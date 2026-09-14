@@ -30,10 +30,17 @@ internal static class RuntimeArtifactJson
 
     private sealed class LosslessUtf16StringConverter : JsonConverter<string>
     {
-        public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
-            EfRelationalIdentity.Decode(reader.GetString() ?? throw new JsonException("A runtime artifact string was null."));
+        public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => Decode(ref reader);
+
+        public override string ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => Decode(ref reader);
 
         public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options) =>
             writer.WriteStringValue(EfRelationalIdentity.Encode(value));
+
+        public override void WriteAsPropertyName(Utf8JsonWriter writer, string value, JsonSerializerOptions options) =>
+            writer.WritePropertyName(EfRelationalIdentity.Encode(value));
+
+        private static string Decode(ref Utf8JsonReader reader) =>
+            EfRelationalIdentity.Decode(reader.GetString() ?? throw new JsonException("A runtime artifact string was null."));
     }
 }

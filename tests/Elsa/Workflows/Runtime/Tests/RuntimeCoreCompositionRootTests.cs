@@ -98,6 +98,22 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
     }
 
     [Fact]
+    public void AddWorkflowRuntime_scopes_the_template_reader_alias_for_scoped_replacements()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IExecutableActivityTemplateStore, InMemoryExecutableActivityTemplateStore>();
+        services.AddWorkflowRuntime();
+
+        var descriptor = Assert.Single(services, candidate => candidate.ServiceType == typeof(IExecutableActivityTemplateReader));
+        Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<IExecutableActivityTemplateStore>();
+        Assert.Same(store, scope.ServiceProvider.GetRequiredService<IExecutableActivityTemplateReader>());
+    }
+
+    [Fact]
     public void AddWorkflowRuntime_RegistersOneOverridableDefaultStartPolicy()
     {
         var services = new ServiceCollection().AddWorkflowRuntime();

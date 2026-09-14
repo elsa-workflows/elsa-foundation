@@ -52,6 +52,23 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Malformed_utf16_dictionary_keys_round_trip_through_runtime_artifact_json()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var malformedKey = "metadata-" + '\uD800';
+
+        await fixture.Executable.SaveAsync(Executable(
+            "malformed-metadata-key",
+            compatibilityMetadata: new Dictionary<string, string> { [malformedKey] = "value" }));
+
+        var roundTrip = await fixture.Executable.FindAsync("malformed-metadata-key");
+
+        Assert.NotNull(roundTrip);
+        Assert.Equal("value", roundTrip!.CompatibilityMetadata[malformedKey]);
+    }
+
+    [Fact]
     public async Task Source_reference_ids_are_isolated_when_tenants_reuse_the_same_id()
     {
         await using var database = await Database.CreateAsync();
@@ -487,6 +504,24 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Executable_idempotent_save_rejects_mismatched_existing_incarnations()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Executable.SaveAsync(Executable("mismatched-incarnation"));
+
+        var coordination = await fixture.Context.WorkflowExecutableCoordinations
+            .SingleAsync(x => x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("mismatched-incarnation"));
+        coordination.IncarnationId = "different-incarnation";
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable
+            .SaveAsync(Executable("mismatched-incarnation"))
+            .AsTask());
+    }
+
+    [Fact]
     public async Task Concurrent_idempotent_executable_saves_reconcile_a_complete_winner()
     {
         await using var database = await Database.CreateFileAsync();
@@ -837,7 +872,9 @@ public sealed class EfRuntimeArtifactScopeTests
         await fixture.Executable.SaveAsync(Executable("case-sensitive-leases"));
         var row = await fixture.Context.WorkflowExecutableCoordinations
             .SingleAsync(x => x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("case-sensitive-leases"));
-        row.ContentJson = $"{{\"Leases\":{{\"A\":{{\"Id\":\"{Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("A")}\",\"Token\":\"{Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("token-a")}\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"a\":{{\"Id\":\"{Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("a")}\",\"Token\":\"{Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("token-b")}\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}}}},\"Guard\":null}}";
+        var encodedA = Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("A");
+        var encodedAInsensitive = Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("a");
+        row.ContentJson = $"{{\"Leases\":{{\"{encodedA}\":{{\"Id\":\"{encodedA}\",\"Token\":\"{Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("token-a")}\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"{encodedAInsensitive}\":{{\"Id\":\"{encodedAInsensitive}\",\"Token\":\"{Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("token-b")}\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}}}},\"Guard\":null}}";
         await fixture.Context.SaveChangesAsync();
         fixture.Context.ChangeTracker.Clear();
 
@@ -852,10 +889,13 @@ public sealed class EfRuntimeArtifactScopeTests
         id, artifact, "WorkflowDefinition", "definition", "1", "definition", "definition-version", "1",
         DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, WorkflowExecutableReferenceScope.Published);
 
-    private static WorkflowExecutable Executable(string artifactId, string? artifactHash = null)
+    private static WorkflowExecutable Executable(
+        string artifactId,
+        string? artifactHash = null,
+        IReadOnlyDictionary<string, string>? compatibilityMetadata = null)
     {
         var node = new ExecutableNode("node", "node", "test", "1", "consumer", JsonSerializer.SerializeToElement(new { }), new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), outputCaptures: new Dictionary<string, RuntimeOutputCapture>());
-        return new WorkflowExecutable(new WorkflowExecutableIdentity(artifactId, "definition", "version", "1", artifactHash ?? $"hash-{artifactId}"), node, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
+        return new WorkflowExecutable(new WorkflowExecutableIdentity(artifactId, "definition", "version", "1", artifactHash ?? $"hash-{artifactId}"), node, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, compatibilityMetadata ?? new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static ExecutableActivityTemplate Template(string id, string hash)
@@ -889,7 +929,7 @@ public sealed class EfRuntimeArtifactScopeTests
         public static async Task<Database> CreateFileAsync()
         {
             var fileName = $"elsa-runtime-artifacts-{Guid.NewGuid():N}.db";
-            var databasePath = Path.Combine(Path.GetTempPath(), Path.GetFileName(fileName));
+            var databasePath = Path.Join(Path.GetTempPath(), fileName);
             var connectionString = $"Data Source={databasePath};Pooling=False";
             var connection = new SqliteConnection(connectionString);
             await connection.OpenAsync();

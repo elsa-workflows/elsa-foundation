@@ -55,6 +55,7 @@ public sealed class EfWorkflowExecutableStore(
                 {
                     var current = Read(artifact, scope, artifactId, id);
                     _ = ReadCoordination(coordination, scope, artifactId, id);
+                    EnsureMatchingIncarnation(artifact, coordination, id);
                     EnsureSameIdentityAndContent(current, item);
                 }
             }
@@ -138,6 +139,15 @@ public sealed class EfWorkflowExecutableStore(
     {
         if (!StringComparer.Ordinal.Equals(current.Identity.ArtifactHash, candidate.Identity.ArtifactHash))
             throw new InvalidOperationException($"Workflow executable '{candidate.Identity.ArtifactId}' is already bound to different artifact content.");
+    }
+
+    private static void EnsureMatchingIncarnation(
+        WorkflowExecutableEntity artifact,
+        WorkflowExecutableCoordinationEntity coordination,
+        string id)
+    {
+        if (!StringComparer.Ordinal.Equals(artifact.IncarnationId, coordination.IncarnationId))
+            throw new InvalidDataException($"Workflow executable '{id}' has mismatched incarnation identities.");
     }
     public async ValueTask<WorkflowExecutable?> FindAsync(
         string artifactId,
@@ -552,8 +562,7 @@ public sealed class EfWorkflowExecutableStore(
             return null;
         if (artifact is null || coordination is null)
             throw new InvalidDataException($"Workflow executable '{id}' has incomplete persisted state.");
-        if (artifact.IncarnationId != coordination.IncarnationId)
-            throw new InvalidDataException($"Workflow executable '{id}' has mismatched incarnation identities.");
+        EnsureMatchingIncarnation(artifact, coordination, id);
 
         _ = Read(artifact, scope, artifactId, id);
         _ = ReadCoordination(coordination, scope, artifactId, id);
