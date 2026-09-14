@@ -7,6 +7,7 @@ public sealed class WorkflowExecutableEntity
     public string ScopeKeyHash { get; set; } = null!;
     public string ArtifactId { get; set; } = null!;
     public string ArtifactIdHash { get; set; } = null!;
+    public string ArtifactHash { get; set; } = null!;
     public string ArtifactIdOrderKey { get; set; } = null!;
     public string ContentJson { get; set; } = null!;
     public string SchemaVersion { get; set; } = null!;

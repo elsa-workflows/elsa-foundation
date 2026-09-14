@@ -111,7 +111,7 @@ public sealed class EfWorkflowExecutableStore(
         var rows = await context.WorkflowExecutables
             .AsNoTracking()
             .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == encodedScope &&
-                        (cursor == null || string.CompareOrdinal(x.ArtifactIdOrderKey, cursor) > 0))
+                        (cursor == null || x.ArtifactIdOrderKey.CompareTo(cursor) > 0))
             .OrderBy(x => x.ArtifactIdOrderKey)
             .Take(request.Limit + 1)
             .ToArrayAsync(cancellationToken);
@@ -450,6 +450,7 @@ public sealed class EfWorkflowExecutableStore(
             ScopeKeyHash = Hash(scope),
             ArtifactId = executable.Identity.ArtifactId,
             ArtifactIdHash = Hash(executable.Identity.ArtifactId),
+            ArtifactHash = executable.Identity.ArtifactHash,
             ArtifactIdOrderKey = OrderKey(executable.Identity.ArtifactId),
             ContentJson = json,
             SchemaVersion = RuntimeArtifactEfModule.SchemaVersion,
@@ -481,13 +482,14 @@ public sealed class EfWorkflowExecutableStore(
     {
         if (row.Id != id || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
             row.ArtifactId != expected || row.ArtifactIdHash != Hash(expected) ||
+            string.IsNullOrWhiteSpace(row.ArtifactHash) ||
             row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.ArtifactIdOrderKey != OrderKey(expected) ||
             string.IsNullOrWhiteSpace(row.IncarnationId))
             throw new InvalidDataException("The persisted workflow executable row is corrupt.");
         try
         {
             var x = RuntimeArtifactJson.Deserialize<WorkflowExecutable>(row.ContentJson);
-            if (x.Identity.ArtifactId != expected)
+            if (x.Identity.ArtifactId != expected || x.Identity.ArtifactHash != row.ArtifactHash)
                 throw new InvalidDataException("The persisted workflow executable identity is corrupt.");
             return x;
         }

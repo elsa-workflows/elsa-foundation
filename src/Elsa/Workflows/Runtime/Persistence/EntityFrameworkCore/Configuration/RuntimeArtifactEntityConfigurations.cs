@@ -15,6 +15,7 @@ public sealed class WorkflowExecutableEntityConfiguration : IEntityTypeConfigura
         b.Property(x => x.ScopeKeyHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.ArtifactId).HasMaxLength(128).IsRequired();
         b.Property(x => x.ArtifactIdHash).HasMaxLength(64).IsRequired();
+        b.Property(x => x.ArtifactHash).HasMaxLength(450).IsRequired();
         b.Property(x => x.ArtifactIdOrderKey).HasMaxLength(655).IsRequired();
         b.Property(x => x.ContentJson).IsRequired();
         b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();

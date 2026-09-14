@@ -86,7 +86,8 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
     private static void EnsureReplaceable<T>(IServiceCollection services)
     {
         var descriptors = services.Where(x => x.ServiceType == typeof(T)).ToArray();
-        if (descriptors.Any(x => x.ImplementationType is not null && x.ImplementationType != typeof(InMemoryWorkflowExecutableStore) && x.ImplementationType != typeof(InMemoryExecutableActivityTemplateStore) && x.ImplementationType != typeof(InMemoryWorkflowExecutableSourceReferenceStore) && !x.ImplementationType.Namespace?.StartsWith("Elsa.Persistence.Groundwork", StringComparison.Ordinal) == true) ||
+        if (descriptors.Any(x => x.ImplementationInstance is not null) ||
+            descriptors.Any(x => x.ImplementationType is not null && x.ImplementationType != typeof(InMemoryWorkflowExecutableStore) && x.ImplementationType != typeof(InMemoryExecutableActivityTemplateStore) && x.ImplementationType != typeof(InMemoryWorkflowExecutableSourceReferenceStore) && !x.ImplementationType.Namespace?.StartsWith("Elsa.Persistence.Groundwork", StringComparison.Ordinal) == true) ||
             descriptors.Any(x => x.ImplementationFactory is not null && !x.ImplementationFactory.Method.DeclaringType?.Namespace?.StartsWith("Elsa.Persistence.Groundwork", StringComparison.Ordinal) == true))
             throw new InvalidOperationException($"An explicit {typeof(T).Name} is already registered; Runtime artifact EF persistence refuses to replace it implicitly.");
         foreach (var descriptor in descriptors)

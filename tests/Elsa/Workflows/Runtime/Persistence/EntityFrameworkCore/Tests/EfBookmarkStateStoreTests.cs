@@ -347,6 +347,26 @@ public sealed class EfBookmarkStateStoreTests
     }
 
     [Fact]
+    public async Task Stale_delete_after_delete_and_recreate_same_key_and_revision_preserves_successor()
+    {
+        await using var database = await FileDatabase.CreateAsync();
+        await using (var seed = database.Open())
+            await seed.Store.SaveAsync(State("wf-recreate", "bm", "Event", "original"));
+
+        var pause = new PausingSaveInterceptor();
+        await using var deleting = database.Open(pause);
+        await using var current = database.Open();
+        var delete = deleting.Store.DeleteAsync("wf-recreate", "bm").AsTask();
+        await pause.Entered;
+        Assert.True(await current.Store.DeleteAsync("wf-recreate", "bm"));
+        await current.Store.SaveAsync(State("wf-recreate", "bm", "Event", "successor"));
+        pause.Release();
+
+        Assert.False(await delete);
+        Assert.Equal("successor", (await current.Store.FindAsync("wf-recreate", "bm"))!.StimulusHash);
+    }
+
+    [Fact]
     public async Task External_transaction_rollback_leaves_no_bookmark()
     {
         await using var fixture = await Fixture.CreateAsync("tenant-a");

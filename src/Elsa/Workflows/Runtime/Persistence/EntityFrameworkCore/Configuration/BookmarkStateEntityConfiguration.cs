@@ -35,6 +35,7 @@ public sealed class BookmarkStateEntityConfiguration : IEntityTypeConfiguration<
         builder.Property(row => row.ExpiresAtUtcTicks).IsRequired(false);
         builder.Property(row => row.ExpiresAtOffsetMinutes).IsRequired(false);
         builder.Property(row => row.Revision).IsRequired().IsConcurrencyToken();
+        builder.Property(row => row.IncarnationId).HasMaxLength(64).IsRequired().IsConcurrencyToken();
         builder.HasIndex(row => new { row.ScopeKeyHash, row.WorkflowExecutionIdHash });
         builder.HasIndex(row => new { row.ScopeKeyHash, row.StimulusLookupKey });
         builder.HasIndex(row => new { row.ScopeKeyHash, row.StimulusTypeLookupKey });

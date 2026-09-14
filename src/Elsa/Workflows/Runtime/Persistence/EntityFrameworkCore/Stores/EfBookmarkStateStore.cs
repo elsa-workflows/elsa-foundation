@@ -276,7 +276,7 @@ public sealed class EfBookmarkStateStore(
 
     private static BookmarkStateEntity ToEntity(BookmarkState state, string scope, string id, long revision)
     {
-        var row = new BookmarkStateEntity { Id = id };
+        var row = new BookmarkStateEntity { Id = id, IncarnationId = Guid.NewGuid().ToString("N") };
         CopyToEntity(row, state, scope, id, revision);
         return row;
     }
@@ -319,7 +319,7 @@ public sealed class EfBookmarkStateStore(
                 row.WorkflowExecutionIdHash != Hash(row.WorkflowExecutionId) || row.BookmarkIdHash != Hash(row.BookmarkId) ||
                 row.WorkflowExecutionIdOrderKey != OrdinalKey(row.WorkflowExecutionId) || row.BookmarkIdOrderKey != OrdinalKey(row.BookmarkId) ||
                 (expectedWorkflow is not null && row.WorkflowExecutionId != expectedWorkflow) ||
-                (expectedBookmark is not null && row.BookmarkId != expectedBookmark) || string.IsNullOrWhiteSpace(row.MetadataJson) || row.Revision <= 0)
+                (expectedBookmark is not null && row.BookmarkId != expectedBookmark) || string.IsNullOrWhiteSpace(row.MetadataJson) || row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
                 throw new InvalidDataException("The persisted EF bookmark row is corrupt.");
 
             var state = JsonSerializer.Deserialize<BookmarkState>(row.ContentJson, Json)

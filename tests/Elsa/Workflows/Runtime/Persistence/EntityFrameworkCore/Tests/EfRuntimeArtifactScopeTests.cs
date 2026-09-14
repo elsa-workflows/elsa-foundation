@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using System.Data.Common;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
@@ -371,6 +372,22 @@ public sealed class EfRuntimeArtifactScopeTests
         await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable.SaveBatchAsync(
             [Executable("new-artifact"), Executable("incomplete")]).AsTask());
         Assert.Null(await fixture.Executable.FindAsync("new-artifact"));
+    }
+
+    [Fact]
+    public async Task Executable_artifact_hash_projection_rejects_valid_json_tampering()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Executable.SaveAsync(Executable("artifact-hash-corrupt"));
+        var row = await fixture.Context.WorkflowExecutables.SingleAsync(x => x.ArtifactId == "artifact-hash-corrupt");
+        var payload = JsonNode.Parse(row.ContentJson)!.AsObject();
+        payload["identity"]!.AsObject()["artifactHash"] = "tampered-artifact-hash";
+        row.ContentJson = payload.ToJsonString();
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable.FindAsync("artifact-hash-corrupt").AsTask());
     }
 
     [Fact]

@@ -73,6 +73,15 @@ internal static class RuntimeArtifactsProviderSmoke
 
             await executable.SaveAsync(Executable("artifact-a"));
             Assert.NotNull(await executable.FindAsync("artifact-a"));
+            await executable.SaveAsync(Executable("artifact-b"));
+            var firstExecutablePage = await executable.ListPageAsync(new RuntimeStorePageRequest(1));
+            var secondExecutablePage = await executable.ListPageAsync(new RuntimeStorePageRequest(1, firstExecutablePage.NextContinuationToken));
+            Assert.Single(firstExecutablePage.Items);
+            Assert.Single(secondExecutablePage.Items);
+            Assert.Null(secondExecutablePage.NextContinuationToken);
+            Assert.Equal(
+                new[] { "artifact-a", "artifact-b" },
+                new[] { firstExecutablePage.Items[0].Identity.ArtifactId, secondExecutablePage.Items[0].Identity.ArtifactId }.Order(StringComparer.Ordinal));
             await template.SaveAsync(Template("template-a", "template-hash-a"));
             Assert.NotNull(await template.FindByHashAsync("template-hash-a"));
             await source.SaveAsync(Reference("reference-a", "artifact-a", "definition-version-a"));
