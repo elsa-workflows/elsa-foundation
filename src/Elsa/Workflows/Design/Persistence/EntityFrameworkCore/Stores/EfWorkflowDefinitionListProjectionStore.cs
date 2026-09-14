@@ -10,7 +10,11 @@ public sealed class EfWorkflowDefinitionListProjectionStore(WorkflowsDesignDbCon
 {
     public async Task<IReadOnlyList<WorkflowDefinitionListProjection>> ListByDefinitionIdsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default)
     {
-        var distinct = ids.Distinct(StringComparer.Ordinal).ToArray(); if (distinct.Length == 0) return [];
+        var distinct = ids
+            .GroupBy(EfDesignSupport.SearchKey, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .ToArray();
+        if (distinct.Length == 0) return [];
         var folded = distinct.Select(id => EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(id))).ToArray();
         var drafts = new List<WorkflowDefinitionDraft>();
         var versions = new List<WorkflowDefinitionVersion>();

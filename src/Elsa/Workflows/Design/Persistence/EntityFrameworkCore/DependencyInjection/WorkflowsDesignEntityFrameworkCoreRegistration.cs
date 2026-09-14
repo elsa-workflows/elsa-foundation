@@ -18,7 +18,11 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         var provider = EfRelationalProviderBinding.Normalize(options.Provider);
         var existingBackend = DesignPersistenceBackend.Find(services);
         if (existingBackend is not null)
+        {
+            if (existingBackend.Name != DesignPersistenceBackend.EntityFramework)
+                throw new InvalidOperationException($"Workflow-design persistence backend '{existingBackend.Name}' is already selected; use an explicit replacement API to switch backends.");
             existingBackend.RemoveOwnedDescriptors(services);
+        }
         else if (HasOwnedSurfaceRegistration(services))
             throw new InvalidOperationException("An explicit workflow-design persistence registration is already present; EF Core refuses to replace it implicitly.");
         var registrationStart = services.Count;

@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Events.Core.Contracts;
 using Elsa.Primitives.Contracts;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -249,9 +250,106 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public void Ef_registration_rejects_a_different_selected_backend()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<object>(new object());
+        var owned = Assert.Single(services, x => x.ServiceType == typeof(object));
+        services.AddSingleton(new DesignPersistenceBackend(DesignPersistenceBackend.Groundwork, [owned]));
+
+        var exception = Assert.Throws<InvalidOperationException>(() => services.AddWorkflowsDesignEntityFrameworkCore(new WorkflowsDesignEntityFrameworkCoreOptions()));
+
+        Assert.Contains("already selected", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(owned, services);
+    }
+
+    [Fact]
+    public void Ef_feature_registration_flows_settings_through_ConfigureServices()
+    {
+        var services = new ServiceCollection();
+        var feature = new WorkflowsDesignEntityFrameworkCoreFeature
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=feature.db",
+            ConnectionName = "workflow-design"
+        };
+
+        feature.ConfigureServices(services);
+
+        var options = Assert.Single(services, x => x.ServiceType == typeof(WorkflowsDesignEntityFrameworkCoreOptions)).ImplementationInstance as WorkflowsDesignEntityFrameworkCoreOptions;
+        Assert.NotNull(options);
+        Assert.Equal(feature.Provider, options!.Provider);
+        Assert.Equal(feature.ConnectionString, options.ConnectionString);
+        Assert.Equal(feature.ConnectionName, options.ConnectionName);
+        Assert.Contains(services, x => x.ServiceType == typeof(IDesignAtomicWriter));
+    }
+
+    [Fact]
+    public async Task Marker_race_replay_does_not_publish_lifecycle_events_for_any_draft_command()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var serializer = new TestSerializer();
+        var events = new CapturingDeferredEventPublisher();
+        var atomic = new ReplayedAtomicWriter();
+
+        await new EfCreateDraftCommand(db, access, atomic, new TestIdentity(), serializer, new TestLockProvider(), deferredEvents: events)
+            .Execute(new DesignOperationKey("create-race"), "definition");
+        await new EfCloneDraftFromVersionCommand(db, access, atomic, new TestIdentity(), serializer, new TestLockProvider(), deferredEvents: events)
+            .Execute(new DesignOperationKey("clone-race"), "version");
+        await new EfUpdateDraftCommand(db, access, atomic, serializer, new EmptyActivityStructureService(), new TestLockProvider(), deferredEvents: events)
+            .Execute(new DesignOperationKey("update-race"), new UpdateDraftRequest("draft", State(), []));
+        await new EfDiscardDraftCommand(db, access, atomic, new TestLockProvider(), events)
+            .Execute(new DesignOperationKey("discard-race"), "draft");
+
+        Assert.Empty(events.Events);
+    }
+
+    [Fact]
+    public async Task Save_workflow_definition_covers_lookup_tenant_validation_and_failure_branches()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var writer = new EfDesignAtomicWriter(db, access);
+        db.Definitions.Add(new WorkflowDefinition { Id = "stored", TenantId = "tenant-a", Name = "before" });
+        await db.SaveChangesAsync();
+        var command = new EfSaveWorkflowDefinitionCommand(db, access, writer);
+
+        await command.Execute(new DesignOperationKey("save-success"), new WorkflowDefinition { Id = "STORED", TenantId = "tenant-a", Name = "after" });
+        Assert.Equal("after", (await db.Definitions.SingleAsync()).Name);
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => command.Execute(new DesignOperationKey("save-missing"), new WorkflowDefinition { Id = "missing", TenantId = "tenant-a", Name = "missing" }));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => command.Execute(new DesignOperationKey("save-tenant"), new WorkflowDefinition { Id = "stored", TenantId = "tenant-b", Name = "wrong tenant" }));
+        await Assert.ThrowsAsync<ArgumentException>(() => command.Execute(new DesignOperationKey("save-invalid"), new WorkflowDefinition { Id = "stored", TenantId = "tenant-a", Name = new string('x', WorkflowDefinitionLimits.TextMaximumLength + 1) }));
+    }
+
+    [Fact]
+    public async Task SQLite_save_validates_bounded_version_draft_layout_and_operation_identities()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        db.Definitions.Add(new WorkflowDefinition { Id = "definition", TenantId = "tenant-a", Name = "Definition" });
+        db.Versions.Add(new WorkflowDefinitionVersion("definition", $"1.0.0-{new string('a', 123)}") { Id = "version", TenantId = "tenant-a" });
+        await Assert.ThrowsAsync<ArgumentException>(() => db.SaveChangesAsync());
+        db.ChangeTracker.Clear();
+        db.Drafts.Add(new WorkflowDefinitionDraft { Id = new string('d', 129), TenantId = "tenant-a", WorkflowDefinitionId = "definition", StateSource = "{}" });
+        await Assert.ThrowsAsync<ArgumentException>(() => db.SaveChangesAsync());
+        db.ChangeTracker.Clear();
+        db.Operations.Add(new DesignOperationEntity { TenantId = "tenant-a", OperationKind = new string('o', DesignOperationKey.MaximumLength + 1), OperationKey = "key", RequestFingerprint = "request", ResultFingerprint = "result", ResultJson = "{}" });
+        await Assert.ThrowsAsync<ArgumentException>(() => db.SaveChangesAsync());
+    }
+
+    [Fact]
     public async Task Definitions_drafts_layouts_and_versions_survive_reopen_and_preserve_scope()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"elsa-workflow-design-reopen-{Guid.NewGuid():N}.db");
+        var path = Path.Join(Path.GetTempPath(), $"elsa-workflow-design-reopen-{Guid.NewGuid():N}.db");
         try
         {
             var serializer = new TestSerializer(); var accessor = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
@@ -337,11 +435,11 @@ public sealed class EfWorkflowDesignPersistenceTests
         db.Versions.Add(new WorkflowDefinitionVersion("tenant-b-only", "9.0.0") { Id = "foreign-version", TenantId = "tenant-b" });
         await db.SaveChangesAsync();
 
-        var requested = definitions.Select(x => x.Id).Reverse().Append("tenant-b-only").Append(definitions[0].Id).ToArray();
+        var requested = definitions.Select(x => x.Id).Reverse().Append("tenant-b-only").Append(definitions[0].Id).Append(definitions[0].Id.ToUpperInvariant()).ToArray();
         var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
         var projections = await new EfWorkflowDefinitionListProjectionStore(db, access).ListByDefinitionIdsAsync(requested);
         Assert.Equal(206, projections.Count);
-        Assert.Equal(requested.Distinct(StringComparer.Ordinal), projections.Select(x => x.WorkflowDefinitionId));
+        Assert.Equal(requested.GroupBy(WorkflowDefinitionIdentity.Fold, StringComparer.Ordinal).Select(group => group.First()), projections.Select(x => x.WorkflowDefinitionId));
         var first = Assert.Single(projections, x => x.WorkflowDefinitionId == definitions[0].Id);
         Assert.Equal("draft-current", first.DraftId);
         Assert.Equal("version-201", first.LatestVersionId);
@@ -1063,6 +1161,11 @@ public sealed class EfWorkflowDesignPersistenceTests
     private sealed class CustomDesignAtomicWriter : IDesignAtomicWriter
     {
         public Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default, IDesignAtomicWriteResultCodec<T>? resultCodec = null) => throw new NotSupportedException();
+    }
+    private sealed class ReplayedAtomicWriter : IDesignAtomicWriter
+    {
+        public Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default, IDesignAtomicWriteResultCodec<T>? resultCodec = null) =>
+            Task.FromResult(new DesignAtomicWriteResult<T>(DesignAtomicWriteStatus.Replayed, default));
     }
     private sealed class TestLockProvider : IDistributedLockProvider
     {

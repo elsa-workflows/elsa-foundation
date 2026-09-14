@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
@@ -150,7 +151,11 @@ public sealed class EfDesignAtomicWriter(
         }
         catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
         {
-            try { await transaction.RollbackAsync(CancellationToken.None); } catch { }
+            try { await transaction.RollbackAsync(CancellationToken.None); }
+            catch (Exception rollbackException) when (rollbackException is not OperationCanceledException)
+            {
+                Trace.TraceWarning("Workflow design rollback failed after a transient write conflict: {0}", rollbackException);
+            }
             db.ChangeTracker.Clear();
             if (attempt >= 3)
                 throw ProviderFailure(operationKind, exception);
@@ -160,18 +165,28 @@ public sealed class EfDesignAtomicWriter(
         }
         catch (DbUpdateException exception)
         {
-            try { await transaction.RollbackAsync(CancellationToken.None); } catch { }
+            try { await transaction.RollbackAsync(CancellationToken.None); }
+            catch (Exception rollbackException) when (rollbackException is not OperationCanceledException)
+            {
+                Trace.TraceWarning("Workflow design rollback failed while resolving a write conflict: {0}", rollbackException);
+            }
             db.ChangeTracker.Clear();
             var winner = await EfDesignSupport.ReadAsync("reading design operation winner", () => db.Operations.AsNoTracking().SingleOrDefaultAsync(
                 x => x.TenantId == tenantId && x.OperationKind == operationKind && x.OperationKey == key.Value,
                 cancellationToken));
             if (winner is not null)
-                return ResolveExisting(winner, operationKind, requestFingerprint, legacyRequestFingerprint, DesignAtomicWriteStatus.Reconciled, resultCodec);
+                // The local stage lost the marker race. The concurrent winner owns publication;
+                // classify this caller as a replay so it cannot emit duplicate post-commit events.
+                return ResolveExisting(winner, operationKind, requestFingerprint, legacyRequestFingerprint, DesignAtomicWriteStatus.Replayed, resultCodec);
             throw ProviderFailure(operationKind, exception);
         }
         catch
         {
-            try { await transaction.RollbackAsync(CancellationToken.None); } catch { }
+            try { await transaction.RollbackAsync(CancellationToken.None); }
+            catch (Exception rollbackException) when (rollbackException is not OperationCanceledException)
+            {
+                Trace.TraceWarning("Workflow design rollback failed while handling an unexpected write error: {0}", rollbackException);
+            }
             db.ChangeTracker.Clear();
             throw;
         }

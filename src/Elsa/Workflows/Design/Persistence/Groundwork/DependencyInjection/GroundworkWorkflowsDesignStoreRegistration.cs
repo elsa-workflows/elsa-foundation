@@ -23,7 +23,12 @@ public static class GroundworkWorkflowsDesignStoreRegistration
     {
         ArgumentNullException.ThrowIfNull(services);
         var existingBackend = DesignPersistenceBackend.Find(services);
-        existingBackend?.RemoveOwnedDescriptors(services);
+        if (existingBackend is not null)
+        {
+            if (existingBackend.Name != DesignPersistenceBackend.Groundwork)
+                throw new InvalidOperationException($"Workflow-design persistence backend '{existingBackend.Name}' is already selected; use an explicit replacement API to switch backends.");
+            existingBackend.RemoveOwnedDescriptors(services);
+        }
         services.AddPersistenceCore();
         services.AddGroundworkStorageLane<WorkflowsDesignGroundworkStorageManifestSource>(targetName);
         foreach (var unit in WorkflowsDesignStorageManifest.CreateUnits())
