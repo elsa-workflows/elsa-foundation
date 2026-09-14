@@ -23,9 +23,14 @@ public sealed class EfWorkflowDefinitionStore(WorkflowsDesignDbContext db, IPers
         if (filter.Name is not null) query = query.Where(x => x.Name == filter.Name);
         if (filter.Names is not null) { if (filter.Names.Count == 0) return []; query = query.Where(x => filter.Names.Contains(x.Name)); }
         if (filter.Description is not null) query = query.Where(x => x.Description == filter.Description);
-        var values = await query.OrderBy(x => x.Id).ThenBy(x => x.TenantId).Take(1000).ToListAsync(cancellationToken);
-        if (string.IsNullOrWhiteSpace(filter.SearchTerm)) return values;
-        return values.Where(x => Contains(x.Id, filter.SearchTerm) || Contains(x.Name, filter.SearchTerm) || Contains(x.Description, filter.SearchTerm)).ToArray();
+        if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
+        {
+            var term = filter.SearchTerm.Trim().ToLower();
+            query = query.Where(x => x.Id.ToLower().Contains(term) || x.Name.ToLower().Contains(term) || (x.Description != null && x.Description.ToLower().Contains(term)));
+        }
+        var values = await query.OrderBy(x => x.Id).ThenBy(x => x.TenantId).Take(1001).ToListAsync(cancellationToken);
+        if (values.Count > 1000)
+            throw new InvalidOperationException("Workflow definition query exceeded the bounded result limit of 1000; add exact filters.");
+        return values;
     }
-    private static bool Contains(string? value, string term) => value is not null && value.Contains(term, StringComparison.OrdinalIgnoreCase);
 }

@@ -26,4 +26,11 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
     }
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);
+
+    protected static void ConfigureDateTime(ModelBuilder modelBuilder, string columnType)
+    {
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        foreach (var property in entityType.GetProperties().Where(x => x.ClrType == typeof(DateTimeOffset) || x.ClrType == typeof(DateTimeOffset?)))
+            property.SetColumnType(columnType);
+    }
 }

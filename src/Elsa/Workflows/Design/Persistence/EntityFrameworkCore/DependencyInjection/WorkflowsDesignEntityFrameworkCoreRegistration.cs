@@ -6,6 +6,7 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.DependencyInjection;
 
@@ -15,7 +16,24 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
     {
         ArgumentNullException.ThrowIfNull(services); ArgumentNullException.ThrowIfNull(options);
         var provider = EfRelationalProviderBinding.Normalize(options.Provider);
+        services.RemoveAll<WorkflowsDesignEntityFrameworkCoreOptions>();
         services.AddSingleton(options);
+        services.RemoveAll<WorkflowsDesignDbContext>();
+        services.RemoveAll<WorkflowsDesignSqliteDbContext>(); services.RemoveAll<WorkflowsDesignSqlServerDbContext>();
+        services.RemoveAll<WorkflowsDesignPostgreSqlDbContext>(); services.RemoveAll<WorkflowsDesignMySqlDbContext>();
+        services.RemoveAll<IDesignAtomicWriter>();
+        services.RemoveAll<IWorkflowDefinitionStore>(); services.RemoveAll<IWorkflowDefinitionVersionStore>();
+        services.RemoveAll<IWorkflowDefinitionDraftStore>(); services.RemoveAll<IWorkflowDefinitionVersionLayoutStore>();
+        services.RemoveAll<IWorkflowDefinitionListProjectionStore>();
+        services.RemoveAll<EfWorkflowDefinitionStore>(); services.RemoveAll<EfWorkflowDefinitionVersionStore>();
+        services.RemoveAll<EfWorkflowDefinitionDraftStore>(); services.RemoveAll<EfWorkflowDefinitionVersionLayoutStore>();
+        services.RemoveAll<EfWorkflowDefinitionListProjectionStore>();
+        services.RemoveAll<IAddWorkflowDefinitionCommand>(); services.RemoveAll<IAddWorkflowDefinitionVersionCommand>();
+        services.RemoveAll<ICreateDraftCommand>(); services.RemoveAll<ICloneDraftFromVersionCommand>();
+        services.RemoveAll<IDeleteWorkflowDefinitionPermanentlyCommand>(); services.RemoveAll<IDiscardDraftCommand>();
+        services.RemoveAll<IMaterializeWorkflowDefinitionCommand>(); services.RemoveAll<IMaterializeWorkflowDefinitionVersionCommand>();
+        services.RemoveAll<IPromoteDraftToVersionCommand>(); services.RemoveAll<ISaveWorkflowDefinitionCommand>();
+        services.RemoveAll<ISubmitWorkflowDefinitionCommand>(); services.RemoveAll<IUpdateDraftCommand>();
         switch (provider)
         {
             case "sqlite": AddContext<WorkflowsDesignSqliteDbContext>(services, options, EfRelationalProviderBinding.UseSqlite); break;

@@ -13,8 +13,14 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 
 internal static class EfDesignSupport
 {
-    public static IQueryable<T> InScope<T>(IQueryable<T> query, IPersistenceAccessContextAccessor access, Func<T, string?> tenant) where T : class =>
-        access.Current.Scope is { } scope ? query.Where(row => EF.Property<string>(row, "TenantId") == scope.Value) : query;
+    public static IQueryable<T> InScope<T>(IQueryable<T> query, IPersistenceAccessContextAccessor access, Func<T, string?> tenant) where T : class
+    {
+        if (access.Current.Scope is { } scope)
+            return query.Where(row => EF.Property<string>(row, "TenantId") == scope.Value);
+        if (access.Current.AcrossScopes && access.Current.AccessPolicy == PersistenceAccessPolicy.Privileged)
+            return query;
+        throw new InvalidOperationException("Workflow design persistence requires an explicit scope or privileged across-scope access.");
+    }
 
     public static void EnsureTenant(IPersistenceAccessContextAccessor access, string? tenant) => access.Current.EnsureTenantScope(tenant);
 

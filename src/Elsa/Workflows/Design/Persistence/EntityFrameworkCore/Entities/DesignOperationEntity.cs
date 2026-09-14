@@ -3,6 +3,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities;
 public sealed class DesignOperationEntity
 {
     public long RowNumber { get; set; }
+    public string TenantId { get; set; } = string.Empty;
     public string OperationKind { get; set; } = string.Empty;
     public string OperationKey { get; set; } = string.Empty;
     public string RequestFingerprint { get; set; } = string.Empty;

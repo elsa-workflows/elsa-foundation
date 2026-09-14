@@ -48,6 +48,59 @@ public sealed class EfWorkflowDesignPersistenceTests
         var writer = new EfDesignAtomicWriter(db); var key = new DesignOperationKey("same"); var first = await writer.ExecuteAsync(key, "test.op", new { Value = 1 }, _ => Task.FromResult(new { Id = "winner" })); var replay = await writer.ExecuteAsync(key, "test.op", new { Value = 1 }, _ => Task.FromResult(new { Id = "loser" })); Assert.Equal(first.Id, replay.Id); await Assert.ThrowsAsync<InvalidOperationException>(() => writer.ExecuteAsync(key, "test.op", new { Value = 2 }, _ => Task.FromResult(new { Id = "conflict" })));
     }
 
+    [Fact]
+    public async Task Same_ids_and_operation_keys_are_isolated_by_tenant()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        var a = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var b = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-b")));
+        var serializer = new TestSerializer(); var identities = new TestIdentity();
+        var first = new EfDesignAtomicWriter(db, access: a);
+        var second = new EfDesignAtomicWriter(db, access: b);
+        await first.ExecuteAsync(new DesignOperationKey("same"), "test.op", new { Value = 1 }, _ => Task.FromResult(new { Id = "a" }));
+        var replay = await second.ExecuteAsync(new DesignOperationKey("same"), "test.op", new { Value = 1 }, _ => Task.FromResult(new { Id = "b" }));
+        Assert.Equal("b", replay.Id);
+        var addA = new EfAddWorkflowDefinitionCommand(db, a, first, serializer, identities);
+        var addB = new EfAddWorkflowDefinitionCommand(db, b, second, serializer, identities);
+        await addA.Execute(new DesignOperationKey("add-a"), new WorkflowDefinition { Id = "shared", TenantId = "tenant-a", Name = "A" }, new WorkflowDefinitionDraft { Id = "draft-a", TenantId = "tenant-a", WorkflowDefinitionId = "shared", State = State() });
+        await addB.Execute(new DesignOperationKey("add-b"), new WorkflowDefinition { Id = "shared", TenantId = "tenant-b", Name = "B" }, new WorkflowDefinitionDraft { Id = "draft-b", TenantId = "tenant-b", WorkflowDefinitionId = "shared", State = State() });
+        Assert.Equal("A", (await new EfWorkflowDefinitionStore(db, a).GetAsync("shared")).Name);
+        Assert.Equal("B", (await new EfWorkflowDefinitionStore(db, b).GetAsync("shared")).Name);
+    }
+
+    [Fact]
+    public async Task Scope_less_mutations_are_rejected_and_corrupt_replays_fail_closed()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        var global = new TestAccessor(PersistenceAccessContext.Global);
+        var writer = new EfDesignAtomicWriter(db, access: global);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.ExecuteAsync(new DesignOperationKey("global"), "test.op", new { Value = 1 }, _ => Task.FromResult(new { Id = "x" })));
+
+        var scoped = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var scopedWriter = new EfDesignAtomicWriter(db, access: scoped);
+        await scopedWriter.ExecuteAsync(new DesignOperationKey("corrupt"), "test.op", new { Value = 1 }, _ => Task.FromResult(new { Id = "x" }));
+        var marker = await db.Operations.SingleAsync(x => x.OperationKey == "corrupt"); marker.ResultJson = "{\"Id\":\"tampered\"}"; await db.SaveChangesAsync();
+        await Assert.ThrowsAsync<InvalidDataException>(() => scopedWriter.ExecuteAsync(new DesignOperationKey("corrupt"), "test.op", new { Value = 1 }, _ => Task.FromResult(new { Id = "unused" })));
+    }
+
+    [Fact]
+    public async Task Promotion_copies_layout_and_presentation_into_write_once_version_sibling()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        var accessor = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var serializer = new TestSerializer(); var identities = new TestIdentity(); var writer = new EfDesignAtomicWriter(db);
+        var definition = new WorkflowDefinition { Id = "definition", TenantId = "tenant-a", Name = "Definition" };
+        var draft = new WorkflowDefinitionDraft { Id = "draft", TenantId = "tenant-a", WorkflowDefinitionId = definition.Id, State = State() };
+        await new EfAddWorkflowDefinitionCommand(db, accessor, writer, serializer, identities).Execute(new DesignOperationKey("add"), definition, draft, [new DesignMetadataRecord("root", 3, 4)], [new ActivityPresentationRecord("root", "Root", "Description")]);
+        var versionId = await new EfPromoteDraftToVersionCommand(db, accessor, writer, serializer, identities).Execute(new DesignOperationKey("promote"), draft.Id, "1.0.0");
+        var layout = await new EfWorkflowDefinitionVersionLayoutStore(db, accessor).FindByVersionIdAsync(versionId);
+        Assert.NotNull(layout); Assert.Single(layout!.Records);
+        Assert.Single(layout.ActivityPresentation);
+    }
+
     private static WorkflowsDesignSqliteDbContext Create(SqliteConnection connection) => new(new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>().UseSqlite(connection).Options);
     private static WorkflowDefinitionState State() => new([], null, [], [], null);
     private sealed class TestIdentity : IIdentityGenerator { private int n; public string Generate() => $"generated-{Interlocked.Increment(ref n)}"; }

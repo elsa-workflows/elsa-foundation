@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 [ManifestFeatureCategory("Design")]
 [ManifestFeatureCategory("Persistence")]
 [ShellFeature(name: "WorkflowsDesignEntityFrameworkCore", DisplayName = "Workflows Design Entity Framework Core Persistence", Description = "Opt-in EF Core persistence for Workflows Design definitions, versions, drafts, layouts and lifecycle operation receipts. Schema provisioning and default selection remain deferred.")]
-public sealed class WorkflowsDesignEntityFrameworkCoreFeature : IShellFeature
+public class WorkflowsDesignEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(DisplayName = "Provider", Description = "Sqlite, SqlServer, PostgreSql, or MySql.", Category = "Persistence")]
     public string Provider { get; set; } = "Sqlite";
@@ -18,5 +18,5 @@ public sealed class WorkflowsDesignEntityFrameworkCoreFeature : IShellFeature
     public string? ConnectionString { get; set; }
     [ManifestSetting(DisplayName = "Connection name", Description = "Named connection under ConnectionStrings.", Category = "Persistence")]
     public string? ConnectionName { get; set; }
-    public void ConfigureServices(IServiceCollection services) => services.AddWorkflowsDesignEntityFrameworkCore(new WorkflowsDesignEntityFrameworkCoreOptions { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName });
+    public virtual void ConfigureServices(IServiceCollection services) => services.AddWorkflowsDesignEntityFrameworkCore(new WorkflowsDesignEntityFrameworkCoreOptions { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName });
 }
