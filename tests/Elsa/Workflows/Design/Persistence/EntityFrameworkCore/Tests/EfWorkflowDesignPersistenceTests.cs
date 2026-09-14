@@ -26,6 +26,8 @@ using Elsa.Locking.Core;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -145,6 +147,19 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public void MySql_model_declares_provider_spike_collation_without_cross_provider_leakage()
+    {
+        // SQLite supplies a relational model builder here; the assertions target the provider
+        // metadata emitted by the MySQL context without adding a provider dependency to this test.
+        using var db = new WorkflowsDesignMySqlDbContext(new DbContextOptionsBuilder<WorkflowsDesignMySqlDbContext>().UseSqlite("Data Source=:memory:").Options);
+        Assert.Equal(WorkflowsDesignMySqlDbContext.CharacterSet, db.Model.FindAnnotation("MySQL:Charset")?.Value);
+        var model = db.GetService<IDesignTimeModel>().Model;
+        Assert.Equal(WorkflowsDesignMySqlDbContext.Collation, model.GetCollation());
+        Assert.All(model.GetEntityTypes(), entity =>
+            Assert.Equal(WorkflowsDesignMySqlDbContext.Collation, entity.FindAnnotation("MySQL:Collation")?.Value));
+    }
+
+    [Fact]
     public async Task Operation_identity_over_bound_is_rejected_without_truncation()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
@@ -234,23 +249,39 @@ public sealed class EfWorkflowDesignPersistenceTests
     [Fact]
     public async Task Definitions_drafts_layouts_and_versions_survive_reopen_and_preserve_scope()
     {
-        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
-        var serializer = new TestSerializer(); var accessor = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
-        await using (var db = Create(connection))
+        var path = Path.Combine(Path.GetTempPath(), $"elsa-workflow-design-reopen-{Guid.NewGuid():N}.db");
+        try
         {
-            await db.Database.EnsureCreatedAsync(); var atomic = new EfDesignAtomicWriter(db, accessor); var identities = new TestIdentity();
-            var definition = new WorkflowDefinition { Id = "definition-1", TenantId = "tenant-a", Name = "Order" }; var draft = new WorkflowDefinitionDraft { Id = "draft-1", TenantId = "tenant-a", WorkflowDefinitionId = definition.Id, State = State() };
-            var add = new EfAddWorkflowDefinitionCommand(db, accessor, atomic, serializer, identities); await add.Execute(new DesignOperationKey("create-1"), definition, draft, [new DesignMetadataRecord("root", 1, 2)]);
-            var definitions = new EfWorkflowDefinitionStore(db, accessor); Assert.Single(await definitions.ListAsync(new WorkflowDefinitionFilter { SearchTerm = "ord" }));
-            var drafts = new EfWorkflowDefinitionDraftStore(db, serializer, accessor); var loadedLayout = await drafts.FindWithLayoutByIdAsync(draft.Id); Assert.NotNull(loadedLayout); Assert.Single(loadedLayout!.Layout);
-            var version = new EfAddWorkflowDefinitionVersionCommand(db, accessor, atomic, serializer, identities, new TestLockProvider()); var added = await version.Execute(new DesignOperationKey("version-1"), definition.Id, State()); Assert.Equal("1.0.0", added.Version);
+            var serializer = new TestSerializer(); var accessor = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+            await using (var connection = new SqliteConnection($"Data Source={path}"))
+            {
+                await connection.OpenAsync();
+                await using var db = Create(connection);
+                await db.Database.EnsureCreatedAsync(); var atomic = new EfDesignAtomicWriter(db, accessor); var identities = new TestIdentity();
+                var definition = new WorkflowDefinition { Id = "definition-1", TenantId = "tenant-a", Name = "Order" }; var draft = new WorkflowDefinitionDraft { Id = "draft-1", TenantId = "tenant-a", WorkflowDefinitionId = definition.Id, State = State() };
+                var add = new EfAddWorkflowDefinitionCommand(db, accessor, atomic, serializer, identities); await add.Execute(new DesignOperationKey("create-1"), definition, draft, [new DesignMetadataRecord("root", 1, 2)]);
+                var definitions = new EfWorkflowDefinitionStore(db, accessor); Assert.Single(await definitions.ListAsync(new WorkflowDefinitionFilter { SearchTerm = "ord" }));
+                var drafts = new EfWorkflowDefinitionDraftStore(db, serializer, accessor); var loadedLayout = await drafts.FindWithLayoutByIdAsync(draft.Id); Assert.NotNull(loadedLayout); Assert.Single(loadedLayout!.Layout);
+                var version = new EfAddWorkflowDefinitionVersionCommand(db, accessor, atomic, serializer, identities, new TestLockProvider()); var added = await version.Execute(new DesignOperationKey("version-1"), definition.Id, State()); Assert.Equal("1.0.0", added.Version);
+            }
+            await using (var reopenedConnection = new SqliteConnection($"Data Source={path}"))
+            {
+                await reopenedConnection.OpenAsync();
+                await using var reopened = Create(reopenedConnection);
+                var store = new EfWorkflowDefinitionStore(reopened, accessor); Assert.NotNull(await store.FindByIdAsync("definition-1"));
+                var versions = new EfWorkflowDefinitionVersionStore(reopened, serializer, store, accessor); Assert.Equal("1.0.0", (await versions.FindLatestVersionAsync("definition-1"))!.Version);
+            }
+            await using (var scopeConnection = new SqliteConnection($"Data Source={path}"))
+            {
+                await scopeConnection.OpenAsync();
+                await using var scopedDb = Create(scopeConnection);
+                var other = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-b"))); Assert.Null(await new EfWorkflowDefinitionStore(scopedDb, other).FindByIdAsync("definition-1"));
+            }
         }
-        await using (var reopened = Create(connection))
+        finally
         {
-            var store = new EfWorkflowDefinitionStore(reopened, accessor); Assert.NotNull(await store.FindByIdAsync("definition-1"));
-            var versions = new EfWorkflowDefinitionVersionStore(reopened, serializer, store, accessor); Assert.Equal("1.0.0", (await versions.FindLatestVersionAsync("definition-1"))!.Version);
+            if (File.Exists(path)) File.Delete(path);
         }
-        var other = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-b"))); await using var scopedDb = Create(connection); Assert.Null(await new EfWorkflowDefinitionStore(scopedDb, other).FindByIdAsync("definition-1"));
     }
 
     [Fact]
@@ -432,6 +463,72 @@ public sealed class EfWorkflowDesignPersistenceTests
             new DesignOperationKey("submit-invalid"), "Invalid", null, new WorkflowDefinitionState([], null, [], [], null)));
 
         Assert.Empty(await db.Definitions.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Create_draft_resolves_definition_identity_and_write_scope_tenant()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        var accessor = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var serializer = new TestSerializer();
+        db.Definitions.Add(new WorkflowDefinition { Id = "Stored-Definition", TenantId = "tenant-a", Name = "Definition" });
+        await db.SaveChangesAsync();
+
+        var command = new EfCreateDraftCommand(db, accessor, new EfDesignAtomicWriter(db, accessor), new TestIdentity(), serializer, new TestLockProvider());
+        var draftId = await command.Execute(new DesignOperationKey("create-canonical-draft"), "stored-definition");
+        var draft = await db.Drafts.SingleAsync(x => x.Id == draftId);
+
+        Assert.Equal("Stored-Definition", draft.WorkflowDefinitionId);
+        Assert.Equal("tenant-a", draft.TenantId);
+    }
+
+    [Fact]
+    public async Task Submit_creates_the_normalized_draft_layout_sibling_atomically()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        var accessor = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var result = await new EfSubmitWorkflowDefinitionCommand(
+            db, accessor, new EfDesignAtomicWriter(db, accessor), new TestSerializer(), new TestIdentity(), new EmptyActivityStructureService())
+            .Execute(new DesignOperationKey("submit-layout"), "Definition", null,
+                State() with { RootActivity = new ActivityNode("root", "activity", [], []) });
+
+        var layout = await db.DraftLayouts.SingleAsync(x => x.WorkflowDefinitionDraftId == result.DraftId);
+        Assert.Equal("tenant-a", layout.TenantId);
+        Assert.Empty(layout.Records);
+        Assert.Empty(layout.ActivityPresentation);
+    }
+
+    [Fact]
+    public async Task Version_and_version_layout_immutable_source_fields_reject_after_save_changes()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        db.Definitions.Add(new WorkflowDefinition { Id = "definition", TenantId = "tenant-a", Name = "Definition" });
+        var sourceCreatedAt = DateTimeOffset.UnixEpoch;
+        var version = new WorkflowDefinitionVersion("definition", "1.0.0", "{}", sourceCreatedAt)
+        {
+            Id = "version", TenantId = "tenant-a", SourceDraftId = "draft"
+        };
+        var layout = new WorkflowDefinitionVersionLayout
+        {
+            Id = "layout", TenantId = "tenant-a", WorkflowDefinitionVersionId = version.Id,
+            Records = [new DesignMetadataRecord("root", 1, 2)]
+        };
+        db.Versions.Add(version); db.Entry(layout).Property<string>("RecordsJson").CurrentValue = "[{\"nodeId\":\"root\",\"x\":1,\"y\":2,\"width\":null,\"height\":null,\"additionalProperties\":null}]"; db.Entry(layout).Property<string>("ActivityPresentationJson").CurrentValue = "[]"; db.VersionLayouts.Add(layout);
+        await db.SaveChangesAsync();
+
+        version.StateSource = "{\"changed\":true}";
+        Assert.Throws<InvalidOperationException>(() => db.SaveChanges());
+        db.ChangeTracker.Clear();
+        var loadedVersion = await db.Versions.SingleAsync();
+        db.Entry(loadedVersion).Property(nameof(WorkflowDefinitionVersion.SemVerSortKey)).CurrentValue = "changed";
+        Assert.Throws<InvalidOperationException>(() => db.SaveChanges());
+        db.ChangeTracker.Clear();
+        var loadedLayout = await db.VersionLayouts.SingleAsync();
+        db.Entry(loadedLayout).Property<string>("RecordsJson").CurrentValue = "[]";
+        Assert.Throws<InvalidOperationException>(() => db.SaveChanges());
     }
 
     [Fact]

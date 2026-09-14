@@ -26,7 +26,10 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore(
         IReadOnlyCollection<string> workflowDefinitionIds,
         CancellationToken cancellationToken = default)
     {
-        var ids = workflowDefinitionIds.Distinct(StringComparer.Ordinal).ToArray();
+        var ids = workflowDefinitionIds
+            .GroupBy(WorkflowDefinitionIdentity.Fold, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .ToArray();
         if (ids.Length == 0)
             return [];
 
@@ -68,7 +71,7 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore(
 
         var drafts = draftRows
             .Select(row => GroundworkDesignStorage.DeserializeDocument<WorkflowDefinitionDraft>(row.Entry, json))
-            .GroupBy(document => document.Entity.WorkflowDefinitionId, StringComparer.Ordinal)
+            .GroupBy(document => WorkflowDefinitionIdentity.Fold(document.Entity.WorkflowDefinitionId), StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
                 group => group.OrderByDescending(x => x.Entity.LastModifiedAt)
@@ -78,7 +81,7 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore(
                 StringComparer.Ordinal);
         var versions = versionRows
             .Select(row => GroundworkDesignStorage.Deserialize<WorkflowDefinitionVersion>(row.Entry, json))
-            .GroupBy(version => version.DefinitionId, StringComparer.Ordinal)
+            .GroupBy(version => WorkflowDefinitionIdentity.Fold(version.DefinitionId), StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
                 group => group.OrderByDescending(x => x.SemVerSortKey, StringComparer.Ordinal).ToArray(),
@@ -86,8 +89,9 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore(
 
         return ids.Select(definitionId =>
         {
-            drafts.TryGetValue(definitionId, out var draft);
-            versions.TryGetValue(definitionId, out var definitionVersions);
+            var key = WorkflowDefinitionIdentity.Fold(definitionId);
+            drafts.TryGetValue(key, out var draft);
+            versions.TryGetValue(key, out var definitionVersions);
             var latest = definitionVersions?.FirstOrDefault();
             return new WorkflowDefinitionListProjection(
                 definitionId,

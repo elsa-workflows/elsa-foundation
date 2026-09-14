@@ -42,8 +42,10 @@ internal static class DesignEntityConfigurations
         b.Property(x => x.SemVerSortKey).HasMaxLength(128);
         b.Property(x => x.StateSource);
         b.Property(x => x.Version).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
+        b.Property(x => x.SemVerSortKey).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
         b.Property(x => x.DefinitionId).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
         b.Property(x => x.SourceDraftId).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
+        b.Property(x => x.SourceCreatedAt).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
         b.Property(x => x.StateSource).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
         b.HasIndex("TenantId", "DefinitionIdLookupHash", nameof(WorkflowDefinitionVersion.SemVerSortKey)).IsUnique();
         b.HasOne(x => x.Definition).WithMany().HasForeignKey("TenantId", "DefinitionId").OnDelete(DeleteBehavior.Cascade);
@@ -100,6 +102,8 @@ internal static class DesignEntityConfigurations
         b.Ignore(x => x.Records);
         b.Ignore(x => x.ActivityPresentation);
         b.Property(x => x.WorkflowDefinitionVersionId).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
+        b.Property<string>("RecordsJson").Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
+        b.Property<string>("ActivityPresentationJson").Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
         b.Property(x => x.LastModifiedAt).IsConcurrencyToken();
     }
 

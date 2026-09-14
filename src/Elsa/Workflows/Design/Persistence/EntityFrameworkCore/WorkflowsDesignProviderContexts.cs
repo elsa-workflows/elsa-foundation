@@ -24,5 +24,19 @@ public sealed class WorkflowsDesignPostgreSqlDbContext(DbContextOptions<Workflow
 public sealed class WorkflowsDesignMySqlDbContext(DbContextOptions<WorkflowsDesignMySqlDbContext> options) : WorkflowsDesignDbContext(options)
 {
     public const string ExpectedProviderName = EfProviderNames.MySql;
-    protected override void ConfigureProvider(ModelBuilder modelBuilder) { ConfigureDateTime(modelBuilder, "datetime(6)"); ConfigureText(modelBuilder, "longtext"); ConfigureOrdinalCollation(modelBuilder, "utf8mb4_bin"); }
+    private const string CharacterSetAnnotation = "MySQL:Charset";
+    private const string CollationAnnotation = "MySQL:Collation";
+    public const string CharacterSet = "utf8mb4";
+    public const string Collation = "utf8mb4_0900_bin";
+
+    protected override void ConfigureProvider(ModelBuilder modelBuilder)
+    {
+        ConfigureDateTime(modelBuilder, "datetime(6)");
+        ConfigureText(modelBuilder, "longtext");
+        modelBuilder.Model.SetAnnotation(CharacterSetAnnotation, CharacterSet);
+        modelBuilder.UseCollation(Collation);
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+            entityType.SetAnnotation(CollationAnnotation, Collation);
+        ConfigureOrdinalCollation(modelBuilder, Collation);
+    }
 }

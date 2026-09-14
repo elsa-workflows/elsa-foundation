@@ -117,6 +117,26 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
         Assert.Empty(raw.Queries);
     }
 
+    [Fact]
+    public async Task Groups_projection_rows_by_folded_definition_identity()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        raw.SeedDraft(Draft("draft", "Stored-Definition", 1));
+        raw.SeedVersion(Version("version", "STORED-DEFINITION", "1.0.0"));
+
+        var rows = await new GroundworkWorkflowDefinitionListProjectionStore(
+            raw,
+            new FakePayloadSerializer(),
+            DesignGroundworkTestAccess.DefaultAccessContextAccessor)
+            .ListByDefinitionIdsAsync(["stored-definition", "STORED-DEFINITION"]);
+
+        var row = Assert.Single(rows);
+        Assert.Equal("stored-definition", row.WorkflowDefinitionId);
+        Assert.Equal("draft", row.DraftId);
+        Assert.Equal("version", row.LatestVersionId);
+        Assert.Equal(1, row.VersionCount);
+    }
+
     private static WorkflowDefinitionDraft Draft(string id, string definitionId, int day) => new()
     {
         Id = id,
