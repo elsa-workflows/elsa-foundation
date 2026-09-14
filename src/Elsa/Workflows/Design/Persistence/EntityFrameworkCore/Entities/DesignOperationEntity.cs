@@ -1,0 +1,12 @@
+namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities;
+
+public sealed class DesignOperationEntity
+{
+    public long RowNumber { get; set; }
+    public string OperationKind { get; set; } = string.Empty;
+    public string OperationKey { get; set; } = string.Empty;
+    public string RequestFingerprint { get; set; } = string.Empty;
+    public string ResultFingerprint { get; set; } = string.Empty;
+    public string ResultJson { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAt { get; set; }
+}

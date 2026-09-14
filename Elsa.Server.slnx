@@ -253,6 +253,7 @@
   <Folder Name="/src/Elsa/Workflows/Design/Persistence/">
     <Project Path="src/Elsa/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
+    <Project Path="src/Elsa/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Workflows/Design/Reconciliation/">
     <Project Path="src/Elsa/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj" />
@@ -608,6 +609,9 @@
   <Folder Name="/tests/Elsa/Workflows/Design/Persistence/" />
   <Folder Name="/tests/Elsa/Workflows/Design/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Workflows/Design/Persistence/Groundwork/Tests/Elsa.Workflows.Design.Persistence.Groundwork.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Workflows/Design/Persistence/EntityFrameworkCore/">
+    <Project Path="tests/Elsa/Workflows/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/ExecutionEvidence/">
     <Project Path="tests/Elsa/Workflows/ExecutionEvidence/Tests/Elsa.Workflows.ExecutionEvidence.Tests.csproj" />
