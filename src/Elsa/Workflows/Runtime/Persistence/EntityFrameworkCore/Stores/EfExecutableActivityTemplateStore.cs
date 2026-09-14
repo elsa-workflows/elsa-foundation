@@ -131,14 +131,17 @@ public sealed class EfExecutableActivityTemplateStore(
 
     public async ValueTask<bool> DeleteAsync(string templateId, CancellationToken cancellationToken = default)
     {
+        context.ChangeTracker.Clear();
         ArgumentException.ThrowIfNullOrWhiteSpace(templateId);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         var identity = new TemplateIdentity(scope, templateId, null);
-        context.ChangeTracker.Clear();
         var initialRow = await FindRowByIdAsync(identity, cancellationToken);
         if (initialRow is null)
+        {
+            context.ChangeTracker.Clear();
             return false;
+        }
         var initialTemplate = Read(initialRow, identity);
         var fullIdentity = identity with { TemplateHash = initialTemplate.TemplateHash };
         var initialClaim = await FindClaimRowAsync(fullIdentity, cancellationToken)
@@ -152,15 +155,24 @@ public sealed class EfExecutableActivityTemplateStore(
             context.ChangeTracker.Clear();
             var row = await FindRowByIdAsync(identity, cancellationToken);
             if (row is null)
+            {
+                context.ChangeTracker.Clear();
                 return false;
+            }
             if (row.IncarnationId != expectedIncarnationId)
+            {
+                context.ChangeTracker.Clear();
                 return false;
+            }
             var template = Read(row, identity);
             var claim = await FindClaimRowAsync(fullIdentity, cancellationToken)
                         ?? throw new InvalidDataException("Executable activity template has no hash claim.");
             EnsureOwnedClaim(claim, fullIdentity);
             if (claim.IncarnationId != expectedIncarnationId)
+            {
+                context.ChangeTracker.Clear();
                 return false;
+            }
             try
             {
                 await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
@@ -168,6 +180,7 @@ public sealed class EfExecutableActivityTemplateStore(
                 context.Remove(claim);
                 await context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
+                context.ChangeTracker.Clear();
                 return true;
             }
             catch (DbUpdateConcurrencyException) when (attempt + 1 < MaximumDeleteAttempts)
@@ -178,7 +191,13 @@ public sealed class EfExecutableActivityTemplateStore(
             {
                 context.ChangeTracker.Clear();
             }
+            catch
+            {
+                context.ChangeTracker.Clear();
+                throw;
+            }
         }
+        context.ChangeTracker.Clear();
         throw new InvalidOperationException($"Executable activity template '{templateId}' changed concurrently and did not settle after {MaximumDeleteAttempts} attempts.");
     }
 
@@ -340,7 +359,7 @@ public sealed class EfExecutableActivityTemplateStore(
 
     private static string ReadString(JsonObject node, string property) => node[property] is JsonValue value && value.TryGetValue<string>(out var text) && !string.IsNullOrWhiteSpace(text) ? text : throw new InvalidDataException($"The executable activity template envelope is missing '{property}'.");
     private static InvalidOperationException HashCollision(ExecutableActivityTemplate template, string owner) => new($"Template hash '{template.TemplateHash}' is already bound to id '{owner}', not '{template.TemplateId}'.");
-    private static void Validate(ExecutableActivityTemplate value) { ArgumentNullException.ThrowIfNull(value); ArgumentException.ThrowIfNullOrWhiteSpace(value.TemplateId); ArgumentException.ThrowIfNullOrWhiteSpace(value.TemplateHash); if (value.TemplateId.Length > RuntimeArtifactEfModule.IdentityMaximumLength) throw new ArgumentOutOfRangeException(nameof(value.TemplateId)); if (value.TemplateHash.Length > 450) throw new ArgumentOutOfRangeException(nameof(value.TemplateHash)); }
+    private static void Validate(ExecutableActivityTemplate value) { ArgumentNullException.ThrowIfNull(value); ArgumentException.ThrowIfNullOrWhiteSpace(value.TemplateId); ArgumentException.ThrowIfNullOrWhiteSpace(value.TemplateHash); if (value.TemplateId.Length > RuntimeArtifactEfModule.IdentityMaximumLength) throw new ArgumentOutOfRangeException(nameof(value.TemplateId)); if (value.TemplateHash.Length > RuntimeArtifactEfModule.HashMaximumLength) throw new ArgumentOutOfRangeException(nameof(value.TemplateHash)); }
     private static string CreateId(string scope, string value) => Hash($"{scope.Length}:{scope}{value.Length}:{value}");
     private static string NewIncarnationId() => Guid.NewGuid().ToString("N");
     private static string Hash(string value) => EfRelationalIdentity.Hash(value);

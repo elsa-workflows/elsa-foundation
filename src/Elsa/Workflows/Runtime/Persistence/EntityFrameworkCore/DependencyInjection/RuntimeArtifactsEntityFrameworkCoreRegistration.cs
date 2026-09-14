@@ -18,7 +18,15 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
         if (services.Any(x => x.ImplementationType == typeof(EfWorkflowExecutableStore)))
+        {
+            var existing = services.Select(x => x.ImplementationInstance).OfType<RuntimeArtifactsEntityFrameworkCoreOptions>().SingleOrDefault();
+            if (existing is null ||
+                !string.Equals(EfRelationalProviderBinding.Normalize(existing.Provider), EfRelationalProviderBinding.Normalize(options.Provider), StringComparison.Ordinal) ||
+                !string.Equals(existing.ConnectionString, options.ConnectionString, StringComparison.Ordinal) ||
+                !string.Equals(existing.ConnectionName, options.ConnectionName, StringComparison.Ordinal))
+                throw new InvalidOperationException("Runtime artifacts EF persistence is already registered with different provider options.");
             return services;
+        }
         var provider = EfRelationalProviderBinding.Normalize(options.Provider);
         _ = EfRelationalProviderBinding.ExpectedProviderName(options.Provider);
         services.AddOptions<RuntimeRecoveryContinuationOptions>()

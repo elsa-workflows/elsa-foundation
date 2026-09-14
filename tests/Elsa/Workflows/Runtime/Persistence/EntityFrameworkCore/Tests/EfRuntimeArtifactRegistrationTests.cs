@@ -85,6 +85,41 @@ public sealed class EfRuntimeArtifactRegistrationTests
     }
 
     [Fact]
+    public void Artifact_registration_is_idempotent_only_for_equivalent_options()
+    {
+        var options = new RuntimeArtifactsEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=runtime-artifacts.db",
+            ConnectionName = "runtime-artifacts"
+        };
+        var services = new ServiceCollection();
+        services.AddRuntimeArtifactsEntityFrameworkCore(options);
+
+        services.AddRuntimeArtifactsEntityFrameworkCore(new RuntimeArtifactsEntityFrameworkCoreOptions
+        {
+            Provider = "sqlite",
+            ConnectionString = options.ConnectionString,
+            ConnectionName = options.ConnectionName
+        });
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(
+            new RuntimeArtifactsEntityFrameworkCoreOptions
+            {
+                Provider = "Sqlite",
+                ConnectionString = "Data Source=other.db",
+                ConnectionName = options.ConnectionName
+            }));
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(
+            new RuntimeArtifactsEntityFrameworkCoreOptions
+            {
+                Provider = "Sqlite",
+                ConnectionString = options.ConnectionString,
+                ConnectionName = "other"
+            }));
+    }
+
+    [Fact]
     public void Bookmark_feature_can_be_extended_without_replacing_its_registration_contract()
     {
         var feature = new ExtensibleBookmarksFeature();

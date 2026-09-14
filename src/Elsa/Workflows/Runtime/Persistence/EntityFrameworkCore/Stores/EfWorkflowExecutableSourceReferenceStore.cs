@@ -130,26 +130,34 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
 
     public async ValueTask<bool> RetireAsync(string sourceReferenceId, DateTimeOffset deletedAt, string? reason = null, CancellationToken cancellationToken = default)
     {
+        context.ChangeTracker.Clear();
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceReferenceId);
         var scope = RequireScope();
-        var row = await context.WorkflowExecutableSourceReferences.SingleOrDefaultAsync(x =>
-            x.Id == CreateId(scope, sourceReferenceId) &&
-            x.ScopeKeyHash == Hash(scope) &&
-            x.ScopeKey == Encode(scope) &&
-            x.SourceReferenceIdHash == Hash(sourceReferenceId) &&
-            x.SourceReferenceId == sourceReferenceId,
-            cancellationToken);
-        if (row is null)
-            return false;
-        var current = Read(row, scope, sourceReferenceId);
-        if (current.DeletedAt is not null)
-            return true;
-        Copy(row, current.Retire(deletedAt, reason), scope);
-        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
+            var row = await context.WorkflowExecutableSourceReferences.SingleOrDefaultAsync(x =>
+                x.Id == CreateId(scope, sourceReferenceId) &&
+                x.ScopeKeyHash == Hash(scope) &&
+                x.ScopeKey == Encode(scope) &&
+                x.SourceReferenceIdHash == Hash(sourceReferenceId) &&
+                x.SourceReferenceId == sourceReferenceId,
+                cancellationToken);
+            if (row is null)
+            {
+                context.ChangeTracker.Clear();
+                return false;
+            }
+            var current = Read(row, scope, sourceReferenceId);
+            if (current.DeletedAt is not null)
+            {
+                context.ChangeTracker.Clear();
+                return true;
+            }
+            Copy(row, current.Retire(deletedAt, reason), scope);
+            await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
             await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+            context.ChangeTracker.Clear();
             return true;
         }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
@@ -170,6 +178,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
 
     private async ValueTask<bool> TryReplace(WorkflowExecutableSourceReference expected, WorkflowExecutableSourceReference replacement, bool restore, CancellationToken cancellationToken)
     {
+        context.ChangeTracker.Clear();
         Validate(expected);
         Validate(replacement);
         var valid = WorkflowExecutableSourceReferenceComparer.SameIdentity(expected, replacement) &&
@@ -179,22 +188,29 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         if (!valid)
             return false;
         var scope = RequireScope();
-        var row = await context.WorkflowExecutableSourceReferences.SingleOrDefaultAsync(x =>
-            x.Id == CreateId(scope, expected.SourceReferenceId) &&
-            x.ScopeKeyHash == Hash(scope) &&
-            x.ScopeKey == Encode(scope) &&
-            x.SourceReferenceIdHash == Hash(expected.SourceReferenceId) &&
-            x.SourceReferenceId == expected.SourceReferenceId,
-            cancellationToken);
-        if (row is null)
-            return false;
-        var current = Read(row, scope, expected.SourceReferenceId);
-        if (!WorkflowExecutableSourceReferenceComparer.SameSnapshot(current, expected))
-            return false;
-        Copy(row, replacement, scope);
         try
         {
+            var row = await context.WorkflowExecutableSourceReferences.SingleOrDefaultAsync(x =>
+                x.Id == CreateId(scope, expected.SourceReferenceId) &&
+                x.ScopeKeyHash == Hash(scope) &&
+                x.ScopeKey == Encode(scope) &&
+                x.SourceReferenceIdHash == Hash(expected.SourceReferenceId) &&
+                x.SourceReferenceId == expected.SourceReferenceId,
+                cancellationToken);
+            if (row is null)
+            {
+                context.ChangeTracker.Clear();
+                return false;
+            }
+            var current = Read(row, scope, expected.SourceReferenceId);
+            if (!WorkflowExecutableSourceReferenceComparer.SameSnapshot(current, expected))
+            {
+                context.ChangeTracker.Clear();
+                return false;
+            }
+            Copy(row, replacement, scope);
             await context.SaveChangesAsync(cancellationToken);
+            context.ChangeTracker.Clear();
             return true;
         }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
@@ -203,24 +219,29 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
 
     public async ValueTask<bool> DeleteAsync(string sourceReferenceId, CancellationToken cancellationToken = default)
     {
+        context.ChangeTracker.Clear();
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceReferenceId);
         var scope = RequireScope();
-        var row = await context.WorkflowExecutableSourceReferences.SingleOrDefaultAsync(x =>
-            x.Id == CreateId(scope, sourceReferenceId) &&
-            x.ScopeKeyHash == Hash(scope) &&
-            x.ScopeKey == Encode(scope) &&
-            x.SourceReferenceIdHash == Hash(sourceReferenceId) &&
-            x.SourceReferenceId == sourceReferenceId,
-            cancellationToken);
-        if (row is null)
-            return false;
-        _ = Read(row, scope, sourceReferenceId);
-        context.Remove(row);
-        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
+            var row = await context.WorkflowExecutableSourceReferences.SingleOrDefaultAsync(x =>
+                x.Id == CreateId(scope, sourceReferenceId) &&
+                x.ScopeKeyHash == Hash(scope) &&
+                x.ScopeKey == Encode(scope) &&
+                x.SourceReferenceIdHash == Hash(sourceReferenceId) &&
+                x.SourceReferenceId == sourceReferenceId,
+                cancellationToken);
+            if (row is null)
+            {
+                context.ChangeTracker.Clear();
+                return false;
+            }
+            _ = Read(row, scope, sourceReferenceId);
+            context.Remove(row);
+            await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
             await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+            context.ChangeTracker.Clear();
             return true;
         }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
@@ -229,19 +250,29 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
 
     public async ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(WorkflowExecutableSourceReferenceCleanupBatch batch, DateTimeOffset now, CancellationToken cancellationToken = default)
     {
+        context.ChangeTracker.Clear();
         ArgumentNullException.ThrowIfNull(batch);
         var scope = RequireScope();
-        var query = context.WorkflowExecutableSourceReferences.Where(x => x.ExpiresAtUtcTicks <= now.UtcTicks || x.IsRetired);
-        query = query.Where(x => x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope));
-        var rows = await query.OrderBy(x => x.ExpiresAtUtcTicks).ThenBy(x => x.SourceReferenceIdOrderKey).Take(batch.Limit).ToArrayAsync(cancellationToken);
-        var deleted = new List<string>(rows.Length);
-        foreach (var row in rows)
+        try
         {
-            var current = Read(row, scope, row.SourceReferenceId);
-            if (await TryDeleteCapturedAsync(current.SourceReferenceId, row.IncarnationId, row.Revision, cancellationToken))
-                deleted.Add(current.SourceReferenceId);
+            var query = context.WorkflowExecutableSourceReferences.Where(x => x.ExpiresAtUtcTicks <= now.UtcTicks || x.IsRetired);
+            query = query.Where(x => x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope));
+            var rows = await query.OrderBy(x => x.ExpiresAtUtcTicks).ThenBy(x => x.SourceReferenceIdOrderKey).Take(batch.Limit).ToArrayAsync(cancellationToken);
+            var deleted = new List<string>(rows.Length);
+            foreach (var row in rows)
+            {
+                var current = Read(row, scope, row.SourceReferenceId);
+                if (await TryDeleteCapturedAsync(current.SourceReferenceId, row.IncarnationId, row.Revision, cancellationToken))
+                    deleted.Add(current.SourceReferenceId);
+            }
+            context.ChangeTracker.Clear();
+            return deleted;
         }
-        return deleted;
+        catch
+        {
+            context.ChangeTracker.Clear();
+            throw;
+        }
     }
 
     private async ValueTask<bool> TryDeleteCapturedAsync(string sourceReferenceId, string expectedIncarnationId, long expectedRevision, CancellationToken cancellationToken)
@@ -256,14 +287,18 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             x.SourceReferenceId == sourceReferenceId,
             cancellationToken);
         if (row is null || row.IncarnationId != expectedIncarnationId || row.Revision != expectedRevision)
+        {
+            context.ChangeTracker.Clear();
             return false;
+        }
         _ = Read(row, scope, sourceReferenceId);
         context.Remove(row);
-        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
+            await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
             await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+            context.ChangeTracker.Clear();
             return true;
         }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
@@ -399,11 +434,21 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(value.SourceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(value.DefinitionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(value.DefinitionVersionId);
+        ValidateBound(value.SourceReferenceId, nameof(value.SourceReferenceId));
+        ValidateBound(value.ArtifactId, nameof(value.ArtifactId));
+        ValidateBound(value.DefinitionId, nameof(value.DefinitionId));
+        ValidateBound(value.DefinitionVersionId, nameof(value.DefinitionVersionId));
         ArgumentException.ThrowIfNullOrWhiteSpace(value.ArtifactVersion);
         if (value.SourceVersion is not null)
             ArgumentException.ThrowIfNullOrWhiteSpace(value.SourceVersion);
         if (!Enum.IsDefined(value.Scope))
             throw new ArgumentOutOfRangeException(nameof(value.Scope));
+    }
+
+    private static void ValidateBound(string value, string parameterName)
+    {
+        if (value.Length > RuntimeArtifactEfModule.IdentityMaximumLength)
+            throw new ArgumentOutOfRangeException(parameterName);
     }
 
     private static string SerializeEnvelope(WorkflowExecutableSourceReference value)

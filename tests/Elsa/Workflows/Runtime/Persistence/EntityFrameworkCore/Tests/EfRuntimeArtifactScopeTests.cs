@@ -113,6 +113,30 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Constrained_artifact_and_source_reference_inputs_are_rejected_before_database_access()
+    {
+        await using var database = await Database.CreateAsync();
+        var interceptor = new ReaderCommandInterceptor();
+        await using var fixture = database.Open("tenant-a", interceptor);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => fixture.Executable.SaveAsync(
+            Executable("artifact", new string('h', RuntimeArtifactEfModule.HashMaximumLength + 1))).AsTask());
+
+        var reference = Reference("reference", "artifact");
+        var invalidReferences = new[]
+        {
+            reference with { SourceReferenceId = new string('s', RuntimeArtifactEfModule.IdentityMaximumLength + 1) },
+            reference with { ArtifactId = new string('a', RuntimeArtifactEfModule.IdentityMaximumLength + 1) },
+            reference with { DefinitionId = new string('d', RuntimeArtifactEfModule.IdentityMaximumLength + 1) },
+            reference with { DefinitionVersionId = new string('v', RuntimeArtifactEfModule.IdentityMaximumLength + 1) }
+        };
+        foreach (var invalid in invalidReferences)
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => fixture.Store.SaveAsync(invalid).AsTask());
+
+        Assert.Empty(interceptor.Commands);
+    }
+
+    [Fact]
     public async Task Cleanup_does_not_delete_a_successor_recreated_after_selection()
     {
         await using var database = await Database.CreateAsync();
@@ -269,6 +293,7 @@ public sealed class EfRuntimeArtifactScopeTests
         var result = await fixture.Store.TryRetireAsync(stale!, stale!.Retire(DateTimeOffset.UtcNow, "stale"));
 
         Assert.False(result);
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
         Assert.Null((await fixture.Store.FindAsync(original.SourceReferenceId))!.DeletedAt);
     }
 
@@ -349,6 +374,7 @@ public sealed class EfRuntimeArtifactScopeTests
         await using var stale = database.Open("tenant-a", interleaving);
 
         Assert.False(await stale.Template.DeleteAsync("recreated-template-different-hash"));
+        Assert.Empty(stale.Context.ChangeTracker.Entries());
         Assert.Equal("new-hash", (await current.Template.FindAsync("recreated-template-different-hash"))!.TemplateHash);
     }
 
@@ -547,10 +573,10 @@ public sealed class EfRuntimeArtifactScopeTests
         id, artifact, "WorkflowDefinition", "definition", "1", "definition", "definition-version", "1",
         DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, WorkflowExecutableReferenceScope.Published);
 
-    private static WorkflowExecutable Executable(string artifactId)
+    private static WorkflowExecutable Executable(string artifactId, string? artifactHash = null)
     {
         var node = new ExecutableNode("node", "node", "test", "1", "consumer", JsonSerializer.SerializeToElement(new { }), new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), outputCaptures: new Dictionary<string, RuntimeOutputCapture>());
-        return new WorkflowExecutable(new WorkflowExecutableIdentity(artifactId, "definition", "version", "1", $"hash-{artifactId}"), node, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
+        return new WorkflowExecutable(new WorkflowExecutableIdentity(artifactId, "definition", "version", "1", artifactHash ?? $"hash-{artifactId}"), node, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static ExecutableActivityTemplate Template(string id, string hash)

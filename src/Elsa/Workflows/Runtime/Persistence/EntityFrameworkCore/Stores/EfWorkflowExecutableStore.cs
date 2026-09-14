@@ -593,7 +593,10 @@ public sealed class EfWorkflowExecutableStore(
     {
         ArgumentNullException.ThrowIfNull(executable);
         ArgumentException.ThrowIfNullOrWhiteSpace(executable.Identity.ArtifactId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(executable.Identity.ArtifactHash);
         if (executable.Identity.ArtifactId.Length > RuntimeArtifactEfModule.IdentityMaximumLength)
+            throw new ArgumentOutOfRangeException(nameof(executable));
+        if (executable.Identity.ArtifactHash.Length > RuntimeArtifactEfModule.HashMaximumLength)
             throw new ArgumentOutOfRangeException(nameof(executable));
     }
 

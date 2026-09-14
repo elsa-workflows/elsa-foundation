@@ -15,7 +15,7 @@ public sealed class WorkflowExecutableEntityConfiguration : IEntityTypeConfigura
         b.Property(x => x.ScopeKeyHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.ArtifactId).HasMaxLength(128).IsRequired();
         b.Property(x => x.ArtifactIdHash).HasMaxLength(64).IsRequired();
-        b.Property(x => x.ArtifactHash).HasMaxLength(450).IsRequired();
+        b.Property(x => x.ArtifactHash).HasMaxLength(RuntimeArtifactEfModule.HashMaximumLength).IsRequired();
         b.Property(x => x.ArtifactIdOrderKey).HasMaxLength(655).IsRequired();
         b.Property(x => x.ContentJson).IsRequired();
         b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
@@ -52,7 +52,7 @@ public sealed class ExecutableActivityTemplateEntityConfiguration : IEntityTypeC
         b.Property(x => x.ScopeKeyHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.TemplateId).HasMaxLength(128).IsRequired();
         b.Property(x => x.TemplateIdHash).HasMaxLength(64).IsRequired();
-        b.Property(x => x.TemplateHash).HasMaxLength(450).IsRequired();
+        b.Property(x => x.TemplateHash).HasMaxLength(RuntimeArtifactEfModule.HashMaximumLength).IsRequired();
         b.Property(x => x.TemplateIdOrderKey).HasMaxLength(655).IsRequired();
         b.Property(x => x.ContentJson).IsRequired();
         b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
@@ -99,7 +99,7 @@ public sealed class WorkflowExecutableSourceReferenceEntityConfiguration : IEnti
         b.Property(x => x.ScopeKey).IsRequired();
         b.Property(x => x.ScopeKeyHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.ScopeKeyOrderKey).HasMaxLength(655).IsRequired();
-        b.Property(x => x.Scope).HasMaxLength(32).IsRequired();
+        b.Property(x => x.Scope).HasMaxLength(RuntimeArtifactEfModule.ScopeMaximumLength).IsRequired();
         b.Property(x => x.ContentJson).IsRequired();
         b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
         b.Property(x => x.Revision).IsConcurrencyToken().IsRequired();
