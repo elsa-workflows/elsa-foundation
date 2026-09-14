@@ -727,7 +727,7 @@ public sealed class ArchitectureGuardTests
     {
         var sourceRoot = Path.Join(RepoRoot, "src");
         var violations = Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
-            .Where(file => !IsBuildArtifactFile(file))
+            .Where(file => !IsGeneratedScratchFile(file) && !IsBuildArtifactFile(file))
             .SelectMany(file => FindPrunedPublicContractNames(File.ReadAllText(file))
                 .Select(name => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {name}"))
             .Distinct()
@@ -847,6 +847,11 @@ public sealed class ArchitectureGuardTests
         reference.Name.StartsWith("Elsa.", StringComparison.Ordinal) &&
         reference.Name.Contains(".Design", StringComparison.Ordinal);
 
+    // ExtensionBuilder wrote runtime-generated scratch projects under this path. The feature
+    // is retired, but the prune scan still skips those files if they reappear so generated
+    // output cannot look like a reintroduced public contract.
+    private static bool IsGeneratedScratchFile(string filePath) =>
+        filePath.Replace(Path.DirectorySeparatorChar, '/').Contains("/extension-builder/projects/", StringComparison.Ordinal);
 
     // Build output under src/**/obj and src/**/bin (AssemblyInfo, GlobalUsings.g.cs, EF/source-generator
     // scaffolds) is not source; scanning it would make a token sweep depend on build state.
