@@ -480,6 +480,9 @@
     <Project Path="tests/Elsa/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/EntityFrameworkCore/" />
+  <Folder Name="/tests/Elsa/Persistence/EntityFrameworkCore/TransactionTopology/">
+    <Project Path="tests/Elsa/Persistence/EntityFrameworkCore/TransactionTopology/Tests/Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Persistence/EntityFrameworkCore/MySql/">
     <Project Path="tests/Elsa/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj" />
   </Folder>

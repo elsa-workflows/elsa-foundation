@@ -7,7 +7,7 @@ Records direct project references only.
 ## Summary
 
 - Source projects: 136
-- Test projects: 117
+- Test projects: 118
 - Direct project references: 1236
 
 ## Projects
@@ -210,6 +210,7 @@ Records direct project references only.
 | [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Modularity | - | default | Elsa.Agent.Anthropic<br>Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Host<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane<br>Elsa.Workbench<br>Elsa.Workflows.Design.Reconciliation.Git |
 | [Elsa.Persistence.EntityFramework.Tests](../../tests/Elsa/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj) | test | Elsa.Persistence | - | default | Elsa.Persistence.EntityFramework |
 | [Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests](../../tests/Elsa/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj) | test | Elsa.Persistence | - | default | Elsa.Secrets<br>Elsa.Secrets.Persistence.EntityFrameworkCore |
+| [Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests](../../tests/Elsa/Persistence/EntityFrameworkCore/TransactionTopology/Tests/Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests.csproj) | test | Elsa.Persistence | - | false | - |
 | [Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests](../../tests/Elsa/Persistence/Groundwork/DesignConformance/MongoDb/Tests/Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests.csproj) | test | Elsa.Persistence | - | default | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Persistence.Groundwork.DesignConformance.Target<br>Elsa.Persistence.Groundwork.DesignConformance.Tests<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Persistence.Groundwork<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Publishing.Persistence.Groundwork<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
 | [Elsa.Persistence.Groundwork.DesignConformance.PostgreSql.Tests](../../tests/Elsa/Persistence/Groundwork/DesignConformance/PostgreSql/Tests/Elsa.Persistence.Groundwork.DesignConformance.PostgreSql.Tests.csproj) | test | Elsa.Persistence | - | default | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Persistence.Groundwork.DesignConformance.Target<br>Elsa.Persistence.Groundwork.DesignConformance.Tests<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Persistence.Groundwork<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Publishing.Persistence.Groundwork<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
 | [Elsa.Persistence.Groundwork.DesignConformance.SqlServer.Tests](../../tests/Elsa/Persistence/Groundwork/DesignConformance/SqlServer/Tests/Elsa.Persistence.Groundwork.DesignConformance.SqlServer.Tests.csproj) | test | Elsa.Persistence | - | default | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Persistence.Groundwork.DesignConformance.Target<br>Elsa.Persistence.Groundwork.DesignConformance.Tests<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Persistence.Groundwork<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Publishing.Persistence.Groundwork<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
@@ -288,7 +289,7 @@ Records direct project references only.
 | Elsa.Locking | 2 | 0 |
 | Elsa.Mediator | 2 | 1 |
 | Elsa.Modularity | 3 | 1 |
-| Elsa.Persistence | 2 | 16 |
+| Elsa.Persistence | 2 | 17 |
 | Elsa.Pipelines | 1 | 0 |
 | Elsa.Primitives | 2 | 2 |
 | Elsa.Samples | 0 | 1 |

@@ -7,7 +7,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 ## Summary
 
 - Source projects: 136
-- Test projects: 117
+- Test projects: 118
 - Domains: 28
 - Direct cross-domain references: 730
 
@@ -31,7 +31,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Locking | 2 | 0 | contract<br>provider/implementation |
 | Elsa.Mediator | 2 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Modularity | 3 | 1 | contract<br>feature/implementation<br>test |
-| Elsa.Persistence | 2 | 16 | feature/implementation<br>test |
+| Elsa.Persistence | 2 | 17 | feature/implementation<br>test |
 | Elsa.Pipelines | 1 | 0 | contract |
 | Elsa.Primitives | 2 | 2 | feature/implementation<br>test |
 | Elsa.Samples | 0 | 1 | test |
@@ -244,6 +244,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Modularity | Tests | test | Elsa.Agent.Anthropic<br>Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Host<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane<br>Elsa.Workbench<br>Elsa.Workflows.Design.Reconciliation.Git |
 | [Elsa.Persistence.EntityFramework.Tests](../../tests/Elsa/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj) | test | Elsa.Persistence | EntityFramework.Tests | test | Elsa.Persistence.EntityFramework |
 | [Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests](../../tests/Elsa/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj) | test | Elsa.Persistence | EntityFrameworkCore.MySql.FeasibilityTests | test | Elsa.Secrets<br>Elsa.Secrets.Persistence.EntityFrameworkCore |
+| [Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests](../../tests/Elsa/Persistence/EntityFrameworkCore/TransactionTopology/Tests/Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests.csproj) | test | Elsa.Persistence | EntityFrameworkCore.TransactionTopology.Tests | test | - |
 | [Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests](../../tests/Elsa/Persistence/Groundwork/DesignConformance/MongoDb/Tests/Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests.csproj) | test | Elsa.Persistence | Groundwork.DesignConformance.MongoDb.Tests | test | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Persistence.Groundwork.DesignConformance.Target<br>Elsa.Persistence.Groundwork.DesignConformance.Tests<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Persistence.Groundwork<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Publishing.Persistence.Groundwork<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
 | [Elsa.Persistence.Groundwork.DesignConformance.PostgreSql.Tests](../../tests/Elsa/Persistence/Groundwork/DesignConformance/PostgreSql/Tests/Elsa.Persistence.Groundwork.DesignConformance.PostgreSql.Tests.csproj) | test | Elsa.Persistence | Groundwork.DesignConformance.PostgreSql.Tests | test | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Persistence.Groundwork.DesignConformance.Target<br>Elsa.Persistence.Groundwork.DesignConformance.Tests<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Persistence.Groundwork<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Publishing.Persistence.Groundwork<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
 | [Elsa.Persistence.Groundwork.DesignConformance.SqlServer.Tests](../../tests/Elsa/Persistence/Groundwork/DesignConformance/SqlServer/Tests/Elsa.Persistence.Groundwork.DesignConformance.SqlServer.Tests.csproj) | test | Elsa.Persistence | Groundwork.DesignConformance.SqlServer.Tests | test | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Persistence.Groundwork.DesignConformance.Target<br>Elsa.Persistence.Groundwork.DesignConformance.Tests<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Persistence.Groundwork<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Publishing.Persistence.Groundwork<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
