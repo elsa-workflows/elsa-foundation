@@ -62,7 +62,9 @@ public sealed class GroundworkWorkflowDefinitionVersionStoreTests
     [Fact]
     public void Stored_document_omits_persistence_artifacts()
     {
-        var fixture = Seeded([Version("v1", "def1", "1.0.0")]);
+        var version = Version("v1", "def1", "1.0.0");
+        version.DefinitionIdLookupHash = "definition-lookup-hash";
+        var fixture = Seeded([version]);
         using (fixture.Raw)
         {
             var values = Assert.Single(fixture.Raw.Snapshot(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind));
@@ -76,6 +78,7 @@ public sealed class GroundworkWorkflowDefinitionVersionStoreTests
             Assert.DoesNotContain("stateSource", json);
             Assert.DoesNotContain("rowNumber", json);
             Assert.DoesNotContain("\"definition\":", json);
+            Assert.DoesNotContain("definitionIdLookupHash", json);
         }
     }
 

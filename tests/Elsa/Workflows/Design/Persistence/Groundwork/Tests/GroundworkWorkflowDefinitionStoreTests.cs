@@ -71,6 +71,32 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
     }
 
     [Fact]
+    public void Stored_document_omits_persistence_projection_artifacts()
+    {
+        var definition = new WorkflowDefinition
+        {
+            Id = "definition",
+            Name = "Definition",
+            Description = "Description",
+            IdLookupHash = "id-lookup-hash",
+            IdSearchKey = "id-search-key",
+            NameSearchKey = "name-search-key",
+            DescriptionSearchKey = "description-search-key"
+        };
+        var (_, raw) = Seeded(definition);
+        using (raw)
+        {
+            var values = Assert.Single(raw.Snapshot(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind));
+            var json = ((System.Text.Json.JsonElement)values.Values[WorkflowsDesignStorageManifest.ContentField]!).GetRawText();
+            Assert.Contains("\"name\"", json);
+            Assert.DoesNotContain("idLookupHash", json);
+            Assert.DoesNotContain("idSearchKey", json);
+            Assert.DoesNotContain("nameSearchKey", json);
+            Assert.DoesNotContain("descriptionSearchKey", json);
+        }
+    }
+
+    [Fact]
     public async Task FindById_rejects_a_valid_payload_whose_embedded_identity_differs_from_the_projected_identity()
     {
         using var raw = new DesignGroundworkTestPersistence();

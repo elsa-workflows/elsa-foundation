@@ -1413,7 +1413,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.Throws<InvalidOperationException>(() => db.SaveChanges());
         db.ChangeTracker.Clear();
         var loadedVersion = await db.Versions.SingleAsync();
-        loadedVersion.SemVerSortKey = "changed";
+        db.Entry(loadedVersion).Property(x => x.SemVerSortKey).CurrentValue = "changed";
         Assert.Throws<InvalidOperationException>(() => db.SaveChanges());
         db.ChangeTracker.Clear();
         var loadedDraft = await db.Drafts.SingleAsync();

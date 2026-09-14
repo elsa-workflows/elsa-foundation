@@ -178,7 +178,9 @@ public sealed class GroundworkWorkflowDefinitionDraftStoreTests
     [Fact]
     public void Stored_document_omits_persistence_artifacts()
     {
-        var (_, raw) = Seeded((Draft("d1", "def1"), null, null));
+        var draft = Draft("d1", "def1");
+        draft.WorkflowDefinitionIdLookupHash = "definition-lookup-hash";
+        var (_, raw) = Seeded((draft, null, null));
         using (raw)
         {
             var values = Assert.Single(raw.Snapshot(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind));
@@ -187,6 +189,7 @@ public sealed class GroundworkWorkflowDefinitionDraftStoreTests
             Assert.DoesNotContain("stateSource", json);
             Assert.DoesNotContain("rowNumber", json);
             Assert.DoesNotContain("workflowDefinition\"", json);
+            Assert.DoesNotContain("workflowDefinitionIdLookupHash", json);
         }
     }
 

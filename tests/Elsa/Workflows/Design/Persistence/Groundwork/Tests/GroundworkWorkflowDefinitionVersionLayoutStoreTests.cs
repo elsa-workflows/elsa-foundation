@@ -9,7 +9,14 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
 public sealed class GroundworkWorkflowDefinitionVersionLayoutStoreTests
 {
     private static WorkflowDefinitionVersionLayout Layout(string id, string versionId, params DesignMetadataRecord[] records) =>
-        new() { Id = id, WorkflowDefinitionVersionId = versionId, Records = records };
+        new()
+        {
+            Id = id,
+            WorkflowDefinitionVersionId = versionId,
+            Records = records,
+            RecordsJson = "serialized-records",
+            ActivityPresentationJson = "serialized-presentation"
+        };
 
     private static (GroundworkWorkflowDefinitionVersionLayoutStore Store, DesignGroundworkTestPersistence Raw) Seeded(
         params WorkflowDefinitionVersionLayout[] layouts)
@@ -87,6 +94,8 @@ public sealed class GroundworkWorkflowDefinitionVersionLayoutStoreTests
             Assert.Contains("\"records\"", json);
             Assert.DoesNotContain("rowNumber", json);
             Assert.DoesNotContain("workflowDefinitionVersion\"", json);
+            Assert.DoesNotContain("recordsJson", json);
+            Assert.DoesNotContain("activityPresentationJson", json);
         }
     }
 }

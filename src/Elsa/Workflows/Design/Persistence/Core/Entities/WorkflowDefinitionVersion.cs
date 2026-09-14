@@ -19,7 +19,7 @@ public sealed class WorkflowDefinitionVersion(string definitionId, string versio
     /// once via <see cref="SemVer.ToSortKey(string)"/>). Drives DB-side ORDER BY and latest-version
     /// resolution. It is persistence-only and is not exposed via the domain interface.
     /// </summary>
-    public string SemVerSortKey { get; set; } = SemVer.ToSortKey(version);
+    public string SemVerSortKey { get; init; } = SemVer.ToSortKey(version);
 
     /// <summary>
     /// The id of the workflow definition
