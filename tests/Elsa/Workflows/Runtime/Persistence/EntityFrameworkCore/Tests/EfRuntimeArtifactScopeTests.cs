@@ -481,6 +481,9 @@ public sealed class EfRuntimeArtifactScopeTests
             "{\"Leases\":null,\"Guard\":null}",
             "{\"Leases\":{\"key\":{\"Id\":\"other\",\"Token\":\"token\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"Guard\":null}",
             "{\"Leases\":{\"one\":{\"Id\":\"one\",\"Token\":\"\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"},\"two\":{\"Id\":\"two\",\"Token\":\"\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"Guard\":null}",
+            "{\"Leases\":{\"one\":{\"Id\":\"one\",\"id\":\"one\",\"Token\":\"token\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"Guard\":null}",
+            "{\"Leases\":{\"one\":{\"Token\":\"token\",\"token\":\"token-duplicate\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"Guard\":null}",
+            "{\"Leases\":{\"one\":{\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\",\"expiresAt\":\"2030-01-02T00:00:00+00:00\",\"Id\":\"one\",\"Token\":\"token\"}},\"Guard\":null}",
             "{\"Leases\":{\"one\":{\"Id\":\"one\",\"Token\":\"token\",\"ExpiresAt\":\"0001-01-01T00:00:00+00:00\"}},\"Guard\":null}",
             "{\"Leases\":{},\"Guard\":{\"OperationId\":\"\",\"Token\":\"token\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}}",
             "{\"Leases\":{},\"leases\":{},\"Guard\":null}"

@@ -568,7 +568,7 @@ public sealed class EfWorkflowExecutableStore(
         else if (element.ValueKind == JsonValueKind.Array)
         {
             foreach (var item in element.EnumerateArray())
-                EnsureUniqueProperties(item, dictionaryKeys);
+                EnsureUniqueProperties(item);
         }
     }
 
