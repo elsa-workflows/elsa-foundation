@@ -1,5 +1,7 @@
 using Elsa.Persistence.EntityFramework;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +21,10 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             return services;
         var provider = EfRelationalProviderBinding.Normalize(options.Provider);
         _ = EfRelationalProviderBinding.ExpectedProviderName(options.Provider);
+        services.AddOptions<RuntimeRecoveryContinuationOptions>()
+            .Configure(options => options.AllowEphemeralDevelopmentKey = false);
+        services.TryAddSingleton<IRuntimeRecoveryContinuationCodec, HmacRuntimeRecoveryContinuationCodec>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateRuntimeRecoveryContinuationCodecStartupTask>());
         BookmarkStateEfContextRegistration.EnsureCompatible(
             services,
             provider,

@@ -97,7 +97,7 @@ public sealed class WorkflowExecutableSourceReferenceEntityConfiguration : IEnti
         b.Property(x => x.ContentJson).IsRequired();
         b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
         b.Property(x => x.Revision).IsConcurrencyToken().IsRequired();
-        b.HasIndex(x => new { x.ScopeKeyHash, x.ArtifactIdHash });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.ArtifactIdHash, x.ArtifactId });
         b.HasIndex(x => new { x.ScopeKeyHash, x.DefinitionVersionIdHash, x.DefinitionVersionId });
         b.HasIndex(x => new { x.ScopeKeyHash, x.DefinitionIdHash, x.DefinitionId });
         b.HasIndex(x => new { x.ScopeKeyHash, x.SourceReferenceIdHash, x.SourceReferenceId }).IsUnique();

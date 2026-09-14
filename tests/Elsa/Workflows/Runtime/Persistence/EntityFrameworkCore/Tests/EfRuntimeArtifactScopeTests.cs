@@ -2,10 +2,14 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Options;
+using System.Data.Common;
 using System.Text.Json;
 using Xunit;
 
@@ -86,6 +90,25 @@ public sealed class EfRuntimeArtifactScopeTests
         var unreferenced = await fixture.Store.ListUnreferencedArtifactIdsAsync(new(["artifact-live", "artifact-missing"]), DateTimeOffset.UtcNow);
 
         Assert.Equal(["artifact-missing"], unreferenced);
+    }
+
+    [Fact]
+    public async Task Unreferenced_lookup_uses_exact_bounded_existence_queries_per_candidate()
+    {
+        await using var database = await Database.CreateAsync();
+        var interceptor = new ReaderCommandInterceptor();
+        await using var fixture = database.Open("tenant-a", interceptor);
+        await fixture.Store.SaveAsync(Reference("ref-live", "artifact-live"));
+        await fixture.Store.SaveAsync(Reference("ref-other", "artifact-other"));
+        interceptor.Commands.Clear();
+
+        var unreferenced = await fixture.Store.ListUnreferencedArtifactIdsAsync(
+            new(["artifact-live", "artifact-missing"]),
+            DateTimeOffset.UtcNow);
+
+        Assert.Equal(["artifact-missing"], unreferenced);
+        Assert.Equal(2, interceptor.Commands.Count);
+        Assert.All(interceptor.Commands, command => Assert.Contains("LIMIT", command, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -361,12 +384,24 @@ public sealed class EfRuntimeArtifactScopeTests
             return new Database(connection);
         }
 
-        public Fixture Open(string scope) => Open(PersistenceAccessContext.Scoped(new PersistenceScope(scope)));
+        public Fixture Open(string scope, ReaderCommandInterceptor? interceptor = null) => Open(PersistenceAccessContext.Scoped(new PersistenceScope(scope)), interceptor);
 
-        public Fixture Open(PersistenceAccessContext access)
+        public Fixture Open(PersistenceAccessContext access, ReaderCommandInterceptor? interceptor = null)
         {
-            var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
-            return new Fixture(context, new EfWorkflowExecutableSourceReferenceStore(context, new Accessor(access)), new EfWorkflowExecutableStore(context, new Accessor(access)), new EfExecutableActivityTemplateStore(context, new Accessor(access)));
+            var options = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection);
+            if (interceptor is not null)
+                options.AddInterceptors(interceptor);
+            var context = new BookmarkStateSqliteDbContext(options.Options);
+            var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions
+            {
+                SigningKey = "ef-runtime-test-recovery-signing-key-32-bytes",
+                AllowEphemeralDevelopmentKey = false
+            }));
+            return new Fixture(
+                context,
+                new EfWorkflowExecutableSourceReferenceStore(context, new Accessor(access), codec),
+                new EfWorkflowExecutableStore(context, new Accessor(access)),
+                new EfExecutableActivityTemplateStore(context, new Accessor(access), codec));
         }
 
         public ValueTask DisposeAsync() => connection.DisposeAsync();
@@ -384,5 +419,29 @@ public sealed class EfRuntimeArtifactScopeTests
     private sealed class Accessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
     {
         public PersistenceAccessContext Current { get; } = current;
+    }
+
+    private sealed class ReaderCommandInterceptor : DbCommandInterceptor
+    {
+        public List<string> Commands { get; } = [];
+
+        public override InterceptionResult<DbDataReader> ReaderExecuting(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result)
+        {
+            Commands.Add(command.CommandText);
+            return result;
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            Commands.Add(command.CommandText);
+            return ValueTask.FromResult(result);
+        }
     }
 }

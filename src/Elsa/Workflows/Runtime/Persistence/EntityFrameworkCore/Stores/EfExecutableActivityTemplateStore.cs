@@ -7,20 +7,18 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 public sealed class EfExecutableActivityTemplateStore(
     BookmarkStateDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    IRuntimeRecoveryContinuationCodec? continuationCodec = null) : IExecutableActivityTemplateStore
+    IRuntimeRecoveryContinuationCodec continuationCodec) : IExecutableActivityTemplateStore
 {
     private const int MaximumCreateAttempts = 3;
     private const int MaximumDeleteAttempts = 8;
     private const string ContinuationPurpose = "ef-runtime-template-page-v1";
-    private readonly IRuntimeRecoveryContinuationCodec continuationCodec = continuationCodec ??
-        new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { AllowEphemeralDevelopmentKey = true }));
+    private readonly IRuntimeRecoveryContinuationCodec continuationCodec = continuationCodec;
 
     public async ValueTask SaveAsync(ExecutableActivityTemplate template, CancellationToken cancellationToken = default)
     {

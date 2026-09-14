@@ -7,18 +7,16 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 public sealed class EfWorkflowExecutableSourceReferenceStore(
     BookmarkStateDbContext context,
     IPersistenceAccessContextAccessor access,
-    IRuntimeRecoveryContinuationCodec? continuationCodec = null) : IWorkflowExecutableSourceReferenceStore
+    IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowExecutableSourceReferenceStore
 {
     private const string ContinuationPurpose = "ef-runtime-source-reference-page-v1";
-    private readonly IRuntimeRecoveryContinuationCodec continuationCodec = continuationCodec ??
-        new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { AllowEphemeralDevelopmentKey = true }));
+    private readonly IRuntimeRecoveryContinuationCodec continuationCodec = continuationCodec;
     public async ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default)
     {
         Validate(reference);
@@ -228,16 +226,33 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
     public async ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(WorkflowExecutableArtifactCandidateBatch candidates, DateTimeOffset now, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(candidates);
+        cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        var candidateHashes = candidates.ArtifactIds.Select(Hash).ToArray();
-        var query = context.WorkflowExecutableSourceReferences.Where(x =>
-            x.ScopeKeyHash == Hash(scope) &&
-            x.ScopeKey == Encode(scope) &&
-            !x.IsRetired &&
-            x.ExpiresAtUtcTicks > now.UtcTicks &&
-            candidateHashes.Contains(x.ArtifactIdHash));
-        var rows = await query.Select(x => new { x.ArtifactId, x.ArtifactIdHash }).ToArrayAsync(cancellationToken);
-        return candidates.ArtifactIds.Where(candidate => !rows.Any(row => row.ArtifactIdHash == EfRelationalIdentity.Hash(candidate) && row.ArtifactId == candidate)).ToArray();
+        var scopeHash = Hash(scope);
+        var scopeKey = Encode(scope);
+        var unreferenced = new List<string>(candidates.ArtifactIds.Count);
+        foreach (var candidate in candidates.ArtifactIds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var candidateHash = Hash(candidate);
+            var referenced = await context.WorkflowExecutableSourceReferences
+                .AsNoTracking()
+                .Where(x =>
+                    x.ScopeKeyHash == scopeHash &&
+                    x.ScopeKey == scopeKey &&
+                    !x.IsRetired &&
+                    x.ExpiresAtUtcTicks > now.UtcTicks &&
+                    x.ArtifactIdHash == candidateHash &&
+                    x.ArtifactId == candidate)
+                .OrderBy(x => x.SourceReferenceIdOrderKey)
+                .Select(x => x.Id)
+                .Take(1)
+                .ToArrayAsync(cancellationToken);
+            if (referenced.Length == 0)
+                unreferenced.Add(candidate);
+        }
+
+        return unreferenced;
     }
 
     private string RequireScope()
