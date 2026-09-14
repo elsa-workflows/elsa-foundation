@@ -610,6 +610,54 @@ public sealed class EfBookmarkStateStoreTests
 
     }
 
+    [Theory]
+    [InlineData("context-type")]
+    [InlineData("context-instance")]
+    [InlineData("context-factory")]
+    [InlineData("options")]
+    [InlineData("base-context")]
+    public void Equivalent_registration_rejects_post_registration_context_contamination(string registration)
+    {
+        var options = new RuntimeBookmarksEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=runtime-bookmarks.db"
+        };
+        var services = new ServiceCollection();
+        services.AddRuntimeBookmarksEntityFrameworkCore(options);
+        AddCustomContextRegistration(services, registration);
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeBookmarksEntityFrameworkCore(options));
+        Assert.Equal(before, services);
+    }
+
+    private static void AddCustomContextRegistration(IServiceCollection services, string registration)
+    {
+        switch (registration)
+        {
+            case "context-type":
+                services.AddScoped<BookmarkStateSqliteDbContext>();
+                break;
+            case "context-instance":
+                services.AddSingleton<BookmarkStateSqliteDbContext>(new BookmarkStateSqliteDbContext(
+                    new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().Options));
+                break;
+            case "context-factory":
+                services.AddScoped<BookmarkStateSqliteDbContext>(_ => throw new NotSupportedException());
+                break;
+            case "options":
+                services.AddSingleton<DbContextOptions<BookmarkStateSqliteDbContext>>(
+                    new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().Options);
+                break;
+            case "base-context":
+                services.AddScoped<BookmarkStateDbContext>(_ => throw new NotSupportedException());
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(registration), registration, null);
+        }
+    }
+
     [Fact]
     public void Registration_restores_the_exact_service_collection_when_backend_registration_fails()
     {
@@ -700,7 +748,35 @@ public sealed class EfBookmarkStateStoreTests
             await using var provider = services.BuildServiceProvider();
             using var scope = provider.CreateScope();
             Assert.IsAssignableFrom<BookmarkStateDbContext>(scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
+            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
+            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(DbContextOptions<BookmarkStateSqliteDbContext>));
+            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
         }
+    }
+
+    [Theory]
+    [InlineData("bookmarks-first")]
+    [InlineData("artifacts-first")]
+    public void Combined_runtime_ef_registration_rejects_post_registration_context_contamination(string first)
+    {
+        var bookmarks = new RuntimeBookmarksEntityFrameworkCoreOptions { Provider = "Sqlite", ConnectionString = "Data Source=shared.db" };
+        var artifacts = new RuntimeArtifactsEntityFrameworkCoreOptions { Provider = "Sqlite", ConnectionString = "Data Source=shared.db" };
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        if (first == "bookmarks-first")
+            services.AddRuntimeBookmarksEntityFrameworkCore(bookmarks);
+        else
+            services.AddRuntimeArtifactsEntityFrameworkCore(artifacts);
+
+        services.AddScoped<BookmarkStateSqliteDbContext>(_ => throw new NotSupportedException());
+        var before = services.ToArray();
+
+        var exception = first == "bookmarks-first"
+            ? Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(artifacts))
+            : Assert.Throws<InvalidOperationException>(() => services.AddRuntimeBookmarksEntityFrameworkCore(bookmarks));
+
+        Assert.Contains("registration already exists", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(before, services);
     }
 
     private static async Task<Exception?> Capture(ValueTask<BookmarkState> operation)

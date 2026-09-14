@@ -46,17 +46,21 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
                     !string.Equals(existingOptions.ConnectionString, options.ConnectionString, StringComparison.Ordinal) ||
                     !string.Equals(existingOptions.ConnectionName, options.ConnectionName, StringComparison.Ordinal))
                     throw new InvalidOperationException("Runtime bookmarks EF persistence is already registered with different provider options.");
+                BookmarkStateEfContextRegistration.EnsureContextIsAvailable(
+                    services,
+                    provider,
+                    existingBackend.Owns,
+                    "Runtime bookmarks");
                 return services;
             }
 
-            switch (provider)
-            {
-                case "sqlite": BookmarkStateEfContextRegistration.EnsureContextIsAvailable<BookmarkStateSqliteDbContext>(services, BookmarkStateEfContextRegistration.IsOwnedByArtifacts(services), "Runtime bookmarks"); break;
-                case "sqlserver": BookmarkStateEfContextRegistration.EnsureContextIsAvailable<BookmarkStateSqlServerDbContext>(services, BookmarkStateEfContextRegistration.IsOwnedByArtifacts(services), "Runtime bookmarks"); break;
-                case "postgresql": BookmarkStateEfContextRegistration.EnsureContextIsAvailable<BookmarkStatePostgreSqlDbContext>(services, BookmarkStateEfContextRegistration.IsOwnedByArtifacts(services), "Runtime bookmarks"); break;
-                case "mysql": BookmarkStateEfContextRegistration.EnsureContextIsAvailable<BookmarkStateMySqlDbContext>(services, BookmarkStateEfContextRegistration.IsOwnedByArtifacts(services), "Runtime bookmarks"); break;
-                default: throw new ArgumentException($"Unknown Runtime bookmarks EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.", nameof(options));
-            }
+            var artifactsBackend = RuntimeArtifactStoreBackend.Find(services);
+            var artifactsOwnContext = artifactsBackend?.Name == RuntimeArtifactStoreBackend.EntityFramework;
+            BookmarkStateEfContextRegistration.EnsureContextIsAvailable(
+                services,
+                provider,
+                artifactsOwnContext ? artifactsBackend!.Owns : null,
+                "Runtime bookmarks");
 
             if (existingBackend is null && BookmarkStateStoreBackend.HasRegisteredContract(services))
             {
@@ -73,14 +77,14 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
             var optionsDescriptor = ServiceDescriptor.Singleton(configured);
             services.Add(optionsDescriptor);
             ownedArtifacts.Add(optionsDescriptor);
-            switch (provider)
-            {
-                case "sqlite": ownedArtifacts.AddRange(AddContext<BookmarkStateSqliteDbContext>(services, configured, EfRelationalProviderBinding.UseSqlite)); break;
-                case "sqlserver": ownedArtifacts.AddRange(AddContext<BookmarkStateSqlServerDbContext>(services, configured, EfRelationalProviderBinding.UseSqlServer)); break;
-                case "postgresql": ownedArtifacts.AddRange(AddContext<BookmarkStatePostgreSqlDbContext>(services, configured, EfRelationalProviderBinding.UseNpgsql)); break;
-                case "mysql": ownedArtifacts.AddRange(AddContext<BookmarkStateMySqlDbContext>(services, configured, EfRelationalProviderBinding.UseMySql)); break;
-                default: throw new ArgumentException($"Unknown Runtime bookmarks EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.", nameof(options));
-            }
+            if (!artifactsOwnContext)
+                switch (provider)
+                {
+                    case "sqlite": ownedArtifacts.AddRange(AddContext<BookmarkStateSqliteDbContext>(services, configured, EfRelationalProviderBinding.UseSqlite)); break;
+                    case "sqlserver": ownedArtifacts.AddRange(AddContext<BookmarkStateSqlServerDbContext>(services, configured, EfRelationalProviderBinding.UseSqlServer)); break;
+                    case "postgresql": ownedArtifacts.AddRange(AddContext<BookmarkStatePostgreSqlDbContext>(services, configured, EfRelationalProviderBinding.UseNpgsql)); break;
+                    case "mysql": ownedArtifacts.AddRange(AddContext<BookmarkStateMySqlDbContext>(services, configured, EfRelationalProviderBinding.UseMySql)); break;
+                }
 
             var descriptorState = ServiceDescriptor.Scoped<IBookmarkStateStore>(provider => provider.GetRequiredService<EfBookmarkStateStore>());
             var descriptorIndex = ServiceDescriptor.Scoped<IBookmarkStimulusIndex>(provider => provider.GetRequiredService<EfBookmarkStateStore>());
@@ -93,7 +97,8 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
                 BookmarkStateStoreBackend.EntityFramework,
                 descriptorState,
                 descriptorIndex,
-                collection => RemoveEfArtifacts(collection, ownedArtifacts)));
+                collection => RemoveEfArtifacts(collection, ownedArtifacts),
+                ownedArtifacts));
             return services;
         }
         catch

@@ -44,6 +44,8 @@ public sealed class RuntimeArtifactStoreBackend
 
     public string Name { get; }
 
+    public bool Owns(ServiceDescriptor descriptor) => descriptors.Contains(descriptor);
+
     public static RuntimeArtifactStoreBackend? Find(IServiceCollection services) => services
         .Select(descriptor => descriptor.ImplementationInstance)
         .OfType<RuntimeArtifactStoreBackend>()

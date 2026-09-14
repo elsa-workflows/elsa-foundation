@@ -10,32 +10,48 @@ internal static class BookmarkStateEfContextRegistration
 {
     public static void EnsureContextIsAvailable<TContext>(
         IServiceCollection services,
-        bool existingContextIsOwnedBySibling,
+        Func<ServiceDescriptor, bool>? ownsExistingContext,
         string owner)
         where TContext : BookmarkStateDbContext
     {
-        var hasContextRegistration = services.Any(descriptor =>
-            descriptor.ServiceType == typeof(TContext) ||
-            descriptor.ServiceType == typeof(DbContextOptions<TContext>) ||
-            descriptor.ServiceType == typeof(BookmarkStateDbContext));
-        if (hasContextRegistration && !existingContextIsOwnedBySibling)
+        var contextRegistrations = services.Where(IsContextRegistration<TContext>).ToArray();
+        if (contextRegistrations.Length > 0 &&
+            (ownsExistingContext is null || contextRegistrations.Any(descriptor => !ownsExistingContext(descriptor))))
             throw new InvalidOperationException(
                 $"A {typeof(TContext).Name} registration already exists; {owner} EF persistence refuses to reuse or replace an unowned context.");
     }
 
-    public static bool IsOwnedByArtifacts(IServiceCollection services) =>
-        services.Select(descriptor => descriptor.ImplementationInstance)
-            .OfType<RuntimeArtifactsEntityFrameworkCoreOptions>()
-            .Any() &&
-        services.Any(descriptor =>
-            descriptor.ServiceType == typeof(EfWorkflowExecutableStore) &&
-            descriptor.ImplementationType == typeof(EfWorkflowExecutableStore));
+    public static void EnsureContextIsAvailable(
+        IServiceCollection services,
+        string provider,
+        Func<ServiceDescriptor, bool>? ownsExistingContext,
+        string owner)
+    {
+        switch (EfRelationalProviderBinding.Normalize(provider))
+        {
+            case "sqlite": EnsureContextIsAvailable<BookmarkStateSqliteDbContext>(services, ownsExistingContext, owner); break;
+            case "sqlserver": EnsureContextIsAvailable<BookmarkStateSqlServerDbContext>(services, ownsExistingContext, owner); break;
+            case "postgresql": EnsureContextIsAvailable<BookmarkStatePostgreSqlDbContext>(services, ownsExistingContext, owner); break;
+            case "mysql": EnsureContextIsAvailable<BookmarkStateMySqlDbContext>(services, ownsExistingContext, owner); break;
+            default: throw new ArgumentException($"Unknown Runtime EF provider '{provider}'.", nameof(provider));
+        }
+    }
 
-    public static bool IsOwnedByBookmarks(IServiceCollection services) =>
-        services.Select(descriptor => descriptor.ImplementationInstance)
-            .OfType<RuntimeBookmarksEntityFrameworkCoreOptions>()
-            .Any() &&
-        BookmarkStateStoreBackend.Find(services)?.Name == BookmarkStateStoreBackend.EntityFramework;
+    private static bool IsContextRegistration<TContext>(ServiceDescriptor descriptor)
+        where TContext : BookmarkStateDbContext
+    {
+        if (descriptor.ServiceType == typeof(TContext) ||
+            descriptor.ServiceType == typeof(DbContextOptions<TContext>) ||
+            descriptor.ServiceType == typeof(BookmarkStateDbContext))
+            return true;
+
+        return IsContextType(descriptor.ImplementationType) ||
+               IsContextType(descriptor.ImplementationInstance?.GetType()) ||
+               IsContextType(descriptor.ImplementationFactory?.Method.ReturnType);
+    }
+
+    private static bool IsContextType(Type? type) =>
+        type is not null && typeof(BookmarkStateDbContext).IsAssignableFrom(type);
 
     public static void EnsureCompatible(
         IServiceCollection services,

@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -185,6 +186,54 @@ public sealed class EfRuntimeArtifactRegistrationTests
 
         Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(options));
         Assert.Equal(before, services);
+    }
+
+    [Theory]
+    [InlineData("context-type")]
+    [InlineData("context-instance")]
+    [InlineData("context-factory")]
+    [InlineData("options")]
+    [InlineData("base-context")]
+    public void Equivalent_registration_rejects_post_registration_context_contamination(string registration)
+    {
+        var options = new RuntimeArtifactsEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=runtime-artifacts.db"
+        };
+        var services = new ServiceCollection();
+        services.AddRuntimeArtifactsEntityFrameworkCore(options);
+        AddCustomContextRegistration(services, registration);
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(options));
+        Assert.Equal(before, services);
+    }
+
+    private static void AddCustomContextRegistration(IServiceCollection services, string registration)
+    {
+        switch (registration)
+        {
+            case "context-type":
+                services.AddScoped<BookmarkStateSqliteDbContext>();
+                break;
+            case "context-instance":
+                services.AddSingleton<BookmarkStateSqliteDbContext>(new BookmarkStateSqliteDbContext(
+                    new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().Options));
+                break;
+            case "context-factory":
+                services.AddScoped<BookmarkStateSqliteDbContext>(_ => throw new NotSupportedException());
+                break;
+            case "options":
+                services.AddSingleton<DbContextOptions<BookmarkStateSqliteDbContext>>(
+                    new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().Options);
+                break;
+            case "base-context":
+                services.AddScoped<BookmarkStateDbContext>(_ => throw new NotSupportedException());
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(registration), registration, null);
+        }
     }
 
     [Fact]

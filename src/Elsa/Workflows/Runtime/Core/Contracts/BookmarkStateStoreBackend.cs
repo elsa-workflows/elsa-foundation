@@ -7,6 +7,7 @@ public sealed class BookmarkStateStoreBackend
 {
     private readonly ServiceDescriptor stateDescriptor;
     private readonly ServiceDescriptor indexDescriptor;
+    private readonly IReadOnlyCollection<ServiceDescriptor> auxiliaryDescriptors;
     private readonly Action<IServiceCollection>? removeOwnedArtifacts;
 
     public const string Groundwork = "groundwork";
@@ -16,7 +17,8 @@ public sealed class BookmarkStateStoreBackend
         string name,
         ServiceDescriptor stateDescriptor,
         ServiceDescriptor indexDescriptor,
-        Action<IServiceCollection>? removeOwnedArtifacts = null)
+        Action<IServiceCollection>? removeOwnedArtifacts = null,
+        IEnumerable<ServiceDescriptor>? auxiliaryDescriptors = null)
     {
         EnsureKnown(name);
         ArgumentNullException.ThrowIfNull(stateDescriptor);
@@ -30,9 +32,15 @@ public sealed class BookmarkStateStoreBackend
         this.stateDescriptor = stateDescriptor;
         this.indexDescriptor = indexDescriptor;
         this.removeOwnedArtifacts = removeOwnedArtifacts;
+        this.auxiliaryDescriptors = (auxiliaryDescriptors ?? []).ToArray();
     }
 
     public string Name { get; }
+
+    public bool Owns(ServiceDescriptor descriptor) =>
+        ReferenceEquals(descriptor, stateDescriptor) ||
+        ReferenceEquals(descriptor, indexDescriptor) ||
+        auxiliaryDescriptors.Contains(descriptor);
 
     public static void Register(IServiceCollection services, BookmarkStateStoreBackend backend)
     {
