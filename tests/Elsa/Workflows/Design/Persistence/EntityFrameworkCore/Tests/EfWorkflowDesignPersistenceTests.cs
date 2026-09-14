@@ -38,6 +38,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests;
@@ -504,6 +505,26 @@ public sealed class EfWorkflowDesignPersistenceTests
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => validator.ExecuteAsync(CancellationToken.None));
         Assert.Contains(nameof(IWorkflowDefinitionStore), exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Ef_registration_fails_startup_when_a_replacement_contract_is_removed_late()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowsDesignEntityFrameworkCore(new WorkflowsDesignEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        });
+        services.RemoveAll<IWorkflowDefinitionStore>();
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var validator = Assert.Single(scope.ServiceProvider.GetServices<IStartupTask>(),
+            task => task is ValidateDesignPersistenceReplacementContractsStartupTask);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => validator.ExecuteAsync(CancellationToken.None));
+        Assert.Contains($"{nameof(IWorkflowDefinitionStore)} (0 registrations)", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
