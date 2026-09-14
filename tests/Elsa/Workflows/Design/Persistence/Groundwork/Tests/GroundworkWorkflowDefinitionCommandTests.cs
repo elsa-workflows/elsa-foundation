@@ -54,7 +54,8 @@ public class GroundworkWorkflowDefinitionCommandTests
     private IDraftOriginator DraftOriginator(
         IGroundworkStorageSessionSource? store = null,
         IPayloadSerializer? payloadSerializer = null,
-        IDeferredEventPublisher? deferredEventPublisher = null)
+        IDeferredEventPublisher? deferredEventPublisher = null,
+        IDesignAtomicWriter? atomicWriter = null)
     {
         var storage = Storage(store);
         var payloads = payloadSerializer ?? Payloads;
@@ -62,7 +63,7 @@ public class GroundworkWorkflowDefinitionCommandTests
             _identities,
             _locks,
             storage,
-            new GroundworkDesignAtomicWrite(storage),
+            atomicWriter ?? new GroundworkDesignAtomicWrite(storage),
             payloads,
             _events,
             deferredEventPublisher ?? _events,
@@ -246,6 +247,42 @@ public class GroundworkWorkflowDefinitionCommandTests
         Assert.Equal(
             activityPresentation,
             await DraftStore().FindActivityPresentationByDraftIdAsync(cloneId));
+    }
+
+    [Fact]
+    public async Task CloneDraftFromVersion_disposes_the_previous_draft_lock_before_atomic_retry_setup()
+    {
+        var source = new WorkflowDefinitionVersion("definition-1", "1.0.0")
+        {
+            Id = "source-version",
+            TenantId = DesignGroundworkTestAccess.DefaultScopeValue,
+            State = MinimalState(),
+            StateSource = Payloads.Serialize(MinimalState())
+        };
+        _store.SeedVersion(source);
+        var locks = new DisposalRecordingLockProvider();
+        var writer = new RepeatingBeforeAttemptAtomicWriter(new GroundworkDesignAtomicWrite(Storage()));
+        var originator = new DraftOriginator(
+            _identities,
+            locks,
+            Storage(),
+            writer,
+            Payloads,
+            _events,
+            _events,
+            _clock,
+            _accessContext);
+        var clone = new GroundworkCloneDraftFromVersionCommand(
+            VersionStore(),
+            VersionLayoutStore(),
+            originator,
+            _accessContext);
+
+        await clone.Execute(NextKey(), source.Id, CancellationToken.None);
+
+        Assert.Equal(2, writer.BeforeAttemptCalls);
+        Assert.Equal(writer.BeforeAttemptCalls, locks.AcquireCount);
+        Assert.Equal(locks.AcquireCount, locks.DisposeCount);
     }
 
     [Fact]
@@ -1348,6 +1385,67 @@ public class GroundworkWorkflowDefinitionCommandTests
         }
     }
 
+    private sealed class DisposalRecordingLockProvider : IDistributedLockProvider
+    {
+        public int AcquireCount { get; private set; }
+        public int DisposeCount { get; private set; }
+
+        public IDistributedSynchronizationHandle AcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
+            new Handle(this);
+
+        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        {
+            AcquireCount++;
+            return ValueTask.FromResult<IDistributedSynchronizationHandle>(new Handle(this));
+        }
+
+        public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
+            AcquireLock(name, timeout, cancellationToken);
+
+        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IDistributedSynchronizationHandle?>(AcquireLock(name, timeout, cancellationToken));
+
+        private sealed class Handle(DisposalRecordingLockProvider owner) : IDistributedSynchronizationHandle
+        {
+            private int disposed;
+            public CancellationToken HandleLostToken => CancellationToken.None;
+            public void Dispose()
+            {
+                if (Interlocked.Exchange(ref disposed, 1) == 0)
+                    owner.DisposeCount++;
+            }
+            public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
+        }
+    }
+
+    private sealed class RepeatingBeforeAttemptAtomicWriter(IDesignAtomicWriter inner) : IDesignAtomicWriter
+    {
+        public int BeforeAttemptCalls { get; private set; }
+
+        public Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(
+            DesignOperationKey operationKey,
+            string operationKind,
+            object requestMaterial,
+            IReadOnlyCollection<string> mutatedUnits,
+            Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage,
+            Func<CancellationToken, Task>? beforeAttempt = null,
+            CancellationToken cancellationToken = default,
+            IDesignAtomicWriteResultCodec<T>? resultCodec = null)
+        {
+            async Task Repeat(CancellationToken token)
+            {
+                if (beforeAttempt is null)
+                    return;
+                BeforeAttemptCalls++;
+                await beforeAttempt(token);
+                BeforeAttemptCalls++;
+                await beforeAttempt(token);
+            }
+
+            return inner.ExecuteAsync(operationKey, operationKind, requestMaterial, mutatedUnits, stage, Repeat, cancellationToken, resultCodec);
+        }
+    }
+
     private sealed class EmptyActivityStructureService : IActivityStructureService
     {
         public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) => [];
@@ -1443,12 +1541,11 @@ public class GroundworkWorkflowDefinitionCommandTests
                 write.Mode != RowWriteMode.Delete)
             {
                 owner.VersionSaveWasRejected = true;
-                var id = write.Values?.Values[WorkflowsDesignStorageManifest.IdField]?.ToString()
-                         ?? throw new InvalidOperationException("Version write has no id.");
-                inner.Stage(RowWrite.Delete(
-                    write.Unit,
-                    GroundworkDesignStorage.Key(id),
-                    WriteOptions.IfVersion(1)));
+                // Stage the same CreateOnly version twice. The provider reports the second
+                // version-unit write as a modeled uniqueness/CAS conflict, while preserving
+                // the real version write shape for the command's classifier.
+                inner.Stage(write);
+                inner.Stage(RowWrite.ConditionalUpsert(write.Unit, write.Values!, WriteOptions.IfVersion(long.MaxValue)));
                 return;
             }
             inner.Stage(write);

@@ -107,6 +107,13 @@ public sealed class EfCloneDraftFromVersionCommand(WorkflowsDesignDbContext db, 
         {
             result = await Atomic.ExecuteAsync(key, "workflow.draft.clone-from-version.v1", new CloneDraftRequestMaterial(sourceVersionId), [DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.DraftLayouts], async token =>
             {
+                // A transient atomic retry reruns the stage and allocates a fresh draft id.
+                // Dispose the previous attempt's handle before acquiring the next one.
+                if (draftLock is not null)
+                {
+                    await draftLock.DisposeAsync();
+                    draftLock = null;
+                }
                 var source = await Scoped(Db.Versions.AsNoTracking(), x => x.TenantId).SingleOrDefaultAsync(x => x.Id == sourceVersionId, token) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionVersion), sourceVersionId);
                 Tenant(source.TenantId); var state = EfDesignSupport.ReadState(serializer, source.StateSource, "workflow.draft.clone-from-version.v1");
                 var layout = await Scoped(Db.VersionLayouts.AsNoTracking(), x => x.TenantId).SingleOrDefaultAsync(x => x.WorkflowDefinitionVersionId == sourceVersionId, token);
@@ -184,7 +191,7 @@ public sealed class EfDiscardDraftCommand(WorkflowsDesignDbContext db, IPersiste
 
 public sealed class EfDeleteWorkflowDefinitionPermanentlyCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic, IEnumerable<IWorkflowDefinitionPermanentDeletionGuard>? guards = null) : EfDesignCommand(db, access, atomic), IDeleteWorkflowDefinitionPermanentlyCommand
 {
-    public async Task Execute(DesignOperationKey key, string definitionId, CancellationToken ct = default) { ArgumentException.ThrowIfNullOrWhiteSpace(definitionId); var publicationGuards = (guards ?? []).OfType<IWorkflowDefinitionPublicationDeletionGuard>().ToArray(); await Atomic.ExecuteAsync(key, "workflow.definition.permanent-delete.v1", new PermanentDeleteRequestMaterial(definitionId), [DesignPersistenceUnitNames.Definitions], async token => { if (publicationGuards.Length == 0) throw new PermanentDeletionUnavailableException(definitionId); var row = await Scoped(Db.Definitions, x => x.TenantId).SingleOrDefaultAsync(x => x.Id == definitionId, token) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), definitionId); if (row.DeletedAt is null) throw new WorkflowDefinitionNotSoftDeletedException(definitionId); foreach (var guard in publicationGuards) await guard.EnsureCanDeleteAsync(definitionId, token); Db.Definitions.Remove(row); return true; }, ct); }
+    public async Task Execute(DesignOperationKey key, string definitionId, CancellationToken ct = default) { ArgumentException.ThrowIfNullOrWhiteSpace(definitionId); var allGuards = (guards ?? []).ToArray(); var publicationGuards = allGuards.OfType<IWorkflowDefinitionPublicationDeletionGuard>().ToArray(); await Atomic.ExecuteAsync(key, "workflow.definition.permanent-delete.v1", new PermanentDeleteRequestMaterial(definitionId), [DesignPersistenceUnitNames.Definitions, DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.Versions, DesignPersistenceUnitNames.DraftLayouts, DesignPersistenceUnitNames.VersionLayouts], async token => { if (publicationGuards.Length == 0) throw new PermanentDeletionUnavailableException(definitionId); var row = await Scoped(Db.Definitions, x => x.TenantId).SingleOrDefaultAsync(x => x.Id == definitionId, token) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), definitionId); if (row.DeletedAt is null) throw new WorkflowDefinitionNotSoftDeletedException(definitionId); foreach (var guard in allGuards) await guard.EnsureCanDeleteAsync(definitionId, token); Db.Definitions.Remove(row); return true; }, ct); }
 }
 
 public sealed class EfPromoteDraftToVersionCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic, IPayloadSerializer serializer, IIdentityGenerator identities, IWorkflowDefinitionVersionStore versionStore, IDistributedLockProvider? lockProvider = null, IInlineEventPublisher? inlineEvents = null) : EfDesignCommand(db, access, atomic), IPromoteDraftToVersionCommand
@@ -288,6 +295,12 @@ public sealed class EfPromoteDraftToVersionCommand(WorkflowsDesignDbContext db, 
                     $"Workflow promotion operation '{key.Value}' was previously recorded with different request material.");
             return result.Value!;
         }
+        catch (DesignPersistenceException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        {
+            throw new WorkflowDefinitionVersionConflictException(
+                draftId,
+                normalizedRequestedVersion ?? "automatic");
+        }
         catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
         {
             throw new WorkflowDefinitionVersionConflictException(
@@ -321,6 +334,7 @@ public sealed class EfPromoteDraftToVersionCommand(WorkflowsDesignDbContext db, 
 
             throw new WorkflowVersionSelectionException(issue.Code, issue.Message);
         }
+
     }
 }
 

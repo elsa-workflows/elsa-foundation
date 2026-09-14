@@ -19,13 +19,16 @@ public static class DesignAtomicWriteProtocol
         var existing = await lane.LoadMarker(cancellationToken);
         if (existing is not null)
             return lane.OnReplay(existing);
-        if (beforeAttempt is not null)
-            await beforeAttempt(cancellationToken);
 
         for (var attempt = 1; ; attempt++)
         {
             if (lane.ThrowIfCancellationRequestedEachAttempt)
                 cancellationToken.ThrowIfCancellationRequested();
+            // Attempt setup can acquire locks and resolve provider state. Re-run it for every
+            // retry so a failed attempt never carries a disposed/stale handle or stale snapshot
+            // into the next stage execution.
+            if (beforeAttempt is not null)
+                await beforeAttempt(cancellationToken);
             try
             {
                 return await ExecuteAttemptAsync(lane, stage, cancellationToken);

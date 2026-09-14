@@ -11,8 +11,19 @@ public static class EfRelationalExceptionClassifier
     public static bool IsUniqueConstraintViolation(DbUpdateException exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
+        return IsUniqueConstraintViolation((Exception)exception);
+    }
 
-        for (var current = (Exception?)exception; current is not null; current = current.InnerException)
+    /// <summary>
+    /// Classifies a relational uniqueness violation through an exception wrapper. Design
+    /// persistence surfaces normalize provider failures into domain exceptions, so callers that
+    /// receive that public shape must still be able to inspect the provider's inner exception.
+    /// </summary>
+    public static bool IsUniqueConstraintViolation(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        for (var current = exception; current is not null; current = current.InnerException)
         {
             var type = current.GetType();
             var fullName = type.FullName ?? "";

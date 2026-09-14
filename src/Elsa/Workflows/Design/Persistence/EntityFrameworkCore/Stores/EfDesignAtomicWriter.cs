@@ -198,6 +198,19 @@ public sealed class EfDesignAtomicWriter(
                 if (winner is not null)
                     return ResolveExisting(winner, operationKind, requestFingerprint, legacyRequestFingerprint, DesignAtomicWriteStatus.Reconciled, resultCodec);
             }
+            catch (OperationCanceledException) when (timeoutSource.IsCancellationRequested)
+            {
+                throw new DesignAtomicWriteUnknownOutcomeException(
+                    $"The EF commit acknowledgement for design operation '{operationKind}/{operationKey}' has an unknown outcome after bounded recovery.",
+                    commitException);
+            }
+            catch (DesignPersistenceException exception) when (exception.FailureKind == DesignPersistenceFailureKind.Provider)
+            {
+                // A provider can briefly reject reads while the commit acknowledgement is
+                // being recovered. Keep the bounded reconciliation window authoritative;
+                // do not expose the wrapped provider exception as a terminal result.
+                _ = exception;
+            }
             catch (DesignPersistenceException) { throw; }
             catch (Exception exception) when (exception is InvalidDataException or JsonException)
             {

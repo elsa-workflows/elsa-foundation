@@ -474,7 +474,12 @@ public sealed class EfWorkflowDesignPersistenceTests
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
-        await using var db = Create(connection);
+        var interceptor = new TransientSaveInterceptor();
+        var options = new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>()
+            .UseSqlite(connection)
+            .AddInterceptors(interceptor)
+            .Options;
+        await using var db = new WorkflowsDesignSqliteDbContext(options);
         await db.Database.EnsureCreatedAsync();
         var accessor = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
         var serializer = new TestSerializer(new JsonSerializerOptions { PropertyNamingPolicy = null });
@@ -673,6 +678,149 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Ef_maps_reconciliation_timeout_after_provider_read_failures_to_unknown_outcome()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var state = new FailureState();
+        var options = new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>()
+            .UseSqlite(connection)
+            .AddInterceptors(new CommitAcknowledgementFailureInterceptor(state), new ReadFailureInterceptor(state))
+            .Options;
+        await using var db = new WorkflowsDesignSqliteDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var writer = new EfDesignAtomicWriter(db, access, reconciliationTimeout: TimeSpan.FromMilliseconds(100));
+        state.FailNextCommit = true;
+
+        var exception = await Assert.ThrowsAsync<DesignAtomicWriteUnknownOutcomeException>(() => writer.ExecuteAsync(
+            new DesignOperationKey("ack-lost-read-failure"),
+            "test.op",
+            new { Value = 1 },
+            ["test"],
+            (_, _) => Task.FromResult(DesignAtomicWriteStage<int>.Accepted(1))));
+
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+    }
+
+    [Fact]
+    public async Task Ef_preserves_caller_cancellation_during_commit_acknowledgement()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        using var callerCancellation = new CancellationTokenSource();
+        var interceptor = new CallerCancellationCommitInterceptor(callerCancellation);
+        var options = new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>()
+            .UseSqlite(connection)
+            .AddInterceptors(interceptor)
+            .Options;
+        await using var db = new WorkflowsDesignSqliteDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+        interceptor.Arm();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var writer = new EfDesignAtomicWriter(db, access, reconciliationTimeout: TimeSpan.FromMilliseconds(100));
+
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => writer.ExecuteAsync(
+            new DesignOperationKey("caller-cancelled-commit"),
+            "test.op",
+            new { Value = 1 },
+            ["test"],
+            (_, _) => Task.FromResult(DesignAtomicWriteStage<int>.Accepted(1)),
+            cancellationToken: callerCancellation.Token));
+
+        Assert.NotEqual(typeof(DesignAtomicWriteUnknownOutcomeException), exception.GetType());
+        Assert.True(callerCancellation.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task Ef_permanent_delete_requires_publication_guard_invokes_all_guards_and_declares_cascade_units()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var inner = new EfDesignAtomicWriter(db, access);
+        var atomic = new CapturingAtomicWriter(inner);
+        var publication = new PermittingPublicationGuard();
+        var other = new RecordingDeletionGuard();
+        db.Definitions.Add(new WorkflowDefinition { Id = "definition-delete", TenantId = "tenant-a", Name = "Delete", DeletedAt = DateTimeOffset.UnixEpoch });
+        await db.SaveChangesAsync();
+
+        await new EfDeleteWorkflowDefinitionPermanentlyCommand(db, access, atomic, [publication, other])
+            .Execute(new DesignOperationKey("delete-all-units"), "definition-delete");
+
+        Assert.Equal("definition-delete", publication.SeenDefinitionId);
+        Assert.Equal("definition-delete", other.SeenDefinitionId);
+        Assert.Contains(DesignPersistenceUnitNames.VersionLayouts, atomic.MutatedUnits);
+        Assert.Equal(
+            [DesignPersistenceUnitNames.Definitions, DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.Versions, DesignPersistenceUnitNames.DraftLayouts, DesignPersistenceUnitNames.VersionLayouts],
+            atomic.MutatedUnits);
+    }
+
+    [Fact]
+    public async Task Ef_permanent_delete_refuses_a_composition_without_publication_guard()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var atomic = new CapturingAtomicWriter(new EfDesignAtomicWriter(db, access));
+
+        await Assert.ThrowsAsync<PermanentDeletionUnavailableException>(() =>
+            new EfDeleteWorkflowDefinitionPermanentlyCommand(
+                    db,
+                    access,
+                    atomic,
+                    [new RecordingDeletionGuard()])
+                .Execute(new DesignOperationKey("delete-without-publication-guard"), "missing"));
+
+        Assert.Equal(
+            [DesignPersistenceUnitNames.Definitions, DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.Versions, DesignPersistenceUnitNames.DraftLayouts, DesignPersistenceUnitNames.VersionLayouts],
+            atomic.MutatedUnits);
+    }
+
+    [Fact]
+    public async Task Ef_maps_only_unique_provider_failures_during_promotion_to_version_conflict()
+    {
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var unique = new DbUpdateException("unique", new SqliteException("UNIQUE constraint failed", 19, 1555));
+        var writer = new ThrowingAtomicWriter(new DesignPersistenceException(
+            DesignPersistenceDomain.Workflow,
+            DesignPersistenceFailureKind.Provider,
+            "workflow.draft.promote.v1",
+            null,
+            unique.InnerException!));
+        var command = new EfPromoteDraftToVersionCommand(
+            null!, access, writer, new TestSerializer(), new TestIdentity(), null!, new TestLockProvider());
+
+        var exception = await Assert.ThrowsAsync<WorkflowDefinitionVersionConflictException>(() => command.Execute(
+            new DesignOperationKey("promotion-unique-race"), "draft-1", "1.0.0"));
+
+        Assert.Equal("draft-1", exception.DefinitionId);
+    }
+
+    [Fact]
+    public async Task Ef_does_not_map_unrelated_provider_failures_during_promotion_to_version_conflict()
+    {
+        var providerFailure = new DesignPersistenceException(
+            DesignPersistenceDomain.Workflow,
+            DesignPersistenceFailureKind.Provider,
+            "workflow.draft.promote.v1",
+            null,
+            new InvalidOperationException("provider unavailable"));
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var command = new EfPromoteDraftToVersionCommand(
+            null!, access, new ThrowingAtomicWriter(providerFailure), new TestSerializer(), new TestIdentity(), null!, new TestLockProvider());
+
+        var exception = await Assert.ThrowsAsync<DesignPersistenceException>(() => command.Execute(
+            new DesignOperationKey("promotion-provider-failure"), "draft-1", "1.0.0"));
+
+        Assert.Same(providerFailure, exception);
+    }
+
+    [Fact]
     public async Task Ef_retries_transient_writes_after_rerunning_attempt_setup()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
@@ -702,6 +850,47 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.Equal(DesignAtomicWriteStatus.Committed, result.Status);
         Assert.Equal(2, beforeAttemptCalls);
         Assert.Equal(2, stageCalls);
+    }
+
+    [Fact]
+    public async Task Ef_clone_releases_the_previous_generated_draft_lock_before_retrying_stage()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var interceptor = new TransientSaveInterceptor();
+        var options = new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>()
+            .UseSqlite(connection)
+            .AddInterceptors(interceptor)
+            .Options;
+        await using var db = new WorkflowsDesignSqliteDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var serializer = new TestSerializer();
+        db.Definitions.Add(new WorkflowDefinition { Id = "definition", TenantId = "tenant-a", Name = "Definition" });
+        db.Versions.Add(new WorkflowDefinitionVersion("definition", "1.0.0")
+        {
+            Id = "source-version",
+            TenantId = "tenant-a",
+            State = State(),
+            StateSource = serializer.Serialize(State())
+        });
+        await db.SaveChangesAsync();
+        var locks = new DisposalRecordingLockProvider();
+        interceptor.FailNextSave = true;
+        var atomic = new EfDesignAtomicWriter(db, access);
+        var clone = new EfCloneDraftFromVersionCommand(
+            db,
+            access,
+            atomic,
+            new TestIdentity(),
+            serializer,
+            locks);
+
+        var draftId = await clone.Execute(new DesignOperationKey("clone-retry"), "source-version");
+
+        Assert.Equal("generated-3", draftId);
+        Assert.Equal(2, locks.AcquireCount);
+        Assert.Equal(2, locks.DisposeCount);
     }
 
     [Fact]
@@ -754,6 +943,38 @@ public sealed class EfWorkflowDesignPersistenceTests
         public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
         public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());
         private sealed class Handle : IDistributedSynchronizationHandle { public CancellationToken HandleLostToken => CancellationToken.None; public void Dispose() { } public ValueTask DisposeAsync() => ValueTask.CompletedTask; }
+    }
+    private sealed class DisposalRecordingLockProvider : IDistributedLockProvider
+    {
+        public int AcquireCount { get; private set; }
+        public int DisposeCount { get; private set; }
+
+        public IDistributedSynchronizationHandle AcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
+            new Handle(this);
+
+        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        {
+            AcquireCount++;
+            return ValueTask.FromResult<IDistributedSynchronizationHandle>(new Handle(this));
+        }
+
+        public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
+            AcquireLock(name, timeout, cancellationToken);
+
+        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IDistributedSynchronizationHandle?>(AcquireLock(name, timeout, cancellationToken));
+
+        private sealed class Handle(DisposalRecordingLockProvider owner) : IDistributedSynchronizationHandle
+        {
+            private int disposed;
+            public CancellationToken HandleLostToken => CancellationToken.None;
+            public void Dispose()
+            {
+                if (Interlocked.Exchange(ref disposed, 1) == 0)
+                    owner.DisposeCount++;
+            }
+            public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
+        }
     }
     private sealed class RecordingLockProvider : IDistributedLockProvider
     {
@@ -856,6 +1077,69 @@ public sealed class EfWorkflowDesignPersistenceTests
                     new DbUpdateException("simulated transient write conflict", new SqliteException("database is locked", 5, 5)));
             return ValueTask.FromResult(result);
         }
+    }
+    private sealed class FailureState
+    {
+        public bool FailNextCommit { get; set; }
+        public bool FailReads { get; set; }
+    }
+    private sealed class CommitAcknowledgementFailureInterceptor(FailureState state) : DbTransactionInterceptor
+    {
+        public override Task TransactionCommittedAsync(DbTransaction transaction, TransactionEndEventData eventData, CancellationToken cancellationToken = default)
+        {
+            if (!state.FailNextCommit)
+                return Task.CompletedTask;
+            state.FailNextCommit = false;
+            state.FailReads = true;
+            return Task.FromException(new InvalidOperationException("commit acknowledgement lost"));
+        }
+    }
+    private sealed class CallerCancellationCommitInterceptor(CancellationTokenSource cancellation) : DbTransactionInterceptor
+    {
+        private int armed;
+
+        public void Arm() => Interlocked.Exchange(ref armed, 1);
+
+        public override Task TransactionCommittedAsync(DbTransaction transaction, TransactionEndEventData eventData, CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Exchange(ref armed, 0) == 0)
+                return Task.CompletedTask;
+            cancellation.Cancel();
+            return Task.FromCanceled(cancellation.Token);
+        }
+    }
+    private sealed class ReadFailureInterceptor(FailureState state) : DbCommandInterceptor
+    {
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default) => state.FailReads
+            ? ValueTask.FromException<InterceptionResult<DbDataReader>>(new InvalidOperationException("provider read unavailable"))
+            : ValueTask.FromResult(result);
+    }
+    private sealed class CapturingAtomicWriter(IDesignAtomicWriter inner) : IDesignAtomicWriter
+    {
+        public IReadOnlyCollection<string> MutatedUnits { get; private set; } = [];
+        public Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default, IDesignAtomicWriteResultCodec<T>? resultCodec = null)
+        {
+            MutatedUnits = mutatedUnits.ToArray();
+            return inner.ExecuteAsync(operationKey, operationKind, requestMaterial, mutatedUnits, stage, beforeAttempt, cancellationToken, resultCodec);
+        }
+    }
+    private sealed class ThrowingAtomicWriter(Exception exception) : IDesignAtomicWriter
+    {
+        public Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default, IDesignAtomicWriteResultCodec<T>? resultCodec = null) => Task.FromException<DesignAtomicWriteResult<T>>(exception);
+    }
+    private sealed class PermittingPublicationGuard : IWorkflowDefinitionPublicationDeletionGuard
+    {
+        public string? SeenDefinitionId { get; private set; }
+        public Task EnsureCanDeleteAsync(string definitionId, CancellationToken cancellationToken = default) { SeenDefinitionId = definitionId; return Task.CompletedTask; }
+    }
+    private sealed class RecordingDeletionGuard : IWorkflowDefinitionPermanentDeletionGuard
+    {
+        public string? SeenDefinitionId { get; private set; }
+        public Task EnsureCanDeleteAsync(string definitionId, CancellationToken cancellationToken = default) { SeenDefinitionId = definitionId; return Task.CompletedTask; }
     }
     private sealed class TestSerializer(JsonSerializerOptions? serializerOptions = null) : IPayloadSerializer
     {

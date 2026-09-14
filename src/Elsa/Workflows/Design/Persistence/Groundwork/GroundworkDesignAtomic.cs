@@ -232,7 +232,10 @@ public sealed class GroundworkDesignAtomicWrite(
                     {
                         if (IsOperationMarkerConflict(report.Outcomes))
                             throw new GroundworkDesignOperationMarkerRaceException();
-                        var failed = report.Outcomes.Where(item => item.Disposition == RowWriteDisposition.Applied && !item.Outcome.Succeeded).ToArray();
+                        // Preserve every unsuccessful outcome, including precondition failures
+                        // that providers report without an Applied disposition. Commands can then
+                        // distinguish a version CreateOnly race from an unrelated provider error.
+                        var failed = report.Outcomes.Where(item => !item.Outcome.Succeeded).ToArray();
                         if (failed.Length != 0)
                             throw new GroundworkDesignWriteProviderException("Groundwork rejected the design-operation batch.", new BatchWriteException("Groundwork returned unsuccessful design-operation outcomes.", failed));
                         return Task.FromResult(DesignAtomicCommitDisposition.Rejected);
@@ -249,7 +252,7 @@ public sealed class GroundworkDesignAtomicWrite(
             Rollback = TryRollback,
             ClassifyMarkerRace = exception => exception is GroundworkDesignOperationMarkerRaceException,
             ClassifyUncertainCommit = exception => exception is GroundworkDesignUncertainCommitException,
-            OnUncertainCommit = (exception, token) => ReconcileAsync(markerId, request, token),
+            OnUncertainCommit = (exception, token) => ReconcileAsync(markerId, request, exception, token),
             ShouldReconcileAfterCommitFailure = exception => exception is not GroundworkDesignWriteProviderException,
             DisposeBeforeReconcile = unitOfWork =>
             {
@@ -268,7 +271,11 @@ public sealed class GroundworkDesignAtomicWrite(
         return await DesignAtomicWriteProtocol.ExecuteAsync(lane, async (unitOfWork, token) => await stage(new GroundworkDesignAtomicWriteContext(unitOfWork, storage.ForUnitOfWork(unitOfWork)), token), beforeAttempt, cancellationToken);
     }
 
-    private async Task<GroundworkDesignAtomicWriteResult> ReconcileAsync(string markerId, GroundworkDesignAtomicWriteRequest request, CancellationToken cancellationToken)
+    private async Task<GroundworkDesignAtomicWriteResult> ReconcileAsync(
+        string markerId,
+        GroundworkDesignAtomicWriteRequest request,
+        Exception originalCause,
+        CancellationToken cancellationToken)
     {
         using var reconciliation = new CancellationTokenSource(timeout);
         var backoff = MarkerRaceBackoffStep;
@@ -291,7 +298,11 @@ public sealed class GroundworkDesignAtomicWrite(
             }
             try { await Task.Delay(backoff, clock, reconciliation.Token); }
             catch (OperationCanceledException) when (reconciliation.IsCancellationRequested)
-            { throw new DesignAtomicWriteUnknownOutcomeException($"Design operation marker '{markerId}' did not become visible within the reconciliation timeout."); }
+            {
+                throw new DesignAtomicWriteUnknownOutcomeException(
+                    $"Design operation marker '{markerId}' did not become visible within the reconciliation timeout.",
+                    originalCause);
+            }
             backoff = TimeSpan.FromMilliseconds(Math.Min(backoff.TotalMilliseconds * 2, 250));
         }
     }
@@ -304,7 +315,7 @@ public sealed class GroundworkDesignAtomicWrite(
     {
         try
         {
-            return await ReconcileAsync(markerId, request, cancellationToken);
+            return await ReconcileAsync(markerId, request, exception, cancellationToken);
         }
         catch (DesignAtomicWriteUnknownOutcomeException)
         {
