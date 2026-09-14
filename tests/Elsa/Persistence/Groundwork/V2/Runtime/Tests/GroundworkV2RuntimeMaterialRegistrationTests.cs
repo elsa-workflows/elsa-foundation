@@ -48,6 +48,21 @@ public sealed class GroundworkV2RuntimeMaterialRegistrationTests
         Assert.Equal(before, services);
     }
 
+    [Fact]
+    public void Replacing_default_material_backend_does_not_withdraw_named_target_declarations()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkV2RuntimeMaterials();
+        foreach (var unitId in UnitIds)
+            services.AddGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.Require(unitId), "named");
+
+        services.AddGroundworkV2RuntimeMaterials();
+
+        var registry = Assert.IsType<GroundworkStorageUnitRegistry>(services.Single(descriptor =>
+            descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance);
+        Assert.All(UnitIds, unitId => Assert.Equal("named", registry.Require(unitId, "named").TargetName));
+    }
+
     private static void AssertScoped<TImplementation>(IServiceCollection services, Type contract)
     {
         var implementation = Assert.Single(services, candidate => candidate.ServiceType == typeof(TImplementation));
@@ -65,6 +80,15 @@ public sealed class GroundworkV2RuntimeMaterialRegistrationTests
         Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
         Assert.NotNull(descriptor.ImplementationFactory);
     }
+
+    private static readonly string[] UnitIds =
+    [
+        ElsaRuntimeV2StorageManifest.WorkflowExecutableDocumentKind,
+        ElsaRuntimeV2StorageManifest.WorkflowExecutableCoordinationDocumentKind,
+        ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateDocumentKind,
+        ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateHashClaimDocumentKind,
+        ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDocumentKind
+    ];
 
     private sealed class ThrowingServiceCollection(Func<ServiceDescriptor, bool> shouldThrow) : IServiceCollection
     {

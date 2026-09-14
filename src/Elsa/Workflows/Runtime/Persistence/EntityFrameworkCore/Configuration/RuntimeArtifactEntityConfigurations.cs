@@ -53,12 +53,14 @@ public sealed class ExecutableActivityTemplateEntityConfiguration : IEntityTypeC
         b.Property(x => x.TemplateId).HasMaxLength(RuntimeArtifactEfModule.IdentityProjectionMaximumLength).IsRequired();
         b.Property(x => x.TemplateIdHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.TemplateHash).HasMaxLength(RuntimeArtifactEfModule.HashMaximumLength).IsRequired();
+        b.Property(x => x.TemplateHashHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.TemplateIdOrderKey).HasMaxLength(655).IsRequired();
         b.Property(x => x.ContentJson).IsRequired();
         b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
         b.Property(x => x.Revision).IsConcurrencyToken().IsRequired();
         b.Property(x => x.IncarnationId).HasMaxLength(64).IsRequired().IsConcurrencyToken();
         b.HasIndex(x => new { x.ScopeKeyHash, x.TemplateIdHash, x.TemplateId }).IsUnique();
+        b.HasIndex(x => new { x.ScopeKeyHash, x.TemplateHashHash, x.TemplateHash });
     }
 }
 public sealed class ExecutableActivityTemplateHashClaimEntityConfiguration : IEntityTypeConfiguration<ExecutableActivityTemplateHashClaimEntity>

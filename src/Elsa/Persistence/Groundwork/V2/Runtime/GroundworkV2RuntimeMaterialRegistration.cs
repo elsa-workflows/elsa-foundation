@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,6 +39,7 @@ public static class GroundworkV2RuntimeMaterialRegistration
         string? targetName = null)
     {
         ArgumentNullException.ThrowIfNull(services);
+        var target = GroundworkTargetNames.Normalize(targetName);
         var snapshot = services.ToArray();
         var registry = services
             .Where(descriptor => descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry))
@@ -56,14 +58,14 @@ public static class GroundworkV2RuntimeMaterialRegistration
             else
                 RuntimeArtifactStoreBackend.EnsureNoUnownedArtifactRegistrations(services);
             foreach (var unitId in UnitIds)
-                services.AddGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.Require(unitId), targetName);
+                services.AddGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.Require(unitId), target);
 
         services.RemoveAll<GroundworkV2WorkflowExecutableStore>();
         services.RemoveAll<IWorkflowExecutableStore>();
         services.AddScoped<GroundworkV2WorkflowExecutableStore>(provider => new(
             provider.GetRequiredService<IGroundworkStorageSessionSource>(),
             provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
-            targetName));
+            target));
         services.AddScoped<IWorkflowExecutableStore>(provider =>
             provider.GetRequiredService<GroundworkV2WorkflowExecutableStore>());
 
@@ -74,7 +76,7 @@ public static class GroundworkV2RuntimeMaterialRegistration
         services.AddScoped<GroundworkV2ExecutableActivityTemplateStore>(provider => new(
             provider.GetRequiredService<IGroundworkStorageSessionSource>(),
             provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
-            targetName));
+            target));
         services.AddScoped<IExecutableActivityTemplateStore>(provider =>
             provider.GetRequiredService<GroundworkV2ExecutableActivityTemplateStore>());
         services.AddScoped<IExecutableActivityTemplateReader>(provider =>
@@ -89,7 +91,7 @@ public static class GroundworkV2RuntimeMaterialRegistration
         services.AddScoped<GroundworkV2WorkflowExecutableSourceReferenceStore>(provider => new(
             provider.GetRequiredService<IGroundworkStorageSessionSource>(),
             provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
-            targetName));
+            target));
         services.AddScoped<IWorkflowExecutableSourceReferenceStore>(provider =>
             provider.GetRequiredService<GroundworkV2WorkflowExecutableSourceReferenceStore>());
         services.AddScoped<IWorkflowExecutableSourceReferenceReader>(provider =>
@@ -99,7 +101,7 @@ public static class GroundworkV2RuntimeMaterialRegistration
             RuntimeArtifactStoreBackend.Register(services, new RuntimeArtifactStoreBackend(
                 RuntimeArtifactStoreBackend.Groundwork,
                 RuntimeArtifactStoreBackend.CaptureArtifactSurfaceRegistrations(services),
-                collection => GroundworkV2RuntimeUnitWithdrawal.RemoveArtifacts(collection, targetName)));
+                collection => GroundworkV2RuntimeUnitWithdrawal.RemoveArtifacts(collection, target)));
             return services;
         }
         catch

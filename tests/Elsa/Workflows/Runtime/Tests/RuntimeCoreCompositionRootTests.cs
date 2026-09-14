@@ -89,6 +89,15 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
     }
 
     [Fact]
+    public void AddWorkflowRuntime_scopes_the_source_reference_reader_alias()
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+
+        var descriptor = Assert.Single(services, candidate => candidate.ServiceType == typeof(IWorkflowExecutableSourceReferenceReader));
+        Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+    }
+
+    [Fact]
     public void AddWorkflowRuntime_RegistersOneOverridableDefaultStartPolicy()
     {
         var services = new ServiceCollection().AddWorkflowRuntime();

@@ -123,6 +123,7 @@ public sealed class EfExecutableActivityTemplateStore(
                   ?? throw new InvalidDataException("Executable activity template hash claim points to a missing template.");
         if (row.IncarnationId != claim.IncarnationId)
             throw new InvalidDataException("Executable activity template and its hash claim have mismatched incarnation identities.");
+        EnsureRowHash(row, identity.TemplateHash);
         return Read(row, templateIdentity);
     }
 
@@ -185,6 +186,7 @@ public sealed class EfExecutableActivityTemplateStore(
                 return false;
             }
             var template = Read(row, identity);
+            EnsureRowHash(row, fullIdentity.TemplateHash);
             var claim = await FindClaimRowAsync(fullIdentity, cancellationToken)
                         ?? throw new InvalidDataException("Executable activity template has no hash claim.");
             EnsureOwnedClaim(claim, fullIdentity);
@@ -292,7 +294,7 @@ public sealed class EfExecutableActivityTemplateStore(
             identity.TemplateHash,
             () => context.ExecutableActivityTemplates.AsNoTracking().Where(x =>
                 x.ScopeKeyHash == Hash(identity.Scope) && x.ScopeKey == Encode(identity.Scope) &&
-                x.TemplateHash == identity.TemplateHash)
+                x.TemplateHashHash == Hash(identity.TemplateHash) && x.TemplateHash == identity.TemplateHash)
                 .OrderBy(x => x.TemplateId).Take(2).ToArrayAsync(cancellationToken));
     }
 
@@ -307,7 +309,7 @@ public sealed class EfExecutableActivityTemplateStore(
     private static ExecutableActivityTemplateEntity ToEntity(ExecutableActivityTemplate template, TemplateIdentity identity, string json, string incarnationId) => new()
     {
         Id = CreateId(identity.Scope, template.TemplateId), ScopeKey = Encode(identity.Scope), ScopeKeyHash = Hash(identity.Scope), TemplateId = Encode(template.TemplateId),
-        TemplateIdHash = Hash(template.TemplateId), TemplateHash = template.TemplateHash, TemplateIdOrderKey = OrderKey(template.TemplateId), ContentJson = json,
+        TemplateIdHash = Hash(template.TemplateId), TemplateHash = template.TemplateHash, TemplateHashHash = Hash(template.TemplateHash), TemplateIdOrderKey = OrderKey(template.TemplateId), ContentJson = json,
         SchemaVersion = RuntimeArtifactEfModule.SchemaVersion, Revision = 1, IncarnationId = incarnationId
     };
 
@@ -321,7 +323,7 @@ public sealed class EfExecutableActivityTemplateStore(
     private static ExecutableActivityTemplate Read(ExecutableActivityTemplateEntity row, TemplateIdentity identity)
     {
         if (identity.TemplateId is null || row.Id != CreateId(identity.Scope, identity.TemplateId) || row.ScopeKey != Encode(identity.Scope) || row.ScopeKeyHash != Hash(identity.Scope) ||
-            row.TemplateId != Encode(identity.TemplateId) || row.TemplateIdHash != Hash(identity.TemplateId) || row.TemplateIdOrderKey != OrderKey(identity.TemplateId) || row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
+            row.TemplateId != Encode(identity.TemplateId) || row.TemplateIdHash != Hash(identity.TemplateId) || row.TemplateHashHash != Hash(row.TemplateHash) || row.TemplateIdOrderKey != OrderKey(identity.TemplateId) || row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
             throw new InvalidDataException("The persisted executable activity template row is corrupt.");
         try
         {
@@ -362,6 +364,12 @@ public sealed class EfExecutableActivityTemplateStore(
             throw new InvalidDataException("Executable activity template has no hash claim.");
         if (identity.TemplateHash is null || ReadClaim(row, identity).TemplateId != identity.TemplateId)
             throw new InvalidOperationException($"Executable activity template hash '{identity.TemplateHash}' is owned by another template.");
+    }
+
+    private static void EnsureRowHash(ExecutableActivityTemplateEntity row, string? expectedHash)
+    {
+        if (expectedHash is null || !StringComparer.Ordinal.Equals(row.TemplateHash, expectedHash) || !StringComparer.Ordinal.Equals(row.TemplateHashHash, Hash(expectedHash)))
+            throw new InvalidDataException("Executable activity template row hash does not match its requested hash claim.");
     }
 
     private static void EnsureSameIdentityAndContent(ExecutableActivityTemplate existing, ExecutableActivityTemplate candidate)

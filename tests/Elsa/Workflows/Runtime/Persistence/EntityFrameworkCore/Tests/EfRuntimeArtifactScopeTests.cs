@@ -231,6 +231,42 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Template_hash_lookup_rejects_a_row_projection_that_disagrees_with_its_claim()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Template.SaveAsync(Template("template-hash-projection", "hash-projection"));
+
+        var row = await fixture.Context.ExecutableActivityTemplates.SingleAsync();
+        row.TemplateHash = "different-hash";
+        row.TemplateHashHash = Elsa.Persistence.EntityFramework.EfRelationalIdentity.Hash("different-hash");
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Template.FindByHashAsync("hash-projection").AsTask());
+    }
+
+    [Fact]
+    public async Task Template_delete_rejects_a_row_hash_that_no_longer_matches_its_claim()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Template.SaveAsync(Template("template-delete-hash", "hash-before"));
+
+        var row = await fixture.Context.ExecutableActivityTemplates.SingleAsync();
+        var envelope = JsonNode.Parse(row.ContentJson)!.AsObject();
+        envelope["templateHash"] = Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("hash-after");
+        envelope["template"]!.AsObject()["templateHash"] = "hash-after";
+        row.TemplateHash = "hash-after";
+        row.TemplateHashHash = Elsa.Persistence.EntityFramework.EfRelationalIdentity.Hash("hash-after");
+        row.ContentJson = envelope.ToJsonString();
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Template.DeleteAsync("template-delete-hash").AsTask());
+    }
+
+    [Fact]
     public async Task Source_reference_definition_projection_and_cursor_shape_are_verified()
     {
         await using var database = await Database.CreateAsync();

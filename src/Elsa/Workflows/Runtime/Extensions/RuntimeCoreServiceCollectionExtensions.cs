@@ -125,7 +125,7 @@ public static class RuntimeCoreServiceCollectionExtensions
             serviceProvider.GetRequiredService<IExecutableActivityTemplateStore>());
         services.TryAdd(defaultActivityTemplateReader);
         services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
-        var defaultSourceReferenceReader = ServiceDescriptor.Singleton<IWorkflowExecutableSourceReferenceReader>(serviceProvider =>
+        var defaultSourceReferenceReader = ServiceDescriptor.Scoped<IWorkflowExecutableSourceReferenceReader>(serviceProvider =>
             serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>());
         services.TryAdd(defaultSourceReferenceReader);
         if (RuntimeArtifactStoreBackend.Find(services) is null)

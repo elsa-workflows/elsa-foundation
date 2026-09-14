@@ -35,6 +35,7 @@ public sealed class ExecutableActivityTemplateEntity
     public string TemplateId { get; set; } = null!;
     public string TemplateIdHash { get; set; } = null!;
     public string TemplateHash { get; set; } = null!;
+    public string TemplateHashHash { get; set; } = null!;
     public string TemplateIdOrderKey { get; set; } = null!;
     public string ContentJson { get; set; } = null!;
     public string SchemaVersion { get; set; } = null!;

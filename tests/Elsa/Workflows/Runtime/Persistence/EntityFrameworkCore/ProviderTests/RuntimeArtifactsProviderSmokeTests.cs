@@ -87,6 +87,9 @@ internal static class RuntimeArtifactsProviderSmoke
             Assert.NotNull(await executable.FindAsync(maximumWidthArtifactId));
             await template.SaveAsync(Template("template-a", "template-hash-a"));
             Assert.NotNull(await template.FindByHashAsync("template-hash-a"));
+            await template.SaveAsync(Template("template-case-upper", "ABC"));
+            await template.SaveAsync(Template("template-case-lower", "abc"));
+            Assert.Equal("template-case-lower", (await template.FindByHashAsync("abc"))!.TemplateId);
             await source.SaveAsync(Reference("reference-a", "artifact-a", "definition-version-a"));
             Assert.NotNull(await source.FindAsync("reference-a"));
 
