@@ -35,6 +35,45 @@ internal static class EfDesignSupport
     public static string SearchKey(string value)
         => WorkflowDefinitionIdentity.Fold(value);
 
+    public static void EnsureDefinitionIdentity(string requestedId, string? actualId, string operation)
+    {
+        try
+        {
+            if (actualId is not null && WorkflowDefinitionIdentity.Equals(actualId, requestedId))
+                return;
+        }
+        catch (ArgumentException exception)
+        {
+            throw new InvalidOperationException(
+                $"The {operation} returned a row with a corrupt workflow-definition identity.",
+                exception);
+        }
+
+        throw new InvalidOperationException(
+            $"The {operation} returned a row whose workflow-definition identity does not match the requested identity.");
+    }
+
+    public static void EnsureDefinitionIdentityInSet(
+        IEnumerable<string> requestedIds,
+        string? actualId,
+        string operation)
+    {
+        try
+        {
+            if (actualId is not null && requestedIds.Any(requestedId => WorkflowDefinitionIdentity.Equals(actualId, requestedId)))
+                return;
+        }
+        catch (ArgumentException exception)
+        {
+            throw new InvalidOperationException(
+                $"The {operation} returned a row with a corrupt workflow-definition identity.",
+                exception);
+        }
+
+        throw new InvalidOperationException(
+            $"The {operation} returned a row whose workflow-definition identity does not match the requested identities.");
+    }
+
     public static void SetDefinitionSearchKeys(DbContext context, WorkflowDefinition definition)
     {
         WorkflowDefinitionLimits.Validate(definition);

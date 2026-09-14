@@ -18,12 +18,18 @@ public sealed class WorkflowsDesignStorageManifestTests
             WorkflowsDesignStorageManifest.DefinitionStorageSchemaVersion,
             units.Single(unit => unit.Id.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind).SchemaVersion);
         Assert.Equal(
+            WorkflowsDesignStorageManifest.VersionStorageSchemaVersion,
+            units.Single(unit => unit.Id.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind).SchemaVersion);
+        Assert.Equal(
+            WorkflowsDesignStorageManifest.DraftStorageSchemaVersion,
+            units.Single(unit => unit.Id.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind).SchemaVersion);
+        Assert.Equal(
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 [WorkflowsDesignStorageManifest.DesignOperationDocumentKind] = "elsa_design_operations",
                 [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind] = "elsa_workflow_definitions_v2",
-                [WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind] = "elsa_workflow_definition_drafts",
-                [WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind] = "elsa_workflow_definition_versions",
+                [WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind] = "elsa_workflow_definition_drafts_v2",
+                [WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind] = "elsa_workflow_definition_versions_v2",
                 [WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind] = "elsa_workflow_definition_version_layouts"
             },
             units.ToDictionary(unit => unit.Id.Value, unit => unit.Name, StringComparer.Ordinal));
@@ -32,6 +38,15 @@ public sealed class WorkflowsDesignStorageManifestTests
         {
             Assert.Equal(ScopePolicy.Scoped, unit.Scope);
             Assert.True(unit.Concurrency.IsOptimistic);
+            Assert.Equal(
+                unit.Id.Value switch
+                {
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind => WorkflowsDesignStorageManifest.DefinitionStorageSchemaVersion,
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind => WorkflowsDesignStorageManifest.VersionStorageSchemaVersion,
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind => WorkflowsDesignStorageManifest.DraftStorageSchemaVersion,
+                    _ => 1
+                },
+                unit.SchemaVersion);
             Assert.Equal([WorkflowsDesignStorageManifest.IdField], unit.Key.Columns);
             Assert.Contains(unit.Columns, column => column.Name == WorkflowsDesignStorageManifest.ContentField && column.Type == PortableType.Json);
             Assert.Contains(unit.Columns, column => column.Name == WorkflowsDesignStorageManifest.SchemaVersionField && column.IsNullable == false);

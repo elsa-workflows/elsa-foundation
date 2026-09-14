@@ -62,6 +62,63 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Definition_id_hash_candidates_are_residual_validated_before_returning_rows()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        db.Definitions.Add(new WorkflowDefinition { Id = "actual", TenantId = "tenant-a", Name = "Definition" });
+        await db.SaveChangesAsync();
+
+        await db.Database.ExecuteSqlRawAsync(
+            $"UPDATE {WorkflowsDesignEfModule.DefinitionTable} SET IdSearchKey = {{0}} WHERE TenantId = {{1}} AND Id = {{2}}",
+            WorkflowDefinitionIdentity.Fold("requested"), "tenant-a", "actual");
+
+        var store = new EfWorkflowDefinitionStore(db, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.FindByIdAsync("requested"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.ListAsync(new WorkflowDefinitionFilter { Id = "requested" }));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.ListAsync(new WorkflowDefinitionFilter { Ids = ["requested"] }));
+    }
+
+    [Fact]
+    public async Task Draft_and_version_hash_candidates_are_residual_validated_in_all_relationship_routes()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        db.Definitions.Add(new WorkflowDefinition { Id = "actual", TenantId = "tenant-a", Name = "Definition" });
+        var version = new WorkflowDefinitionVersion("actual", "1.0.0", "{}") { Id = "version", TenantId = "tenant-a" };
+        var draft = new WorkflowDefinitionDraft { Id = "draft", TenantId = "tenant-a", WorkflowDefinitionId = "actual", StateSource = "{}" };
+        db.Versions.Add(version);
+        db.Drafts.Add(draft);
+        await db.SaveChangesAsync();
+
+        var requestedHash = LookupHash("requested");
+        await db.Database.ExecuteSqlRawAsync(
+            $"UPDATE {WorkflowsDesignEfModule.VersionTable} SET DefinitionIdLookupHash = {{0}} WHERE TenantId = {{1}} AND Id = {{2}}",
+            requestedHash, "tenant-a", version.Id);
+        await db.Database.ExecuteSqlRawAsync(
+            $"UPDATE {WorkflowsDesignEfModule.DraftTable} SET WorkflowDefinitionIdLookupHash = {{0}} WHERE TenantId = {{1}} AND Id = {{2}}",
+            requestedHash, "tenant-a", draft.Id);
+
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var serializer = new TestSerializer();
+        var definitions = new EfWorkflowDefinitionStore(db, access);
+        var versions = new EfWorkflowDefinitionVersionStore(db, serializer, definitions, access);
+        var drafts = new EfWorkflowDefinitionDraftStore(db, serializer, access);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => drafts.FindByWorkflowDefinitionIdAsync("requested"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => drafts.ListByWorkflowDefinitionIdAsync("requested"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => versions.FindLatestVersionAsync("requested"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => versions.ListByDefinitionAsync("requested"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => versions.ExistsAsync("requested", version.SemVerSortKey));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new EfWorkflowDefinitionListProjectionStore(db, access)
+            .ListByDefinitionIdsAsync(["requested"]));
+    }
+
+    [Fact]
     public async Task Exact_name_query_is_not_subject_to_the_free_text_candidate_cap()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
@@ -1242,6 +1299,36 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Ef_version_allocation_recomputes_latest_version_after_a_transient_retry()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        db.Definitions.Add(new WorkflowDefinition { Id = "definition", TenantId = "tenant-a", Name = "Definition" });
+        db.Versions.Add(new WorkflowDefinitionVersion("definition", "1.0.0", "{}")
+        {
+            Id = "existing-version",
+            TenantId = "tenant-a"
+        });
+        await db.SaveChangesAsync();
+
+        var command = new EfAddWorkflowDefinitionVersionCommand(
+            db,
+            access,
+            new RetryingVersionAllocationAtomicWriter(db),
+            new TestSerializer(),
+            new TestIdentity("allocated"),
+            new TestLockProvider());
+        var added = await command.Execute(new DesignOperationKey("version-retry-state-change"), "definition", State());
+        await db.SaveChangesAsync();
+
+        Assert.Equal("3.0.0", added.Version);
+        Assert.Equal(["1.0.0", "2.0.0", "3.0.0"], (await db.Versions.AsNoTracking().OrderBy(x => x.SemVerSortKey).Select(x => x.Version).ToListAsync()));
+    }
+
+    [Fact]
     public async Task Ef_clone_releases_the_previous_generated_draft_lock_before_retrying_stage()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
@@ -1447,6 +1534,7 @@ public sealed class EfWorkflowDesignPersistenceTests
 
 
     private static WorkflowsDesignSqliteDbContext Create(SqliteConnection connection) => new(new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>().UseSqlite(connection).Options);
+    private static string LookupHash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(WorkflowDefinitionIdentity.Fold(value)))).ToLowerInvariant();
     private static WorkflowDefinitionState State() => new([], null, [], [], null);
     private sealed class TestIdentity(string prefix = "generated") : IIdentityGenerator { private int n; public string Generate() => $"{prefix}-{Interlocked.Increment(ref n)}"; }
     private sealed class CustomDesignAtomicWriter : IDesignAtomicWriter
@@ -1457,6 +1545,34 @@ public sealed class EfWorkflowDesignPersistenceTests
     {
         public Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default, IDesignAtomicWriteResultCodec<T>? resultCodec = null) =>
             Task.FromResult(new DesignAtomicWriteResult<T>(DesignAtomicWriteStatus.Replayed, default));
+    }
+    private sealed class RetryingVersionAllocationAtomicWriter(WorkflowsDesignSqliteDbContext db) : IDesignAtomicWriter
+    {
+        public async Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default, IDesignAtomicWriteResultCodec<T>? resultCodec = null)
+        {
+            if (beforeAttempt is null)
+                throw new InvalidOperationException("The version allocation test requires attempt setup.");
+
+            await beforeAttempt(cancellationToken);
+            var firstStage = await stage(null!, cancellationToken);
+            if (!firstStage.IsAccepted)
+                return new DesignAtomicWriteResult<T>(DesignAtomicWriteStatus.Rejected, default);
+
+            db.ChangeTracker.Clear();
+            db.Versions.Add(new WorkflowDefinitionVersion("definition", "2.0.0", "{}")
+            {
+                Id = "retry-latest",
+                TenantId = "tenant-a"
+            });
+            await db.SaveChangesAsync(cancellationToken);
+            await beforeAttempt(cancellationToken);
+            var staged = await stage(null!, cancellationToken);
+            return new DesignAtomicWriteResult<T>(
+                staged.IsAccepted ? DesignAtomicWriteStatus.Committed : DesignAtomicWriteStatus.Rejected,
+                staged.Value,
+                staged.ResultFingerprint,
+                staged.ResultJson);
+        }
     }
     private sealed class FailingTransaction(Exception rollbackFailure, Exception disposeFailure) : IDbContextTransaction
     {

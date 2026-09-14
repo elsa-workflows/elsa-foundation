@@ -11,9 +11,14 @@ public sealed class EfWorkflowDefinitionStore(WorkflowsDesignDbContext db, IPers
 {
     private IQueryable<WorkflowDefinition> Query() => EfDesignSupport.InScope(db.Definitions.AsNoTracking(), access, x => x.TenantId);
     public async Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => await FindByIdAsync(id, cancellationToken) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), id);
-    public Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) =>
-        EfDesignSupport.ReadAsync("reading workflow definition", () => Query().SingleOrDefaultAsync(
+    public async Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default)
+    {
+        var row = await EfDesignSupport.ReadAsync("reading workflow definition", () => Query().SingleOrDefaultAsync(
             x => EF.Property<string>(x, "IdSearchKey") == EfDesignSupport.SearchKey(id), cancellationToken));
+        if (row is not null)
+            EfDesignSupport.EnsureDefinitionIdentity(id, row.Id, "workflow definition lookup");
+        return row;
+    }
     public async Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
@@ -42,6 +47,16 @@ public sealed class EfWorkflowDefinitionStore(WorkflowsDesignDbContext db, IPers
             .OrderBy(x => x.Id).ThenBy(x => x.TenantId).ToListAsync(cancellationToken));
         if (!exactRoute && !string.IsNullOrWhiteSpace(filter.SearchTerm) && values.Count > 10_000)
             throw new InvalidOperationException("Workflow definition search exceeded the bounded result limit of 10000.");
+        if (filter.Id is not null)
+        {
+            foreach (var candidate in values)
+                EfDesignSupport.EnsureDefinitionIdentity(filter.Id, candidate.Id, "workflow definition lookup");
+        }
+        else if (filter.Ids is not null)
+        {
+            foreach (var candidate in values)
+                EfDesignSupport.EnsureDefinitionIdentityInSet(filter.Ids, candidate.Id, "workflow definition lookup");
+        }
         return values;
     }
 }

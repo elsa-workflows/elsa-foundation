@@ -29,6 +29,11 @@ public sealed class EfWorkflowDefinitionListProjectionStore(WorkflowsDesignDbCon
                 .ToListAsync(cancellationToken)));
         }
 
+        foreach (var candidate in drafts)
+            EfDesignSupport.EnsureDefinitionIdentityInSet(distinct, candidate.WorkflowDefinitionId, "workflow draft projection lookup");
+        foreach (var candidate in versions)
+            EfDesignSupport.EnsureDefinitionIdentityInSet(distinct, candidate.DefinitionId, "workflow version projection lookup");
+
         var latestDrafts = drafts
             .GroupBy(x => EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(x.WorkflowDefinitionId)), StringComparer.Ordinal)
             .ToDictionary(
