@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -254,6 +255,23 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Definition_version_pages_order_scopes_longer_than_artifact_identity_bound()
+    {
+        await using var database = await Database.CreateAsync();
+        var firstScope = "scope-" + new string('a', RuntimeArtifactEfModule.IdentityMaximumLength + 1);
+        var secondScope = "scope-" + new string('b', RuntimeArtifactEfModule.IdentityMaximumLength + 1);
+        await using var first = database.Open(firstScope);
+        await using var second = database.Open(secondScope);
+        await first.Store.SaveAsync(Reference("same-ref", "artifact-a") with { DefinitionVersionId = "shared-version", TenantId = firstScope });
+        await second.Store.SaveAsync(Reference("same-ref", "artifact-b") with { DefinitionVersionId = "shared-version", TenantId = secondScope });
+
+        await using var across = database.Open(PersistenceAccessContext.PrivilegedAcrossScopes(new PersistenceAccessPurpose("definition-export")));
+        var page = await across.Store.ListByDefinitionVersionPageAsync(new("shared-version", 10));
+
+        Assert.Equal([firstScope, secondScope], page.Items.Select(item => item.TenantId!).ToArray());
+    }
+
+    [Fact]
     public async Task Definition_version_pages_reject_global_access_and_cross_shape_continuations()
     {
         await using var database = await Database.CreateAsync();
@@ -398,6 +416,80 @@ public sealed class EfRuntimeArtifactScopeTests
         await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable.SaveBatchAsync(
             [Executable("new-artifact"), Executable("incomplete")]).AsTask());
         Assert.Null(await fixture.Executable.FindAsync("new-artifact"));
+    }
+
+    [Fact]
+    public async Task Concurrent_idempotent_executable_saves_reconcile_a_complete_winner()
+    {
+        await using var database = await Database.CreateFileAsync();
+        await using var winner = database.Open("tenant-a");
+        var candidate = Executable("concurrent-artifact");
+        var interleaving = new RecreateAfterExecutableReadsInterceptor(() => winner.Executable.SaveAsync(candidate).AsTask());
+        await using var loser = database.Open("tenant-a", interleaving);
+
+        await loser.Executable.SaveAsync(candidate);
+
+        Assert.NotNull(await loser.Executable.FindAsync(candidate.Identity.ArtifactId));
+        Assert.Empty(loser.Context.ChangeTracker.Entries());
+    }
+
+    [Fact]
+    public async Task Executable_save_rejects_a_complete_winner_with_different_content()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var winner = database.Open("tenant-a");
+        var winning = Executable("different-content", "winner-hash");
+        await winner.Executable.SaveAsync(winning);
+        await using var contender = database.Open("tenant-a");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => contender.Executable.SaveAsync(Executable("different-content", "contender-hash")).AsTask());
+    }
+
+    [Fact]
+    public async Task Provider_write_failures_are_normalized_at_runtime_artifact_boundaries()
+    {
+        await using var database = await Database.CreateAsync();
+
+        await using var executable = database.Open("tenant-a", new ThrowingSaveInterceptor());
+        var executableFailure = await Assert.ThrowsAsync<RuntimeArtifactEntityFrameworkPersistenceException>(() => executable.Executable.SaveAsync(Executable("provider-failure")).AsTask());
+        Assert.Equal("saving", executableFailure.Operation);
+        Assert.Equal("provider-failure", executableFailure.Identity);
+
+        await using var template = database.Open("tenant-b", new ThrowingSaveInterceptor());
+        var templateFailure = await Assert.ThrowsAsync<RuntimeArtifactEntityFrameworkPersistenceException>(() => template.Template.SaveAsync(Template("provider-failure", "provider-hash")).AsTask());
+        Assert.Equal("saving", templateFailure.Operation);
+        Assert.Equal("provider-failure", templateFailure.Identity);
+
+        await using var reference = database.Open("tenant-c", new ThrowingSaveInterceptor());
+        var referenceFailure = await Assert.ThrowsAsync<RuntimeArtifactEntityFrameworkPersistenceException>(() => reference.Store.SaveAsync(Reference("provider-failure", "provider-artifact")).AsTask());
+        Assert.Equal("saving", referenceFailure.Operation);
+        Assert.Equal("provider-failure", referenceFailure.Identity);
+    }
+
+    [Fact]
+    public async Task Release_root_write_lease_reloads_after_contention_and_preserves_newer_leases()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var seed = database.Open("tenant-a");
+        await seed.Executable.SaveAsync(Executable("release-contention"));
+        var now = DateTimeOffset.UtcNow;
+        var original = await seed.Executable.TryAcquireRootWriteLeaseAsync("release-contention", "original", now.AddMinutes(5), now);
+        Assert.NotNull(original);
+
+        await using var current = database.Open("tenant-a");
+        WorkflowExecutableRootWriteLease? newer = null;
+        var interleaving = new RecreateBeforeSaveInterceptor(async () =>
+        {
+            newer = await current.Executable.TryAcquireRootWriteLeaseAsync("release-contention", "newer", now.AddMinutes(5), now);
+            Assert.NotNull(newer);
+        });
+        await using var releasing = database.Open("tenant-a", interleaving);
+
+        await releasing.Executable.ReleaseRootWriteLeaseAsync(original!);
+
+        Assert.NotNull(newer);
+        Assert.False(await current.Executable.RenewRootWriteLeaseAsync(original!, now.AddMinutes(6), now));
+        Assert.True(await current.Executable.RenewRootWriteLeaseAsync(newer!, now.AddMinutes(6), now));
     }
 
     [Fact]
@@ -611,10 +703,12 @@ public sealed class EfRuntimeArtifactScopeTests
     {
         private readonly SqliteConnection connection;
         private readonly string connectionString;
-        private Database(SqliteConnection connection, string connectionString)
+        private readonly string? databasePath;
+        private Database(SqliteConnection connection, string connectionString, string? databasePath = null)
         {
             this.connection = connection;
             this.connectionString = connectionString;
+            this.databasePath = databasePath;
         }
 
         public static async Task<Database> CreateAsync()
@@ -625,6 +719,22 @@ public sealed class EfRuntimeArtifactScopeTests
             await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
             await context.Database.EnsureCreatedAsync();
             return new Database(connection, connectionString);
+        }
+
+        public static async Task<Database> CreateFileAsync()
+        {
+            var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-runtime-artifacts-{Guid.NewGuid():N}.db");
+            var connectionString = $"Data Source={databasePath};Pooling=False";
+            var connection = new SqliteConnection(connectionString);
+            await connection.OpenAsync();
+            await using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;";
+                await command.ExecuteNonQueryAsync();
+            }
+            await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            await context.Database.EnsureCreatedAsync();
+            return new Database(connection, connectionString, databasePath);
         }
 
         public Fixture Open(string scope, IInterceptor? interceptor = null) => Open(PersistenceAccessContext.Scoped(new PersistenceScope(scope)), interceptor);
@@ -661,7 +771,16 @@ public sealed class EfRuntimeArtifactScopeTests
             }
         }
 
-        public ValueTask DisposeAsync() => connection.DisposeAsync();
+        public async ValueTask DisposeAsync()
+        {
+            await connection.DisposeAsync();
+            if (databasePath is not null)
+            {
+                File.Delete(databasePath);
+                File.Delete(databasePath + "-wal");
+                File.Delete(databasePath + "-shm");
+            }
+        }
     }
 
     private sealed class Fixture(BookmarkStateSqliteDbContext context, EfWorkflowExecutableSourceReferenceStore store, EfWorkflowExecutableStore executable, EfExecutableActivityTemplateStore template, SqliteConnection connection) : IAsyncDisposable
@@ -706,6 +825,15 @@ public sealed class EfRuntimeArtifactScopeTests
         }
     }
 
+    private sealed class ThrowingSaveInterceptor : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default) =>
+            throw new DbUpdateException("provider save failure");
+    }
+
     private sealed class RecreateBeforeSaveInterceptor(Func<Task> recreate) : SaveChangesInterceptor
     {
         private int invoked;
@@ -743,6 +871,22 @@ public sealed class EfRuntimeArtifactScopeTests
         {
             if (Volatile.Read(ref readerCount) == triggerAfterReaders &&
                 Interlocked.CompareExchange(ref readerCount, triggerAfterReaders + 1, triggerAfterReaders) == triggerAfterReaders)
+                await recreate();
+            return result;
+        }
+    }
+
+    private sealed class RecreateAfterExecutableReadsInterceptor(Func<Task> recreate) : DbCommandInterceptor
+    {
+        private int readerCount;
+
+        public override async ValueTask<DbDataReader> ReaderExecutedAsync(
+            DbCommand command,
+            CommandExecutedEventData eventData,
+            DbDataReader result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Increment(ref readerCount) == 2)
                 await recreate();
             return result;
         }

@@ -2,8 +2,10 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using System.Data.Common;
 using System.Text.Json;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -12,6 +14,8 @@ public sealed class EfWorkflowExecutableStore(
     BookmarkStateDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowExecutableStore
 {
+    private const int MaximumCoordinationAttempts = 16;
+
     public ValueTask SaveAsync(
         WorkflowExecutable executable,
         CancellationToken cancellationToken = default) =>
@@ -32,7 +36,7 @@ public sealed class EfWorkflowExecutableStore(
 
         var scope = RequireScope();
         context.ChangeTracker.Clear();
-        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        var pending = new List<(WorkflowExecutable Executable, string Id)>();
         try
         {
             foreach (var item in executables)
@@ -42,27 +46,37 @@ public sealed class EfWorkflowExecutableStore(
                 var artifact = await FindExecutableAsync(scope, artifactId, id, cancellationToken);
                 var coordination = await FindCoordinationAsync(scope, artifactId, id, cancellationToken);
                 if (artifact is null && coordination is null)
-                {
-                    var incarnationId = NewIncarnationId();
-                    context.WorkflowExecutables.Add(ToEntity(
-                        item,
-                        scope,
-                        id,
-                        RuntimeArtifactJson.Serialize(item),
-                        incarnationId));
-                    context.WorkflowExecutableCoordinations.Add(ToCoordinationEntity(artifactId, scope, id, incarnationId));
-                }
+                    pending.Add((item, id));
                 else if (artifact is null || coordination is null)
                 {
                     throw new InvalidDataException($"Workflow executable '{id}' has incomplete persisted state.");
                 }
                 else
                 {
-                    _ = Read(artifact, scope, artifactId, id);
+                    var current = Read(artifact, scope, artifactId, id);
                     _ = ReadCoordination(coordination, scope, artifactId, id);
+                    EnsureSameIdentityAndContent(current, item);
                 }
             }
 
+            if (pending.Count == 0)
+            {
+                context.ChangeTracker.Clear();
+                return;
+            }
+
+            await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+            foreach (var (item, id) in pending)
+            {
+                var incarnationId = NewIncarnationId();
+                context.WorkflowExecutables.Add(ToEntity(
+                    item,
+                    scope,
+                    id,
+                    RuntimeArtifactJson.Serialize(item),
+                    incarnationId));
+                context.WorkflowExecutableCoordinations.Add(ToCoordinationEntity(item.Identity.ArtifactId, scope, id, incarnationId));
+            }
             await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
@@ -71,13 +85,56 @@ public sealed class EfWorkflowExecutableStore(
             EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
         {
             context.ChangeTracker.Clear();
-            throw new InvalidOperationException("The workflow executable changed concurrently; retry the operation.", exception);
+            try
+            {
+                await ReconcileCreateAsync(executables, scope, exception, cancellationToken);
+            }
+            finally
+            {
+                context.ChangeTracker.Clear();
+            }
+        }
+        catch (DbUpdateException exception)
+        {
+            context.ChangeTracker.Clear();
+            throw NormalizeProviderFailure("saving", string.Join(",", executables.Select(x => x.Identity.ArtifactId)), exception);
+        }
+        catch (DbException exception)
+        {
+            context.ChangeTracker.Clear();
+            throw NormalizeProviderFailure("saving", string.Join(",", executables.Select(x => x.Identity.ArtifactId)), exception);
         }
         catch
         {
             context.ChangeTracker.Clear();
             throw;
         }
+    }
+
+    private async ValueTask ReconcileCreateAsync(
+        IReadOnlyList<WorkflowExecutable> executables,
+        string scope,
+        Exception cause,
+        CancellationToken cancellationToken)
+    {
+        foreach (var executable in executables)
+        {
+            var artifactId = executable.Identity.ArtifactId;
+            var pair = await LoadPairAsync(scope, artifactId, cancellationToken);
+            if (pair is null)
+                throw NormalizeProviderFailure("saving", artifactId, cause);
+
+            var current = Read(pair.Value.Artifact, scope, artifactId, CreateId(scope, artifactId));
+            EnsureSameIdentityAndContent(current, executable);
+        }
+
+        context.ChangeTracker.Clear();
+    }
+
+    private static void EnsureSameIdentityAndContent(WorkflowExecutable current, WorkflowExecutable candidate)
+    {
+        if (!StringComparer.Ordinal.Equals(current.Identity.ArtifactHash, candidate.Identity.ArtifactHash))
+            throw new InvalidOperationException($"Workflow executable '{candidate.Identity.ArtifactId}' is already bound to different artifact content.");
     }
     public async ValueTask<WorkflowExecutable?> FindAsync(
         string artifactId,
@@ -203,16 +260,38 @@ public sealed class EfWorkflowExecutableStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(lease.LeaseId);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        var pair = await LoadPairAsync(scope, lease.ArtifactId, cancellationToken);
-        if (pair is null)
-            return;
-        var row = pair.Value.Coordination;
-        var state = ReadCoordination(row, scope, lease.ArtifactId, CreateId(scope, lease.ArtifactId));
-        if (!state.Leases.TryGetValue(lease.LeaseId, out var current) || current.Token != lease.ConcurrencyToken)
-            return;
-        var leases = state.Leases.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
-        leases.Remove(lease.LeaseId);
-        _ = await UpdateCoordination(row, new CoordinationState(leases, state.Guard), cancellationToken);
+        try
+        {
+            for (var attempt = 0; attempt < MaximumCoordinationAttempts; attempt++)
+            {
+                var pair = await LoadPairAsync(scope, lease.ArtifactId, cancellationToken);
+                if (pair is null)
+                    return;
+                var row = pair.Value.Coordination;
+                var state = ReadCoordination(row, scope, lease.ArtifactId, CreateId(scope, lease.ArtifactId));
+                if (!state.Leases.TryGetValue(lease.LeaseId, out var current) || current.Token != lease.ConcurrencyToken)
+                    return;
+                var leases = state.Leases.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
+                leases.Remove(lease.LeaseId);
+                if (await UpdateCoordination(row, new CoordinationState(leases, state.Guard), cancellationToken))
+                {
+                    context.ChangeTracker.Clear();
+                    return;
+                }
+            }
+
+            throw new InvalidOperationException($"Runtime coordination for workflow executable '{lease.ArtifactId}' changed concurrently and did not settle after {MaximumCoordinationAttempts} attempts.");
+        }
+        catch (DbUpdateException exception)
+        {
+            context.ChangeTracker.Clear();
+            throw NormalizeProviderFailure("releasing", lease.ArtifactId, exception);
+        }
+        catch (DbException exception)
+        {
+            context.ChangeTracker.Clear();
+            throw NormalizeProviderFailure("releasing", lease.ArtifactId, exception);
+        }
     }
 
     public async ValueTask<WorkflowExecutableDeletionGuard?> TryBeginDeletionAsync(
@@ -640,6 +719,12 @@ public sealed class EfWorkflowExecutableStore(
         state.Leases
             .Where(x => x.Value.ExpiresAt > now)
             .ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
+
+    private static RuntimeArtifactEntityFrameworkPersistenceException NormalizeProviderFailure(
+        string operation,
+        string identity,
+        Exception inner) =>
+        new(operation, identity, $"The EF runtime artifact store failed while {operation} workflow executable '{identity}'.", inner);
 
     private static string Encode(string x, string scope) =>
         Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{Hash(scope)}:{x}"));

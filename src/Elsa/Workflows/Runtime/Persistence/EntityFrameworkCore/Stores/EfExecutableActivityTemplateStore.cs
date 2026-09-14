@@ -6,7 +6,9 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Microsoft.EntityFrameworkCore;
+using System.Data.Common;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
@@ -68,6 +70,16 @@ public sealed class EfExecutableActivityTemplateStore(
                 context.ChangeTracker.Clear();
                 if (attempt + 1 == MaximumCreateAttempts)
                     await ReconcileCreateAsync(template, identity, exception, cancellationToken);
+            }
+            catch (DbUpdateException exception)
+            {
+                context.ChangeTracker.Clear();
+                throw NormalizeProviderFailure("saving", template.TemplateId, exception);
+            }
+            catch (DbException exception)
+            {
+                context.ChangeTracker.Clear();
+                throw NormalizeProviderFailure("saving", template.TemplateId, exception);
             }
             catch
             {
@@ -366,6 +378,8 @@ public sealed class EfExecutableActivityTemplateStore(
     private static string Encode(string value) => EfRelationalIdentity.Encode(value);
     private static string HashClaimId(string scope, string hash) => CreateId(scope, $"templateHash:{Hash(hash)}");
     private static string OrderKey(string value) => Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(value, RuntimeArtifactEfModule.IdentityMaximumLength));
+    private static RuntimeArtifactEntityFrameworkPersistenceException NormalizeProviderFailure(string operation, string identity, Exception inner) =>
+        new(operation, identity, $"The EF runtime artifact store failed while {operation} executable activity template '{identity}'.", inner);
     private sealed record TemplateIdentity(string Scope, string? TemplateId, string? TemplateHash);
     private sealed record HashClaim(string TemplateHash, string TemplateId);
     private sealed record Cursor(int Version, string ScopeHash, string Key);

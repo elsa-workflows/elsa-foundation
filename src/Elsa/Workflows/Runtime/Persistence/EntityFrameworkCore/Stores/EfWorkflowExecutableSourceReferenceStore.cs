@@ -6,7 +6,9 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Microsoft.EntityFrameworkCore;
+using System.Data.Common;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
@@ -44,6 +46,10 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         }
         catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
         { context.ChangeTracker.Clear(); throw new InvalidOperationException("The workflow executable source reference already exists; source references are create-only.", exception); }
+        catch (DbUpdateException exception)
+        { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("saving", reference.SourceReferenceId, exception); }
+        catch (DbException exception)
+        { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("saving", reference.SourceReferenceId, exception); }
         catch { context.ChangeTracker.Clear(); throw; }
     }
 
@@ -156,6 +162,8 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             return true;
         }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
+        catch (DbUpdateException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("retiring", sourceReferenceId, exception); }
+        catch (DbException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("retiring", sourceReferenceId, exception); }
         catch { context.ChangeTracker.Clear(); throw; }
     }
 
@@ -209,6 +217,8 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             return true;
         }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
+        catch (DbUpdateException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure(restore ? "restoring" : "retiring", expected.SourceReferenceId, exception); }
+        catch (DbException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure(restore ? "restoring" : "retiring", expected.SourceReferenceId, exception); }
         catch { context.ChangeTracker.Clear(); throw; }
     }
 
@@ -240,6 +250,8 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             return true;
         }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
+        catch (DbUpdateException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("deleting", sourceReferenceId, exception); }
+        catch (DbException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("deleting", sourceReferenceId, exception); }
         catch { context.ChangeTracker.Clear(); throw; }
     }
 
@@ -262,6 +274,16 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             }
             context.ChangeTracker.Clear();
             return deleted;
+        }
+        catch (DbUpdateException exception)
+        {
+            context.ChangeTracker.Clear();
+            throw NormalizeProviderFailure("cleaning up", scope, exception);
+        }
+        catch (DbException exception)
+        {
+            context.ChangeTracker.Clear();
+            throw NormalizeProviderFailure("cleaning up", scope, exception);
         }
         catch
         {
@@ -297,6 +319,8 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             return true;
         }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
+        catch (DbUpdateException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("cleaning up", sourceReferenceId, exception); }
+        catch (DbException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("cleaning up", sourceReferenceId, exception); }
         catch { context.ChangeTracker.Clear(); throw; }
     }
 
@@ -367,7 +391,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         row.DefinitionIdHash = Hash(value.DefinitionId);
         row.ScopeKey = Encode(scope);
         row.ScopeKeyHash = Hash(scope);
-        row.ScopeKeyOrderKey = OrderKey(scope);
+        row.ScopeKeyOrderKey = ScopeOrderKey(scope);
         row.Scope = value.Scope.ToString();
         row.IsRetired = value.DeletedAt is not null;
         row.ExpiresAtUtcTicks = (value.ExpiresAt ?? DateTimeOffset.MaxValue).UtcTicks;
@@ -389,7 +413,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
                 row.SourceReferenceIdOrderKey != OrderKey(expectedId) ||
                 row.ScopeKey != Encode(expectedScope) ||
                 row.ScopeKeyHash != Hash(expectedScope) ||
-                row.ScopeKeyOrderKey != OrderKey(expectedScope) ||
+                row.ScopeKeyOrderKey != ScopeOrderKey(expectedScope) ||
                 row.ArtifactIdHash != Hash(row.ArtifactId) ||
                 row.DefinitionIdHash != Hash(row.DefinitionId) ||
                 row.DefinitionVersionIdHash != Hash(row.DefinitionVersionId) ||
@@ -469,6 +493,24 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
     private static string Hash(string value) => EfRelationalIdentity.Hash(value);
     private static string Encode(string value) => EfRelationalIdentity.Encode(value);
     private static string OrderKey(string value) => Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(value, RuntimeArtifactEfModule.IdentityMaximumLength));
+
+    // Scope values are opaque persistence partitions and are not subject to the artifact-id bound. The
+    // trailing zero code unit makes the variable-length key preserve ordinal prefix ordering ("a" < "aa")
+    // while the hexadecimal representation remains provider/collation stable.
+    private static string ScopeOrderKey(string value)
+    {
+        var bytes = new byte[checked((value.Length + 1) * sizeof(char))];
+        for (var index = 0; index < value.Length; index++)
+        {
+            bytes[index * sizeof(char)] = (byte)(value[index] >> 8);
+            bytes[index * sizeof(char) + 1] = (byte)value[index];
+        }
+
+        return Convert.ToHexString(bytes);
+    }
+
+    private static RuntimeArtifactEntityFrameworkPersistenceException NormalizeProviderFailure(string operation, string identity, Exception inner) =>
+        new(operation, identity, $"The EF runtime artifact store failed while {operation} workflow executable source reference '{identity}'.", inner);
     private string BuildBinding(Route route, string? scope, string? artifact, string? definition, WorkflowExecutableSourceReferencePageQuery? all, PersistenceAccessContext accessContext)
     {
         var shape = RuntimeArtifactJson.Serialize(new
