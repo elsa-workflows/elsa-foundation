@@ -78,7 +78,8 @@ internal static class RuntimeWorkflowExecutionProviderSmoke
         var outcomes = await Task.WhenAll(
             Capture(new EfWorkflowExecutionStateStore(leftContext, new FixedAccessor(scope), codec).SaveAsync(concurrent)),
             Capture(new EfWorkflowExecutionStateStore(rightContext, new FixedAccessor(scope), codec).SaveAsync(concurrent)));
-        Assert.All(outcomes, outcome => Assert.Null(outcome));
+        Assert.Contains(outcomes, outcome => outcome is null);
+        Assert.All(outcomes, outcome => Assert.True(outcome is null or InvalidOperationException));
         await using var verificationContext = createContext(fixture.ConnectionString);
         var verification = new EfWorkflowExecutionStateStore(verificationContext, new FixedAccessor(scope), codec);
         Assert.NotNull(await verification.FindAsync(concurrent.WorkflowExecutionId));

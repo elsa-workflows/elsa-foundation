@@ -97,6 +97,9 @@ public sealed class EfWorkflowExecutionStateStore(
     {
         ArgumentNullException.ThrowIfNull(query);
         query.Validate();
+        ValidatePageSize(query.PageSize);
+        if (query.TenantId is not null)
+            ValidateTenant(query.TenantId, nameof(query.TenantId));
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
@@ -127,6 +130,8 @@ public sealed class EfWorkflowExecutionStateStore(
     {
         ArgumentNullException.ThrowIfNull(query);
         query.Validate();
+        ValidatePageSize(query.PageSize);
+        ValidateTenant(query.TenantPartition, nameof(query.TenantPartition));
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
@@ -314,7 +319,7 @@ public sealed class EfWorkflowExecutionStateStore(
         ArgumentNullException.ThrowIfNull(state); ValidateIdentity(state.WorkflowExecutionId, nameof(state.WorkflowExecutionId)); ArgumentNullException.ThrowIfNull(state.PinnedExecutable);
         ValidateIdentity(state.PinnedExecutable.ArtifactId, nameof(state.PinnedExecutable.ArtifactId)); ValidateIdentity(state.PinnedExecutable.DefinitionId, nameof(state.PinnedExecutable.DefinitionId));
         if (state.PinnedSource is { } source) ValidateIdentity(source.DefinitionId, nameof(source.DefinitionId));
-        if (state.TenantId is not null) ValidateIdentity(state.TenantId, nameof(state.TenantId)); if (state.CorrelationId is not null) ValidateIdentity(state.CorrelationId, nameof(state.CorrelationId));
+        if (state.TenantId is not null) ValidateTenant(state.TenantId, nameof(state.TenantId)); if (state.CorrelationId is not null) ValidateIdentity(state.CorrelationId, nameof(state.CorrelationId));
         if (!Enum.IsDefined(state.Status) || !Enum.IsDefined(state.RunKind)) throw new InvalidDataException("The persisted workflow execution state contains an undefined enum value.");
     }
 
@@ -323,10 +328,14 @@ public sealed class EfWorkflowExecutionStateStore(
         var current = accessContextAccessor.Current;
         if (current.AccessPolicy != PersistenceAccessPolicy.Ordinary || current.Scope is null || current.AcrossScopes)
             throw new InvalidOperationException("EF workflow-execution persistence requires one explicit persistence scope.");
-        return current.Scope.Value;
+        var scope = current.Scope.Value;
+        ValidateTenant(scope, nameof(scope));
+        return scope;
     }
 
     private static void ValidateIdentity(string value, string name) { ArgumentException.ThrowIfNullOrWhiteSpace(value); if (value.Length > RuntimeWorkflowExecutionEfModule.IdentityMaximumLength) throw new ArgumentException($"The {name} value cannot exceed {RuntimeWorkflowExecutionEfModule.IdentityMaximumLength} characters.", name); }
+    private static void ValidateTenant(string value, string name) { ArgumentException.ThrowIfNullOrWhiteSpace(value); if (value.Length > RuntimeWorkflowExecutionEfModule.TenantMaximumLength) throw new ArgumentException($"The {name} value cannot exceed {RuntimeWorkflowExecutionEfModule.TenantMaximumLength} characters.", name); }
+    private static void ValidatePageSize(int pageSize) { if (pageSize > WorkflowExecutionStatePaging.MaximumPageSize) throw new ArgumentOutOfRangeException(nameof(pageSize), pageSize, $"Page size cannot exceed {WorkflowExecutionStatePaging.MaximumPageSize} rows."); }
     private static string Encode(string value) => EfRelationalIdentity.Encode(value);
     private static string Decode(string value)
     {

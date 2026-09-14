@@ -11,12 +11,12 @@ public sealed class WorkflowExecutionStateEntityConfiguration : IEntityTypeConfi
         b.ToTable(RuntimeWorkflowExecutionEfModule.TableName);
         b.HasKey(x => x.Id);
         b.Property(x => x.Id).HasMaxLength(64).IsRequired();
-        b.Property(x => x.ScopeKey).IsRequired();
+        b.Property(x => x.ScopeKey).HasMaxLength(RuntimeWorkflowExecutionEfModule.TenantProjectionMaximumLength).IsRequired();
         b.Property(x => x.ScopeKeyHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.WorkflowExecutionId).HasMaxLength(RuntimeWorkflowExecutionEfModule.IdentityProjectionMaximumLength).IsRequired();
         b.Property(x => x.WorkflowExecutionIdHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.WorkflowExecutionIdOrderKey).HasMaxLength(RuntimeWorkflowExecutionEfModule.OrderKeyMaximumLength).IsRequired();
-        b.Property(x => x.TenantId).HasMaxLength(RuntimeWorkflowExecutionEfModule.IdentityProjectionMaximumLength);
+        b.Property(x => x.TenantId).HasMaxLength(RuntimeWorkflowExecutionEfModule.TenantProjectionMaximumLength);
         b.Property(x => x.TenantIdHash).HasMaxLength(64);
         b.Property(x => x.DefinitionId).HasMaxLength(RuntimeWorkflowExecutionEfModule.IdentityProjectionMaximumLength).IsRequired();
         b.Property(x => x.DefinitionIdHash).HasMaxLength(64).IsRequired();

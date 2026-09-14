@@ -49,6 +49,52 @@ public sealed class EfWorkflowExecutionStateStoreTests
         Assert.Equal(WorkflowExecutionStateStoreBackend.EntityFramework, WorkflowExecutionStateStoreBackend.Find(beforeDefaults)!.Name);
         Assert.Single(beforeDefaults.Where(x => x.ServiceType == typeof(IWorkflowExecutionStateStore)));
     }
+
+    [Fact]
+    public async Task Workflow_execution_feature_registers_store_options_and_manifest_contract()
+    {
+        const string signingKey = "ef-runtime-workflow-execution-feature-signing-key";
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        new RuntimeWorkflowExecutionEntityFrameworkCoreFeature
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:",
+            RecoveryContinuationSigningKey = signingKey
+        }.ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider(validateScopes: true);
+        using var scope = provider.CreateScope();
+        Assert.IsType<EfWorkflowExecutionStateStore>(scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
+        var options = provider.GetRequiredService<RuntimeWorkflowExecutionEntityFrameworkCoreOptions>();
+        Assert.Equal("Sqlite", options.Provider);
+        Assert.Equal("Data Source=:memory:", options.ConnectionString);
+        Assert.Null(options.ConnectionName);
+        Assert.Equal(signingKey, options.RecoveryContinuationSigningKey);
+        Assert.Equal(signingKey, provider.GetRequiredService<IOptions<RuntimeRecoveryContinuationOptions>>().Value.SigningKey);
+        Assert.False(provider.GetRequiredService<IOptions<RuntimeRecoveryContinuationOptions>>().Value.AllowEphemeralDevelopmentKey);
+
+        var featureType = typeof(RuntimeWorkflowExecutionEntityFrameworkCoreFeature);
+        Assert.Contains(featureType.CustomAttributes, attribute => attribute.AttributeType.Name == "ShellFeatureAttribute");
+        Assert.Contains(featureType.CustomAttributes, attribute => attribute.AttributeType.Name == "ManifestRuntimeKindAttribute");
+        Assert.Equal(3, featureType.CustomAttributes.Count(attribute => attribute.AttributeType.Name == "ManifestFeatureCategoryAttribute"));
+        foreach (var propertyName in new[]
+                 {
+                     nameof(RuntimeWorkflowExecutionEntityFrameworkCoreFeature.Provider),
+                     nameof(RuntimeWorkflowExecutionEntityFrameworkCoreFeature.ConnectionString),
+                     nameof(RuntimeWorkflowExecutionEntityFrameworkCoreFeature.ConnectionName),
+                     nameof(RuntimeWorkflowExecutionEntityFrameworkCoreFeature.RecoveryContinuationSigningKey)
+                 })
+        {
+            var property = featureType.GetProperty(propertyName);
+            Assert.Contains(property!.CustomAttributes, attribute => attribute.AttributeType.Name == "ManifestSettingAttribute");
+        }
+
+        Assert.False(featureType.IsSealed);
+        Assert.True(featureType.GetMethod(nameof(RuntimeWorkflowExecutionEntityFrameworkCoreFeature.ConfigureServices))!.IsVirtual);
+        Assert.IsAssignableFrom<RuntimeWorkflowExecutionEntityFrameworkCoreFeature>(new DerivedFeature());
+    }
+
     [Fact]
     public async Task Crud_restart_and_scope_isolation_round_trip_lossless_state()
     {
@@ -86,6 +132,41 @@ public sealed class EfWorkflowExecutionStateStoreTests
         Assert.Equal(["c", "d"], second.Items.Select(x => x.WorkflowExecutionId));
         await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.QueryPageAsync(new WorkflowExecutionStatePageQuery(2, TenantId: "other", Cursor: first.NextCursor)).AsTask());
         await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.QueryPageAsync(new WorkflowExecutionStatePageQuery(2, TenantId: "other")).AsTask());
+    }
+
+    [Fact]
+    public async Task History_and_alteration_capture_pages_reject_sizes_above_the_provider_bound()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => fixture.Store.QueryPageAsync(new WorkflowExecutionStatePageQuery(WorkflowExecutionStateStorePagingExtensions.MaximumPageSize + 1)).AsTask());
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => fixture.Store.QueryAlterationCapturePageAsync(new WorkflowExecutionAlterationCaptureQuery(
+            "tenant-a", "system", "root", new Dictionary<string, string>(), new WorkflowAlterationQuerySelector(matchAllAuthorized: true), WorkflowExecutionStateStorePagingExtensions.MaximumPageSize + 1)).AsTask());
+    }
+
+    [Fact]
+    public async Task Tenant_and_scope_values_support_the_groundwork_256_character_contract()
+    {
+        var tenant = new string('t', RuntimeWorkflowExecutionEfModule.TenantMaximumLength);
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open(tenant);
+        var state = State("long-tenant", tenant, DateTimeOffset.UtcNow);
+
+        await fixture.Store.SaveAsync(state);
+
+        Assert.Equal(state.WorkflowExecutionId, (await fixture.Store.FindAsync(state.WorkflowExecutionId))!.WorkflowExecutionId);
+        Assert.Single((await fixture.Store.QueryPageAsync(new WorkflowExecutionStatePageQuery(1, TenantId: tenant))).Items);
+    }
+
+    [Fact]
+    public async Task Tenant_and_scope_values_above_the_groundwork_contract_are_rejected()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var tooLong = new string('t', RuntimeWorkflowExecutionEfModule.TenantMaximumLength + 1);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.SaveAsync(State("long-tenant", tooLong, DateTimeOffset.UtcNow)).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.QueryPageAsync(new WorkflowExecutionStatePageQuery(1, TenantId: tooLong)).AsTask());
     }
 
     [Fact]
@@ -199,6 +280,10 @@ public sealed class EfWorkflowExecutionStateStoreTests
     }
 
     private static WorkflowExecutionState State(string id, string tenant, DateTimeOffset timestamp) => new(id, new WorkflowExecutableIdentity("artifact", "definition", "version", "1", "hash"), WorkflowExecutionStatus.Completed, null, timestamp.AddMinutes(-1), timestamp.AddMinutes(-1), timestamp, timestamp, null, null, tenant, new Dictionary<string, string>());
+
+    private sealed class DerivedFeature : RuntimeWorkflowExecutionEntityFrameworkCoreFeature
+    {
+    }
 
     private sealed class Database : IAsyncDisposable
     {
