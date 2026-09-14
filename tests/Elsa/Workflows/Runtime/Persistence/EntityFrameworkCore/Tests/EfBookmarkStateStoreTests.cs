@@ -1,4 +1,8 @@
+using System.Data.Common;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -108,6 +112,27 @@ public sealed class EfBookmarkStateStoreTests
     }
 
     [Fact]
+    public async Task Workflow_continuation_cannot_be_replayed_for_another_workflow()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        await fixture.Store.SaveAsync(State("wf-1", "a", "Event", "one"));
+        await fixture.Store.SaveAsync(State("wf-1", "b", "Event", "two"));
+        await fixture.Store.SaveAsync(State("wf-2", "a", "Event", "three"));
+        await fixture.Store.SaveAsync(State("wf-2", "b", "Event", "four"));
+
+        var first = await fixture.Store.ListPageAsync(new BookmarkStatePageQuery("wf-1", 1));
+        var other = await fixture.Store.ListPageAsync(new BookmarkStatePageQuery("wf-2", 1));
+        var tampered = JsonNode.Parse(Utf8.GetString(Convert.FromBase64String(first.NextContinuationToken!)))!.AsObject();
+        var otherCursor = JsonNode.Parse(Utf8.GetString(Convert.FromBase64String(other.NextContinuationToken!)))!.AsObject();
+        tampered["workflowExecutionId"] = otherCursor["workflowExecutionId"]!.GetValue<string>();
+        tampered["workflowOrderKey"] = otherCursor["workflowOrderKey"]!.GetValue<string>();
+        var token = Convert.ToBase64String(Utf8.GetBytes(tampered.ToJsonString()));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.ListPageAsync(
+            new BookmarkStatePageQuery("wf-1", 1, token)).AsTask());
+    }
+
+    [Fact]
     public async Task Paging_uses_ordinal_unicode_order_even_when_ids_share_prefixes()
     {
         await using var fixture = await Fixture.CreateAsync("tenant-a");
@@ -204,6 +229,32 @@ public sealed class EfBookmarkStateStoreTests
             Assert.Empty(context.ChangeTracker.Entries());
             await store.SaveAsync(State("wf", "bookmark", "Event", "hash"));
             Assert.NotNull(await store.FindAsync("wf", "bookmark"));
+        }
+    }
+
+    [Fact]
+    public async Task Provider_failures_are_normalized_at_every_store_boundary()
+    {
+        await using (var save = await FailingProviderFixture.CreateAsync(new ThrowingSaveInterceptor()))
+        {
+            var exception = await Assert.ThrowsAsync<BookmarkStateEntityFrameworkPersistenceException>(() =>
+                save.Store.SaveAsync(State("wf", "save", "Event", "hash")).AsTask());
+            Assert.Equal("saving", exception.Operation);
+        }
+
+        await using (var read = await FailingProviderFixture.CreateAsync(new ThrowingReaderInterceptor()))
+        {
+            var find = await Assert.ThrowsAsync<BookmarkStateEntityFrameworkPersistenceException>(() =>
+                read.Store.FindAsync("wf", "find").AsTask());
+            Assert.Equal("finding", find.Operation);
+
+            var delete = await Assert.ThrowsAsync<BookmarkStateEntityFrameworkPersistenceException>(() =>
+                read.Store.DeleteAsync("wf", "delete").AsTask());
+            Assert.Equal("deleting", delete.Operation);
+
+            var list = await Assert.ThrowsAsync<BookmarkStateEntityFrameworkPersistenceException>(() =>
+                read.Store.ListPageAsync(new BookmarkStatePageQuery("wf", 1)).AsTask());
+            Assert.Equal("listing", list.Operation);
         }
     }
 
@@ -357,6 +408,39 @@ public sealed class EfBookmarkStateStoreTests
     }
 
     [Fact]
+    public void Shell_feature_is_derivable_and_allows_configuration_override()
+    {
+        Assert.False(typeof(RuntimeBookmarksEntityFrameworkCoreFeature).IsSealed);
+        Assert.True(typeof(RuntimeBookmarksEntityFrameworkCoreFeature)
+            .GetMethod(nameof(RuntimeBookmarksEntityFrameworkCoreFeature.ConfigureServices))!.IsVirtual);
+        Assert.IsAssignableFrom<RuntimeBookmarksEntityFrameworkCoreFeature>(new DerivedFeature());
+    }
+
+    [Fact]
+    public void Remove_owned_artifacts_rolls_back_public_and_auxiliary_descriptors_when_cleanup_fails()
+    {
+        var services = new ServiceCollection();
+        var state = ServiceDescriptor.Singleton<IBookmarkStateStore, CustomBookmarkStateStore>();
+        var index = ServiceDescriptor.Singleton<IBookmarkStimulusIndex, CustomBookmarkStimulusIndex>();
+        var auxiliary = ServiceDescriptor.Singleton<object>(new object());
+        ((ICollection<ServiceDescriptor>)services).Add(state);
+        ((ICollection<ServiceDescriptor>)services).Add(index);
+        ((ICollection<ServiceDescriptor>)services).Add(auxiliary);
+        var backend = new BookmarkStateStoreBackend("entity-framework", state, index, collection =>
+        {
+            collection.Remove(auxiliary);
+            collection.Remove(state);
+            throw new InvalidOperationException("cleanup failed");
+        });
+        BookmarkStateStoreBackend.Register(services, backend);
+        var snapshot = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => backend.RemoveOwnedArtifacts(services));
+        Assert.Equal(snapshot, services);
+        backend.EnsureOwnsRegisteredContract(services);
+    }
+
+    [Fact]
     public void Named_connection_rejects_an_empty_configured_value_when_the_context_is_resolved()
     {
         var configuration = new ConfigurationBuilder()
@@ -440,6 +524,13 @@ public sealed class EfBookmarkStateStoreTests
         metadata ?? new Dictionary<string, string> { ["tag"] = "one", ["unicode"] = "é" },
         new DateTimeOffset(2026, 9, 13, 10, 15, 16, 123, TimeSpan.FromHours(2)),
         new DateTimeOffset(2026, 9, 14, 10, 15, 16, 123, TimeSpan.FromHours(-5)));
+
+    private static readonly Encoding Utf8 = new UTF8Encoding(false, true);
+
+    private sealed class DerivedFeature : RuntimeBookmarksEntityFrameworkCoreFeature
+    {
+        public override void ConfigureServices(IServiceCollection services) { }
+    }
 
     private sealed class Fixture : IAsyncDisposable
     {
@@ -577,6 +668,63 @@ public sealed class EfBookmarkStateStoreTests
             entered.TrySetResult();
             await release.Task.WaitAsync(cancellationToken);
             return result;
+        }
+    }
+
+    private sealed class ThrowingSaveInterceptor : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default) =>
+            throw new DbUpdateException("provider save failure");
+    }
+
+    private sealed class ThrowingReaderInterceptor : DbCommandInterceptor
+    {
+        public override InterceptionResult<DbDataReader> ReaderExecuting(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result) =>
+            throw new SqliteException("provider read failure", 1, 1);
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default) =>
+            throw new SqliteException("provider read failure", 1, 1);
+    }
+
+    private sealed class FailingProviderFixture : IAsyncDisposable
+    {
+        private readonly SqliteConnection connection;
+        private readonly BookmarkStateSqliteDbContext context;
+        public EfBookmarkStateStore Store { get; }
+
+        private FailingProviderFixture(SqliteConnection connection, BookmarkStateSqliteDbContext context)
+        {
+            this.connection = connection;
+            this.context = context;
+            Store = new EfBookmarkStateStore(context, new Accessor("tenant-a"));
+        }
+
+        public static async Task<FailingProviderFixture> CreateAsync(IInterceptor interceptor)
+        {
+            var connection = new SqliteConnection("Data Source=:memory:");
+            await connection.OpenAsync();
+            var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>()
+                .UseSqlite(connection)
+                .AddInterceptors(interceptor)
+                .Options);
+            await context.Database.EnsureCreatedAsync();
+            return new FailingProviderFixture(connection, context);
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await context.DisposeAsync();
+            await connection.DisposeAsync();
         }
     }
 

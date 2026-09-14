@@ -97,6 +97,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "tests/Elsa/Persistence/EntityFramework/Tests/EfMigrationsHistoryTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfProviderGuardTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfRelationalExceptionClassifierTests.cs",
+        "tests/Elsa/Persistence/EntityFramework/Tests/EfRelationalIdentityTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfRelationalProviderBindingTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Program.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/PostgreSqlEfSecretRepositoryTests.cs",

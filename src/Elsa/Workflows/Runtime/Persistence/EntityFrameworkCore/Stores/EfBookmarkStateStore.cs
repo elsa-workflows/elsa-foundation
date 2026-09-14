@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -5,6 +6,7 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -55,7 +57,17 @@ public sealed class EfBookmarkStateStore(
         catch (DbUpdateException exception)
         {
             context.ChangeTracker.Clear();
-            throw new InvalidOperationException("EF bookmark-state save failed.", exception);
+            throw NormalizeProviderFailure("saving", state.WorkflowExecutionId, exception);
+        }
+        catch (DbException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
+        {
+            context.ChangeTracker.Clear();
+            throw new InvalidOperationException("The bookmark state changed concurrently; retry the operation.", exception);
+        }
+        catch (Exception exception) when (IsProviderFailure(exception))
+        {
+            context.ChangeTracker.Clear();
+            throw NormalizeProviderFailure("saving", state.WorkflowExecutionId, exception);
         }
         catch (OperationCanceledException)
         {
@@ -99,7 +111,17 @@ public sealed class EfBookmarkStateStore(
         catch (DbUpdateException exception)
         {
             context.ChangeTracker.Clear();
-            throw new InvalidOperationException("EF bookmark-state delete failed.", exception);
+            throw NormalizeProviderFailure("deleting", workflowExecutionId, exception);
+        }
+        catch (DbException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
+        {
+            context.ChangeTracker.Clear();
+            return false;
+        }
+        catch (Exception exception) when (IsProviderFailure(exception))
+        {
+            context.ChangeTracker.Clear();
+            throw NormalizeProviderFailure("deleting", workflowExecutionId, exception);
         }
         catch
         {
@@ -115,8 +137,21 @@ public sealed class EfBookmarkStateStore(
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         var id = CreateId(scope, workflowExecutionId, bookmarkId);
-        var row = await context.Bookmarks.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
-        return row is null ? null : MapChecked(row, scope, workflowExecutionId, bookmarkId, id);
+        try
+        {
+            var row = await context.Bookmarks.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+            return row is null ? null : MapChecked(row, scope, workflowExecutionId, bookmarkId, id);
+        }
+        catch (OperationCanceledException)
+        {
+            context.ChangeTracker.Clear();
+            throw;
+        }
+        catch (Exception exception) when (IsProviderFailure(exception))
+        {
+            context.ChangeTracker.Clear();
+            throw NormalizeProviderFailure("finding", workflowExecutionId, exception);
+        }
     }
 
     public ValueTask<RuntimeStorePage<BookmarkState>> ListPageAsync(BookmarkStatePageQuery query, CancellationToken cancellationToken = default)
@@ -218,6 +253,11 @@ public sealed class EfBookmarkStateStore(
         {
             context.ChangeTracker.Clear();
             throw;
+        }
+        catch (Exception exception) when (IsProviderFailure(exception))
+        {
+            context.ChangeTracker.Clear();
+            throw NormalizeProviderFailure("listing", binding, exception);
         }
     }
 
@@ -372,6 +412,7 @@ public sealed class EfBookmarkStateStore(
         {
             var cursor = JsonSerializer.Deserialize<BookmarkCursor>(Utf8.GetString(Convert.FromBase64String(token)), Json);
             if (cursor is null || cursor.Version != 1 || cursor.Kind != kind || cursor.ScopeHash != Hash(scope) || cursor.Binding != binding ||
+                (kind == CursorKind.Workflow && cursor.WorkflowExecutionId != binding) ||
                 string.IsNullOrWhiteSpace(cursor.WorkflowExecutionId) || string.IsNullOrWhiteSpace(cursor.BookmarkId) ||
                 cursor.WorkflowOrderKey != OrdinalKey(cursor.WorkflowExecutionId) || cursor.BookmarkOrderKey != OrdinalKey(cursor.BookmarkId))
                 throw new FormatException();
@@ -382,6 +423,16 @@ public sealed class EfBookmarkStateStore(
             throw new ArgumentException("The bookmark continuation token is invalid.", nameof(token), exception);
         }
     }
+
+    private static bool IsProviderFailure(Exception exception) =>
+        exception is not (InvalidDataException or OperationCanceledException) &&
+        exception is (DbException or DbUpdateException or InvalidOperationException);
+
+    private static BookmarkStateEntityFrameworkPersistenceException NormalizeProviderFailure(
+        string operation,
+        string identity,
+        Exception inner) =>
+        new(operation, identity, $"The EF runtime bookmark store failed while {operation} bookmark state '{identity}'.", inner);
 
     private static JsonSerializerOptions CreateJsonOptions()
     {

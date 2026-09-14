@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
     DisplayName = "Workflows Runtime EF Core Bookmark Persistence",
     Description = "Opt-in EF Core persistence for runtime bookmark state and stimulus lookup. Groundwork remains the default.",
     DependsOn = new object[] { "WorkflowsRuntime" })]
-public sealed class RuntimeBookmarksEntityFrameworkCoreFeature : IShellFeature
+public class RuntimeBookmarksEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(
         DisplayName = "Provider",
@@ -35,7 +35,7 @@ public sealed class RuntimeBookmarksEntityFrameworkCoreFeature : IShellFeature
         Category = "Persistence")]
     public string? ConnectionName { get; set; }
 
-    public void ConfigureServices(IServiceCollection services) => services.AddRuntimeBookmarksEntityFrameworkCore(
+    public virtual void ConfigureServices(IServiceCollection services) => services.AddRuntimeBookmarksEntityFrameworkCore(
         new RuntimeBookmarksEntityFrameworkCoreOptions
         {
             Provider = Provider,

@@ -150,14 +150,30 @@ public sealed class BookmarkStateStoreBackend
 
     public void RemoveOwnedArtifacts(IServiceCollection services)
     {
+        ArgumentNullException.ThrowIfNull(services);
         EnsureOwnsRegisteredContract(services);
-        services.Remove(stateDescriptor);
-        services.Remove(indexDescriptor);
-        removeOwnedArtifacts?.Invoke(services);
-        for (var index = services.Count - 1; index >= 0; index--)
+        var snapshot = services.ToArray();
+        try
         {
-            if (ReferenceEquals(services[index].ImplementationInstance, this))
-                services.RemoveAt(index);
+            // Auxiliary cleanup runs while the public contracts are still present. This lets us
+            // validate that a callback only removed its own registrations before committing the
+            // public descriptor removal, and makes a failed replacement retryable.
+            removeOwnedArtifacts?.Invoke(services);
+            EnsureOwnsRegisteredContract(services);
+            services.Remove(stateDescriptor);
+            services.Remove(indexDescriptor);
+            for (var index = services.Count - 1; index >= 0; index--)
+            {
+                if (ReferenceEquals(services[index].ImplementationInstance, this))
+                    services.RemoveAt(index);
+            }
+        }
+        catch
+        {
+            services.Clear();
+            foreach (var descriptor in snapshot)
+                services.Add(descriptor);
+            throw;
         }
     }
 
