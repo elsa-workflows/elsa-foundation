@@ -29,6 +29,8 @@ public static class GroundworkWorkflowsDesignStoreRegistration
                 throw new InvalidOperationException($"Workflow-design persistence backend '{existingBackend.Name}' is already selected; use an explicit replacement API to switch backends.");
             existingBackend.RemoveOwnedDescriptors(services);
         }
+        else if (HasOwnedSurfaceRegistration(services))
+            throw new InvalidOperationException("An explicit workflow-design persistence registration is already present; Groundwork refuses to replace it implicitly.");
         services.AddPersistenceCore();
         services.AddGroundworkStorageLane<WorkflowsDesignGroundworkStorageManifestSource>(targetName);
         foreach (var unit in WorkflowsDesignStorageManifest.CreateUnits())
@@ -87,6 +89,9 @@ public static class GroundworkWorkflowsDesignStoreRegistration
     private static bool IsOwnedDescriptor(ServiceDescriptor descriptor) =>
         OwnedServiceTypes.Contains(descriptor.ServiceType) &&
         (descriptor.ServiceType != typeof(IDesignAtomicWriter) || descriptor.ImplementationType == typeof(GroundworkDesignAtomicWrite));
+
+    private static bool HasOwnedSurfaceRegistration(IServiceCollection services) => services.Any(descriptor =>
+        OwnedServiceTypes.Contains(descriptor.ServiceType) && descriptor.ServiceType != typeof(IDesignAtomicWriter));
 
     private static readonly Type[] OwnedServiceTypes =
     [

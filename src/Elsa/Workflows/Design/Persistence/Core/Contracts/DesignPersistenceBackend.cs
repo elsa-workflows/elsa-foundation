@@ -13,8 +13,6 @@ public sealed class DesignPersistenceBackend
     public DesignPersistenceBackend(string name, IEnumerable<ServiceDescriptor> descriptors)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        if (name is not Groundwork and not EntityFramework)
-            throw new ArgumentException($"Unknown design persistence backend '{name}'.", nameof(name));
         ArgumentNullException.ThrowIfNull(descriptors);
         this.descriptors = descriptors.ToArray();
         if (this.descriptors.Count == 0)

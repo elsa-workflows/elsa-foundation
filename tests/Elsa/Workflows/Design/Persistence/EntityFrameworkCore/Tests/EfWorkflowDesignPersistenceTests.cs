@@ -352,6 +352,34 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public void Design_backend_contract_accepts_a_custom_backend_name()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<object>(new object());
+        var owned = Assert.Single(services, x => x.ServiceType == typeof(object));
+        var backend = new DesignPersistenceBackend("custom", [owned]);
+
+        DesignPersistenceBackend.Register(services, backend);
+
+        Assert.Same(backend, DesignPersistenceBackend.Find(services));
+        Assert.Equal("custom", backend.Name);
+    }
+
+    [Fact]
+    public void Ef_registration_rejects_a_custom_selected_backend()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<object>(new object());
+        var owned = Assert.Single(services, x => x.ServiceType == typeof(object));
+        DesignPersistenceBackend.Register(services, new DesignPersistenceBackend("custom", [owned]));
+
+        var exception = Assert.Throws<InvalidOperationException>(() => services.AddWorkflowsDesignEntityFrameworkCore(new WorkflowsDesignEntityFrameworkCoreOptions()));
+
+        Assert.Contains("already selected", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(owned, services);
+    }
+
+    [Fact]
     public void Ef_feature_registration_flows_settings_through_ConfigureServices()
     {
         var services = new ServiceCollection();
@@ -695,6 +723,58 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.Equal(201, first.VersionCount);
         var foreign = Assert.Single(projections, x => x.WorkflowDefinitionId == "tenant-b-only");
         Assert.Null(foreign.DraftId); Assert.Null(foreign.LatestVersionId); Assert.Null(foreign.LatestVersion); Assert.Equal(0, foreign.VersionCount);
+    }
+
+    [Fact]
+    public async Task Draft_current_and_list_use_last_modified_created_and_id_order()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        var timestamp = DateTimeOffset.UnixEpoch.AddDays(10);
+        var serializer = new TestSerializer();
+        db.Definitions.Add(new WorkflowDefinition { Id = "definition", TenantId = "tenant-a", Name = "Definition" });
+        db.Drafts.AddRange(
+            new WorkflowDefinitionDraft
+            {
+                Id = "draft-created-old",
+                TenantId = "tenant-a",
+                WorkflowDefinitionId = "definition",
+                CreatedAt = timestamp.AddDays(-1),
+                LastModifiedAt = timestamp,
+                StateSource = serializer.Serialize(State())
+            },
+            new WorkflowDefinitionDraft
+            {
+                Id = "draft-created-new",
+                TenantId = "tenant-a",
+                WorkflowDefinitionId = "definition",
+                CreatedAt = timestamp.AddDays(1),
+                LastModifiedAt = timestamp,
+                StateSource = serializer.Serialize(State())
+            },
+            new WorkflowDefinitionDraft
+            {
+                Id = "draft-created-new-z",
+                TenantId = "tenant-a",
+                WorkflowDefinitionId = "definition",
+                CreatedAt = timestamp.AddDays(1),
+                LastModifiedAt = timestamp,
+                StateSource = serializer.Serialize(State())
+            });
+        await db.SaveChangesAsync();
+
+        var store = new EfWorkflowDefinitionDraftStore(
+            db,
+            serializer,
+            new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+
+        var current = await store.FindByWorkflowDefinitionIdAsync("definition");
+        var listed = await store.ListByWorkflowDefinitionIdAsync("definition");
+
+        Assert.Equal("draft-created-new-z", current?.Id);
+        Assert.Equal(["draft-created-new-z", "draft-created-new", "draft-created-old"], listed.Select(x => x.Id));
     }
 
     [Fact]

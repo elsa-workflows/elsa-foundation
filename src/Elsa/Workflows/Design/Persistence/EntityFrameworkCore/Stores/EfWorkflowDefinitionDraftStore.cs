@@ -18,7 +18,7 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
         var rows = await EfDesignSupport.ReadAsync("reading workflow definition draft", () => Query()
             .Where(x => EF.Property<string>(x, "WorkflowDefinitionIdLookupHash") == key)
             .ToListAsync(cancellationToken));
-        rows = rows.OrderByDescending(x => x.LastModifiedAt).ThenByDescending(x => x.Id, StringComparer.Ordinal).ToList();
+        rows = rows.OrderByDescending(x => x.LastModifiedAt).ThenByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id, StringComparer.Ordinal).ToList();
         foreach (var candidate in rows)
             EfDesignSupport.EnsureDefinitionIdentity(workflowDefinitionId, candidate.WorkflowDefinitionId, "workflow definition draft lookup");
         return rows.FirstOrDefault() is { } row ? EfDesignSupport.MapDraft(serializer, row) : null;
@@ -30,7 +30,7 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
         var rows = await EfDesignSupport.ReadAsync("listing workflow drafts", () => Query()
             .Where(x => EF.Property<string>(x, "WorkflowDefinitionIdLookupHash") == key)
             .ToListAsync(cancellationToken));
-        rows = rows.OrderByDescending(x => x.LastModifiedAt).ThenByDescending(x => x.Id, StringComparer.Ordinal).ToList();
+        rows = rows.OrderByDescending(x => x.LastModifiedAt).ThenByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id, StringComparer.Ordinal).ToList();
         foreach (var candidate in rows)
             EfDesignSupport.EnsureDefinitionIdentity(workflowDefinitionId, candidate.WorkflowDefinitionId, "workflow definition draft lookup");
         return rows.Select(x => EfDesignSupport.MapDraft(serializer, x)).ToArray();

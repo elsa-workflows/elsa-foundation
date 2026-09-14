@@ -90,12 +90,25 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
     }
 
     [Fact]
-    public void Groundwork_registration_overrides_a_prior_store()
+    public void Groundwork_registration_rejects_an_untracked_prior_store()
     {
-        using var provider = BuildProvider(services => services.AddScoped<IWorkflowDefinitionStore, PriorStore>());
-        using var scope = provider.CreateScope();
-        Assert.IsType<GroundworkWorkflowDefinitionStore>(scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>());
-        Assert.Single(scope.ServiceProvider.GetServices<IWorkflowDefinitionStore>());
+        var services = new ServiceCollection();
+        services.AddScoped<IWorkflowDefinitionStore, PriorStore>();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => services.AddGroundworkWorkflowsDesignStores());
+
+        Assert.Contains("already present", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Groundwork_registration_rejects_an_untracked_prior_command()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IAddWorkflowDefinitionCommand, PriorAddWorkflowDefinitionCommand>();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => services.AddGroundworkWorkflowsDesignStores());
+
+        Assert.Contains("already present", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -114,6 +127,20 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
         using var scope = provider.CreateScope();
         Assert.IsType<PriorDesignAtomicWriter>(scope.ServiceProvider.GetRequiredService<IDesignAtomicWriter>());
         Assert.Single(scope.ServiceProvider.GetServices<IDesignAtomicWriter>());
+    }
+
+    [Fact]
+    public void Groundwork_registration_rejects_a_custom_selected_backend()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<object>(new object());
+        var owned = Assert.Single(services, x => x.ServiceType == typeof(object));
+        DesignPersistenceBackend.Register(services, new DesignPersistenceBackend("custom", [owned]));
+
+        var exception = Assert.Throws<InvalidOperationException>(() => services.AddGroundworkWorkflowsDesignStores());
+
+        Assert.Contains("already selected", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(owned, services);
     }
 
     [Fact]
@@ -177,6 +204,15 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
         public Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class PriorAddWorkflowDefinitionCommand : IAddWorkflowDefinitionCommand
+    {
+        public Task<WorkflowDefinitionCreated> Execute(
+            DesignOperationKey operationKey,
+            WorkflowDefinition workflowDefinition,
+            WorkflowDefinitionDraft draft,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class PriorDraftOriginator : IDraftOriginator
