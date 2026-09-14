@@ -24,5 +24,5 @@ public sealed class WorkflowsDesignPostgreSqlDbContext(DbContextOptions<Workflow
 public sealed class WorkflowsDesignMySqlDbContext(DbContextOptions<WorkflowsDesignMySqlDbContext> options) : WorkflowsDesignDbContext(options)
 {
     public const string ExpectedProviderName = EfProviderNames.MySql;
-    protected override void ConfigureProvider(ModelBuilder modelBuilder) => ConfigureDateTime(modelBuilder, "datetime(6)");
+    protected override void ConfigureProvider(ModelBuilder modelBuilder) { ConfigureDateTime(modelBuilder, "datetime(6)"); ConfigureLongText(modelBuilder); }
 }

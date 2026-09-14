@@ -54,7 +54,7 @@ internal static class DesignEntityConfigurations
         b.Property(x => x.StateSource).HasColumnType("TEXT");
         b.HasIndex(x => new { x.TenantId, x.WorkflowDefinitionId, x.LastModifiedAt, x.Id });
         b.HasOne(x => x.WorkflowDefinition).WithMany().HasForeignKey("TenantId", "WorkflowDefinitionId").OnDelete(DeleteBehavior.Cascade);
-        b.Property(x => x.LastModifiedAt).IsConcurrencyToken();
+        // Draft updates are explicitly last-writer-wins; stale writers must not be rejected by EF.
         b.Ignore(x => x.State);
     }
 

@@ -33,4 +33,11 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
         foreach (var property in entityType.GetProperties().Where(x => x.ClrType == typeof(DateTimeOffset) || x.ClrType == typeof(DateTimeOffset?)))
             property.SetColumnType(columnType);
     }
+
+    protected static void ConfigureLongText(ModelBuilder modelBuilder)
+    {
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        foreach (var property in entityType.GetProperties().Where(x => x.Name is "StateSource" or "RecordsJson" or "ActivityPresentationJson" or "ResultJson"))
+            property.SetColumnType("longtext");
+    }
 }
