@@ -125,6 +125,15 @@ internal static class RuntimeOperationalStateProviderSmoke
             var futureItem = new RuntimePostCommitOutboxItem(
                 futureId, futureIntent, RuntimePostCommitOutboxStatus.Pending, futureAt, futureAt);
             var futureDispatch = PendingDispatch("workflow-a", "native-checkpoint-dispatch", scope, futureAt);
+            var workId = $"native-checkpoint-work-{Guid.NewGuid():N}";
+            var queue = new EfSchedulerWorkQueueStore(context, accessor,
+                new HmacRuntimeRecoveryContinuationCodec(Options.Create(
+                    new RuntimeRecoveryContinuationOptions { SigningKey = SigningKey })));
+            await queue.EnqueueAsync(new RuntimeSchedulerWorkItem(
+                workId, "workflow-a", "command", WorkflowExecutionCommandKind.ScheduleActivity,
+                "envelope", $"enqueue-{workId}", futureAt, futureAt, 1));
+            var queueClaim = (await queue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest(
+                "workflow-a", "checkpoint-worker", futureAt, TimeSpan.FromMinutes(1))))!;
             futureCommit = futureCommit with
             {
                 Checkpoint = futureCommit.Checkpoint with { OccurredAt = futureAt },
@@ -135,9 +144,15 @@ internal static class RuntimeOperationalStateProviderSmoke
                         futureDispatch, new Dictionary<string, string>())]).WithPostCommitOutbox([
                     new RuntimeStateChange<RuntimePostCommitOutboxItem>(
                         futureId, RuntimeStateChangeOperation.Upsert, futureItem, new Dictionary<string, string>())])
+                    .WithConsumedSchedulerWorkItems([ConsumedSchedulerWorkItem.FromClaim(queueClaim)])
             };
-            Assert.Equal([futureId], (await checkpointStore.CommitAsync(futureCommit, new(RuntimeCheckpointPersistenceMode.Immediate))).PendingPostCommitWorkIds);
-            Assert.Equal([futureId], (await checkpointStore.CommitAsync(futureCommit, new(RuntimeCheckpointPersistenceMode.Immediate))).PendingPostCommitWorkIds);
+            var staged = await checkpointStore.CommitAsync(futureCommit, new(RuntimeCheckpointPersistenceMode.Immediate));
+            var replay = await checkpointStore.CommitAsync(futureCommit, new(RuntimeCheckpointPersistenceMode.Immediate));
+            Assert.Equal([futureId], staged.PendingPostCommitWorkIds);
+            Assert.Equal([futureId], replay.PendingPostCommitWorkIds);
+            Assert.Equal([workId], staged.ConsumedSchedulerWorkItemIds);
+            Assert.Equal([workId], replay.ConsumedSchedulerWorkItemIds);
+            Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery("workflow-a", 10))).Items);
             Assert.Equal(futureId, (await outbox.FindAsync(futureId))!.OutboxItemId);
             Assert.Equal(futureDispatch.DispatchId,
                 (await new EfWorkflowDispatchStore(context, accessor).FindAsync(futureDispatch.DispatchId))!.DispatchId);

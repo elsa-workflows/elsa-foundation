@@ -9,13 +9,12 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
-/// <summary>Opt-in EF Core checkpoint writer for the bounded R19 execution/scheduler slice.</summary>
+/// <summary>Opt-in EF Core checkpoint writer for bounded Runtime participant slices.</summary>
 /// <remarks>
-/// This slice owns the durable replay marker, workflow-execution and scheduler projections, and the execution fence
-/// in one transaction. Workflow-execution writes also run inside the established root executable write-lease
-/// boundary; replay remains resolvable before a lease is required. The remaining R20-R24 participants are still
-/// rejected explicitly; they are not silently treated as committed until their EF adapters can stage changes through
-/// this same context.
+/// The durable replay marker, supported participant projections, and execution fence share one transaction.
+/// Workflow-execution writes also run inside the established root executable write-lease boundary; replay remains
+/// resolvable before a lease is required. Unsupported participants are rejected explicitly until their EF adapters
+/// can stage changes through this same context.
 /// </remarks>
 public sealed class EfRuntimeCheckpointCommitStore(
     BookmarkStateDbContext context,
@@ -126,6 +125,10 @@ public sealed class EfRuntimeCheckpointCommitStore(
                     scope,
                     writeCancellationToken);
 
+                foreach (var consumed in commit.StateChanges.ConsumedSchedulerWorkItems)
+                    await EfRuntimeCheckpointParticipantStaging.StageConsumedSchedulerWorkAsync(
+                        context, consumed, scope, writeCancellationToken);
+
                 // Flush all participant rows first, then add the immutable marker as the final write in this
                 // transaction. The marker is the durable commit proof, so it must never precede a participant failure.
                 await context.SaveChangesAsync(writeCancellationToken);
@@ -200,6 +203,15 @@ public sealed class EfRuntimeCheckpointCommitStore(
 
         foreach (var request in commit.StateChanges.WorkflowDispatchCancellations)
             RequireWorkflow(request.ParentWorkflowExecutionId, commit.WorkflowExecutionId, "workflow dispatch cancellation");
+
+        foreach (var consumed in commit.StateChanges.ConsumedSchedulerWorkItems)
+        {
+            RequireWorkflow(consumed.WorkflowExecutionId, commit.WorkflowExecutionId, "consumed scheduler work");
+            ArgumentException.ThrowIfNullOrWhiteSpace(consumed.WorkItemId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(consumed.ClaimOwnerId);
+            if (consumed.FencingToken <= 0)
+                throw new InvalidOperationException("Consumed scheduler work requires a positive fencing token.");
+        }
     }
 
     private static void RequireOperation<TState>(
@@ -255,11 +267,10 @@ public sealed class EfRuntimeCheckpointCommitStore(
             changes.Incidents.Count > 0 ||
             changes.Operational.Count > 0 ||
             changes.ActivityScopeCleanups.Count > 0 ||
-            changes.ConsumedSchedulerWorkItems.Count > 0 ||
             changes.AlterationJobTerminalChange is not null)
         {
             throw new NotSupportedException(
-                "The R19 EF checkpoint slice supports workflow-execution, scheduler, ordinary dispatch, and pending outbox changes only; remaining participants must be staged by the complete checkpoint writer before this adapter is enabled for those runtime commits.");
+                "The EF checkpoint slice supports workflow-execution, scheduler, ordinary dispatch, pending outbox, and claimed scheduler-work consume only; remaining participants must be staged by the complete checkpoint writer before this adapter is enabled for those runtime commits.");
         }
 
         if (commit.PostCommitIntents.Count > 0)
@@ -312,16 +323,20 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 commit.Checkpoint.OccurredAt,
                 fingerprint,
                 PendingOutboxIds(commit),
-                Array.Empty<string>()),
+                ConsumedSchedulerWorkIds(commit)),
             JsonOptions),
         PendingPostCommitWorkIdsJson = JsonSerializer.Serialize(PendingOutboxIds(commit), JsonOptions),
-        ConsumedSchedulerWorkItemIdsJson = JsonSerializer.Serialize(Array.Empty<string>(), JsonOptions),
+        ConsumedSchedulerWorkItemIdsJson = JsonSerializer.Serialize(ConsumedSchedulerWorkIds(commit), JsonOptions),
         SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion,
         Revision = 1
     };
 
     private static string[] PendingOutboxIds(RuntimeCheckpointCommit commit) =>
         commit.StateChanges.PostCommitOutbox.Select(change => change.StateId)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+
+    private static string[] ConsumedSchedulerWorkIds(RuntimeCheckpointCommit commit) =>
+        commit.StateChanges.ConsumedSchedulerWorkItems.Select(item => item.WorkItemId)
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
 
     private static RuntimeCheckpointCommitEntity ReadChecked(

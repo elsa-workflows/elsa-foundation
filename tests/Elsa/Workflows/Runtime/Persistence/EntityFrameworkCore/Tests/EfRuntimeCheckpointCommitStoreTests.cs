@@ -207,6 +207,118 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
+    public async Task Claimed_scheduler_work_dispatch_and_outbox_share_the_marker_transaction_and_replay()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open("tenant-a");
+        var access = new FixedAccessor("tenant-a");
+        var queue = new EfSchedulerWorkQueueStore(context, access, new NoopContinuationCodec());
+        await queue.EnqueueAsync(SchedulerWork("work-checkpoint"));
+        var claim = (await queue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest(
+            "workflow-a", "worker-a", OccurredAt, TimeSpan.FromMinutes(1))))!;
+        var dispatch = PendingDispatch("workflow-a", "activity-queue", "tenant-a");
+        var commit = WithPendingDispatch("commit-queue", "intent-queue", dispatch);
+        commit = commit with
+        {
+            StateChanges = commit.StateChanges.WithConsumedSchedulerWorkItems(
+                [ConsumedSchedulerWorkItem.FromClaim(claim)])
+        };
+
+        var store = new EfRuntimeCheckpointCommitStore(context, access);
+        var first = await store.CommitAsync(commit, Decision());
+        Assert.Equal(["work-checkpoint"], first.ConsumedSchedulerWorkItemIds);
+        Assert.Equal(first.ConsumedSchedulerWorkItemIds, (await store.CommitAsync(commit, Decision())).ConsumedSchedulerWorkItemIds);
+        Assert.Empty(await context.SchedulerWorkItems.ToArrayAsync());
+        Assert.Single(await context.WorkflowDispatches.ToArrayAsync());
+        Assert.Single(await context.RuntimePostCommitOutbox.ToArrayAsync());
+
+        await using var restarted = database.Open("tenant-a");
+        Assert.Equal(["work-checkpoint"],
+            (await new EfRuntimeCheckpointCommitStore(restarted, access).CommitAsync(commit, Decision()))
+            .ConsumedSchedulerWorkItemIds);
+        Assert.Single(await restarted.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Marker_failure_restores_claimed_scheduler_work_and_sibling_writes_before_retry()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var interceptor = new FailMarkerInsertInterceptor();
+        RuntimeCheckpointCommit commit;
+        await using (var context = database.Open("tenant-a", interceptor))
+        {
+            var access = new FixedAccessor("tenant-a");
+            var queue = new EfSchedulerWorkQueueStore(context, access, new NoopContinuationCodec());
+            await queue.EnqueueAsync(SchedulerWork("work-rollback"));
+            var claim = (await queue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest(
+                "workflow-a", "worker-a", OccurredAt, TimeSpan.FromMinutes(1))))!;
+            commit = WithPendingDispatch("commit-queue-rollback", "intent-queue-rollback",
+                PendingDispatch("workflow-a", "activity-queue-rollback", "tenant-a"));
+            commit = commit with
+            {
+                StateChanges = commit.StateChanges.WithConsumedSchedulerWorkItems(
+                    [ConsumedSchedulerWorkItem.FromClaim(claim)])
+            };
+
+            interceptor.Arm();
+            await Assert.ThrowsAsync<DbUpdateException>(() =>
+                new EfRuntimeCheckpointCommitStore(context, access).CommitAsync(commit, Decision()).AsTask());
+            Assert.Empty(context.ChangeTracker.Entries());
+        }
+
+        await using var restarted = database.Open("tenant-a");
+        Assert.Single(await restarted.SchedulerWorkItems.ToArrayAsync());
+        Assert.Empty(await restarted.WorkflowDispatches.ToArrayAsync());
+        Assert.Empty(await restarted.RuntimePostCommitOutbox.ToArrayAsync());
+        Assert.Empty(await restarted.RuntimeCheckpointCommits.ToArrayAsync());
+        Assert.Equal(["work-rollback"],
+            (await new EfRuntimeCheckpointCommitStore(restarted, new FixedAccessor("tenant-a"))
+                .CommitAsync(commit, Decision())).ConsumedSchedulerWorkItemIds);
+        Assert.Empty(await restarted.SchedulerWorkItems.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Lost_scheduler_claim_rejects_the_entire_checkpoint_and_mismatched_workflow_fails_before_io()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open("tenant-a");
+        var access = new FixedAccessor("tenant-a");
+        var queue = new EfSchedulerWorkQueueStore(context, access, new NoopContinuationCodec());
+        await queue.EnqueueAsync(SchedulerWork("work-fenced"));
+        var original = (await queue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest(
+            "workflow-a", "worker-a", OccurredAt, TimeSpan.FromMinutes(1))))!;
+        var successor = await queue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest(
+            "workflow-a", "worker-b", OccurredAt.AddMinutes(2), TimeSpan.FromMinutes(1)));
+        Assert.NotNull(successor);
+        Assert.True(successor!.FencingToken > original.FencingToken);
+        var commit = WithPendingDispatch("commit-lost-claim", "intent-lost-claim",
+            PendingDispatch("workflow-a", "activity-lost-claim", "tenant-a"));
+        commit = commit with
+        {
+            StateChanges = commit.StateChanges.WithConsumedSchedulerWorkItems(
+                [ConsumedSchedulerWorkItem.FromClaim(original)])
+        };
+
+        await Assert.ThrowsAsync<RuntimeSchedulerWorkConsumeConflictException>(() =>
+            new EfRuntimeCheckpointCommitStore(context, access).CommitAsync(commit, Decision()).AsTask());
+        Assert.Empty(await context.WorkflowDispatches.ToArrayAsync());
+        Assert.Empty(await context.RuntimePostCommitOutbox.ToArrayAsync());
+        Assert.Empty(await context.RuntimeCheckpointCommits.ToArrayAsync());
+        Assert.Equal(successor.FencingToken, (await context.SchedulerWorkItems.SingleAsync()).ClaimToken);
+
+        var wrongWorkflow = commit with
+        {
+            StateChanges = commit.StateChanges.WithConsumedSchedulerWorkItems(
+                [ConsumedSchedulerWorkItem.FromClaim(original) with { WorkflowExecutionId = "wrong-workflow" }])
+        };
+        var commands = new CommandCaptureInterceptor();
+        await using var beforeIo = database.Open("tenant-a", commands);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new EfRuntimeCheckpointCommitStore(beforeIo, access).CommitAsync(wrongWorkflow, Decision()).AsTask());
+        Assert.Empty(commands.Commands);
+    }
+
+    [Fact]
     public async Task Marker_failure_rolls_back_previously_saved_outbox_and_does_not_leak_tracker_state()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -568,6 +680,10 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     private static RuntimeCheckpointPersistenceDecision Decision() => new(RuntimeCheckpointPersistenceMode.Immediate);
+
+    private static RuntimeSchedulerWorkItem SchedulerWork(string id) => new(
+        id, "workflow-a", "command", WorkflowExecutionCommandKind.ScheduleActivity,
+        "envelope", $"enqueue-{id}", OccurredAt, OccurredAt, 1);
 
     private static WorkflowExecutionState Execution(string id, string tenantId) => new(
         id,
