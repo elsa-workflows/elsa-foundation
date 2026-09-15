@@ -57,10 +57,15 @@ public sealed class EfRuntimeCheckpointCommitStore(
             if (dispatch.State.TestScope is { } testScope)
                 accessContextAccessor.Current.EnsureTenantScope(testScope.TenantId);
         }
+        EfRuntimeAlterationCheckpointParticipationGate.Validate(context, commit, scope);
 
         var existing = await FindMarkerAsync(scope, commit.CommitId, cancellationToken);
         if (existing is not null)
-            return ResolveReplay(commit, fingerprint, existing);
+        {
+            var replay = ResolveReplay(commit, fingerprint, existing);
+            EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
+            return replay;
+        }
 
         if (commit.StateChanges.WorkflowExecution is { } executionChange)
         {
@@ -77,10 +82,14 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 $"checkpoint:{commit.CommitId}",
                 ExecuteCheckpointAsync,
                 cancellationToken);
-            return result ?? throw new InvalidOperationException("The checkpoint lease callback did not produce a result.");
+            var completed = result ?? throw new InvalidOperationException("The checkpoint lease callback did not produce a result.");
+            EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
+            return completed;
         }
 
-        return await CommitNewAsync(cancellationToken);
+        var immediate = await CommitNewAsync(cancellationToken);
+        EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
+        return immediate;
 
         async ValueTask<RuntimeCheckpointCommitStoreResult> CommitNewAsync(CancellationToken writeCancellationToken)
         {
@@ -172,6 +181,10 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 foreach (var consumed in commit.StateChanges.ConsumedSchedulerWorkItems)
                     await EfRuntimeCheckpointParticipantStaging.StageConsumedSchedulerWorkAsync(
                         context, consumed, scope, writeCancellationToken);
+
+                if (commit.StateChanges.AlterationJobTerminalChange is { } terminalJob)
+                    await EfRuntimeCheckpointAlterationJobParticipantStaging.StageAsync(
+                        context, terminalJob, scope, commit.WorkflowExecutionId, writeCancellationToken);
 
                 // Flush all participant rows first, then add the immutable marker as the final write in this
                 // transaction. The marker is the durable commit proof, so it must never precede a participant failure.
@@ -337,6 +350,10 @@ public sealed class EfRuntimeCheckpointCommitStore(
             if (consumed.FencingToken <= 0)
                 throw new InvalidOperationException("Consumed scheduler work requires a positive fencing token.");
         }
+
+        if (commit.StateChanges.AlterationJobTerminalChange is { } alteration &&
+            !StringComparer.Ordinal.Equals(alteration.CheckpointCommitId, commit.CommitId))
+            throw new InvalidOperationException("Workflow alteration terminal evidence must reference its checkpoint commit ID.");
     }
 
     private static void RequireOperation<TState>(
@@ -390,12 +407,6 @@ public sealed class EfRuntimeCheckpointCommitStore(
             throw new NotSupportedException("The R19 EF checkpoint slice supports workflow-execution upserts only.");
         if (changes.Scheduler is { Operation: not RuntimeStateChangeOperation.Upsert })
             throw new NotSupportedException("The R19 EF checkpoint slice supports scheduler upserts only.");
-
-        if (changes.AlterationJobTerminalChange is not null)
-        {
-            throw new NotSupportedException(
-                "The EF checkpoint slice supports workflow-execution, scheduler, activity execution, inspection/hierarchy, incidents/run health, bookmarks, durable values, scope cleanup, operational state, dispatch, pending outbox, and claimed scheduler-work consume only; remaining participants must be staged by the complete checkpoint writer before this adapter is enabled for those runtime commits.");
-        }
 
         if (commit.PostCommitIntents.Count > 0)
         {
@@ -463,7 +474,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
         commit.StateChanges.ConsumedSchedulerWorkItems.Select(item => item.WorkItemId)
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
 
-    private static RuntimeCheckpointCommitEntity ReadChecked(
+    internal static RuntimeCheckpointCommitEntity ReadChecked(
         RuntimeCheckpointCommitEntity row,
         string scope,
         string expectedCommitId)

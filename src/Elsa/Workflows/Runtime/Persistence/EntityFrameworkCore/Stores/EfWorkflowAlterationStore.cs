@@ -290,13 +290,14 @@ public sealed class EfWorkflowAlterationStore(
         ArgumentNullException.ThrowIfNull(change);
         var scopeKey = Key(RequireScope());
         var row = await _context.WorkflowAlterationJobs.AsNoTracking()
-            .SingleOrDefaultAsync(x => x.Id == Id(scopeKey, change.JobId) && x.ScopeKey == EfRelationalIdentity.Encode(scopeKey) && x.ScopeKeyHash == EfRelationalIdentity.Hash(scopeKey) && x.JobId == EfRelationalIdentity.Encode(change.JobId) && x.JobIdHash == EfRelationalIdentity.Hash(change.JobId), cancellationToken)
+            .SingleOrDefaultAsync(x => x.Id == Id(scopeKey, change.JobId), cancellationToken)
             ?? throw new KeyNotFoundException($"Alteration job '{change.JobId}' was not found.");
         ValidateTerminalChange(ReadJob(row, scopeKey, change.JobId), change);
     }
     public async ValueTask ApplyTerminalJobChangeAsync(WorkflowAlterationJobTerminalChange change, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(change);
+        EfRuntimeAlterationCheckpointParticipationGate.RejectIndependentTerminalWrite(_context);
         var scopeKey = Key(RequireScope());
         var row = await _context.WorkflowAlterationJobs
             .SingleOrDefaultAsync(x => x.Id == Id(scopeKey, change.JobId) && x.ScopeKey == EfRelationalIdentity.Encode(scopeKey) && x.ScopeKeyHash == EfRelationalIdentity.Hash(scopeKey) && x.JobId == EfRelationalIdentity.Encode(change.JobId) && x.JobIdHash == EfRelationalIdentity.Hash(change.JobId), cancellationToken)
@@ -320,17 +321,19 @@ public sealed class EfWorkflowAlterationStore(
     }
 
     /// <summary>
-    /// The runtime checkpoint callback receives no context or transaction enlistment handle. Until a shared
-    /// checkpoint transaction seam exists, rejecting it is safer than allowing a Groundwork or other provider write
-    /// to commit before this EF store applies the terminal job transition.
+    /// The callback must enter the EF checkpoint writer on this exact DbContext with matching job evidence. The
+    /// writer stages the terminal transition and marker in one transaction; a no-op or unrelated EF callback cannot
+    /// establish that boundary and fails closed.
     /// </summary>
-    public ValueTask CommitTerminalJobChangeAtomicallyAsync(WorkflowAlterationJobTerminalChange change, Func<CancellationToken, ValueTask> commitWorkflowCheckpointAsync, CancellationToken cancellationToken = default)
+    public async ValueTask CommitTerminalJobChangeAtomicallyAsync(WorkflowAlterationJobTerminalChange change, Func<CancellationToken, ValueTask> commitWorkflowCheckpointAsync, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(change);
         ArgumentNullException.ThrowIfNull(commitWorkflowCheckpointAsync);
         cancellationToken.ThrowIfCancellationRequested();
-        throw new InvalidOperationException(
-            "EF alteration terminal checkpoint callbacks are unavailable until the runtime supplies a transaction enlistment seam shared by the checkpoint store and this DbContext. Use ApplyTerminalJobChangeAsync for the direct alteration-store transition.");
+        await ValidateTerminalJobChangeAsync(change, cancellationToken);
+        using var gate = EfRuntimeAlterationCheckpointParticipationGate.Begin(_context, change, Key(RequireScope()));
+        await commitWorkflowCheckpointAsync(cancellationToken);
+        await gate.VerifyDurableAsync(cancellationToken);
     }
 
     private async Task<WorkflowAlterationPlanEntity> RequirePlan(string planId, CancellationToken ct) { ArgumentException.ThrowIfNullOrWhiteSpace(planId); var scopeKey = Key(RequireScope()); return await _context.WorkflowAlterationPlans.SingleOrDefaultAsync(x => x.Id == Id(scopeKey, planId) && x.ScopeKey == EfRelationalIdentity.Encode(scopeKey) && x.ScopeKeyHash == EfRelationalIdentity.Hash(scopeKey) && x.PlanId == EfRelationalIdentity.Encode(planId) && x.PlanIdHash == EfRelationalIdentity.Hash(planId), ct) ?? throw new KeyNotFoundException($"Alteration plan '{planId}' was not found."); }
@@ -347,7 +350,8 @@ public sealed class EfWorkflowAlterationStore(
             throw new ArgumentException("The alteration cursor contains an invalid identity.", parameterName, exception);
         }
     }
-    internal static string Id(string scope, string id) => EfRelationalIdentity.Hash(scope + "\u001f" + id);
+    internal static string Id(string scope, string id) =>
+        EfRelationalIdentity.Hash($"{scope.Length}:{scope}{id.Length}:{id}");
     private static bool IsTerminal(WorkflowAlterationPlanStatus status) => status is WorkflowAlterationPlanStatus.Completed or WorkflowAlterationPlanStatus.CompletedWithFailures or WorkflowAlterationPlanStatus.Failed or WorkflowAlterationPlanStatus.Cancelled;
     private static bool IsTerminal(WorkflowAlterationJobStatus status) => status is WorkflowAlterationJobStatus.Succeeded or WorkflowAlterationJobStatus.Failed or WorkflowAlterationJobStatus.Cancelled;
     private static string ActiveKey(DateTimeOffset at, string id) =>

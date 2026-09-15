@@ -81,6 +81,28 @@ internal static class RuntimeCheckpointAlterationJobParticipantProviderSmoke
             Assert.Equal(committedJob.Revision + 1, saved.Revision);
         }
 
+        await using (var callbackContext = createContext(fixture.ConnectionString))
+        {
+            var access = new FixedAccessor(scope);
+            var alteration = new EfWorkflowAlterationStore(callbackContext, access, Codec());
+            var job = await SeedRunningAsync(alteration, scope, "callback");
+            var terminal = TerminalChange(job);
+            var checkpoint = new RuntimeCheckpointCommit(terminal.CheckpointCommitId,
+                new RuntimeCheckpoint($"checkpoint:{terminal.CheckpointCommitId}", "runtime.alteration.job",
+                    job.WorkflowExecutionId, terminal.CompletedAt, [], new Dictionary<string, string>()),
+                new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], [],
+                    null, null, null, null, null, null, terminal),
+                [], new Dictionary<string, string>());
+            var writer = new EfRuntimeCheckpointCommitStore(callbackContext, access);
+            async ValueTask CommitCheckpointAsync(CancellationToken cancellationToken) =>
+                _ = await writer.CommitAsync(checkpoint, new(RuntimeCheckpointPersistenceMode.Immediate), cancellationToken);
+
+            await alteration.CommitTerminalJobChangeAtomicallyAsync(terminal, CommitCheckpointAsync);
+            await alteration.CommitTerminalJobChangeAtomicallyAsync(terminal, CommitCheckpointAsync);
+            Assert.Equal(WorkflowAlterationJobStatus.Succeeded, (await alteration.FindJobAsync(job.JobId))!.Status);
+            Assert.Single(await callbackContext.RuntimeCheckpointCommits.ToArrayAsync());
+        }
+
         await using var rollbackContext = createContext(fixture.ConnectionString);
         var rollbackStore = new EfWorkflowAlterationStore(rollbackContext, new FixedAccessor(scope), Codec());
         var rollbackJob = await SeedRunningAsync(rollbackStore, scope, "rollback");
