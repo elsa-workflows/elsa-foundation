@@ -12,13 +12,16 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// <summary>Opt-in EF Core checkpoint writer for the bounded R19 execution/scheduler slice.</summary>
 /// <remarks>
 /// This slice owns the durable replay marker, workflow-execution and scheduler projections, and the execution fence
-/// in one transaction. The remaining R20-R24 participants are still rejected explicitly; they are not silently
-/// treated as committed until their EF adapters can stage changes through this same context.
+/// in one transaction. Workflow-execution writes also run inside the established root executable write-lease
+/// boundary; replay remains resolvable before a lease is required. The remaining R20-R24 participants are still
+/// rejected explicitly; they are not silently treated as committed until their EF adapters can stage changes through
+/// this same context.
 /// </remarks>
 public sealed class EfRuntimeCheckpointCommitStore(
     BookmarkStateDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    TimeProvider? timeProvider = null) : IRuntimeCheckpointCommitStore
+    TimeProvider? timeProvider = null,
+    IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager = null) : IRuntimeCheckpointCommitStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
@@ -38,82 +41,148 @@ public sealed class EfRuntimeCheckpointCommitStore(
         var fingerprint = RuntimeCheckpointCommitFingerprint.Compute(commit);
         var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, commit.CommitId);
 
-        var existing = await FindMarkerAsync(scope, commit.CommitId, cancellationToken);
-        if (existing is not null)
-            return ResolveReplay(commit, fingerprint, existing);
-
+        // Match the established checkpoint funnel: identity admission happens before marker reads, transaction
+        // creation, or any other provider I/O. A malformed state change must not be able to reach EF by using this
+        // preview adapter's narrower participant set as an excuse to bypass the shared boundary.
+        ValidateCommitBoundary(commit);
         ValidateThinSlice(commit);
         if (commit.StateChanges.WorkflowExecution is { } workflowExecution)
             accessContextAccessor.Current.EnsureTenantScope(workflowExecution.State.TenantId);
 
-        var marker = ToEntity(commit, scope, id, fingerprint);
-        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
-        try
+        var existing = await FindMarkerAsync(scope, commit.CommitId, cancellationToken);
+        if (existing is not null)
+            return ResolveReplay(commit, fingerprint, existing);
+
+        if (commit.StateChanges.WorkflowExecution is { } executionChange)
         {
-            // Fence validation/touch is deliberately first. The workflow and scheduler rows then join the same
-            // transaction, and the immutable marker is added only after every supported participant is staged. Do
-            // not clear the tracker: callers may have staged a sibling R14-R18 mutation on this context already.
-            if (commit.ExpectedFence is { } expectedFence)
+            if (rootWriteLeaseManager is null)
+                throw new InvalidOperationException(
+                    "A workflow execution checkpoint write requires IWorkflowExecutableRootWriteLeaseManager.");
+
+            RuntimeCheckpointCommitStoreResult? result = null;
+            async ValueTask ExecuteCheckpointAsync(CancellationToken leaseCancellationToken) =>
+                result = await CommitNewAsync(leaseCancellationToken);
+
+            await rootWriteLeaseManager.ExecuteAsync(
+                executionChange.State.PinnedExecutable,
+                $"checkpoint:{commit.CommitId}",
+                ExecuteCheckpointAsync,
+                cancellationToken);
+            return result ?? throw new InvalidOperationException("The checkpoint lease callback did not produce a result.");
+        }
+
+        return await CommitNewAsync(cancellationToken);
+
+        async ValueTask<RuntimeCheckpointCommitStoreResult> CommitNewAsync(CancellationToken writeCancellationToken)
+        {
+            var marker = ToEntity(commit, scope, id, fingerprint);
+
+            await using var transaction = await context.Database.BeginTransactionAsync(writeCancellationToken);
+            try
             {
-                await EfRuntimeCheckpointParticipantStaging.StageExecutionFenceAsync(
-                    context,
-                    scope,
-                    commit.WorkflowExecutionId,
-                    expectedFence,
-                    _timeProvider,
-                    cancellationToken);
-            }
+                // Fence validation/touch is deliberately first. The workflow and scheduler rows then join the same
+                // transaction, and the immutable marker is added only after every supported participant is staged.
+                // Do not clear the tracker: callers may have staged a sibling R14-R18 mutation on this context.
+                if (commit.ExpectedFence is { } expectedFence)
+                {
+                    await EfRuntimeCheckpointParticipantStaging.StageExecutionFenceAsync(
+                        context,
+                        scope,
+                        commit.WorkflowExecutionId,
+                        expectedFence,
+                        _timeProvider,
+                        writeCancellationToken);
+                }
 
-            if (commit.StateChanges.WorkflowExecution is { } workflowChange)
+                if (commit.StateChanges.WorkflowExecution is { } workflowChange)
+                {
+                    await EfRuntimeCheckpointParticipantStaging.StageWorkflowExecutionAsync(
+                        context,
+                        workflowChange,
+                        scope,
+                        writeCancellationToken);
+                }
+
+                if (commit.StateChanges.Scheduler is { } schedulerChange)
+                {
+                    await EfRuntimeCheckpointParticipantStaging.StageSchedulerAsync(
+                        context,
+                        schedulerChange,
+                        scope,
+                        writeCancellationToken);
+                }
+
+                // Flush all participant rows first, then add the immutable marker as the final write in this
+                // transaction. The marker is the durable commit proof, so it must never precede a participant failure.
+                await context.SaveChangesAsync(writeCancellationToken);
+                context.RuntimeCheckpointCommits.Add(marker);
+                await context.SaveChangesAsync(writeCancellationToken);
+                await transaction.CommitAsync(writeCancellationToken);
+                return ResultFor(commit, marker);
+            }
+            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
             {
-                await EfRuntimeCheckpointParticipantStaging.StageWorkflowExecutionAsync(
-                    context,
-                    workflowChange,
-                    scope,
-                    cancellationToken);
+                await RollbackAndRestoreAsync(transaction);
+                var winner = await FindMarkerAsync(scope, commit.CommitId, writeCancellationToken);
+                if (winner is not null)
+                    return ResolveReplay(commit, fingerprint, winner);
+                throw;
             }
-
-            if (commit.StateChanges.Scheduler is { } schedulerChange)
+            catch (OperationCanceledException)
             {
-                await EfRuntimeCheckpointParticipantStaging.StageSchedulerAsync(
-                    context,
-                    schedulerChange,
-                    scope,
-                    cancellationToken);
+                await RollbackAndRestoreAsync(transaction);
+                throw;
             }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                await RollbackAndRestoreAsync(transaction);
 
-            // Flush all participant rows first, then add the immutable marker as the final write in this
-            // transaction. The marker is the durable commit proof, so it must never precede a participant failure.
-            await context.SaveChangesAsync(cancellationToken);
-            context.RuntimeCheckpointCommits.Add(marker);
-            await context.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            return ResultFor(commit, marker);
+                // A provider can acknowledge the commit ambiguously. The immutable marker is the only authoritative
+                // reconciliation signal: if it is visible, return the original result; otherwise preserve the failure.
+                var reconciled = await FindMarkerAsync(scope, commit.CommitId, writeCancellationToken);
+                if (reconciled is not null)
+                    return ResolveReplay(commit, fingerprint, reconciled);
+                throw;
+            }
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
-        {
-            await RollbackAndRestoreAsync(transaction);
-            var winner = await FindMarkerAsync(scope, commit.CommitId, cancellationToken);
-            if (winner is not null)
-                return ResolveReplay(commit, fingerprint, winner);
-            throw;
-        }
-        catch (OperationCanceledException)
-        {
-            await RollbackAndRestoreAsync(transaction);
-            throw;
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            await RollbackAndRestoreAsync(transaction);
+    }
 
-            // A provider can acknowledge the commit ambiguously. The immutable marker is the only authoritative
-            // reconciliation signal: if it is visible, return the original result; otherwise preserve the failure.
-            var reconciled = await FindMarkerAsync(scope, commit.CommitId, cancellationToken);
-            if (reconciled is not null)
-                return ResolveReplay(commit, fingerprint, reconciled);
-            throw;
+    private static void ValidateCommitBoundary(RuntimeCheckpointCommit commit)
+    {
+        if (commit.StateChanges.WorkflowExecution is { } workflow)
+        {
+            RequireOperation(workflow, RuntimeStateChangeOperation.Upsert, "workflow execution");
+            RequireId(workflow.StateId, workflow.State.WorkflowExecutionId, "workflow execution");
+            RequireWorkflow(workflow.State.WorkflowExecutionId, commit.WorkflowExecutionId, "workflow execution");
         }
+
+        if (commit.StateChanges.Scheduler is { } scheduler)
+        {
+            RequireOperation(scheduler, RuntimeStateChangeOperation.Upsert, "scheduler");
+            RequireId(scheduler.StateId, scheduler.State.WorkflowExecutionId, "scheduler");
+            RequireWorkflow(scheduler.State.WorkflowExecutionId, commit.WorkflowExecutionId, "scheduler");
+        }
+    }
+
+    private static void RequireOperation<TState>(
+        RuntimeStateChange<TState> change,
+        RuntimeStateChangeOperation expected,
+        string label)
+    {
+        if (change.Operation != expected)
+            throw new InvalidOperationException($"The EF checkpoint writer can only project {label} '{expected}' changes.");
+    }
+
+    private static void RequireId(string actual, string expected, string label)
+    {
+        if (!StringComparer.Ordinal.Equals(actual, expected))
+            throw new InvalidOperationException($"{label} state change StateId must match its model identity.");
+    }
+
+    private static void RequireWorkflow(string actual, string expected, string label)
+    {
+        if (!StringComparer.Ordinal.Equals(actual, expected))
+            throw new InvalidOperationException($"{label} workflow execution ID must match the checkpoint workflow execution ID.");
     }
 
     private async ValueTask<RuntimeCheckpointCommitEntity?> FindMarkerAsync(

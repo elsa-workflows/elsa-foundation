@@ -52,7 +52,10 @@ internal static class RuntimeOperationalStateProviderSmoke
             await context.Database.EnsureCreatedAsync();
             var accessor = new FixedAccessor(scope);
             var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = SigningKey }));
-            var checkpointStore = new EfRuntimeCheckpointCommitStore(context, accessor);
+            var checkpointStore = new EfRuntimeCheckpointCommitStore(
+                context,
+                accessor,
+                rootWriteLeaseManager: new PassThroughRootWriteLeaseManager());
             var checkpoint = EmptyCheckpointCommit($"checkpoint-{Guid.NewGuid():N}");
             var checkpointResult = await checkpointStore.CommitAsync(checkpoint, new(RuntimeCheckpointPersistenceMode.Immediate));
             var checkpointReplay = await checkpointStore.CommitAsync(checkpoint, new(RuntimeCheckpointPersistenceMode.Immediate));
@@ -266,4 +269,13 @@ internal static class RuntimeOperationalStateProviderSmoke
         [],
         new Dictionary<string, string>());
     private sealed class FixedAccessor(string scope) : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(scope)); }
+
+    private sealed class PassThroughRootWriteLeaseManager : IWorkflowExecutableRootWriteLeaseManager
+    {
+        public ValueTask ExecuteAsync(
+            string artifactId,
+            string leaseId,
+            Func<CancellationToken, ValueTask> write,
+            CancellationToken cancellationToken = default) => write(cancellationToken);
+    }
 }

@@ -93,12 +93,15 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
                     [], [], [], [], [])
             };
 
-            var store = new EfRuntimeCheckpointCommitStore(context, accessor, new FixedTimeProvider(now));
+            var manager = new PassThroughRootWriteLeaseManager();
+            var store = new EfRuntimeCheckpointCommitStore(context, accessor, new FixedTimeProvider(now), manager);
             var first = await store.CommitAsync(commit, Decision());
             var replay = await store.CommitAsync(commit, Decision());
 
             Assert.Empty(first.PendingPostCommitWorkIds);
             Assert.Empty(replay.PendingPostCommitWorkIds);
+            Assert.Equal("artifact-workflow-a", manager.ArtifactId);
+            Assert.Equal("checkpoint:commit-nonempty", manager.LeaseId);
             Assert.Equal(1, (await context.WorkflowExecutionStates.SingleAsync()).Revision);
             Assert.Equal(1, (await context.SchedulerStates.SingleAsync()).Revision);
             Assert.Equal(2, (await context.ExecutionLivenessStates.SingleAsync()).Revision);
@@ -135,7 +138,10 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
                 [], [], [], [], [])
         };
 
-        var store = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"));
+        var store = new EfRuntimeCheckpointCommitStore(
+            context,
+            new FixedAccessor("tenant-a"),
+            rootWriteLeaseManager: new PassThroughRootWriteLeaseManager());
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => store.CommitAsync(commit, Decision()).AsTask());
         Assert.Empty(context.ChangeTracker.Entries());
 
@@ -143,6 +149,80 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         Assert.Null(await verification.WorkflowExecutionStates.SingleOrDefaultAsync());
         Assert.Empty(await verification.RuntimeCheckpointCommits.ToArrayAsync());
         Assert.Equal(2, (await verification.SchedulerStates.SingleAsync()).Revision);
+    }
+
+    [Fact]
+    public async Task Workflow_identity_mismatch_is_rejected_before_provider_io()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var interceptor = new CommandCaptureInterceptor();
+        await using var context = database.Open("tenant-a", interceptor);
+        var commit = Commit("commit-identity") with
+        {
+            StateChanges = new RuntimeCheckpointStateChangeSet(
+                new RuntimeStateChange<WorkflowExecutionState>(
+                    "workflow-other",
+                    RuntimeStateChangeOperation.Upsert,
+                    Execution("workflow-other", "tenant-a"),
+                    new Dictionary<string, string>()),
+                null,
+                [], [], [], [], [])
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"))
+                .CommitAsync(commit, Decision()).AsTask());
+        Assert.Empty(interceptor.Commands);
+        Assert.Empty(await context.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Scheduler_identity_mismatch_is_rejected_before_provider_io()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var interceptor = new CommandCaptureInterceptor();
+        await using var context = database.Open("tenant-a", interceptor);
+        var commit = Commit("commit-scheduler-identity") with
+        {
+            StateChanges = new RuntimeCheckpointStateChangeSet(
+                null,
+                new RuntimeStateChange<SchedulerState>(
+                    "workflow-other",
+                    RuntimeStateChangeOperation.Upsert,
+                    new SchedulerState("workflow-other", 1),
+                    new Dictionary<string, string>()),
+                [], [], [], [], [])
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"))
+                .CommitAsync(commit, Decision()).AsTask());
+        Assert.Empty(interceptor.Commands);
+        Assert.Empty(await context.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task New_workflow_execution_fails_closed_without_root_write_lease_manager()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open("tenant-a");
+        var commit = Commit("commit-no-root-lease") with
+        {
+            StateChanges = new RuntimeCheckpointStateChangeSet(
+                new RuntimeStateChange<WorkflowExecutionState>(
+                    "workflow-a",
+                    RuntimeStateChangeOperation.Upsert,
+                    Execution("workflow-a", "tenant-a"),
+                    new Dictionary<string, string>()),
+                null,
+                [], [], [], [], [])
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"))
+                .CommitAsync(commit, Decision()).AsTask());
+        Assert.Empty(await context.WorkflowExecutionStates.ToArrayAsync());
+        Assert.Empty(await context.RuntimeCheckpointCommits.ToArrayAsync());
     }
 
     [Fact]
@@ -292,6 +372,48 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class PassThroughRootWriteLeaseManager : IWorkflowExecutableRootWriteLeaseManager
+    {
+        public string? ArtifactId { get; private set; }
+        public string? LeaseId { get; private set; }
+
+        public ValueTask ExecuteAsync(
+            string artifactId,
+            string leaseId,
+            Func<CancellationToken, ValueTask> write,
+            CancellationToken cancellationToken = default)
+        {
+            ArtifactId = artifactId;
+            LeaseId = leaseId;
+            return write(cancellationToken);
+        }
+    }
+
+    private sealed class CommandCaptureInterceptor : DbCommandInterceptor
+    {
+        public List<string> Commands { get; } = [];
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            Commands.Add(command.CommandText);
+            return ValueTask.FromResult(result);
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            Commands.Add(command.CommandText);
+            return ValueTask.FromResult(result);
+        }
     }
 
     private sealed class NoopContinuationCodec : IRuntimeRecoveryContinuationCodec
