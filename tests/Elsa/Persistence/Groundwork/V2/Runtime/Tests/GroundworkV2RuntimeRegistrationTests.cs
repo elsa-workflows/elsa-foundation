@@ -22,6 +22,35 @@ namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
 public sealed class GroundworkV2RuntimeRegistrationTests
 {
     [Fact]
+    public void Groundwork_registration_accepts_the_runtime_recurring_schedule_default()
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        // This is the same default descriptor installed by WorkflowsRuntimeRecurringTriggersFeature. Keeping the
+        // registration in this Groundwork-focused project avoids coupling the ownership guard to the scheduling
+        // feature assembly while preserving the production registration order.
+        services.AddSingleton<IRecurringTriggerScheduleStore, InMemoryRecurringTriggerScheduleStore>();
+
+        services.AddGroundworkV2RuntimeStores();
+
+        var backend = RecurringTriggerScheduleStoreBackend.Find(services)!;
+        Assert.Equal(RecurringTriggerScheduleStoreBackend.Groundwork, backend.Name);
+        backend.EnsureOwnsRegisteredContract(services);
+        Assert.DoesNotContain(services, descriptor => descriptor.ImplementationType == typeof(InMemoryRecurringTriggerScheduleStore));
+    }
+
+    [Fact]
+    public void Groundwork_registration_still_refuses_an_unowned_recurring_schedule()
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddSingleton<IRecurringTriggerScheduleStore, InMemoryRecurringTriggerScheduleStore>();
+        services.AddScoped<IRecurringTriggerScheduleStore>(_ => throw new InvalidOperationException("foreign"));
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddGroundworkV2RuntimeStores());
+        Assert.Equal(before, services);
+    }
+
+    [Fact]
     public void Runtime_shell_feature_exposes_and_threads_the_clean_break_contract()
     {
         var defaults = new GroundworkWorkflowRuntimeFeature();
