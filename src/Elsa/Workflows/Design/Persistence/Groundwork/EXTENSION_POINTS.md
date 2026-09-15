@@ -25,8 +25,9 @@ Groundwork provider catalog for workflow-design persistence replacement contract
 | `ICloneDraftFromVersionCommand` | `GroundworkCloneDraftFromVersionCommand` |
 | `IWorkflowDefinitionLookup` | Core `WorkflowDefinitionLookup` |
 
-`AddGroundworkWorkflowsDesignStores()` removes existing registrations for the contracts in this
-table before adding the Groundwork implementations, preserving the one-active-provider rule.
+`AddGroundworkWorkflowsDesignStores()` registers the Groundwork implementation for each contract in
+this table. If another workflow-design backend is already selected, it fails closed; switching
+backends belongs behind an explicitly named replacement operation.
 
 `IDraftStateDiffEngine` is intentionally absent: per-diff mutation-event publication is retired until an event-sourcing consumer exists, so the engine is no longer registered by this provider (it remains in Core as the tested contract).
 
@@ -43,7 +44,7 @@ table before adding the Groundwork implementations, preserving the one-active-pr
 
 | Contract | Default implementation |
 |---|---|
-| `IDesignAtomicWriter` | `GroundworkDesignAtomicWrite` |
+| `Elsa.Workflows.Design.Persistence.Core.Contracts.IDesignAtomicWriter` | `GroundworkDesignAtomicWrite` |
 | `IDraftOriginator` | `DraftOriginator` |
 
 These feature-owned replacement seams use `TryAddScoped`, so a host can register one
@@ -52,7 +53,7 @@ specializes after its base registration must use
 `services.Replace(ServiceDescriptor.Scoped<IContract, Implementation>())`; direct `AddScoped`
 would create an invalid duplicate replacement registration. Both pre-composition preservation and
 post-composition replacement are covered by registration tests.
-`IDesignAtomicWriter` owns replay-safe multi-document mutation, durable operation markers, and
+The Core `IDesignAtomicWriter` owns replay-safe multi-document mutation, durable operation markers, and
 uncertain-commit reconciliation for both workflow and activity design commands.
 
 `IDraftOriginator` is the provider-feature replacement seam used by the Groundwork create and
@@ -90,7 +91,7 @@ keyword strings or `DateTime` (`ValueKind`); there are no numeric projected memb
 
 ## Design atomic writer and shared operation document
 
-`IDesignAtomicWriter` (defined in `Elsa.Persistence.Groundwork.Querying`, default
+`IDesignAtomicWriter` (defined in `Elsa.Workflows.Design.Persistence.Core.Contracts`, default
 `GroundworkDesignAtomicWrite`) owns replay-safe multi-document mutation: durable operation markers,
 staged writes, and uncertain-commit reconciliation for both workflow- and activity-design commands.
 Its durable ledger is the shared `designOperation` document declared by
@@ -138,8 +139,8 @@ reusable-activity publication whose publishing lane is on another target.
 (`Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection`) is the lane registration method.
 It:
 
-- swaps every replacement contract in the tables above to its Groundwork implementation
-  (`RemoveAll<T>()` then `AddScoped<T, …>()`), enforcing the one-active-provider rule;
+- registers every replacement contract in the tables above to its Groundwork implementation,
+  enforcing the one-active-provider rule;
 - binds the lane with `AddGroundworkStorageLane<WorkflowsDesignGroundworkStorageManifestSource>()` and
   declares its v2 units with `AddGroundworkStorageUnit` over `WorkflowsDesignStorageManifest.CreateUnits()`;
 - registers the `IDesignAtomicWriter` and `IDraftOriginator` specialization seams with `TryAddScoped`;
@@ -173,10 +174,9 @@ derives errors on demand from the already-loaded draft through the shielded vali
 
 ## Cross-references
 
-- The former EF Core design persistence implementation was removed by spec 093 US4. Groundwork is
-  therefore the only currently shipped workflow-design provider, but accepted
-  [ADR 0073](../../../../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
-  requires an evidence-gated EF replacement; this statement is inventory, not policy.
+- Groundwork remains the default workflow-design provider. The opt-in EF Core implementation is
+  catalogued in the sibling EntityFrameworkCore extension-point document; hosts select exactly one
+  provider per shell and must use an explicit replacement operation to switch.
 - Validation extension points: [`../../Validations/EXTENSION_POINTS.md`](../../Validations/EXTENSION_POINTS.md)
 - Provider connection and target composition: [`../../../../Persistence/Groundwork/EXTENSION_POINTS.md`](../../../../Persistence/Groundwork/EXTENSION_POINTS.md)
 - Repo-wide index: [`../../../../../../EXTENSION_POINTS.md`](../../../../../../EXTENSION_POINTS.md)

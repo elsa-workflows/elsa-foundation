@@ -84,9 +84,26 @@ public sealed class DraftOriginator(
                 cancellationToken,
                 beforeAttempt: async token =>
                 {
+                    // Atomic retries rerun attempt setup. Release the previous attempt's
+                    // generated-draft lock before allocating and acquiring the next one;
+                    // otherwise every marker race leaves a live handle behind.
+                    if (draftLock is not null)
+                    {
+                        await draftLock.DisposeAsync();
+                        draftLock = null;
+                    }
                     input = await resolveInput(token)
                         ?? throw new InvalidOperationException("Draft origination input resolver returned null.");
                     ArgumentException.ThrowIfNullOrWhiteSpace(input.WorkflowDefinitionId);
+                    if (storage.Read(
+                            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+                            input.WorkflowDefinitionId) is { } definitionEntry)
+                    {
+                        // Preserve the existing draft-origination contract for callers that
+                        // intentionally create an unbound draft, while canonicalizing the
+                        // relationship whenever its definition is available.
+                        input = input with { WorkflowDefinitionId = storage.MapDefinition(definitionEntry).Id };
+                    }
                     accessContextAccessor.Current.EnsureTenantScope(input.TenantId);
                     draft = new WorkflowDefinitionDraft
                     {

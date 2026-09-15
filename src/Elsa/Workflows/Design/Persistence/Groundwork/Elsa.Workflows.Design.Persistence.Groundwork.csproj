@@ -22,6 +22,7 @@
     <ProjectReference Include="..\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
     <ProjectReference Include="..\..\..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
     <ProjectReference Include="..\..\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
   </ItemGroup>
 

@@ -17,7 +17,7 @@ public sealed class WorkflowDefinitionVersion(string definitionId, string versio
     /// <summary>
     /// Persistence-only normalised key whose ordinal ordering equals SemVer precedence (computed
     /// once via <see cref="SemVer.ToSortKey(string)"/>). Drives DB-side ORDER BY and latest-version
-    /// resolution. A domain shadow (§2.9.1): present on the entity, not exposed via the interface.
+    /// resolution. It is persistence-only and is not exposed via the domain interface.
     /// </summary>
     public string SemVerSortKey { get; init; } = SemVer.ToSortKey(version);
 
@@ -25,6 +25,12 @@ public sealed class WorkflowDefinitionVersion(string definitionId, string versio
     /// The id of the workflow definition
     /// </summary>
     public string DefinitionId { get; init; } = definitionId;
+
+    /// <summary>Persistence-only exact identity hash for the raw version id.</summary>
+    public string IdLookupHash { get; set; } = null!;
+
+    /// <summary>Persistence-only folded foreign-key lookup material; not part of the domain interface.</summary>
+    public string DefinitionIdLookupHash { get; set; } = null!;
 
     /// <summary>The exact draft promoted into this immutable version, when authored through Design.</summary>
     public string? SourceDraftId { get; init; }
@@ -41,7 +47,7 @@ public sealed class WorkflowDefinitionVersion(string definitionId, string versio
     public WorkflowDefinitionState State { get; set; } = default!;
 
     /// <summary>
-    /// Shadow property that contains the serialized state of this version. Write-once —
+    /// Serialized state of this version. Write-once —
     /// immutability enforced via <c>PropertySaveBehavior.Throw</c> in the EF Core entity configuration.
     /// </summary>
     public string? StateSource { get; set; } = stateSource;

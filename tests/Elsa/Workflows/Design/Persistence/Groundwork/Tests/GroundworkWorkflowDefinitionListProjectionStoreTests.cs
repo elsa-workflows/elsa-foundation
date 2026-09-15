@@ -1,7 +1,13 @@
+using System.Security.Cryptography;
+using System.Text;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Persistence.Groundwork.Composition;
 using Groundwork.Query.Model;
+using Groundwork.Store;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
@@ -40,10 +46,10 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
         AssertBatchQuery(
             raw.Queries.Single(query => query.IndexName == WorkflowsDesignStorageManifest.DraftByDefinitionIndex),
             WorkflowsDesignStorageManifest.DraftByDefinitionIndex,
-            WorkflowsDesignStorageManifest.DraftDefinitionIdField,
+            WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField,
             ["definition-1", "definition-2"],
             [
-                WorkflowsDesignStorageManifest.DraftDefinitionIdField,
+                WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField,
                 WorkflowsDesignStorageManifest.DraftLastModifiedAtField,
                 WorkflowsDesignStorageManifest.DraftCreatedAtField,
                 WorkflowsDesignStorageManifest.DraftIdField
@@ -51,10 +57,10 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
         AssertBatchQuery(
             raw.Queries.Single(query => query.IndexName == WorkflowsDesignStorageManifest.VersionByDefinitionIndex),
             WorkflowsDesignStorageManifest.VersionByDefinitionIndex,
-            WorkflowsDesignStorageManifest.VersionDefinitionIdField,
+            WorkflowsDesignStorageManifest.VersionDefinitionIdLookupHashField,
             ["definition-1", "definition-2"],
             [
-                WorkflowsDesignStorageManifest.VersionDefinitionIdField,
+                WorkflowsDesignStorageManifest.VersionDefinitionIdLookupHashField,
                 WorkflowsDesignStorageManifest.VersionSemVerSortKeyField,
                 WorkflowsDesignStorageManifest.VersionIdField
             ]);
@@ -74,7 +80,7 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
             .ListByDefinitionIdsAsync(requested);
         Assert.Equal(450, rows.Count);
         Assert.Equal(requested.Distinct(StringComparer.Ordinal), rows.Select(row => row.WorkflowDefinitionId));
-        Assert.Equal(6, raw.Queries.Count);
+        Assert.Equal(58, raw.Queries.Count);
         Assert.All(raw.Queries, query => Assert.Contains(
             query.IndexName,
             new[] { WorkflowsDesignStorageManifest.DraftByDefinitionIndex, WorkflowsDesignStorageManifest.VersionByDefinitionIndex }));
@@ -88,10 +94,16 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
                 .Where(query => query.IndexName == index)
                 .Select(query => Assert.IsType<Predicate.In>(query.Request.Where).Values.Select(value => value.Value?.ToString() ?? string.Empty).ToArray())
                 .ToArray();
-            Assert.Equal(3, batches.Length);
-            Assert.Equal([200, 200, 50], batches.Select(batch => batch.Length));
-            Assert.Equal("definition-000", batches.SelectMany(batch => batch).Order(StringComparer.Ordinal).First());
-            Assert.Equal("definition-449", batches.SelectMany(batch => batch).Order(StringComparer.Ordinal).Last());
+            Assert.Equal(29, batches.Length);
+            Assert.All(batches.Take(28), batch => Assert.Equal(16, batch.Length));
+            Assert.Equal(2, batches[^1].Length);
+            var expected = requested.Distinct(StringComparer.Ordinal)
+                .Select(LookupHash)
+                .Chunk(16)
+                .Select(batch => batch.Order(StringComparer.Ordinal).ToArray())
+                .SelectMany(batch => batch)
+                .ToArray();
+            Assert.Equal(expected, batches.SelectMany(batch => batch));
         }
     }
 
@@ -107,6 +119,168 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
         Assert.Empty(rows);
         Assert.Equal(0, raw.LoadCount);
         Assert.Empty(raw.Queries);
+    }
+
+    [Fact]
+    public async Task Groups_projection_rows_by_folded_definition_identity()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        raw.SeedDraft(Draft("draft", "Stored-Definition", 1));
+        raw.SeedVersion(Version("version", "STORED-DEFINITION", "1.0.0"));
+
+        var rows = await new GroundworkWorkflowDefinitionListProjectionStore(
+            raw,
+            new FakePayloadSerializer(),
+            DesignGroundworkTestAccess.DefaultAccessContextAccessor)
+            .ListByDefinitionIdsAsync(["stored-definition", "STORED-DEFINITION"]);
+
+        var row = Assert.Single(rows);
+        Assert.Equal("stored-definition", row.WorkflowDefinitionId);
+        Assert.Equal("draft", row.DraftId);
+        Assert.Equal("version", row.LatestVersionId);
+        Assert.Equal(1, row.VersionCount);
+    }
+
+    [Fact]
+    public async Task Privileged_across_scope_list_rejects_duplicate_folded_definition_drafts()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        var tenantA = Draft("draft-a", "Definition-1", 1);
+        tenantA.TenantId = "tenant-a";
+        raw.SeedDraft(tenantA);
+        var tenantB = Draft("draft-b", "definition-1", 2);
+        tenantB.TenantId = "tenant-b";
+        raw.SeedDraft(tenantB);
+        var accessor = DesignGroundworkTestAccess.Mutable(PersistenceAccessContext.PrivilegedAcrossScopes(
+            new PersistenceAccessPurpose("list-workflow-definitions-across-tenants")));
+        var store = new GroundworkWorkflowDefinitionListProjectionStore(
+            raw,
+            new FakePayloadSerializer(),
+            accessor,
+            auditSink: new GroundworkPrivilegedQueryAuditSink());
+
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            store.ListByDefinitionIdsAsync(["definition-1"]));
+    }
+
+    [Fact]
+    public async Task Privileged_across_scope_list_rejects_duplicate_folded_definition_versions()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        var tenantA = Version("version-a", "Definition-1", "1.0.0");
+        tenantA.TenantId = "tenant-a";
+        raw.SeedVersion(tenantA);
+        var tenantB = Version("version-b", "definition-1", "2.0.0");
+        tenantB.TenantId = "tenant-b";
+        raw.SeedVersion(tenantB);
+        var accessor = DesignGroundworkTestAccess.Mutable(PersistenceAccessContext.PrivilegedAcrossScopes(
+            new PersistenceAccessPurpose("list-workflow-definitions-across-tenants")));
+        var store = new GroundworkWorkflowDefinitionListProjectionStore(
+            raw,
+            new FakePayloadSerializer(),
+            accessor,
+            auditSink: new GroundworkPrivilegedQueryAuditSink());
+
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            store.ListByDefinitionIdsAsync(["definition-1"]));
+    }
+
+    [Fact]
+    public async Task Privileged_across_scope_list_rejects_draft_and_version_from_different_scopes()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        var draft = Draft("draft-a", "definition-1", 1);
+        draft.TenantId = "tenant-a";
+        raw.SeedDraft(draft);
+        var version = Version("version-b", "definition-1", "1.0.0");
+        version.TenantId = "tenant-b";
+        raw.SeedVersion(version);
+        var accessor = DesignGroundworkTestAccess.Mutable(PersistenceAccessContext.PrivilegedAcrossScopes(
+            new PersistenceAccessPurpose("list-workflow-definitions-across-tenants")));
+        var store = new GroundworkWorkflowDefinitionListProjectionStore(
+            raw,
+            new FakePayloadSerializer(),
+            accessor,
+            auditSink: new GroundworkPrivilegedQueryAuditSink());
+
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            store.ListByDefinitionIdsAsync(["definition-1"]));
+    }
+
+    [Fact]
+    public async Task Privileged_across_scope_list_keeps_distinct_definition_ids()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        var tenantA = Draft("draft-a", "definition-a", 1);
+        tenantA.TenantId = "tenant-a";
+        raw.SeedDraft(tenantA);
+        var tenantB = Draft("draft-b", "definition-b", 2);
+        tenantB.TenantId = "tenant-b";
+        raw.SeedDraft(tenantB);
+        var accessor = DesignGroundworkTestAccess.Mutable(PersistenceAccessContext.PrivilegedAcrossScopes(
+            new PersistenceAccessPurpose("list-workflow-definitions-across-tenants")));
+        var store = new GroundworkWorkflowDefinitionListProjectionStore(
+            raw,
+            new FakePayloadSerializer(),
+            accessor,
+            auditSink: new GroundworkPrivilegedQueryAuditSink());
+
+        var rows = await store.ListByDefinitionIdsAsync(["definition-a", "definition-b"]);
+
+        Assert.Equal(["definition-a", "definition-b"], rows.Select(row => row.WorkflowDefinitionId));
+        Assert.Equal(["draft-a", "draft-b"], rows.Select(row => row.DraftId));
+    }
+
+    [Fact]
+    public async Task List_projection_rejects_a_stale_draft_relationship_hash()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        var draft = Draft("draft", "actual-definition", 1);
+        var options = GroundworkDesignDocumentSerialization.Create(new FakePayloadSerializer());
+        var values = GroundworkDesignStorage.Values(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+            draft,
+            options,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection);
+        var row = values.Values.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        row[WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField] = LookupHash("requested-definition");
+        raw.InsertRaw(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+            new StorageValues(row));
+
+        var store = new GroundworkWorkflowDefinitionListProjectionStore(
+            raw,
+            new FakePayloadSerializer(),
+            DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            store.ListByDefinitionIdsAsync(["requested-definition"]));
+    }
+
+    [Fact]
+    public async Task List_projection_rejects_a_stale_version_relationship_hash()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        var version = Version("version", "actual-definition", "1.0.0");
+        var options = GroundworkDesignDocumentSerialization.Create(new FakePayloadSerializer());
+        var values = GroundworkDesignStorage.Values(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
+            version,
+            options,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection);
+        var row = values.Values.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        row[WorkflowsDesignStorageManifest.VersionDefinitionIdLookupHashField] = LookupHash("requested-definition");
+        raw.InsertRaw(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
+            new StorageValues(row));
+
+        var store = new GroundworkWorkflowDefinitionListProjectionStore(
+            raw,
+            new FakePayloadSerializer(),
+            DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            store.ListByDefinitionIdsAsync(["requested-definition"]));
     }
 
     private static WorkflowDefinitionDraft Draft(string id, string definitionId, int day) => new()
@@ -131,7 +305,12 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
         Assert.Equal(index, query.IndexName);
         var predicate = Assert.IsType<Predicate.In>(query.Request.Where);
         Assert.Equal(predicateColumn, predicate.Column.Name);
-        Assert.Equal(values, predicate.Values.Select(value => value.Value?.ToString() ?? string.Empty).ToArray());
+        Assert.Equal(
+            values.Select(LookupHash).Order(StringComparer.Ordinal),
+            predicate.Values.Select(value => value.Value?.ToString() ?? string.Empty));
         Assert.Equal(order, query.Request.Order.Select(term => term.Column.Name));
     }
+
+    private static string LookupHash(string value) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(QuerySearchKeys.Encode(value, QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase)))).ToLowerInvariant();
 }

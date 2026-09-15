@@ -13,9 +13,20 @@ namespace Elsa.Workflows.Design.Persistence.Core.Entities;
 /// </summary>
 public sealed class WorkflowDefinitionVersionLayout : TenantEntity, IWorkflowDefinitionLayout
 {
+    /// <summary>Persistence-only exact identity hash for the raw layout id.</summary>
+    public string IdLookupHash { get; set; } = null!;
+
     public string WorkflowDefinitionVersionId { get; init; } = default!;
 
+    /// <summary>Persistence-only exact identity hash for the raw version foreign key.</summary>
+    public string WorkflowDefinitionVersionIdLookupHash { get; set; } = null!;
+
     public WorkflowDefinitionVersion? WorkflowDefinitionVersion { get; init; }
+
+    /// <summary>Persistence-only serialized layout columns; not part of the domain read interface.</summary>
+    public string RecordsJson { get; set; } = "[]";
+
+    public string ActivityPresentationJson { get; set; } = "[]";
 
     public IEnumerable<DesignMetadataRecord> Records { get; init; } = [];
 

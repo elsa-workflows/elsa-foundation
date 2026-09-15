@@ -6,26 +6,14 @@ using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Atomic;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Primitives.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Groundwork.Store;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork;
-
-public interface IDesignAtomicWriter
-{
-    Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
-        GroundworkDesignAtomicWriteRequest request,
-        Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
-        CancellationToken cancellationToken = default);
-
-    Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
-        GroundworkDesignAtomicWriteRequest request,
-        Func<CancellationToken, Task>? beforeAttempt,
-        Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
-        CancellationToken cancellationToken = default);
-}
 
 public sealed record GroundworkDesignOperationIdentity(string OperationKind, string OperationKey);
 
@@ -34,25 +22,16 @@ public sealed record GroundworkDesignAtomicWriteRequest(
     string RequestFingerprint,
     IReadOnlyCollection<string> MutatedUnits);
 
-public enum GroundworkDesignAtomicWriteStatus
-{
-    Committed,
-    Reconciled,
-    Replayed,
-    Conflict,
-    Rejected
-}
-
 public sealed record GroundworkDesignAtomicWriteResult(
-    GroundworkDesignAtomicWriteStatus Status,
+    DesignAtomicWriteStatus Status,
     string? AuthoritativeResultFingerprint = null,
     string? AuthoritativeResultJson = null)
 {
     public static GroundworkDesignAtomicWriteResult Committed(string fingerprint, string json) =>
-        new(GroundworkDesignAtomicWriteStatus.Committed, fingerprint, json);
+        new(DesignAtomicWriteStatus.Committed, fingerprint, json);
 
     public static GroundworkDesignAtomicWriteResult Rejected() =>
-        new(GroundworkDesignAtomicWriteStatus.Rejected);
+        new(DesignAtomicWriteStatus.Rejected);
 }
 
 public sealed record GroundworkDesignAtomicWriteStageResult(
@@ -76,7 +55,7 @@ public sealed record GroundworkDesignDeleteRequest(
     string Id,
     long? ExpectedVersion = null);
 
-public sealed class GroundworkDesignAtomicWriteContext
+public sealed class GroundworkDesignAtomicWriteContext : IDesignAtomicWriteContext
 {
     private readonly GroundworkDesignStorage.DesignUnitOfWork unitOfWork;
     internal GroundworkDesignStorage Storage { get; }
@@ -131,13 +110,94 @@ public sealed class GroundworkDesignAtomicWrite(
     private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
     private readonly TimeSpan timeout = reconciliationTimeout ?? DefaultReconciliationTimeout;
 
+    public async Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(
+        DesignOperationKey operationKey,
+        string operationKind,
+        object requestMaterial,
+        IReadOnlyCollection<string> mutatedUnits,
+        Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage,
+        Func<CancellationToken, Task>? beforeAttempt = null,
+        CancellationToken cancellationToken = default,
+        IDesignAtomicWriteResultCodec<T>? resultCodec = null)
+    {
+        ArgumentNullException.ThrowIfNull(operationKey);
+        DesignOperationKey.Validate(operationKey, operationKind);
+        ArgumentNullException.ThrowIfNull(requestMaterial);
+        ArgumentNullException.ThrowIfNull(stage);
+        var codec = resultCodec ?? new GroundworkDesignAtomicWriteResultCodec<T>(MarkerOptions);
+        var request = GroundworkDesignAtomicWriteMaterial.Create(operationKind, "1", requestMaterial, MarkerOptions);
+        var result = await ExecuteLegacyAsync(
+            new GroundworkDesignAtomicWriteRequest(
+                new GroundworkDesignOperationIdentity(operationKind, operationKey.Value),
+                request.Fingerprint,
+                mutatedUnits),
+            beforeAttempt,
+            async (context, token) =>
+            {
+                var staged = await stage(context, token);
+                ArgumentNullException.ThrowIfNull(staged);
+                if (!staged.IsAccepted)
+                    return GroundworkDesignAtomicWriteStageResult.Rejected();
+                ArgumentNullException.ThrowIfNull(staged.Value);
+                if ((staged.ResultFingerprint is null) != (staged.ResultJson is null))
+                    throw new InvalidDataException("An accepted design operation must provide both result fingerprint and result payload.");
+                if (staged.ResultFingerprint is not null)
+                {
+                    GroundworkDesignAtomicWriteMaterial.ValidateFingerprint(
+                        staged.ResultFingerprint, staged.ResultJson!, $"{operationKind}.result", "1");
+                    var suppliedValue = codec.Deserialize(staged.ResultJson!);
+                    if (!codec.Equivalent(staged.Value, suppliedValue))
+                        throw new InvalidDataException("The accepted design-operation result must match its staged value.");
+                    return GroundworkDesignAtomicWriteStageResult.Accepted(staged.ResultFingerprint, staged.ResultJson!);
+                }
+                var authoritative = GroundworkDesignAtomicWriteMaterial.Create(
+                    $"{operationKind}.result", "1", staged.Value, MarkerOptions);
+                return GroundworkDesignAtomicWriteStageResult.Accepted(authoritative.Fingerprint, authoritative.Json);
+            },
+            cancellationToken);
+
+        var status = result.Status switch
+        {
+            DesignAtomicWriteStatus.Committed => DesignAtomicWriteStatus.Committed,
+            DesignAtomicWriteStatus.Reconciled => DesignAtomicWriteStatus.Reconciled,
+            DesignAtomicWriteStatus.Replayed => DesignAtomicWriteStatus.Replayed,
+            DesignAtomicWriteStatus.Conflict => DesignAtomicWriteStatus.Conflict,
+            DesignAtomicWriteStatus.Rejected => DesignAtomicWriteStatus.Rejected,
+            _ => throw new ArgumentOutOfRangeException(nameof(result.Status))
+        };
+        var value = status is DesignAtomicWriteStatus.Committed or DesignAtomicWriteStatus.Reconciled or DesignAtomicWriteStatus.Replayed
+            ? DeserializeAuthoritativeResult(codec, result, operationKind)
+            : default;
+        return new DesignAtomicWriteResult<T>(status, value, result.AuthoritativeResultFingerprint, result.AuthoritativeResultJson);
+    }
+
+    private static T DeserializeAuthoritativeResult<T>(
+        IDesignAtomicWriteResultCodec<T> codec,
+        GroundworkDesignAtomicWriteResult result,
+        string operationKind)
+    {
+        GroundworkDesignAtomicWriteMaterial.ValidateFingerprint(
+            result.AuthoritativeResultFingerprint!, result.AuthoritativeResultJson!,
+            $"{operationKind}.result", "1");
+        return codec.Deserialize(result.AuthoritativeResultJson!);
+    }
+
+    // Compatibility overloads keep the existing Groundwork conformance harness source-compatible;
+    // command composition resolves the provider-neutral Core interface above.
     public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
         GroundworkDesignAtomicWriteRequest request,
         Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
         CancellationToken cancellationToken = default) =>
-        ExecuteAsync(request, null, stage, cancellationToken);
+        ExecuteLegacyAsync(request, null, stage, cancellationToken);
 
-    public async Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
+    public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
+        GroundworkDesignAtomicWriteRequest request,
+        Func<CancellationToken, Task>? beforeAttempt,
+        Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
+        CancellationToken cancellationToken = default) =>
+        ExecuteLegacyAsync(request, beforeAttempt, stage, cancellationToken);
+
+    private async Task<GroundworkDesignAtomicWriteResult> ExecuteLegacyAsync(
         GroundworkDesignAtomicWriteRequest request,
         Func<CancellationToken, Task>? beforeAttempt,
         Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
@@ -150,135 +210,118 @@ public sealed class GroundworkDesignAtomicWrite(
             throw new ArgumentOutOfRangeException(nameof(reconciliationTimeout));
 
         var markerId = MarkerId(request.Operation);
-        var existing = ReadMarker(markerId);
-        if (existing is not null)
-            return Resolve(existing, request, GroundworkDesignAtomicWriteStatus.Replayed);
-
-        if (beforeAttempt is not null)
-            await beforeAttempt(cancellationToken);
-
-        for (var attempt = 1; ; attempt++)
+        var lane = new DesignAtomicWriteLane<GroundworkDesignStorage.DesignUnitOfWork, GroundworkDesignOperationMarker, GroundworkDesignAtomicWriteStageResult, GroundworkDesignAtomicWriteResult>
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
+            MarkerId = markerId,
+            LoadMarker = _ => Task.FromResult(ReadMarker(markerId)),
+            BeginScope = () => storage.BeginUnitOfWork(request.MutatedUnits.Append(WorkflowsDesignStorageManifest.DesignOperationDocumentKind).ToArray()),
+            SaveMarker = (unitOfWork, staged, _) =>
             {
-                return await ExecuteAttemptAsync(request, markerId, stage, cancellationToken);
-            }
-            catch (GroundworkDesignOperationMarkerRaceException)
+                if (string.IsNullOrWhiteSpace(staged.AuthoritativeResultFingerprint) || string.IsNullOrWhiteSpace(staged.AuthoritativeResultJson))
+                    throw new InvalidDataException("An accepted design operation must provide an authoritative result.");
+                var marker = new GroundworkDesignOperationMarker(request.Operation.OperationKind, request.Operation.OperationKey, request.RequestFingerprint, staged.AuthoritativeResultFingerprint, staged.AuthoritativeResultJson, clock.GetUtcNow());
+                unitOfWork.Stage(WorkflowsDesignStorageManifest.DesignOperationDocumentKind, MarkerValues(markerId, marker), WriteOptions.CreateOnly);
+                return Task.CompletedTask;
+            },
+            Commit = (unitOfWork, _) =>
+            {
+                try
+                {
+                    var report = unitOfWork.Commit();
+                    if (!report.IsSuccessful)
+                    {
+                        if (IsOperationMarkerConflict(report.Outcomes))
+                            throw new GroundworkDesignOperationMarkerRaceException();
+                        // Preserve every unsuccessful outcome, including precondition failures
+                        // that providers report without an Applied disposition. Commands can then
+                        // distinguish a version CreateOnly race from an unrelated provider error.
+                        var failed = report.Outcomes.Where(item => !item.Outcome.Succeeded).ToArray();
+                        if (failed.Length != 0)
+                            throw new GroundworkDesignWriteProviderException("Groundwork rejected the design-operation batch.", new BatchWriteException("Groundwork returned unsuccessful design-operation outcomes.", failed));
+                        return Task.FromResult(DesignAtomicCommitDisposition.Rejected);
+                    }
+                    return Task.FromResult(DesignAtomicCommitDisposition.Committed);
+                }
+                catch (BatchWriteException exception)
+                {
+                    if (IsOperationMarkerConflict(exception.Outcomes))
+                        throw new GroundworkDesignOperationMarkerRaceException();
+                    throw new GroundworkDesignWriteProviderException("Groundwork rejected the design-operation batch.", exception);
+                }
+            },
+            Rollback = TryRollback,
+            ClassifyMarkerRace = exception => exception is GroundworkDesignOperationMarkerRaceException,
+            ClassifyUncertainCommit = exception => exception is GroundworkDesignUncertainCommitException,
+            OnUncertainCommit = (exception, token) => ReconcileAsync(markerId, request, exception, token),
+            ShouldReconcileAfterCommitFailure = exception => exception is not GroundworkDesignWriteProviderException,
+            DisposeBeforeReconcile = unitOfWork =>
+            {
+                unitOfWork.Dispose();
+                return Task.CompletedTask;
+            },
+            TryReconcileAfterCommit = (exception, token) => ReconcileAfterCommitAsync(markerId, request, exception, token),
+            Delay = (attempt, token) => Task.Delay(MarkerRaceBackoffStep * attempt, clock, token),
+            IsAccepted = staged => staged.IsAccepted,
+            OnCommitted = staged => GroundworkDesignAtomicWriteResult.Committed(staged.AuthoritativeResultFingerprint!, staged.AuthoritativeResultJson!),
+            OnReplay = marker => Resolve(marker, request, DesignAtomicWriteStatus.Replayed),
+            OnRejected = GroundworkDesignAtomicWriteResult.Rejected,
+            MarkerRaceAttemptBudget = MarkerRaceAttemptBudget,
+            CreateExhaustedMarkerRaceException = (_, id) => new GroundworkDesignUncertainCommitException($"Design operation marker '{id}' conflicted, but the winner could not be reloaded.")
+        };
+        return await DesignAtomicWriteProtocol.ExecuteAsync(lane, async (unitOfWork, token) => await stage(new GroundworkDesignAtomicWriteContext(unitOfWork, storage.ForUnitOfWork(unitOfWork)), token), beforeAttempt, cancellationToken);
+    }
+
+    private async Task<GroundworkDesignAtomicWriteResult> ReconcileAsync(
+        string markerId,
+        GroundworkDesignAtomicWriteRequest request,
+        Exception originalCause,
+        CancellationToken cancellationToken)
+    {
+        using var reconciliation = new CancellationTokenSource(timeout);
+        var backoff = MarkerRaceBackoffStep;
+        while (true)
+        {
+            try
             {
                 var winner = ReadMarker(markerId);
                 if (winner is not null)
-                    return Resolve(winner, request, GroundworkDesignAtomicWriteStatus.Replayed);
-                if (attempt >= MarkerRaceAttemptBudget)
-                    throw new GroundworkDesignUncertainCommitException(
-                        $"Design operation marker '{markerId}' conflicted, but the winner could not be reloaded.");
-                await Task.Delay(MarkerRaceBackoffStep * attempt, clock, cancellationToken);
+                    return Resolve(winner, request, DesignAtomicWriteStatus.Reconciled);
             }
-            catch (GroundworkDesignUncertainCommitException)
+            catch (GroundworkDesignCorruptMarkerException)
             {
-                using var reconciliation = new CancellationTokenSource(timeout);
-                var backoff = MarkerRaceBackoffStep;
-                while (true)
-                {
-                    var winner = ReadMarker(markerId);
-                    if (winner is not null)
-                        return Resolve(winner, request, GroundworkDesignAtomicWriteStatus.Reconciled);
-
-                    try
-                    {
-                        await Task.Delay(backoff, clock, reconciliation.Token);
-                    }
-                    catch (OperationCanceledException) when (reconciliation.IsCancellationRequested)
-                    {
-                        throw new GroundworkDesignUncertainCommitException(
-                            $"Design operation marker '{markerId}' did not become visible within the reconciliation timeout.");
-                    }
-
-                    backoff = TimeSpan.FromMilliseconds(
-                        Math.Min(backoff.TotalMilliseconds * 2, 250));
-                }
+                throw;
             }
+            catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException))
+            {
+                // Continue until the bounded recovery window classifies the outcome.
+                _ = exception;
+            }
+            try { await Task.Delay(backoff, clock, reconciliation.Token); }
+            catch (OperationCanceledException) when (reconciliation.IsCancellationRequested)
+            {
+                throw new DesignAtomicWriteUnknownOutcomeException(
+                    $"Design operation marker '{markerId}' did not become visible within the reconciliation timeout.",
+                    originalCause);
+            }
+            backoff = TimeSpan.FromMilliseconds(Math.Min(backoff.TotalMilliseconds * 2, 250));
         }
     }
 
-    private async Task<GroundworkDesignAtomicWriteResult> ExecuteAttemptAsync(
-        GroundworkDesignAtomicWriteRequest request,
+    private async Task<GroundworkDesignAtomicWriteResult?> ReconcileAfterCommitAsync(
         string markerId,
-        Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
+        GroundworkDesignAtomicWriteRequest request,
+        Exception exception,
         CancellationToken cancellationToken)
     {
-        using var unitOfWork = storage.BeginUnitOfWork(
-            request.MutatedUnits.Append(WorkflowsDesignStorageManifest.DesignOperationDocumentKind).ToArray());
-        var context = new GroundworkDesignAtomicWriteContext(
-            unitOfWork,
-            storage.ForUnitOfWork(unitOfWork));
         try
         {
-            var staged = await stage(context, cancellationToken);
-            ArgumentNullException.ThrowIfNull(staged);
-            if (!staged.IsAccepted)
-            {
-                unitOfWork.Rollback();
-                return GroundworkDesignAtomicWriteResult.Rejected();
-            }
-            if (string.IsNullOrWhiteSpace(staged.AuthoritativeResultFingerprint) ||
-                string.IsNullOrWhiteSpace(staged.AuthoritativeResultJson))
-                throw new InvalidDataException("An accepted design operation must provide an authoritative result.");
-
-            var marker = new GroundworkDesignOperationMarker(
-                request.Operation.OperationKind,
-                request.Operation.OperationKey,
-                request.RequestFingerprint,
-                staged.AuthoritativeResultFingerprint,
-                staged.AuthoritativeResultJson,
-                clock.GetUtcNow());
-            unitOfWork.Stage(
-                WorkflowsDesignStorageManifest.DesignOperationDocumentKind,
-                MarkerValues(markerId, marker),
-                WriteOptions.CreateOnly);
-            BatchWriteReport report;
-            try
-            {
-                report = unitOfWork.Commit();
-            }
-            catch (BatchWriteException exception)
-            {
-                if (IsOperationMarkerConflict(exception.Outcomes))
-                    throw new GroundworkDesignOperationMarkerRaceException();
-                throw new GroundworkDesignWriteProviderException(
-                    "Groundwork rejected the design-operation batch.", exception);
-            }
-
-            if (!report.IsSuccessful)
-            {
-                if (IsOperationMarkerConflict(report.Outcomes))
-                    throw new GroundworkDesignOperationMarkerRaceException();
-                var failed = report.Outcomes
-                    .Where(item => item.Disposition == RowWriteDisposition.Applied && !item.Outcome.Succeeded)
-                    .ToArray();
-                if (failed.Length != 0)
-                    throw new GroundworkDesignWriteProviderException(
-                        "Groundwork rejected the design-operation batch.",
-                        new BatchWriteException("Groundwork returned unsuccessful design-operation outcomes.", failed));
-                return GroundworkDesignAtomicWriteResult.Rejected();
-            }
-            return GroundworkDesignAtomicWriteResult.Committed(
-                staged.AuthoritativeResultFingerprint,
-                staged.AuthoritativeResultJson);
+            return await ReconcileAsync(markerId, request, exception, cancellationToken);
         }
-        catch (GroundworkDesignOperationMarkerRaceException)
+        catch (DesignAtomicWriteUnknownOutcomeException)
         {
-            TryRollback(unitOfWork);
-            throw;
-        }
-        catch (GroundworkDesignUncertainCommitException)
-        {
-            throw;
-        }
-        catch
-        {
-            TryRollback(unitOfWork);
-            throw;
+            throw new DesignAtomicWriteUnknownOutcomeException(
+                $"The Groundwork commit acknowledgement for design operation '{markerId}' has an unknown outcome after bounded recovery.",
+                exception);
         }
     }
 
@@ -328,7 +371,7 @@ public sealed class GroundworkDesignAtomicWrite(
     private static GroundworkDesignAtomicWriteResult Resolve(
         GroundworkDesignOperationMarker marker,
         GroundworkDesignAtomicWriteRequest request,
-        GroundworkDesignAtomicWriteStatus status)
+        DesignAtomicWriteStatus status)
     {
         if (!StringComparer.Ordinal.Equals(marker.OperationKind, request.Operation.OperationKind) ||
             !StringComparer.Ordinal.Equals(marker.OperationKey, request.Operation.OperationKey))
@@ -341,7 +384,7 @@ public sealed class GroundworkDesignAtomicWrite(
         // goes through GroundworkDesignAtomicCommand, which already turns this status into
         // GroundworkDesignOperationConflictException.
         if (!StringComparer.Ordinal.Equals(marker.RequestFingerprint, request.RequestFingerprint))
-            return new GroundworkDesignAtomicWriteResult(GroundworkDesignAtomicWriteStatus.Conflict);
+            return new GroundworkDesignAtomicWriteResult(DesignAtomicWriteStatus.Conflict);
         return new GroundworkDesignAtomicWriteResult(status, marker.ResultFingerprint, marker.ResultJson);
     }
 
@@ -355,8 +398,7 @@ public sealed class GroundworkDesignAtomicWrite(
     private static void Validate(GroundworkDesignAtomicWriteRequest request)
     {
         ArgumentNullException.ThrowIfNull(request.Operation);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.Operation.OperationKind);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.Operation.OperationKey);
+        DesignOperationKey.Validate(new DesignOperationKey(request.Operation.OperationKey), request.Operation.OperationKind);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.RequestFingerprint);
         ArgumentNullException.ThrowIfNull(request.MutatedUnits);
         if (request.MutatedUnits.Count == 0 || request.MutatedUnits.Any(string.IsNullOrWhiteSpace))
@@ -385,11 +427,11 @@ public sealed record GroundworkDesignOperationMarker(
 
 public sealed record GroundworkDesignAtomicCommandResult<TResult>(
     TResult Value,
-    GroundworkDesignAtomicWriteStatus Status)
+    DesignAtomicWriteStatus Status)
     where TResult : notnull
 {
     public bool ShouldPublishPostCommitOutcome =>
-        Status is GroundworkDesignAtomicWriteStatus.Committed or GroundworkDesignAtomicWriteStatus.Reconciled;
+        Status is DesignAtomicWriteStatus.Committed or DesignAtomicWriteStatus.Reconciled;
 }
 
 public static class GroundworkDesignAtomicCommand
@@ -416,30 +458,28 @@ public static class GroundworkDesignAtomicCommand
             : (DesignPersistenceDomain?)null);
         try
         {
-            var request = GroundworkDesignAtomicWriteMaterial.Create(operationKind, MaterialSchemaVersion, requestMaterial, jsonOptions);
             var result = await atomicWrite.ExecuteAsync(
-                new GroundworkDesignAtomicWriteRequest(
-                    new GroundworkDesignOperationIdentity(operationKind, operationKey.Value),
-                    request.Fingerprint,
-                    mutatedUnits),
-                beforeAttempt,
+                operationKey,
+                operationKind,
+                requestMaterial,
+                mutatedUnits,
                 async (context, token) =>
                 {
-                    var value = await stage(context, token);
+                    var value = await stage((GroundworkDesignAtomicWriteContext)context, token);
                     var authoritative = GroundworkDesignAtomicWriteMaterial.Create(
                         $"{operationKind}.result", MaterialSchemaVersion, value, jsonOptions);
-                    return GroundworkDesignAtomicWriteStageResult.Accepted(authoritative.Fingerprint, authoritative.Json);
+                    return DesignAtomicWriteStage<TResult>.Accepted(value, authoritative.Fingerprint, authoritative.Json);
                 },
-                cancellationToken);
+                beforeAttempt,
+                cancellationToken,
+                new GroundworkDesignAtomicWriteResultCodec<TResult>(jsonOptions ?? new JsonSerializerOptions(JsonSerializerDefaults.Web)));
             return result.Status switch
             {
-                GroundworkDesignAtomicWriteStatus.Committed or GroundworkDesignAtomicWriteStatus.Reconciled or GroundworkDesignAtomicWriteStatus.Replayed =>
+                DesignAtomicWriteStatus.Committed or DesignAtomicWriteStatus.Reconciled or DesignAtomicWriteStatus.Replayed =>
                     new GroundworkDesignAtomicCommandResult<TResult>(
-                        GroundworkDesignAtomicWriteMaterial.Deserialize<TResult>(
-                            result.AuthoritativeResultFingerprint!, result.AuthoritativeResultJson!,
-                            $"{operationKind}.result", MaterialSchemaVersion, jsonOptions), result.Status),
-                GroundworkDesignAtomicWriteStatus.Conflict => throw new GroundworkDesignOperationConflictException(operationKind, operationKey.Value),
-                GroundworkDesignAtomicWriteStatus.Rejected => throw new GroundworkDesignOperationRejectedException(operationKind, operationKey.Value),
+                        result.Value!, result.Status),
+                DesignAtomicWriteStatus.Conflict => throw new GroundworkDesignOperationConflictException(operationKind, operationKey.Value),
+                DesignAtomicWriteStatus.Rejected => throw new GroundworkDesignOperationRejectedException(operationKind, operationKey.Value),
                 _ => throw new ArgumentOutOfRangeException(nameof(result.Status))
             };
         }
@@ -499,6 +539,21 @@ public sealed record GroundworkDesignAtomicWriteMaterial(string Json, string Fin
 
     public static T Deserialize<T>(string fingerprint, string json, string operationKind, string schema, JsonSerializerOptions? options = null)
     {
+        ValidateFingerprint(fingerprint, json, operationKind, schema);
+        try
+        {
+            return JsonSerializer.Deserialize<T>(json, options ?? new JsonSerializerOptions(JsonSerializerDefaults.Web))
+                   ?? throw new GroundworkDesignCorruptResultException("Authoritative design result is null.");
+        }
+        catch (GroundworkDesignCorruptResultException) { throw; }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            throw new GroundworkDesignCorruptResultException("Authoritative design result could not be deserialized.", exception);
+        }
+    }
+
+    public static void ValidateFingerprint(string fingerprint, string json, string operationKind, string schema)
+    {
         try
         {
             using var document = JsonDocument.Parse(json);
@@ -507,13 +562,11 @@ public sealed record GroundworkDesignAtomicWriteMaterial(string Json, string Fin
             var expected = $"sha256:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(framed)))}";
             if (!StringComparer.Ordinal.Equals(expected, fingerprint))
                 throw new GroundworkDesignCorruptResultException("Authoritative design result fingerprint mismatch.");
-            return JsonSerializer.Deserialize<T>(json, options ?? new JsonSerializerOptions(JsonSerializerDefaults.Web))
-                   ?? throw new GroundworkDesignCorruptResultException("Authoritative design result is null.");
         }
         catch (GroundworkDesignCorruptResultException) { throw; }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
-            throw new GroundworkDesignCorruptResultException("Authoritative design result could not be deserialized.", exception);
+            throw new GroundworkDesignCorruptResultException("Authoritative design result could not be validated.", exception);
         }
     }
 
@@ -543,6 +596,39 @@ public sealed record GroundworkDesignAtomicWriteMaterial(string Json, string Fin
             writer.WriteEndArray();
         }
         else element.WriteTo(writer);
+    }
+}
+
+internal sealed class GroundworkDesignAtomicWriteResultCodec<T>(JsonSerializerOptions options) : IDesignAtomicWriteResultCodec<T>
+{
+    private readonly JsonSerializerOptions options = options ?? throw new ArgumentNullException(nameof(options));
+
+    public T Deserialize(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<T>(json, options)
+                   ?? throw new GroundworkDesignCorruptResultException("Authoritative design result is null.");
+        }
+        catch (GroundworkDesignCorruptResultException) { throw; }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            throw new GroundworkDesignCorruptResultException("Authoritative design result could not be deserialized.", exception);
+        }
+    }
+
+    public bool Equivalent(T left, T right)
+    {
+        try
+        {
+            var leftJson = JsonSerializer.SerializeToElement(left, options);
+            var rightJson = JsonSerializer.SerializeToElement(right, options);
+            return JsonElement.DeepEquals(leftJson, rightJson);
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            throw new GroundworkDesignSerializationException("Authoritative design result could not be compared.", exception);
+        }
     }
 }
 

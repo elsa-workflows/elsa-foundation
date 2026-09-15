@@ -9,7 +9,14 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
 public sealed class GroundworkWorkflowDefinitionVersionLayoutStoreTests
 {
     private static WorkflowDefinitionVersionLayout Layout(string id, string versionId, params DesignMetadataRecord[] records) =>
-        new() { Id = id, WorkflowDefinitionVersionId = versionId, Records = records };
+        new()
+        {
+            Id = id,
+            WorkflowDefinitionVersionId = versionId,
+            Records = records,
+            RecordsJson = "serialized-records",
+            ActivityPresentationJson = "serialized-presentation"
+        };
 
     private static (GroundworkWorkflowDefinitionVersionLayoutStore Store, DesignGroundworkTestPersistence Raw) Seeded(
         params WorkflowDefinitionVersionLayout[] layouts)
@@ -43,6 +50,32 @@ public sealed class GroundworkWorkflowDefinitionVersionLayoutStoreTests
             Assert.Equal(WorkflowsDesignStorageManifest.LayoutVersionIdField, predicate.Column.Name);
             Assert.Equal("v1", predicate.Value.Value);
         }
+    }
+
+    [Fact]
+    public async Task FindByVersionId_rejects_projected_version_relationship_drift()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        var layout = Layout("l1", "v1");
+        layout.TenantId = DesignGroundworkTestAccess.DefaultScopeValue;
+        var options = GroundworkDesignDocumentSerialization.Create(new FakePayloadSerializer());
+        var values = GroundworkDesignStorage.Values(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind,
+            layout,
+            options,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutCollection)
+            .Values
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        values[WorkflowsDesignStorageManifest.LayoutVersionIdField] = "forged-version";
+        raw.InsertRaw(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind,
+            new StorageValues(values));
+        var store = new GroundworkWorkflowDefinitionVersionLayoutStore(
+            raw,
+            DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+
+        Assert.Null(await store.FindByVersionIdAsync("v1"));
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() => store.FindByVersionIdAsync("forged-version"));
     }
 
     [Fact]
@@ -87,6 +120,9 @@ public sealed class GroundworkWorkflowDefinitionVersionLayoutStoreTests
             Assert.Contains("\"records\"", json);
             Assert.DoesNotContain("rowNumber", json);
             Assert.DoesNotContain("workflowDefinitionVersion\"", json);
+            Assert.DoesNotContain("workflowDefinitionVersionIdLookupHash", json);
+            Assert.DoesNotContain("recordsJson", json);
+            Assert.DoesNotContain("activityPresentationJson", json);
         }
     }
 }

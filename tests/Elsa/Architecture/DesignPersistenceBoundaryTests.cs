@@ -174,7 +174,9 @@ public sealed class DesignPersistenceBoundaryTests
             [
                 "AddGroundworkStorageLane<WorkflowsDesignGroundworkStorageManifestSource>",
                 "AddGroundworkStorageUnit(",
-                "IDesignAtomicWriter, GroundworkDesignAtomicWrite"
+                "TryAddScoped<GroundworkDesignAtomicWrite>()",
+                "TryAddScoped<IDesignAtomicWriter>(provider =>",
+                "provider.GetRequiredService<GroundworkDesignAtomicWrite>()"
             ]),
         (
             "src/Elsa/Activities/Design/Persistence/Groundwork/DependencyInjection/GroundworkActivitiesDesignStoreRegistration.cs",

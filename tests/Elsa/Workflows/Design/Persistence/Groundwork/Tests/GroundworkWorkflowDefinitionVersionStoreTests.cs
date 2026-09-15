@@ -1,8 +1,12 @@
+using System.Security.Cryptography;
+using System.Text;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Groundwork.Query.Model;
+using Groundwork.Store;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
@@ -45,9 +49,49 @@ public sealed class GroundworkWorkflowDefinitionVersionStoreTests
     }
 
     [Fact]
+    public async Task FindById_rejects_projected_relationship_drift()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        var version = Version("v1", "def1", "1.0.0");
+        version.TenantId = DesignGroundworkTestAccess.DefaultScopeValue;
+        var options = GroundworkDesignDocumentSerialization.Create(Payloads);
+        var values = GroundworkDesignStorage.Values(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
+            version,
+            options,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection)
+            .Values
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        values[WorkflowsDesignStorageManifest.VersionDefinitionIdField] = "forged-definition";
+        raw.InsertRaw(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
+            new StorageValues(values));
+        var store = new GroundworkWorkflowDefinitionVersionStore(
+            raw,
+            new GroundworkWorkflowDefinitionStore(raw, DesignGroundworkTestAccess.DefaultAccessContextAccessor),
+            Payloads,
+            DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() => store.FindByIdAsync("v1"));
+    }
+
+    [Fact]
+    public async Task Definition_id_relationship_queries_use_the_folded_identity()
+    {
+        var fixture = Seeded([Version("v1", "Definition-1", "1.0.0")]);
+        using (fixture.Raw)
+        {
+            var result = await fixture.Versions.FindLatestVersionAsync("definition-1");
+            Assert.Equal("v1", result?.Id);
+        }
+    }
+
+    [Fact]
     public void Stored_document_omits_persistence_artifacts()
     {
-        var fixture = Seeded([Version("v1", "def1", "1.0.0")]);
+        var version = Version("v1", "def1", "1.0.0");
+        version.DefinitionIdLookupHash = "definition-lookup-hash";
+        var fixture = Seeded([version]);
         using (fixture.Raw)
         {
             var values = Assert.Single(fixture.Raw.Snapshot(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind));
@@ -61,6 +105,7 @@ public sealed class GroundworkWorkflowDefinitionVersionStoreTests
             Assert.DoesNotContain("stateSource", json);
             Assert.DoesNotContain("rowNumber", json);
             Assert.DoesNotContain("\"definition\":", json);
+            Assert.DoesNotContain("definitionIdLookupHash", json);
         }
     }
 
@@ -116,6 +161,36 @@ public sealed class GroundworkWorkflowDefinitionVersionStoreTests
     }
 
     [Fact]
+    public async Task Relationship_hash_candidates_are_residual_validated_before_version_reads()
+    {
+        using var raw = new DesignGroundworkTestPersistence { RecordQueries = true };
+        var version = Version("v1", "actual-definition", "1.0.0");
+        var options = GroundworkDesignDocumentSerialization.Create(Payloads);
+        var values = GroundworkDesignStorage.Values(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
+            version,
+            options,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection);
+        var row = values.Values.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        row[WorkflowsDesignStorageManifest.VersionDefinitionIdLookupHashField] = LookupHash("requested-definition");
+        raw.InsertRaw(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
+            new StorageValues(row));
+        var versions = new GroundworkWorkflowDefinitionVersionStore(
+            raw,
+            new GroundworkWorkflowDefinitionStore(raw, DesignGroundworkTestAccess.DefaultAccessContextAccessor),
+            Payloads,
+            DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            versions.FindLatestVersionAsync("requested-definition"));
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            versions.ListByDefinitionAsync("requested-definition"));
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            versions.ExistsAsync("requested-definition", version.SemVerSortKey));
+    }
+
+    [Fact]
     public async Task Version_reads_use_their_exact_named_routes_and_result_operations()
     {
         var fixture = Seeded([Version("v1", "def1", "1.0.0")]);
@@ -135,7 +210,7 @@ public sealed class GroundworkWorkflowDefinitionVersionStoreTests
             Assert.Equal(WorkflowsDesignStorageManifest.VersionByDefinitionIndex, list.IndexName);
             Assert.Equal(
                 [
-                    WorkflowsDesignStorageManifest.VersionDefinitionIdField,
+                    WorkflowsDesignStorageManifest.VersionDefinitionIdLookupHashField,
                     WorkflowsDesignStorageManifest.VersionSemVerSortKeyField,
                     WorkflowsDesignStorageManifest.VersionIdField
                 ],
@@ -166,4 +241,7 @@ public sealed class GroundworkWorkflowDefinitionVersionStoreTests
         using (fixture.Raw)
             await Assert.ThrowsAsync<EntityNotFoundException>(() => fixture.Versions.GetAsync("missing"));
     }
+
+    private static string LookupHash(string value) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(QuerySearchKeys.Encode(value, QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase)))).ToLowerInvariant();
 }

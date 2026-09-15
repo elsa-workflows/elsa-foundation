@@ -21,6 +21,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 using Elsa.Testing;
+using Elsa.Tasks.Core;
+using Elsa.Workflows.Publishing;
+using Elsa.Workflows.Publishing.Services;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
 
@@ -71,6 +74,9 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
         Assert.IsType<GroundworkCloneDraftFromVersionCommand>(sp.GetRequiredService<ICloneDraftFromVersionCommand>());
         Assert.IsType<WorkflowDefinitionLookup>(sp.GetRequiredService<IWorkflowDefinitionLookup>());
         Assert.IsType<GroundworkDesignAtomicWrite>(sp.GetRequiredService<IDesignAtomicWriter>());
+        Assert.Same(
+            sp.GetRequiredService<GroundworkDesignAtomicWrite>(),
+            sp.GetRequiredService<IDesignAtomicWriter>());
         Assert.IsType<DraftOriginator>(sp.GetRequiredService<IDraftOriginator>());
         var storage = sp.GetRequiredService<GroundworkDesignStorage>();
         Assert.IsType<GroundworkDesignStorage>(storage);
@@ -90,12 +96,55 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
     }
 
     [Fact]
-    public void Groundwork_registration_overrides_a_prior_store()
+    public void Groundwork_registration_rejects_a_marked_non_layout_prior_store()
     {
-        using var provider = BuildProvider(services => services.AddScoped<IWorkflowDefinitionStore, PriorStore>());
-        using var scope = provider.CreateScope();
-        Assert.IsType<GroundworkWorkflowDefinitionStore>(scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>());
-        Assert.Single(scope.ServiceProvider.GetServices<IWorkflowDefinitionStore>());
+        var services = new ServiceCollection();
+        services.AddScoped<IWorkflowDefinitionStore, PriorStore>();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => services.AddGroundworkWorkflowsDesignStores());
+
+        Assert.Contains("already present", exception.Message, StringComparison.Ordinal);
+        Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowDefinitionStore) &&
+            descriptor.ImplementationType == typeof(PriorStore));
+    }
+
+    [Fact]
+    public void Groundwork_registration_replaces_the_publishing_layout_fallback()
+    {
+        var services = new ServiceCollection();
+        new WorkflowsPublishingFeature().ConfigureServices(services);
+
+        services.AddGroundworkWorkflowsDesignStores();
+
+        var layout = Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowDefinitionVersionLayoutStore));
+        Assert.Equal(typeof(GroundworkWorkflowDefinitionVersionLayoutStore), layout.ImplementationType);
+        Assert.DoesNotContain(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowDefinitionVersionLayoutStore) &&
+            descriptor.ImplementationType == typeof(EmptyWorkflowDefinitionVersionLayoutStore));
+    }
+
+    [Fact]
+    public void Groundwork_registration_refuses_an_arbitrary_layout_registration()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IWorkflowDefinitionVersionLayoutStore, PriorLayoutStore>();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => services.AddGroundworkWorkflowsDesignStores());
+
+        Assert.Contains("already present", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Groundwork_registration_rejects_an_untracked_prior_command()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IAddWorkflowDefinitionCommand, PriorAddWorkflowDefinitionCommand>();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => services.AddGroundworkWorkflowsDesignStores());
+
+        Assert.Contains("already present", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -114,6 +163,20 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
         using var scope = provider.CreateScope();
         Assert.IsType<PriorDesignAtomicWriter>(scope.ServiceProvider.GetRequiredService<IDesignAtomicWriter>());
         Assert.Single(scope.ServiceProvider.GetServices<IDesignAtomicWriter>());
+    }
+
+    [Fact]
+    public void Groundwork_registration_rejects_a_custom_selected_backend()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<object>(new object());
+        var owned = Assert.Single(services, x => x.ServiceType == typeof(object));
+        DesignPersistenceBackend.Register(services, new DesignPersistenceBackend("custom", [owned]));
+
+        var exception = Assert.Throws<InvalidOperationException>(() => services.AddGroundworkWorkflowsDesignStores());
+
+        Assert.Contains("already selected", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(owned, services);
     }
 
     [Fact]
@@ -138,6 +201,51 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
         using var scope = provider.CreateScope();
         Assert.IsType<PriorDraftOriginator>(scope.ServiceProvider.GetRequiredService<IDraftOriginator>());
         Assert.Single(scope.ServiceProvider.GetServices<IDraftOriginator>());
+    }
+
+    [Fact]
+    public async Task Groundwork_registration_fails_startup_when_a_replacement_contract_is_duplicated_late()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkWorkflowsDesignStores();
+        services.AddScoped<IWorkflowDefinitionStore, PriorStore>();
+        using var provider = services.BuildServiceProvider();
+
+        using var scope = provider.CreateScope();
+        var task = Assert.Single(scope.ServiceProvider.GetServices<IStartupTask>(),
+            item => item is ValidateDesignPersistenceReplacementContractsStartupTask);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => task.ExecuteAsync(CancellationToken.None));
+
+        Assert.Contains(nameof(IWorkflowDefinitionStore), exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Groundwork_registration_keeps_replacement_validation_when_an_unrelated_startup_task_precedes_it()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IStartupTask, UnrelatedStartupTask>();
+        services.AddGroundworkWorkflowsDesignStores();
+        services.AddScoped<IWorkflowDefinitionStore>(_ => throw new NotSupportedException());
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var validator = Assert.Single(scope.ServiceProvider.GetServices<IStartupTask>(),
+            task => task is ValidateDesignPersistenceReplacementContractsStartupTask);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => validator.ExecuteAsync(CancellationToken.None));
+        Assert.Contains(nameof(IWorkflowDefinitionStore), exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Groundwork_repeated_registration_does_not_duplicate_replacement_validator()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkWorkflowsDesignStores();
+        services.AddGroundworkWorkflowsDesignStores();
+
+        Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(IStartupTask) &&
+            descriptor.ImplementationType == typeof(ValidateDesignPersistenceReplacementContractsStartupTask));
     }
 
     [Fact]
@@ -172,11 +280,26 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
         Assert.Equal(ServiceLifetime.Scoped, registration.Lifetime);
     }
 
-    private sealed class PriorStore : IWorkflowDefinitionStore
+    private sealed class PriorStore : IWorkflowDefinitionStore, IDesignPersistenceFallback
     {
         public Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class PriorLayoutStore : IWorkflowDefinitionVersionLayoutStore
+    {
+        public Task<WorkflowDefinitionVersionLayout?> FindByVersionIdAsync(string workflowDefinitionVersionId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class PriorAddWorkflowDefinitionCommand : IAddWorkflowDefinitionCommand
+    {
+        public Task<WorkflowDefinitionCreated> Execute(
+            DesignOperationKey operationKey,
+            WorkflowDefinition workflowDefinition,
+            WorkflowDefinitionDraft draft,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class PriorDraftOriginator : IDraftOriginator
@@ -187,8 +310,12 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
 
     private sealed class PriorDesignAtomicWriter : IDesignAtomicWriter
     {
-        public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(GroundworkDesignAtomicWriteRequest request, Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(GroundworkDesignAtomicWriteRequest request, Func<CancellationToken, Task>? beforeAttempt, Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default, IDesignAtomicWriteResultCodec<T>? resultCodec = null) => throw new NotSupportedException();
+    }
+
+    private sealed class UnrelatedStartupTask : IStartupTask
+    {
+        public Task ExecuteAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class StubEventPublisher : IInlineEventPublisher, IDeferredEventPublisher

@@ -54,9 +54,15 @@ public class DesignPersistenceFixtureDataTests
             nameof(ActivityDefinitionVersion.OutputsSource),
             nameof(ActivityDefinitionVersion.DesignFacetsSource));
         AssertSnapshotCoverage<WorkflowDefinition, WorkflowDesignContractSuite.WorkflowDefinitionSnapshot>(
-            nameof(WorkflowDefinition.RowNumber));
+            nameof(WorkflowDefinition.RowNumber),
+            nameof(WorkflowDefinition.IdLookupHash),
+            nameof(WorkflowDefinition.IdSearchKey),
+            nameof(WorkflowDefinition.NameSearchKey),
+            nameof(WorkflowDefinition.DescriptionSearchKey));
         AssertSnapshotCoverage<WorkflowDefinitionDraft, WorkflowDesignContractSuite.WorkflowDefinitionDraftSnapshot>(
             nameof(WorkflowDefinitionDraft.RowNumber),
+            nameof(WorkflowDefinitionDraft.IdLookupHash),
+            nameof(WorkflowDefinitionDraft.WorkflowDefinitionIdLookupHash),
             nameof(WorkflowDefinitionDraft.WorkflowDefinition),
             nameof(WorkflowDefinitionDraft.StateSource));
 
@@ -65,17 +71,27 @@ public class DesignPersistenceFixtureDataTests
         AssertSnapshotCoverage<WorkflowDefinitionDraftLayout, WorkflowDesignContractSuite.WorkflowDefinitionDraftLayoutSnapshot>(
             nameof(WorkflowDefinitionDraftLayout.RowNumber),
             nameof(WorkflowDefinitionDraftLayout.Id),
+            nameof(WorkflowDefinitionDraftLayout.IdLookupHash),
             nameof(WorkflowDefinitionDraftLayout.CreatedAt),
             nameof(WorkflowDefinitionDraftLayout.LastModifiedAt),
             nameof(WorkflowDefinitionDraftLayout.TenantId),
             nameof(WorkflowDefinitionDraftLayout.WorkflowDefinitionDraftId),
+            nameof(WorkflowDefinitionDraftLayout.WorkflowDefinitionDraftIdLookupHash),
+            nameof(WorkflowDefinitionDraftLayout.RecordsJson),
+            nameof(WorkflowDefinitionDraftLayout.ActivityPresentationJson),
             nameof(WorkflowDefinitionDraftLayout.WorkflowDefinitionDraft));
         AssertSnapshotCoverage<WorkflowDefinitionVersion, WorkflowDesignContractSuite.WorkflowDefinitionVersionSnapshot>(
             nameof(WorkflowDefinitionVersion.RowNumber),
+            nameof(WorkflowDefinitionVersion.IdLookupHash),
+            nameof(WorkflowDefinitionVersion.DefinitionIdLookupHash),
             nameof(WorkflowDefinitionVersion.Definition),
             nameof(WorkflowDefinitionVersion.StateSource));
         AssertSnapshotCoverage<WorkflowDefinitionVersionLayout, WorkflowDesignContractSuite.WorkflowDefinitionVersionLayoutSnapshot>(
             nameof(WorkflowDefinitionVersionLayout.RowNumber),
+            nameof(WorkflowDefinitionVersionLayout.IdLookupHash),
+            nameof(WorkflowDefinitionVersionLayout.WorkflowDefinitionVersionIdLookupHash),
+            nameof(WorkflowDefinitionVersionLayout.RecordsJson),
+            nameof(WorkflowDefinitionVersionLayout.ActivityPresentationJson),
             nameof(WorkflowDefinitionVersionLayout.WorkflowDefinitionVersion));
         AssertSnapshotCoverage<DesignMetadataRecord, WorkflowDesignContractSuite.DesignMetadataSnapshot>();
     }

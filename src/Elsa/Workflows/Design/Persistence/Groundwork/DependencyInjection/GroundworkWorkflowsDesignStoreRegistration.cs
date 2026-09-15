@@ -11,6 +11,7 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Elsa.Tasks.Core;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 
@@ -22,7 +23,17 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         string? targetName = null)
     {
         ArgumentNullException.ThrowIfNull(services);
+        var existingBackend = DesignPersistenceBackend.Find(services);
+        if (existingBackend is not null)
+        {
+            if (existingBackend.Name != DesignPersistenceBackend.Groundwork)
+                throw new InvalidOperationException($"Workflow-design persistence backend '{existingBackend.Name}' is already selected; use an explicit replacement API to switch backends.");
+            existingBackend.RemoveOwnedDescriptors(services);
+        }
+        else if (HasOwnedSurfaceRegistration(services))
+            throw new InvalidOperationException("An explicit workflow-design persistence registration is already present; Groundwork refuses to replace it implicitly.");
         services.AddPersistenceCore();
+        services.TryAddSingleton<IServiceCollection>(services);
         services.AddGroundworkStorageLane<WorkflowsDesignGroundworkStorageManifestSource>(targetName);
         foreach (var unit in WorkflowsDesignStorageManifest.CreateUnits())
             services.AddGroundworkStorageUnit(unit, targetName);
@@ -32,7 +43,9 @@ public static class GroundworkWorkflowsDesignStoreRegistration
             provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
             targetName,
             provider.GetRequiredService<IGroundworkPrivilegedQueryAuditSink>()));
-        services.TryAddScoped<IDesignAtomicWriter, GroundworkDesignAtomicWrite>();
+        services.TryAddScoped<GroundworkDesignAtomicWrite>();
+        services.TryAddScoped<IDesignAtomicWriter>(provider =>
+            provider.GetRequiredService<GroundworkDesignAtomicWrite>());
         services.TryAddScoped<IDraftOriginator, DraftOriginator>();
 
         ReplaceScoped<IWorkflowDefinitionStore, GroundworkWorkflowDefinitionStore>(services);
@@ -63,6 +76,10 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         services.TryAddScoped<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
         services.TryAddScoped<IWorkflowDefinitionVersionFactory, WorkflowDefinitionVersionFactory>();
         services.TryAddScoped<IWorkflowDefinitionDraftFactory, WorkflowDefinitionDraftFactory>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateDesignPersistenceReplacementContractsStartupTask>());
+        DesignPersistenceBackend.Register(services, new DesignPersistenceBackend(
+            DesignPersistenceBackend.Groundwork,
+            services.Where(IsOwnedDescriptor).ToArray()));
         return services;
     }
 
@@ -73,4 +90,60 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         services.RemoveAll<TService>();
         services.AddScoped<TService, TImplementation>();
     }
+
+    private static bool IsOwnedDescriptor(ServiceDescriptor descriptor) =>
+        OwnedServiceTypes.Contains(descriptor.ServiceType) &&
+        (descriptor.ServiceType != typeof(IDesignAtomicWriter) || descriptor.ImplementationType == typeof(GroundworkDesignAtomicWrite));
+
+    private static bool HasOwnedSurfaceRegistration(IServiceCollection services) => services.Any(descriptor =>
+        OwnedServiceTypes.Contains(descriptor.ServiceType) &&
+        descriptor.ServiceType != typeof(IDesignAtomicWriter) &&
+        !IsFallbackDescriptor(descriptor));
+
+    private static bool IsFallbackDescriptor(ServiceDescriptor descriptor) =>
+        descriptor.ServiceType == typeof(IWorkflowDefinitionVersionLayoutStore) &&
+        descriptor.ImplementationType is { } implementationType &&
+        typeof(IDesignPersistenceFallback).IsAssignableFrom(implementationType);
+
+    private static readonly Type[] OwnedServiceTypes =
+    [
+        typeof(GroundworkDesignStorage),
+        typeof(IDesignAtomicWriter),
+        typeof(GroundworkDesignAtomicWrite),
+        typeof(IWorkflowDefinitionLookup),
+        typeof(IWorkflowDefinitionStore),
+        typeof(IWorkflowDefinitionVersionStore),
+        typeof(IWorkflowDefinitionDraftStore),
+        typeof(IWorkflowDefinitionListProjectionStore),
+        typeof(IWorkflowDefinitionVersionLayoutStore),
+        typeof(IAddWorkflowDefinitionCommand),
+        typeof(IMaterializeWorkflowDefinitionCommand),
+        typeof(IAddWorkflowDefinitionVersionCommand),
+        typeof(IMaterializeWorkflowDefinitionVersionCommand),
+        typeof(ISaveWorkflowDefinitionCommand),
+        typeof(IDeleteWorkflowDefinitionPermanentlyCommand),
+        typeof(ICreateDraftCommand),
+        typeof(IUpdateDraftCommand),
+        typeof(IDiscardDraftCommand),
+        typeof(IPromoteDraftToVersionCommand),
+        typeof(ISubmitWorkflowDefinitionCommand),
+        typeof(ICloneDraftFromVersionCommand),
+        typeof(GroundworkWorkflowDefinitionStore),
+        typeof(GroundworkWorkflowDefinitionVersionStore),
+        typeof(GroundworkWorkflowDefinitionDraftStore),
+        typeof(GroundworkWorkflowDefinitionListProjectionStore),
+        typeof(GroundworkWorkflowDefinitionVersionLayoutStore),
+        typeof(GroundworkAddWorkflowDefinitionCommand),
+        typeof(GroundworkMaterializeWorkflowDefinitionCommand),
+        typeof(GroundworkAddWorkflowDefinitionVersionCommand),
+        typeof(GroundworkMaterializeWorkflowDefinitionVersionCommand),
+        typeof(GroundworkSaveWorkflowDefinitionCommand),
+        typeof(GroundworkDeleteWorkflowDefinitionPermanentlyCommand),
+        typeof(GroundworkCreateDraftCommand),
+        typeof(GroundworkUpdateDraftCommand),
+        typeof(GroundworkDiscardDraftCommand),
+        typeof(GroundworkPromoteDraftToVersionCommand),
+        typeof(GroundworkSubmitWorkflowDefinitionCommand),
+        typeof(GroundworkCloneDraftFromVersionCommand)
+    ];
 }

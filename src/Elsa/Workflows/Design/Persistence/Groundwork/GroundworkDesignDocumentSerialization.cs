@@ -12,6 +12,15 @@ public static class GroundworkDesignDocumentSerialization
     private static readonly string[] ExcludedMembers =
     [
         "RowNumber",
+        "IdLookupHash",
+        "IdSearchKey",
+        "NameSearchKey",
+        "DescriptionSearchKey",
+        "WorkflowDefinitionIdLookupHash",
+        "RecordsJson",
+        "ActivityPresentationJson",
+        "DefinitionIdLookupHash",
+        "WorkflowDefinitionVersionIdLookupHash",
         "StateSource",
         "Definition",
         "WorkflowDefinition",

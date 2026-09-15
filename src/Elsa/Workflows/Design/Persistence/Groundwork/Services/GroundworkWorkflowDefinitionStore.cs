@@ -26,7 +26,12 @@ public sealed class GroundworkWorkflowDefinitionStore(
     {
         cancellationToken.ThrowIfCancellationRequested();
         var entry = storage.Read(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, id);
-        return Task.FromResult(entry is null ? null : storage.MapDefinition(entry));
+        if (entry is null)
+            return Task.FromResult<WorkflowDefinition?>(null);
+
+        var definition = storage.MapDefinition(entry);
+        GroundworkDesignStorage.EnsureDefinitionIdentity(id, definition.Id, "workflow-definition point read");
+        return Task.FromResult<WorkflowDefinition?>(definition);
     }
 
     public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(

@@ -71,6 +71,57 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
     }
 
     [Fact]
+    public void Stored_document_omits_persistence_projection_artifacts()
+    {
+        var definition = new WorkflowDefinition
+        {
+            Id = "definition",
+            Name = "Definition",
+            Description = "Description",
+            IdLookupHash = "id-lookup-hash",
+            IdSearchKey = "id-search-key",
+            NameSearchKey = "name-search-key",
+            DescriptionSearchKey = "description-search-key"
+        };
+        var (_, raw) = Seeded(definition);
+        using (raw)
+        {
+            var values = Assert.Single(raw.Snapshot(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind));
+            var json = ((System.Text.Json.JsonElement)values.Values[WorkflowsDesignStorageManifest.ContentField]!).GetRawText();
+            Assert.Contains("\"name\"", json);
+            Assert.DoesNotContain("idLookupHash", json);
+            Assert.DoesNotContain("idSearchKey", json);
+            Assert.DoesNotContain("nameSearchKey", json);
+            Assert.DoesNotContain("descriptionSearchKey", json);
+        }
+    }
+
+    [Fact]
+    public async Task FindById_rejects_a_valid_payload_whose_embedded_identity_differs_from_the_projected_identity()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        var embedded = new WorkflowDefinition { Id = "embedded-id", Name = "Definition" };
+        var options = GroundworkDesignDocumentSerialization.Create(new FakePayloadSerializer());
+        var values = GroundworkDesignStorage.Values(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            embedded,
+            options,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionCollection)
+            .Values
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        values[WorkflowsDesignStorageManifest.IdField] = "requested-id";
+        values[WorkflowsDesignStorageManifest.DefinitionIdField] = "requested-id";
+        values[WorkflowsDesignStorageManifest.DefinitionIdSearchKeyField] = QuerySearchKeys.Encode("requested-id", QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase);
+        values[WorkflowsDesignStorageManifest.DefinitionIdLookupHashField] = LookupHash(values[WorkflowsDesignStorageManifest.DefinitionIdSearchKeyField]!.ToString()!);
+        raw.InsertRaw(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, new StorageValues(values));
+
+        var store = new GroundworkWorkflowDefinitionStore(raw, DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+
+        var exception = await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() => store.FindByIdAsync("requested-id"));
+        Assert.Contains("does not match", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task FindById_returns_null_when_absent()
     {
         var (store, raw) = Seeded(Sample());
@@ -133,6 +184,25 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
             AssertRoute(raw, WorkflowsDesignStorageManifest.DefinitionByNameIndex,
                 [WorkflowsDesignStorageManifest.DefinitionNameLookupHashField,
                  WorkflowsDesignStorageManifest.DefinitionIdField]);
+        }
+    }
+
+    [Fact]
+    public async Task Exact_name_and_description_filters_are_ordinal_residuals()
+    {
+        var (store, raw) = Seeded(
+            new WorkflowDefinition { Id = "name-upper", Name = "Order", Description = "Handles orders" },
+            new WorkflowDefinition { Id = "name-lower", Name = "order", Description = "handles orders" });
+        using (raw)
+        {
+            Assert.Equal(["name-upper"], (await store.ListAsync(new WorkflowDefinitionFilter
+            {
+                Name = "Order"
+            })).Select(definition => definition.Id));
+            Assert.Equal(["name-lower"], (await store.ListAsync(new WorkflowDefinitionFilter
+            {
+                Description = "handles orders"
+            })).Select(definition => definition.Id));
         }
     }
 

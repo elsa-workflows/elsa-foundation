@@ -54,7 +54,10 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
             ],
             WorkflowsDesignStorageManifest.DraftByDefinitionIndex,
             cancellationToken: cancellationToken);
-        return Task.FromResult(rows.Select(Deserialize).FirstOrDefault());
+        var documents = rows
+            .Select(row => Deserialize(row, [workflowDefinitionId]))
+            .ToArray();
+        return Task.FromResult<GroundworkWorkflowDefinitionDraftDocument?>(documents.FirstOrDefault());
     }
 
     public Task<IReadOnlyList<GroundworkWorkflowDefinitionDraftDocument>> ListByWorkflowDefinitionIdAsync(
@@ -75,7 +78,7 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
             unit,
             storage.In(unit, WorkflowsDesignStorageManifest.DraftDefinitionIdField, ids.Cast<object?>()),
             [
-                storage.Order(unit, WorkflowsDesignStorageManifest.DraftDefinitionIdField),
+                storage.Order(unit, WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField),
                 storage.Order(unit, WorkflowsDesignStorageManifest.DraftLastModifiedAtField, descending: true),
                 storage.Order(unit, WorkflowsDesignStorageManifest.DraftCreatedAtField, descending: true),
                 storage.Order(unit, WorkflowsDesignStorageManifest.DraftIdField, descending: true)
@@ -83,7 +86,7 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
             WorkflowsDesignStorageManifest.DraftByDefinitionIndex,
             cancellationToken: cancellationToken);
         return Task.FromResult<IReadOnlyList<GroundworkWorkflowDefinitionDraftDocument>>(
-            rows.Select(Deserialize).ToArray());
+            rows.Select(row => Deserialize(row, ids)).ToArray());
     }
 
     public GroundworkDesignSaveRequest ToSaveRequest(
@@ -107,10 +110,18 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
     public GroundworkDesignDeleteRequest ToDeleteRequest(string draftId, long? expectedVersion = null) =>
         new(unit, draftId, expectedVersion);
 
-    private GroundworkWorkflowDefinitionDraftDocument Deserialize(GroundworkDesignEntry entry)
+    private GroundworkWorkflowDefinitionDraftDocument Deserialize(
+        GroundworkDesignEntry entry,
+        IReadOnlyCollection<string>? expectedWorkflowDefinitionIds = null)
     {
         var document = GroundworkDesignStorage.DeserializeDocument<WorkflowDefinitionDraft>(entry.Entry, jsonOptions);
         accessContextAccessor.Current.EnsureTenantScope(document.Entity.TenantId);
+        GroundworkDesignStorage.EnsureProjectedIdentity(entry, document.Entity, "workflow draft point read");
+        if (expectedWorkflowDefinitionIds is not null)
+            GroundworkDesignStorage.EnsureDefinitionIdentityInSet(
+                expectedWorkflowDefinitionIds,
+                document.Entity.WorkflowDefinitionId,
+                "workflow draft relationship lookup");
         return new GroundworkWorkflowDefinitionDraftDocument(
             document.Collection,
             document.Entity,

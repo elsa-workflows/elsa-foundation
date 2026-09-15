@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
 using Elsa.Workflows.Design.Persistence.Core.Models;
@@ -52,7 +54,8 @@ public class GroundworkWorkflowDefinitionCommandTests
     private IDraftOriginator DraftOriginator(
         IGroundworkStorageSessionSource? store = null,
         IPayloadSerializer? payloadSerializer = null,
-        IDeferredEventPublisher? deferredEventPublisher = null)
+        IDeferredEventPublisher? deferredEventPublisher = null,
+        IDesignAtomicWriter? atomicWriter = null)
     {
         var storage = Storage(store);
         var payloads = payloadSerializer ?? Payloads;
@@ -60,7 +63,7 @@ public class GroundworkWorkflowDefinitionCommandTests
             _identities,
             _locks,
             storage,
-            new GroundworkDesignAtomicWrite(storage),
+            atomicWriter ?? new GroundworkDesignAtomicWrite(storage),
             payloads,
             _events,
             deferredEventPublisher ?? _events,
@@ -247,6 +250,42 @@ public class GroundworkWorkflowDefinitionCommandTests
     }
 
     [Fact]
+    public async Task CloneDraftFromVersion_disposes_the_previous_draft_lock_before_atomic_retry_setup()
+    {
+        var source = new WorkflowDefinitionVersion("definition-1", "1.0.0")
+        {
+            Id = "source-version",
+            TenantId = DesignGroundworkTestAccess.DefaultScopeValue,
+            State = MinimalState(),
+            StateSource = Payloads.Serialize(MinimalState())
+        };
+        _store.SeedVersion(source);
+        var locks = new DisposalRecordingLockProvider();
+        var writer = new RepeatingBeforeAttemptAtomicWriter(new GroundworkDesignAtomicWrite(Storage()));
+        var originator = new DraftOriginator(
+            _identities,
+            locks,
+            Storage(),
+            writer,
+            Payloads,
+            _events,
+            _events,
+            _clock,
+            _accessContext);
+        var clone = new GroundworkCloneDraftFromVersionCommand(
+            VersionStore(),
+            VersionLayoutStore(),
+            originator,
+            _accessContext);
+
+        await clone.Execute(NextKey(), source.Id, CancellationToken.None);
+
+        Assert.Equal(2, writer.BeforeAttemptCalls);
+        Assert.Equal(writer.BeforeAttemptCalls, locks.AcquireCount);
+        Assert.Equal(locks.AcquireCount, locks.DisposeCount);
+    }
+
+    [Fact]
     public async Task CloneDraftFromVersion_replay_returns_the_committed_draft_after_the_source_is_removed_without_restaging_or_republishing()
     {
         var sourceDraftId = await CreateCommand().Execute(
@@ -367,6 +406,119 @@ public class GroundworkWorkflowDefinitionCommandTests
             @event => Assert.IsType<DraftValidated>(@event));
         Assert.All(deferredEvents.CancellationTokens, token => Assert.False(token.IsCancellationRequested));
         Assert.NotNull(await DraftStore().FindByIdAsync(cloneId));
+    }
+
+    [Fact]
+    public async Task Direct_atomic_interface_reports_conflict_without_rerunning_stage()
+    {
+        var writer = AtomicWrite();
+        var key = NextKey();
+        var stageCalls = 0;
+        var first = await writer.ExecuteAsync(
+            key,
+            "test.operation.v1",
+            new { Value = 1 },
+            [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind],
+            (_, _) =>
+            {
+                stageCalls++;
+                return Task.FromResult(DesignAtomicWriteStage<string>.Accepted("winner"));
+            });
+
+        var conflict = await writer.ExecuteAsync(
+            key,
+            "test.operation.v1",
+            new { Value = 2 },
+            [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind],
+            (_, _) =>
+            {
+                stageCalls++;
+                return Task.FromResult(DesignAtomicWriteStage<string>.Accepted("loser"));
+            });
+
+        Assert.Equal(DesignAtomicWriteStatus.Committed, first.Status);
+        Assert.Equal(DesignAtomicWriteStatus.Conflict, conflict.Status);
+        Assert.Equal(1, stageCalls);
+    }
+
+    [Fact]
+    public async Task Direct_atomic_interface_accepts_the_shared_256_character_bound()
+    {
+        var result = await AtomicWrite().ExecuteAsync(
+            new DesignOperationKey(new string('k', DesignOperationKey.MaximumLength)),
+            new string('o', DesignOperationKey.MaximumLength), new { Value = 1 },
+            [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind],
+            (_, _) => Task.FromResult(DesignAtomicWriteStage<string>.Accepted("staged")));
+
+        Assert.Equal(DesignAtomicWriteStatus.Committed, result.Status);
+    }
+
+    [Fact]
+    public async Task Direct_atomic_interface_rejects_a_257_character_key_or_kind()
+    {
+        var writer = AtomicWrite();
+        await Assert.ThrowsAsync<ArgumentException>(() => writer.ExecuteAsync(
+            new DesignOperationKey(new string('k', DesignOperationKey.MaximumLength + 1)), "test.operation.v1", new { Value = 1 },
+            [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind],
+            (_, _) => Task.FromResult(DesignAtomicWriteStage<string>.Accepted("never-staged"))));
+        await Assert.ThrowsAsync<ArgumentException>(() => writer.ExecuteAsync(
+            new DesignOperationKey("bounded-key"), new string('o', DesignOperationKey.MaximumLength + 1), new { Value = 1 },
+            [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind],
+            (_, _) => Task.FromResult(DesignAtomicWriteStage<string>.Accepted("never-staged"))));
+    }
+
+    [Fact]
+    public async Task Direct_atomic_interface_rejects_a_supplied_result_that_differs_from_the_staged_value()
+    {
+        IDesignAtomicWriter writer = AtomicWrite();
+        var supplied = GroundworkDesignAtomicWriteMaterial.Create(
+            "test.operation.v1.result", "1", "supplied");
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => writer.ExecuteAsync(
+            NextKey(),
+            "test.operation.v1",
+            new { Value = 1 },
+            [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind],
+            (_, _) => Task.FromResult(DesignAtomicWriteStage<string>.Accepted(
+                "staged", supplied.Fingerprint, supplied.Json))));
+    }
+
+    [Fact]
+    public async Task Command_uses_custom_result_serializer_for_authoritative_validation_and_replay()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.Converters.Add(new JsonStringEnumConverter());
+        var operationKey = NextKey();
+        var value = new CustomResult(CustomResultStatus.Ready);
+
+        var committed = await GroundworkDesignAtomicCommand.ExecuteAsync(
+            AtomicWrite(),
+            operationKey,
+            "test.operation.v1",
+            new { Value = 1 },
+            [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind],
+            (_, _) => Task.FromResult(value),
+            options);
+
+        var replayStageCalled = false;
+        var replayed = await GroundworkDesignAtomicCommand.ExecuteAsync<object, CustomResult>(
+            AtomicWrite(),
+            operationKey,
+            "test.operation.v1",
+            new { Value = 1 },
+            [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind],
+            (_, _) =>
+            {
+                replayStageCalled = true;
+                throw new InvalidOperationException("replay must not restage");
+            },
+            options);
+
+        Assert.Equal(DesignAtomicWriteStatus.Committed, committed.Status);
+        Assert.Equal(DesignAtomicWriteStatus.Replayed, replayed.Status);
+        Assert.Equal(value, committed.Value);
+        Assert.Equal(value, replayed.Value);
+        Assert.False(replayStageCalled);
     }
 
     [Fact]
@@ -652,6 +804,35 @@ public class GroundworkWorkflowDefinitionCommandTests
         Assert.NotNull(await VersionStore().FindByIdAsync(versionId));
         Assert.Equal(1, replacement.FindLatestCount);
         Assert.Equal(1, replacement.ExistsCount);
+    }
+
+    [Fact]
+    public async Task PromoteDraft_releases_attempt_locks_before_marker_race_retry()
+    {
+        var draftId = await CreateCommand().Execute(
+            NextKey(),
+            "definition-marker-race",
+            EmptyState(),
+            cancellationToken: CancellationToken.None);
+        var racedStore = new MarkerRaceOnceDocumentStore(_store);
+        var locks = new DisposalRecordingLockProvider();
+        var storage = Storage(racedStore);
+        var promote = new GroundworkPromoteDraftToVersionCommand(
+            locks,
+            storage,
+            new GroundworkDesignAtomicWrite(storage),
+            Payloads,
+            _events,
+            VersionStore(racedStore),
+            _identities,
+            _clock,
+            _accessContext);
+
+        var versionId = await promote.Execute(NextKey(), draftId, CancellationToken.None);
+
+        Assert.NotNull(await VersionStore().FindByIdAsync(versionId));
+        Assert.Equal(4, locks.AcquireCount);
+        Assert.Equal(locks.AcquireCount, locks.DisposeCount);
     }
 
     [Fact]
@@ -1166,26 +1347,31 @@ public class GroundworkWorkflowDefinitionCommandTests
         IDesignAtomicWriter inner,
         Action onStageEntered) : IDesignAtomicWriter
     {
-        public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
-            GroundworkDesignAtomicWriteRequest request,
-            Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
-            CancellationToken cancellationToken = default) =>
-            inner.ExecuteAsync(request, Observe(stage), cancellationToken);
+        public Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(
+            DesignOperationKey operationKey,
+            string operationKind,
+            object requestMaterial,
+            IReadOnlyCollection<string> mutatedUnits,
+            Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage,
+            Func<CancellationToken, Task>? beforeAttempt = null,
+            CancellationToken cancellationToken = default,
+            IDesignAtomicWriteResultCodec<T>? resultCodec = null) =>
+            inner.ExecuteAsync(operationKey, operationKind, requestMaterial, mutatedUnits, Observe(stage), beforeAttempt, cancellationToken, resultCodec);
 
-        public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
-            GroundworkDesignAtomicWriteRequest request,
-            Func<CancellationToken, Task>? beforeAttempt,
-            Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
-            CancellationToken cancellationToken = default) =>
-            inner.ExecuteAsync(request, beforeAttempt, Observe(stage), cancellationToken);
-
-        private Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> Observe(
-            Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage) =>
+        private Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> Observe<T>(
+            Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage) =>
             (context, cancellationToken) =>
             {
                 onStageEntered();
                 return stage(context, cancellationToken);
             };
+    }
+
+    private sealed record CustomResult(CustomResultStatus Status);
+
+    private enum CustomResultStatus
+    {
+        Ready
     }
 
     private sealed class SequentialIdentityGenerator : Elsa.Primitives.Contracts.IIdentityGenerator
@@ -1251,6 +1437,117 @@ public class GroundworkWorkflowDefinitionCommandTests
                 Dispose();
                 return ValueTask.CompletedTask;
             }
+        }
+    }
+
+    private sealed class DisposalRecordingLockProvider : IDistributedLockProvider
+    {
+        public int AcquireCount { get; private set; }
+        public int DisposeCount { get; private set; }
+
+        public IDistributedSynchronizationHandle AcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
+            new Handle(this);
+
+        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        {
+            AcquireCount++;
+            return ValueTask.FromResult<IDistributedSynchronizationHandle>(new Handle(this));
+        }
+
+        public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
+            AcquireLock(name, timeout, cancellationToken);
+
+        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IDistributedSynchronizationHandle?>(AcquireLock(name, timeout, cancellationToken));
+
+        private sealed class Handle(DisposalRecordingLockProvider owner) : IDistributedSynchronizationHandle
+        {
+            private int disposed;
+            public CancellationToken HandleLostToken => CancellationToken.None;
+            public void Dispose()
+            {
+                if (Interlocked.Exchange(ref disposed, 1) == 0)
+                    owner.DisposeCount++;
+            }
+            public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
+        }
+    }
+
+    private sealed class MarkerRaceOnceDocumentStore(
+        IGroundworkStorageSessionSource inner)
+        : IGroundworkStorageSessionSource, IGroundworkStorageCapabilitySource
+    {
+        private int raceInjected;
+
+        public IStorageSession Open(
+            string unitId,
+            StorageAccess access,
+            string? targetName = null) => inner.Open(unitId, access, targetName);
+
+        public IUnitOfWork BeginUnitOfWork(
+            StorageAccess access,
+            BatchWriteOptions options,
+            IReadOnlyList<string> unitIds,
+            string? targetName = null) =>
+            new MarkerRaceOnceUnitOfWork(
+                inner.BeginUnitOfWork(access, options, unitIds, targetName),
+                this);
+
+        public StorageUnit Unit(string unitId, string? targetName = null) => inner.Unit(unitId, targetName);
+
+        public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null) =>
+            ((IGroundworkStorageCapabilitySource)inner).Capabilities(targetName);
+
+        private bool ShouldInjectRace() => Interlocked.Exchange(ref raceInjected, 1) == 0;
+
+        private sealed class MarkerRaceOnceUnitOfWork(
+            IUnitOfWork inner,
+            MarkerRaceOnceDocumentStore owner) : IUnitOfWork
+        {
+            public IStorageSession OpenSession(StorageUnit unit) => inner.OpenSession(unit);
+            public void Stage(RowWrite write) => inner.Stage(write);
+
+            public BatchWriteSummary Commit() => inner.Commit();
+
+            public BatchWriteReport CommitWithOutcomes()
+            {
+                if (owner.ShouldInjectRace())
+                    throw new GroundworkDesignOperationMarkerRaceException();
+                return inner.CommitWithOutcomes();
+            }
+
+            public ValueTask<BatchWriteReport> CommitWithOutcomesAsync(CancellationToken cancellationToken = default) => inner.CommitWithOutcomesAsync(cancellationToken);
+            public ValueTask<BatchWriteSummary> CommitAsync(CancellationToken cancellationToken = default) => inner.CommitAsync(cancellationToken);
+            public void Rollback() => inner.Rollback();
+            public void Dispose() => inner.Dispose();
+        }
+    }
+
+    private sealed class RepeatingBeforeAttemptAtomicWriter(IDesignAtomicWriter inner) : IDesignAtomicWriter
+    {
+        public int BeforeAttemptCalls { get; private set; }
+
+        public Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(
+            DesignOperationKey operationKey,
+            string operationKind,
+            object requestMaterial,
+            IReadOnlyCollection<string> mutatedUnits,
+            Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage,
+            Func<CancellationToken, Task>? beforeAttempt = null,
+            CancellationToken cancellationToken = default,
+            IDesignAtomicWriteResultCodec<T>? resultCodec = null)
+        {
+            async Task Repeat(CancellationToken token)
+            {
+                if (beforeAttempt is null)
+                    return;
+                BeforeAttemptCalls++;
+                await beforeAttempt(token);
+                BeforeAttemptCalls++;
+                await beforeAttempt(token);
+            }
+
+            return inner.ExecuteAsync(operationKey, operationKind, requestMaterial, mutatedUnits, stage, Repeat, cancellationToken, resultCodec);
         }
     }
 
@@ -1349,12 +1646,11 @@ public class GroundworkWorkflowDefinitionCommandTests
                 write.Mode != RowWriteMode.Delete)
             {
                 owner.VersionSaveWasRejected = true;
-                var id = write.Values?.Values[WorkflowsDesignStorageManifest.IdField]?.ToString()
-                         ?? throw new InvalidOperationException("Version write has no id.");
-                inner.Stage(RowWrite.Delete(
-                    write.Unit,
-                    GroundworkDesignStorage.Key(id),
-                    WriteOptions.IfVersion(1)));
+                // Stage the same CreateOnly version twice. The provider reports the second
+                // version-unit write as a modeled uniqueness/CAS conflict, while preserving
+                // the real version write shape for the command's classifier.
+                inner.Stage(write);
+                inner.Stage(RowWrite.ConditionalUpsert(write.Unit, write.Values!, WriteOptions.IfVersion(long.MaxValue)));
                 return;
             }
             inner.Stage(write);

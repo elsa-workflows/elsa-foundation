@@ -87,11 +87,11 @@ public sealed class GroundworkAddWorkflowDefinitionVersionCommand(
                 // cross-tenant case: it says nothing about whether the id exists elsewhere.
                 var definition = await definitionStore.GetAsync(definitionId, token);
                 accessContextAccessor.Current.EnsureTenantScope(definition.TenantId);
-                var lastVersion = await versionStore.FindLatestVersionAsync(definitionId, token);
+                var lastVersion = await versionStore.FindLatestVersionAsync(definition.Id, token);
                 var nextVersion = WorkflowVersionNumbering.NextMajor(lastVersion?.Version);
                 var nextSortKey = SemVer.ToSortKey(nextVersion);
-                if (await versionStore.ExistsAsync(definitionId, nextSortKey, token))
-                    throw new WorkflowDefinitionVersionConflictException(definitionId, nextVersion);
+                if (await versionStore.ExistsAsync(definition.Id, nextSortKey, token))
+                    throw new WorkflowDefinitionVersionConflictException(definition.Id, nextVersion);
 
                 version = WorkflowDefinitionVersion.From(
                     versionFactory.Create(definition, nextVersion, state));

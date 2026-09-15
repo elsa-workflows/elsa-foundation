@@ -91,6 +91,16 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                 {
                     // Marker replay must win before source reads and locks: a successfully promoted
                     // draft may later be discarded while its authoritative version remains valid.
+                    if (definitionLock is not null)
+                    {
+                        await definitionLock.DisposeAsync();
+                        definitionLock = null;
+                    }
+                    if (draftLock is not null)
+                    {
+                        await draftLock.DisposeAsync();
+                        draftLock = null;
+                    }
                     draftLock = await lockProvider.AcquireLockAsync(draftLockKey, null, token);
                     var document = await documents.FindByIdAsync(draftId, token)
                                    ?? throw EntityNotFoundException.ForEntity(
@@ -175,15 +185,7 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
         {
             throw new WorkflowPromotionOperationConflictException(exception.Message, exception);
         }
-        catch (GroundworkDesignOperationRejectedException)
-        {
-            // A final version identity CreateOnly race is an observable version conflict,
-            // even when the public-v2 provider reports it as an unsuccessful batch outcome.
-            throw new WorkflowDefinitionVersionConflictException(
-                draftId,
-                normalizedRequestedVersion ?? "automatic");
-        }
-        catch (DesignPersistenceException exception) when (exception.InnerException is BatchWriteException)
+        catch (DesignPersistenceException exception) when (IsUniqueVersionViolation(exception))
         {
             throw new WorkflowDefinitionVersionConflictException(
                 draftId,
@@ -220,6 +222,24 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                 assessment.RequestedVersion ?? assessment.ResolvedVersion ?? "automatic");
 
         throw new WorkflowVersionSelectionException(issue.Code, issue.Message);
+    }
+
+    private static bool IsUniqueVersionViolation(DesignPersistenceException exception)
+    {
+        for (var current = (Exception?)exception; current is not null; current = current.InnerException)
+        {
+            if (current is BatchWriteException batch && batch.Outcomes.Any(outcome =>
+                    StringComparer.Ordinal.Equals(
+                        outcome.Write.Unit.Id.Value,
+                        WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind) &&
+                    (outcome.Outcome.Status is WriteOutcomeStatus.UniqueViolation
+                        or WriteOutcomeStatus.ConcurrencyConflict ||
+                     outcome.Outcome.Status == WriteOutcomeStatus.NotFound &&
+                     outcome.Write.Mode == RowWriteMode.ConditionalUpsert)))
+                return true;
+        }
+
+        return false;
     }
 
     private sealed record PromoteDraftRequestMaterial(

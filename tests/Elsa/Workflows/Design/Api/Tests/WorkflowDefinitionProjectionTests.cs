@@ -57,6 +57,19 @@ public sealed class WorkflowDefinitionProjectionTests
         Assert.InRange(fixture.TotalReadCount, 1, 3);
     }
 
+    [Fact]
+    public async Task Definition_list_rejects_duplicate_folded_identities_before_projection()
+    {
+        var projections = new ThrowingProjectionStore();
+        var endpoint = new Endpoint(new DuplicateDefinitionStore(), projections);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => endpoint.HandleAsync(
+            new ListDefinitions(null, null, null, null, null, "all"),
+            CancellationToken.None));
+
+        Assert.False(projections.Called);
+    }
+
     private static T RequiredProperty<T>(WorkflowDefinitionView view, string name) =>
         Property(view, name) is T value
             ? value
@@ -131,6 +144,31 @@ public sealed class WorkflowDefinitionProjectionTests
                 })
                 .ToArray();
             return Task.FromResult(projections);
+        }
+    }
+
+    private sealed class DuplicateDefinitionStore : IWorkflowDefinitionStore
+    {
+        public Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<WorkflowDefinition>>([
+                new WorkflowDefinition { Id = "Shared", TenantId = "tenant-a" },
+                new WorkflowDefinition { Id = "shared", TenantId = "tenant-b" }
+            ]);
+    }
+
+    private sealed class ThrowingProjectionStore : IWorkflowDefinitionListProjectionStore
+    {
+        public bool Called { get; private set; }
+
+        public Task<IReadOnlyList<WorkflowDefinitionListProjection>> ListByDefinitionIdsAsync(
+            IReadOnlyCollection<string> workflowDefinitionIds,
+            CancellationToken cancellationToken = default)
+        {
+            Called = true;
+            throw new Xunit.Sdk.XunitException("Projection lookup must not run for duplicate folded identities.");
         }
     }
 }

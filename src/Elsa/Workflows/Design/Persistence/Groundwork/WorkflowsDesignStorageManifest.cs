@@ -1,4 +1,5 @@
 using Groundwork.Kernel;
+using Elsa.Workflows.Design.Persistence.Core.Constants;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork;
 
@@ -17,13 +18,21 @@ public static class WorkflowsDesignStorageManifest
     // pre-GA baseline so Groundwork never attempts to add a required, non-canonical projection
     // column or retain the removed wide indexes in place.
     public const int DefinitionStorageSchemaVersion = 2;
-    public const int IdentityMaximumLength = 128;
-    public const int TextMaximumLength = 256;
+    // The version projection changed incompatibly when the portable definition lookup hash and
+    // its replacement indexes became required. Provision a clean pre-GA table rather than
+    // silently mutating schema v1 in place.
+    public const int VersionStorageSchemaVersion = 2;
+    // The draft projection changed incompatibly when the portable definition lookup hash and its
+    // replacement index became required. Provision a clean pre-GA table rather than silently
+    // mutating schema v1 in place.
+    public const int DraftStorageSchemaVersion = 2;
+    public const int IdentityMaximumLength = WorkflowDefinitionLimits.IdentityMaximumLength;
+    public const int TextMaximumLength = WorkflowDefinitionLimits.TextMaximumLength;
     public const int SchemaVersionMaximumLength = 32;
     // The provider-independent Unicode ordinal-ignore-case key uses six hexadecimal characters
     // plus a boundary marker per UTF-16 code unit. It is retained for substring matching, but is
     // deliberately not indexed: its maximum width is larger than the strict portable index cap.
-    public const int DefinitionIdSearchKeyMaximumLength = IdentityMaximumLength * 7;
+    public const int DefinitionIdSearchKeyMaximumLength = WorkflowDefinitionLimits.IdentitySearchKeyMaximumLength;
     public const int DefinitionIdLookupHashMaximumLength = 64;
     public const int DefinitionTextLookupHashMaximumLength = 64;
 
@@ -56,6 +65,7 @@ public static class WorkflowsDesignStorageManifest
 
     public const string VersionIdField = "versionId";
     public const string VersionDefinitionIdField = "definitionId";
+    public const string VersionDefinitionIdLookupHashField = "definitionIdLookupHash";
     public const string VersionField = "version";
     public const string ConcurrencyTokenField = "rowVersion";
     public const string VersionSemVerSortKeyField = "semVerSortKey";
@@ -63,6 +73,7 @@ public static class WorkflowsDesignStorageManifest
 
     public const string DraftIdField = "draftId";
     public const string DraftDefinitionIdField = "definitionId";
+    public const string DraftDefinitionIdLookupHashField = "definitionIdLookupHash";
     public const string DraftSourceVersionField = "sourceVersionId";
     public const string DraftLastModifiedAtField = "lastModifiedAt";
     public const string DraftCreatedAtField = "createdAt";
@@ -144,13 +155,14 @@ public static class WorkflowsDesignStorageManifest
             .Build() with { SchemaVersion = DefinitionStorageSchemaVersion };
 
     private static StorageUnit VersionUnit() =>
-        StorageUnit.Declare(WorkflowDefinitionVersionDocumentKind, "elsa_workflow_definition_versions")
+        StorageUnit.Declare(WorkflowDefinitionVersionDocumentKind, "elsa_workflow_definition_versions_v2")
             .String(IdField, IdentityMaximumLength, column => column.Required())
             .String(SchemaVersionField, SchemaVersionMaximumLength, column => column.Required())
             .Json(ContentField, column => column.Required())
             .String(TenantIdField, IdentityMaximumLength)
             .String(VersionIdField, IdentityMaximumLength, column => column.Required())
             .String(VersionDefinitionIdField, IdentityMaximumLength, column => column.Required())
+            .String(VersionDefinitionIdLookupHashField, DefinitionIdLookupHashMaximumLength, column => column.Required())
             .String(VersionField, IdentityMaximumLength, column => column.Required())
             .String(VersionSemVerSortKeyField, IdentityMaximumLength, column => column.Required())
             .String(VersionSourceDraftField, IdentityMaximumLength)
@@ -158,28 +170,29 @@ public static class WorkflowsDesignStorageManifest
             .Timestamp("lastModifiedAt", column => column.Required())
             .Key(IdField)
             .OptimisticConcurrency(ConcurrencyTokenField)
-            .UniqueIndex(VersionByDefinitionIndex, index => index.Ascending(VersionDefinitionIdField).Ascending(VersionSemVerSortKeyField).Ascending(VersionIdField))
-            .UniqueIndex(VersionByDefinitionAndSortKeyIndex, VersionDefinitionIdField, VersionSemVerSortKeyField)
-            .Index(LatestVersionByDefinitionIndex, index => index.Ascending(VersionDefinitionIdField).Descending(VersionSemVerSortKeyField).Descending(VersionIdField))
+            .UniqueIndex(VersionByDefinitionIndex, index => index.Ascending(VersionDefinitionIdLookupHashField).Ascending(VersionSemVerSortKeyField).Ascending(VersionIdField))
+            .UniqueIndex(VersionByDefinitionAndSortKeyIndex, VersionDefinitionIdLookupHashField, VersionSemVerSortKeyField)
+            .Index(LatestVersionByDefinitionIndex, index => index.Ascending(VersionDefinitionIdLookupHashField).Descending(VersionSemVerSortKeyField).Descending(VersionIdField))
             .Scoped()
-            .Build();
+            .Build() with { SchemaVersion = VersionStorageSchemaVersion };
 
     private static StorageUnit DraftUnit() =>
-        StorageUnit.Declare(WorkflowDefinitionDraftDocumentKind, "elsa_workflow_definition_drafts")
+        StorageUnit.Declare(WorkflowDefinitionDraftDocumentKind, "elsa_workflow_definition_drafts_v2")
             .String(IdField, IdentityMaximumLength, column => column.Required())
             .String(SchemaVersionField, SchemaVersionMaximumLength, column => column.Required())
             .Json(ContentField, column => column.Required())
             .String(TenantIdField, IdentityMaximumLength)
             .String(DraftIdField, IdentityMaximumLength, column => column.Required())
             .String(DraftDefinitionIdField, IdentityMaximumLength, column => column.Required())
+            .String(DraftDefinitionIdLookupHashField, DefinitionIdLookupHashMaximumLength, column => column.Required())
             .String(DraftSourceVersionField, IdentityMaximumLength)
             .Timestamp(DraftLastModifiedAtField, column => column.Required())
             .Timestamp(DraftCreatedAtField, column => column.Required())
             .Key(IdField)
             .OptimisticConcurrency(ConcurrencyTokenField)
-            .UniqueIndex(DraftByDefinitionIndex, index => index.Ascending(DraftDefinitionIdField).Descending(DraftLastModifiedAtField).Descending(DraftCreatedAtField).Descending(DraftIdField))
+            .UniqueIndex(DraftByDefinitionIndex, index => index.Ascending(DraftDefinitionIdLookupHashField).Descending(DraftLastModifiedAtField).Descending(DraftCreatedAtField).Descending(DraftIdField))
             .Scoped()
-            .Build();
+            .Build() with { SchemaVersion = DraftStorageSchemaVersion };
 
     private static StorageUnit LayoutUnit() =>
         StorageUnit.Declare(WorkflowDefinitionVersionLayoutDocumentKind, "elsa_workflow_definition_version_layouts")

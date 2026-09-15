@@ -5,10 +5,12 @@ using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
+using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Primitives.Entities;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Store;
@@ -76,7 +78,7 @@ public sealed class GroundworkDesignStorage(
     {
         if (IsCaseInsensitiveField(unitId, field) && value is string text)
         {
-            if (IsDefinitionIdField(field))
+            if (IsDefinitionUnit(unitId) && IsDefinitionIdField(field))
             {
                 var lookupColumn = DefinitionIdLookupHashColumn(unitId);
                 return new Predicate.Equal(
@@ -99,6 +101,11 @@ public sealed class GroundworkDesignStorage(
                 ]);
             }
 
+            if (IsDefinitionIdField(field))
+            {
+                var lookupColumn = DefinitionRelationshipLookupHashColumn(unitId);
+                return new Predicate.Equal(lookupColumn, QueryConstant.Of(lookupColumn, DefinitionIdLookupHash(text)));
+            }
             var searchColumn = SearchColumn(unitId, field);
             var policy = SearchPolicy(unitId, field);
             var lower = QueryConstant.Of(searchColumn, QuerySearchKeys.Encode(text, policy));
@@ -269,19 +276,139 @@ public sealed class GroundworkDesignStorage(
     }
 
     internal static bool SameDefinitionIdentity(string value, string other) =>
-        StringComparer.Ordinal.Equals(
-            QuerySearchKeys.Encode(value, QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase),
-            QuerySearchKeys.Encode(other, QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase));
+        WorkflowDefinitionIdentity.Equals(value, other);
+
+    internal static void EnsureDefinitionIdentity(string requestedId, string? actualId, string operation)
+    {
+        try
+        {
+            if (actualId is not null && WorkflowDefinitionIdentity.Equals(actualId, requestedId))
+                return;
+        }
+        catch (ArgumentException exception)
+        {
+            throw new GroundworkQueryReadinessException(
+                $"The {operation} returned a row with a corrupt workflow-definition identity: {exception.Message}");
+        }
+
+        throw new GroundworkQueryReadinessException(
+            $"The {operation} returned a row whose workflow-definition identity does not match the requested identity.");
+    }
+
+    internal static void EnsureDefinitionIdentityInSet(
+        IEnumerable<string> requestedIds,
+        string? actualId,
+        string operation)
+    {
+        try
+        {
+            if (actualId is not null && requestedIds.Any(requestedId => WorkflowDefinitionIdentity.Equals(actualId, requestedId)))
+                return;
+        }
+        catch (ArgumentException exception)
+        {
+            throw new GroundworkQueryReadinessException(
+                $"The {operation} returned a row with a corrupt workflow-definition identity: {exception.Message}");
+        }
+
+        throw new GroundworkQueryReadinessException(
+            $"The {operation} returned a row whose workflow-definition identity does not match the requested identities.");
+    }
+
+    /// <summary>
+    /// Verifies that the provider projections used to route a point read still describe the
+    /// authoritative entity retained in the payload. A projection is only a query accelerator;
+    /// accepting drift here would let a stale relationship route return or mutate another
+    /// aggregate. The check is deliberately exact and fails closed on missing or non-string values.
+    /// </summary>
+    internal static void EnsureProjectedIdentity<TEntity>(
+        GroundworkDesignEntry entry,
+        TEntity entity,
+        string operation,
+        bool requireCrossScopeProvenance = false)
+        where TEntity : Entity
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentNullException.ThrowIfNull(entity);
+
+        var values = entry.Entry.Values.Values;
+        EnsureProjectedString(values, WorkflowsDesignStorageManifest.IdField, entity.Id, operation);
+        switch (entity)
+        {
+            case WorkflowDefinitionVersion version:
+                EnsureProjectedString(values, WorkflowsDesignStorageManifest.VersionIdField, version.Id, operation);
+                EnsureProjectedString(values, WorkflowsDesignStorageManifest.VersionDefinitionIdField, version.DefinitionId, operation);
+                break;
+            case WorkflowDefinitionDraft draft:
+                EnsureProjectedString(values, WorkflowsDesignStorageManifest.DraftIdField, draft.Id, operation);
+                EnsureProjectedString(values, WorkflowsDesignStorageManifest.DraftDefinitionIdField, draft.WorkflowDefinitionId, operation);
+                break;
+            case WorkflowDefinitionVersionLayout layout:
+                EnsureProjectedString(values, WorkflowsDesignStorageManifest.LayoutVersionIdField, layout.WorkflowDefinitionVersionId, operation);
+                break;
+            default:
+                throw new GroundworkQueryReadinessException(
+                    $"The {operation} returned an undeclared workflow-design entity type '{typeof(TEntity).Name}'.");
+        }
+
+        var tenantId = (entity as TenantEntity)?.TenantId;
+        if (!TryProjectedString(values, WorkflowsDesignStorageManifest.TenantIdField, out var projectedTenantId) ||
+            !StringComparer.Ordinal.Equals(projectedTenantId, tenantId))
+        {
+            throw new GroundworkQueryReadinessException(
+                $"The {operation} returned a row whose tenant projection does not match its authoritative entity.");
+        }
+
+        // Normal scoped point reads do not return the physical scope in StoredEntry. In contrast,
+        // the privileged cross-scope query includes it, including null for a global provider row.
+        // A null physical scope must not silently authenticate tenant-owned authoritative content.
+        if ((requireCrossScopeProvenance || entry.Scope is not null) &&
+            !StringComparer.Ordinal.Equals(entry.Scope?.Value, tenantId))
+        {
+            throw new GroundworkQueryReadinessException(
+                $"The {operation} returned a row whose provider scope does not match its authoritative entity.");
+        }
+    }
+
+    private static void EnsureProjectedString(
+        IReadOnlyDictionary<string, object?> values,
+        string field,
+        string? expected,
+        string operation)
+    {
+        if (!TryProjectedString(values, field, out var actual) || !StringComparer.Ordinal.Equals(actual, expected))
+            throw new GroundworkQueryReadinessException(
+                $"The {operation} returned a row whose '{field}' projection does not match its authoritative entity.");
+    }
+
+    private static bool TryProjectedString(
+        IReadOnlyDictionary<string, object?> values,
+        string field,
+        out string? value)
+    {
+        if (!values.TryGetValue(field, out var raw))
+        {
+            value = null;
+            return false;
+        }
+
+        if (raw is null)
+        {
+            value = null;
+            return true;
+        }
+
+        value = raw as string;
+        return value is not null;
+    }
 
     private static void EnsureDefinitionIdentity(GroundworkDesignEntry entry, string requestedId)
     {
-        if (!entry.Entry.Values.Values.TryGetValue(WorkflowsDesignStorageManifest.DefinitionIdField, out var value) ||
-            value is not string actualId ||
-            !SameDefinitionIdentity(actualId, requestedId))
-        {
-            throw new GroundworkQueryReadinessException(
-                $"Workflow-definition point read for '{requestedId}' returned a row with a non-matching definition identity.");
-        }
+        var actualId = entry.Entry.Values.Values.TryGetValue(WorkflowsDesignStorageManifest.DefinitionIdField, out var value) &&
+                       value is string identity
+            ? identity
+            : null;
+        EnsureDefinitionIdentity(requestedId, actualId, "workflow-definition point read");
     }
 
     public IReadOnlyList<GroundworkDesignEntry> Query(
@@ -579,6 +706,7 @@ public sealed class GroundworkDesignStorage(
         switch (entity)
         {
             case WorkflowDefinition definition:
+                WorkflowDefinitionLimits.Validate(definition);
                 values[WorkflowsDesignStorageManifest.DefinitionIdField] = definition.Id;
                 values[WorkflowsDesignStorageManifest.DefinitionIdSearchKeyField] =
                     QuerySearchKeys.Encode(definition.Id, DefinitionIdSearchPolicy);
@@ -599,6 +727,8 @@ public sealed class GroundworkDesignStorage(
             case WorkflowDefinitionVersion version:
                 values[WorkflowsDesignStorageManifest.VersionIdField] = version.Id;
                 values[WorkflowsDesignStorageManifest.VersionDefinitionIdField] = version.DefinitionId;
+                values[WorkflowsDesignStorageManifest.VersionDefinitionIdLookupHashField] =
+                    DefinitionIdLookupHash(version.DefinitionId);
                 values[WorkflowsDesignStorageManifest.VersionField] = version.Version;
                 values[WorkflowsDesignStorageManifest.VersionSemVerSortKeyField] = version.SemVerSortKey;
                 values[WorkflowsDesignStorageManifest.VersionSourceDraftField] = version.SourceDraftId;
@@ -606,6 +736,8 @@ public sealed class GroundworkDesignStorage(
             case WorkflowDefinitionDraft draft:
                 values[WorkflowsDesignStorageManifest.DraftIdField] = draft.Id;
                 values[WorkflowsDesignStorageManifest.DraftDefinitionIdField] = draft.WorkflowDefinitionId;
+                values[WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField] =
+                    DefinitionIdLookupHash(draft.WorkflowDefinitionId);
                 values[WorkflowsDesignStorageManifest.DraftSourceVersionField] = draft.SourceVersionId;
                 values[WorkflowsDesignStorageManifest.DraftLastModifiedAtField] = draft.LastModifiedAt;
                 values[WorkflowsDesignStorageManifest.DraftCreatedAtField] = draft.CreatedAt;
@@ -885,10 +1017,17 @@ public sealed class GroundworkDesignStorage(
     }
 
     private static bool IsCaseInsensitiveField(string unitId, string name) =>
-        StringComparer.Ordinal.Equals(unitId, WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind) &&
+        (IsDefinitionUnit(unitId) ||
+         StringComparer.Ordinal.Equals(unitId, WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind) &&
+         StringComparer.Ordinal.Equals(name, WorkflowsDesignStorageManifest.VersionDefinitionIdField) ||
+         StringComparer.Ordinal.Equals(unitId, WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind) &&
+         StringComparer.Ordinal.Equals(name, WorkflowsDesignStorageManifest.DraftDefinitionIdField)) &&
         (IsDefinitionIdField(name) ||
          StringComparer.Ordinal.Equals(name, WorkflowsDesignStorageManifest.DefinitionNameField) ||
          StringComparer.Ordinal.Equals(name, WorkflowsDesignStorageManifest.DefinitionDescriptionField));
+
+    private static bool IsDefinitionUnit(string unitId) =>
+        StringComparer.Ordinal.Equals(unitId, WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
 
     private static bool IsDefinitionIdField(string name) =>
         StringComparer.Ordinal.Equals(name, WorkflowsDesignStorageManifest.IdField) ||
@@ -902,8 +1041,10 @@ public sealed class GroundworkDesignStorage(
     {
         var unit = Unit(unitId);
         var table = new TableId(unit.Name);
-        if (IsDefinitionIdField(field))
+        if (IsDefinitionUnit(unitId) && IsDefinitionIdField(field))
             return Column(unit, table, WorkflowsDesignStorageManifest.DefinitionIdSearchKeyField);
+        if (IsDefinitionIdField(field))
+            return Column(unit, table, SearchKeyProjection.ColumnName(field));
 
         var source = unit.Columns.Single(column => StringComparer.Ordinal.Equals(column.Name, field));
         return new ColumnRef(
@@ -911,12 +1052,17 @@ public sealed class GroundworkDesignStorage(
             SearchKeyProjection.ColumnName(field),
             QueryType.String,
             isNullable: source.IsNullable,
-            maxLength: source.MaxLength is int maxLength ? maxLength * 7 : null,
+            maxLength: source.MaxLength is int maxLength ? maxLength * WorkflowDefinitionLimits.SearchKeyExpansionFactor : null,
             stringComparison: QueryStringComparisonPolicy.Ordinal);
     }
 
     private ColumnRef DefinitionIdLookupHashColumn(string unitId) =>
         Column(unitId, WorkflowsDesignStorageManifest.DefinitionIdLookupHashField);
+
+    private ColumnRef DefinitionRelationshipLookupHashColumn(string unitId) =>
+        Column(unitId, StringComparer.Ordinal.Equals(unitId, WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind)
+            ? WorkflowsDesignStorageManifest.VersionDefinitionIdLookupHashField
+            : WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField);
 
     private ColumnRef DefinitionTextLookupHashColumn(string unitId, string field) =>
         Column(unitId, field switch

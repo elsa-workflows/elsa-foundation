@@ -1,9 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <ProjectReference Include="..\..\..\..\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\Core\Elsa.Workflows.Design.Core.csproj" />
     <ProjectReference Include="..\..\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
   </ItemGroup>
 
 </Project>

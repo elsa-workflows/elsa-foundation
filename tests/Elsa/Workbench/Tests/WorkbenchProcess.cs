@@ -1,7 +1,5 @@
 using System.Diagnostics;
-using System.Net;
 using System.Net.Http.Json;
-using System.Net.Sockets;
 using System.Text;
 
 namespace Elsa.Workbench.Tests;
@@ -27,13 +25,14 @@ public sealed class WorkbenchProcess : IAsyncDisposable
     private readonly Process _process;
     private readonly string _directory;
     private readonly StringBuilder _output = new();
+    private readonly TaskCompletionSource<Uri> _listeningAddress = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    private WorkbenchProcess(Process process, string directory, Uri baseAddress, string managementKey)
+    private WorkbenchProcess(Process process, string directory, string managementKey)
     {
         _process = process;
         _directory = directory;
-        Client = new HttpClient { BaseAddress = baseAddress };
-        ManagementClient = new HttpClient { BaseAddress = baseAddress };
+        Client = new HttpClient();
+        ManagementClient = new HttpClient();
         ManagementClient.DefaultRequestHeaders.Add(ManagementKeyHeader, managementKey);
     }
 
@@ -54,7 +53,9 @@ public sealed class WorkbenchProcess : IAsyncDisposable
             CopySourceFile($"appsettings.{shell.Environment}.json", directory);
         Directory.CreateDirectory(Path.Combine(directory, "packages"));
 
-        var baseAddress = new Uri($"http://127.0.0.1:{FreePort()}");
+        // Let Kestrel reserve its own ephemeral port. Selecting a "free" port with a temporary listener and
+        // releasing it before the child binds leaves a race with other parallel test processes.
+        const string requestedAddress = "http://127.0.0.1:0";
         var managementKey = Guid.NewGuid().ToString("n");
         var settings = new Dictionary<string, string>(shell.Settings)
         {
@@ -65,7 +66,7 @@ public sealed class WorkbenchProcess : IAsyncDisposable
 
         var startInfo = new ProcessStartInfo(
             Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet",
-            [WorkbenchBuild.AssemblyPath(), "--contentRoot", directory, "--urls", baseAddress.ToString()])
+            [WorkbenchBuild.AssemblyPath(), "--contentRoot", directory, "--urls", requestedAddress])
         {
             WorkingDirectory = directory,
             RedirectStandardOutput = true,
@@ -75,8 +76,11 @@ public sealed class WorkbenchProcess : IAsyncDisposable
         startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = shell.Environment;
         foreach (var (key, value) in settings)
             startInfo.Environment[key.Replace(":", "__", StringComparison.Ordinal)] = value;
+        // The child reports Kestrel's selected port through this lifetime message, even when a shell's settings
+        // suppress other informational logs.
+        startInfo.Environment["Logging__LogLevel__Microsoft.Hosting.Lifetime"] = "Information";
 
-        var workbench = new WorkbenchProcess(new Process { StartInfo = startInfo }, directory, baseAddress, managementKey);
+        var workbench = new WorkbenchProcess(new Process { StartInfo = startInfo }, directory, managementKey);
         try
         {
             await workbench.StartAndWaitUntilReadyAsync();
@@ -140,7 +144,13 @@ public sealed class WorkbenchProcess : IAsyncDisposable
             if (_process.HasExited)
                 throw Failure($"exited with code {_process.ExitCode} before the default shell was ready");
 
-            var readiness = await TryReadReadinessAsync();
+            if (Client.BaseAddress is null && _listeningAddress.Task.IsCompletedSuccessfully)
+            {
+                Client.BaseAddress = await _listeningAddress.Task;
+                ManagementClient.BaseAddress = Client.BaseAddress;
+            }
+
+            var readiness = Client.BaseAddress is null ? null : await TryReadReadinessAsync();
             if (readiness?.Status == "ready")
                 return;
             if (readiness?.Status == "failed")
@@ -198,17 +208,17 @@ public sealed class WorkbenchProcess : IAsyncDisposable
 
         lock (_output)
             _output.AppendLine(line);
+
+        const string marker = "Now listening on: ";
+        var index = line.IndexOf(marker, StringComparison.Ordinal);
+        if (index >= 0 &&
+            Uri.TryCreate(line[(index + marker.Length)..].Trim(), UriKind.Absolute, out var address) &&
+            address.Host == "127.0.0.1" && address.Port > 0)
+            _listeningAddress.TrySetResult(address);
     }
 
     private static void CopySourceFile(string fileName, string directory, string? targetName = null) =>
         File.Copy(WorkbenchBuild.SourceFile(fileName), Path.Combine(directory, targetName ?? fileName));
-
-    private static int FreePort()
-    {
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        return ((IPEndPoint)listener.LocalEndpoint).Port;
-    }
 
     private sealed record Readiness(string Status, string? Code);
 

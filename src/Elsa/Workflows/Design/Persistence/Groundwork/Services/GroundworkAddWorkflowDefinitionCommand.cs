@@ -1,13 +1,13 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
@@ -62,12 +62,13 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(
             ActivityPresentationRecord.NormalizeCollection(activityPresentation);
         accessContextAccessor.Current.EnsureTenantScope(workflowDefinition.TenantId);
         accessContextAccessor.Current.EnsureTenantScope(draft.TenantId);
-        if (!StringComparer.Ordinal.Equals(workflowDefinition.Id, draft.WorkflowDefinitionId))
+        if (!WorkflowDefinitionIdentity.Equals(workflowDefinition.Id, draft.WorkflowDefinitionId))
         {
             throw new ArgumentException(
                 "The first workflow draft must belong to the workflow definition being created.",
                 nameof(draft));
         }
+        draft.WorkflowDefinitionId = workflowDefinition.Id;
 
         var requestMaterial = new CreateRequestMaterial(
             workflowDefinition.Name,

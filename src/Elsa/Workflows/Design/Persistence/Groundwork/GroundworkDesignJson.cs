@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork;
 /// design entities (<c>WorkflowDefinitionVersion</c>, <c>WorkflowDefinitionDraft</c>,
 /// <c>WorkflowDefinitionVersionLayout</c>) require the <b>domain-projection</b> model recorded in the
 /// design-provider implementation plan — serialize the logical <c>State</c>/<c>Records</c> directly, exclude
-/// the EF shadow <c>*Source</c> strings and navigation properties — which a per-type
+/// the persistence-only <c>*Source</c> strings and navigation properties — which a per-type
 /// <see cref="System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver"/> modifier on these
 /// options will apply when those adapters are added.
 /// </para>

@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -56,9 +58,35 @@ public sealed class GroundworkWorkflowDefinitionDraftStoreTests
                 ],
                 query.Request.Order.Select(term => term.Column.Name));
             var predicate = Assert.IsType<Predicate.Equal>(query.Request.Where);
-            Assert.Equal(WorkflowsDesignStorageManifest.DraftDefinitionIdField, predicate.Column.Name);
-            Assert.Equal("def1", predicate.Value.Value);
+            Assert.Equal(WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField, predicate.Column.Name);
+            Assert.Equal(LookupHash("def1"), predicate.Value.Value);
         }
+    }
+
+    [Fact]
+    public async Task FindById_rejects_projected_tenant_drift()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        var draft = Draft("d1", "def1");
+        draft.TenantId = DesignGroundworkTestAccess.DefaultScopeValue;
+        var options = GroundworkDesignDocumentSerialization.Create(Payloads);
+        var values = GroundworkDesignStorage.Values(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+            draft,
+            options,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection)
+            .Values
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        values[WorkflowsDesignStorageManifest.TenantIdField] = "forged-tenant";
+        raw.InsertRaw(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+            new StorageValues(values));
+        var store = new GroundworkWorkflowDefinitionDraftStore(
+            new GroundworkDesignStorage(raw, DesignGroundworkTestAccess.DefaultAccessContextAccessor),
+            Payloads,
+            DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() => store.FindByIdAsync("d1"));
     }
 
     [Fact]
@@ -66,6 +94,33 @@ public sealed class GroundworkWorkflowDefinitionDraftStoreTests
     {
         var (store, raw) = Seeded((Draft("d1", "def1"), null, null));
         using (raw) Assert.Null(await store.FindByWorkflowDefinitionIdAsync("other"));
+    }
+
+    [Fact]
+    public async Task Relationship_hash_candidates_are_residual_validated_before_draft_reads()
+    {
+        using var raw = new DesignGroundworkTestPersistence { RecordQueries = true };
+        var draft = Draft("d1", "actual-definition");
+        var options = GroundworkDesignDocumentSerialization.Create(Payloads);
+        var values = GroundworkDesignStorage.Values(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+            draft,
+            options,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection);
+        var row = values.Values.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        row[WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField] = LookupHash("requested-definition");
+        raw.InsertRaw(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+            new StorageValues(row));
+        var store = new GroundworkWorkflowDefinitionDraftStore(
+            new GroundworkDesignStorage(raw, DesignGroundworkTestAccess.DefaultAccessContextAccessor),
+            Payloads,
+            DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            store.FindByWorkflowDefinitionIdAsync("requested-definition"));
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            store.ListByWorkflowDefinitionIdAsync("requested-definition"));
     }
 
     [Fact]
@@ -79,15 +134,15 @@ public sealed class GroundworkWorkflowDefinitionDraftStoreTests
             Assert.Equal(WorkflowsDesignStorageManifest.DraftByDefinitionIndex, query.IndexName);
             Assert.Equal(
                 [
-                    WorkflowsDesignStorageManifest.DraftDefinitionIdField,
+                    WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField,
                     WorkflowsDesignStorageManifest.DraftLastModifiedAtField,
                     WorkflowsDesignStorageManifest.DraftCreatedAtField,
                     WorkflowsDesignStorageManifest.DraftIdField
                 ],
                 query.Request.Order.Select(term => term.Column.Name));
             var predicate = Assert.IsType<Predicate.Equal>(query.Request.Where);
-            Assert.Equal(WorkflowsDesignStorageManifest.DraftDefinitionIdField, predicate.Column.Name);
-            Assert.Equal("def1", predicate.Value.Value);
+            Assert.Equal(WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField, predicate.Column.Name);
+            Assert.Equal(LookupHash("def1"), predicate.Value.Value);
         }
     }
 
@@ -149,7 +204,9 @@ public sealed class GroundworkWorkflowDefinitionDraftStoreTests
     [Fact]
     public void Stored_document_omits_persistence_artifacts()
     {
-        var (_, raw) = Seeded((Draft("d1", "def1"), null, null));
+        var draft = Draft("d1", "def1");
+        draft.WorkflowDefinitionIdLookupHash = "definition-lookup-hash";
+        var (_, raw) = Seeded((draft, null, null));
         using (raw)
         {
             var values = Assert.Single(raw.Snapshot(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind));
@@ -158,6 +215,10 @@ public sealed class GroundworkWorkflowDefinitionDraftStoreTests
             Assert.DoesNotContain("stateSource", json);
             Assert.DoesNotContain("rowNumber", json);
             Assert.DoesNotContain("workflowDefinition\"", json);
+            Assert.DoesNotContain("workflowDefinitionIdLookupHash", json);
         }
     }
+
+    private static string LookupHash(string value) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(QuerySearchKeys.Encode(value, QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase)))).ToLowerInvariant();
 }

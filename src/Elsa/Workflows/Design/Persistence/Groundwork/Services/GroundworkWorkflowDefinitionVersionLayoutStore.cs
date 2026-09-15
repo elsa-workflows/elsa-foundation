@@ -27,6 +27,12 @@ public sealed class GroundworkWorkflowDefinitionVersionLayoutStore(
             WorkflowsDesignStorageManifest.LayoutByVersionIndex,
             cancellationToken: cancellationToken);
         return Task.FromResult<WorkflowDefinitionVersionLayout?>(
-            rows.Select(row => storage.MapLayout(row, GroundworkDesignJson.Options)).FirstOrDefault());
+            rows.Select(row =>
+            {
+                var layout = storage.MapLayout(row, GroundworkDesignJson.Options);
+                accessContextAccessor.Current.EnsureTenantScope(layout.TenantId);
+                GroundworkDesignStorage.EnsureProjectedIdentity(row, layout, "workflow version-layout point read");
+                return layout;
+            }).FirstOrDefault());
     }
 }

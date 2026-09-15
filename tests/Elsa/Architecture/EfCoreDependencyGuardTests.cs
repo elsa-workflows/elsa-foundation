@@ -238,6 +238,25 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     [Fact]
+    public void Every_admitted_Workflows_Design_EF_project_resolves_only_its_reviewed_closure()
+    {
+        var offenders = Adr0073WorkflowsDesignEf.ExpectedEfPackagesByProject
+            .SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
+            {
+                var resolved = ReadProjectEfPackages(project.Key, configuration);
+                var unexpected = FindUnexpectedEfPackages(resolved, project.Value)
+                    .Select(package => $"{project.Key} ({configuration}) unexpectedly resolves {package}");
+                var missing = FindUnexpectedEfPackages(project.Value, resolved)
+                    .Select(package => $"{project.Key} ({configuration}) no longer resolves reviewed package {package}");
+                return unexpected.Concat(missing);
+            }))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        Assert.True(offenders.Length == 0, Report("drift from the reviewed Workflows Design EF closure", offenders));
+    }
+
+    [Fact]
     public void Workbench_package_allowlist_rejects_an_unreviewed_transitive_wrapper()
     {
         const string assets = """
@@ -473,7 +492,8 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0073RuntimePlacementEf.IsProjectPath(relativePath) ||
                     Adr0073RuntimeBookmarksEf.IsProjectPath(relativePath) ||
                     Adr0073DashboardRunHealthEf.IsProjectPath(relativePath) ||
-                    Adr0073PublishingSnapshotReviewEf.IsProjectPath(relativePath)));
+                    Adr0073PublishingSnapshotReviewEf.IsProjectPath(relativePath) ||
+                    Adr0073WorkflowsDesignEf.IsProjectPath(relativePath)));
         }
         return projects;
     }
@@ -615,6 +635,7 @@ public sealed class EfCoreDependencyGuardTests
                Adr0073RuntimeBookmarksEf.IsSurfacePath(relativePath) ||
                Adr0073DashboardRunHealthEf.IsSurfacePath(relativePath) ||
                Adr0073PublishingSnapshotReviewEf.IsSurfacePath(relativePath) ||
+               Adr0073WorkflowsDesignEf.IsSurfacePath(relativePath) ||
                OpenIddictPersistenceArchitectureTests.IsWorkbenchVendorEfSource(relativePath);
     }
 
@@ -1025,6 +1046,45 @@ public sealed class EfCoreDependencyGuardTests
                 ],
                 ["tests/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
+            };
+
+        public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
+
+        public static bool IsSurfacePath(string relativePath) =>
+            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
+
+        public static bool IsProjectPath(string relativePath) =>
+            ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
+
+        private static string[] CorePackages() =>
+        [
+            "Microsoft.EntityFrameworkCore",
+            "Microsoft.EntityFrameworkCore.Abstractions",
+            "Microsoft.EntityFrameworkCore.Analyzers",
+            "Microsoft.EntityFrameworkCore.Relational"
+        ];
+    }
+
+    /// <summary>
+    /// ADR 0073's Workflows Design repository-first admission for issue #1727 (W01-W05). The
+    /// production adapter is provider-neutral; SQLite belongs only to its focused behavioral test project.
+    /// </summary>
+    internal static class Adr0073WorkflowsDesignEf
+    {
+        public static readonly string[] SurfacePathPrefixes =
+        [
+            "src/Elsa/Workflows/Design/Persistence/EntityFrameworkCore/",
+            "tests/Elsa/Workflows/Design/Persistence/EntityFrameworkCore/"
+        ];
+
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["src/Elsa/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["tests/Elsa/Workflows/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
+                ["tests/Elsa/Workflows/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                [.. CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
             };
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
