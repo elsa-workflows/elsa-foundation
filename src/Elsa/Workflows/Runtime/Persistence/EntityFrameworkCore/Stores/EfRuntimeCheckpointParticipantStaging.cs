@@ -83,6 +83,61 @@ internal static class EfRuntimeCheckpointParticipantStaging
     }
 
     /// <summary>
+    /// Stages one durable-value state change inside the caller-owned transaction.
+    /// </summary>
+    /// <remarks>
+    /// The public durable-value store owns independent writes and therefore clears the tracker around them. A
+    /// checkpoint must retain all participants in one unit of work, so this seam deliberately only changes EF
+    /// tracking state. SaveChanges, transaction creation, and commit remain the caller's responsibility.
+    /// </remarks>
+    public static async ValueTask StageDurableValueAsync(
+        BookmarkStateDbContext context,
+        RuntimeStateChange<DurableValueState> change,
+        string scope,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(change);
+        ArgumentException.ThrowIfNullOrWhiteSpace(scope);
+        if (scope.Length > 256)
+            throw new ArgumentException("Runtime persistence scope cannot exceed 256 UTF-16 code units.", nameof(scope));
+        ArgumentNullException.ThrowIfNull(change.State);
+        EfRuntimeOperationalStoreSupport.ValidateIdentity(change.State.WorkflowExecutionId, nameof(change.State.WorkflowExecutionId));
+        EfRuntimeOperationalStoreSupport.ValidateIdentity(change.State.DurableValueId, nameof(change.State.DurableValueId));
+        if (!StringComparer.Ordinal.Equals(change.StateId, change.State.DurableValueId))
+            throw new InvalidOperationException("Durable value state change StateId must match its model identity.");
+        if (change.Operation is not (RuntimeStateChangeOperation.Upsert or RuntimeStateChangeOperation.Delete))
+            throw new InvalidOperationException($"The EF checkpoint writer can only project durable value '{RuntimeStateChangeOperation.Upsert}' or '{RuntimeStateChangeOperation.Delete}' changes.");
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (context.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("Durable value state must be staged inside a caller-owned EF transaction.");
+
+        var state = change.State;
+        var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, state.WorkflowExecutionId, state.DurableValueId);
+        // Load by the immutable physical identity first. Filtering on projected fields would turn a corrupt row
+        // into a false insert/miss instead of letting the authoritative content/projection validation fail closed.
+        var row = await context.DurableValueStates.SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+        if (row is null)
+        {
+            if (change.Operation == RuntimeStateChangeOperation.Upsert)
+                context.DurableValueStates.Add(EfDurableValueStateStore.ToEntity(state, scope, id, 1));
+
+            // Groundwork's conditional delete is idempotent for a missing row.
+            return;
+        }
+
+        _ = EfDurableValueStateStore.Read(row, scope, state.WorkflowExecutionId, state.DurableValueId);
+        if (change.Operation == RuntimeStateChangeOperation.Delete)
+        {
+            context.DurableValueStates.Remove(row);
+            return;
+        }
+
+        EfDurableValueStateStore.Copy(row, state, scope, checked(row.Revision + 1));
+    }
+
+    /// <summary>
     /// Consumes one claimed scheduler-work item inside the caller-owned transaction.
     /// </summary>
     /// <remarks>
