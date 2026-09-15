@@ -28,6 +28,7 @@ public abstract class BookmarkStateDbContext(DbContextOptions options) : DbConte
     public DbSet<IncidentStateEntity> IncidentStates => Set<IncidentStateEntity>();
     public DbSet<RuntimeCheckpointCommitEntity> RuntimeCheckpointCommits => Set<RuntimeCheckpointCommitEntity>();
     public DbSet<RuntimePostCommitOutboxEntity> RuntimePostCommitOutbox => Set<RuntimePostCommitOutboxEntity>();
+    public DbSet<WorkflowDispatchEntity> WorkflowDispatches => Set<WorkflowDispatchEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -52,6 +53,7 @@ public abstract class BookmarkStateDbContext(DbContextOptions options) : DbConte
         modelBuilder.ApplyConfiguration(new IncidentStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new RuntimeCheckpointCommitEntityConfiguration());
         modelBuilder.ApplyConfiguration(new RuntimePostCommitOutboxEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new WorkflowDispatchEntityConfiguration());
         ConfigureProvider(modelBuilder);
     }
 

@@ -12,10 +12,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>Opt-in EF Core post-commit outbox adapter (R20).</summary>
 /// <remarks>
-/// Pending persistence, delivery lookup, claims, and delivery completion are implemented against one relational
-/// row with provider-neutral projections. Dispatch projection and redrive remain explicitly unavailable until the
-/// R21 EF dispatch adapter can participate in the same context and transaction; this type is not registered as a
-/// runtime contract until that combined writer is complete.
+/// Pending persistence, delivery lookup, claims, delivery completion, and the R21 dispatch projection are implemented
+/// against the shared relational context. The adapter remains opt-in until the complete runtime checkpoint writer
+/// can compose every participant, but completion never hides a partial dispatch write behind Groundwork.
 /// </remarks>
 public sealed class EfRuntimePostCommitOutboxStore(
     BookmarkStateDbContext context,
@@ -242,12 +241,6 @@ public sealed class EfRuntimePostCommitOutboxStore(
     {
         ArgumentNullException.ThrowIfNull(completion);
         cancellationToken.ThrowIfCancellationRequested();
-        if (completion.WorkflowDispatch is not null || completion.FollowUpOutboxItem is not null)
-        {
-            throw new NotSupportedException(
-                "EF post-commit outbox atomic completion with dispatch or follow-up projection is unavailable until the R21 dispatch adapter is implemented.");
-        }
-
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
         var row = await LoadAsync(scope, completion.Claim.OutboxItemId, tracking: true, cancellationToken)
                    ?? throw NotFound(completion.Claim.OutboxItemId);
@@ -258,15 +251,93 @@ public sealed class EfRuntimePostCommitOutboxStore(
             completion.DeliveryResult);
         Copy(row, completed, scope, checked(row.Revision + 1));
 
+        WorkflowDispatchEntity? dispatchRow = null;
+        WorkflowDispatchRecord? winningDispatch = null;
+        var admissionWins = false;
+        RuntimePostCommitOutboxEntity? followUpRow = null;
+        if (completion.WorkflowDispatch is { } projectedDispatch)
+        {
+            dispatchRow = await context.WorkflowDispatches.SingleOrDefaultAsync(
+                candidate => candidate.Id == WorkflowDispatchEfSupport.RowId(scope, projectedDispatch.DispatchId) &&
+                             candidate.ScopeKey == EfRuntimeOperationalStoreSupport.Encode(scope) &&
+                             candidate.ScopeKeyHash == EfRuntimeOperationalStoreSupport.Hash(scope),
+                cancellationToken)
+                ?? throw new InvalidOperationException(
+                    $"Workflow dispatch '{projectedDispatch.DispatchId}' was not found in the atomic completion context.");
+            var existingDispatch = WorkflowDispatchEfSupport.ReadChecked(dispatchRow, scope, projectedDispatch.DispatchId);
+            accessContextAccessor.Current.EnsureTenantScope(existingDispatch.TenantId);
+
+            var childId = existingDispatch.ChildWorkflowExecutionId;
+            var childRow = await context.WorkflowExecutionStates.AsNoTracking().SingleOrDefaultAsync(
+                candidate => candidate.Id == EfWorkflowExecutionStateStore.CreateIdForAtomicParticipant(scope, childId) &&
+                             candidate.ScopeKey == EfRuntimeOperationalStoreSupport.Encode(scope) &&
+                             candidate.ScopeKeyHash == EfRuntimeOperationalStoreSupport.Hash(scope),
+                cancellationToken);
+            var childExecution = childRow is null
+                ? null
+                : EfWorkflowExecutionStateStore.ReadChecked(childRow, scope, childId);
+            winningDispatch = WorkflowDispatchLifecycle.ResolveSuccessfulChildDelivery(
+                existingDispatch,
+                childExecution,
+                completion.DeliveryResult.RecordedAt);
+            admissionWins = winningDispatch is not null;
+            if (admissionWins)
+            {
+                completed = RuntimePostCommitOutboxClaimTransitions.Complete(
+                    current,
+                    completion.Claim,
+                    new RuntimePostCommitOutboxDeliveryResult(
+                        completion.Claim.OutboxItemId,
+                        RuntimePostCommitOutboxStatus.Delivered,
+                        completion.DeliveryResult.RecordedAt));
+                Copy(row, completed, scope, checked(row.Revision));
+            }
+            else
+            {
+                WorkflowDispatchLifecycle.ValidateTransition(existingDispatch, projectedDispatch);
+                winningDispatch = projectedDispatch;
+            }
+
+            var selectedDispatch = winningDispatch ?? throw new InvalidOperationException("The dispatch projection did not produce a lifecycle record.");
+            if (!admissionWins &&
+                (completed.Status != RuntimePostCommitOutboxStatus.FailedFinal ||
+                 selectedDispatch.Status != WorkflowDispatchStatus.DispatchFailed))
+                throw new InvalidOperationException(
+                    "An atomic workflow-dispatch projection is valid only for a final outbox failure and DispatchFailed lifecycle state.");
+            if (!completion.Claim.Item.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId) ||
+                !StringComparer.Ordinal.Equals(dispatchId, selectedDispatch.DispatchId))
+                throw new InvalidOperationException(
+                    "The workflow-dispatch projection does not match the claimed child-start intent.");
+
+            WorkflowDispatchEfSupport.Copy(dispatchRow, selectedDispatch, scope, checked(dispatchRow.Revision + 1));
+        }
+
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
+            if (!admissionWins && completion.FollowUpOutboxItem is { } followUp)
+            {
+                if (StringComparer.Ordinal.Equals(followUp.OutboxItemId, completion.Claim.OutboxItemId))
+                    throw new InvalidOperationException("A post-commit follow-up cannot replace the claimed outbox item.");
+                followUpRow = await LoadAsync(scope, followUp.OutboxItemId, tracking: true, cancellationToken);
+                if (followUpRow is null)
+                {
+                    followUpRow = ToEntity(followUp, scope, RowId(scope, followUp.OutboxItemId), revision: 1);
+                    context.RuntimePostCommitOutbox.Add(followUpRow);
+                }
+                else
+                {
+                    var existingFollowUp = ReadChecked(followUpRow, scope, followUp.OutboxItemId);
+                    if (!ItemsEquivalent(existingFollowUp, followUp))
+                        throw DifferentPendingItem(followUp.OutboxItemId);
+                }
+            }
             await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException exception)
         {
-            await RollbackAndDetachAsync(transaction, row);
+            await RollbackAndDetachAsync(transaction, row, dispatchRow, followUpRow);
             var latest = await LoadAsync(scope, completion.Claim.OutboxItemId, tracking: false, cancellationToken);
             if (latest is not null)
             {
@@ -282,24 +353,70 @@ public sealed class EfRuntimePostCommitOutboxStore(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            await RollbackAndDetachAsync(transaction, row);
+            await RollbackAndDetachAsync(transaction, row, dispatchRow, followUpRow);
             var reconciled = await LoadAsync(scope, completion.Claim.OutboxItemId, tracking: false, cancellationToken);
-            if (reconciled is not null && ItemsEquivalent(
-                    ReadChecked(reconciled, scope, completion.Claim.OutboxItemId),
-                    completed))
-                return;
+            if (reconciled is not null && ItemsEquivalent(ReadChecked(reconciled, scope, completion.Claim.OutboxItemId), completed))
+            {
+                var dispatchReconciled = true;
+                if (winningDispatch is not null)
+                {
+                    var dispatchEntry = await context.WorkflowDispatches.AsNoTracking().SingleOrDefaultAsync(candidate =>
+                        candidate.Id == WorkflowDispatchEfSupport.RowId(scope, winningDispatch.DispatchId), cancellationToken);
+                    dispatchReconciled = dispatchEntry is not null &&
+                        WorkflowDispatchLifecycle.RecordsEqual(
+                            WorkflowDispatchEfSupport.ReadChecked(dispatchEntry, scope, winningDispatch.DispatchId),
+                            winningDispatch);
+                }
+                var followUpReconciled = completion.FollowUpOutboxItem is null ||
+                    await LoadAsync(scope, completion.FollowUpOutboxItem.OutboxItemId, tracking: false, cancellationToken) is { } followUpEntry &&
+                    ItemsEquivalent(ReadChecked(followUpEntry, scope, completion.FollowUpOutboxItem.OutboxItemId), completion.FollowUpOutboxItem);
+                if (dispatchReconciled && followUpReconciled)
+                    return;
+            }
             throw;
         }
     }
 
-    public ValueTask<WorkflowDispatchRedriveResult> RedriveAsync(
+    public async ValueTask<WorkflowDispatchRedriveResult> RedriveAsync(
         WorkflowDispatchRedriveRequest request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
-        throw new NotSupportedException(
-            "EF post-commit outbox redrive is unavailable until the R21 dispatch adapter can participate in the atomic transition.");
+        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
+        var dispatchRow = await context.WorkflowDispatches.SingleOrDefaultAsync(
+            candidate => candidate.Id == WorkflowDispatchEfSupport.RowId(scope, request.DispatchId) &&
+                         candidate.ScopeKey == EfRuntimeOperationalStoreSupport.Encode(scope) &&
+                         candidate.ScopeKeyHash == EfRuntimeOperationalStoreSupport.Hash(scope), cancellationToken);
+        var dispatch = dispatchRow is null ? null : WorkflowDispatchEfSupport.ReadChecked(dispatchRow, scope, request.DispatchId);
+        if (dispatch is not null)
+            accessContextAccessor.Current.EnsureTenantScope(dispatch.TenantId);
+        var deadLetterId = dispatch is null ? null : WorkflowDispatchLifecycle.ReadDeliveryDeadLetterId(dispatch);
+        var deadLetterRow = deadLetterId is null ? null : await LoadAsync(scope, deadLetterId, tracking: true, cancellationToken);
+        var deadLetter = deadLetterRow is null ? null : ReadChecked(deadLetterRow, scope, deadLetterId);
+        var transition = WorkflowDispatchRedriveTransitions.Evaluate(request, dispatch, deadLetter);
+        if (!transition.HasMutation)
+            return transition.Result;
+
+        WorkflowDispatchEfSupport.Copy(dispatchRow!, transition.WorkflowDispatch!, scope, checked(dispatchRow!.Revision + 1));
+        Copy(deadLetterRow!, transition.OutboxItem!, scope, checked(deadLetterRow!.Revision + 1));
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return transition.Result;
+        }
+        catch (DbUpdateConcurrencyException exception)
+        {
+            await RollbackAndDetachAsync(transaction, dispatchRow, deadLetterRow);
+            throw new InvalidOperationException($"Workflow dispatch '{request.DispatchId}' changed concurrently; retry redrive.", exception);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await RollbackAndDetachAsync(transaction, dispatchRow, deadLetterRow);
+            throw;
+        }
     }
 
     private async ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> QueryCandidatesAsync(
@@ -361,7 +478,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
             : await query.AsNoTracking().SingleOrDefaultAsync(cancellationToken);
     }
 
-    private static RuntimePostCommitOutboxEntity ToEntity(
+    internal static RuntimePostCommitOutboxEntity ToEntity(
         RuntimePostCommitOutboxItem item,
         string scope,
         string id,
@@ -388,7 +505,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
         Revision = revision
     };
 
-    private static void Copy(
+    internal static void Copy(
         RuntimePostCommitOutboxEntity row,
         RuntimePostCommitOutboxItem item,
         string scope,
@@ -415,7 +532,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
         row.Revision = revision;
     }
 
-    private static RuntimePostCommitOutboxItem ReadChecked(
+    internal static RuntimePostCommitOutboxItem ReadChecked(
         RuntimePostCommitOutboxEntity row,
         string scope,
         string? expectedOutboxItemId = null)
@@ -509,12 +626,12 @@ public sealed class EfRuntimePostCommitOutboxStore(
 
     private static long? Ticks(DateTimeOffset? value) => value?.UtcTicks;
 
-    private static string RowId(string scope, string outboxItemId) =>
+    internal static string RowId(string scope, string outboxItemId) =>
         EfRuntimeOperationalStoreSupport.CompositeId(
             scope,
             RuntimePostCommitOutboxIdentity.CreateProjectionValue(outboxItemId));
 
-    private static string OrderKey(string value)
+    internal static string OrderKey(string value)
     {
         var physical = RuntimePostCommitOutboxIdentity.CreateProjectionValue(value);
         var prefix = physical[..Math.Min(physical.Length, RuntimePostCommitOutboxEfModule.PhysicalIdentityOrderPrefixMaximumLength)];
@@ -531,7 +648,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
         right.Status == RuntimePostCommitOutboxStatus.Pending &&
         ItemsEquivalent(left, right);
 
-    private static bool ItemsEquivalent(RuntimePostCommitOutboxItem left, RuntimePostCommitOutboxItem right) =>
+    internal static bool ItemsEquivalent(RuntimePostCommitOutboxItem left, RuntimePostCommitOutboxItem right) =>
         StringComparer.Ordinal.Equals(left.OutboxItemId, right.OutboxItemId) &&
         IntentsEquivalent(left.Intent, right.Intent) &&
         left.Status == right.Status &&
@@ -620,7 +737,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
 
     private async ValueTask RollbackAndDetachAsync(
         IDbContextTransaction transaction,
-        RuntimePostCommitOutboxEntity row)
+        params object?[] entities)
     {
         try
         {
@@ -632,7 +749,8 @@ public sealed class EfRuntimePostCommitOutboxStore(
         }
 
         await transaction.DisposeAsync();
-        context.Entry(row).State = EntityState.Detached;
+        foreach (var entity in entities.Where(entity => entity is not null))
+            context.Entry(entity!).State = EntityState.Detached;
     }
 
     private enum CandidateSelection

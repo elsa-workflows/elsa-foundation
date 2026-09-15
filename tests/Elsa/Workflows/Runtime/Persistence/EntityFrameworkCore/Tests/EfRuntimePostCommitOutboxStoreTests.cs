@@ -62,6 +62,32 @@ public sealed class EfRuntimePostCommitOutboxStoreTests
     }
 
     [Fact]
+    public async Task Equal_time_long_identity_order_is_bounded_deterministic_and_restart_stable()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var firstId = new string('x', 451) + "-first";
+        var secondId = new string('x', 451) + "-second";
+        string[] firstOrder;
+        await using (var context = database.Open("tenant-a"))
+        {
+            var store = new EfRuntimePostCommitOutboxStore(context, new FixedAccessor("tenant-a"));
+            await store.SavePendingAsync(PendingAt(firstId, Now, "workflow-a", "publish"));
+            await store.SavePendingAsync(PendingAt(secondId, Now, "workflow-a", "publish"));
+            firstOrder = (await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10)))
+                .Select(item => item.OutboxItemId).ToArray();
+        }
+
+        await using var restarted = database.Open("tenant-a");
+        var secondOrder = (await new EfRuntimePostCommitOutboxStore(restarted, new FixedAccessor("tenant-a"))
+                .GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10)))
+            .Select(item => item.OutboxItemId).ToArray();
+        Assert.Equal(2, firstOrder.Length);
+        Assert.Contains(firstId, firstOrder);
+        Assert.Contains(secondId, firstOrder);
+        Assert.Equal(firstOrder, secondOrder);
+    }
+
+    [Fact]
     public async Task Null_availability_is_immediately_eligible_and_exhausted_retry_is_not()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -211,14 +237,14 @@ public sealed class EfRuntimePostCommitOutboxStoreTests
     }
 
     [Fact]
-    public async Task Dispatch_redrive_is_explicitly_fail_closed_until_R21()
+    public async Task Dispatch_redrive_returns_not_found_without_a_dispatch()
     {
         await using var database = await TestDatabase.CreateAsync();
         await using var context = database.Open("tenant-a");
         var store = new EfRuntimePostCommitOutboxStore(context, new FixedAccessor("tenant-a"));
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => store.RedriveAsync(
-            new WorkflowDispatchRedriveRequest("dispatch", "request", Now)).AsTask());
+        var result = await store.RedriveAsync(new WorkflowDispatchRedriveRequest("dispatch", "request", Now));
+        Assert.Equal(WorkflowDispatchRedriveDisposition.NotFound, result.Disposition);
     }
 
     [Fact]

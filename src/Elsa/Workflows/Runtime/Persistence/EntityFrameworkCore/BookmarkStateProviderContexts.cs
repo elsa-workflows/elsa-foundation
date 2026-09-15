@@ -72,5 +72,14 @@ file static class BookmarkStateProviderModel
         modelBuilder.Entity<RuntimePostCommitOutboxEntity>().Property("OutboxItemId").HasColumnType(type);
         modelBuilder.Entity<RuntimePostCommitOutboxEntity>().Property("WorkflowExecutionId").HasColumnType(type);
         modelBuilder.Entity<RuntimePostCommitOutboxEntity>().Property("ContentJson").HasColumnType(type);
+        modelBuilder.Entity<WorkflowDispatchEntity>().Property("ScopeKey").HasColumnType(type);
+        modelBuilder.Entity<WorkflowDispatchEntity>().Property("DispatchId").HasColumnType(type);
+        modelBuilder.Entity<WorkflowDispatchEntity>().Property("ParentWorkflowExecutionId").HasColumnType(type);
+        modelBuilder.Entity<WorkflowDispatchEntity>().Property("ParentActivityExecutionId").HasColumnType(type);
+        modelBuilder.Entity<WorkflowDispatchEntity>().Property("ChildWorkflowExecutionId").HasColumnType(type);
+        modelBuilder.Entity<WorkflowDispatchEntity>().Property("ChildArtifactId").HasColumnType(type);
+        modelBuilder.Entity<WorkflowDispatchEntity>().Property("TestScopeId").HasColumnType(type);
+        modelBuilder.Entity<WorkflowDispatchEntity>().Property("TenantId").HasColumnType(type);
+        modelBuilder.Entity<WorkflowDispatchEntity>().Property("ContentJson").HasColumnType(type);
     }
 }

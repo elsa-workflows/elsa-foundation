@@ -278,6 +278,8 @@ public sealed class EfWorkflowExecutionStateStore(
         }
     }
 
+    internal static string CreateIdForAtomicParticipant(string scope, string id) => CreateId(scope, id);
+
     private static WorkflowExecutionState ReadCheckedCore(WorkflowExecutionStateEntity row, string scope, string expectedId)
     {
         if (row.SchemaVersion != RuntimeWorkflowExecutionEfModule.SchemaVersion || row.Id != CreateId(scope, expectedId) || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) || row.Revision <= 0)
