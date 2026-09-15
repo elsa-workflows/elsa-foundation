@@ -153,6 +153,23 @@ public sealed class EfIncidentAndAttentionTests
     }
 
     [Fact]
+    public async Task Attention_rejects_an_active_incident_hidden_by_a_resolved_status_projection()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Executions.SaveAsync(Execution("fault", "definition", WorkflowExecutionStatus.Faulted, Now, "tenant-a"));
+        await fixture.Incidents.TryAddAsync(Incident("incident", "fault", IncidentStatus.Open, Now));
+
+        var row = await fixture.Context.IncidentStates.SingleAsync();
+        row.Status = (int)IncidentStatus.Resolved;
+        await fixture.Context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Attention.QueryAsync(new(
+            new AttentionQueryContext(new ClaimsPrincipal(), "tenant-a"),
+            5)).AsTask());
+    }
+
+    [Fact]
     public async Task Attention_fails_closed_when_an_authorized_execution_tenant_projection_is_missing()
     {
         await using var database = await TestDatabase.CreateAsync();
