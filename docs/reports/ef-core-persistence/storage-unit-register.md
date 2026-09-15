@@ -100,33 +100,42 @@ Owner: Runtime program #1672 and proving slice #1676. Dependencies: S1-S4.
 
 ## Activities Design: 21 units
 
-Owner: Design/Publishing epic #1677; a worker-ready child is required before implementation.
+Owner: Design/Publishing epic #1677; Activities Design EF replacement tracked by issue #1731.
 Dependencies: S1-S3, plus stable Runtime contracts where publication or upgrade behavior crosses
-modules.
+modules. The implementation is opt-in and Groundwork remains the default backend.
+
+Evidence boundary: focused SQLite behavioral coverage, provider-neutral EF model creation, and live
+SQL Server, PostgreSQL, and MySQL smoke are available locally. The provider smoke currently passes
+6/6 with no skips, covering schema-required TenantKey, CRUD/query/transaction/concurrency, concurrent
+global uniqueness, scoped hashed identity, and keyset paging across the 256/500 batch boundaries. MySQL's
+binary collation does not order case variants like .NET ordinal, so exact cross-provider case-sort parity
+is not claimed. Groundwork-to-EF switching withdraws the Activities lane binding and all 21 unit
+declarations from a shared Groundwork catalog and restores them if the switch fails. This is local
+evidence and does not replace the later migration and default-flip gates.
 
 | ID | Groundwork unit / physical name | Domain contract or semantic role | Evidence | Blockers | Replacement PR | Default-flip PR | Deletion PR | Disposition |
 |---|---|---|---|---|---|---|---|---|
-| A01 | `activityDefinition` / `elsa_activity_definitions` | `IActivityDefinitionStore`; definition authority | E-DESIGN | S1-S3 | | | | Pending |
-| A02 | `activityDefinitionVersion` / `elsa_activity_definition_versions_v2` | `IActivityDefinitionVersionStore`; immutable versions | E-DESIGN | S1-S3 | | | | Pending |
-| A03 | `activityAvailabilitySettings` / `elsa_activity_availability_settings` | `IActivityAvailabilitySettingsStore` | E-DESIGN | S1-S3 | | | | Pending |
-| A04 | `activityDefinitionAuthoringState` / `elsa_activity_definition_authoring` | Authoring lifecycle state used by reusable-activity stores | E-DESIGN | S1-S3 | | | | Pending |
-| A05 | `activityDefinitionDraft` / `elsa_activity_definition_drafts` | Reusable-activity draft store and commands | E-DESIGN | S1-S3 | | | | Pending |
-| A06 | `activityDefinitionDraftLayout` / `elsa_activity_definition_draft_layouts` | Draft layout persistence | E-DESIGN | S1-S3 | | | | Pending |
-| A07 | `activityDraftValidation` / `elsa_activity_draft_validations` | Draft validation state | E-DESIGN | S1-S3 | | | | Pending |
-| A08 | `activityDefinitionVersionPublication` / `elsa_activity_version_publications` | Version publication state | E-PUBLISH | S1-S3; #1677 | | | | Pending |
-| A09 | `activityDefinitionVersionLayout` / `elsa_activity_version_layouts` | Published version layout | E-DESIGN | S1-S3 | | | | Pending |
-| A10 | `activityDependencyEdge` / `elsa_activity_dependency_edges` | Dependency edge authority | E-DESIGN | S1-S3 | | | | Pending |
-| A11 | `activityDependencyProjection` / `elsa_activity_dependency_projection` | Dependency projection and reconciliation | E-DESIGN | S1-S3 | | | | Pending |
-| A12 | `activityUpgradePlan` / `elsa_activity_upgrade_plans` | `IActivityUpgradePlanStore`; cross-design upgrade staging | E-PUBLISH | S1-S3 | | | | Pending |
-| A13 | `activityUpgradeApplyReceipt` / `elsa_activity_upgrade_apply_receipts` | Idempotent upgrade-apply receipt | E-PUBLISH | S1-S3 | | | | Pending |
-| A14 | `activityForkCandidate` / `elsa_activity_fork_candidates` | Fork candidate staging | E-DESIGN | S1-S3 | | | | Pending |
-| A15 | `activityForkReceipt` / `elsa_activity_fork_receipts` | Idempotent fork receipt | E-DESIGN | S1-S3 | | | | Pending |
-| A16 | `activityDefinitionManagementProjection` / `elsa_activity_management_definitions` | `IActivityDefinitionManagementProjectionStore` | E-DESIGN | S1-S3 | | | | Pending |
-| A17 | `activityDraftManagementProjection` / `elsa_activity_management_drafts` | Draft management projection | E-DESIGN | S1-S3 | | | | Pending |
-| A18 | `activityVersionManagementProjection` / `elsa_activity_management_versions` | Version management projection | E-DESIGN | S1-S3 | | | | Pending |
-| A19 | `activityManagementProjectionWatermark` / `elsa_activity_management_watermarks` | Projection high-water mark | E-CLAIM | S1-S3 | | | | Pending |
-| A20 | `activityManagementProjectionSnapshot` / `elsa_activity_management_snapshots` | Temporal projection snapshot | E-DESIGN | S1-S3 | | | | Pending |
-| A21 | `activityDesignOperation` / `elsa_activity_design_operations` | Idempotent design-operation ledger and atomic commands | E-CLAIM | S1-S3 | | | | Pending |
+| A01 | `activityDefinition` / `elsa_activity_definitions` | `IActivityDefinitionStore`; definition authority | E-DESIGN | S1-S3 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
+| A02 | `activityDefinitionVersion` / `elsa_activity_definition_versions_v2` | `IActivityDefinitionVersionStore`; immutable versions | E-DESIGN | S1-S3 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
+| A03 | `activityAvailabilitySettings` / `elsa_activity_availability_settings` | `IActivityAvailabilitySettingsStore` | E-DESIGN | S1-S3 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
+| A04 | `activityDefinitionAuthoringState` / `elsa_activity_definition_authoring` | Authoring lifecycle state used by reusable-activity stores | E-DESIGN | S1-S3 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
+| A05 | `activityDefinitionDraft` / `elsa_activity_definition_drafts` | Reusable-activity draft store and commands | E-DESIGN | S1-S3 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
+| A06 | `activityDefinitionDraftLayout` / `elsa_activity_definition_draft_layouts` | Draft layout persistence | E-DESIGN | S1-S3 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
+| A07 | `activityDraftValidation` / `elsa_activity_draft_validations` | Draft validation state | E-DESIGN | S1-S3 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
+| A08 | `activityDefinitionVersionPublication` / `elsa_activity_version_publications` | Version publication state | E-PUBLISH | S1-S3; #1677 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
+| A09 | `activityDefinitionVersionLayout` / `elsa_activity_version_layouts` | Published version layout | E-DESIGN | S1-S3 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
+| A10 | `activityDependencyEdge` / `elsa_activity_dependency_edges` | Dependency edge authority | E-DESIGN | S1-S3 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
+| A11 | `activityDependencyProjection` / `elsa_activity_dependency_projection` | Dependency projection and reconciliation | E-DESIGN | S1-S3 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
+| A12 | `activityUpgradePlan` / `elsa_activity_upgrade_plans` | `IActivityUpgradePlanStore`; cross-design upgrade staging | E-PUBLISH | S1-S3 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
+| A13 | `activityUpgradeApplyReceipt` / `elsa_activity_upgrade_apply_receipts` | Idempotent upgrade-apply receipt | E-PUBLISH | S1-S3 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
+| A14 | `activityForkCandidate` / `elsa_activity_fork_candidates` | Fork candidate staging | E-DESIGN | S1-S3 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
+| A15 | `activityForkReceipt` / `elsa_activity_fork_receipts` | Idempotent fork receipt | E-DESIGN | S1-S3 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
+| A16 | `activityDefinitionManagementProjection` / `elsa_activity_management_definitions` | `IActivityDefinitionManagementProjectionStore` | E-DESIGN | S1-S3 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
+| A17 | `activityDraftManagementProjection` / `elsa_activity_management_drafts` | Draft management projection | E-DESIGN | S1-S3 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
+| A18 | `activityVersionManagementProjection` / `elsa_activity_management_versions` | Version management projection | E-DESIGN | S1-S3 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
+| A19 | `activityManagementProjectionWatermark` / `elsa_activity_management_watermarks` | Projection high-water mark | E-CLAIM | S1-S3 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
+| A20 | `activityManagementProjectionSnapshot` / `elsa_activity_management_snapshots` | Temporal projection snapshot | E-DESIGN | S1-S3 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
+| A21 | `activityDesignOperation` / `elsa_activity_design_operations` | Idempotent design-operation ledger and atomic commands | E-CLAIM | S1-S3 | | | | Opt-in EF implementation tracked by issue #1731; focused SQLite and live 6/6 native-provider smoke; Groundwork remains default |
 
 ## Identity: 17 units
 

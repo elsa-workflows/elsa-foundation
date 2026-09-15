@@ -1,3 +1,5 @@
+using Elsa.Workflows.Runtime.Core.Contracts;
+
 namespace Elsa.Persistence.Groundwork.Targets;
 
 /// <summary>
@@ -10,7 +12,7 @@ namespace Elsa.Persistence.Groundwork.Targets;
 /// as it did before targets existed.
 /// </para>
 /// </summary>
-public sealed class GroundworkManifestBindings
+public sealed class GroundworkManifestBindings : IRuntimePersistenceRegistrationState
 {
     private readonly Lock gate = new();
     private readonly Dictionary<Type, string> bindings = [];
@@ -83,6 +85,17 @@ public sealed class GroundworkManifestBindings
             return bindings.GetValueOrDefault(manifestSourceType, GroundworkTargetNames.Default);
     }
 
+    /// <summary>Withdraws the binding of a lane whose persistence moved to another backend.</summary>
+    public void Unbind(Type manifestSourceType)
+    {
+        ArgumentNullException.ThrowIfNull(manifestSourceType);
+        lock (gate)
+        {
+            bindings.Remove(manifestSourceType);
+            explicitBindings.Remove(manifestSourceType);
+        }
+    }
+
     /// <summary>The distinct targets that own at least one bound manifest source, in ordinal order.</summary>
     public IReadOnlyList<string> BoundTargets
     {
@@ -98,6 +111,16 @@ public sealed class GroundworkManifestBindings
     {
         lock (gate)
             return new GroundworkManifestBindingsSnapshot(bindings.ToArray(), explicitBindings.ToHashSet());
+    }
+
+    IRuntimePersistenceRegistrationSnapshot IRuntimePersistenceRegistrationState.CaptureSnapshot() =>
+        new RegistrationSnapshot(this, Capture());
+
+    private sealed class RegistrationSnapshot(
+        GroundworkManifestBindings bindings,
+        GroundworkManifestBindingsSnapshot snapshot) : IRuntimePersistenceRegistrationSnapshot
+    {
+        public void Rollback() => bindings.Restore(snapshot);
     }
 
     /// <summary>Restores a state captured before a composite registration began.</summary>

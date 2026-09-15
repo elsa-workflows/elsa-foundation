@@ -9,6 +9,9 @@ namespace Elsa.Activities.Design.Persistence.Core.Entities;
 /// </summary>
 public sealed class ActivityDefinitionAuthoringState : TenantEntity
 {
+    /// <summary>Non-null provider-safe scope discriminator for tenant-aware uniqueness.</summary>
+    public string TenantScopeKey { get; set; } = null!;
+
     public string DefinitionId { get; init; } = null!;
 
     public ActivityContentAuthority ContentAuthority { get; init; } = null!;

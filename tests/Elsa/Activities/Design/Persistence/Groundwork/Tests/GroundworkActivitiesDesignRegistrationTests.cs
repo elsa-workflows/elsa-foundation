@@ -128,25 +128,57 @@ public sealed class GroundworkActivitiesDesignRegistrationTests
     }
 
     [Fact]
-    public void Groundwork_registration_overrides_a_prior_store()
+    public void Groundwork_registration_refuses_a_prior_store_without_mutation()
     {
         var services = new ServiceCollection();
         services.AddScoped<IActivityDefinitionStore, PriorStore>();
-        services.AddGroundworkActivitiesDesignStores();
+        var before = services.ToArray();
 
-        AssertImplementation<IActivityDefinitionStore, GroundworkActivityDefinitionStore>(services);
-        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IActivityDefinitionStore));
+        var error = Assert.Throws<InvalidOperationException>(() => services.AddGroundworkActivitiesDesignStores());
+
+        Assert.Contains("already has a persistence contract", error.Message, StringComparison.Ordinal);
+        Assert.Equal(before, services);
     }
 
     [Fact]
     public void Groundwork_registration_preserves_a_prior_design_atomic_writer()
     {
+        Assert.True(typeof(IDesignAtomicWriter).IsDefined(typeof(ActivityDesignPersistenceReplacementContractAttribute), inherit: false));
         var services = new ServiceCollection();
         services.AddScoped<IDesignAtomicWriter, PriorDesignAtomicWriter>();
         services.AddGroundworkActivitiesDesignStores();
 
         var descriptor = Assert.Single(services, candidate => candidate.ServiceType == typeof(IDesignAtomicWriter));
         Assert.Equal(typeof(PriorDesignAtomicWriter), descriptor.ImplementationType);
+    }
+
+    [Fact]
+    public void Groundwork_registration_rejects_duplicate_or_other_backend_atomic_writers_before_mutation()
+    {
+        var duplicate = new ServiceCollection();
+        duplicate.AddScoped<IDesignAtomicWriter, PriorDesignAtomicWriter>();
+        duplicate.AddScoped<IDesignAtomicWriter, PriorDesignAtomicWriter>();
+        var duplicateCount = duplicate.Count;
+        Assert.Throws<InvalidOperationException>(() => duplicate.AddGroundworkActivitiesDesignStores());
+        Assert.Equal(duplicateCount, duplicate.Count);
+
+        var otherBackend = new ServiceCollection();
+        otherBackend.AddSingleton<OtherAtomicWriterContract, OtherAtomicWriter>();
+        var otherBackendCount = otherBackend.Count;
+        Assert.Throws<InvalidOperationException>(() => otherBackend.AddGroundworkActivitiesDesignStores());
+        Assert.Equal(otherBackendCount, otherBackend.Count);
+    }
+
+    [Fact]
+    public void Groundwork_registration_ignores_an_unrelated_same_named_contract()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<UnrelatedAtomicWriterTypes.IDesignAtomicWriter, UnrelatedAtomicWriterTypes.AtomicWriter>();
+
+        services.AddGroundworkActivitiesDesignStores();
+
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(UnrelatedAtomicWriterTypes.IDesignAtomicWriter));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IDesignAtomicWriter));
     }
 
     [Fact]
@@ -265,5 +297,25 @@ public sealed class GroundworkActivitiesDesignRegistrationTests
             Func<CancellationToken, Task>? beforeAttempt,
             Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    [ActivityDesignPersistenceReplacementContract]
+    private interface OtherAtomicWriterContract
+    {
+    }
+
+    private sealed class OtherAtomicWriter : OtherAtomicWriterContract
+    {
+    }
+
+    private static class UnrelatedAtomicWriterTypes
+    {
+        public interface IDesignAtomicWriter
+        {
+        }
+
+        public sealed class AtomicWriter : IDesignAtomicWriter
+        {
+        }
     }
 }

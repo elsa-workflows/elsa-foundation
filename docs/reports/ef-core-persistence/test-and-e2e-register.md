@@ -3,7 +3,7 @@
 Status: active completion evidence for [#1671](https://github.com/elsa-workflows/elsa-foundation/issues/1671).
 
 Snapshot: `main` at `7a952efcf8d53472d7d4e7e3fd7b51d7a808c1c8` (2026-09-12).
-This register covers 61 relevant test/evidence projects (51 snapshot projects plus two merged
+This register covers 63 relevant test/evidence projects (51 snapshot projects plus the Activities Design EF behavioral and native-provider projects, two merged
 Studio Preferences EF projects, two Structured Logs EF projects delivered by #1696, and two
 OpenTelemetry EF projects delivered by #1701, plus the two Identity EF behavioral/provider projects and the
 ASP.NET Identity EF adapter project being implemented under #1712): the original 36 Groundwork/Mongo-named
@@ -39,6 +39,8 @@ default-flip owner explicit without repeating the same text 51 times.
 | T02 | `tests/Elsa/Activities/Design/Persistence/Groundwork/Tests/Elsa.Activities.Design.Persistence.Groundwork.Tests.csproj` | #1677 child | Activity definition/version/draft/availability/upgrade CRUD, registration and manifest | SQLite; port to EF | | |
 | T03 | `tests/Elsa/Activities/Design/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Activities.Design.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj` | #1677 child | Activities Design provider contract matrix | Relational + retire Mongo; add MySQL | | |
 | T04 | `tests/Elsa/Activities/Design/Persistence/Groundwork/V2/Tests/Elsa.Activities.Design.Persistence.Groundwork.V2.Tests.csproj` | #1677 child | Atomicity and concurrency | SQLite; port to EF | | |
+| T67 | `tests/Elsa/Activities/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.Tests.csproj` | #1731 | EF Activities Design model creation, SQLite round-trip, tenant isolation, atomicity, projections, lifecycle, draft/layout, fork receipt, and immutable identity evidence | SQLite and provider-neutral model validation; 71 focused tests pass at this candidate head | #1731 | |
+| T68 | `tests/Elsa/Activities/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj` | #1731 | Live SQL Server, PostgreSQL, and MySQL model creation, CRUD/query, rollback, optimistic concurrency, required TenantKey, and concurrent global uniqueness | SQL Server/PostgreSQL/MySQL native smoke currently passes 3/3 locally; Docker-skippable and not a hosted migration/default-flip gate | #1731 | |
 | T05 | `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests.csproj` | #1681 | Trace/log/metric round-trip, filtering, retention, HTTP boundary and session disposal | Relational + retire Mongo; add MySQL | | |
 | T06 | `tests/Elsa/Diagnostics/Persistence/Groundwork/Tests/Elsa.Diagnostics.Persistence.Groundwork.Tests.csproj` | #1681 | Diagnostics umbrella feature composition | Rebind to EF | | |
 | T07 | `tests/Elsa/Diagnostics/Persistence/Groundwork/V2/Consumer/Elsa.Diagnostics.Persistence.Groundwork.V2.Consumer.csproj` | #1681 | Consumer build/launch boundary | Rewire to EF or explicitly retire when no consumer boundary remains | | |

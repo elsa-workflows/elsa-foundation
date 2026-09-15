@@ -7,13 +7,14 @@ Records direct project-reference signals only. A signal is a review prompt, not 
 ## Summary
 
 - Runtime-to-design direct reference signals: 0
-- Design-to-runtime direct reference signals: 10
-- Projects directly referencing both design and runtime projects: 19
+- Design-to-runtime direct reference signals: 11
+- Projects directly referencing both design and runtime projects: 20
 
 ## Direct Design/Runtime Signals
 
 | Signal | From | To | Review note |
 |---|---|---|---|
+| design-to-runtime | [Elsa.Activities.Design.Persistence.EntityFrameworkCore](../../src/Elsa/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj) | [Elsa.Workflows.Runtime.Core](../../src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj) | expected in some design/read/publish paths; review context |
 | design-to-runtime | [Elsa.Activities.Design.Persistence.Groundwork](../../src/Elsa/Activities/Design/Persistence/Groundwork/Elsa.Activities.Design.Persistence.Groundwork.csproj) | [Elsa.Workflows.Runtime.Core](../../src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj) | expected in some design/read/publish paths; review context |
 | design-to-runtime | [Elsa.Activities.Design.Reconciliation](../../src/Elsa/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation.csproj) | [Elsa.Workflows.Runtime.Core](../../src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj) | expected in some design/read/publish paths; review context |
 | design-to-runtime | [Elsa.Activities.Design.Reconciliation.Clr](../../src/Elsa/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj) | [Elsa.Activities.Runtime.Core](../../src/Elsa/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj) | expected in some design/read/publish paths; review context |
@@ -31,6 +32,7 @@ Records direct project-reference signals only. A signal is a review prompt, not 
 |---|---|---|
 | [Elsa.Activities.Bpmn](../../src/Elsa/Activities/Bpmn/Elsa.Activities.Bpmn.csproj) | Elsa.Workflows.Design.Core | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.ControlFlow](../../src/Elsa/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj) | Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Validations.Core | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Activities.Design.Persistence.EntityFrameworkCore](../../src/Elsa/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj) | Elsa.Activities.Design.Persistence.Core | Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Design.Persistence.Groundwork](../../src/Elsa/Activities/Design/Persistence/Groundwork/Elsa.Activities.Design.Persistence.Groundwork.csproj) | Elsa.Activities.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.Core | Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Design.Reconciliation](../../src/Elsa/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation.csproj) | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.Core | Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Design.Reconciliation.Clr](../../src/Elsa/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj) | Elsa.Activities.Design.Core | Elsa.Activities.Runtime.Core |

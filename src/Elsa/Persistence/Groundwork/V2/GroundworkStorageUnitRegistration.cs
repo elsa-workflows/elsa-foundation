@@ -25,6 +25,23 @@ public static class GroundworkStorageUnitServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// Withdraws the target binding of <typeparamref name="TLane"/> before the service provider is built,
+    /// for a lane whose persistence moved to another backend. Other lanes' bindings are untouched.
+    /// </summary>
+    public static IServiceCollection RemoveGroundworkStorageLane<TLane>(this IServiceCollection services)
+        where TLane : class, IGroundworkStorageLane
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services
+            .Where(descriptor => descriptor.ServiceType == typeof(GroundworkManifestBindings))
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<GroundworkManifestBindings>()
+            .FirstOrDefault()
+            ?.Unbind(typeof(TLane));
+        return services;
+    }
+
     /// <summary>Gets the host's lane bindings, registering them on first use.</summary>
     public static GroundworkManifestBindings FindOrAddManifestBindings(IServiceCollection services)
     {

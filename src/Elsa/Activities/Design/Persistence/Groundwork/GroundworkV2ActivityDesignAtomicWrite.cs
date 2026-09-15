@@ -1,12 +1,17 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork;
 
-/// <summary>Public-v2 atomic writer for activity-design operations and their replay marker.</summary>
+/// <summary>
+/// Replacement contract for the Groundwork Activities Design atomic-operation boundary. A host
+/// may register one custom implementation before composing the Groundwork backend.
+/// </summary>
+[ActivityDesignPersistenceReplacementContract]
 public interface IDesignAtomicWriter
 {
     Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(

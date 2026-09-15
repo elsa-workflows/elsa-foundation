@@ -6,9 +6,9 @@ Records direct project references only.
 
 ## Summary
 
-- Source projects: 139
-- Test projects: 124
-- Direct project references: 1270
+- Source projects: 140
+- Test projects: 126
+- Direct project references: 1276
 
 ## Projects
 
@@ -22,6 +22,7 @@ Records direct project references only.
 | [Elsa.Activities.Design.Api](../../src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj) | source | Elsa.Activities | - | default | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Api.AspNetCore<br>Elsa.Api.Capabilities<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Mediator.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Persistence.Core |
 | [Elsa.Activities.Design.Core](../../src/Elsa/Activities/Design/Core/Elsa.Activities.Design.Core.csproj) | source | Elsa.Activities | - | default | Elsa.Events.Core<br>Elsa.Primitives |
 | [Elsa.Activities.Design.Persistence.Core](../../src/Elsa/Activities/Design/Persistence/Core/Elsa.Activities.Design.Persistence.Core.csproj) | source | Elsa.Activities | - | default | Elsa.Activities.Design.Core<br>Elsa.Primitives<br>Elsa.Workflows.Design.Persistence.Core |
+| [Elsa.Activities.Design.Persistence.EntityFrameworkCore](../../src/Elsa/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj) | source | Elsa.Activities | - | default | Elsa.Activities.Design.Persistence.Core<br>Elsa.Persistence.EntityFramework<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Design.Persistence.Groundwork](../../src/Elsa/Activities/Design/Persistence/Groundwork/Elsa.Activities.Design.Persistence.Groundwork.csproj) | source | Elsa.Activities | - | default | Elsa.Activities.Design.Persistence.Core<br>Elsa.Locking.Core<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Design.Reconciliation.Clr](../../src/Elsa/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj) | source | Elsa.Activities | - | default | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core |
 | [Elsa.Activities.Design.Reconciliation](../../src/Elsa/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation.csproj) | source | Elsa.Activities | - | default | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Runtime.Core |
@@ -158,6 +159,8 @@ Records direct project references only.
 | [Elsa.Activities.Bpmn.Tests](../../tests/Elsa/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj) | test | Elsa.Activities | - | default | Elsa.Activities.Bpmn<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Scheduling<br>Elsa.Activities.Testing<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Scheduling |
 | [Elsa.Activities.ControlFlow.Tests](../../tests/Elsa/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj) | test | Elsa.Activities | - | default | Elsa.Activities.ControlFlow<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Sequence<br>Elsa.Activities.Testing<br>Elsa.Events<br>Elsa.Expressions<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Jint<br>Elsa.Serialization.Core<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.JavaScript |
 | [Elsa.Activities.Design.Api.Tests](../../tests/Elsa/Activities/Design/Api/Tests/Elsa.Activities.Design.Api.Tests.csproj) | test | Elsa.Activities | - | default | Elsa.Activities.Design.Api<br>Elsa.Testing |
+| [Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests](../../tests/Elsa/Activities/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Design.Persistence.EntityFrameworkCore |
+| [Elsa.Activities.Design.Persistence.EntityFrameworkCore.Tests](../../tests/Elsa/Activities/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Activities | - | default | Elsa.Activities.Design.Persistence.EntityFrameworkCore<br>Elsa.Activities.Design.Persistence.Groundwork |
 | [Elsa.Activities.Design.Persistence.Groundwork.TemporalProjectionTests](../../tests/Elsa/Activities/Design/Persistence/Groundwork/TemporalProjectionTests/Elsa.Activities.Design.Persistence.Groundwork.TemporalProjectionTests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Design.Persistence.Groundwork |
 | [Elsa.Activities.Design.Persistence.Groundwork.Tests](../../tests/Elsa/Activities/Design/Persistence/Groundwork/Tests/Elsa.Activities.Design.Persistence.Groundwork.Tests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Persistence.Core |
 | [Elsa.Activities.Design.Persistence.Groundwork.V2.ProviderMatrix.Tests](../../tests/Elsa/Activities/Design/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Activities.Design.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing |
@@ -282,7 +285,7 @@ Records direct project references only.
 
 | Domain | Source projects | Test projects |
 |---|---:|---:|
-| Elsa.Activities | 22 | 21 |
+| Elsa.Activities | 23 | 23 |
 | Elsa.Agent | 5 | 1 |
 | Elsa.Api | 2 | 3 |
 | Elsa.Architecture | 0 | 1 |
