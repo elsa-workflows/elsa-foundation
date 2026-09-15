@@ -60,5 +60,9 @@ file static class BookmarkStateProviderModel
         modelBuilder.Entity<RuntimeCheckpointCommitEntity>().Property("PendingPostCommitWorkIdsJson").HasColumnType(type);
         modelBuilder.Entity<RuntimeCheckpointCommitEntity>().Property("ConsumedSchedulerWorkItemIdsJson").HasColumnType(type);
         modelBuilder.Entity<RuntimeCheckpointCommitEntity>().Property("ContentJson").HasColumnType(type);
+        modelBuilder.Entity<RuntimePostCommitOutboxEntity>().Property("ScopeKey").HasColumnType(type);
+        modelBuilder.Entity<RuntimePostCommitOutboxEntity>().Property("OutboxItemId").HasColumnType(type);
+        modelBuilder.Entity<RuntimePostCommitOutboxEntity>().Property("WorkflowExecutionId").HasColumnType(type);
+        modelBuilder.Entity<RuntimePostCommitOutboxEntity>().Property("ContentJson").HasColumnType(type);
     }
 }

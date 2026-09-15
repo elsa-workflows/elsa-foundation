@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Elsa.Attention.Core;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
@@ -44,6 +45,7 @@ internal static class RuntimeOperationalStateProviderSmoke
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
         var scope = $"native-{Guid.NewGuid():N}";
         var connectionString = fixture.ConnectionString;
+        RuntimePostCommitOutboxClaim firstOutboxClaim;
         await using (var context = createContext(connectionString))
         {
             Assert.Equal(expectedProvider, context.Database.ProviderName);
@@ -63,6 +65,22 @@ internal static class RuntimeOperationalStateProviderSmoke
             var executions = new EfWorkflowExecutionStateStore(context, accessor, codec);
             var incidents = new EfIncidentStateStore(context, accessor);
             var attention = new EfWorkflowRuntimeAttentionQuery(context, accessor);
+            var outbox = new EfRuntimePostCommitOutboxStore(context, accessor);
+            var outboxNow = DateTimeOffset.UtcNow;
+            var outboxItem = OutboxPending($"outbox-{Guid.NewGuid():N}", "workflow-a", outboxNow);
+            await outbox.SavePendingAsync(outboxItem);
+            await outbox.SavePendingAsync(outboxItem);
+            Assert.Equal(outboxItem.OutboxItemId, Assert.Single(await outbox.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(outboxNow, 10))).OutboxItemId);
+            firstOutboxClaim = Assert.Single(await outbox.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+                "provider-owner-a", outboxNow, TimeSpan.FromMinutes(1), 1)));
+
+            await using (var rollback = await context.Database.BeginTransactionAsync())
+            {
+                await outbox.SavePendingAsync(OutboxPending("outbox-rolled-back", "workflow-a", outboxNow));
+                await rollback.RollbackAsync();
+            }
+            Assert.Null(await outbox.FindAsync("outbox-rolled-back"));
+
             var value = Value("aa", "workflow-a");
             await values.SaveAsync(value);
             await values.SaveAsync(Value("aG", "workflow-a"));
@@ -96,6 +114,24 @@ internal static class RuntimeOperationalStateProviderSmoke
 
         await using (var fresh = createContext(connectionString))
         {
+            var outbox = new EfRuntimePostCommitOutboxStore(fresh, new FixedAccessor(scope));
+            var reclaimed = Assert.Single(await outbox.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+                "provider-owner-b", DateTimeOffset.UtcNow.AddMinutes(2), TimeSpan.FromMinutes(1), 1)));
+            await Assert.ThrowsAsync<RuntimePostCommitOutboxStaleClaimException>(() => outbox.CompleteClaimAsync(
+                new RuntimePostCommitOutboxClaimCompletion(
+                    firstOutboxClaim,
+                    new RuntimePostCommitOutboxDeliveryResult(
+                        firstOutboxClaim.OutboxItemId,
+                        RuntimePostCommitOutboxStatus.Delivered,
+                        DateTimeOffset.UtcNow.AddMinutes(2)))).AsTask());
+            await outbox.CompleteClaimAsync(new RuntimePostCommitOutboxClaimCompletion(
+                reclaimed,
+                new RuntimePostCommitOutboxDeliveryResult(
+                    reclaimed.OutboxItemId,
+                    RuntimePostCommitOutboxStatus.Delivered,
+                    DateTimeOffset.UtcNow.AddMinutes(2))));
+            Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await outbox.FindAsync(reclaimed.OutboxItemId))!.Status);
+
             var values = new EfDurableValueStateStore(fresh, new FixedAccessor(scope), new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = SigningKey })));
             Assert.Null(await values.FindAsync("workflow-a", "rolled-back"));
             var liveness = new EfExecutionLivenessStateStore(fresh, new FixedAccessor(scope), new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = SigningKey })));
@@ -154,6 +190,21 @@ internal static class RuntimeOperationalStateProviderSmoke
         "provider smoke detail",
         DateTimeOffset.UtcNow,
         null);
+
+    private static RuntimePostCommitOutboxItem OutboxPending(string outboxItemId, string workflowExecutionId, DateTimeOffset recordedAt) => new(
+        outboxItemId,
+        new RuntimePostCommitIntent(
+            $"intent-{outboxItemId}",
+            workflowExecutionId,
+            "provider-smoke.outbox",
+            recordedAt,
+            null,
+            null,
+            null),
+        RuntimePostCommitOutboxStatus.Pending,
+        recordedAt,
+        recordedAt);
+
     private static RuntimeCheckpointCommit EmptyCheckpointCommit(string commitId) => new(
         commitId,
         new RuntimeCheckpoint(
