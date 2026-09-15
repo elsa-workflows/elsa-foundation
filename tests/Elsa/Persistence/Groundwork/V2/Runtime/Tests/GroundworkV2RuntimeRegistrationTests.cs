@@ -273,6 +273,40 @@ public sealed class GroundworkV2RuntimeRegistrationTests
         }
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Groundwork_replaces_the_stock_trigger_default_in_either_feature_registration_order(bool triggerFeatureFirst)
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        if (triggerFeatureFirst)
+            AddStockTriggerBindingDefault(services);
+
+        services.AddGroundworkV2RuntimeStores();
+
+        if (!triggerFeatureFirst)
+            AddStockTriggerBindingDefault(services);
+
+        AssertScopedAlias<IWorkflowTriggerBindingStore, GroundworkV2WorkflowTriggerBindingStore>(services);
+    }
+
+    [Fact]
+    public void Groundwork_still_rejects_a_nonstock_trigger_binding_registration()
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddScoped<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddGroundworkV2RuntimeStores());
+        Assert.Equal(before, services);
+    }
+
+    private static void AddStockTriggerBindingDefault(IServiceCollection services)
+    {
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IWorkflowTriggerBindingStore)))
+            services.AddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
+    }
+
     [Fact]
     public void R26_EF_transition_owns_the_trigger_store_without_withdrawing_R27s_shared_projection_unit()
     {

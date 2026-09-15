@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -27,19 +28,23 @@ public static class RuntimeWorkflowTriggerBindingEntityFrameworkCoreRegistration
             }
 
             var contractRegistrations = services.Where(x => x.ServiceType == typeof(IWorkflowTriggerBindingStore)).ToArray();
+            var defaultRegistrations = contractRegistrations.Where(IsRuntimeDefault).ToArray();
             if (existing is not null)
             {
                 existing.EnsureOwnsRegisteredContract(services);
                 if (existing.Name != WorkflowTriggerBindingStoreBackend.Groundwork)
                     throw new InvalidOperationException("Runtime trigger-binding EF persistence refuses to replace a selected non-EF backend.");
             }
-            else if (contractRegistrations.Length > 0)
+            else if (contractRegistrations.Length > 0 &&
+                     (defaultRegistrations.Length != 1 || defaultRegistrations.Length != contractRegistrations.Length))
             {
                 throw new InvalidOperationException("An explicit workflow trigger-binding store registration is already present; EF persistence refuses to replace it implicitly.");
             }
             var removeGroundwork = existing?.Name == WorkflowTriggerBindingStoreBackend.Groundwork
                 ? existing.PrepareRemoveOwnedArtifacts(services)
                 : null;
+            foreach (var descriptor in defaultRegistrations)
+                services.Remove(descriptor);
 
             services.AddScoped<EfWorkflowTriggerBindingStore>();
             var concrete = services.Last();
@@ -61,4 +66,8 @@ public static class RuntimeWorkflowTriggerBindingEntityFrameworkCoreRegistration
 
     public static IServiceCollection AddRuntimeWorkflowTriggerBindingsEntityFrameworkCore(this IServiceCollection services) =>
         services.AddRuntimeWorkflowTriggerBindingEntityFrameworkCore();
+
+    private static bool IsRuntimeDefault(ServiceDescriptor descriptor) =>
+        descriptor.Lifetime == ServiceLifetime.Singleton &&
+        descriptor.ImplementationType == typeof(InMemoryWorkflowTriggerBindingStore);
 }

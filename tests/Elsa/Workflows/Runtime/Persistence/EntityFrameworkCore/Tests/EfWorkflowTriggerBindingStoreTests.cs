@@ -121,6 +121,40 @@ public sealed class EfWorkflowTriggerBindingStoreTests
     }
 
     [Fact]
+    public async Task Preparation_reconciles_activation_rows_saved_before_projection_state()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+        await context.Database.EnsureCreatedAsync();
+        var store = new EfWorkflowTriggerBindingStore(context, new Accessor("tenant-a"));
+        var binding = Binding("saved-first", "activation-saved-first", "saved-first-hash");
+
+        await store.SaveAsync(binding);
+        await store.PrepareActivationAsync(binding.ActivationId!, [binding]);
+
+        var row = await context.WorkflowTriggerBindings.SingleAsync();
+        Assert.Equal(2, row.Revision);
+        Assert.Equal(binding.TriggerBindingId, (await store.ListByActivationAsync(new WorkflowTriggerBindingActivationPageQuery(binding.ActivationId!))).Items.Single().TriggerBindingId);
+    }
+
+    [Fact]
+    public void Registration_replaces_the_stock_trigger_default_when_the_feature_has_run()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddRuntimeOperationalStateEntityFrameworkCore(new RuntimeOperationalStateEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite", ConnectionString = "Data Source=:memory:"
+        });
+        services.AddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
+
+        services.AddRuntimeWorkflowTriggerBindingEntityFrameworkCore();
+
+        Assert.IsType<EfWorkflowTriggerBindingStore>(services.BuildServiceProvider().GetRequiredService<IWorkflowTriggerBindingStore>());
+    }
+
+    [Fact]
     public async Task Continuation_is_query_bound_and_projection_corruption_fails_closed()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

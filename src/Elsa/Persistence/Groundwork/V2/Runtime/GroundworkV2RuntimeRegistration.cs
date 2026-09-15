@@ -95,7 +95,9 @@ public static class GroundworkV2RuntimeRegistration
                 ? existingTimerBackend.PrepareRemoveOwnedArtifacts(services)
                 : null;
             var existingTriggerBindingBackend = WorkflowTriggerBindingStoreBackend.Find(services);
-            if (existingTriggerBindingBackend is null && services.Any(descriptor => descriptor.ServiceType == typeof(IWorkflowTriggerBindingStore)))
+            var triggerBindingContracts = services.Where(descriptor => descriptor.ServiceType == typeof(IWorkflowTriggerBindingStore)).ToArray();
+            if (existingTriggerBindingBackend is null &&
+                (triggerBindingContracts.Length > 1 || triggerBindingContracts.Any(descriptor => !IsRuntimeTriggerBindingDefault(descriptor))))
                 throw new InvalidOperationException("Groundwork runtime refuses to replace an unowned workflow trigger-binding store.");
             existingTriggerBindingBackend?.EnsureOwnsRegisteredContract(services);
             var commitExistingTriggerBindingRemoval = existingTriggerBindingBackend is not null && existingTriggerBindingBackend.Name != WorkflowTriggerBindingStoreBackend.Groundwork
@@ -545,6 +547,10 @@ public static class GroundworkV2RuntimeRegistration
             services.AddScoped(contract, provider => provider.GetRequiredService<TImplementation>());
         }
     }
+
+    private static bool IsRuntimeTriggerBindingDefault(ServiceDescriptor descriptor) =>
+        descriptor.Lifetime == ServiceLifetime.Singleton &&
+        descriptor.ImplementationType == typeof(InMemoryWorkflowTriggerBindingStore);
 
     private static void RemoveKeyed<TContract>(IServiceCollection services, object key)
     {

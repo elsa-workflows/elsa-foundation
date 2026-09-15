@@ -77,11 +77,11 @@ public sealed class EfWorkflowTriggerBindingStore(
             throw new InvalidOperationException($"Trigger-binding activation projection '{activationId}' is already prepared with different state.");
         }
 
-        var byId = existing.ToDictionary(x => x.TriggerBindingId, StringComparer.Ordinal);
+        var byId = existing.ToDictionary(x => Decode(x.TriggerBindingId), StringComparer.Ordinal);
         var desired = prepared.ToDictionary(x => x.TriggerBindingId, StringComparer.Ordinal);
         foreach (var row in existing)
         {
-            if (desired.TryGetValue(row.TriggerBindingId, out var replacement))
+            if (desired.TryGetValue(Decode(row.TriggerBindingId), out var replacement))
                 Copy(row, replacement, scope, checked(row.Revision + 1));
             else
                 context.WorkflowTriggerBindings.Remove(row);
