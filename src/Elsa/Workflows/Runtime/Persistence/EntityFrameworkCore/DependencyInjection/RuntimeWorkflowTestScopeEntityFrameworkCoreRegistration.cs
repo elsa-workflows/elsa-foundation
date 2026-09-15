@@ -5,8 +5,6 @@ using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -52,7 +50,7 @@ public static class RuntimeWorkflowTestScopeEntityFrameworkCoreRegistration
             var alteration = RuntimeWorkflowAlterationStoreBackend.Find(services);
             var operational = RuntimeOperationalStateStoreBackend.Find(services);
             BookmarkStateEfContextRegistration.EnsureRecoveryContinuationSigningKeyCompatible(services, options.RecoveryContinuationSigningKey, "Runtime test scopes");
-            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, RuntimeWorkflowTestScopeEfModule.DefaultSqliteConnectionString);
+            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName);
             BookmarkStateEfContextRegistration.EnsureContextIsAvailable(
                 services,
                 provider,
@@ -101,7 +99,7 @@ public static class RuntimeWorkflowTestScopeEntityFrameworkCoreRegistration
             else if (operational?.Name == RuntimeOperationalStateStoreBackend.EntityFramework)
                 owned.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(operational.Owns));
             else
-                owned.AddRange(AddContext(services, options, provider));
+                owned.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, options.ConnectionString, options.ConnectionName));
 
             services.AddScoped<EfWorkflowTestScopeStore>();
             var concrete = services.Last();
@@ -144,7 +142,4 @@ public static class RuntimeWorkflowTestScopeEntityFrameworkCoreRegistration
             throw new InvalidOperationException("Runtime test-scope EF persistence refuses to replace an unowned test-scope registration.");
     }
     private static bool IsCoreFactory(ServiceDescriptor descriptor) => descriptor.ImplementationFactory is { } factory && (factory.Method.DeclaringType == typeof(RuntimeCoreServiceCollectionExtensions) || factory.Method.DeclaringType?.DeclaringType == typeof(RuntimeCoreServiceCollectionExtensions));
-    private static IReadOnlyCollection<ServiceDescriptor> AddContext(IServiceCollection s, RuntimeWorkflowTestScopeEntityFrameworkCoreOptions o, string p) => p switch { "sqlite" => AddContext<BookmarkStateSqliteDbContext>(s, o, EfRelationalProviderBinding.UseSqlite), "sqlserver" => AddContext<BookmarkStateSqlServerDbContext>(s, o, EfRelationalProviderBinding.UseSqlServer), "postgresql" => AddContext<BookmarkStatePostgreSqlDbContext>(s, o, EfRelationalProviderBinding.UseNpgsql), "mysql" => AddContext<BookmarkStateMySqlDbContext>(s, o, EfRelationalProviderBinding.UseMySql), _ => throw new ArgumentException($"Unknown Runtime EF provider '{p}'.", nameof(p)) };
-    private static IReadOnlyCollection<ServiceDescriptor> AddContext<T>(IServiceCollection s, RuntimeWorkflowTestScopeEntityFrameworkCoreOptions o, Action<DbContextOptionsBuilder, string, string, string?> bind) where T : BookmarkStateDbContext { var start = s.Count; s.AddDbContext<T>((sp, b) => bind(b, Resolve(sp, o), RuntimeEfModule.HistoryTableName, typeof(BookmarkStateDbContext).Assembly.GetName().Name)); s.TryAddScoped<BookmarkStateDbContext>(sp => sp.GetRequiredService<T>()); return s.Skip(start).ToArray(); }
-    private static string Resolve(IServiceProvider sp, RuntimeWorkflowTestScopeEntityFrameworkCoreOptions o) { if (!string.IsNullOrWhiteSpace(o.ConnectionString)) return o.ConnectionString!; var cfg = sp.GetService<IConfiguration>(); if (!string.IsNullOrWhiteSpace(o.ConnectionName)) return cfg?.GetConnectionString(o.ConnectionName!) ?? throw new InvalidOperationException($"Runtime test-scope EF connection '{o.ConnectionName}' was not found."); var fallback = cfg?.GetConnectionString(RuntimeWorkflowTestScopeEfModule.DefaultConnectionName); if (!string.IsNullOrWhiteSpace(fallback)) return fallback!; if (EfRelationalProviderBinding.Normalize(o.Provider) == "sqlite") return RuntimeWorkflowTestScopeEfModule.DefaultSqliteConnectionString; throw new InvalidOperationException("Runtime test-scope EF requires ConnectionString or ConnectionName for a non-Sqlite provider."); }
 }

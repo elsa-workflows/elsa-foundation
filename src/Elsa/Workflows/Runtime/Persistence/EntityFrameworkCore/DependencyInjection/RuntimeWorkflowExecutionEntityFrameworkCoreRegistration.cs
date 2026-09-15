@@ -4,8 +4,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -43,7 +41,7 @@ public static class RuntimeWorkflowExecutionEntityFrameworkCoreRegistration
                 if (explicitStore.Any(x => x.ImplementationType != typeof(Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowExecutionStateStore))) throw new InvalidOperationException("Runtime workflow execution EF persistence refuses to replace an unowned execution-state store.");
             }
             BookmarkStateEfContextRegistration.EnsureRecoveryContinuationSigningKeyCompatible(services, options.RecoveryContinuationSigningKey, "Runtime workflow executions");
-            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, RuntimeWorkflowExecutionEfModule.DefaultSqliteConnectionString);
+            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName);
             var commitExistingRemoval = existing?.PrepareRemoveOwnedArtifacts(services);
             var artifacts = RuntimeArtifactStoreBackend.Find(services); var activity = RuntimeActivityExecutionStoreBackend.Find(services); var bookmarks = BookmarkStateStoreBackend.Find(services); var alterations = RuntimeWorkflowAlterationStoreBackend.Find(services); var scopes = WorkflowTestScopeStoreBackend.Find(services); var operational = RuntimeOperationalStateStoreBackend.Find(services);
             if (artifacts?.Name == RuntimeArtifactStoreBackend.EntityFramework) artifacts.EnsureOwnsRegisteredContracts(services);
@@ -62,7 +60,7 @@ public static class RuntimeWorkflowExecutionEntityFrameworkCoreRegistration
             else if (alterations?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework) owned.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(alterations.Owns));
             else if (scopes?.Name == WorkflowTestScopeStoreBackend.EntityFramework) owned.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(scopes.Owns));
             else if (operational?.Name == RuntimeOperationalStateStoreBackend.EntityFramework) owned.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(operational.Owns));
-            else owned.AddRange(AddContext(services, configured, provider));
+            else owned.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName));
             services.AddScoped<EfWorkflowExecutionStateStore>(); var concrete = services.Last(); owned.Add(concrete);
             services.RemoveAll<IWorkflowExecutionStateStore>();
             var contract = ServiceDescriptor.Scoped<IWorkflowExecutionStateStore>(p => p.GetRequiredService<EfWorkflowExecutionStateStore>()); services.Add(contract);
@@ -76,9 +74,6 @@ public static class RuntimeWorkflowExecutionEntityFrameworkCoreRegistration
     public static IServiceCollection AddRuntimeWorkflowExecutionStateEfCore(this IServiceCollection services, RuntimeWorkflowExecutionEntityFrameworkCoreOptions options) => services.AddRuntimeWorkflowExecutionEntityFrameworkCore(options);
 
     private static bool OptionsEqual(RuntimeWorkflowExecutionEntityFrameworkCoreOptions a, RuntimeWorkflowExecutionEntityFrameworkCoreOptions b) => StringComparer.Ordinal.Equals(EfRelationalProviderBinding.Normalize(a.Provider), EfRelationalProviderBinding.Normalize(b.Provider)) && a.ConnectionString == b.ConnectionString && a.ConnectionName == b.ConnectionName && a.RecoveryContinuationSigningKey == b.RecoveryContinuationSigningKey;
-    private static IReadOnlyCollection<ServiceDescriptor> AddContext(IServiceCollection services, RuntimeWorkflowExecutionEntityFrameworkCoreOptions options, string provider) => provider switch { "sqlite" => AddContext<BookmarkStateSqliteDbContext>(services, options, EfRelationalProviderBinding.UseSqlite), "sqlserver" => AddContext<BookmarkStateSqlServerDbContext>(services, options, EfRelationalProviderBinding.UseSqlServer), "postgresql" => AddContext<BookmarkStatePostgreSqlDbContext>(services, options, EfRelationalProviderBinding.UseNpgsql), "mysql" => AddContext<BookmarkStateMySqlDbContext>(services, options, EfRelationalProviderBinding.UseMySql), _ => throw new ArgumentException($"Unknown Runtime EF provider '{provider}'.", nameof(provider)) };
-    private static IReadOnlyCollection<ServiceDescriptor> AddContext<T>(IServiceCollection services, RuntimeWorkflowExecutionEntityFrameworkCoreOptions options, Action<DbContextOptionsBuilder, string, string, string?> bind) where T : BookmarkStateDbContext { var start = services.Count; services.AddDbContext<T>((p, b) => bind(b, Resolve(p, options), RuntimeEfModule.HistoryTableName, typeof(BookmarkStateDbContext).Assembly.GetName().Name)); services.TryAddScoped<BookmarkStateDbContext>(p => p.GetRequiredService<T>()); return services.Skip(start).ToArray(); }
-    private static string Resolve(IServiceProvider provider, RuntimeWorkflowExecutionEntityFrameworkCoreOptions options) { if (!string.IsNullOrWhiteSpace(options.ConnectionString)) return options.ConnectionString!; var cfg = provider.GetService<IConfiguration>(); if (!string.IsNullOrWhiteSpace(options.ConnectionName)) return cfg?.GetConnectionString(options.ConnectionName!) ?? throw new InvalidOperationException($"Runtime workflow execution EF connection '{options.ConnectionName}' was not found."); var fallback = cfg?.GetConnectionString(RuntimeWorkflowExecutionEfModule.DefaultConnectionName); if (!string.IsNullOrWhiteSpace(fallback)) return fallback!; if (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite") return RuntimeWorkflowExecutionEfModule.DefaultSqliteConnectionString; throw new InvalidOperationException("Runtime workflow execution EF requires ConnectionString or ConnectionName for a non-Sqlite provider."); }
     private static void RemoveOwned(IServiceCollection services, IReadOnlyCollection<ServiceDescriptor> owned) { foreach (var descriptor in owned.Where(x => services.Contains(x) && RuntimeArtifactStoreBackend.Find(services)?.Owns(x) != true && RuntimeActivityExecutionStoreBackend.Find(services)?.Owns(x) != true && BookmarkStateStoreBackend.Find(services)?.Owns(x) != true && RuntimeWorkflowAlterationStoreBackend.Find(services)?.Owns(x) != true && WorkflowTestScopeStoreBackend.Find(services)?.Owns(x) != true && RuntimeOperationalStateStoreBackend.Find(services)?.Owns(x) != true)) services.Remove(descriptor); }
 }
 

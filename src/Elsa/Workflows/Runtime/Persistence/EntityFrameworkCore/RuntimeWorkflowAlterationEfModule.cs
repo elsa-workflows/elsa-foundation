@@ -3,8 +3,6 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 /// <summary>Schema and projection limits for the R11/R12 workflow alteration ledger.</summary>
 public static class RuntimeWorkflowAlterationEfModule
 {
-    public const string DefaultConnectionName = "ElsaRuntimeWorkflowAlterations";
-    public const string DefaultSqliteConnectionString = "Data Source=elsa-runtime-workflow-alterations.db";
     public const string PlanTableName = "elsa_runtime_workflow_alteration_plan";
     public const string JobTableName = "elsa_runtime_workflow_alteration_job";
     public const string SchemaVersion = "1.0.0";

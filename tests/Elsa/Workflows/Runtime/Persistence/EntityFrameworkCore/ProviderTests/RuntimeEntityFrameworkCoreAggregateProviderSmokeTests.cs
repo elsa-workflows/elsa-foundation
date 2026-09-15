@@ -1,3 +1,6 @@
+using System.Data.Common;
+using CShells.Lifecycle;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -23,6 +26,14 @@ public sealed class RuntimeEntityFrameworkCoreAggregatePostgreSqlSmokeTests(Runt
             "PostgreSql",
             connection => new BookmarkStatePostgreSqlDbContext(new DbContextOptionsBuilder<BookmarkStatePostgreSqlDbContext>().UseNpgsql(connection).Options),
             BookmarkStatePostgreSqlDbContext.ExpectedProviderName);
+
+    [SkippableFact]
+    public Task PostgreSql_fresh_runtime_aggregate_migrates_and_commits_without_Groundwork() =>
+        RuntimeEntityFrameworkCoreAggregateProviderSmoke.RunFreshAsync(
+            fixture,
+            "PostgreSql",
+            connection => new BookmarkStatePostgreSqlDbContext(new DbContextOptionsBuilder<BookmarkStatePostgreSqlDbContext>().UseNpgsql(connection).Options),
+            BookmarkStatePostgreSqlDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
@@ -35,6 +46,14 @@ public sealed class RuntimeEntityFrameworkCoreAggregateSqlServerSmokeTests(Runti
             "SqlServer",
             connection => new BookmarkStateSqlServerDbContext(new DbContextOptionsBuilder<BookmarkStateSqlServerDbContext>().UseSqlServer(connection).Options),
             BookmarkStateSqlServerDbContext.ExpectedProviderName);
+
+    [SkippableFact]
+    public Task SqlServer_fresh_runtime_aggregate_migrates_and_commits_without_Groundwork() =>
+        RuntimeEntityFrameworkCoreAggregateProviderSmoke.RunFreshAsync(
+            fixture,
+            "SqlServer",
+            connection => new BookmarkStateSqlServerDbContext(new DbContextOptionsBuilder<BookmarkStateSqlServerDbContext>().UseSqlServer(connection).Options),
+            BookmarkStateSqlServerDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
@@ -43,6 +62,14 @@ public sealed class RuntimeEntityFrameworkCoreAggregateMySqlSmokeTests(RuntimeBo
     [SkippableFact]
     public Task MySql_full_runtime_aggregate_model_checkpoint_and_rollback() =>
         RuntimeEntityFrameworkCoreAggregateProviderSmoke.RunAsync(
+            fixture,
+            "MySql",
+            connection => new BookmarkStateMySqlDbContext(new DbContextOptionsBuilder<BookmarkStateMySqlDbContext>().UseMySQL(connection).Options),
+            BookmarkStateMySqlDbContext.ExpectedProviderName);
+
+    [SkippableFact]
+    public Task MySql_fresh_runtime_aggregate_migrates_and_commits_without_Groundwork() =>
+        RuntimeEntityFrameworkCoreAggregateProviderSmoke.RunFreshAsync(
             fixture,
             "MySql",
             connection => new BookmarkStateMySqlDbContext(new DbContextOptionsBuilder<BookmarkStateMySqlDbContext>().UseMySQL(connection).Options),
@@ -127,6 +154,97 @@ internal static class RuntimeEntityFrameworkCoreAggregateProviderSmoke
         Assert.Equal(beforeUnits, invalidRegistry.Registrations);
         Assert.Equal(RuntimeCheckpointCommitStoreBackend.Groundwork, RuntimeCheckpointCommitStoreBackend.Find(invalidServices)!.Name);
         Assert.DoesNotContain(invalidServices, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+    }
+
+    /// <summary>
+    /// The aggregate on a fresh collection with no Groundwork: its registered module migrator installs the Runtime
+    /// schema into an empty database of its own, then checkpoints commit through the resolved EF writer, including
+    /// one execution committing from two scopes in turn.
+    /// </summary>
+    public static async Task RunFreshAsync(
+        RuntimeBookmarksProviderFixture fixture,
+        string providerName,
+        Func<string, BookmarkStateDbContext> createContext,
+        string expectedProviderName)
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? $"Docker/{providerName} is unavailable.");
+        var database = $"elsa_runtime_fresh_{Guid.NewGuid():N}";
+        await using (var admin = createContext(fixture.ConnectionString))
+            await admin.Database.ExecuteSqlRawAsync($"CREATE DATABASE {database}");
+        var connection = new DbConnectionStringBuilder { ConnectionString = fixture.ConnectionString };
+        connection.Remove("Initial Catalog");
+        connection["Database"] = database;
+
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddRuntimeEntityFrameworkCore(new()
+        {
+            Provider = providerName,
+            ConnectionString = connection.ConnectionString,
+            HierarchyCursorSigningKey = HierarchySigningKey,
+            RecoveryContinuationSigningKey = RecoverySigningKey
+        });
+        services.AddEfModuleMigrations<BookmarkStateDbContext>(providerName);
+        services.AddSingleton<IWorkflowDispatchDurabilityEvidence>(
+            new WorkflowDispatchDurabilityEvidence(WorkflowDispatchDurabilityComponents.Resumption, WorkflowDispatchDurabilityLevel.Durable));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType.FullName?.Contains("Groundwork", StringComparison.Ordinal) == true);
+        Assert.Equal(RuntimeCheckpointCommitStoreBackend.EntityFramework, RuntimeCheckpointCommitStoreBackend.Find(services)!.Name);
+        Assert.Equal(WorkflowActivationAuthorityBackend.EntityFramework, WorkflowActivationAuthorityBackend.Find(services)!.Name);
+
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        foreach (var initializer in provider.GetServices<IShellInitializer>())
+            await initializer.InitializeAsync();
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>();
+            Assert.Equal(expectedProviderName, context.Database.ProviderName);
+            Assert.NotEmpty(await context.Database.GetAppliedMigrationsAsync());
+            Assert.Empty(await context.Database.GetPendingMigrationsAsync());
+            var readiness = await scope.ServiceProvider.GetRequiredService<IWorkflowDispatchReadinessAssessor>().AssessAsync();
+            Assert.Equal(WorkflowDispatchReadinessGuarantee.DurableReady, readiness.Guarantee);
+        }
+
+        await using (var outer = provider.CreateAsyncScope())
+        await using (var nested = provider.CreateAsyncScope())
+        {
+            var outerStore = outer.ServiceProvider.GetRequiredService<IRuntimeCheckpointCommitStore>();
+            var nestedStore = nested.ServiceProvider.GetRequiredService<IRuntimeCheckpointCommitStore>();
+            Assert.IsType<EfRuntimeCheckpointCommitStore>(outerStore);
+            await outerStore.CommitAsync(InspectionCommit("fresh-scheduled", ActivityExecutionStatus.Scheduled), new(RuntimeCheckpointPersistenceMode.Immediate));
+            await outerStore.CommitAsync(InspectionCommit("fresh-running", ActivityExecutionStatus.Running), new(RuntimeCheckpointPersistenceMode.Immediate));
+            await nestedStore.CommitAsync(InspectionCommit("fresh-suspended", ActivityExecutionStatus.Suspended), new(RuntimeCheckpointPersistenceMode.Immediate));
+            await outerStore.CommitAsync(InspectionCommit("fresh-completed", ActivityExecutionStatus.Completed), new(RuntimeCheckpointPersistenceMode.Immediate));
+        }
+
+        await using (var verification = provider.CreateAsyncScope())
+        {
+            var context = verification.ServiceProvider.GetRequiredService<BookmarkStateDbContext>();
+            var inspection = await context.ActivityExecutionInspections.AsNoTracking().SingleAsync();
+            Assert.Equal(nameof(ActivityExecutionStatus.Completed), inspection.Status);
+            Assert.Equal(4, await context.RuntimeCheckpointCommits.AsNoTracking().CountAsync());
+        }
+
+        // Running the migrator again on an installed schema is a no-op, as a shell reload or a second node is.
+        foreach (var initializer in provider.GetServices<IShellInitializer>())
+            await initializer.InitializeAsync();
+    }
+
+    private static RuntimeCheckpointCommit InspectionCommit(string commitId, ActivityExecutionStatus status)
+    {
+        var occurredAt = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        var inspection = new ActivityExecutionInspectionProjection(
+            "activity-fresh", "workflow-fresh", "node-fresh", "authored-fresh", "Test.Activity", "1",
+            status, null, 1, occurredAt, occurredAt, occurredAt, "checkpoint-1", "checkpoint-1", occurredAt,
+            ActivitySchedulingProvenance.From("workflow-fresh", null, null, null, null, null, "scope-fresh", "checkpoint"),
+            ["Done"], [], [], [], new Dictionary<string, string>(), "scope-fresh");
+        return EmptyCheckpointCommit(commitId) with
+        {
+            Checkpoint = new RuntimeCheckpoint($"checkpoint-{commitId}", "NativeFreshCheckpoint", "workflow-fresh", occurredAt, [], new Dictionary<string, string>()),
+            StateChanges = new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], [], null,
+                [new RuntimeStateChange<ActivityExecutionInspectionProjection>(inspection.ActivityExecutionId,
+                    RuntimeStateChangeOperation.Upsert, inspection, new Dictionary<string, string>())],
+                null, null, null)
+        };
     }
 
     private static RuntimeCheckpointCommit EmptyCheckpointCommit(string commitId) => new(

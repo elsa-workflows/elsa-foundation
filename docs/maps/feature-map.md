@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 121
+- Discovered feature classes: 123
 
 ## Features
 
@@ -95,6 +95,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | RuntimeFaultStackTraceFeature | direct IShellFeature | Elsa.Workbench | IShellFeature | [RuntimeFaultStackTraceFeature.cs](../../src/Apps/Elsa.Workbench/RuntimeFaultStackTraceFeature.cs) |
 | WorkbenchGroundworkDashboardFeature | direct IShellFeature | Elsa.Workbench | IShellFeature | [WorkbenchGroundworkDashboardFeature.cs](../../src/Apps/Elsa.Workbench/WorkbenchGroundworkDashboardFeature.cs) |
 | WorkflowsDashboardFeature | direct IWebShellFeature | Elsa.Workflows.Dashboard | IWebShellFeature | [WorkflowsDashboardFeature.cs](../../src/Elsa/Workflows/Dashboard/WorkflowsDashboardFeature.cs) |
+| WorkflowsDashboardEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore | IShellFeature | [WorkflowsDashboardEntityFrameworkCoreFeature.cs](../../src/Elsa/Workflows/Dashboard/Persistence/EntityFrameworkCore/WorkflowsDashboardEntityFrameworkCoreFeature.cs) |
 | WorkflowsDesignApiFeature | direct IWebShellFeature | Elsa.Workflows.Design.Api | IWebShellFeature | [WorkflowsDesignApiFeature.cs](../../src/Elsa/Workflows/Design/Api/WorkflowsDesignApiFeature.cs) |
 | JavaScriptWorkflowsDesignFeature | direct IShellFeature | Elsa.Workflows.Design.JavaScript | IShellFeature | [JavaScriptWorkflowsDesignFeature.cs](../../src/Elsa/Workflows/Design/JavaScript/JavaScriptWorkflowsDesignFeature.cs) |
 | WorkflowsDesignEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Design.Persistence.EntityFrameworkCore | IShellFeature | [WorkflowsDesignEntityFrameworkCoreFeature.cs](../../src/Elsa/Workflows/Design/Persistence/EntityFrameworkCore/WorkflowsDesignEntityFrameworkCoreFeature.cs) |
@@ -121,6 +122,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | RuntimeActivityExecutionEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore | IShellFeature | [RuntimeActivityExecutionEntityFrameworkCoreFeature.cs](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeActivityExecutionEntityFrameworkCoreFeature.cs) |
 | RuntimeArtifactsEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore | IShellFeature | [RuntimeArtifactsEntityFrameworkCoreFeature.cs](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeArtifactsEntityFrameworkCoreFeature.cs) |
 | RuntimeBookmarksEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore | IShellFeature | [RuntimeBookmarksEntityFrameworkCoreFeature.cs](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeBookmarksEntityFrameworkCoreFeature.cs) |
+| RuntimeEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore | IShellFeature | [RuntimeEntityFrameworkCoreFeature.cs](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeEntityFrameworkCoreFeature.cs) |
 | RuntimeOperationalStateEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore | IShellFeature | [RuntimeOperationalStateEntityFrameworkCoreFeature.cs](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeOperationalStateEntityFrameworkCoreFeature.cs) |
 | RuntimeWorkflowAlterationEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore | IShellFeature | [RuntimeWorkflowAlterationEntityFrameworkCoreFeature.cs](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeWorkflowAlterationEntityFrameworkCoreFeature.cs) |
 | RuntimeWorkflowExecutionEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore | IShellFeature | [RuntimeWorkflowExecutionEntityFrameworkCoreFeature.cs](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeWorkflowExecutionEntityFrameworkCoreFeature.cs) |

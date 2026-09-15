@@ -1,14 +1,23 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 
-/// <summary>Atomically composes all EF-owned Runtime checkpoint participants.</summary>
+/// <summary>Atomically composes the complete EF Runtime persistence family (R01-R29).</summary>
 /// <remarks>
-/// The individual participant extensions remain useful for opt-in, mixed compositions that do not use the
-/// checkpoint writer. This aggregate is the only supported Groundwork-to-EF path for the transactionally coupled
-/// Runtime family: it keeps the transition token private to the synchronous composition and restores both service
-/// descriptors and provider-owned registration snapshots when any participant rejects the transition.
+/// <para>
+/// This is the EF counterpart of the Groundwork runtime composition. It composes on a service collection with no
+/// runtime persistence selected, over the in-memory Runtime defaults, or as the only supported Groundwork-to-EF
+/// switch for the transactionally coupled Runtime family; repeating it with the same options changes nothing.
+/// </para>
+/// <para>
+/// Either every participant is selected or none is: the transition token stays private to the synchronous
+/// composition, and both service descriptors and provider-owned registration snapshots are restored when any
+/// participant rejects the transition. The individual participant extensions remain useful for opt-in, mixed
+/// compositions that do not use the checkpoint writer.
+/// </para>
 /// </remarks>
 public static class RuntimeEntityFrameworkCoreRegistration
 {
@@ -19,11 +28,15 @@ public static class RuntimeEntityFrameworkCoreRegistration
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
 
-        var selectedCheckpoint = RuntimeCheckpointCommitStoreBackend.Find(services);
-        if (selectedCheckpoint?.Name != RuntimeCheckpointCommitStoreBackend.Groundwork)
-            throw new InvalidOperationException(
-                "Runtime EF persistence requires the aggregate Groundwork checkpoint backend before replacing the Runtime composition.");
-        selectedCheckpoint.EnsureOwnsRegisteredContract(services);
+        var executableCache = new WorkflowExecutableCacheOptions
+        {
+            Enabled = options.CacheWorkflowExecutables,
+            Capacity = options.WorkflowExecutableCacheCapacity
+        };
+        executableCache.Validate();
+        // A selected checkpoint writer is either replaced (Groundwork) or repeated (EF); either way it must still
+        // own its contract. With none selected the composition starts from the Runtime defaults or from nothing.
+        RuntimeCheckpointCommitStoreBackend.Find(services)?.EnsureOwnsRegisteredContract(services);
 
         var serviceSnapshot = services.ToArray();
         var registrationSnapshots = services
@@ -35,6 +48,8 @@ public static class RuntimeEntityFrameworkCoreRegistration
         using var transition = RuntimeEfCheckpointCompositionTransition.Begin(services);
         try
         {
+            // Shared infrastructure rather than an EF-owned descriptor: every store binds its access context here.
+            services.AddPersistenceCore();
             var operational = new RuntimeOperationalStateEntityFrameworkCoreOptions
             {
                 Provider = options.Provider,
@@ -47,7 +62,8 @@ public static class RuntimeEntityFrameworkCoreRegistration
             {
                 Provider = options.Provider,
                 ConnectionString = options.ConnectionString,
-                ConnectionName = options.ConnectionName
+                ConnectionName = options.ConnectionName,
+                WorkflowExecutableCache = executableCache
             });
             services.AddRuntimeWorkflowExecutionEntityFrameworkCore(new()
             {
@@ -91,6 +107,12 @@ public static class RuntimeEntityFrameworkCoreRegistration
                 ConnectionName = options.ConnectionName,
                 RecoveryContinuationSigningKey = options.RecoveryContinuationSigningKey
             });
+            services.AddRuntimeSchedulerPoisonEntityFrameworkCore(new()
+            {
+                Provider = options.Provider,
+                ConnectionString = options.ConnectionString,
+                ConnectionName = options.ConnectionName
+            });
             services.AddRuntimeDurableTimerEntityFrameworkCore(new()
             {
                 Provider = options.Provider,
@@ -101,6 +123,11 @@ public static class RuntimeEntityFrameworkCoreRegistration
             services.AddRuntimeWorkflowDispatchEntityFrameworkCore();
             services.AddRuntimePostCommitOutboxEntityFrameworkCore();
             services.AddRuntimeCheckpointCommitEntityFrameworkCore();
+            // The trigger-binding and recurring-schedule tables carry their own projection state (R29); selecting both
+            // withdraws the Groundwork publication projection-state unit they replace.
+            services.AddRuntimeWorkflowTriggerBindingEntityFrameworkCore();
+            services.AddRuntimeRecurringTriggerScheduleEntityFrameworkCore();
+            services.AddRuntimeWorkflowActivationAuthorityEntityFrameworkCore();
 
             return services;
         }
@@ -159,4 +186,10 @@ public sealed class RuntimeEntityFrameworkCoreOptions
     public string? ConnectionName { get; set; }
     public string? HierarchyCursorSigningKey { get; set; }
     public string? RecoveryContinuationSigningKey { get; set; }
+
+    /// <summary>Whether ordinary scoped reads of immutable workflow executables go through a bounded shell-local cache.</summary>
+    public bool CacheWorkflowExecutables { get; set; } = true;
+
+    /// <summary>Maximum executables the cache retains; must be positive when caching is enabled.</summary>
+    public int WorkflowExecutableCacheCapacity { get; set; } = WorkflowExecutableCacheOptions.DefaultCapacity;
 }

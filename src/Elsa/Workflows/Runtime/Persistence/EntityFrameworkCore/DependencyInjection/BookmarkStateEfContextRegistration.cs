@@ -1,8 +1,9 @@
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 
@@ -109,166 +110,115 @@ internal static class BookmarkStateEfContextRegistration
     private static bool IsContextType(Type? type) =>
         type is not null && typeof(BookmarkStateDbContext).IsAssignableFrom(type);
 
+    /// <summary>
+    /// Rejects a participant whose connection differs from one already registered. Participants share one context,
+    /// so a second connection would otherwise be silently ignored in favor of whichever participant registered first.
+    /// </summary>
     public static void EnsureCompatible(
         IServiceCollection services,
         string provider,
         string? connectionString,
-        string? connectionName,
-        string defaultConnectionString)
+        string? connectionName)
     {
-        EnsureCompatible(
-            services.Select(x => x.ImplementationInstance)
-                .OfType<RuntimeBookmarksEntityFrameworkCoreOptions>()
-                .SingleOrDefault(),
-            provider,
-            connectionString,
-            connectionName,
-            defaultConnectionString,
-            "Runtime bookmarks");
-        EnsureCompatible(
-            services.Select(x => x.ImplementationInstance)
-                .OfType<RuntimeArtifactsEntityFrameworkCoreOptions>()
-                .SingleOrDefault(),
-            provider,
-            connectionString,
-            connectionName,
-            defaultConnectionString,
-            "Runtime artifacts");
-        EnsureCompatible(
-            services.Select(x => x.ImplementationInstance)
-                .OfType<RuntimeActivityExecutionEntityFrameworkCoreOptions>()
-                .SingleOrDefault(),
-            provider,
-            connectionString,
-            connectionName,
-            defaultConnectionString,
-            "Runtime activity executions");
-        EnsureCompatible(
-            services.Select(x => x.ImplementationInstance)
-                .OfType<RuntimeWorkflowExecutionEntityFrameworkCoreOptions>()
-                .SingleOrDefault(),
-            provider,
-            connectionString,
-            connectionName,
-            defaultConnectionString,
-            "Runtime workflow executions");
-        EnsureCompatible(
-            services.Select(x => x.ImplementationInstance)
-                .OfType<RuntimeWorkflowAlterationEntityFrameworkCoreOptions>()
-                .SingleOrDefault(),
-            provider,
-            connectionString,
-            connectionName,
-            defaultConnectionString,
-            "Runtime alterations");
-        EnsureCompatible(
-            services.Select(x => x.ImplementationInstance)
-                .OfType<RuntimeWorkflowTestScopeEntityFrameworkCoreOptions>()
-                .SingleOrDefault(),
-            provider,
-            connectionString,
-            connectionName,
-            defaultConnectionString,
-            "Runtime test scopes");
-        EnsureCompatible(
-            services.Select(x => x.ImplementationInstance)
-                .OfType<RuntimeOperationalStateEntityFrameworkCoreOptions>()
-                .SingleOrDefault(),
-            provider,
-            connectionString,
-            connectionName,
-            defaultConnectionString,
-            "Runtime operational state");
-        EnsureCompatible(
-            services.Select(x => x.ImplementationInstance)
-                .OfType<RuntimeDurableTimerEntityFrameworkCoreOptions>()
-                .SingleOrDefault(),
-            provider,
-            connectionString,
-            connectionName,
-            defaultConnectionString,
-            "Runtime durable timers");
-        EnsureCompatible(
-            services.Select(x => x.ImplementationInstance)
-                .OfType<RuntimeSchedulerWorkQueueEntityFrameworkCoreOptions>()
-                .SingleOrDefault(),
-            provider,
-            connectionString,
-            connectionName,
-            defaultConnectionString,
-            "Runtime scheduler work");
-        EnsureCompatible(
-            services.Select(x => x.ImplementationInstance)
-                .OfType<RuntimeSchedulerPoisonEntityFrameworkCoreOptions>()
-                .SingleOrDefault(),
-            provider,
-            connectionString,
-            connectionName,
-            defaultConnectionString,
-            "Runtime scheduler poison");
-    }
-
-    private static void EnsureCompatible<TOptions>(
-        TOptions? existing,
-        string provider,
-        string? connectionString,
-        string? connectionName,
-        string defaultConnectionString,
-        string owner)
-        where TOptions : class
-    {
-        if (existing is null)
-            return;
-
-        var (existingProvider, existingConnectionString, existingConnectionName, existingDefaultConnectionString) = existing switch
+        var currentIdentity = EffectiveIdentity(provider, connectionString, connectionName);
+        foreach (var (owner, existingProvider, existingConnectionString, existingConnectionName) in services
+                     .Select(descriptor => descriptor.ImplementationInstance)
+                     .Select(RegisteredConnection)
+                     .OfType<(string, string, string?, string?)>())
         {
-            RuntimeBookmarksEntityFrameworkCoreOptions options =>
-                (options.Provider, options.ConnectionString, options.ConnectionName, BookmarkStateEfModule.DefaultSqliteConnectionString),
-            RuntimeArtifactsEntityFrameworkCoreOptions options =>
-                (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeArtifactEfModule.DefaultSqliteConnectionString),
-            RuntimeActivityExecutionEntityFrameworkCoreOptions options =>
-                (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeActivityExecutionEfModule.DefaultSqliteConnectionString),
-            RuntimeWorkflowExecutionEntityFrameworkCoreOptions options =>
-                (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeWorkflowExecutionEfModule.DefaultSqliteConnectionString),
-            RuntimeWorkflowAlterationEntityFrameworkCoreOptions options =>
-                (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeWorkflowAlterationEfModule.DefaultSqliteConnectionString),
-            RuntimeWorkflowTestScopeEntityFrameworkCoreOptions options =>
-                (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeWorkflowTestScopeEfModule.DefaultSqliteConnectionString),
-            RuntimeOperationalStateEntityFrameworkCoreOptions options =>
-                (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeOperationalStateEfModule.DefaultSqliteConnectionString),
-            RuntimeDurableTimerEntityFrameworkCoreOptions options =>
-                (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeOperationalStateEfModule.DefaultSqliteConnectionString),
-            RuntimeSchedulerWorkQueueEntityFrameworkCoreOptions options =>
-                (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeOperationalStateEfModule.DefaultSqliteConnectionString),
-            RuntimeSchedulerPoisonEntityFrameworkCoreOptions options =>
-                (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeOperationalStateEfModule.DefaultSqliteConnectionString),
-            _ => throw new InvalidOperationException("Unknown Runtime EF context options.")
-        };
-
-        var existingIdentity = EffectiveIdentity(
-            existingProvider,
-            existingConnectionString,
-            existingConnectionName,
-            existingDefaultConnectionString);
-        var currentIdentity = EffectiveIdentity(provider, connectionString, connectionName, defaultConnectionString);
-        if (!string.Equals(existingIdentity, currentIdentity, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                $"Combined Runtime bookmarks and artifact EF persistence requires compatible provider options; {owner} is already registered differently.");
+            if (!string.Equals(EffectiveIdentity(existingProvider, existingConnectionString, existingConnectionName), currentIdentity, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    $"Combined Runtime bookmarks and artifact EF persistence requires compatible provider options; {owner} is already registered differently.");
         }
     }
 
-    private static string EffectiveIdentity(
-        string provider,
-        string? connectionString,
-        string? connectionName,
-        string defaultConnectionString)
+    private static (string Owner, string Provider, string? ConnectionString, string? ConnectionName)? RegisteredConnection(object? instance) => instance switch
+    {
+        RuntimeBookmarksEntityFrameworkCoreOptions options => ("Runtime bookmarks", options.Provider, options.ConnectionString, options.ConnectionName),
+        RuntimeArtifactsEntityFrameworkCoreOptions options => ("Runtime artifacts", options.Provider, options.ConnectionString, options.ConnectionName),
+        RuntimeActivityExecutionEntityFrameworkCoreOptions options => ("Runtime activity executions", options.Provider, options.ConnectionString, options.ConnectionName),
+        RuntimeWorkflowExecutionEntityFrameworkCoreOptions options => ("Runtime workflow executions", options.Provider, options.ConnectionString, options.ConnectionName),
+        RuntimeWorkflowAlterationEntityFrameworkCoreOptions options => ("Runtime alterations", options.Provider, options.ConnectionString, options.ConnectionName),
+        RuntimeWorkflowTestScopeEntityFrameworkCoreOptions options => ("Runtime test scopes", options.Provider, options.ConnectionString, options.ConnectionName),
+        RuntimeOperationalStateEntityFrameworkCoreOptions options => ("Runtime operational state", options.Provider, options.ConnectionString, options.ConnectionName),
+        RuntimeDurableTimerEntityFrameworkCoreOptions options => ("Runtime durable timers", options.Provider, options.ConnectionString, options.ConnectionName),
+        RuntimeSchedulerWorkQueueEntityFrameworkCoreOptions options => ("Runtime scheduler work", options.Provider, options.ConnectionString, options.ConnectionName),
+        RuntimeSchedulerPoisonEntityFrameworkCoreOptions options => ("Runtime scheduler poison", options.Provider, options.ConnectionString, options.ConnectionName),
+        _ => null
+    };
+
+    private static string EffectiveIdentity(string provider, string? connectionString, string? connectionName)
     {
         var normalizedProvider = EfRelationalProviderBinding.Normalize(provider);
         if (!string.IsNullOrWhiteSpace(connectionString))
             return $"{normalizedProvider}:connection:{connectionString}";
         if (!string.IsNullOrWhiteSpace(connectionName))
             return $"{normalizedProvider}:name:{connectionName}";
-        return $"{normalizedProvider}:default:{defaultConnectionString}";
+        return $"{normalizedProvider}:default";
+    }
+
+    /// <summary>
+    /// Registers the one shared Runtime context. Every participant registers it through here, so whichever registers
+    /// first, the context resolves the same connection for the same options.
+    /// </summary>
+    public static IReadOnlyCollection<ServiceDescriptor> AddContext(
+        IServiceCollection services,
+        string provider,
+        string? connectionString,
+        string? connectionName) => EfRelationalProviderBinding.Normalize(provider) switch
+    {
+        "sqlite" => AddContext<BookmarkStateSqliteDbContext>(services, provider, connectionString, connectionName, EfRelationalProviderBinding.UseSqlite),
+        "sqlserver" => AddContext<BookmarkStateSqlServerDbContext>(services, provider, connectionString, connectionName, EfRelationalProviderBinding.UseSqlServer),
+        "postgresql" => AddContext<BookmarkStatePostgreSqlDbContext>(services, provider, connectionString, connectionName, EfRelationalProviderBinding.UseNpgsql),
+        "mysql" => AddContext<BookmarkStateMySqlDbContext>(services, provider, connectionString, connectionName, EfRelationalProviderBinding.UseMySql),
+        _ => throw new ArgumentException($"Unknown Runtime EF provider '{provider}'.", nameof(provider))
+    };
+
+    private static IReadOnlyCollection<ServiceDescriptor> AddContext<TContext>(
+        IServiceCollection services,
+        string provider,
+        string? connectionString,
+        string? connectionName,
+        Action<DbContextOptionsBuilder, string, string, string?> bind)
+        where TContext : BookmarkStateDbContext
+    {
+        var start = services.Count;
+        services.AddDbContext<TContext>((serviceProvider, builder) => bind(
+            builder,
+            ResolveConnectionString(serviceProvider, provider, connectionString, connectionName),
+            RuntimeEfModule.HistoryTableName,
+            typeof(BookmarkStateDbContext).Assembly.GetName().Name));
+        services.TryAddScoped<BookmarkStateDbContext>(serviceProvider => serviceProvider.GetRequiredService<TContext>());
+        return services.Skip(start).ToArray();
+    }
+
+    /// <summary>
+    /// An explicit connection string wins, then a named <c>ConnectionStrings</c> entry, then
+    /// <see cref="RuntimeEfModule.DefaultConnectionName"/>, then the SQLite default file.
+    /// </summary>
+    public static string ResolveConnectionString(
+        IServiceProvider services,
+        string provider,
+        string? connectionString,
+        string? connectionName)
+    {
+        if (!string.IsNullOrWhiteSpace(connectionString))
+            return connectionString;
+        var configuration = services.GetService<IConfiguration>();
+        if (!string.IsNullOrWhiteSpace(connectionName))
+        {
+            var named = configuration?.GetConnectionString(connectionName);
+            return string.IsNullOrWhiteSpace(named)
+                ? throw new InvalidOperationException($"Runtime EF connection '{connectionName}' was not found or was empty in ConnectionStrings.")
+                : named;
+        }
+
+        var fallback = configuration?.GetConnectionString(RuntimeEfModule.DefaultConnectionName);
+        if (!string.IsNullOrWhiteSpace(fallback))
+            return fallback;
+        if (EfRelationalProviderBinding.Normalize(provider) == "sqlite")
+            return RuntimeEfModule.DefaultSqliteConnectionString;
+        throw new InvalidOperationException(
+            $"Runtime EF requires ConnectionString, ConnectionName or ConnectionStrings:{RuntimeEfModule.DefaultConnectionName} for a non-Sqlite provider.");
     }
 }

@@ -4,8 +4,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -40,12 +38,7 @@ public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
             else
                 RuntimeOperationalStateStoreBackend.EnsureNoUnownedRegistrations(services);
 
-            BookmarkStateEfContextRegistration.EnsureCompatible(
-                services,
-                provider,
-                options.ConnectionString,
-                options.ConnectionName,
-                RuntimeOperationalStateEfModule.DefaultSqliteConnectionString);
+            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName);
             BookmarkStateEfContextRegistration.EnsureRecoveryContinuationSigningKeyCompatible(services, options.RecoveryContinuationSigningKey, "Runtime operational state");
             var commitExistingRemoval = existing?.PrepareRemoveOwnedArtifacts(services);
 
@@ -87,7 +80,7 @@ public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
             services.Add(optionsDescriptor);
             owned.Add(optionsDescriptor);
             if (BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Count == 0)
-                owned.AddRange(AddContext(services, configured, provider));
+                owned.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName));
 
             var durableContract = ServiceDescriptor.Scoped<IDurableValueStateStore>(provider => provider.GetRequiredService<EfDurableValueStateStore>());
             var schedulerContract = ServiceDescriptor.Scoped<ISchedulerStateStore>(provider => provider.GetRequiredService<EfSchedulerStateStore>());
@@ -162,35 +155,6 @@ public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
         StringComparer.Ordinal.Equals(left.ConnectionString, right.ConnectionString) &&
         StringComparer.Ordinal.Equals(left.ConnectionName, right.ConnectionName) &&
         StringComparer.Ordinal.Equals(left.RecoveryContinuationSigningKey, right.RecoveryContinuationSigningKey);
-
-    private static IReadOnlyCollection<ServiceDescriptor> AddContext(IServiceCollection services, RuntimeOperationalStateEntityFrameworkCoreOptions options, string provider) => provider switch
-    {
-        "sqlite" => AddContext<BookmarkStateSqliteDbContext>(services, options, EfRelationalProviderBinding.UseSqlite),
-        "sqlserver" => AddContext<BookmarkStateSqlServerDbContext>(services, options, EfRelationalProviderBinding.UseSqlServer),
-        "postgresql" => AddContext<BookmarkStatePostgreSqlDbContext>(services, options, EfRelationalProviderBinding.UseNpgsql),
-        "mysql" => AddContext<BookmarkStateMySqlDbContext>(services, options, EfRelationalProviderBinding.UseMySql),
-        _ => throw new ArgumentException($"Unknown Runtime EF provider '{provider}'.", nameof(provider))
-    };
-
-    private static IReadOnlyCollection<ServiceDescriptor> AddContext<TContext>(IServiceCollection services, RuntimeOperationalStateEntityFrameworkCoreOptions options, Action<DbContextOptionsBuilder, string, string, string?> bind) where TContext : BookmarkStateDbContext
-    {
-        var start = services.Count;
-        services.AddDbContext<TContext>((provider, builder) => bind(builder, ResolveConnectionString(provider, options), RuntimeEfModule.HistoryTableName, typeof(BookmarkStateDbContext).Assembly.GetName().Name));
-        services.TryAddScoped<BookmarkStateDbContext>(provider => provider.GetRequiredService<TContext>());
-        return services.Skip(start).ToArray();
-    }
-
-    private static string ResolveConnectionString(IServiceProvider provider, RuntimeOperationalStateEntityFrameworkCoreOptions options)
-    {
-        if (!string.IsNullOrWhiteSpace(options.ConnectionString)) return options.ConnectionString!;
-        var configuration = provider.GetService<IConfiguration>();
-        if (!string.IsNullOrWhiteSpace(options.ConnectionName))
-            return configuration?.GetConnectionString(options.ConnectionName!) ?? throw new InvalidOperationException($"Runtime operational-state EF connection '{options.ConnectionName}' was not found.");
-        var fallback = configuration?.GetConnectionString(RuntimeOperationalStateEfModule.DefaultConnectionName);
-        if (!string.IsNullOrWhiteSpace(fallback)) return fallback!;
-        if (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite") return RuntimeOperationalStateEfModule.DefaultSqliteConnectionString;
-        throw new InvalidOperationException("Runtime operational-state EF requires ConnectionString or ConnectionName for a non-Sqlite provider.");
-    }
 
     private static void RemoveOwned(IServiceCollection services, IReadOnlyCollection<ServiceDescriptor> owned)
     {
