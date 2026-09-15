@@ -99,9 +99,16 @@ public sealed class EfRuntimeCheckpointCommitStore(
             await using var transaction = await context.Database.BeginTransactionAsync(writeCancellationToken);
             try
             {
+                // Stage against the rows as they are now. An unchanged tracked entity is only a snapshot from earlier
+                // work on this context, and one execution commits from more than one scope (a nested drain commits in
+                // its own scope between two commits of the outer one); a stale snapshot would carry a superseded
+                // revision into the concurrency check and refuse this commit. Pending sibling R14-R18 mutations that a
+                // caller staged on this context are kept, so this is not a tracker clear.
+                foreach (var entry in context.ChangeTracker.Entries().Where(entry => entry.State == EntityState.Unchanged).ToArray())
+                    entry.State = EntityState.Detached;
+
                 // Fence validation/touch is deliberately first. The workflow and scheduler rows then join the same
                 // transaction, and the immutable marker is added only after every supported participant is staged.
-                // Do not clear the tracker: callers may have staged a sibling R14-R18 mutation on this context.
                 if (commit.ExpectedFence is { } expectedFence)
                 {
                     await EfRuntimeCheckpointParticipantStaging.StageExecutionFenceAsync(

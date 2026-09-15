@@ -4,8 +4,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -60,12 +58,7 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
             var operationalBackend = RuntimeOperationalStateStoreBackend.Find(services);
 
             BookmarkStateEfContextRegistration.EnsureRecoveryContinuationSigningKeyCompatible(services, options.RecoveryContinuationSigningKey, "Runtime activity executions");
-            BookmarkStateEfContextRegistration.EnsureCompatible(
-                services,
-                provider,
-                options.ConnectionString,
-                options.ConnectionName,
-                RuntimeActivityExecutionEfModule.DefaultSqliteConnectionString);
+            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName);
             EnsureContext(services, provider, bookmarksBackend?.Name == BookmarkStateStoreBackend.EntityFramework ? bookmarksBackend.Owns : null,
                 artifactsBackend?.Name == RuntimeArtifactStoreBackend.EntityFramework ? artifactsBackend.Owns : null,
                 workflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework ? workflowBackend.Owns : null,
@@ -119,7 +112,7 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
             else if (operationalBackend?.Name == RuntimeOperationalStateStoreBackend.EntityFramework)
                 ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(operationalBackend.Owns));
             else
-                ownedInfrastructure.AddRange(AddContext(services, configured, provider));
+                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName));
 
             services.RemoveAll<EfActivityExecutionStateStore>();
             services.RemoveAll<EfActivityExecutionInspectionStore>();
@@ -198,42 +191,6 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
 
     private static void EnsureContext(IServiceCollection services, string provider, Func<ServiceDescriptor, bool>? bookmarksOwner, Func<ServiceDescriptor, bool>? artifactsOwner, Func<ServiceDescriptor, bool>? workflowOwner, Func<ServiceDescriptor, bool>? alterationOwner, Func<ServiceDescriptor, bool>? scopeOwner, Func<ServiceDescriptor, bool>? operationalOwner, string owner) =>
         BookmarkStateEfContextRegistration.EnsureContextIsAvailable(services, provider, owner, bookmarksOwner, artifactsOwner, workflowOwner, alterationOwner, scopeOwner, operationalOwner);
-
-    private static IReadOnlyCollection<ServiceDescriptor> AddContext(IServiceCollection services, RuntimeActivityExecutionEntityFrameworkCoreOptions options, string provider)
-    {
-        return provider switch
-        {
-            "sqlite" => AddContext<BookmarkStateSqliteDbContext>(services, options, EfRelationalProviderBinding.UseSqlite),
-            "sqlserver" => AddContext<BookmarkStateSqlServerDbContext>(services, options, EfRelationalProviderBinding.UseSqlServer),
-            "postgresql" => AddContext<BookmarkStatePostgreSqlDbContext>(services, options, EfRelationalProviderBinding.UseNpgsql),
-            "mysql" => AddContext<BookmarkStateMySqlDbContext>(services, options, EfRelationalProviderBinding.UseMySql),
-            _ => throw new ArgumentException($"Unknown Runtime EF provider '{provider}'.", nameof(provider))
-        };
-    }
-
-    private static IReadOnlyCollection<ServiceDescriptor> AddContext<TContext>(IServiceCollection services, RuntimeActivityExecutionEntityFrameworkCoreOptions options, Action<DbContextOptionsBuilder, string, string, string?> bind)
-        where TContext : BookmarkStateDbContext
-    {
-        var start = services.Count;
-        services.AddDbContext<TContext>((provider, builder) => bind(builder, Resolve(provider, options), RuntimeEfModule.HistoryTableName, typeof(BookmarkStateDbContext).Assembly.GetName().Name));
-        services.TryAddScoped<BookmarkStateDbContext>(provider => provider.GetRequiredService<TContext>());
-        return services.Skip(start).ToArray();
-    }
-
-    private static string Resolve(IServiceProvider provider, RuntimeActivityExecutionEntityFrameworkCoreOptions options)
-    {
-        if (!string.IsNullOrWhiteSpace(options.ConnectionString))
-            return options.ConnectionString!;
-        var configuration = provider.GetService<IConfiguration>();
-        if (!string.IsNullOrWhiteSpace(options.ConnectionName))
-            return configuration?.GetConnectionString(options.ConnectionName!) ?? throw new InvalidOperationException($"Runtime activity execution EF connection '{options.ConnectionName}' was not found.");
-        var fallback = configuration?.GetConnectionString(RuntimeActivityExecutionEfModule.DefaultConnectionName);
-        if (!string.IsNullOrWhiteSpace(fallback))
-            return fallback!;
-        if (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite")
-            return RuntimeActivityExecutionEfModule.DefaultSqliteConnectionString;
-        throw new InvalidOperationException("Runtime activity execution EF requires ConnectionString or ConnectionName for a non-Sqlite provider.");
-    }
 
     private static void RemoveOwnedArtifacts(IServiceCollection services, IReadOnlyCollection<ServiceDescriptor> ownedInfrastructure)
     {

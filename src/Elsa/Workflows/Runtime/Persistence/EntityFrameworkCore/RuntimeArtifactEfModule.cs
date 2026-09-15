@@ -3,8 +3,6 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 public static class RuntimeArtifactEfModule
 {
     public const string SchemaVersion = "1.0.0";
-    public const string DefaultConnectionName = "ElsaRuntimeArtifacts";
-    public const string DefaultSqliteConnectionString = "Data Source=elsa-runtime-artifacts.db";
     public const string WorkflowExecutableTableName = "elsa_runtime_workflow_executable";
     public const string WorkflowExecutableCoordinationTableName = "elsa_runtime_workflow_executable_coordination";
     public const string ExecutableActivityTemplateTableName = "elsa_runtime_executable_activity_template";

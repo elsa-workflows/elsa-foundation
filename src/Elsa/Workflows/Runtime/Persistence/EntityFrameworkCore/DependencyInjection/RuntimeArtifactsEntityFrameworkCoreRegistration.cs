@@ -4,8 +4,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -22,6 +20,7 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
         {
             var provider = EfRelationalProviderBinding.Normalize(options.Provider);
             _ = EfRelationalProviderBinding.ExpectedProviderName(options.Provider);
+            var cacheOptions = CopyAndValidate(options.WorkflowExecutableCache);
             if (services.Any(x => x.ImplementationType == typeof(EfWorkflowExecutableStore)))
             {
                 var registeredBackend = RuntimeArtifactStoreBackend.Find(services);
@@ -47,7 +46,8 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                 if (existing is null ||
                     !string.Equals(EfRelationalProviderBinding.Normalize(existing.Provider), EfRelationalProviderBinding.Normalize(options.Provider), StringComparison.Ordinal) ||
                     !string.Equals(existing.ConnectionString, options.ConnectionString, StringComparison.Ordinal) ||
-                    !string.Equals(existing.ConnectionName, options.ConnectionName, StringComparison.Ordinal))
+                    !string.Equals(existing.ConnectionName, options.ConnectionName, StringComparison.Ordinal) ||
+                    !CacheOptionsEqual(existing.WorkflowExecutableCache, cacheOptions))
                     throw new InvalidOperationException("Runtime artifacts EF persistence is already registered with different provider options.");
                 BookmarkStateEfContextRegistration.EnsureContextIsAvailable(
                     services,
@@ -97,18 +97,13 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             if (existingScopeBackend?.Name == WorkflowTestScopeStoreBackend.EntityFramework)
                 existingScopeBackend.EnsureOwnsRegisteredContracts(services);
             var existingOperationalBackend = RuntimeOperationalStateStoreBackend.Find(services);
-            BookmarkStateEfContextRegistration.EnsureCompatible(
-                services,
-                provider,
-                options.ConnectionString,
-                options.ConnectionName,
-                RuntimeArtifactEfModule.DefaultSqliteConnectionString);
+            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName);
             var commitExistingBackendRemoval = existingBackend?.PrepareRemoveOwnedArtifacts(services);
             services.AddOptions<RuntimeRecoveryContinuationOptions>()
                 .Configure(options => options.AllowEphemeralDevelopmentKey = false);
             services.TryAddSingleton<IRuntimeRecoveryContinuationCodec, HmacRuntimeRecoveryContinuationCodec>();
             services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateRuntimeRecoveryContinuationCodecStartupTask>());
-            var configured = new RuntimeArtifactsEntityFrameworkCoreOptions { Provider = options.Provider, ConnectionString = options.ConnectionString, ConnectionName = options.ConnectionName };
+            var configured = new RuntimeArtifactsEntityFrameworkCoreOptions { Provider = options.Provider, ConnectionString = options.ConnectionString, ConnectionName = options.ConnectionName, WorkflowExecutableCache = cacheOptions };
             var optionsStart = services.Count;
             services.AddSingleton(configured);
             var ownedInfrastructure = new List<ServiceDescriptor> { services[optionsStart] };
@@ -158,13 +153,7 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                 ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
                     .Where(operationalBackend!.Owns));
             else
-                switch (provider)
-                {
-                    case "sqlite": ownedInfrastructure.AddRange(AddContext<BookmarkStateSqliteDbContext>(services, configured, EfRelationalProviderBinding.UseSqlite)); break;
-                    case "sqlserver": ownedInfrastructure.AddRange(AddContext<BookmarkStateSqlServerDbContext>(services, configured, EfRelationalProviderBinding.UseSqlServer)); break;
-                    case "postgresql": ownedInfrastructure.AddRange(AddContext<BookmarkStatePostgreSqlDbContext>(services, configured, EfRelationalProviderBinding.UseNpgsql)); break;
-                    case "mysql": ownedInfrastructure.AddRange(AddContext<BookmarkStateMySqlDbContext>(services, configured, EfRelationalProviderBinding.UseMySql)); break;
-                }
+                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName));
             services.RemoveAll<EfWorkflowExecutableStore>();
             services.RemoveAll<EfExecutableActivityTemplateStore>();
             services.RemoveAll<EfWorkflowExecutableSourceReferenceStore>();
@@ -178,7 +167,10 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             services.RemoveAll<IWorkflowExecutableSourceReferenceStore>();
             services.RemoveAll<IWorkflowExecutableSourceReferenceReader>();
             services.RemoveAll<IWorkflowExecutableSourceReferenceWriter>();
-            services.AddScoped<IWorkflowExecutableStore>(p => p.GetRequiredService<EfWorkflowExecutableStore>());
+            if (cacheOptions is null)
+                services.AddScoped<IWorkflowExecutableStore>(p => p.GetRequiredService<EfWorkflowExecutableStore>());
+            else
+                ownedInfrastructure.AddRange(AddExecutableStore(services, cacheOptions));
             services.AddScoped<IExecutableActivityTemplateStore>(p => p.GetRequiredService<EfExecutableActivityTemplateStore>());
             services.AddScoped<IExecutableActivityTemplateReader>(p => p.GetRequiredService<EfExecutableActivityTemplateStore>());
             services.AddScoped<IExecutableActivityTemplateWriter>(p => p.GetRequiredService<EfExecutableActivityTemplateStore>());
@@ -189,6 +181,7 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                 RuntimeArtifactStoreBackend.EntityFramework,
                 RuntimeArtifactStoreBackend.CaptureArtifactSurfaceRegistrations(services)
                     .Concat(ownedInfrastructure)
+                    .Distinct()
                     .ToArray()));
             commitExistingBackendRemoval?.Invoke(services);
             return services;
@@ -202,18 +195,93 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
         }
     }
     public static IServiceCollection AddRuntimeExecutableArtifactsEntityFrameworkCore(this IServiceCollection services, RuntimeArtifactsEntityFrameworkCoreOptions options) => services.AddRuntimeArtifactsEntityFrameworkCore(options);
-    private static IReadOnlyCollection<ServiceDescriptor> AddContext<T>(IServiceCollection services, RuntimeArtifactsEntityFrameworkCoreOptions options, Action<DbContextOptionsBuilder, string, string, string?> bind) where T : BookmarkStateDbContext
+
+    /// <summary>
+    /// Selects the executable-store surface. Enabled caching mirrors the Groundwork composition: ordinary scoped
+    /// reads go through one bounded cache partitioned by persistence scope, and every other access policy reads the
+    /// database directly while still invalidating cached entries it changes. The returned infrastructure is owned by
+    /// the artifact backend together with the captured store surface.
+    /// </summary>
+    private static IReadOnlyCollection<ServiceDescriptor> AddExecutableStore(IServiceCollection services, WorkflowExecutableCacheOptions cacheOptions)
     {
         var start = services.Count;
-        services.AddDbContext<T>((provider, builder) => bind(builder, Resolve(provider, options), RuntimeEfModule.HistoryTableName, typeof(BookmarkStateDbContext).Assembly.GetName().Name));
-        services.TryAddScoped<BookmarkStateDbContext>(p => p.GetRequiredService<T>());
+        services.AddSingleton(cacheOptions);
+        if (!cacheOptions.Enabled)
+        {
+            services.AddScoped<IWorkflowExecutableStore>(p => p.GetRequiredService<EfWorkflowExecutableStore>());
+            return services.Skip(start).ToArray();
+        }
+
+        services.AddKeyedScoped<IWorkflowExecutableStore>(UncachedWorkflowExecutableStoreKey, (p, _) => p.GetRequiredService<EfWorkflowExecutableStore>());
+        services.AddSingleton<WorkflowExecutableCache>();
+        services.AddSingleton<EfWorkflowExecutableCacheLoader>();
+        services.AddScoped(p =>
+        {
+            var context = p.GetRequiredService<IPersistenceAccessContextAccessor>().Current;
+            if (context.AccessPolicy != PersistenceAccessPolicy.Ordinary || context.Scope is not { } persistenceScope)
+                throw new InvalidOperationException("The workflow executable cache adapter requires an ordinary persistence scope.");
+            var loader = p.GetRequiredService<EfWorkflowExecutableCacheLoader>();
+            return new CachingWorkflowExecutableStore(
+                p.GetRequiredKeyedService<IWorkflowExecutableStore>(UncachedWorkflowExecutableStoreKey),
+                p.GetRequiredService<WorkflowExecutableCache>(),
+                persistenceScope.Value,
+                (artifactId, cancellationToken) => loader.LoadAsync(persistenceScope, artifactId, cancellationToken));
+        });
+        services.AddScoped(p => new InvalidatingWorkflowExecutableStore(
+            p.GetRequiredKeyedService<IWorkflowExecutableStore>(UncachedWorkflowExecutableStoreKey),
+            p.GetRequiredService<WorkflowExecutableCache>(),
+            p.GetRequiredService<IPersistenceAccessContextAccessor>().Current.Scope?.Value));
+        services.AddScoped<IWorkflowExecutableStore>(p =>
+        {
+            var context = p.GetRequiredService<IPersistenceAccessContextAccessor>().Current;
+            return context.AccessPolicy == PersistenceAccessPolicy.Ordinary && context.Scope is not null
+                ? p.GetRequiredService<CachingWorkflowExecutableStore>()
+                : p.GetRequiredService<InvalidatingWorkflowExecutableStore>();
+        });
         return services.Skip(start).ToArray();
     }
-    private static string Resolve(IServiceProvider provider, RuntimeArtifactsEntityFrameworkCoreOptions options) { if (!string.IsNullOrWhiteSpace(options.ConnectionString)) return options.ConnectionString!; var cfg = provider.GetService<IConfiguration>(); if (!string.IsNullOrWhiteSpace(options.ConnectionName)) return cfg?.GetConnectionString(options.ConnectionName!) ?? throw new InvalidOperationException($"Runtime artifacts EF connection '{options.ConnectionName}' was not found."); var fallback = cfg?.GetConnectionString(RuntimeArtifactEfModule.DefaultConnectionName); if (!string.IsNullOrWhiteSpace(fallback)) return fallback!; if (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite") return RuntimeArtifactEfModule.DefaultSqliteConnectionString; throw new InvalidOperationException("Runtime artifacts EF requires ConnectionString or ConnectionName for a non-Sqlite provider."); }
+
+    private static WorkflowExecutableCacheOptions? CopyAndValidate(WorkflowExecutableCacheOptions? options)
+    {
+        if (options is null)
+            return null;
+        var copy = new WorkflowExecutableCacheOptions { Enabled = options.Enabled, Capacity = options.Capacity };
+        copy.Validate();
+        return copy;
+    }
+
+    private static bool CacheOptionsEqual(WorkflowExecutableCacheOptions? left, WorkflowExecutableCacheOptions? right) =>
+        left is null ? right is null : right is not null && left.Enabled == right.Enabled && left.Capacity == right.Capacity;
+
+    /// <summary>Key of the uncached EF store behind the optional executable cache.</summary>
+    public const string UncachedWorkflowExecutableStoreKey = "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.UncachedWorkflowExecutableStore";
 }
+
+/// <summary>
+/// Loads a cache miss in its own operation scope bound to the requesting persistence scope: a shared in-flight
+/// load can outlive the scope that started it, so it must not borrow that scope's context.
+/// </summary>
+internal sealed class EfWorkflowExecutableCacheLoader(IPersistenceOperationScopeFactory operationScopeFactory)
+{
+    public async ValueTask<WorkflowExecutable?> LoadAsync(PersistenceScope persistenceScope, string artifactId, CancellationToken cancellationToken)
+    {
+        await using var operationScope = await operationScopeFactory.CreateAsync(persistenceScope, cancellationToken);
+        var store = operationScope.ServiceProvider.GetRequiredKeyedService<IWorkflowExecutableStore>(
+            RuntimeArtifactsEntityFrameworkCoreRegistration.UncachedWorkflowExecutableStoreKey);
+        return await store.FindAsync(artifactId, cancellationToken);
+    }
+}
+
 public sealed class RuntimeArtifactsEntityFrameworkCoreOptions
 {
     public string Provider { get; set; } = "Sqlite";
     public string? ConnectionString { get; set; }
     public string? ConnectionName { get; set; }
+
+    /// <summary>
+    /// Bounded shell-local cache of immutable workflow executables, isolated by persistence scope. Null (this
+    /// participant's default) registers no cache infrastructure and reads executables straight from the database;
+    /// the Runtime EF aggregate always supplies it, as the Groundwork runtime composition does.
+    /// </summary>
+    public WorkflowExecutableCacheOptions? WorkflowExecutableCache { get; set; }
 }

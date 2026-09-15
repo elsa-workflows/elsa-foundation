@@ -739,6 +739,32 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         Assert.Single(await context.RuntimeCheckpointCommits.ToArrayAsync());
     }
 
+    /// <summary>
+    /// One execution commits from more than one scope: a nested drain commits in its own scope between two commits of
+    /// the outer one. The outer context must stage against the row as it now is, not the snapshot its own earlier
+    /// commit left tracked, or the revision check refuses a legitimate commit.
+    /// </summary>
+    [Fact]
+    public async Task A_commit_stages_against_current_rows_after_another_context_committed_the_same_execution()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var outer = database.Open("tenant-a");
+        await using var nested = database.Open("tenant-a");
+        var outerStore = new EfRuntimeCheckpointCommitStore(outer, new FixedAccessor("tenant-a"));
+        var nestedStore = new EfRuntimeCheckpointCommitStore(nested, new FixedAccessor("tenant-a"));
+
+        await outerStore.CommitAsync(WithInspection("commit-scheduled", ActivityExecutionStatus.Scheduled), Decision());
+        await outerStore.CommitAsync(WithInspection("commit-running", ActivityExecutionStatus.Running), Decision());
+        await nestedStore.CommitAsync(WithInspection("commit-suspended", ActivityExecutionStatus.Suspended), Decision());
+        await outerStore.CommitAsync(WithInspection("commit-completed", ActivityExecutionStatus.Completed), Decision());
+
+        await using var verification = database.Open("tenant-a");
+        var inspection = await verification.ActivityExecutionInspections.AsNoTracking().SingleAsync();
+        Assert.Equal(nameof(ActivityExecutionStatus.Completed), inspection.Status);
+        Assert.Equal(4, inspection.Revision);
+        Assert.Equal(4, await verification.RuntimeCheckpointCommits.CountAsync());
+    }
+
     [Fact]
     public async Task Inspection_without_its_own_scope_uses_provenance_for_checkpoint_hierarchy()
     {
@@ -1380,6 +1406,18 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
                 [new RuntimeStateChange<IncidentState>(incident.IncidentId,
                     RuntimeStateChangeOperation.Append, incident, new Dictionary<string, string>())],
                 [], null,
+                [new RuntimeStateChange<ActivityExecutionInspectionProjection>(inspection.ActivityExecutionId,
+                    RuntimeStateChangeOperation.Upsert, inspection, new Dictionary<string, string>())],
+                null, null, null)
+        };
+    }
+
+    private static RuntimeCheckpointCommit WithInspection(string commitId, ActivityExecutionStatus status)
+    {
+        var inspection = CheckpointInspection("activity-inspected") with { Status = status };
+        return Commit(commitId) with
+        {
+            StateChanges = new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], [], null,
                 [new RuntimeStateChange<ActivityExecutionInspectionProjection>(inspection.ActivityExecutionId,
                     RuntimeStateChangeOperation.Upsert, inspection, new Dictionary<string, string>())],
                 null, null, null)

@@ -337,7 +337,7 @@ public sealed class GroundworkV2RuntimeRegistrationTests
     }
 
     [Fact]
-    public void R26_EF_transition_owns_the_trigger_store_without_withdrawing_R27s_shared_projection_unit()
+    public void R26_EF_transition_is_refused_alone_and_the_aggregate_owns_the_trigger_store_and_its_units()
     {
         var services = new ServiceCollection().AddWorkflowRuntime();
         services.AddGroundworkV2RuntimeStores();
@@ -365,12 +365,13 @@ public sealed class GroundworkV2RuntimeRegistrationTests
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowTriggerBindingStore));
         Assert.DoesNotContain(registry.Registrations, registration =>
             registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingDocumentKind);
-        Assert.Contains(registry.Registrations, registration =>
+        // The aggregate selects R27 as well, so the projection state both of them shared is withdrawn too.
+        Assert.DoesNotContain(registry.Registrations, registration =>
             registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind);
     }
 
     [Fact]
-    public void R28_EF_transition_owns_only_the_activation_authority_and_withdraws_its_Groundwork_unit()
+    public void R28_aggregate_transition_owns_the_activation_authority_and_withdraws_its_Groundwork_unit()
     {
         var services = new ServiceCollection().AddWorkflowRuntime();
         services.AddGroundworkV2RuntimeStores();
@@ -397,12 +398,10 @@ public sealed class GroundworkV2RuntimeRegistrationTests
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowActivationAuthority));
         Assert.DoesNotContain(registry.Registrations, registration =>
             registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind);
-        Assert.Contains(registry.Registrations, registration =>
-            registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind);
     }
 
     [Fact]
-    public void R27_EF_transition_owns_only_recurring_schedules_and_retains_shared_publication_projection()
+    public void R27_aggregate_transition_owns_recurring_schedules_and_withdraws_their_Groundwork_units()
     {
         var services = new ServiceCollection().AddWorkflowRuntime();
         services.AddGroundworkV2RuntimeStores();
@@ -429,8 +428,42 @@ public sealed class GroundworkV2RuntimeRegistrationTests
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2RecurringTriggerScheduleStore));
         Assert.DoesNotContain(registry.Registrations, registration =>
             registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleDocumentKind);
-        Assert.Contains(registry.Registrations, registration =>
+        Assert.DoesNotContain(registry.Registrations, registration =>
             registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind);
+    }
+
+    /// <summary>
+    /// The aggregate selects both owners of the shared projection state at once, so the one-sided case can no longer
+    /// be composed. The coordinator must still keep the unit declared while either owner remains on Groundwork.
+    /// </summary>
+    [Fact]
+    public void R29_shared_projection_stays_declared_while_only_one_owner_is_EF()
+    {
+        var services = new ServiceCollection();
+        var withdrawals = 0;
+        var transition = new RuntimeSharedProjectionStateTransition(_ => withdrawals++);
+        RuntimeSharedProjectionStateTransition.Register(services, transition);
+        WorkflowTriggerBindingStoreBackend.Register(services, new(
+            WorkflowTriggerBindingStoreBackend.EntityFramework,
+            ServiceDescriptor.Scoped<IWorkflowTriggerBindingStore, EfWorkflowTriggerBindingStore>(),
+            ServiceDescriptor.Scoped<EfWorkflowTriggerBindingStore, EfWorkflowTriggerBindingStore>()));
+        var groundworkSchedules = new RecurringTriggerScheduleStoreBackend(
+            RecurringTriggerScheduleStoreBackend.Groundwork,
+            ServiceDescriptor.Scoped<IRecurringTriggerScheduleStore, GroundworkV2RecurringTriggerScheduleStore>(),
+            ServiceDescriptor.Scoped<GroundworkV2RecurringTriggerScheduleStore, GroundworkV2RecurringTriggerScheduleStore>());
+        RecurringTriggerScheduleStoreBackend.Register(services, groundworkSchedules);
+
+        Assert.False(transition.WithdrawIfBothEfSelected(services));
+        Assert.Equal(0, withdrawals);
+
+        services.Remove(services.Single(descriptor => ReferenceEquals(descriptor.ImplementationInstance, groundworkSchedules)));
+        RecurringTriggerScheduleStoreBackend.Register(services, new(
+            RecurringTriggerScheduleStoreBackend.EntityFramework,
+            ServiceDescriptor.Scoped<IRecurringTriggerScheduleStore, EfRecurringTriggerScheduleStore>(),
+            ServiceDescriptor.Scoped<EfRecurringTriggerScheduleStore, EfRecurringTriggerScheduleStore>()));
+
+        Assert.True(transition.WithdrawIfBothEfSelected(services));
+        Assert.Equal(1, withdrawals);
     }
 
     [Theory]
