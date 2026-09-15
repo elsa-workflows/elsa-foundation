@@ -59,6 +59,14 @@ public sealed class EfWorkflowSchedulerPoisonStore(
                     Detach(inserted);
                     throw;
                 }
+                catch (DbUpdateException)
+                {
+                    // A provider failure can leave the failed Added entity tracked even though its transaction was
+                    // rolled back. Detach it before the caller can stage another shared-context participant; the
+                    // failed poison write must never be retried implicitly by a later SaveChanges call.
+                    Detach(inserted);
+                    throw;
+                }
             }
 
             _ = ReadChecked(row, scope, record.WorkflowExecutionId, record.WorkItemId);
@@ -76,6 +84,12 @@ public sealed class EfWorkflowSchedulerPoisonStore(
             }
             catch (OperationCanceledException)
             {
+                Detach(replacement);
+                throw;
+            }
+            catch (DbUpdateException)
+            {
+                // Keep the shared context usable after a generic provider failure, just as after a CAS conflict.
                 Detach(replacement);
                 throw;
             }

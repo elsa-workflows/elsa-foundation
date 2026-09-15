@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -7,6 +8,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -129,6 +131,37 @@ public sealed class EfWorkflowSchedulerPoisonStoreTests
     }
 
     [Fact]
+    public async Task Generic_provider_failure_detaches_poison_entity_before_shared_context_sibling_save()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var interceptor = new PoisonWriteFailureInterceptor();
+        await using var fixture = database.Open("tenant-a", interceptor);
+        interceptor.Arm();
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => fixture.Store.RecordAsync(Record(1)).AsTask());
+        Assert.Empty(fixture.Context.ChangeTracker.Entries<WorkflowSchedulerPoisonEntity>());
+
+        // A later participant using the same DbContext must not flush the failed poison insert implicitly.
+        fixture.Context.SchedulerStates.Add(new SchedulerStateEntity
+        {
+            Id = "sibling-row",
+            ScopeKey = EfRelationalIdentity.Encode("tenant-a"),
+            ScopeKeyHash = EfRelationalIdentity.Hash("tenant-a"),
+            WorkflowExecutionId = EfRelationalIdentity.Encode("workflow-sibling"),
+            WorkflowExecutionIdHash = EfRelationalIdentity.Hash("workflow-sibling"),
+            WorkflowExecutionIdOrderKey = Convert.ToHexString(EfRelationalIdentity.CreateOrderKey("workflow-sibling", RuntimeOperationalStateEfModule.IdentityMaximumLength)),
+            Collection = "schedulerState",
+            ContentJson = "{}",
+            SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion,
+            Revision = 1
+        });
+        await fixture.Context.SaveChangesAsync();
+
+        Assert.Null(await fixture.Store.FindAsync("workflow-1", "work-1"));
+        Assert.Single(await fixture.Context.SchedulerStates.ToArrayAsync());
+    }
+
+    [Fact]
     public async Task Registration_is_load_order_independent_and_keeps_poison_out_of_operational_backend()
     {
         foreach (var poisonFirst in new[] { true, false })
@@ -232,7 +265,7 @@ public sealed class EfWorkflowSchedulerPoisonStoreTests
             return new TestDatabase(keeper, connectionString);
         }
 
-        public Fixture Open(string scope) => new(connectionString, scope);
+        public Fixture Open(string scope, params IInterceptor[] interceptors) => new(connectionString, scope, interceptors);
 
         public async ValueTask DisposeAsync() => await keeper.DisposeAsync();
     }
@@ -243,12 +276,14 @@ public sealed class EfWorkflowSchedulerPoisonStoreTests
         public readonly BookmarkStateSqliteDbContext Context;
         public readonly EfWorkflowSchedulerPoisonStore Store;
 
-        public Fixture(string connectionString, string scope)
+        public Fixture(string connectionString, string scope, params IInterceptor[] interceptors)
         {
             connection = new SqliteConnection(connectionString);
             connection.Open();
-            Context = new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            var options = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection);
+            if (interceptors.Length > 0)
+                options.AddInterceptors(interceptors);
+            Context = new BookmarkStateSqliteDbContext(options.Options);
             Store = new EfWorkflowSchedulerPoisonStore(Context, new FixedAccessor(scope));
         }
 
@@ -256,6 +291,41 @@ public sealed class EfWorkflowSchedulerPoisonStoreTests
         {
             await Context.DisposeAsync();
             await connection.DisposeAsync();
+        }
+    }
+
+    private sealed class PoisonWriteFailureInterceptor : DbCommandInterceptor
+    {
+        private int armed;
+
+        public void Arm() => Interlocked.Exchange(ref armed, 1);
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            ThrowIfArmed(command);
+            return ValueTask.FromResult(result);
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            ThrowIfArmed(command);
+            return ValueTask.FromResult(result);
+        }
+
+        private void ThrowIfArmed(DbCommand command)
+        {
+            if (command.CommandText.Contains("elsa_runtime_scheduler_poison", StringComparison.OrdinalIgnoreCase) &&
+                command.CommandText.Contains("INSERT", StringComparison.OrdinalIgnoreCase) &&
+                Interlocked.Exchange(ref armed, 0) == 1)
+                throw new DbUpdateException("Simulated generic provider write failure.");
         }
     }
 }
