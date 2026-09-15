@@ -8,7 +8,9 @@ using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Groundwork.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -145,6 +147,57 @@ public sealed class GroundworkV2RuntimeRegistrationTests
             "Runtime recovery continuation signing key must be configured for durable recovery paging.",
             exception.Message);
         Assert.Contains(nameof(GroundworkWorkflowRuntimeFeature.RecoveryContinuationSigningKey), exception.Message);
+    }
+
+    [Fact]
+    public void Operational_state_switches_between_groundwork_and_ef_without_stale_units()
+    {
+        var services = new ServiceCollection();
+        services.Configure<RuntimeRecoveryContinuationOptions>(options =>
+            options.SigningKey = "shared-runtime-recovery-signing-key-32-bytes");
+        services.AddGroundworkV2RuntimeStores();
+
+        services.AddRuntimeOperationalStateEntityFrameworkCore(new()
+        {
+            ConnectionString = "Data Source=:memory:",
+            RecoveryContinuationSigningKey = "shared-runtime-recovery-signing-key-32-bytes"
+        });
+
+        var registry = Assert.IsType<GroundworkStorageUnitRegistry>(services.Single(descriptor =>
+            descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance);
+        Assert.Equal(RuntimeOperationalStateStoreBackend.EntityFramework, RuntimeOperationalStateStoreBackend.Find(services)!.Name);
+        Assert.DoesNotContain(registry.Registrations, registration =>
+            registration.Unit.Id.Value is ElsaRuntimeV2StorageManifest.DurableValueStateDocumentKind or ElsaRuntimeV2StorageManifest.SchedulerStateDocumentKind);
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(EfDurableValueStateStore) && descriptor.Lifetime == ServiceLifetime.Scoped);
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(EfSchedulerStateStore) && descriptor.Lifetime == ServiceLifetime.Scoped);
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IDurableValueStateStore) && descriptor.Lifetime == ServiceLifetime.Scoped);
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(ISchedulerStateStore) && descriptor.Lifetime == ServiceLifetime.Scoped);
+
+        services.AddGroundworkV2RuntimeStores();
+        services.AddGroundworkV2RuntimeStores();
+
+        Assert.Equal(RuntimeOperationalStateStoreBackend.Groundwork, RuntimeOperationalStateStoreBackend.Find(services)!.Name);
+        AssertScopedAlias<IDurableValueStateStore, GroundworkV2DurableValueStateStore>(services);
+        AssertScopedAlias<ISchedulerStateStore, GroundworkV2SchedulerStateStore>(services);
+        Assert.Equal(
+            ElsaRuntimeV2StorageManifest.CreateUnits().Select(unit => unit.Id.Value).Order(StringComparer.Ordinal),
+            registry.Registrations.Select(registration => registration.Unit.Id.Value).Order(StringComparer.Ordinal));
+
+        var efFirst = new ServiceCollection();
+        efFirst.AddRuntimeOperationalStateEntityFrameworkCore(new()
+        {
+            ConnectionString = "Data Source=:memory:",
+            RecoveryContinuationSigningKey = "shared-runtime-recovery-signing-key-32-bytes"
+        });
+        efFirst.AddGroundworkV2RuntimeStores();
+
+        Assert.Equal(RuntimeOperationalStateStoreBackend.Groundwork, RuntimeOperationalStateStoreBackend.Find(efFirst)!.Name);
+        AssertScopedAlias<IDurableValueStateStore, GroundworkV2DurableValueStateStore>(efFirst);
+        AssertScopedAlias<ISchedulerStateStore, GroundworkV2SchedulerStateStore>(efFirst);
+        Assert.DoesNotContain(efFirst, descriptor => descriptor.ServiceType == typeof(EfDurableValueStateStore));
+        Assert.DoesNotContain(efFirst, descriptor => descriptor.ServiceType == typeof(EfSchedulerStateStore));
+        Assert.DoesNotContain(efFirst, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
+        Assert.DoesNotContain(efFirst, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
     }
 
     // Recovery paging is only exercised by the background resumption sweep, so a missing key would otherwise

@@ -48,6 +48,7 @@ public static class RuntimeWorkflowTestScopeEntityFrameworkCoreRegistration
             if (existing is not null) existing.EnsureOwnsRegisteredContracts(services);
             else EnsureOnlyCoreScopeRegistrations(services);
             var alteration = RuntimeWorkflowAlterationStoreBackend.Find(services);
+            var operational = RuntimeOperationalStateStoreBackend.Find(services);
             BookmarkStateEfContextRegistration.EnsureRecoveryContinuationSigningKeyCompatible(services, options.RecoveryContinuationSigningKey, "Runtime test scopes");
             BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, RuntimeWorkflowTestScopeEfModule.DefaultSqliteConnectionString);
             BookmarkStateEfContextRegistration.EnsureContextIsAvailable(
@@ -58,7 +59,8 @@ public static class RuntimeWorkflowTestScopeEntityFrameworkCoreRegistration
                 RuntimeActivityExecutionStoreBackend.Find(services) is { } activityBackend ? activityBackend.Owns : null,
                 BookmarkStateStoreBackend.Find(services) is { } bookmarkBackend ? bookmarkBackend.Owns : null,
                 WorkflowExecutionStateStoreBackend.Find(services) is { } executionBackend ? executionBackend.Owns : null,
-                alteration is { } alterationBackend ? alterationBackend.Owns : null);
+                alteration is { } alterationBackend ? alterationBackend.Owns : null,
+                operational?.Name == RuntimeOperationalStateStoreBackend.EntityFramework ? operational.Owns : null);
             var remove = existing?.PrepareRemoveOwnedArtifacts(services);
             if (existing is not null && existing.Name != WorkflowTestScopeStoreBackend.EntityFramework)
                 services.RemoveAll<WorkflowTestScopeProviderRegistration>();
@@ -94,6 +96,8 @@ public static class RuntimeWorkflowTestScopeEntityFrameworkCoreRegistration
                 owned.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(execution.Owns));
             else if (alteration?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework)
                 owned.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(alteration.Owns));
+            else if (operational?.Name == RuntimeOperationalStateStoreBackend.EntityFramework)
+                owned.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(operational.Owns));
             else
                 owned.AddRange(AddContext(services, options, provider));
 

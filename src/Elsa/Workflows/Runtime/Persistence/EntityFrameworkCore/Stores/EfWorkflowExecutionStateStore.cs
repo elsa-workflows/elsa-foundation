@@ -265,7 +265,7 @@ public sealed class EfWorkflowExecutionStateStore(
         row.ContentJson = RuntimeArtifactJson.Serialize(state); row.SchemaVersion = RuntimeWorkflowExecutionEfModule.SchemaVersion; row.Revision = revision;
     }
 
-    private static WorkflowExecutionState ReadChecked(WorkflowExecutionStateEntity row, string scope, string expectedId)
+    internal static WorkflowExecutionState ReadChecked(WorkflowExecutionStateEntity row, string scope, string expectedId)
     {
         try
         {
