@@ -59,6 +59,33 @@ public sealed class WorkbenchShellActivationTests
 
     public static TheoryData<string> Shells => new(WorkbenchShell.All.Keys);
 
+    [Fact]
+    public async Task Parallel_stock_shells_bind_distinct_ports_and_serve_requests()
+    {
+        var launches = new[]
+        {
+            WorkbenchProcess.StartAsync(WorkbenchShell.Development),
+            WorkbenchProcess.StartAsync(WorkbenchShell.Development)
+        };
+
+        try
+        {
+            var processes = await Task.WhenAll(launches);
+            Assert.NotEqual(processes[0].Client.BaseAddress!.Port, processes[1].Client.BaseAddress!.Port);
+            foreach (var process in processes)
+            {
+                Assert.InRange(process.Client.BaseAddress!.Port, 1, 65535);
+                var live = await process.Client.GetFromJsonAsync<Health>("/health/live");
+                Assert.Equal("live", live!.Status);
+            }
+        }
+        finally
+        {
+            foreach (var launch in launches.Where(launch => launch.IsCompletedSuccessfully))
+                await (await launch).DisposeAsync();
+        }
+    }
+
     [Theory]
     [MemberData(nameof(Shells))]
     public async Task Stock_shell_activates_and_serves_requests(string shellName)
