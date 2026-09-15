@@ -1,4 +1,5 @@
 using Elsa.Persistence.EntityFramework;
+using Microsoft.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -122,4 +123,12 @@ internal static class EfPublishingStoreSupport
         if (!StringComparer.Ordinal.Equals(hash, Hash(value)))
             throw new InvalidOperationException($"The persisted publication {field} hash projection is corrupt.");
     }
+
+    /// <summary>
+    /// Stops tracking a written entity whatever the outcome. Policy, intent and snapshot-review stores
+    /// share one scoped context, and a failed save keeps its entity Added or Modified, so without this
+    /// a later, unrelated save in the same scope would silently commit the write the caller saw fail.
+    /// </summary>
+    public static void Detach(DbContext context, object entity) =>
+        context.Entry(entity).State = EntityState.Detached;
 }

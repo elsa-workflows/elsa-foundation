@@ -305,6 +305,26 @@ public sealed class EfPublicationPolicyProjectionStoreTests
         Assert.Equal(before, foreign);
     }
 
+    [Fact]
+    public async Task A_failed_policy_write_is_not_committed_by_a_later_save_on_the_same_context()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var context = database.Context();
+        var policies = database.Policies(context, "tenant-a");
+        Assert.True((await policies.TrySaveAsync(Policy("zombie", "original"), 0)).Succeeded);
+
+        // A non-concurrency failure such as a deadlock or timeout: the caller sees the write fail.
+        await context.Database.ExecuteSqlRawAsync(
+            $"CREATE TRIGGER reject_policy_update BEFORE UPDATE ON {PublishingPolicyProjectionEfModule.PolicyTableName} BEGIN SELECT RAISE(ABORT, 'transient'); END;");
+        await Assert.ThrowsAsync<DbUpdateException>(() => policies.TrySaveAsync(Policy("zombie", "failed"), 1).AsTask());
+        await context.Database.ExecuteSqlRawAsync("DROP TRIGGER reject_policy_update;");
+
+        await database.Intents(context, "tenant-a").SaveAsync(Intent("unrelated", "publication"));
+
+        await using var verify = database.Context();
+        Assert.Equal("original", (await database.Policies(verify, "tenant-a").FindAsync("zombie"))!.DefaultSlotName);
+    }
+
     private static PublicationPolicy Policy(string? definitionId, string slot) =>
         new(definitionId, PublicationPolicyDefaultAction.ReplaceDefaultSlot, slot, 0, new DateTimeOffset(2026, 9, 15, 12, 0, 0, TimeSpan.FromHours(2)));
 

@@ -26,7 +26,8 @@ public sealed class EfPublicationProjectionIntentStore(
             return;
         }
 
-        context.ProjectionIntents.Add(ToEntity(intent, tenantId));
+        var created = ToEntity(intent, tenantId);
+        context.ProjectionIntents.Add(created);
         try
         {
             await context.SaveChangesAsync(cancellationToken);
@@ -39,6 +40,10 @@ public sealed class EfPublicationProjectionIntentStore(
                 throw;
             if (winner != intent)
                 throw new InvalidOperationException($"Publication projection intent '{intent.IntentId}' already exists.");
+        }
+        finally
+        {
+            EfPublishingStoreSupport.Detach(context, created);
         }
     }
 
@@ -109,6 +114,10 @@ public sealed class EfPublicationProjectionIntentStore(
             context.ChangeTracker.Clear();
             var winner = await FindAsync(intent.IntentId, cancellationToken);
             return new PublicationProjectionIntentTransitionResult(false, winner ?? intent);
+        }
+        finally
+        {
+            EfPublishingStoreSupport.Detach(context, row);
         }
     }
 

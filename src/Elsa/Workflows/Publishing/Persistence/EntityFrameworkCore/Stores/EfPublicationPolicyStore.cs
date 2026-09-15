@@ -55,6 +55,10 @@ public sealed class EfPublicationPolicyStore(
                     return new PublicationPolicyWriteResult(false, winner);
                 throw;
             }
+            finally
+            {
+                EfPublishingStoreSupport.Detach(context, created);
+            }
         }
 
         var current = ToModel(row);
@@ -72,6 +76,10 @@ public sealed class EfPublicationPolicyStore(
         {
             context.ChangeTracker.Clear();
             return new PublicationPolicyWriteResult(false, await FindWinnerAsync(policy.WorkflowDefinitionId, next, cancellationToken));
+        }
+        finally
+        {
+            EfPublishingStoreSupport.Detach(context, row);
         }
     }
 
