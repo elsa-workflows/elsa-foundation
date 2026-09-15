@@ -6,10 +6,10 @@ Records CShells feature identity, public feature properties, and dependency evid
 
 ## Summary
 
-- Feature classes: 119
+- Feature classes: 120
 - Concrete features missing explicit ShellFeature ID: 2
 - Duplicate explicit feature IDs: 0
-- Feature-bearing source projects: 93
+- Feature-bearing source projects: 94
 - IConfiguration feature-registration shape observed from: `src/Apps/Elsa.Workbench/appsettings.json`
 
 ## IConfiguration Shape Evidence
