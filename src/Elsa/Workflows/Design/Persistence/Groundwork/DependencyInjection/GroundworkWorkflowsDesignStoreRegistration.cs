@@ -101,6 +101,7 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         !IsFallbackDescriptor(descriptor));
 
     private static bool IsFallbackDescriptor(ServiceDescriptor descriptor) =>
+        descriptor.ServiceType == typeof(IWorkflowDefinitionVersionLayoutStore) &&
         descriptor.ImplementationType is { } implementationType &&
         typeof(IDesignPersistenceFallback).IsAssignableFrom(implementationType);
 

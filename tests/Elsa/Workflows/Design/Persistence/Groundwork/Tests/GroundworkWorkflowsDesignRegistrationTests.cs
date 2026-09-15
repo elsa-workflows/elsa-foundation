@@ -96,7 +96,7 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
     }
 
     [Fact]
-    public void Groundwork_registration_rejects_an_untracked_prior_store()
+    public void Groundwork_registration_rejects_a_marked_non_layout_prior_store()
     {
         var services = new ServiceCollection();
         services.AddScoped<IWorkflowDefinitionStore, PriorStore>();
@@ -104,6 +104,9 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
         var exception = Assert.Throws<InvalidOperationException>(() => services.AddGroundworkWorkflowsDesignStores());
 
         Assert.Contains("already present", exception.Message, StringComparison.Ordinal);
+        Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowDefinitionStore) &&
+            descriptor.ImplementationType == typeof(PriorStore));
     }
 
     [Fact]
@@ -277,7 +280,7 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
         Assert.Equal(ServiceLifetime.Scoped, registration.Lifetime);
     }
 
-    private sealed class PriorStore : IWorkflowDefinitionStore
+    private sealed class PriorStore : IWorkflowDefinitionStore, IDesignPersistenceFallback
     {
         public Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();

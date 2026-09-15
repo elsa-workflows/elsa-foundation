@@ -475,6 +475,25 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public void Ef_registration_refuses_a_marked_non_layout_store()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IWorkflowDefinitionStore, MarkedCustomDefinitionStore>();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => services.AddWorkflowsDesignEntityFrameworkCore(
+            new WorkflowsDesignEntityFrameworkCoreOptions
+            {
+                Provider = "Sqlite",
+                ConnectionString = "Data Source=:memory:"
+            }));
+
+        Assert.Contains("already present", exception.Message, StringComparison.Ordinal);
+        Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowDefinitionStore) &&
+            descriptor.ImplementationType == typeof(MarkedCustomDefinitionStore));
+    }
+
+    [Fact]
     public async Task Ef_registration_lookup_reads_a_definition_through_the_provider_store()
     {
         var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-workflows-design-lookup-{Guid.NewGuid():N}.db");
@@ -2384,6 +2403,13 @@ public sealed class EfWorkflowDesignPersistenceTests
     {
         public Task<WorkflowDefinitionVersionLayout?> FindByVersionIdAsync(string workflowDefinitionVersionId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class MarkedCustomDefinitionStore : IWorkflowDefinitionStore, IDesignPersistenceFallback
+    {
+        public Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class CustomDesignAtomicWriter : IDesignAtomicWriter

@@ -98,6 +98,7 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         !IsFallbackDescriptor(descriptor));
 
     private static bool IsFallbackDescriptor(ServiceDescriptor descriptor) =>
+        descriptor.ServiceType == typeof(IWorkflowDefinitionVersionLayoutStore) &&
         descriptor.ImplementationType is { } implementationType &&
         typeof(IDesignPersistenceFallback).IsAssignableFrom(implementationType);
 
