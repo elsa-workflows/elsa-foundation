@@ -10,8 +10,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// <summary>Concrete EF workflow-dispatch lifecycle adapter (R21).</summary>
 /// <remarks>
 /// Ordinary dispatch lifecycle, bounded queries, cancellation, retention deletion and artifact roots are complete.
-/// Test-scope admission is intentionally fail-closed until the test-scope participant can share this context without
-/// clearing sibling checkpoint state; the concrete adapter is therefore an opt-in preview, not a default replacement.
+/// Fire-and-forget test dispatch admission stages the dispatch and its test-scope revision touch in one EF transaction.
+/// The broader checkpoint composition and dispatch completion/redrive surfaces remain owned by their respective slices.
 /// </remarks>
 public sealed class EfWorkflowDispatchStore(
     BookmarkStateDbContext context,
@@ -170,7 +170,7 @@ public sealed class EfWorkflowDispatchStore(
                       ?? throw new InvalidOperationException($"Workflow dispatch '{dispatchId}' was not found for child admission.");
             var current = Read(row, scope, dispatchId);
             if (current.TestScope is not null && current.Mode == WorkflowDispatchMode.FireAndForget)
-                throw new NotSupportedException("EF test-scoped dispatch admission remains unavailable until it can atomically update the test-scope participant.");
+                return await TryAdmitTestScopedAsync(dispatchId, admittedAt, cancellationToken);
             if (current.Status == WorkflowDispatchStatus.Started)
                 return new(WorkflowDispatchAdmissionDisposition.AlreadyAdmitted, current);
             if (WorkflowDispatchLifecycle.WasCancelledBeforeAdmission(current))
@@ -196,6 +196,99 @@ public sealed class EfWorkflowDispatchStore(
                 throw;
             }
         }
+        throw new InvalidOperationException($"Workflow dispatch '{dispatchId}' changed concurrently and did not settle.");
+    }
+
+    private async ValueTask<WorkflowDispatchAdmissionResult> TryAdmitTestScopedAsync(
+        string dispatchId,
+        DateTimeOffset admittedAt,
+        CancellationToken cancellationToken)
+    {
+        var scope = RequireScope();
+        for (var attempt = 0; attempt < MaxTransitionAttempts; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var dispatchRow = await LoadAsync(scope, dispatchId, tracking: true, cancellationToken)
+                               ?? throw new InvalidOperationException($"Workflow dispatch '{dispatchId}' was not found for child admission.");
+            var current = Read(dispatchRow, scope, dispatchId);
+
+            if (current.Status == WorkflowDispatchStatus.Started)
+                return new(WorkflowDispatchAdmissionDisposition.AlreadyAdmitted, current);
+            if (WorkflowDispatchLifecycle.WasCancelledBeforeAdmission(current))
+                return new(WorkflowDispatchAdmissionDisposition.CancelledBeforeAdmission, current);
+            if (current.Status != WorkflowDispatchStatus.Pending)
+                return new(WorkflowDispatchAdmissionDisposition.Terminal, current);
+
+            var testScope = current.TestScope
+                            ?? throw new InvalidDataException($"Workflow dispatch '{dispatchId}' did not contain its test-scope context.");
+            var encodedScope = EfRelationalIdentity.Encode(scope);
+            var scopeHash = EfRelationalIdentity.Hash(scope);
+            var encodedScopeId = EfRelationalIdentity.Encode(testScope.ScopeId);
+            var scopeIdHash = EfRelationalIdentity.Hash(testScope.ScopeId);
+            var scopeRow = await _context.WorkflowTestScopes.SingleOrDefaultAsync(row =>
+                    row.Id == WorkflowTestScopeEfSupport.Id(scope, testScope.ScopeId) &&
+                    row.AccessScopeKey == encodedScope &&
+                    row.AccessScopeKeyHash == scopeHash &&
+                    row.ScopeId == encodedScopeId &&
+                    row.ScopeIdHash == scopeIdHash,
+                cancellationToken);
+
+            var effectiveAt = admittedAt > current.UpdatedAt ? admittedAt : current.UpdatedAt;
+            WorkflowDispatchRecord candidate;
+            WorkflowDispatchAdmissionDisposition disposition;
+            var admitScope = false;
+            if (scopeRow is not null)
+            {
+                var actualScope = WorkflowTestScopeEfSupport.Read(scopeRow, scope, testScope.ScopeId);
+                if (actualScope.State == WorkflowTestScopeState.Open &&
+                    !actualScope.Scope.IsExpired(admittedAt) &&
+                    WorkflowTestScope.ContextEquals(actualScope.Scope, testScope))
+                {
+                    candidate = current.TransitionTo(WorkflowDispatchStatus.Started, effectiveAt);
+                    disposition = WorkflowDispatchAdmissionDisposition.Admitted;
+                    admitScope = true;
+                }
+                else
+                {
+                    candidate = WorkflowDispatchLifecycle.CancelTestScopeBeforeAdmission(current, effectiveAt);
+                    disposition = WorkflowDispatchAdmissionDisposition.CancelledBeforeAdmission;
+                }
+            }
+            else
+            {
+                candidate = WorkflowDispatchLifecycle.CancelTestScopeBeforeAdmission(current, effectiveAt);
+                disposition = WorkflowDispatchAdmissionDisposition.CancelledBeforeAdmission;
+            }
+
+            // All validation and projection reads happen before tracked mutation. The two row writes below share
+            // one transaction and both carry their original Revision as an EF optimistic-concurrency predicate.
+            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                WorkflowDispatchEfSupport.Copy(dispatchRow, candidate, scope, checked(dispatchRow.Revision + 1));
+                if (admitScope)
+                    WorkflowTestScopeEfSupport.StageAdmission(scopeRow!);
+
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return new(disposition, candidate);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                await RollbackAndDetachAsync(transaction, dispatchRow, scopeRow);
+            }
+            catch (OperationCanceledException)
+            {
+                await RollbackAndDetachAsync(transaction, dispatchRow, scopeRow);
+                throw;
+            }
+            catch
+            {
+                await RollbackAndDetachAsync(transaction, dispatchRow, scopeRow);
+                throw;
+            }
+        }
+
         throw new InvalidOperationException($"Workflow dispatch '{dispatchId}' changed concurrently and did not settle.");
     }
 
@@ -346,6 +439,26 @@ public sealed class EfWorkflowDispatchStore(
             !StringComparer.Ordinal.Equals(record.ParentActivityExecutionId, request.ParentActivityExecutionId) ||
             !StringComparer.Ordinal.Equals(record.ChildWorkflowExecutionId, request.ChildWorkflowExecutionId))
             throw new InvalidOperationException($"Workflow dispatch cancellation identity does not match '{request.DispatchId}'.");
+    }
+
+    private async ValueTask RollbackAndDetachAsync(
+        IDbContextTransaction transaction,
+        params object?[] entities)
+    {
+        try
+        {
+            await transaction.RollbackAsync();
+        }
+        catch
+        {
+            // Preserve the original provider failure or concurrency result.
+        }
+
+        foreach (var entity in entities)
+        {
+            if (entity is not null)
+                Detach(entity);
+        }
     }
 
     private void Detach(object entity) => _context.Entry(entity).State = EntityState.Detached;
