@@ -265,6 +265,11 @@ public sealed class EfWorkflowDispatchStore(
             Detach(row);
             return false;
         }
+        catch
+        {
+            Detach(row);
+            throw;
+        }
     }
 
     public async ValueTask DeleteAsync(string dispatchId, CancellationToken cancellationToken = default)
@@ -277,7 +282,15 @@ public sealed class EfWorkflowDispatchStore(
             return;
         _ = Read(row, scope, dispatchId);
         _context.WorkflowDispatches.Remove(row);
-        await _context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch
+        {
+            Detach(row);
+            throw;
+        }
     }
 
     public async ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)

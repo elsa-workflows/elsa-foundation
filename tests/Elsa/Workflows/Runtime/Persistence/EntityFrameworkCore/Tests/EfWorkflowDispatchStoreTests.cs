@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -8,6 +9,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -157,13 +159,101 @@ public sealed class EfWorkflowDispatchStoreTests
             failed.Metadata,
             failed.DispatchNestingDepth,
             failed.TestScope);
+        var sibling = Pending("parent-invalid-sibling", "activity-invalid-sibling");
+        await dispatchStore.SaveAsync(sibling);
+        await StageSiblingRevisionAsync(context, sibling.DispatchId);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => outbox.CompleteClaimAsync(new RuntimePostCommitOutboxClaimCompletion(
             claim,
             new RuntimePostCommitOutboxDeliveryResult(item.OutboxItemId, RuntimePostCommitOutboxStatus.FailedRetryable, Now.AddSeconds(1), "delivery-failed"),
             invalid)).AsTask());
+        await context.SaveChangesAsync();
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, (await outbox.FindAsync(item.OutboxItemId))!.Status);
         Assert.Equal(WorkflowDispatchStatus.Pending, (await dispatchStore.FindAsync(dispatch.DispatchId))!.Status);
+        Assert.Equal(WorkflowDispatchStatus.Pending, (await dispatchStore.FindAsync(sibling.DispatchId))!.Status);
+        Assert.Equal(2, await ReadRevisionAsync(context, sibling.DispatchId));
+    }
+
+    [Fact]
+    public async Task Sqlite_failed_transaction_begin_preserves_tracked_rows_and_sibling_changes()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var interceptor = new FailTransactionStartInterceptor();
+        await using var context = database.Open(interceptors: interceptor);
+        var access = new FixedAccessor("tenant-a");
+        var dispatchStore = new EfWorkflowDispatchStore(context, access);
+        var dispatch = Pending("parent-begin-failure", "activity-begin-failure");
+        await dispatchStore.SaveAsync(dispatch);
+        var item = StartItem("start-begin-failure", dispatch);
+        var outbox = new EfRuntimePostCommitOutboxStore(context, access);
+        await outbox.SavePendingAsync(item);
+        var claim = Assert.Single(await outbox.ClaimAsync(new RuntimePostCommitOutboxClaimRequest("worker", Now, TimeSpan.FromMinutes(1), 1)));
+        var failedAt = Now.AddSeconds(1);
+        var failed = WorkflowDispatchLifecycle.TransitionToDispatchFailed(dispatch, item.OutboxItemId, 0, 1, Now, failedAt);
+        var sibling = Pending("parent-begin-failure-sibling", "activity-begin-failure-sibling");
+        await dispatchStore.SaveAsync(sibling);
+        await StageSiblingRevisionAsync(context, sibling.DispatchId);
+
+        interceptor.FailNextBegin();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => outbox.CompleteClaimAsync(new RuntimePostCommitOutboxClaimCompletion(
+            claim,
+            new RuntimePostCommitOutboxDeliveryResult(item.OutboxItemId, RuntimePostCommitOutboxStatus.FailedRetryable, failedAt, "delivery-failed"),
+            failed)).AsTask());
+
+        await context.SaveChangesAsync();
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, (await outbox.FindAsync(item.OutboxItemId))!.Status);
+        Assert.Equal(WorkflowDispatchStatus.Pending, (await dispatchStore.FindAsync(dispatch.DispatchId))!.Status);
+        Assert.Equal(WorkflowDispatchStatus.Pending, (await dispatchStore.FindAsync(sibling.DispatchId))!.Status);
+        Assert.Equal(2, await ReadRevisionAsync(context, sibling.DispatchId));
+    }
+
+    [Fact]
+    public async Task Sqlite_failed_dispatch_deletes_detach_rows_and_preserve_sibling_changes()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var interceptor = new FailWorkflowDispatchDeleteInterceptor();
+        await using var context = database.Open(interceptors: interceptor);
+        var access = new FixedAccessor("tenant-a");
+        var store = new EfWorkflowDispatchStore(context, access);
+        var first = Pending("parent-delete-first", "activity-delete-first");
+        var second = Pending("parent-delete-second", "activity-delete-second");
+        await store.SaveAsync(first);
+        await store.SaveAsync(second);
+        var firstCancelled = await store.ApplyCancellationAsync(new WorkflowDispatchCancellationRequest(
+            first.DispatchId,
+            first.ParentWorkflowExecutionId,
+            first.ParentActivityExecutionId,
+            first.ChildWorkflowExecutionId,
+            Now.AddMinutes(1)));
+        var secondCancelled = await store.ApplyCancellationAsync(new WorkflowDispatchCancellationRequest(
+            second.DispatchId,
+            second.ParentWorkflowExecutionId,
+            second.ParentActivityExecutionId,
+            second.ChildWorkflowExecutionId,
+            Now.AddMinutes(1)));
+
+        var firstSibling = Pending("parent-delete-first-sibling", "activity-delete-first-sibling");
+        await store.SaveAsync(firstSibling);
+        await StageSiblingRevisionAsync(context, firstSibling.DispatchId);
+        interceptor.FailNextDelete();
+        var firstFailure = await Assert.ThrowsAsync<DbUpdateException>(() => store.TryDeleteAsync(firstCancelled.Record).AsTask());
+        Assert.IsType<InvalidOperationException>(firstFailure.InnerException);
+        await context.SaveChangesAsync();
+        Assert.Equal(2, await ReadRevisionAsync(context, firstSibling.DispatchId));
+
+        var secondSibling = Pending("parent-delete-second-sibling", "activity-delete-second-sibling");
+        await store.SaveAsync(secondSibling);
+        await StageSiblingRevisionAsync(context, secondSibling.DispatchId);
+        interceptor.FailNextDelete();
+        var secondFailure = await Assert.ThrowsAsync<DbUpdateException>(() => store.DeleteAsync(secondCancelled.Record.DispatchId).AsTask());
+        Assert.IsType<InvalidOperationException>(secondFailure.InnerException);
+        await context.SaveChangesAsync();
+        Assert.Equal(2, await ReadRevisionAsync(context, secondSibling.DispatchId));
+
+        Assert.NotNull(await store.FindAsync(firstCancelled.Record.DispatchId));
+        Assert.NotNull(await store.FindAsync(secondCancelled.Record.DispatchId));
+        Assert.NotNull(await store.FindAsync(firstSibling.DispatchId));
+        Assert.NotNull(await store.FindAsync(secondSibling.DispatchId));
     }
 
     [Fact]
@@ -207,6 +297,19 @@ public sealed class EfWorkflowDispatchStoreTests
         Assert.Contains(services, x => x.ServiceType == typeof(EfWorkflowDispatchStore));
         Assert.DoesNotContain(services, x => x.ServiceType == typeof(IWorkflowDispatchStore));
     }
+
+    private static async Task StageSiblingRevisionAsync(BookmarkStateSqliteDbContext context, string dispatchId)
+    {
+        var row = await context.WorkflowDispatches.SingleAsync(x =>
+            x.DispatchId == EfRelationalIdentity.Encode(dispatchId));
+        row.Revision++;
+    }
+
+    private static Task<long> ReadRevisionAsync(BookmarkStateSqliteDbContext context, string dispatchId) =>
+        context.WorkflowDispatches.AsNoTracking()
+            .Where(x => x.DispatchId == EfRelationalIdentity.Encode(dispatchId))
+            .Select(x => x.Revision)
+            .SingleAsync();
 
     private static WorkflowDispatchRecord Pending(string parent, string activity, DateTimeOffset? createdAt = null, WorkflowDispatchMode mode = WorkflowDispatchMode.FireAndForget)
     {
@@ -287,9 +390,67 @@ public sealed class EfWorkflowDispatchStoreTests
             return new TestDatabase(connection);
         }
 
-        public BookmarkStateSqliteDbContext Open(string scope = "tenant-a") =>
-            new(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+        public BookmarkStateSqliteDbContext Open(string scope = "tenant-a", params IInterceptor[] interceptors)
+        {
+            var builder = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection);
+            if (interceptors.Length > 0)
+                builder.AddInterceptors(interceptors);
+            return new BookmarkStateSqliteDbContext(builder.Options);
+        }
 
         public ValueTask DisposeAsync() => connection.DisposeAsync();
+    }
+
+    private sealed class FailTransactionStartInterceptor : DbTransactionInterceptor
+    {
+        private int failNextBegin;
+
+        public void FailNextBegin() => Interlocked.Exchange(ref failNextBegin, 1);
+
+        public override ValueTask<InterceptionResult<DbTransaction>> TransactionStartingAsync(
+            DbConnection connection,
+            TransactionStartingEventData eventData,
+            InterceptionResult<DbTransaction> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Exchange(ref failNextBegin, 0) == 1)
+                throw new InvalidOperationException("Simulated transaction-begin failure.");
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    private sealed class FailWorkflowDispatchDeleteInterceptor : DbCommandInterceptor
+    {
+        private int failNextDelete;
+
+        public void FailNextDelete() => Interlocked.Exchange(ref failNextDelete, 1);
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            ThrowIfArmed(command);
+            return ValueTask.FromResult(result);
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            ThrowIfArmed(command);
+            return ValueTask.FromResult(result);
+        }
+
+        private void ThrowIfArmed(DbCommand command)
+        {
+            if (command.CommandText.Contains("DELETE", StringComparison.OrdinalIgnoreCase) &&
+                command.CommandText.Contains(RuntimeWorkflowDispatchEfModule.TableName, StringComparison.OrdinalIgnoreCase) &&
+                Interlocked.Exchange(ref failNextDelete, 0) == 1)
+                throw new InvalidOperationException("Simulated workflow dispatch delete failure.");
+        }
     }
 }

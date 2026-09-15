@@ -249,7 +249,6 @@ public sealed class EfRuntimePostCommitOutboxStore(
             current,
             completion.Claim,
             completion.DeliveryResult);
-        Copy(row, completed, scope, checked(row.Revision + 1));
 
         WorkflowDispatchEntity? dispatchRow = null;
         WorkflowDispatchRecord? winningDispatch = null;
@@ -309,12 +308,15 @@ public sealed class EfRuntimePostCommitOutboxStore(
                 throw new InvalidOperationException(
                     "The workflow-dispatch projection does not match the claimed child-start intent.");
 
-            WorkflowDispatchEfSupport.Copy(dispatchRow, selectedDispatch, scope, checked(dispatchRow.Revision + 1));
         }
 
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
+            Copy(row, completed, scope, checked(row.Revision + 1));
+            if (dispatchRow is not null && winningDispatch is not null)
+                WorkflowDispatchEfSupport.Copy(dispatchRow, winningDispatch, scope, checked(dispatchRow.Revision + 1));
+
             if (!admissionWins && completion.FollowUpOutboxItem is { } followUp)
             {
                 if (StringComparer.Ordinal.Equals(followUp.OutboxItemId, completion.Claim.OutboxItemId))
@@ -398,11 +400,11 @@ public sealed class EfRuntimePostCommitOutboxStore(
         if (!transition.HasMutation)
             return transition.Result;
 
-        WorkflowDispatchEfSupport.Copy(dispatchRow!, transition.WorkflowDispatch!, scope, checked(dispatchRow!.Revision + 1));
-        Copy(deadLetterRow!, transition.OutboxItem!, scope, checked(deadLetterRow!.Revision + 1));
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
+            WorkflowDispatchEfSupport.Copy(dispatchRow!, transition.WorkflowDispatch!, scope, checked(dispatchRow!.Revision + 1));
+            Copy(deadLetterRow!, transition.OutboxItem!, scope, checked(deadLetterRow!.Revision + 1));
             await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return transition.Result;
