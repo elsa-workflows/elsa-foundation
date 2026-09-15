@@ -151,6 +151,14 @@ public sealed class GroundworkV2RuntimeRegistrationTests
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(EfRuntimePostCommitOutboxStore));
         Assert.Equal(RuntimeArtifactStoreBackend.Groundwork, RuntimeArtifactStoreBackend.Find(services)!.Name);
         Assert.Equal(RuntimeActivityExecutionStoreBackend.Groundwork, RuntimeActivityExecutionStoreBackend.Find(services)!.Name);
+        Assert.Equal(RuntimeCheckpointCommitStoreBackend.Groundwork, RuntimeCheckpointCommitStoreBackend.Find(services)!.Name);
+        var evidenceNames = services.Where(descriptor => descriptor.ServiceType == typeof(IWorkflowDispatchDurabilityEvidence))
+            .Select(descriptor => descriptor.ImplementationType?.Name)
+            .ToArray();
+        Assert.Contains("GroundworkV2CheckpointDurabilityEvidence", evidenceNames);
+        Assert.Contains("GroundworkV2SchedulerDurabilityEvidence", evidenceNames);
+        Assert.DoesNotContain("GroundworkV2DispatchStoreDurabilityEvidence", evidenceNames);
+        Assert.DoesNotContain("GroundworkV2OutboxDurabilityEvidence", evidenceNames);
         Assert.DoesNotContain(registry.Registrations, registration =>
             registration.Unit.Id.Value is ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind or
             ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind);
@@ -199,6 +207,21 @@ public sealed class GroundworkV2RuntimeRegistrationTests
         var unownedBefore = unowned.ToArray();
         Assert.Throws<InvalidOperationException>(() => unowned.AddGroundworkV2RuntimeStores());
         Assert.Equal(unownedBefore, unowned);
+    }
+
+    [Fact]
+    public void Withdrawing_the_owned_Groundwork_checkpoint_removes_its_durability_evidence()
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddGroundworkV2RuntimeStores();
+
+        RuntimeCheckpointCommitStoreBackend.Find(services)!.RemoveOwnedRegistrations(services);
+
+        Assert.Null(RuntimeCheckpointCommitStoreBackend.Find(services));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2RuntimeCheckpointWriter));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IRuntimeCheckpointCommitStore));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IWorkflowDispatchDurabilityEvidence) &&
+            descriptor.ImplementationType?.Name == "GroundworkV2CheckpointDurabilityEvidence");
     }
 
     [Fact]

@@ -263,11 +263,14 @@ public static class GroundworkV2RuntimeRegistration
         ReplaceScoped<GroundworkV2WorkflowDispatchStore>(services, Standard<GroundworkV2WorkflowDispatchStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowDispatchStore), typeof(IWorkflowDispatchQueryStore), typeof(IWorkflowDispatchDeleteStore),
             typeof(IWorkflowDispatchRetentionRootStore), typeof(IWorkflowDispatchAdmissionStore), typeof(IWorkflowDispatchCancellationStore));
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2DispatchStoreDurabilityEvidence>());
+        var groundworkDispatchEvidenceDescriptor = services.Single(descriptor => descriptor.ServiceType == typeof(IWorkflowDispatchDurabilityEvidence) &&
+            descriptor.ImplementationType == typeof(GroundworkV2DispatchStoreDurabilityEvidence));
         var groundworkDispatchConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowDispatchStore));
         var groundworkDispatchContractDescriptors = RuntimeWorkflowDispatchStoreBackend.CaptureContractRegistrations(services);
         RuntimeWorkflowDispatchStoreBackend.Register(services, new(
             RuntimeWorkflowDispatchStoreBackend.Groundwork,
-            [groundworkDispatchConcreteDescriptor, .. groundworkDispatchContractDescriptors],
+            [groundworkDispatchConcreteDescriptor, groundworkDispatchEvidenceDescriptor, .. groundworkDispatchContractDescriptors],
             collection => GroundworkV2RuntimeUnitWithdrawal.RemoveWorkflowDispatch(collection, target)));
         existingCheckpointBackend?.RemoveOwnedRegistrations(services);
         ReplaceScoped<GroundworkV2RuntimeCheckpointWriter>(services, provider => new(
@@ -279,20 +282,27 @@ public static class GroundworkV2RuntimeRegistration
             typeof(IRuntimeCheckpointCommitStore));
         var groundworkCheckpointConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2RuntimeCheckpointWriter));
         var groundworkCheckpointContractDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IRuntimeCheckpointCommitStore));
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2CheckpointDurabilityEvidence>());
+        var groundworkCheckpointEvidenceDescriptor = services.Single(descriptor => descriptor.ServiceType == typeof(IWorkflowDispatchDurabilityEvidence) &&
+            descriptor.ImplementationType == typeof(GroundworkV2CheckpointDurabilityEvidence));
         RuntimeCheckpointCommitStoreBackend.Register(services, new(
             RuntimeCheckpointCommitStoreBackend.Groundwork,
             groundworkCheckpointContractDescriptor,
-            groundworkCheckpointConcreteDescriptor));
+            groundworkCheckpointConcreteDescriptor,
+            groundworkCheckpointEvidenceDescriptor));
         ReplaceScoped<GroundworkV2RuntimePostCommitOutboxStore>(services, Standard<GroundworkV2RuntimePostCommitOutboxStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IRuntimePostCommitOutboxStore), typeof(IPostCommitOutboxLookupStore),
             typeof(IRuntimePostCommitOutboxClaimStore), typeof(IRuntimePostCommitOutboxClaimCompletionStore),
             typeof(IWorkflowDispatchRedriveStore));
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2OutboxDurabilityEvidence>());
+        var groundworkOutboxEvidenceDescriptor = services.Single(descriptor => descriptor.ServiceType == typeof(IWorkflowDispatchDurabilityEvidence) &&
+            descriptor.ImplementationType == typeof(GroundworkV2OutboxDurabilityEvidence));
         services.RemoveAll<RuntimePostCommitOutboxStoreBackend>();
         var groundworkOutboxConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2RuntimePostCommitOutboxStore));
         var groundworkOutboxContractDescriptors = RuntimePostCommitOutboxStoreBackend.CaptureContractRegistrations(services);
         RuntimePostCommitOutboxStoreBackend.Register(services, new(
             RuntimePostCommitOutboxStoreBackend.Groundwork,
-            [groundworkOutboxConcreteDescriptor, .. groundworkOutboxContractDescriptors],
+            [groundworkOutboxConcreteDescriptor, groundworkOutboxEvidenceDescriptor, .. groundworkOutboxContractDescriptors],
             collection => GroundworkV2RuntimeUnitWithdrawal.RemovePostCommitOutbox(collection, target)));
         ReplaceScoped<GroundworkV2WorkflowSchedulerWorkQueue>(services, Standard<GroundworkV2WorkflowSchedulerWorkQueue>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowSchedulerWorkQueue), typeof(IWorkflowSchedulerWorkClaimInspection));
@@ -310,9 +320,6 @@ public static class GroundworkV2RuntimeRegistration
                 provider.GetRequiredService<GroundworkStorageTransactionFactory>(),
                 target), typeof(IWorkflowActivationAuthority));
 
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2CheckpointDurabilityEvidence>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2DispatchStoreDurabilityEvidence>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2OutboxDurabilityEvidence>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2SchedulerDurabilityEvidence>());
         RegisterArtifactBackend(services, target);
         RegisterActivityExecutionBackend(services, target);
