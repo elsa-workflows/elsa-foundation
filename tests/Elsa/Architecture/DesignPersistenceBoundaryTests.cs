@@ -237,7 +237,7 @@ public sealed class DesignPersistenceBoundaryTests
             "Elsa.Persistence.Groundwork.SqlServer.Unified.",
             "Elsa.Persistence.Groundwork.MongoDb.Unified."
         };
-        var activeFiles = new[] { "src", "tests", "benchmarks" }
+        var activeFiles = new[] { "src", "tests" }
             .Select(root => Path.Combine(RepoRoot, root))
             .Where(Directory.Exists)
             .SelectMany(root => Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories))

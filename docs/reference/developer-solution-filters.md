@@ -15,7 +15,7 @@ by the affected work unit.
 | `Elsa.Server.Foundation.Identity.slnf` | Identity, authorization, authentication providers, and their normal tests. |
 | `Elsa.Server.Persistence.Groundwork.slnf` | Groundwork adapters across foundation and workflow domains, plus their container-free tests. |
 | `Elsa.Server.Persistence.Groundwork.Integration.slnf` | All Testcontainers-backed tests, currently the Groundwork provider integration surface. |
-| `Elsa.Server.Workbench.slnf` | Debugging the reference host without loading unrelated tests, samples, or benchmarks as roots. |
+| `Elsa.Server.Workbench.slnf` | Debugging the reference host without loading unrelated tests or samples as roots. |
 
 The Workbench profile is intentionally broad: the reference host directly composes much of the
 product and therefore pulls a large source dependency closure. Use one of the domain profiles when
@@ -32,8 +32,8 @@ dotnet sln Elsa.Server.Workflows.Runtime.slnf list
 ```
 
 The generated files contain the complete in-solution `ProjectReference` closure in ordinal path
-order. A benchmark or test-support project can therefore appear as a dependency even though it was
-not selected as a profile root. Project references outside `Elsa.Server.slnx` remain buildable by
+order. A test-support project can therefore appear as a dependency even though it was not selected
+as a profile root. Project references outside `Elsa.Server.slnx` remain buildable by
 MSBuild but cannot be listed in a solution filter; the existing Groundwork provider-evidence importer
 is one such tool dependency.
 

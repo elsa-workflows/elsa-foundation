@@ -42,12 +42,15 @@ unzip -p "$package_dir"/*.nupkg '*.nuspec' | rg \
   'Groundwork\.(DiagnosticRecords|Documents|Kernel|Query\.Model|Store)'
 ```
 
-## Trace-list benchmark evidence
+## Trace-list benchmark evidence (historical)
 
-`benchmarks/Elsa.Diagnostics.OpenTelemetry.TraceListBenchmark` runs the same deterministic corpus and
-trace-list route against the frozen Groundwork v1 child and this v2 adapter in separate processes. It binds
-the comparison to source/package provenance, canonical input, result count, and ordered result digest before
-printing timing statistics.
+The trace-list benchmark project that compared the frozen Groundwork v1 child with this v2 adapter was
+deleted when performance measurement was retired by owner decision (#1668, ADR 0073). It ran the same
+deterministic corpus and trace-list route against both implementations in separate processes and bound the
+comparison to source/package provenance, canonical input, result count, and ordered result digest before
+printing timing statistics. The v2 trace-list route's correctness is covered by this project's tests; the
+v1 comparand no longer exists. The paragraph below describes historical evidence only, and no current claim
+is made that performance passed.
 
 The retained local run is
 [`docs/reports/groundwork-v2-diagnostics-benchmark.json`](../../../../../../../docs/reports/groundwork-v2-diagnostics-benchmark.json).

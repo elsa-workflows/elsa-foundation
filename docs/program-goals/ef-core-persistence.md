@@ -34,6 +34,19 @@ and explicit dependency, transaction, migration, host, tool, workflow, alert, ma
 surfaces. These are inventory facts and future acceptance gates; no module replacement, default
 flip, or deletion is claimed by this checkpoint.
 
+## Performance measurement retired (2026-09-15)
+
+By owner decision under ADR 0073, [#1668](https://github.com/elsa-workflows/elsa-foundation/issues/1668)
+removes the performance-measurement infrastructure: the five `benchmarks/` projects, `tools/performance/`,
+`tools/ledger/` (the store-performance harness tests and the spec 094 Groundwork coverage-ledger
+validator), the `HTTP workflow performance` and `Groundwork ledger` workflows, the IAM native-plan CI
+upload, and the `BenchmarkDotNet` package pin and source mapping. Timing-independent correctness found
+in those surfaces was moved into ordinary test projects or mapped to suites that already express it;
+the [test register](../reports/ef-core-persistence/test-and-e2e-register.md) records each disposition.
+Historical evidence under `docs/reports/evidence/` and in archived reports is retained unchanged, with
+the run ADR 0045 cites archived there as well. No benchmark or performance workflow was run for this
+change, and no claim is made that performance passed.
+
 ## Settled boundaries
 
 - EF Core is the only first-party persistence family; OpenIddict remains vendor-owned EF.

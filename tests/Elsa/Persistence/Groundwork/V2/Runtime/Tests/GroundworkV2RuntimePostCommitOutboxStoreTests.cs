@@ -62,6 +62,42 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStoreTests
             row.Values.Values[ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField]);
     }
 
+    /// <summary>
+    /// Two claimants that both read the same pending revision converge to exactly one owner: the one whose revision-guarded
+    /// write lands first. Moved from the retired store-performance outbox contention wave (#1668), which raced two
+    /// independent clients over one SQLite connection; pausing the first claimant between its read and its write makes the
+    /// losing interleaving deterministic instead of hoping the scheduler produces it.
+    /// </summary>
+    [Fact]
+    public async Task Sqlite_claimants_that_read_the_same_revision_converge_to_one_owner()
+    {
+        await using var fixture = SqliteFixture.Create();
+        const string id = "contended-item";
+        var store = fixture.Store("tenant-a");
+        await store.SavePendingAsync(Pending(id, "workflow-a"));
+        using var paused = new ManualResetEventSlim();
+        using var resume = new ManualResetEventSlim();
+        var contender = new GroundworkV2RuntimePostCommitOutboxStore(
+            new PauseBeforeFirstConditionalWriteSessionSource(fixture.Connection, paused, resume),
+            Access("tenant-a"));
+
+        var contenderClaims = Task.Run(() => contender.ClaimAsync(ClaimRequest("owner-contender")).AsTask());
+        Assert.True(paused.Wait(TimeSpan.FromSeconds(30)), "The contender never reached its revision-guarded claim write.");
+        var winner = Assert.Single(await store.ClaimAsync(ClaimRequest("owner-winner")));
+        resume.Set();
+
+        Assert.Empty(await contenderClaims);
+        Assert.Equal("owner-winner", winner.OwnerId);
+        Assert.Equal(1, winner.FencingToken);
+        var persisted = await ((IPostCommitOutboxLookupStore)store).FindAsync(id);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, persisted!.Status);
+        Assert.Equal(winner.OwnerId, persisted.DeliveringOwnerId);
+        Assert.Equal(winner.FencingToken, persisted.DeliveryFencingToken);
+
+        static RuntimePostCommitOutboxClaimRequest ClaimRequest(string owner) =>
+            new(owner, Now, TimeSpan.FromMinutes(1), 1);
+    }
+
     [Fact]
     public async Task Sqlite_scopes_and_restart_keep_rows_isolated_and_durable()
     {
@@ -652,6 +688,53 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStoreTests
         public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => throw new NotSupportedException();
         public WriteOutcome Delete(StorageKey key, WriteOptions? options = null) => throw new NotSupportedException();
         public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) => throw new NotSupportedException();
+    }
+
+    /// <summary>Opens real provider sessions whose first revision-guarded write waits until the test releases it.</summary>
+    private sealed class PauseBeforeFirstConditionalWriteSessionSource(
+        IStorageProviderConnection connection,
+        ManualResetEventSlim paused,
+        ManualResetEventSlim resume) : IGroundworkStorageSessionSource
+    {
+        private int _conditionalWrites;
+
+        public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) =>
+            new PauseBeforeFirstConditionalWriteSession(
+                connection.OpenSession(ElsaRuntimeV2StorageManifest.Require(unitId), access),
+                () =>
+                {
+                    if (Interlocked.Increment(ref _conditionalWrites) != 1)
+                        return;
+                    paused.Set();
+                    if (!resume.Wait(TimeSpan.FromSeconds(30)))
+                        throw new TimeoutException("The paused claimant was never released.");
+                });
+
+        public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, IReadOnlyList<string> unitIds, string? targetName = null) =>
+            throw new NotSupportedException();
+
+        public StorageUnit Unit(string unitId, string? targetName = null) => ElsaRuntimeV2StorageManifest.Require(unitId);
+    }
+
+    private sealed class PauseBeforeFirstConditionalWriteSession(IStorageSession inner, Action beforeConditionalWrite)
+        : SynchronousStorageSessionTestDouble, IStorageSession, IConcurrencyStorageSession
+    {
+        public StorageUnit Unit => inner.Unit;
+        public StorageAccess Access => inner.Access;
+        public StoredEntry? Read(StorageKey key) => inner.Read(key);
+        public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null) => inner.Query(request, options);
+        public AggregationResult Aggregate(AggregationQuery query) => inner.Aggregate(query);
+        public WriteOutcome Insert(StorageValues values, WriteOptions? options = null) => inner.Insert(values, options);
+        public WriteOutcome Update(StorageValues values, WriteOptions? options = null) => inner.Update(values, options);
+        public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => inner.Upsert(values, options);
+        public WriteOutcome Delete(StorageKey key, WriteOptions? options = null) => inner.Delete(key, options);
+        public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) => inner.Append(operationId, values);
+
+        public WriteOutcome ConditionalUpsert(StorageValues values, WriteOptions? options = null)
+        {
+            beforeConditionalWrite();
+            return Assert.IsAssignableFrom<IConcurrencyStorageSession>(inner).ConditionalUpsert(values, options);
+        }
     }
 
     private sealed class DirectSessionSource(IStorageProviderConnection connection) : IGroundworkStorageSessionSource, IGroundworkStorageCapabilitySource
