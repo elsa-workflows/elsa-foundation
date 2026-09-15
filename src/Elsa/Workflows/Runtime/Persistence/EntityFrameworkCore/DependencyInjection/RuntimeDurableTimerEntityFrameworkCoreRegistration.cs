@@ -96,6 +96,9 @@ public static class RuntimeDurableTimerEntityFrameworkCoreRegistration
             owned.Add(optionsDescriptor);
             if (BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Count == 0)
                 owned.AddRange(AddContext(services, configured, provider));
+            foreach (var descriptor in BookmarkStateEfContextRegistration.ContextRegistrations(services, provider))
+                if (!owned.Contains(descriptor))
+                    owned.Add(descriptor);
 
             services.AddScoped<EfDurableTimerStore>();
             var concrete = services.Last();

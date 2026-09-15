@@ -54,6 +54,72 @@ public sealed class EfDurableTimerStoreTests
     }
 
     [Fact]
+    public async Task Due_and_workflow_queries_fail_closed_when_selected_projections_drift()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var now = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        var timer = Timer("wf-drift", "timer-1", now);
+        await fixture.Store.SaveAsync(timer);
+
+        var row = await fixture.Context.DurableTimers.SingleAsync();
+        row.DueTimeUtcTicks = now.AddHours(1).UtcTicks;
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Store.ListDueAsync(now.AddHours(2), 10).AsTask());
+
+        row = await fixture.Context.DurableTimers.SingleAsync();
+        row.DueTimeUtcTicks = now.UtcTicks;
+        row.WorkflowExecutionIdOrderKey = "drift";
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Store.ListPageAsync(
+            new DurableTimerPageQuery("wf-drift", 10)).AsTask());
+    }
+
+    [Fact]
+    public async Task Invalid_claim_projection_fails_closed_before_nullable_offset_access()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var now = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        var timer = Timer("wf-claim-corrupt", "timer-1", now);
+        await fixture.Store.SaveAsync(timer);
+        await fixture.Store.ClaimDueAsync(new RuntimeDurableTimerClaimRequest(
+            "worker-a", now, TimeSpan.FromMinutes(1), 10));
+
+        var row = await fixture.Context.DurableTimers.SingleAsync();
+        row.VisibleAfterOffsetMinutes = null;
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Store.FindAsync(
+            timer.WorkflowExecutionId, timer.TimerId).AsTask());
+    }
+
+    [Fact]
+    public async Task Claim_query_fails_closed_when_visible_after_projection_drifts_into_candidate_set()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var now = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        var timer = Timer("wf-visible-drift", "timer-1", now);
+        await fixture.Store.SaveAsync(timer);
+        await fixture.Store.ClaimDueAsync(new RuntimeDurableTimerClaimRequest(
+            "worker-a", now, TimeSpan.FromMinutes(1), 10));
+
+        var row = await fixture.Context.DurableTimers.SingleAsync();
+        row.VisibleAfterUtcTicks = now.UtcTicks;
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Store.ClaimDueAsync(
+            new RuntimeDurableTimerClaimRequest("worker-b", now, TimeSpan.FromMinutes(1), 10)).AsTask());
+    }
+
+    [Fact]
     public async Task Workflow_pages_are_forward_bounded_and_restartable()
     {
         await using var database = await TestDatabase.CreateAsync();

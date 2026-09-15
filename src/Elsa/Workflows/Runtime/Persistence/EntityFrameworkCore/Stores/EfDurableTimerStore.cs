@@ -416,6 +416,7 @@ public sealed class EfDurableTimerStore(
 
         var timer = ReadTimer(row);
         ValidateTimer(timer);
+        ValidateClaimProjection(row);
         if ((expectedWorkflowExecutionId is not null && !StringComparer.Ordinal.Equals(expectedWorkflowExecutionId, timer.WorkflowExecutionId)) ||
             (expectedTimerId is not null && !StringComparer.Ordinal.Equals(expectedTimerId, timer.TimerId)) ||
             row.Id != EfRuntimeOperationalStoreSupport.CompositeId(scope, timer.WorkflowExecutionId, timer.TimerId) ||
@@ -434,7 +435,6 @@ public sealed class EfDurableTimerStore(
             row.ClaimOrderKey != ClaimOrderKey(row.VisibleAfterUtcTicks is { } visible ? FromUtcTicks(visible, row.VisibleAfterOffsetMinutes!.Value) : timer.DueTime, timer))
             throw new InvalidDataException("The durable-timer row identity or projection does not match its current content.");
 
-        ValidateClaimProjection(row);
         return timer;
     }
 

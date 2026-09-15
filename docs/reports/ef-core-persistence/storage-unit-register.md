@@ -81,7 +81,7 @@ corresponding `GroundworkV2*Store` or internal coordination row registered by
 | R21 | `workflowDispatch` / `runtime_workflow_dispatch` | Dispatch store, query, delete, retention, admission, cancellation | E-CLAIM | S1-S4 | | | | Pending |
 | R22 | `schedulerWorkItem` / `runtime_scheduler_work_item` | `IWorkflowSchedulerWorkQueue`; claim inspection | E-CLAIM | S1-S4 | | | | Pending |
 | R23 | `schedulerPoison` / `runtime_scheduler_poison` | `IWorkflowSchedulerPoisonStore` | E-CLAIM | S1-S4 | | | | Pending |
-| R24 | `durableTimer` / `runtime_durable_timer` | `IDurableTimerStore` | E-CLAIM | S1-S4 | | | | Pending |
+| R24 | `durableTimer` / `runtime_durable_timer` | `IDurableTimerStore` | E-CLAIM | S1-S4 | #1740 | | | Opt-in EF implementation and focused SQLite proof are committed locally; selected due/workflow/visibility projection drift fails closed, while corruption that moves a row outside a relational due/workflow/visibility predicate remains an explicit integrity limitation until a bounded integrity mechanism is designed; native-provider, checkpoint participation, migration/default-flip/deletion gates remain pending and Groundwork remains default |
 | R25 | `workflowRunHealthState` / `runtime_workflow_run_health_state` | Run-health projection and bounded dashboard queries | E-RUNTIME | S1-S4 | | | | Pending |
 | R26 | `workflowTriggerBinding` / `runtime_workflow_trigger_binding` | `IWorkflowTriggerBindingStore` | E-CLAIM | S1-S4 | | | | Pending |
 | R27 | `recurringTriggerSchedule` / `runtime_recurring_trigger_schedule` | `IRecurringTriggerScheduleStore` | E-CLAIM | S1-S4 | | | | Pending |
