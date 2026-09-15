@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -62,9 +63,12 @@ public static class RuntimePostCommitOutboxEntityFrameworkCoreRegistration
             foreach (var descriptor in contracts)
                 services.Add(descriptor);
 
+            var evidence = EfRuntimeInfrastructureDurabilityEvidenceRegistration.AddOwned(
+                services, WorkflowDispatchDurabilityComponents.Outbox);
+
             RuntimePostCommitOutboxStoreBackend.Register(
                 services,
-                new(RuntimePostCommitOutboxStoreBackend.EntityFramework, [concrete, .. contracts]));
+                new(RuntimePostCommitOutboxStoreBackend.EntityFramework, [concrete, .. contracts, evidence]));
 
             removeGroundwork?.Invoke(services);
 

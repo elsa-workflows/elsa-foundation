@@ -103,6 +103,8 @@ public static class RuntimeSchedulerWorkQueueEntityFrameworkCoreRegistration
                 serviceProvider.GetRequiredService<EfSchedulerWorkQueueStore>());
             var inspectionContract = services.Last();
             owned.AddRange([concrete, queueContract, inspectionContract]);
+            owned.Add(EfRuntimeInfrastructureDurabilityEvidenceRegistration.AddOwned(
+                services, WorkflowDispatchDurabilityComponents.Scheduler));
             SchedulerWorkQueueStoreBackend.Register(
                 services,
                 new SchedulerWorkQueueStoreBackend(

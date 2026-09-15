@@ -78,6 +78,8 @@ internal static class RuntimeEntityFrameworkCoreAggregateProviderSmoke
         Assert.Equal(RuntimePostCommitOutboxStoreBackend.EntityFramework, RuntimePostCommitOutboxStoreBackend.Find(services)!.Name);
         Assert.Equal(SchedulerWorkQueueStoreBackend.EntityFramework, SchedulerWorkQueueStoreBackend.Find(services)!.Name);
         Assert.Equal(DurableTimerStoreBackend.EntityFramework, DurableTimerStoreBackend.Find(services)!.Name);
+        services.AddSingleton<IWorkflowDispatchDurabilityEvidence>(
+            new WorkflowDispatchDurabilityEvidence(WorkflowDispatchDurabilityComponents.Resumption, WorkflowDispatchDurabilityLevel.Durable));
 
         // This smoke owns persistence composition and model behavior. The runtime host's
         // unrelated pumps require application-level serializer/logging registrations, so
@@ -89,6 +91,9 @@ internal static class RuntimeEntityFrameworkCoreAggregateProviderSmoke
         await using var serviceScope = provider.CreateAsyncScope();
         await using var context = serviceScope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>();
         Assert.Equal(expectedProviderName, context.Database.ProviderName);
+        var readiness = await serviceScope.ServiceProvider.GetRequiredService<IWorkflowDispatchReadinessAssessor>().AssessAsync();
+        Assert.Equal(WorkflowDispatchReadinessGuarantee.DurableReady, readiness.Guarantee);
+        Assert.True(readiness.Ready);
         await context.Database.EnsureCreatedAsync();
 
         var checkpointStore = new EfRuntimeCheckpointCommitStore(

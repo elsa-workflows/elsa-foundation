@@ -61,6 +61,38 @@ public sealed class RuntimeEntityFrameworkCoreRegistrationTests
         Assert.IsType<EfRuntimeCheckpointCommitStore>(scope.ServiceProvider.GetRequiredService<IRuntimeCheckpointCommitStore>());
     }
 
+    [Theory]
+    [InlineData("Data Source=:memory:", WorkflowDispatchReadinessGuarantee.ProcessLocal)]
+    [InlineData("Data Source=file:runtime-ef-readiness;Mode=Memory;Cache=Shared", WorkflowDispatchReadinessGuarantee.ProcessLocal)]
+    [InlineData("Data Source=runtime-ef-readiness.db", WorkflowDispatchReadinessGuarantee.DurableReady)]
+    public async Task EF_infrastructure_readiness_matches_the_actual_SQLite_database_lifetime(
+        string connectionString, WorkflowDispatchReadinessGuarantee expected)
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddGroundworkV2RuntimeStores();
+        var options = Options();
+        options.ConnectionString = connectionString;
+        services.AddRuntimeEntityFrameworkCore(options);
+        services.AddSingleton<IWorkflowDispatchDurabilityEvidence>(
+            new WorkflowDispatchDurabilityEvidence(WorkflowDispatchDurabilityComponents.Resumption, WorkflowDispatchDurabilityLevel.Durable));
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var report = await scope.ServiceProvider.GetRequiredService<IWorkflowDispatchReadinessAssessor>().AssessAsync();
+        Assert.Equal(expected, report.Guarantee);
+        Assert.Equal(expected == WorkflowDispatchReadinessGuarantee.DurableReady, report.Ready);
+        foreach (var component in new[]
+                 {
+                     WorkflowDispatchDurabilityComponents.Checkpoint,
+                     WorkflowDispatchDurabilityComponents.DispatchStore,
+                     WorkflowDispatchDurabilityComponents.Outbox,
+                     WorkflowDispatchDurabilityComponents.Scheduler
+                 })
+            Assert.Equal(expected == WorkflowDispatchReadinessGuarantee.DurableReady
+                    ? WorkflowDispatchDurabilityLevel.Durable : WorkflowDispatchDurabilityLevel.ProcessLocal,
+                Assert.Single(report.Components, x => x.Component == component).Level);
+    }
+
     [Fact]
     public void Failed_late_participant_transition_restores_services_and_groundwork_registry()
     {

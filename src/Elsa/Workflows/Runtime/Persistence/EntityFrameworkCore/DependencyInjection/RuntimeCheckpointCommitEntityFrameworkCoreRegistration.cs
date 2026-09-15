@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -39,8 +40,10 @@ public static class RuntimeCheckpointCommitEntityFrameworkCoreRegistration
             var contract = ServiceDescriptor.Scoped<IRuntimeCheckpointCommitStore>(provider =>
                 provider.GetRequiredService<EfRuntimeCheckpointCommitStore>());
             services.Add(contract);
+            var evidence = EfRuntimeInfrastructureDurabilityEvidenceRegistration.AddOwned(
+                services, WorkflowDispatchDurabilityComponents.Checkpoint);
             RuntimeCheckpointCommitStoreBackend.Register(services,
-                new(RuntimeCheckpointCommitStoreBackend.EntityFramework, contract, concrete));
+                new(RuntimeCheckpointCommitStoreBackend.EntityFramework, contract, concrete, evidence));
             return services;
         }
         catch

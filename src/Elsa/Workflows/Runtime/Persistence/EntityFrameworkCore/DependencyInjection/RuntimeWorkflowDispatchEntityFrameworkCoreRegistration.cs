@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
@@ -57,9 +58,12 @@ public static class RuntimeWorkflowDispatchEntityFrameworkCoreRegistration
             foreach (var descriptor in contracts)
                 services.Add(descriptor);
 
+            var evidence = EfRuntimeInfrastructureDurabilityEvidenceRegistration.AddOwned(
+                services, WorkflowDispatchDurabilityComponents.DispatchStore);
+
             RuntimeWorkflowDispatchStoreBackend.Register(
                 services,
-                new(RuntimeWorkflowDispatchStoreBackend.EntityFramework, [concrete, .. contracts]));
+                new(RuntimeWorkflowDispatchStoreBackend.EntityFramework, [concrete, .. contracts, evidence]));
 
             removeGroundwork?.Invoke(services);
 
