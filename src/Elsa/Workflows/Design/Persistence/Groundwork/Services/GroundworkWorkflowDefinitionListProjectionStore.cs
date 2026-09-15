@@ -73,37 +73,57 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore(
         }
 
         var draftDocuments = draftRows
-            .Select(row => GroundworkDesignStorage.DeserializeDocument<WorkflowDefinitionDraft>(row.Entry, json))
+            .Select(row => (Row: row, Document: GroundworkDesignStorage.DeserializeDocument<WorkflowDefinitionDraft>(row.Entry, json)))
             .ToArray();
-        foreach (var document in draftDocuments)
+        foreach (var candidate in draftDocuments)
+        {
+            var document = candidate.Document;
             GroundworkDesignStorage.EnsureDefinitionIdentityInSet(
                 ids,
                 document.Entity.WorkflowDefinitionId,
                 "workflow draft projection lookup");
-
+            GroundworkDesignStorage.EnsureProjectedIdentity(
+                candidate.Row,
+                document.Entity,
+                "workflow draft projection lookup",
+                requireCrossScopeProvenance: accessContextAccessor.Current.AcrossScopes);
+        }
         var drafts = draftDocuments
-            .GroupBy(document => WorkflowDefinitionIdentity.Fold(document.Entity.WorkflowDefinitionId), StringComparer.Ordinal)
+            .GroupBy(document => WorkflowDefinitionIdentity.Fold(document.Document.Entity.WorkflowDefinitionId), StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
-                group => group.OrderByDescending(x => x.Entity.LastModifiedAt)
-                    .ThenByDescending(x => x.Entity.CreatedAt)
-                    .ThenByDescending(x => x.Entity.Id, StringComparer.Ordinal)
-                    .First().Entity,
+                group => group.OrderByDescending(x => x.Document.Entity.LastModifiedAt)
+                    .ThenByDescending(x => x.Document.Entity.CreatedAt)
+                    .ThenByDescending(x => x.Document.Entity.Id, StringComparer.Ordinal)
+                    .First().Document.Entity,
                 StringComparer.Ordinal);
         var versionEntities = versionRows
-            .Select(row => GroundworkDesignStorage.Deserialize<WorkflowDefinitionVersion>(row.Entry, json))
+            .Select(row => (Row: row, Entity: GroundworkDesignStorage.Deserialize<WorkflowDefinitionVersion>(row.Entry, json)))
             .ToArray();
-        foreach (var version in versionEntities)
+        foreach (var candidate in versionEntities)
+        {
+            var version = candidate.Entity;
             GroundworkDesignStorage.EnsureDefinitionIdentityInSet(
                 ids,
                 version.DefinitionId,
                 "workflow version projection lookup");
+            GroundworkDesignStorage.EnsureProjectedIdentity(
+                candidate.Row,
+                version,
+                "workflow version projection lookup",
+                requireCrossScopeProvenance: accessContextAccessor.Current.AcrossScopes);
+        }
+        EnsureSingleTenantScopePerDefinition(
+            draftDocuments
+                .Select(candidate => (candidate.Document.Entity.WorkflowDefinitionId, candidate.Document.Entity.TenantId))
+                .Concat(versionEntities.Select(candidate => (candidate.Entity.DefinitionId, candidate.Entity.TenantId))),
+            "workflow definition list projection lookup");
 
         var versions = versionEntities
-            .GroupBy(version => WorkflowDefinitionIdentity.Fold(version.DefinitionId), StringComparer.Ordinal)
+            .GroupBy(version => WorkflowDefinitionIdentity.Fold(version.Entity.DefinitionId), StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
-                group => group.OrderByDescending(x => x.SemVerSortKey, StringComparer.Ordinal).ToArray(),
+                group => group.OrderByDescending(x => x.Entity.SemVerSortKey, StringComparer.Ordinal).Select(x => x.Entity).ToArray(),
                 StringComparer.Ordinal);
 
         return ids.Select(definitionId =>
@@ -119,5 +139,21 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore(
                 latest?.Version,
                 definitionVersions?.Length ?? 0);
         }).ToArray();
+    }
+
+    private static void EnsureSingleTenantScopePerDefinition(
+        IEnumerable<(string DefinitionId, string? TenantId)> candidates,
+        string operation)
+    {
+        foreach (var group in candidates.GroupBy(candidate => WorkflowDefinitionIdentity.Fold(candidate.DefinitionId), StringComparer.Ordinal))
+        {
+            var scopes = group
+                .Select(candidate => candidate.TenantId)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            if (scopes.Length > 1)
+                throw new GroundworkQueryReadinessException(
+                    $"The {operation} returned definition identity '{group.Key}' from multiple authoritative tenant scopes.");
+        }
     }
 }

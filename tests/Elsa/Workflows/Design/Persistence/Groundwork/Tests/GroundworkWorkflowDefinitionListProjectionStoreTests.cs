@@ -4,6 +4,8 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Persistence.Groundwork.Composition;
 using Groundwork.Query.Model;
 using Groundwork.Store;
 using Xunit;
@@ -137,6 +139,96 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
         Assert.Equal("draft", row.DraftId);
         Assert.Equal("version", row.LatestVersionId);
         Assert.Equal(1, row.VersionCount);
+    }
+
+    [Fact]
+    public async Task Privileged_across_scope_list_rejects_duplicate_folded_definition_drafts()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        var tenantA = Draft("draft-a", "Definition-1", 1);
+        tenantA.TenantId = "tenant-a";
+        raw.SeedDraft(tenantA);
+        var tenantB = Draft("draft-b", "definition-1", 2);
+        tenantB.TenantId = "tenant-b";
+        raw.SeedDraft(tenantB);
+        var accessor = DesignGroundworkTestAccess.Mutable(PersistenceAccessContext.PrivilegedAcrossScopes(
+            new PersistenceAccessPurpose("list-workflow-definitions-across-tenants")));
+        var store = new GroundworkWorkflowDefinitionListProjectionStore(
+            raw,
+            new FakePayloadSerializer(),
+            accessor,
+            auditSink: new GroundworkPrivilegedQueryAuditSink());
+
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            store.ListByDefinitionIdsAsync(["definition-1"]));
+    }
+
+    [Fact]
+    public async Task Privileged_across_scope_list_rejects_duplicate_folded_definition_versions()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        var tenantA = Version("version-a", "Definition-1", "1.0.0");
+        tenantA.TenantId = "tenant-a";
+        raw.SeedVersion(tenantA);
+        var tenantB = Version("version-b", "definition-1", "2.0.0");
+        tenantB.TenantId = "tenant-b";
+        raw.SeedVersion(tenantB);
+        var accessor = DesignGroundworkTestAccess.Mutable(PersistenceAccessContext.PrivilegedAcrossScopes(
+            new PersistenceAccessPurpose("list-workflow-definitions-across-tenants")));
+        var store = new GroundworkWorkflowDefinitionListProjectionStore(
+            raw,
+            new FakePayloadSerializer(),
+            accessor,
+            auditSink: new GroundworkPrivilegedQueryAuditSink());
+
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            store.ListByDefinitionIdsAsync(["definition-1"]));
+    }
+
+    [Fact]
+    public async Task Privileged_across_scope_list_rejects_draft_and_version_from_different_scopes()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        var draft = Draft("draft-a", "definition-1", 1);
+        draft.TenantId = "tenant-a";
+        raw.SeedDraft(draft);
+        var version = Version("version-b", "definition-1", "1.0.0");
+        version.TenantId = "tenant-b";
+        raw.SeedVersion(version);
+        var accessor = DesignGroundworkTestAccess.Mutable(PersistenceAccessContext.PrivilegedAcrossScopes(
+            new PersistenceAccessPurpose("list-workflow-definitions-across-tenants")));
+        var store = new GroundworkWorkflowDefinitionListProjectionStore(
+            raw,
+            new FakePayloadSerializer(),
+            accessor,
+            auditSink: new GroundworkPrivilegedQueryAuditSink());
+
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            store.ListByDefinitionIdsAsync(["definition-1"]));
+    }
+
+    [Fact]
+    public async Task Privileged_across_scope_list_keeps_distinct_definition_ids()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        var tenantA = Draft("draft-a", "definition-a", 1);
+        tenantA.TenantId = "tenant-a";
+        raw.SeedDraft(tenantA);
+        var tenantB = Draft("draft-b", "definition-b", 2);
+        tenantB.TenantId = "tenant-b";
+        raw.SeedDraft(tenantB);
+        var accessor = DesignGroundworkTestAccess.Mutable(PersistenceAccessContext.PrivilegedAcrossScopes(
+            new PersistenceAccessPurpose("list-workflow-definitions-across-tenants")));
+        var store = new GroundworkWorkflowDefinitionListProjectionStore(
+            raw,
+            new FakePayloadSerializer(),
+            accessor,
+            auditSink: new GroundworkPrivilegedQueryAuditSink());
+
+        var rows = await store.ListByDefinitionIdsAsync(["definition-a", "definition-b"]);
+
+        Assert.Equal(["definition-a", "definition-b"], rows.Select(row => row.WorkflowDefinitionId));
+        Assert.Equal(["draft-a", "draft-b"], rows.Select(row => row.DraftId));
     }
 
     [Fact]
