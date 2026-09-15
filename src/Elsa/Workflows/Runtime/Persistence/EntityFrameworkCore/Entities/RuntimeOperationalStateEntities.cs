@@ -30,6 +30,37 @@ public sealed class SchedulerStateEntity
     public long Revision { get; set; }
 }
 
+/// <summary>Relational envelope and claim projections for one durable timer.</summary>
+public sealed class DurableTimerEntity
+{
+    public string Id { get; set; } = null!;
+    public string ScopeKey { get; set; } = null!;
+    public string ScopeKeyHash { get; set; } = null!;
+    public string WorkflowExecutionId { get; set; } = null!;
+    public string WorkflowExecutionIdHash { get; set; } = null!;
+    public string WorkflowExecutionIdOrderKey { get; set; } = null!;
+    public string TimerId { get; set; } = null!;
+    public string TimerIdHash { get; set; } = null!;
+    public string TimerIdOrderKey { get; set; } = null!;
+    public string StimulusType { get; set; } = null!;
+    public string StimulusHash { get; set; } = null!;
+    public long DueTimeUtcTicks { get; set; }
+    public int DueTimeOffsetMinutes { get; set; }
+    public long CreatedAtUtcTicks { get; set; }
+    public int CreatedAtOffsetMinutes { get; set; }
+    public string ClaimOrderKey { get; set; } = null!;
+    public string? ClaimOwnerId { get; set; }
+    public long ClaimToken { get; set; }
+    public long? ClaimedAtUtcTicks { get; set; }
+    public int? ClaimedAtOffsetMinutes { get; set; }
+    public long? VisibleAfterUtcTicks { get; set; }
+    public int? VisibleAfterOffsetMinutes { get; set; }
+    public int FailureCount { get; set; }
+    public string ContentJson { get; set; } = null!;
+    public string SchemaVersion { get; set; } = null!;
+    public long Revision { get; set; }
+}
+
 /// <summary>Relational envelope and recovery projections for one execution-liveness state.</summary>
 public sealed class ExecutionLivenessStateEntity
 {

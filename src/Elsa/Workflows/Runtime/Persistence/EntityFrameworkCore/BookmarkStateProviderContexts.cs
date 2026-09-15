@@ -50,6 +50,15 @@ file static class BookmarkStateProviderModel
             modelBuilder.Entity(entity).Property("ContentJson").HasColumnType(type);
             modelBuilder.Entity(entity).Property("ScopeKey").HasColumnType(type);
         }
+        foreach (var entity in new[] { typeof(DurableTimerEntity) })
+        {
+            modelBuilder.Entity(entity).Property("ContentJson").HasColumnType(type);
+            modelBuilder.Entity(entity).Property("ScopeKey").HasColumnType(type);
+            modelBuilder.Entity(entity).Property("StimulusType").HasColumnType(type);
+            modelBuilder.Entity(entity).Property("StimulusHash").HasColumnType(type);
+            modelBuilder.Entity(entity).Property("ClaimOrderKey").HasColumnType(type);
+            modelBuilder.Entity(entity).Property("ClaimOwnerId").HasColumnType(type);
+        }
         foreach (var entity in new[] { typeof(ExecutionLivenessStateEntity), typeof(WorkflowHoldStateEntity) })
         {
             modelBuilder.Entity(entity).Property("ContentJson").HasColumnType(type);
