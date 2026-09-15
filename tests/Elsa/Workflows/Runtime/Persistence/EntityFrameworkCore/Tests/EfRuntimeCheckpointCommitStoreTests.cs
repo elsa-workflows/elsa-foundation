@@ -134,6 +134,79 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
+    public async Task Ordinary_dispatch_and_pending_outbox_commit_atomically_before_the_replay_marker()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var dispatch = PendingDispatch("workflow-a", "activity-checkpoint", "tenant-a");
+        var commit = WithPendingDispatch("commit-dispatch-outbox", "start-child", dispatch);
+        var outboxId = RuntimePostCommitOutboxIdentity.CreateLogicalValue(commit.CommitId, "start-child");
+
+        await using (var context = database.Open("tenant-a"))
+        {
+            var store = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"));
+            Assert.Equal([outboxId], (await store.CommitAsync(commit, Decision())).PendingPostCommitWorkIds);
+            Assert.Equal([outboxId], (await store.CommitAsync(commit, Decision())).PendingPostCommitWorkIds);
+            Assert.Equal(WorkflowDispatchStatus.Pending,
+                (await new EfWorkflowDispatchStore(context, new FixedAccessor("tenant-a"))
+                    .FindAsync(dispatch.DispatchId))!.Status);
+            Assert.Equal(outboxId,
+                (await new EfRuntimePostCommitOutboxStore(context, new FixedAccessor("tenant-a"))
+                    .FindAsync(outboxId))!.OutboxItemId);
+        }
+
+        await using var restarted = database.Open("tenant-a");
+        Assert.Single(await restarted.RuntimeCheckpointCommits.ToArrayAsync());
+        Assert.Single(await restarted.WorkflowDispatches.ToArrayAsync());
+        Assert.Single(await restarted.RuntimePostCommitOutbox.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Marker_failure_rolls_back_dispatch_and_outbox_and_allows_clean_retry()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var dispatch = PendingDispatch("workflow-a", "activity-rolled-back", "tenant-a");
+        var commit = WithPendingDispatch("commit-dispatch-rollback", "intent-rolled-back", dispatch);
+        var interceptor = new FailMarkerInsertInterceptor();
+
+        await using (var context = database.Open("tenant-a", interceptor))
+        {
+            interceptor.Arm();
+            await Assert.ThrowsAsync<DbUpdateException>(() =>
+                new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"))
+                    .CommitAsync(commit, Decision()).AsTask());
+            Assert.Empty(context.ChangeTracker.Entries());
+        }
+
+        await using var retry = database.Open("tenant-a");
+        Assert.Empty(await retry.WorkflowDispatches.ToArrayAsync());
+        Assert.Empty(await retry.RuntimePostCommitOutbox.ToArrayAsync());
+        Assert.Empty(await retry.RuntimeCheckpointCommits.ToArrayAsync());
+        Assert.Single((await new EfRuntimeCheckpointCommitStore(retry, new FixedAccessor("tenant-a"))
+            .CommitAsync(commit, Decision())).PendingPostCommitWorkIds);
+        Assert.Single(await retry.WorkflowDispatches.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Parent_cancellation_is_recorded_with_the_checkpoint_marker()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open("tenant-a");
+        var access = new FixedAccessor("tenant-a");
+        var dispatch = PendingDispatch("workflow-a", "activity-cancel", "tenant-a", WorkflowDispatchMode.WaitForCompletion);
+        var dispatchStore = new EfWorkflowDispatchStore(context, access);
+        await dispatchStore.SaveAsync(dispatch);
+        var request = new WorkflowDispatchCancellationRequest(
+            dispatch.DispatchId, dispatch.ParentWorkflowExecutionId,
+            dispatch.ParentActivityExecutionId, dispatch.ChildWorkflowExecutionId, OccurredAt.AddMinutes(1));
+        var commit = Commit("commit-parent-cancel");
+        commit = commit with { StateChanges = commit.StateChanges.WithWorkflowDispatchCancellations([request]) };
+
+        await new EfRuntimeCheckpointCommitStore(context, access).CommitAsync(commit, Decision());
+        Assert.Equal(WorkflowDispatchStatus.Cancelled, (await dispatchStore.FindAsync(dispatch.DispatchId))!.Status);
+        Assert.Single(await context.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
     public async Task Marker_failure_rolls_back_previously_saved_outbox_and_does_not_leak_tracker_state()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -450,6 +523,48 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
             StateChanges = commit.StateChanges.WithPostCommitOutbox([
                 new RuntimeStateChange<RuntimePostCommitOutboxItem>(id, RuntimeStateChangeOperation.Upsert, item, new Dictionary<string, string>())])
         };
+    }
+
+    private static RuntimeCheckpointCommit WithPendingDispatch(
+        string commitId,
+        string intentId,
+        WorkflowDispatchRecord dispatch)
+    {
+        var commit = WithPendingIntent(commitId, intentId);
+        return commit with
+        {
+            StateChanges = commit.StateChanges.WithWorkflowDispatches([
+                new RuntimeStateChange<WorkflowDispatchRecord>(
+                    dispatch.DispatchId, RuntimeStateChangeOperation.Upsert,
+                    dispatch, new Dictionary<string, string>())])
+        };
+    }
+
+    private static WorkflowDispatchRecord PendingDispatch(
+        string parent,
+        string activity,
+        string tenant,
+        WorkflowDispatchMode mode = WorkflowDispatchMode.FireAndForget)
+    {
+        var identity = new WorkflowDispatchIdentity(parent, activity);
+        return new WorkflowDispatchRecord(
+            identity.DispatchId,
+            parent,
+            activity,
+            identity.ChildWorkflowExecutionId,
+            new WorkflowExecutableIdentity($"artifact-{activity}", "definition-child", "version-child", "1", $"hash-{activity}"),
+            new WorkflowExecutableSourceProvenance($"source-{activity}", "WorkflowDefinitionVersion", "version-child", "1", "definition-child", "version-child", "1", "publication-child", "slot-child"),
+            mode,
+            WorkflowDispatchStatus.Pending,
+            null,
+            tenant,
+            new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue),
+            WorkflowRunKind.PublishedRun,
+            new WorkflowExecutionAuthoritySnapshot(parent, "initiator-1"),
+            [new WorkflowDispatchInputDescriptor("orderId", "string")],
+            OccurredAt,
+            OccurredAt,
+            new Dictionary<string, string> { ["safe-code"] = "dispatch" });
     }
 
     private static RuntimeCheckpointPersistenceDecision Decision() => new(RuntimeCheckpointPersistenceMode.Immediate);

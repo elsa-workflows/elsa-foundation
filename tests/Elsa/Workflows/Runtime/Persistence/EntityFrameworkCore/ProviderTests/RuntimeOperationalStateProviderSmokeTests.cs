@@ -124,17 +124,23 @@ internal static class RuntimeOperationalStateProviderSmoke
             var futureId = RuntimePostCommitOutboxIdentity.CreateLogicalValue(futureCommit.CommitId, futureIntent.IntentId);
             var futureItem = new RuntimePostCommitOutboxItem(
                 futureId, futureIntent, RuntimePostCommitOutboxStatus.Pending, futureAt, futureAt);
+            var futureDispatch = PendingDispatch("workflow-a", "native-checkpoint-dispatch", scope, futureAt);
             futureCommit = futureCommit with
             {
                 Checkpoint = futureCommit.Checkpoint with { OccurredAt = futureAt },
                 PostCommitIntents = [futureIntent],
-                StateChanges = futureCommit.StateChanges.WithPostCommitOutbox([
+                StateChanges = futureCommit.StateChanges.WithWorkflowDispatches([
+                    new RuntimeStateChange<WorkflowDispatchRecord>(
+                        futureDispatch.DispatchId, RuntimeStateChangeOperation.Upsert,
+                        futureDispatch, new Dictionary<string, string>())]).WithPostCommitOutbox([
                     new RuntimeStateChange<RuntimePostCommitOutboxItem>(
                         futureId, RuntimeStateChangeOperation.Upsert, futureItem, new Dictionary<string, string>())])
             };
             Assert.Equal([futureId], (await checkpointStore.CommitAsync(futureCommit, new(RuntimeCheckpointPersistenceMode.Immediate))).PendingPostCommitWorkIds);
             Assert.Equal([futureId], (await checkpointStore.CommitAsync(futureCommit, new(RuntimeCheckpointPersistenceMode.Immediate))).PendingPostCommitWorkIds);
             Assert.Equal(futureId, (await outbox.FindAsync(futureId))!.OutboxItemId);
+            Assert.Equal(futureDispatch.DispatchId,
+                (await new EfWorkflowDispatchStore(context, accessor).FindAsync(futureDispatch.DispatchId))!.DispatchId);
             var outboxNow = DateTimeOffset.UtcNow;
             var outboxItem = OutboxPending($"outbox-{Guid.NewGuid():N}", "workflow-a", outboxNow);
             await outbox.SavePendingAsync(outboxItem);
@@ -273,6 +279,33 @@ internal static class RuntimeOperationalStateProviderSmoke
         RuntimePostCommitOutboxStatus.Pending,
         recordedAt,
         recordedAt);
+
+    private static WorkflowDispatchRecord PendingDispatch(
+        string parent,
+        string activity,
+        string tenant,
+        DateTimeOffset createdAt)
+    {
+        var identity = new WorkflowDispatchIdentity(parent, activity);
+        return new WorkflowDispatchRecord(
+            identity.DispatchId,
+            parent,
+            activity,
+            identity.ChildWorkflowExecutionId,
+            new WorkflowExecutableIdentity($"artifact-{activity}", "definition-child", "version-child", "1", $"hash-{activity}"),
+            new WorkflowExecutableSourceProvenance($"source-{activity}", "WorkflowDefinitionVersion", "version-child", "1", "definition-child", "version-child", "1", "publication-child", "slot-child"),
+            WorkflowDispatchMode.FireAndForget,
+            WorkflowDispatchStatus.Pending,
+            null,
+            tenant,
+            new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue),
+            WorkflowRunKind.PublishedRun,
+            new WorkflowExecutionAuthoritySnapshot(parent, "initiator-1"),
+            [new WorkflowDispatchInputDescriptor("orderId", "string")],
+            createdAt,
+            createdAt,
+            new Dictionary<string, string> { ["safe-code"] = "dispatch" });
+    }
 
     private static RuntimeCheckpointCommit EmptyCheckpointCommit(string commitId) => new(
         commitId,

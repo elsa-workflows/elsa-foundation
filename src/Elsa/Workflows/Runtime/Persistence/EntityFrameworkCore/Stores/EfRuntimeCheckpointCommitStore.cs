@@ -48,6 +48,8 @@ public sealed class EfRuntimeCheckpointCommitStore(
         ValidateThinSlice(commit);
         if (commit.StateChanges.WorkflowExecution is { } workflowExecution)
             accessContextAccessor.Current.EnsureTenantScope(workflowExecution.State.TenantId);
+        foreach (var dispatch in commit.StateChanges.WorkflowDispatches)
+            accessContextAccessor.Current.EnsureTenantScope(dispatch.State.TenantId);
 
         var existing = await FindMarkerAsync(scope, commit.CommitId, cancellationToken);
         if (existing is not null)
@@ -111,6 +113,12 @@ public sealed class EfRuntimeCheckpointCommitStore(
                         scope,
                         writeCancellationToken);
                 }
+
+                await EfRuntimeCheckpointDispatchParticipantStaging.StageAsync(
+                    context,
+                    commit,
+                    scope,
+                    writeCancellationToken);
 
                 await EfRuntimeCheckpointOutboxParticipantStaging.StageAsync(
                     context,
@@ -176,6 +184,22 @@ public sealed class EfRuntimeCheckpointCommitStore(
             RequireWorkflow(change.State.Intent.WorkflowExecutionId, commit.WorkflowExecutionId, "post-commit outbox");
             EfRuntimePostCommitOutboxStore.ValidatePending(change.State);
         }
+
+        var seenDispatches = new Dictionary<string, WorkflowDispatchRecord>(StringComparer.Ordinal);
+        foreach (var change in commit.StateChanges.WorkflowDispatches)
+        {
+            RequireOperation(change, RuntimeStateChangeOperation.Upsert, "workflow dispatch");
+            RequireId(change.StateId, change.State.DispatchId, "workflow dispatch");
+            WorkflowDispatchLifecycle.ValidateCheckpointOwnership(commit.WorkflowExecutionId, change.State);
+            if (seenDispatches.TryGetValue(change.StateId, out var duplicate) &&
+                !WorkflowDispatchLifecycle.RecordsEqual(duplicate, change.State))
+                throw new InvalidOperationException(
+                    $"Workflow dispatch '{change.StateId}' occurs more than once with conflicting state.");
+            seenDispatches[change.StateId] = change.State;
+        }
+
+        foreach (var request in commit.StateChanges.WorkflowDispatchCancellations)
+            RequireWorkflow(request.ParentWorkflowExecutionId, commit.WorkflowExecutionId, "workflow dispatch cancellation");
     }
 
     private static void RequireOperation<TState>(
@@ -231,13 +255,11 @@ public sealed class EfRuntimeCheckpointCommitStore(
             changes.Incidents.Count > 0 ||
             changes.Operational.Count > 0 ||
             changes.ActivityScopeCleanups.Count > 0 ||
-            changes.WorkflowDispatches.Count > 0 ||
-            changes.WorkflowDispatchCancellations.Count > 0 ||
             changes.ConsumedSchedulerWorkItems.Count > 0 ||
             changes.AlterationJobTerminalChange is not null)
         {
             throw new NotSupportedException(
-                "The R19 EF checkpoint slice supports workflow-execution, scheduler, and pending outbox changes only; remaining participants must be staged by the complete checkpoint writer before this adapter is enabled for those runtime commits.");
+                "The R19 EF checkpoint slice supports workflow-execution, scheduler, ordinary dispatch, and pending outbox changes only; remaining participants must be staged by the complete checkpoint writer before this adapter is enabled for those runtime commits.");
         }
 
         if (commit.PostCommitIntents.Count > 0)
