@@ -27,6 +27,12 @@ public static class GroundworkPublishingStoreRegistration
         string? targetName = null)
     {
         ArgumentNullException.ThrowIfNull(services);
+        var existingBackend = PublicationSnapshotReviewStoreBackend.Find(services);
+        if (existingBackend is not null)
+            existingBackend.RemoveOwnedArtifacts(services);
+        else
+            PublicationSnapshotReviewStoreBackend.EnsureNoUnownedRegistrations(services);
+
         services.AddPersistenceCore();
         services.AddGroundworkStorageLane<PublishingGroundworkStorageManifestSource>(targetName);
         foreach (var unit in PublishingGroundworkStorageManifest.CreateUnits())
@@ -41,17 +47,22 @@ public static class GroundworkPublishingStoreRegistration
         ReplaceScoped<IPublicationRecordStore, GroundworkPublicationRecordStore>(services);
         ReplaceScoped<IPublicationPolicyStore, GroundworkPublicationPolicyStore>(services);
         ReplaceScoped<IPublicationProjectionIntentStore, GroundworkPublicationProjectionIntentStore>(services);
-        ReplaceScoped<IPublicationSnapshotReviewStore, GroundworkPublicationSnapshotReviewStore>(services);
+        var snapshotReviewDescriptor = ReplaceScoped<IPublicationSnapshotReviewStore, GroundworkPublicationSnapshotReviewStore>(services);
+        PublicationSnapshotReviewStoreBackend.Register(
+            services,
+            new PublicationSnapshotReviewStoreBackend(PublicationSnapshotReviewStoreBackend.Groundwork, snapshotReviewDescriptor));
         ReplaceScoped<IActivityPublicationReceiptStore, GroundworkActivityPublicationReceiptStore>(services);
         ReplaceScoped<IActivityDraftTestRunStore, GroundworkActivityDraftTestRunStore>(services);
         return services;
     }
 
-    private static void ReplaceScoped<TService, TImplementation>(IServiceCollection services)
+    private static ServiceDescriptor ReplaceScoped<TService, TImplementation>(IServiceCollection services)
         where TService : class
         where TImplementation : class, TService
     {
         services.RemoveAll<TService>();
-        services.AddScoped<TService, TImplementation>();
+        var descriptor = ServiceDescriptor.Scoped<TService, TImplementation>();
+        services.Add(descriptor);
+        return descriptor;
     }
 }
