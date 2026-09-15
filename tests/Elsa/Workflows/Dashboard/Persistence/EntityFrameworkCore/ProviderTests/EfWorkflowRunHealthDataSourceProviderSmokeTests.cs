@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Dashboard;
 using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
@@ -22,6 +23,15 @@ public sealed class EfWorkflowRunHealthDataSourcePostgreSqlSmokeTests(RuntimeBoo
         WorkflowRunHealthProviderSmoke.RunAsync(fixture, connection => new BookmarkStatePostgreSqlDbContext(
             new DbContextOptionsBuilder<BookmarkStatePostgreSqlDbContext>().UseNpgsql(connection).Options),
             BookmarkStatePostgreSqlDbContext.ExpectedProviderName);
+
+    [SkippableFact]
+    public Task PostgreSql_portfolio_design_and_runtime_query_smoke() =>
+        WorkflowPortfolioProviderSmoke.RunAsync(fixture,
+            connection => new WorkflowsDesignPostgreSqlDbContext(
+                new DbContextOptionsBuilder<WorkflowsDesignPostgreSqlDbContext>().UseNpgsql(connection).Options),
+            connection => new BookmarkStatePostgreSqlDbContext(
+                new DbContextOptionsBuilder<BookmarkStatePostgreSqlDbContext>().UseNpgsql(connection).Options),
+            BookmarkStatePostgreSqlDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
@@ -32,6 +42,15 @@ public sealed class EfWorkflowRunHealthDataSourceSqlServerSmokeTests(RuntimeBook
         WorkflowRunHealthProviderSmoke.RunAsync(fixture, connection => new BookmarkStateSqlServerDbContext(
             new DbContextOptionsBuilder<BookmarkStateSqlServerDbContext>().UseSqlServer(connection).Options),
             BookmarkStateSqlServerDbContext.ExpectedProviderName);
+
+    [SkippableFact]
+    public Task SqlServer_portfolio_design_and_runtime_query_smoke() =>
+        WorkflowPortfolioProviderSmoke.RunAsync(fixture,
+            connection => new WorkflowsDesignSqlServerDbContext(
+                new DbContextOptionsBuilder<WorkflowsDesignSqlServerDbContext>().UseSqlServer(connection).Options),
+            connection => new BookmarkStateSqlServerDbContext(
+                new DbContextOptionsBuilder<BookmarkStateSqlServerDbContext>().UseSqlServer(connection).Options),
+            BookmarkStateSqlServerDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
@@ -41,6 +60,15 @@ public sealed class EfWorkflowRunHealthDataSourceMySqlSmokeTests(RuntimeBookmark
     public Task MySql_run_health_model_and_query_smoke() =>
         WorkflowRunHealthProviderSmoke.RunAsync(fixture, connection => new BookmarkStateMySqlDbContext(
             new DbContextOptionsBuilder<BookmarkStateMySqlDbContext>().UseMySQL(connection).Options),
+            BookmarkStateMySqlDbContext.ExpectedProviderName);
+
+    [SkippableFact]
+    public Task MySql_portfolio_design_and_runtime_query_smoke() =>
+        WorkflowPortfolioProviderSmoke.RunAsync(fixture,
+            connection => new WorkflowsDesignMySqlDbContext(
+                new DbContextOptionsBuilder<WorkflowsDesignMySqlDbContext>().UseMySQL(connection).Options),
+            connection => new BookmarkStateMySqlDbContext(
+                new DbContextOptionsBuilder<BookmarkStateMySqlDbContext>().UseMySQL(connection).Options),
             BookmarkStateMySqlDbContext.ExpectedProviderName);
 }
 

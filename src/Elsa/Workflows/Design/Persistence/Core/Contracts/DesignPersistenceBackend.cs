@@ -49,6 +49,22 @@ public sealed class DesignPersistenceBackend
 
     public string Name { get; }
 
+    public bool Owns(ServiceDescriptor descriptor) => descriptors.Contains(descriptor);
+
+    /// <summary>Rejects a missing owned registration or an unowned replacement contract.
+    /// Shared host infrastructure and option descriptors remain additive.
+    /// </summary>
+    public void EnsureOwnsRegisteredContracts(IServiceCollection services)
+    {
+        EnsureOwnedDescriptorsPresent(services);
+        foreach (var serviceType in descriptors.Select(descriptor => descriptor.ServiceType)
+                     .Where(ReplacementContractTypes.Contains).Distinct())
+        {
+            if (services.Any(descriptor => descriptor.ServiceType == serviceType && !Owns(descriptor)))
+                throw new InvalidOperationException($"Design persistence backend '{Name}' no longer exclusively owns {serviceType.Name}.");
+        }
+    }
+
     public static DesignPersistenceBackend? Find(IServiceCollection services) => services
         .Select(descriptor => descriptor.ImplementationInstance)
         .OfType<DesignPersistenceBackend>()
@@ -85,14 +101,16 @@ public sealed class DesignPersistenceBackend
         }
     }
 
+    private void EnsureOwnedDescriptorsPresent(IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        if (descriptors.Any(descriptor => !services.Contains(descriptor)))
+            throw new InvalidOperationException($"Design persistence backend '{Name}' no longer owns one of its registrations.");
+    }
+
     private void EnsureOwnsRegisteredDescriptors(IServiceCollection services)
     {
-        foreach (var descriptor in descriptors)
-        {
-            if (!services.Contains(descriptor))
-                throw new InvalidOperationException($"Design persistence backend '{Name}' no longer owns one of its registrations.");
-        }
-
+        EnsureOwnedDescriptorsPresent(services);
         foreach (var serviceType in descriptors.Select(descriptor => descriptor.ServiceType).Distinct())
         {
             var registrations = services.Where(descriptor => descriptor.ServiceType == serviceType).ToArray();

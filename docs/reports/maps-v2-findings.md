@@ -13,7 +13,7 @@ This is a point-in-time report from generated map facts. It is not a constitutio
 - Root-indexed catalogs missing on disk: 0
 - Runtime-to-design direct reference signals: 0
 - Design-to-runtime direct reference signals: 10
-- Bridge-like direct reference shapes: 18
+- Bridge-like direct reference shapes: 19
 
 ## Reference Signals
 

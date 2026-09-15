@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 139
 - Test projects: 124
-- Direct project references: 1269
+- Direct project references: 1270
 
 ## Projects
 
@@ -115,7 +115,7 @@ Records direct project references only.
 | [Elsa.Tasks](../../src/Elsa/Tasks/Elsa.Tasks.csproj) | source | Elsa.Tasks | - | default | Elsa.Locking.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core |
 | [Elsa.Tasks.Schedules](../../src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj) | source | Elsa.Tasks | - | default | Elsa.Primitives<br>Elsa.Tasks.Core |
 | [Elsa.Workflows.Dashboard](../../src/Elsa/Workflows/Dashboard/Elsa.Workflows.Dashboard.csproj) | source | Elsa.Workflows | - | default | Elsa.Api.AspNetCore<br>Elsa.Events.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Validations.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
-| [Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore](../../src/Elsa/Workflows/Dashboard/Persistence/EntityFrameworkCore/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj) | source | Elsa.Workflows | - | default | Elsa.Workflows.Dashboard<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
+| [Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore](../../src/Elsa/Workflows/Dashboard/Persistence/EntityFrameworkCore/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj) | source | Elsa.Workflows | - | default | Elsa.Workflows.Dashboard<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
 | [Elsa.Workflows.Dashboard.Persistence.Groundwork.V2](../../src/Elsa/Workflows/Dashboard/Persistence/Groundwork/V2/Elsa.Workflows.Dashboard.Persistence.Groundwork.V2.csproj) | source | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork.V2<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Design.Persistence.Groundwork |
 | [Elsa.Workflows.Design.Api](../../src/Elsa/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj) | source | Elsa.Workflows | - | default | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Api.AspNetCore<br>Elsa.Api.Capabilities<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Locking.Core<br>Elsa.Mediator.Core<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Validations.Core |
 | [Elsa.Workflows.Design.CodeGeneration](../../src/Elsa/Workflows/Design/CodeGeneration/Elsa.Workflows.Design.CodeGeneration.csproj) | source | Elsa.Workflows | netstandard2.0 | default | - |
