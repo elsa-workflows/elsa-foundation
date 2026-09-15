@@ -185,7 +185,6 @@ internal static class DesignEntityConfigurations
     {
         b.ToTable(WorkflowsDesignEfModule.OperationTable);
         ConfigureScopeKey(b);
-        b.HasKey(x => x.RowNumber);
         b.Property(x => x.TenantId).HasMaxLength(128);
         b.Property(x => x.OperationKind).HasMaxLength(256);
         b.Property(x => x.OperationKey).HasMaxLength(256);
@@ -197,7 +196,9 @@ internal static class DesignEntityConfigurations
         // SQL Server ignores trailing spaces in string equality and unique indexes, even under
         // binary collations. Hashes over the exact UTF-8 values own identity; raw values remain
         // available for diagnostics and residual ordinal validation after a hash match.
-        b.HasIndex(Stores.EfDesignSupport.ScopeKeyProperty, nameof(DesignOperationEntity.OperationKindLookupHash), nameof(DesignOperationEntity.OperationKeyLookupHash)).IsUnique();
+        // The exact operation identity is the key; a database-generated surrogate would need a
+        // provider-specific identity strategy that a provider-free module cannot express.
+        b.HasKey(Stores.EfDesignSupport.ScopeKeyProperty, nameof(DesignOperationEntity.OperationKindLookupHash), nameof(DesignOperationEntity.OperationKeyLookupHash));
     }
 
     private sealed class TenantScopeKeyValueGenerator : ValueGenerator<string>

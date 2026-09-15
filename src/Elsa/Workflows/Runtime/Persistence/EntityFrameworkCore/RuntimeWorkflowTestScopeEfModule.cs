@@ -3,8 +3,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 /// <summary>Schema and projection limits for the R13 workflow test-scope ledger.</summary>
 public static class RuntimeWorkflowTestScopeEfModule
 {
-    public const string HistoryModuleName = "ElsaRuntimeWorkflowTestScopes";
-    public const string DefaultConnectionName = HistoryModuleName;
+    public const string DefaultConnectionName = "ElsaRuntimeWorkflowTestScopes";
     public const string DefaultSqliteConnectionString = "Data Source=elsa-runtime-workflow-test-scopes.db";
     public const string TableName = "elsa_runtime_workflow_test_scope";
     public const string SchemaVersion = "1.0.0";

@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.DependencyInjection;
@@ -11,7 +12,7 @@ namespace Elsa.Studio.Preferences.Persistence.EntityFrameworkCore;
 [ShellFeature(
     name: "StudioPreferencesEntityFrameworkCore",
     DisplayName = "Studio Preferences Entity Framework Core Persistence",
-    Description = "Opt-in EF Core repository binding for Studio Preferences. It does not provision schema and is non-operational on a fresh database until the deferred migration and lifecycle work lands; keep it out of production composition until then. It has no Groundwork fallback and rejects a conflicting preference backend registration.",
+    Description = "Opt-in EF Core repository binding for Studio Preferences. It applies or validates its own migrations when the shell activates. It has no Groundwork fallback and rejects a conflicting preference backend registration.",
     DependsOn = new object[] { "StudioPreferences" })]
 public sealed class StudioPreferencesEntityFrameworkCoreFeature : IShellFeature
 {
@@ -40,5 +41,6 @@ public sealed class StudioPreferencesEntityFrameworkCoreFeature : IShellFeature
             Provider = Provider,
             ConnectionString = ConnectionString,
             ConnectionName = ConnectionName
-        });
+        })
+        .AddEfModuleMigrations<StudioPreferencesDbContext>(Provider);
 }

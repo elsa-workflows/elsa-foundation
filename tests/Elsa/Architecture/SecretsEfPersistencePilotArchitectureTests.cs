@@ -13,8 +13,11 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
 {
     private static readonly string[] PolicyPackages =
     [
+        "CShells.Abstractions",
         "Microsoft.EntityFrameworkCore",
-        "Microsoft.EntityFrameworkCore.Relational"
+        "Microsoft.EntityFrameworkCore.Relational",
+        "Microsoft.Extensions.Hosting.Abstractions",
+        "Microsoft.Extensions.Options"
     ];
 
     private static readonly string[] ModulePackages =
@@ -50,6 +53,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/Elsa/Persistence/EntityFramework/EfMigrateOptions.cs",
         "src/Elsa/Persistence/EntityFramework/EfMigratePolicy.cs",
         "src/Elsa/Persistence/EntityFramework/EfMigrationsHistory.cs",
+        "src/Elsa/Persistence/EntityFramework/EfModuleMigrator.cs",
         "src/Elsa/Persistence/EntityFramework/EfProviderGuard.cs",
         "src/Elsa/Persistence/EntityFramework/EfProviderNames.cs",
         "src/Elsa/Persistence/EntityFramework/EfRelationalExceptionClassifier.cs",
@@ -58,6 +62,9 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Configuration/SecretRecordConfiguration.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/DependencyInjection/SecretsEntityFrameworkCoreRegistration.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Entities/SecretRecord.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20260915205200_Initial.Designer.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20260915205200_Initial.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/SecretsMySqlDbContextModelSnapshot.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260910210216_Initial.Designer.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260910210216_Initial.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260911011058_WidenLookupKeys.Designer.cs",

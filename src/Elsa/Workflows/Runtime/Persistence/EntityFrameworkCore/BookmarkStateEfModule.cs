@@ -1,10 +1,8 @@
-using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
 public static class BookmarkStateEfModule
 {
-    public const string HistoryModuleName = "ElsaRuntimeBookmarks";
     public const string TableName = "elsa_runtime_bookmark_state";
     public const string DefaultConnectionName = "ElsaRuntimeBookmarks";
     public const string DefaultSqliteConnectionString = "Data Source=elsa-runtime-bookmarks.db";
@@ -18,5 +16,4 @@ public static class BookmarkStateEfModule
     // The key contains digits only so relational provider collations cannot alter
     // ordinal ordering, while fixed padding preserves prefix ordering.
     public const int OrdinalOrderKeyMaximumLength = WorkflowIdentityMaximumLength * 5 + 5;
-    public static string HistoryTableName => EfMigrationsHistory.TableName(HistoryModuleName);
 }

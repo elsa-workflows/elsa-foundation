@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -13,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 [ShellFeature(
     name: "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence",
     DisplayName = "Workflows Runtime EF Core Executable Artifact Persistence",
-    Description = "Opt-in EF Core persistence for runtime executable artifacts, templates and source references against a fresh schema. Migration lifecycle is deferred; Groundwork remains the default.",
+    Description = "Opt-in EF Core persistence for runtime executable artifacts, templates and source references. It applies or validates the shared Runtime migrations on shell activation; Groundwork remains the default.",
     DependsOn = new object[] { "WorkflowsRuntime" })]
 public class RuntimeArtifactsEntityFrameworkCoreFeature : IShellFeature
 {
@@ -57,5 +58,6 @@ public class RuntimeArtifactsEntityFrameworkCoreFeature : IShellFeature
             ConnectionString = ConnectionString,
             ConnectionName = ConnectionName
         });
+        services.AddEfModuleMigrations<BookmarkStateDbContext>(Provider ?? "Sqlite");
     }
 }

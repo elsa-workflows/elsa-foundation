@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
@@ -23,5 +24,6 @@ public sealed class RuntimeWorkflowTestScopeEntityFrameworkCoreFeature : IShellF
 
     [ManifestSetting(DisplayName = "Recovery continuation signing key", Description = "Stable key used to authenticate scope paging cursors.", Category = "Persistence", Secret = true)]
     public string? RecoveryContinuationSigningKey { get; set; }
-    public void ConfigureServices(IServiceCollection services) => services.AddRuntimeWorkflowTestScopeEntityFrameworkCore(new() { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName, RecoveryContinuationSigningKey = RecoveryContinuationSigningKey });
+    public void ConfigureServices(IServiceCollection services) => services.AddRuntimeWorkflowTestScopeEntityFrameworkCore(new() { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName, RecoveryContinuationSigningKey = RecoveryContinuationSigningKey })
+        .AddEfModuleMigrations<BookmarkStateDbContext>(Provider);
 }

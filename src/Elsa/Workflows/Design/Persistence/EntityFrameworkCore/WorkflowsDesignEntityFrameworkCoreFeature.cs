@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.DependencyInjection;
@@ -18,5 +19,6 @@ public class WorkflowsDesignEntityFrameworkCoreFeature : IShellFeature
     public string? ConnectionString { get; set; }
     [ManifestSetting(DisplayName = "Connection name", Description = "Named connection under ConnectionStrings.", Category = "Persistence")]
     public string? ConnectionName { get; set; }
-    public virtual void ConfigureServices(IServiceCollection services) => services.AddWorkflowsDesignEntityFrameworkCore(new WorkflowsDesignEntityFrameworkCoreOptions { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName });
+    public virtual void ConfigureServices(IServiceCollection services) => services.AddWorkflowsDesignEntityFrameworkCore(new WorkflowsDesignEntityFrameworkCoreOptions { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName })
+        .AddEfModuleMigrations<WorkflowsDesignDbContext>(Provider);
 }

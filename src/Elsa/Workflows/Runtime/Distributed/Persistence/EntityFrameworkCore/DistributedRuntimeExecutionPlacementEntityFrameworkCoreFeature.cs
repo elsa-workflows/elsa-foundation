@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.DependencyInjection;
@@ -12,7 +13,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
 [ShellFeature(
     name: "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence",
     DisplayName = "Workflows Runtime Distributed EF Core Placement Persistence",
-    Description = "Opt-in EF Core persistence for distributed execution placement only. It replaces IExecutionPlacementStore, leaves command transport ownership unchanged, does not provision schema, and keeps Groundwork as the default for all other distributed stores.",
+    Description = "Opt-in EF Core persistence for distributed execution placement only. It replaces IExecutionPlacementStore, leaves command transport ownership unchanged, applies or validates its own migrations on shell activation, and keeps Groundwork as the default for all other distributed stores.",
     DependsOn = new object[] { "WorkflowsRuntimeDistributed" })]
 public class DistributedRuntimeExecutionPlacementEntityFrameworkCoreFeature : IShellFeature
 {
@@ -31,5 +32,6 @@ public class DistributedRuntimeExecutionPlacementEntityFrameworkCoreFeature : IS
             Provider = Provider,
             ConnectionString = ConnectionString,
             ConnectionName = ConnectionName
-        });
+        })
+        .AddEfModuleMigrations<ExecutionPlacementDbContext>(Provider);
 }
