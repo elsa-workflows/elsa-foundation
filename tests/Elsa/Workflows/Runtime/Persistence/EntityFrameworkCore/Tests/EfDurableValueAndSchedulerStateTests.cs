@@ -273,6 +273,28 @@ public sealed class EfDurableValueAndSchedulerStateTests
     }
 
     [Fact]
+    public async Task Execution_liveness_recovery_continuation_distinguishes_an_owner_named_all_from_no_owner_filter()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var now = DateTimeOffset.UtcNow;
+        await fixture.Liveness.SaveAsync(Liveness("workflow-a", "state-a", interruptedAt: now.AddMinutes(-2)));
+        await fixture.Liveness.SaveAsync(Liveness("workflow-a", "state-b", interruptedAt: now.AddMinutes(-1)));
+
+        var allRequest = new RuntimeRecoveryScanRequest(now, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(2), 1);
+        var all = await fixture.Liveness.ListRecoveryPageAsync(allRequest, new RuntimeStorePageRequest(1));
+        Assert.NotNull(all.NextContinuationToken);
+        var ownerRequest = new RuntimeRecoveryScanRequest(now, allRequest.LeaseTimeout, allRequest.HeartbeatTimeout, 1, ownerId: "<all>");
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Liveness.ListRecoveryPageAsync(
+            ownerRequest, new RuntimeStorePageRequest(1, all.NextContinuationToken)).AsTask());
+
+        var owned = await fixture.Liveness.ListRecoveryPageAsync(ownerRequest, new RuntimeStorePageRequest(1));
+        Assert.NotNull(owned.NextContinuationToken);
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Liveness.ListRecoveryPageAsync(
+            allRequest, new RuntimeStorePageRequest(1, owned.NextContinuationToken)).AsTask());
+    }
+
+    [Fact]
     public async Task Workflow_holds_are_keyed_by_control_plane_id_and_global_embedded_holds_are_workflow_visible()
     {
         await using var database = await TestDatabase.CreateAsync();

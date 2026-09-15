@@ -551,8 +551,13 @@ public sealed class EfExecutionLivenessStateStore(
         { throw new ArgumentException("The execution-liveness continuation is invalid or belongs to another query.", nameof(request), exception); }
     }
 
-    private string RecoveryBinding(string scope, RuntimeRecoveryScanRequest request) =>
-        string.Join("|", scope, request.Now.UtcTicks, request.LeaseTimeout.Ticks, request.HeartbeatTimeout.Ticks, request.OwnerId ?? "<all>");
+    private static string RecoveryBinding(string scope, RuntimeRecoveryScanRequest request) =>
+        JsonSerializer.Serialize(new RecoveryScanBinding(
+            scope,
+            request.Now.UtcTicks,
+            request.LeaseTimeout.Ticks,
+            request.HeartbeatTimeout.Ticks,
+            request.OwnerId));
 
     private string EncodeRecoveryCursor(string binding, DateTimeOffset eligibleAt, ExecutionLivenessState state)
     {
@@ -585,6 +590,7 @@ public sealed class EfExecutionLivenessStateStore(
 
     private sealed record IdentityCursor(string Scope, string WorkflowExecutionId, string Last);
     private sealed record GlobalCursor(string Scope, string WorkflowExecutionId, string OperationalStateId);
+    private sealed record RecoveryScanBinding(string Scope, long NowUtcTicks, long LeaseTimeoutTicks, long HeartbeatTimeoutTicks, string? OwnerId);
     private sealed record RecoveryCursor(string Binding, long EligibleAtUtcTicks, string WorkflowExecutionId, string OperationalStateId)
     {
         public DateTimeOffset EligibleAt => new(EligibleAtUtcTicks, TimeSpan.Zero);
