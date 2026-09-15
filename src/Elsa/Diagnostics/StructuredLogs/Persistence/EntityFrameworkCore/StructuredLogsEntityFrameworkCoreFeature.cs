@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using CShells.Features;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Platform.PackageManifest.Generator.Hints;
@@ -11,7 +12,7 @@ namespace Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore;
 [ShellFeature(
     name: "DiagnosticsStructuredLogsEntityFrameworkCore",
     DisplayName = "Diagnostics Structured Logs Entity Framework Core Persistence",
-    Description = "Opt-in EF Core persistence for Structured Logs. It does not provision schema or apply migrations; Groundwork remains the default.",
+    Description = "Opt-in EF Core persistence for Structured Logs. It applies or validates its own migrations on shell activation; Groundwork remains the default.",
     DependsOn = new object[] { "DiagnosticsStructuredLogs" })]
 public class StructuredLogsEntityFrameworkCoreFeature : IShellFeature
 {
@@ -40,5 +41,6 @@ public class StructuredLogsEntityFrameworkCoreFeature : IShellFeature
             Provider = Provider,
             ConnectionString = ConnectionString,
             ConnectionName = ConnectionName
-        });
+        })
+        .AddEfModuleMigrations<StructuredLogsDbContext>(Provider);
 }

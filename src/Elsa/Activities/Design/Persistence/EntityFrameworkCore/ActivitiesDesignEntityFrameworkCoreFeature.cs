@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore.DependencyInjection;
@@ -14,5 +15,6 @@ public sealed class ActivitiesDesignEntityFrameworkCoreFeature : IShellFeature
     public string? ConnectionString { get; set; }
     [ManifestSetting(DisplayName = "Connection name", Description = "Optional named connection.", Category = "Persistence")]
     public string? ConnectionName { get; set; }
-    public void ConfigureServices(IServiceCollection services) => services.AddActivitiesDesignEntityFrameworkCore(new() { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName });
+    public void ConfigureServices(IServiceCollection services) => services.AddActivitiesDesignEntityFrameworkCore(new() { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName })
+        .AddEfModuleMigrations<ActivitiesDesignDbContext>(Provider);
 }

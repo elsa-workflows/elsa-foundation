@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using CShells.Features;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Platform.PackageManifest.Generator.Hints;
@@ -11,7 +12,7 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
 [ShellFeature(
     name: "DiagnosticsOpenTelemetryEntityFrameworkCore",
     DisplayName = "Diagnostics OpenTelemetry Entity Framework Core Persistence",
-    Description = "Opt-in EF Core persistence for OpenTelemetry. It does not provision schema or apply migrations; Groundwork remains the default.",
+    Description = "Opt-in EF Core persistence for OpenTelemetry. It applies or validates its own migrations on shell activation; Groundwork remains the default.",
     DependsOn = new object[] { "DiagnosticsOpenTelemetry" })]
 public class EfOpenTelemetryFeature : IShellFeature
 {
@@ -33,5 +34,6 @@ public class EfOpenTelemetryFeature : IShellFeature
         TenantId = TenantId,
         ScopeId = ScopeId,
         SourceId = SourceId
-    });
+    })
+        .AddEfModuleMigrations<OpenTelemetryDbContext>(Provider);
 }

@@ -175,7 +175,7 @@ public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
     private static IReadOnlyCollection<ServiceDescriptor> AddContext<TContext>(IServiceCollection services, RuntimeOperationalStateEntityFrameworkCoreOptions options, Action<DbContextOptionsBuilder, string, string, string?> bind) where TContext : BookmarkStateDbContext
     {
         var start = services.Count;
-        services.AddDbContext<TContext>((provider, builder) => bind(builder, ResolveConnectionString(provider, options), RuntimeOperationalStateEfModule.HistoryModuleName, typeof(BookmarkStateDbContext).Assembly.GetName().Name));
+        services.AddDbContext<TContext>((provider, builder) => bind(builder, ResolveConnectionString(provider, options), RuntimeEfModule.HistoryTableName, typeof(BookmarkStateDbContext).Assembly.GetName().Name));
         services.TryAddScoped<BookmarkStateDbContext>(provider => provider.GetRequiredService<TContext>());
         return services.Skip(start).ToArray();
     }

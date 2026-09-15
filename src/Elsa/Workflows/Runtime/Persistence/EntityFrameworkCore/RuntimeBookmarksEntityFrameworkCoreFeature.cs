@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
@@ -41,5 +42,6 @@ public class RuntimeBookmarksEntityFrameworkCoreFeature : IShellFeature
             Provider = Provider,
             ConnectionString = ConnectionString,
             ConnectionName = ConnectionName
-        });
+        })
+        .AddEfModuleMigrations<BookmarkStateDbContext>(Provider);
 }

@@ -1,0 +1,79 @@
+using System.Reflection;
+using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
+using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
+using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore;
+using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
+using Elsa.Secrets.Persistence.EntityFrameworkCore;
+using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+
+namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
+
+/// <summary>Every provider-derived context declared by a first-party EF module.</summary>
+internal static class ModuleContextCatalog
+{
+    public static readonly string[] Providers = ["Sqlite", "SqlServer", "PostgreSql", "MySql"];
+
+    // One anchor per module assembly; a module that gains a context is found without further edits.
+    private static readonly Assembly[] Modules =
+    [
+        typeof(ActivitiesDesignDbContext).Assembly,
+        typeof(OpenTelemetryDbContext).Assembly,
+        typeof(StructuredLogsDbContext).Assembly,
+        typeof(IdentityIamDbContext).Assembly,
+        typeof(SecretsDbContext).Assembly,
+        typeof(StudioPreferencesDbContext).Assembly,
+        typeof(WorkflowsDesignDbContext).Assembly,
+        typeof(PublishingSnapshotReviewDbContext).Assembly,
+        typeof(ExecutionPlacementDbContext).Assembly,
+        typeof(BookmarkStateDbContext).Assembly
+    ];
+
+    public static IReadOnlyList<Type> Contexts(string provider) => Modules
+        .SelectMany(assembly => assembly.GetTypes())
+        .Where(type => type is { IsAbstract: false } && typeof(DbContext).IsAssignableFrom(type) &&
+                       type.Name.EndsWith(provider + "DbContext", StringComparison.Ordinal))
+        .OrderBy(type => type.FullName, StringComparer.Ordinal)
+        .ToArray();
+
+    public static IReadOnlyList<Type> AllContexts() => Providers.SelectMany(Contexts).ToArray();
+
+    public static string ProviderOf(Type context) =>
+        Providers.Single(provider => context.Name.EndsWith(provider + "DbContext", StringComparison.Ordinal));
+
+    /// <summary>Each module context keeps its own history table, so modules can share one database.</summary>
+    public static string HistoryTable(Type context) =>
+        EfMigrationsHistory.TableName(context.Name[..^(ProviderOf(context).Length + "DbContext".Length)]);
+
+    public static DbContext Create(Type context, string connectionString)
+    {
+        var builder = (DbContextOptionsBuilder)Activator.CreateInstance(typeof(DbContextOptionsBuilder<>).MakeGenericType(context))!;
+        EfRelationalProviderBinding.Use(builder, ProviderOf(context), connectionString, HistoryTable(context), context.Assembly.GetName().Name);
+        return (DbContext)Activator.CreateInstance(context, builder.Options)!;
+    }
+
+    /// <summary>Applies every module's migrations to one database, then proves each is current and isolated.</summary>
+    public static async Task InstallAllAsync(string provider, string connectionString)
+    {
+        var contexts = Contexts(provider);
+        foreach (var type in contexts)
+        {
+            await using var context = Create(type, connectionString);
+            await EfDatabaseMigrator.ApplyAsync(context, EfRelationalProviderBinding.ExpectedProviderName(provider), EfMigratePolicy.AutoMigrate);
+        }
+
+        foreach (var type in contexts)
+        {
+            await using var context = Create(type, connectionString);
+            await EfDatabaseMigrator.ApplyAsync(context, EfRelationalProviderBinding.ExpectedProviderName(provider), EfMigratePolicy.Validate);
+            var applied = (await context.Database.GetAppliedMigrationsAsync()).ToArray();
+            if (!applied.SequenceEqual(context.Database.GetMigrations()))
+                throw new InvalidOperationException($"{type.Name} history does not match its own migration set: {string.Join(", ", applied)}.");
+        }
+    }
+}

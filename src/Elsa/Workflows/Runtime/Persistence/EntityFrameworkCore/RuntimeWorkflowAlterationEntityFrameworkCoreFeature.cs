@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -24,5 +25,6 @@ public sealed class RuntimeWorkflowAlterationEntityFrameworkCoreFeature : IShell
 
     [ManifestSetting(DisplayName = "Recovery continuation signing key", Description = "At least 32 UTF-8 bytes shared by nodes consuming durable pages.", Category = "Security", Secret = true)]
     public string? RecoveryContinuationSigningKey { get; set; }
-    public void ConfigureServices(IServiceCollection services) => services.AddRuntimeWorkflowAlterationEntityFrameworkCore(new() { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName, RecoveryContinuationSigningKey = RecoveryContinuationSigningKey });
+    public void ConfigureServices(IServiceCollection services) => services.AddRuntimeWorkflowAlterationEntityFrameworkCore(new() { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName, RecoveryContinuationSigningKey = RecoveryContinuationSigningKey })
+        .AddEfModuleMigrations<BookmarkStateDbContext>(Provider);
 }

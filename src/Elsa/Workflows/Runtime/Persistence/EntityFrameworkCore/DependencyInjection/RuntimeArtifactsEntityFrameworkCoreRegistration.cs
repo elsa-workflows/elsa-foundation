@@ -205,7 +205,7 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
     private static IReadOnlyCollection<ServiceDescriptor> AddContext<T>(IServiceCollection services, RuntimeArtifactsEntityFrameworkCoreOptions options, Action<DbContextOptionsBuilder, string, string, string?> bind) where T : BookmarkStateDbContext
     {
         var start = services.Count;
-        services.AddDbContext<T>((provider, builder) => bind(builder, Resolve(provider, options), RuntimeArtifactEfModule.HistoryTableName, typeof(BookmarkStateDbContext).Assembly.GetName().Name));
+        services.AddDbContext<T>((provider, builder) => bind(builder, Resolve(provider, options), RuntimeEfModule.HistoryTableName, typeof(BookmarkStateDbContext).Assembly.GetName().Name));
         services.TryAddScoped<BookmarkStateDbContext>(p => p.GetRequiredService<T>());
         return services.Skip(start).ToArray();
     }

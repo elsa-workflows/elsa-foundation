@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using CShells.Features;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Platform.PackageManifest.Generator.Hints;
@@ -29,5 +30,6 @@ public class IdentityProviderConfigurationEntityFrameworkCoreFeature : IShellFea
             Provider = Provider,
             ConnectionString = ConnectionString,
             ConnectionName = ConnectionName
-        });
+        })
+        .AddEfModuleMigrations<IdentityProviderConfigurationDbContext>(Provider);
 }

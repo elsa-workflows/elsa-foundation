@@ -163,7 +163,7 @@ public static class RuntimeSchedulerWorkQueueEntityFrameworkCoreRegistration
         services.AddDbContext<TContext>((provider, builder) => bind(
             builder,
             ResolveConnectionString(provider, options),
-            RuntimeOperationalStateEfModule.HistoryModuleName,
+            RuntimeEfModule.HistoryTableName,
             typeof(BookmarkStateDbContext).Assembly.GetName().Name));
         services.TryAddScoped<BookmarkStateDbContext>(provider => provider.GetRequiredService<TContext>());
         return services.Skip(start).ToArray();

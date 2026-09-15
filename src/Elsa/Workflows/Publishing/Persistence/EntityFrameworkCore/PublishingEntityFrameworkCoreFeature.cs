@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.DependencyInjection;
@@ -31,5 +32,6 @@ public class PublishingEntityFrameworkCoreFeature : IShellFeature
             Provider = Provider,
             ConnectionString = ConnectionString,
             ConnectionName = ConnectionName
-        });
+        })
+        .AddEfModuleMigrations<PublishingSnapshotReviewDbContext>(Provider);
 }

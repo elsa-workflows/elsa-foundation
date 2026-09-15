@@ -2,8 +2,35 @@
 
 Convention for first-party EF modules under accepted
 [ADR 0073](../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md).
-The current commands began with the Secrets pilot and must become module-parameterized under #1669;
-#1657 is the prerequisite race/isolation repair, not the owner of that generalization.
+
+## Every module (#1669)
+
+Every first-party EF module ships one migration set per provider (Sqlite, SqlServer, PostgreSql, MySql),
+compiled into the module assembly under `Migrations/<Context>/<Provider>/`, with its own history table.
+`tools/ef/Elsa.EntityFrameworkCore.Tooling` is the shared design-time startup project: it holds the provider
+engines and one `ModuleDesignTimeFactory` line per provider-derived context. Add a line there when a module
+gains a context.
+
+```bash
+bash tools/ef/generate-module-migrations.sh [context-regex]   # regenerate Initial after a model change
+bash tools/ef/module-migrate.sh pending                        # CI-safe: fails on an unmigrated model change
+bash tools/ef/module-migrate.sh apply PostgreSql "<connection>" # out-of-process apply, every module
+bash tools/ef/module-migrate.sh validate PostgreSql "<connection>"
+```
+
+Elsa is pre-release with no production data, so a module keeps a single `Initial` migration per provider
+that is regenerated whenever its model changes; Secrets keeps its historical chain. The generator rewrites
+the few provider-package calls EF emits so modules stay provider-free.
+
+At runtime each EF shell feature registers `EfModuleMigrator<TContext>` for its context. It runs on shell
+activation (`IShellInitializer`) and plain host start, applying migrations under `EfMigrateOptions.Policy =
+AutoMigrate` (the default) or refusing a stale database under `Validate`, which is the mode to use when an
+operator applies migrations out of process first. All Runtime participants share one context and one
+`__EFMigrationsHistory_ElsaRuntime` history. `tests/Elsa/Persistence/EntityFrameworkCore/Migrations` proves
+the model/migration match on all four providers and a fresh install of every module into one database on
+SQLite (fast gate) and on SQL Server, PostgreSQL and MySQL (Testcontainers).
+
+## Secrets pilot tooling
 
 ## Layout
 

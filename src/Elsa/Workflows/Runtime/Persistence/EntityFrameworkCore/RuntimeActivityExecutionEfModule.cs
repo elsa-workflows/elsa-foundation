@@ -1,4 +1,3 @@
-using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
@@ -7,7 +6,6 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 /// </summary>
 public static class RuntimeActivityExecutionEfModule
 {
-    public const string HistoryModuleName = "ElsaRuntimeActivityExecutions";
     public const string DefaultConnectionName = "ElsaRuntimeActivityExecutions";
     public const string DefaultSqliteConnectionString = "Data Source=elsa-runtime-activity-executions.db";
     public const string SchemaVersion = "1.0.0";
@@ -20,5 +18,4 @@ public static class RuntimeActivityExecutionEfModule
     public const int EncodedIdentityMaximumLength = 450;
     public const int HashMaximumLength = 64;
     public const int OrderKeyMaximumLength = 655;
-    public static string HistoryTableName => EfMigrationsHistory.TableName(HistoryModuleName);
 }

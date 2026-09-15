@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using CShells.Features;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.DependencyInjection;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Seeding;
@@ -49,7 +50,8 @@ public class AspNetCoreIdentityEntityFrameworkCoreFeature : IShellFeature
                 ConnectionName = ConnectionName
             },
             BuildInitialAdmin(),
-            IsDevelopmentOrDemo);
+            IsDevelopmentOrDemo)
+        .AddEfModuleMigrations<Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.IdentityIamDbContext>(Provider);
 
     private IdentitySeedOptions? BuildInitialAdmin()
     {

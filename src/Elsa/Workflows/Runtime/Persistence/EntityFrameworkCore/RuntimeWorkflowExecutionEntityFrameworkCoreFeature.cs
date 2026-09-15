@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -30,5 +31,6 @@ public class RuntimeWorkflowExecutionEntityFrameworkCoreFeature : IShellFeature
     {
         ArgumentNullException.ThrowIfNull(services);
         services.AddRuntimeWorkflowExecutionEntityFrameworkCore(new RuntimeWorkflowExecutionEntityFrameworkCoreOptions { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName, RecoveryContinuationSigningKey = RecoveryContinuationSigningKey });
+        services.AddEfModuleMigrations<BookmarkStateDbContext>(Provider);
     }
 }

@@ -215,7 +215,7 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
         where TContext : BookmarkStateDbContext
     {
         var start = services.Count;
-        services.AddDbContext<TContext>((provider, builder) => bind(builder, Resolve(provider, options), RuntimeActivityExecutionEfModule.HistoryTableName, typeof(BookmarkStateDbContext).Assembly.GetName().Name));
+        services.AddDbContext<TContext>((provider, builder) => bind(builder, Resolve(provider, options), RuntimeEfModule.HistoryTableName, typeof(BookmarkStateDbContext).Assembly.GetName().Name));
         services.TryAddScoped<BookmarkStateDbContext>(provider => provider.GetRequiredService<TContext>());
         return services.Skip(start).ToArray();
     }

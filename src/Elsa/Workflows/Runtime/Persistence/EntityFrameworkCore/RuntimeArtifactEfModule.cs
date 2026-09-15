@@ -3,7 +3,6 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 public static class RuntimeArtifactEfModule
 {
     public const string SchemaVersion = "1.0.0";
-    public const string HistoryModuleName = "ElsaRuntimeArtifacts";
     public const string DefaultConnectionName = "ElsaRuntimeArtifacts";
     public const string DefaultSqliteConnectionString = "Data Source=elsa-runtime-artifacts.db";
     public const string WorkflowExecutableTableName = "elsa_runtime_workflow_executable";
@@ -15,5 +14,4 @@ public static class RuntimeArtifactEfModule
     public const int IdentityProjectionMaximumLength = IdentityMaximumLength * sizeof(char) * 2;
     public const int HashMaximumLength = 450;
     public const int ScopeMaximumLength = 32;
-    public static string HistoryTableName => Elsa.Persistence.EntityFramework.EfMigrationsHistory.TableName(HistoryModuleName);
 }

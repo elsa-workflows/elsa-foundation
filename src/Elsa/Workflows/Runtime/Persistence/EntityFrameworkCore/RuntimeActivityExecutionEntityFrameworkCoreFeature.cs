@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -46,5 +47,6 @@ public class RuntimeActivityExecutionEntityFrameworkCoreFeature : IShellFeature
             HierarchyCursorSigningKey = HierarchyCursorSigningKey,
             RecoveryContinuationSigningKey = RecoveryContinuationSigningKey
         });
+        services.AddEfModuleMigrations<BookmarkStateDbContext>(Provider);
     }
 }
