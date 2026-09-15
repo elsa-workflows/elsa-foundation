@@ -185,6 +185,9 @@ public static class GroundworkV2RuntimeRegistration
         // This keeps repeated Groundwork registration idempotent while allowing EF->Groundwork
         // switching to remove the stale workflow unit through the prior backend's callback.
         commitExistingWorkflowExecutionRemoval?.Invoke(services);
+        // Withdraw the old checkpoint unit before the manifest declares the new one. Removing it
+        // after declaration would silently drop checkpoint storage on repeated Groundwork composition.
+        existingCheckpointBackend?.RemoveOwnedRegistrations(services);
         foreach (var unit in ElsaRuntimeV2StorageManifest.CreateUnits())
             services.AddGroundworkStorageUnit(unit, target);
         ReplaceScoped<GroundworkV2ExecutableActivityTemplateStore>(services, Standard<GroundworkV2ExecutableActivityTemplateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
@@ -288,7 +291,6 @@ public static class GroundworkV2RuntimeRegistration
             RuntimeWorkflowDispatchStoreBackend.Groundwork,
             [groundworkDispatchConcreteDescriptor, groundworkDispatchEvidenceDescriptor, .. groundworkDispatchContractDescriptors],
             collection => GroundworkV2RuntimeUnitWithdrawal.RemoveWorkflowDispatch(collection, target)));
-        existingCheckpointBackend?.RemoveOwnedRegistrations(services);
         ReplaceScoped<GroundworkV2RuntimeCheckpointWriter>(services, provider => new(
                 provider.GetRequiredService<IGroundworkStorageSessionSource>(),
                 provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
