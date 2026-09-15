@@ -72,6 +72,31 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
+    public async Task Damaged_marker_scope_projection_fails_closed_instead_of_becoming_a_false_new_commit()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var commit = WithBookmark("commit-marker-drift", CheckpointBookmark("bookmark-marker-drift", "original"),
+            RuntimeStateChangeOperation.Upsert);
+        await using (var seed = database.Open("tenant-a"))
+        {
+            await new EfRuntimeCheckpointCommitStore(seed, new FixedAccessor("tenant-a"))
+                .CommitAsync(commit, Decision());
+            await seed.RuntimeCheckpointCommits.ExecuteUpdateAsync(setters => setters
+                .SetProperty(row => row.ScopeKey, EfRelationalIdentity.Encode("tenant-b")));
+        }
+
+        var capture = new CommandCaptureInterceptor();
+        await using var context = database.Open("tenant-a", capture);
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"))
+                .CommitAsync(commit, Decision()).AsTask());
+        Assert.DoesNotContain(capture.Commands, command => command.StartsWith("INSERT", StringComparison.OrdinalIgnoreCase) ||
+            command.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase));
+        Assert.Single(await context.RuntimeCheckpointCommits.ToArrayAsync());
+        Assert.Single(await context.Bookmarks.ToArrayAsync());
+    }
+
+    [Fact]
     public async Task Nonempty_execution_scheduler_and_fence_commit_as_one_replayable_unit()
     {
         await using var database = await TestDatabase.CreateAsync();

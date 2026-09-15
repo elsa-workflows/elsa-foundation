@@ -379,13 +379,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
     {
         var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, commitId);
         var row = await context.RuntimeCheckpointCommits.AsNoTracking()
-            .SingleOrDefaultAsync(candidate =>
-                candidate.Id == id &&
-                candidate.ScopeKey == EfRuntimeOperationalStoreSupport.Encode(scope) &&
-                candidate.ScopeKeyHash == EfRuntimeOperationalStoreSupport.Hash(scope) &&
-                candidate.CommitId == EfRuntimeOperationalStoreSupport.Encode(commitId) &&
-                candidate.CommitIdHash == EfRuntimeOperationalStoreSupport.Hash(commitId),
-                cancellationToken);
+            .SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
         return row is null ? null : ReadChecked(row, scope, commitId);
     }
 
