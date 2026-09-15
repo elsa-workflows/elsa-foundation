@@ -49,7 +49,7 @@ public sealed class SchedulerWorkQueueStoreBackend
     public static void EnsureNoUnownedRegistrations(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-        if (services.Any(descriptor => IsQueueSurfaceRegistration(descriptor) && !IsRuntimeDefault(descriptor) && !IsGroundwork(descriptor)))
+        if (services.Any(descriptor => IsQueueSurfaceRegistration(descriptor) && !IsRuntimeDefault(descriptor)))
             throw new InvalidOperationException("An explicit scheduler-work queue registration is already present; the selected backend refuses to replace it implicitly.");
     }
 
@@ -95,12 +95,10 @@ public sealed class SchedulerWorkQueueStoreBackend
         (typeof(IWorkflowSchedulerWorkQueue).IsAssignableFrom(returnType) || typeof(IWorkflowSchedulerWorkClaimInspection).IsAssignableFrom(returnType));
 
     private static bool IsRuntimeDefault(ServiceDescriptor descriptor) =>
-        descriptor.ImplementationType?.Name == "InMemoryWorkflowSchedulerWorkQueue" ||
-        descriptor.ImplementationFactory?.Method.DeclaringType?.FullName?.Contains("RuntimeCoreServiceCollectionExtensions", StringComparison.Ordinal) == true;
-
-    private static bool IsGroundwork(ServiceDescriptor descriptor) =>
-        descriptor.ImplementationType?.Name == "GroundworkV2WorkflowSchedulerWorkQueue" ||
-        descriptor.ImplementationFactory?.Method.ReturnType.Name == "GroundworkV2WorkflowSchedulerWorkQueue";
+        descriptor.ImplementationType is { } implementationType &&
+        implementationType.FullName == "Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowSchedulerWorkQueue" &&
+        implementationType.Assembly.GetName().Name == "Elsa.Workflows.Runtime" ||
+        RuntimeCoreRegistrationOwnership.IsCoreFactory(descriptor);
 
     private static bool IsOwnedBySibling(IServiceCollection services, ServiceDescriptor descriptor) =>
         RuntimeArtifactStoreBackend.Find(services)?.Owns(descriptor) == true ||

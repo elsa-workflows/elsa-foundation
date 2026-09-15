@@ -121,21 +121,20 @@ public sealed class GroundworkV2RuntimeRegistrationTests
         var checkpointBackend = RuntimeCheckpointCommitStoreBackend.Find(services)!;
         Assert.Equal(RuntimeCheckpointCommitStoreBackend.Groundwork, checkpointBackend.Name);
         checkpointBackend.EnsureOwnsRegisteredContract(services);
+        var queueBackend = SchedulerWorkQueueStoreBackend.Find(services)!;
+        Assert.Equal(SchedulerWorkQueueStoreBackend.Groundwork, queueBackend.Name);
+        queueBackend.EnsureOwnsRegisteredContracts(services);
+        var timerBackend = DurableTimerStoreBackend.Find(services)!;
+        Assert.Equal(DurableTimerStoreBackend.Groundwork, timerBackend.Name);
+        timerBackend.EnsureOwnsRegisteredContracts(services);
     }
 
     [Fact]
     public void Groundwork_dispatch_and_outbox_transition_to_EF_after_operational_switch()
     {
-        var services = new ServiceCollection().AddWorkflowRuntime();
-        services.AddGroundworkV2RuntimeStores();
+        var services = CreateGroundworkRuntimeWithEfOperationalState();
         var registry = Assert.IsType<GroundworkStorageUnitRegistry>(services.Single(descriptor =>
             descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance);
-
-        services.AddRuntimeOperationalStateEntityFrameworkCore(new()
-        {
-            Provider = "Sqlite",
-            ConnectionString = "Data Source=:memory:"
-        });
         var beforeOutbox = services.ToArray();
         Assert.Throws<InvalidOperationException>(() => services.AddRuntimePostCommitOutboxEntityFrameworkCore());
         Assert.Equal(beforeOutbox, services);
@@ -167,13 +166,7 @@ public sealed class GroundworkV2RuntimeRegistrationTests
     [Fact]
     public void Groundwork_dispatch_transition_refuses_unowned_contract_without_mutation()
     {
-        var services = new ServiceCollection().AddWorkflowRuntime();
-        services.AddGroundworkV2RuntimeStores();
-        services.AddRuntimeOperationalStateEntityFrameworkCore(new()
-        {
-            Provider = "Sqlite",
-            ConnectionString = "Data Source=:memory:"
-        });
+        var services = CreateGroundworkRuntimeWithEfOperationalState();
         services.AddScoped<IWorkflowDispatchStore>(_ => throw new InvalidOperationException("foreign"));
         var before = services.ToArray();
 
@@ -222,6 +215,79 @@ public sealed class GroundworkV2RuntimeRegistrationTests
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IRuntimeCheckpointCommitStore));
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IWorkflowDispatchDurabilityEvidence) &&
             descriptor.ImplementationType?.Name == "GroundworkV2CheckpointDurabilityEvidence");
+    }
+
+    [Fact]
+    public void Groundwork_scheduler_queue_switches_to_EF_with_exclusive_ownership_and_withdraws_its_evidence()
+    {
+        var services = CreateGroundworkRuntimeWithEfOperationalState();
+        var registry = Assert.IsType<GroundworkStorageUnitRegistry>(services.Single(descriptor =>
+            descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance);
+
+        services.AddRuntimeSchedulerWorkQueueEntityFrameworkCore(new()
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        });
+
+        var selected = SchedulerWorkQueueStoreBackend.Find(services)!;
+        Assert.Equal(SchedulerWorkQueueStoreBackend.EntityFramework, selected.Name);
+        selected.EnsureOwnsRegisteredContracts(services);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowSchedulerWorkQueue));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(EfSchedulerWorkQueueStore));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IWorkflowDispatchDurabilityEvidence) &&
+            descriptor.ImplementationType?.Name == "GroundworkV2SchedulerDurabilityEvidence");
+        Assert.DoesNotContain(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind);
+
+        services.AddGroundworkV2RuntimeStores();
+        Assert.Equal(SchedulerWorkQueueStoreBackend.Groundwork, SchedulerWorkQueueStoreBackend.Find(services)!.Name);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowSchedulerWorkQueue));
+        Assert.Single(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind);
+    }
+
+    [Fact]
+    public void Groundwork_durable_timer_switches_to_EF_and_back_without_orphaning_its_storage_unit()
+    {
+        var services = CreateGroundworkRuntimeWithEfOperationalState();
+        var registry = Assert.IsType<GroundworkStorageUnitRegistry>(services.Single(descriptor =>
+            descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance);
+
+        services.AddRuntimeDurableTimerEntityFrameworkCore(new()
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        });
+
+        var selected = DurableTimerStoreBackend.Find(services)!;
+        Assert.Equal(DurableTimerStoreBackend.EntityFramework, selected.Name);
+        selected.EnsureOwnsRegisteredContracts(services);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2DurableTimerStateStore));
+        Assert.DoesNotContain(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind);
+
+        services.AddGroundworkV2RuntimeStores();
+        Assert.Equal(DurableTimerStoreBackend.Groundwork, DurableTimerStoreBackend.Find(services)!.Name);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2DurableTimerStateStore));
+        Assert.Single(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind);
+    }
+
+    [Fact]
+    public void Groundwork_registration_refuses_unowned_scheduler_and_timer_contracts_without_mutation()
+    {
+        foreach (var foreignContract in new[] { typeof(IWorkflowSchedulerWorkQueue), typeof(IDurableTimerStore) })
+        {
+            var services = new ServiceCollection().AddWorkflowRuntime();
+            services.AddScoped(foreignContract, _ => throw new InvalidOperationException("foreign"));
+            var before = services.ToArray();
+
+            Assert.Throws<InvalidOperationException>(() => services.AddGroundworkV2RuntimeStores());
+            Assert.Equal(before, services);
+            Assert.Null(SchedulerWorkQueueStoreBackend.Find(services));
+            Assert.Null(DurableTimerStoreBackend.Find(services));
+        }
     }
 
     [Fact]
@@ -456,6 +522,19 @@ public sealed class GroundworkV2RuntimeRegistrationTests
                 evidence => evidence.Component == WorkflowDispatchDurabilityComponents.Checkpoint);
             Assert.Equal(WorkflowDispatchDurabilityLevel.Durable, checkpoint.Level);
         }
+    }
+
+    private static ServiceCollection CreateGroundworkRuntimeWithEfOperationalState()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddGroundworkV2RuntimeStores();
+        services.AddRuntimeOperationalStateEntityFrameworkCore(new()
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        });
+        return services;
     }
 
     private static void AssertScopedAlias<TContract, TImplementation>(IServiceCollection services)

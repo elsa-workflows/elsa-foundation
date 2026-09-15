@@ -56,7 +56,7 @@ public sealed class DurableTimerStoreBackend
     public static void EnsureNoUnownedRegistrations(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-        if (services.Any(descriptor => IsTimerSurfaceRegistration(descriptor) && !IsRuntimeDefault(descriptor) && !IsGroundwork(descriptor)))
+        if (services.Any(descriptor => IsTimerSurfaceRegistration(descriptor) && !IsRuntimeDefault(descriptor)))
             throw new InvalidOperationException("An explicit durable-timer store registration is already present; the selected backend refuses to replace it implicitly.");
     }
 
@@ -100,12 +100,10 @@ public sealed class DurableTimerStoreBackend
         descriptor.ImplementationFactory?.Method.ReturnType is { } returnType && typeof(IDurableTimerStore).IsAssignableFrom(returnType);
 
     private static bool IsRuntimeDefault(ServiceDescriptor descriptor) =>
-        descriptor.ImplementationType?.Name == "InMemoryDurableTimerStore" ||
-        descriptor.ImplementationFactory?.Method.DeclaringType?.FullName?.Contains("RuntimeCoreServiceCollectionExtensions", StringComparison.Ordinal) == true;
-
-    private static bool IsGroundwork(ServiceDescriptor descriptor) =>
-        descriptor.ImplementationType?.Name == "GroundworkV2DurableTimerStateStore" ||
-        descriptor.ImplementationFactory?.Method.ReturnType.Name == "GroundworkV2DurableTimerStateStore";
+        descriptor.ImplementationType is { } implementationType &&
+        implementationType.FullName == "Elsa.Workflows.Runtime.Core.Services.InMemoryDurableTimerStore" &&
+        implementationType.Assembly.GetName().Name == "Elsa.Workflows.Runtime" ||
+        RuntimeCoreRegistrationOwnership.IsCoreFactory(descriptor);
 
     private static bool IsOwnedBySibling(IServiceCollection services, ServiceDescriptor descriptor) =>
         RuntimeArtifactStoreBackend.Find(services)?.Owns(descriptor) == true ||

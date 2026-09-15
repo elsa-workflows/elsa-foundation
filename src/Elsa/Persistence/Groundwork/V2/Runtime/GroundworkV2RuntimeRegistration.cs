@@ -77,6 +77,22 @@ public static class GroundworkV2RuntimeRegistration
             }
             else
                 existingCheckpointBackend.EnsureOwnsRegisteredContract(services);
+            var existingQueueBackend = SchedulerWorkQueueStoreBackend.Find(services);
+            if (existingQueueBackend is null)
+                SchedulerWorkQueueStoreBackend.EnsureNoUnownedRegistrations(services);
+            else
+                existingQueueBackend.EnsureOwnsRegisteredContracts(services);
+            var commitExistingQueueRemoval = existingQueueBackend is not null && existingQueueBackend.Name != SchedulerWorkQueueStoreBackend.Groundwork
+                ? existingQueueBackend.PrepareRemoveOwnedArtifacts(services)
+                : null;
+            var existingTimerBackend = DurableTimerStoreBackend.Find(services);
+            if (existingTimerBackend is null)
+                DurableTimerStoreBackend.EnsureNoUnownedRegistrations(services);
+            else
+                existingTimerBackend.EnsureOwnsRegisteredContracts(services);
+            var commitExistingTimerRemoval = existingTimerBackend is not null && existingTimerBackend.Name != DurableTimerStoreBackend.Groundwork
+                ? existingTimerBackend.PrepareRemoveOwnedArtifacts(services)
+                : null;
             var existingWorkflowExecutionStateBackend = WorkflowExecutionStateStoreBackend.Find(services);
             existingWorkflowExecutionStateBackend?.EnsureOwnsRegisteredContract(services);
             if (existingWorkflowExecutionStateBackend is null && services.Any(descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionStateStore) && descriptor.ImplementationType != typeof(Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowExecutionStateStore)))
@@ -306,10 +322,28 @@ public static class GroundworkV2RuntimeRegistration
             collection => GroundworkV2RuntimeUnitWithdrawal.RemovePostCommitOutbox(collection, target)));
         ReplaceScoped<GroundworkV2WorkflowSchedulerWorkQueue>(services, Standard<GroundworkV2WorkflowSchedulerWorkQueue>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowSchedulerWorkQueue), typeof(IWorkflowSchedulerWorkClaimInspection));
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2SchedulerDurabilityEvidence>());
+        var groundworkSchedulerEvidenceDescriptor = services.Single(descriptor => descriptor.ServiceType == typeof(IWorkflowDispatchDurabilityEvidence) &&
+            descriptor.ImplementationType == typeof(GroundworkV2SchedulerDurabilityEvidence));
+        var groundworkQueueConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowSchedulerWorkQueue));
+        var groundworkQueueContractDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IWorkflowSchedulerWorkQueue));
+        var groundworkQueueInspectionDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IWorkflowSchedulerWorkClaimInspection));
+        services.RemoveAll<SchedulerWorkQueueStoreBackend>();
+        SchedulerWorkQueueStoreBackend.Register(services, new(
+            SchedulerWorkQueueStoreBackend.Groundwork,
+            [groundworkQueueConcreteDescriptor, groundworkQueueContractDescriptor, groundworkQueueInspectionDescriptor, groundworkSchedulerEvidenceDescriptor],
+            collection => GroundworkV2RuntimeUnitWithdrawal.RemoveSchedulerWorkQueue(collection, target)));
         ReplaceScoped<GroundworkV2WorkflowSchedulerPoisonStore>(services, Standard<GroundworkV2WorkflowSchedulerPoisonStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowSchedulerPoisonStore));
         ReplaceScoped<GroundworkV2DurableTimerStateStore>(services, Standard<GroundworkV2DurableTimerStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IDurableTimerStore));
+        var groundworkTimerConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2DurableTimerStateStore));
+        var groundworkTimerContractDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IDurableTimerStore));
+        services.RemoveAll<DurableTimerStoreBackend>();
+        DurableTimerStoreBackend.Register(services, new(
+            DurableTimerStoreBackend.Groundwork,
+            [groundworkTimerConcreteDescriptor, groundworkTimerContractDescriptor],
+            collection => GroundworkV2RuntimeUnitWithdrawal.RemoveDurableTimer(collection, target)));
         ReplaceScoped<GroundworkV2WorkflowTriggerBindingStore>(services, Standard<GroundworkV2WorkflowTriggerBindingStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowTriggerBindingStore));
         ReplaceScoped<GroundworkV2RecurringTriggerScheduleStore>(services, Standard<GroundworkV2RecurringTriggerScheduleStore>(target, static (sessions, access, target) => new(sessions, access, target)),
@@ -320,7 +354,6 @@ public static class GroundworkV2RuntimeRegistration
                 provider.GetRequiredService<GroundworkStorageTransactionFactory>(),
                 target), typeof(IWorkflowActivationAuthority));
 
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2SchedulerDurabilityEvidence>());
         RegisterArtifactBackend(services, target);
         RegisterActivityExecutionBackend(services, target);
         commitExistingOperationalStateRemoval?.Invoke(services);
@@ -328,6 +361,8 @@ public static class GroundworkV2RuntimeRegistration
         commitExistingTestScopeRemoval?.Invoke(services);
         commitExistingDispatchRemoval?.Invoke(services);
         commitExistingOutboxRemoval?.Invoke(services);
+        commitExistingQueueRemoval?.Invoke(services);
+        commitExistingTimerRemoval?.Invoke(services);
         return services;
         }
         catch
@@ -567,6 +602,12 @@ internal static class GroundworkV2RuntimeUnitWithdrawal
 
     public static void RemovePostCommitOutbox(IServiceCollection services, string? targetName) =>
         services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind, targetName);
+
+    public static void RemoveSchedulerWorkQueue(IServiceCollection services, string? targetName) =>
+        services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, targetName);
+
+    public static void RemoveDurableTimer(IServiceCollection services, string? targetName) =>
+        services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind, targetName);
 
     public static void RemoveOperationalState(IServiceCollection services, string? targetName)
     {
