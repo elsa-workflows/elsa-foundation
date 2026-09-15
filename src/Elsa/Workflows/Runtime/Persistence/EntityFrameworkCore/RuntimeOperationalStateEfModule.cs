@@ -15,6 +15,8 @@ public static class RuntimeOperationalStateEfModule
     public const string IncidentTableName = "elsa_runtime_incident_state";
     public const string WorkflowRunHealthTableName = "elsa_runtime_workflow_run_health_state";
     public const string CheckpointCommitTableName = "elsa_runtime_checkpoint_commit";
+    public const string RecurringScheduleTableName = "elsa_runtime_recurring_trigger_schedule";
+    public const string RecurringScheduleProjectionStateTableName = "elsa_runtime_recurring_schedule_projection_state";
     public const string SchemaVersion = "1.0.0";
     public const int IdentityMaximumLength = 128;
     public const int IdentityProjectionMaximumLength = ((IdentityMaximumLength * sizeof(char) + 2) / 3) * 4;
@@ -27,4 +29,12 @@ public static class RuntimeOperationalStateEfModule
     public const int DurableTimerStimulusHashProjectionMaximumLength = ((DurableTimerStimulusHashMaximumLength * sizeof(char) + 2) / 3) * 4;
     public const int DurableTimerClaimOrderKeyMaximumLength = 84;
     public const int SchedulerWorkOrderKeyMaximumLength = 170;
+    public const int RecurringScheduleStimulusTypeMaximumLength = 240;
+    public const int RecurringScheduleExpressionMaximumLength = 2048;
+    // RecurringTriggerSchedule.BuildFanOutId may compose activation, artifact, node, and stimulus identities.
+    // Escape expands '%' and ':' to three UTF-16 code units, so this is the exact worst-case bound for four
+    // legal 128-code-unit identities and the three separators in the activation-scoped fan-out form.
+    public const int RecurringScheduleIdMaximumLength = IdentityMaximumLength * 3 * 4 + 3;
+    public const int RecurringScheduleIdProjectionMaximumLength = ((RecurringScheduleIdMaximumLength * sizeof(char) + 2) / 3) * 4;
+    public const int RecurringScheduleIdOrderKeyMaximumLength = (RecurringScheduleIdMaximumLength + 1) * sizeof(char) * 2;
 }
