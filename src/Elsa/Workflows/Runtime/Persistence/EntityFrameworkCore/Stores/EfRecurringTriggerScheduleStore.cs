@@ -243,6 +243,12 @@ public sealed class EfRecurringTriggerScheduleStore(
         context.ChangeTracker.Clear();
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         var rows = await RowsForActivation(scope, activationId, cancellationToken);
+        foreach (var row in rows)
+        {
+            var schedule = Read(row, scope, Decode(row.ScheduleId));
+            if (schedule.ActivationId != activationId)
+                throw new InvalidDataException($"Recurring-schedule activation '{activationId}' contains a row with a different activation identity.");
+        }
         var state = await ActivationState(scope, activationId, cancellationToken);
         if (state is not null)
         {

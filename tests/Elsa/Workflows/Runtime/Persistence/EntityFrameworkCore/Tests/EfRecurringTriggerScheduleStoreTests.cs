@@ -106,6 +106,28 @@ public sealed class EfRecurringTriggerScheduleStoreTests
     }
 
     [Fact]
+    public async Task SQLite_activation_cleanup_rejects_a_corrupt_row_even_when_projection_state_is_missing()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var context = Context(connection);
+        await context.Database.EnsureCreatedAsync();
+        var store = Store(context, "tenant-a");
+        var schedule = Schedule("artifact-corrupt", "node", Now, "publication-corrupt", "slot");
+        await store.PrepareActivationAsync("publication-corrupt", [schedule]);
+
+        context.RecurringTriggerScheduleProjectionStates.RemoveRange(context.RecurringTriggerScheduleProjectionStates);
+        await context.SaveChangesAsync();
+        var row = await context.RecurringTriggerSchedules.SingleAsync();
+        row.ContentJson = "not-json";
+        await context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.DeleteByActivationAsync("publication-corrupt").AsTask());
+        Assert.Equal(1, await context.RecurringTriggerSchedules.CountAsync());
+        Assert.Empty(await context.RecurringTriggerScheduleProjectionStates.ToArrayAsync());
+    }
+
+    [Fact]
     public async Task SQLite_active_projection_allows_operational_advancement_and_exhaustion_without_losing_its_fence()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
