@@ -36,7 +36,9 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         services.TryAddSingleton<IServiceCollection>(services);
         // Publishing contributes this provider-neutral fallback before a persistence backend is selected.
         // It is replaceable, while any arbitrary layout registration remains an explicit composition error.
-        services.RemoveAll<IWorkflowDefinitionVersionLayoutStore>();
+        foreach (var descriptor in services.Where(descriptor =>
+                     descriptor.ServiceType == typeof(IWorkflowDefinitionVersionLayoutStore) && IsFallbackDescriptor(descriptor)).ToArray())
+            services.Remove(descriptor);
         var registrationStart = services.Count;
         services.AddSingleton(options);
         switch (provider)

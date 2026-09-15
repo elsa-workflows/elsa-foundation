@@ -201,7 +201,7 @@ public abstract class DesignAtomicityContractSuite
     /// <summary>
     /// An over-limit value for a bounded projected text column fails validation before provider
     /// I/O — uniformly on every provider, never truncating and never partially persisting. The
-    /// shared Groundwork guard surfaces diagnostic GW-PHYSICAL-037 for all four providers.
+    /// workflow-design contract can reject it before the Groundwork physical guard runs.
     /// </summary>
     [SkippableFact]
     public async Task Over_limit_projected_text_fails_validation_without_persisting()
@@ -248,6 +248,7 @@ public abstract class DesignAtomicityContractSuite
         for (var current = exception; current is not null; current = current.InnerException)
             messages.Add(current.Message);
         Assert.Contains(messages, message =>
+            message.Contains("Workflow-definition text cannot exceed 256 UTF-16 code units", StringComparison.Ordinal) ||
             message.Contains("exceeds its declared maximum length", StringComparison.Ordinal) ||
             message.Contains("GW-PHYSICAL-037", StringComparison.Ordinal));
     }
