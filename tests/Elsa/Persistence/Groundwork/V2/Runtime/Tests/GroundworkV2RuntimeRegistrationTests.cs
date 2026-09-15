@@ -10,8 +10,10 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Groundwork.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -269,6 +271,161 @@ public sealed class GroundworkV2RuntimeRegistrationTests
             Assert.Null(SchedulerWorkQueueStoreBackend.Find(services));
             Assert.Null(DurableTimerStoreBackend.Find(services));
         }
+    }
+
+    [Fact]
+    public void R26_EF_transition_owns_the_trigger_store_without_withdrawing_R27s_shared_projection_unit()
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddGroundworkV2RuntimeStores();
+        var groundworkTrigger = WorkflowTriggerBindingStoreBackend.Find(services)!;
+        Assert.Equal(WorkflowTriggerBindingStoreBackend.Groundwork, groundworkTrigger.Name);
+        groundworkTrigger.EnsureOwnsRegisteredContract(services);
+        var registry = Assert.IsType<GroundworkStorageUnitRegistry>(services.Single(descriptor =>
+            descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance);
+        var before = services.ToArray();
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeWorkflowTriggerBindingEntityFrameworkCore());
+        Assert.Equal(before, services);
+
+        services.AddRuntimeEntityFrameworkCore(new()
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:",
+            HierarchyCursorSigningKey = "r26-aggregate-hierarchy-key-32-bytes",
+            RecoveryContinuationSigningKey = "r26-aggregate-recovery-key-32-bytes"
+        });
+        services.AddRuntimeWorkflowTriggerBindingEntityFrameworkCore();
+
+        var selected = WorkflowTriggerBindingStoreBackend.Find(services)!;
+        Assert.Equal(WorkflowTriggerBindingStoreBackend.EntityFramework, selected.Name);
+        selected.EnsureOwnsRegisteredContract(services);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowTriggerBindingStore));
+        Assert.DoesNotContain(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingDocumentKind);
+        Assert.Contains(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind);
+    }
+
+    [Fact]
+    public void R28_EF_transition_owns_only_the_activation_authority_and_withdraws_its_Groundwork_unit()
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddGroundworkV2RuntimeStores();
+        var groundwork = WorkflowActivationAuthorityBackend.Find(services)!;
+        Assert.Equal(WorkflowActivationAuthorityBackend.Groundwork, groundwork.Name);
+        groundwork.EnsureOwnsRegisteredContract(services);
+        var registry = Assert.IsType<GroundworkStorageUnitRegistry>(services.Single(descriptor =>
+            descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance);
+        Assert.Contains(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind);
+
+        services.AddRuntimeEntityFrameworkCore(new()
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:",
+            HierarchyCursorSigningKey = "r28-aggregate-hierarchy-key-32-bytes",
+            RecoveryContinuationSigningKey = "r28-aggregate-recovery-key-32-bytes"
+        });
+        services.AddRuntimeWorkflowActivationAuthorityEntityFrameworkCore();
+
+        var selected = WorkflowActivationAuthorityBackend.Find(services)!;
+        Assert.Equal(WorkflowActivationAuthorityBackend.EntityFramework, selected.Name);
+        selected.EnsureOwnsRegisteredContract(services);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowActivationAuthority));
+        Assert.DoesNotContain(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind);
+        Assert.Contains(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind);
+    }
+
+    [Fact]
+    public void R27_EF_transition_owns_only_recurring_schedules_and_retains_shared_publication_projection()
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddGroundworkV2RuntimeStores();
+        var groundwork = RecurringTriggerScheduleStoreBackend.Find(services)!;
+        Assert.Equal(RecurringTriggerScheduleStoreBackend.Groundwork, groundwork.Name);
+        groundwork.EnsureOwnsRegisteredContract(services);
+        var registry = Assert.IsType<GroundworkStorageUnitRegistry>(services.Single(descriptor =>
+            descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance);
+        Assert.Contains(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleDocumentKind);
+
+        services.AddRuntimeEntityFrameworkCore(new()
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:",
+            HierarchyCursorSigningKey = "r27-aggregate-hierarchy-key-32-bytes",
+            RecoveryContinuationSigningKey = "r27-aggregate-recovery-key-32-bytes"
+        });
+        services.AddRuntimeRecurringTriggerScheduleEntityFrameworkCore();
+
+        var selected = RecurringTriggerScheduleStoreBackend.Find(services)!;
+        Assert.Equal(RecurringTriggerScheduleStoreBackend.EntityFramework, selected.Name);
+        selected.EnsureOwnsRegisteredContract(services);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2RecurringTriggerScheduleStore));
+        Assert.DoesNotContain(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleDocumentKind);
+        Assert.Contains(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void R29_shared_projection_withdrawal_is_order_independent_and_groundwork_restores(bool triggerBindingFirst)
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddGroundworkV2RuntimeStores();
+        services.AddRuntimeEntityFrameworkCore(new()
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:",
+            HierarchyCursorSigningKey = "r29-order-hierarchy-key-32-bytes",
+            RecoveryContinuationSigningKey = "r29-order-recovery-key-32-bytes"
+        });
+
+        if (triggerBindingFirst)
+        {
+            services.AddRuntimeWorkflowTriggerBindingEntityFrameworkCore();
+            services.AddRuntimeRecurringTriggerScheduleEntityFrameworkCore();
+        }
+        else
+        {
+            services.AddRuntimeRecurringTriggerScheduleEntityFrameworkCore();
+            services.AddRuntimeWorkflowTriggerBindingEntityFrameworkCore();
+        }
+
+        var registry = Assert.IsType<GroundworkStorageUnitRegistry>(services.Single(descriptor =>
+            descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance);
+        Assert.DoesNotContain(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind);
+
+        // The full Groundwork switch is intentionally guarded until the remaining EF runtime lanes
+        // transfer their checkpoint-coupled stores. Its manifest redeclaration is the restore action
+        // this bounded R29 coordinator must preserve.
+        services.AddGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.Require(
+            ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind));
+
+        Assert.Contains(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind);
+        Assert.NotNull(RuntimeSharedProjectionStateTransition.Find(services));
+    }
+
+    [Fact]
+    public void R29_EF_projection_state_tables_are_owned_by_their_runtime_modules()
+    {
+        var options = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>()
+            .UseSqlite("Data Source=:memory:")
+            .Options;
+        using var context = new BookmarkStateSqliteDbContext(options);
+
+        Assert.Equal(RuntimeTriggerBindingEfModule.ProjectionStateTableName,
+            context.Model.FindEntityType(typeof(WorkflowTriggerBindingProjectionStateEntity))!.GetTableName());
+        Assert.Equal(RuntimeOperationalStateEfModule.RecurringScheduleProjectionStateTableName,
+            context.Model.FindEntityType(typeof(RecurringTriggerScheduleProjectionStateEntity))!.GetTableName());
+        Assert.DoesNotContain(context.Model.GetEntityTypes(), entity =>
+            entity.GetTableName() == ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind);
     }
 
     [Fact]

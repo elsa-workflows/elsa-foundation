@@ -32,6 +32,11 @@ public abstract class BookmarkStateDbContext(DbContextOptions options) : DbConte
     public DbSet<RuntimePostCommitOutboxEntity> RuntimePostCommitOutbox => Set<RuntimePostCommitOutboxEntity>();
     public DbSet<WorkflowDispatchEntity> WorkflowDispatches => Set<WorkflowDispatchEntity>();
     public DbSet<WorkflowSchedulerPoisonEntity> WorkflowSchedulerPoisonRecords => Set<WorkflowSchedulerPoisonEntity>();
+    public DbSet<WorkflowTriggerBindingEntity> WorkflowTriggerBindings => Set<WorkflowTriggerBindingEntity>();
+    public DbSet<WorkflowTriggerBindingProjectionStateEntity> WorkflowTriggerBindingProjectionStates => Set<WorkflowTriggerBindingProjectionStateEntity>();
+    public DbSet<WorkflowActivationSlotEntity> WorkflowActivationSlots => Set<WorkflowActivationSlotEntity>();
+    public DbSet<RecurringTriggerScheduleEntity> RecurringTriggerSchedules => Set<RecurringTriggerScheduleEntity>();
+    public DbSet<RecurringTriggerScheduleProjectionStateEntity> RecurringTriggerScheduleProjectionStates => Set<RecurringTriggerScheduleProjectionStateEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -60,6 +65,11 @@ public abstract class BookmarkStateDbContext(DbContextOptions options) : DbConte
         modelBuilder.ApplyConfiguration(new RuntimePostCommitOutboxEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowDispatchEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowSchedulerPoisonEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new WorkflowTriggerBindingEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new WorkflowTriggerBindingProjectionStateEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new WorkflowActivationSlotEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new RecurringTriggerScheduleEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new RecurringTriggerScheduleProjectionStateEntityConfiguration());
         ConfigureProvider(modelBuilder);
     }
 

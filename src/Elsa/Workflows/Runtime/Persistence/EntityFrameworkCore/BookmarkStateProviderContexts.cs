@@ -89,5 +89,42 @@ file static class BookmarkStateProviderModel
         modelBuilder.Entity<WorkflowDispatchEntity>().Property("ContentJson").HasColumnType(type);
         modelBuilder.Entity<WorkflowSchedulerPoisonEntity>().Property("ScopeKey").HasColumnType(type);
         modelBuilder.Entity<WorkflowSchedulerPoisonEntity>().Property("ContentJson").HasColumnType(type);
+        foreach (var entity in new[] { typeof(WorkflowTriggerBindingEntity), typeof(WorkflowTriggerBindingProjectionStateEntity) })
+        {
+            modelBuilder.Entity(entity).Property("ScopeKey").HasColumnType(type);
+            modelBuilder.Entity(entity).Property("ContentJson").HasColumnType(type);
+            if (entity == typeof(WorkflowTriggerBindingEntity))
+            {
+                modelBuilder.Entity(entity).Property("ContentJson").HasColumnType(type);
+                modelBuilder.Entity(entity).Property("CorrelationScope").HasColumnType(type);
+                modelBuilder.Entity(entity).Property("ActivationId").HasColumnType(type);
+                modelBuilder.Entity(entity).Property("SlotId").HasColumnType(type);
+            }
+        }
+        modelBuilder.Entity<WorkflowActivationSlotEntity>().Property("ScopeKey").HasColumnType(type);
+        modelBuilder.Entity<WorkflowActivationSlotEntity>().Property("ContentJson").HasColumnType(type);
+        modelBuilder.Entity<WorkflowActivationSlotEntity>().Property("SourceKind").HasColumnType(type);
+        modelBuilder.Entity<WorkflowActivationSlotEntity>().Property("SourceId").HasColumnType(type);
+        modelBuilder.Entity<WorkflowActivationSlotEntity>().Property("ActiveActivationId").HasColumnType(type);
+        foreach (var entity in new[] { typeof(RecurringTriggerScheduleEntity), typeof(RecurringTriggerScheduleProjectionStateEntity) })
+        {
+            modelBuilder.Entity(entity).Property("ScopeKey").HasColumnType(type);
+            modelBuilder.Entity(entity).Property("ContentJson").HasColumnType(type);
+            if (entity == typeof(RecurringTriggerScheduleEntity))
+            {
+                modelBuilder.Entity(entity).Property("ExecutableNodeId").HasColumnType(type);
+                modelBuilder.Entity(entity).Property("StimulusType").HasColumnType(type);
+                modelBuilder.Entity(entity).Property("StimulusHash").HasColumnType(type);
+                modelBuilder.Entity(entity).Property("Expression").HasColumnType(type);
+                modelBuilder.Entity(entity).Property("ActivationId").HasColumnType(type);
+                modelBuilder.Entity(entity).Property("SlotId").HasColumnType(type);
+            }
+            else
+            {
+                modelBuilder.Entity(entity).Property("ScheduleIdsJson").HasColumnType(type);
+                modelBuilder.Entity(entity).Property("ScheduleFingerprintsJson").HasColumnType(type);
+                modelBuilder.Entity(entity).Property("ArtifactId").HasColumnType(type);
+            }
+        }
     }
 }

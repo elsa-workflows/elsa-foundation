@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services;
 using Groundwork.Kernel;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -93,6 +94,31 @@ public static class GroundworkV2RuntimeRegistration
             var commitExistingTimerRemoval = existingTimerBackend is not null && existingTimerBackend.Name != DurableTimerStoreBackend.Groundwork
                 ? existingTimerBackend.PrepareRemoveOwnedArtifacts(services)
                 : null;
+            var existingTriggerBindingBackend = WorkflowTriggerBindingStoreBackend.Find(services);
+            if (existingTriggerBindingBackend is null && services.Any(descriptor => descriptor.ServiceType == typeof(IWorkflowTriggerBindingStore)))
+                throw new InvalidOperationException("Groundwork runtime refuses to replace an unowned workflow trigger-binding store.");
+            existingTriggerBindingBackend?.EnsureOwnsRegisteredContract(services);
+            var commitExistingTriggerBindingRemoval = existingTriggerBindingBackend is not null && existingTriggerBindingBackend.Name != WorkflowTriggerBindingStoreBackend.Groundwork
+                ? existingTriggerBindingBackend.PrepareRemoveOwnedArtifacts(services)
+                : null;
+            var existingRecurringScheduleBackend = RecurringTriggerScheduleStoreBackend.Find(services);
+            if (existingRecurringScheduleBackend is null)
+                RecurringTriggerScheduleStoreBackend.EnsureNoUnownedRegistrations(services);
+            else
+                existingRecurringScheduleBackend.EnsureOwnsRegisteredContract(services);
+            var commitExistingRecurringScheduleRemoval = existingRecurringScheduleBackend is not null && existingRecurringScheduleBackend.Name != RecurringTriggerScheduleStoreBackend.Groundwork
+                ? existingRecurringScheduleBackend.PrepareRemoveOwnedArtifacts(services)
+                : null;
+            var existingActivationAuthorityBackend = WorkflowActivationAuthorityBackend.Find(services);
+            if (existingActivationAuthorityBackend is null && services.Any(descriptor =>
+                    descriptor.ServiceType == typeof(IWorkflowActivationAuthority) &&
+                    descriptor.ImplementationType != typeof(InMemoryWorkflowActivationAuthority)))
+                throw new InvalidOperationException("Groundwork runtime refuses to replace an unowned workflow activation authority.");
+            existingActivationAuthorityBackend?.EnsureOwnsRegisteredContract(services);
+            var commitExistingActivationAuthorityRemoval = existingActivationAuthorityBackend is not null &&
+                existingActivationAuthorityBackend.Name != WorkflowActivationAuthorityBackend.Groundwork
+                    ? existingActivationAuthorityBackend.PrepareRemoveOwnedArtifacts(services)
+                    : null;
             var existingWorkflowExecutionStateBackend = WorkflowExecutionStateStoreBackend.Find(services);
             existingWorkflowExecutionStateBackend?.EnsureOwnsRegisteredContract(services);
             if (existingWorkflowExecutionStateBackend is null && services.Any(descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionStateStore) && descriptor.ImplementationType != typeof(Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowExecutionStateStore)))
@@ -141,6 +167,7 @@ public static class GroundworkV2RuntimeRegistration
             commitExistingActivityExecutionBackendRemoval?.Invoke(services);
 
         services.AddPersistenceCore();
+        services.RemoveAll<RuntimeSharedProjectionStateTransition>();
         ReplaceExistingArtifactBackend(services);
         // Recovery cursors may outlive this process or be consumed by another node. Groundwork therefore refuses
         // the runtime core's development-only ephemeral signer unless the host supplies RuntimeRecoveryContinuationOptions.SigningKey.
@@ -190,6 +217,8 @@ public static class GroundworkV2RuntimeRegistration
         existingCheckpointBackend?.RemoveOwnedRegistrations(services);
         foreach (var unit in ElsaRuntimeV2StorageManifest.CreateUnits())
             services.AddGroundworkStorageUnit(unit, target);
+        RuntimeSharedProjectionStateTransition.Register(services,
+            new(collection => GroundworkV2RuntimeUnitWithdrawal.RemovePublicationProjectionState(collection, target)));
         ReplaceScoped<GroundworkV2ExecutableActivityTemplateStore>(services, Standard<GroundworkV2ExecutableActivityTemplateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IExecutableActivityTemplateStore), typeof(IExecutableActivityTemplateReader), typeof(IExecutableActivityTemplateWriter));
         ReplaceScoped<GroundworkV2WorkflowExecutableSourceReferenceStore>(services, Standard<GroundworkV2WorkflowExecutableSourceReferenceStore>(target, static (sessions, access, target) => new(sessions, access, target)),
@@ -349,13 +378,37 @@ public static class GroundworkV2RuntimeRegistration
             collection => GroundworkV2RuntimeUnitWithdrawal.RemoveDurableTimer(collection, target)));
         ReplaceScoped<GroundworkV2WorkflowTriggerBindingStore>(services, Standard<GroundworkV2WorkflowTriggerBindingStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowTriggerBindingStore));
+        var groundworkTriggerBindingConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowTriggerBindingStore));
+        var groundworkTriggerBindingContractDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IWorkflowTriggerBindingStore));
+        services.RemoveAll<WorkflowTriggerBindingStoreBackend>();
+        WorkflowTriggerBindingStoreBackend.Register(services, new(
+            WorkflowTriggerBindingStoreBackend.Groundwork,
+            groundworkTriggerBindingContractDescriptor,
+            groundworkTriggerBindingConcreteDescriptor,
+            collection => GroundworkV2RuntimeUnitWithdrawal.RemoveWorkflowTriggerBinding(collection, target)));
         ReplaceScoped<GroundworkV2RecurringTriggerScheduleStore>(services, Standard<GroundworkV2RecurringTriggerScheduleStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IRecurringTriggerScheduleStore));
+        var groundworkRecurringScheduleConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2RecurringTriggerScheduleStore));
+        var groundworkRecurringScheduleContractDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IRecurringTriggerScheduleStore));
+        services.RemoveAll<RecurringTriggerScheduleStoreBackend>();
+        RecurringTriggerScheduleStoreBackend.Register(services, new(
+            RecurringTriggerScheduleStoreBackend.Groundwork,
+            groundworkRecurringScheduleContractDescriptor,
+            groundworkRecurringScheduleConcreteDescriptor,
+            collection => GroundworkV2RuntimeUnitWithdrawal.RemoveRecurringTriggerSchedule(collection, target)));
         ReplaceScoped<GroundworkV2WorkflowActivationAuthority>(services, provider => new(
                 provider.GetRequiredService<IGroundworkStorageSessionSource>(),
                 provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
                 provider.GetRequiredService<GroundworkStorageTransactionFactory>(),
                 target), typeof(IWorkflowActivationAuthority));
+        var groundworkActivationConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowActivationAuthority));
+        var groundworkActivationContractDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IWorkflowActivationAuthority));
+        services.RemoveAll<WorkflowActivationAuthorityBackend>();
+        WorkflowActivationAuthorityBackend.Register(services, new(
+            WorkflowActivationAuthorityBackend.Groundwork,
+            groundworkActivationContractDescriptor,
+            groundworkActivationConcreteDescriptor,
+            collection => GroundworkV2RuntimeUnitWithdrawal.RemoveWorkflowActivationSlots(collection, target)));
 
         RegisterArtifactBackend(services, target);
         RegisterActivityExecutionBackend(services, target);
@@ -366,6 +419,9 @@ public static class GroundworkV2RuntimeRegistration
         commitExistingOutboxRemoval?.Invoke(services);
         commitExistingQueueRemoval?.Invoke(services);
         commitExistingTimerRemoval?.Invoke(services);
+        commitExistingTriggerBindingRemoval?.Invoke(services);
+        commitExistingRecurringScheduleRemoval?.Invoke(services);
+        commitExistingActivationAuthorityRemoval?.Invoke(services);
         return services;
         }
         catch
@@ -614,6 +670,18 @@ internal static class GroundworkV2RuntimeUnitWithdrawal
 
     public static void RemoveDurableTimer(IServiceCollection services, string? targetName) =>
         services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind, targetName);
+
+    public static void RemoveWorkflowTriggerBinding(IServiceCollection services, string? targetName) =>
+        services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingDocumentKind, targetName);
+
+    public static void RemoveRecurringTriggerSchedule(IServiceCollection services, string? targetName) =>
+        services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleDocumentKind, targetName);
+
+    public static void RemovePublicationProjectionState(IServiceCollection services, string? targetName) =>
+        services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind, targetName);
+
+    public static void RemoveWorkflowActivationSlots(IServiceCollection services, string? targetName) =>
+        services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind, targetName);
 
     public static void RemoveOperationalState(IServiceCollection services, string? targetName)
     {

@@ -171,3 +171,56 @@ public sealed class RuntimeCheckpointCommitEntity
     public string SchemaVersion { get; set; } = null!;
     public long Revision { get; set; }
 }
+
+/// <summary>Relational envelope and due/activation projections for one recurring start schedule.</summary>
+public sealed class RecurringTriggerScheduleEntity
+{
+    public string Id { get; set; } = null!;
+    public string ScopeKey { get; set; } = null!;
+    public string ScopeKeyHash { get; set; } = null!;
+    public string ScheduleId { get; set; } = null!;
+    public string ScheduleIdHash { get; set; } = null!;
+    public string ScheduleIdOrderKey { get; set; } = null!;
+    public string ArtifactId { get; set; } = null!;
+    public string ArtifactIdHash { get; set; } = null!;
+    public string ArtifactIdOrderKey { get; set; } = null!;
+    public string ExecutableNodeId { get; set; } = null!;
+    public string StimulusType { get; set; } = null!;
+    public string StimulusHash { get; set; } = null!;
+    public int Kind { get; set; }
+    public string Expression { get; set; } = null!;
+    public long NextOccurrenceUtcTicks { get; set; }
+    public int NextOccurrenceOffsetMinutes { get; set; }
+    public long CreatedAtUtcTicks { get; set; }
+    public int CreatedAtOffsetMinutes { get; set; }
+    public string? ActivationId { get; set; }
+    public string? ActivationIdHash { get; set; }
+    public string? ActivationIdOrderKey { get; set; }
+    public string? SlotId { get; set; }
+    public bool IsActive { get; set; }
+    public string ContentJson { get; set; } = null!;
+    public string SchemaVersion { get; set; } = null!;
+    public long Revision { get; set; }
+}
+
+/// <summary>Atomic activation projection marker for recurring schedule preparation and activation.</summary>
+public sealed class RecurringTriggerScheduleProjectionStateEntity
+{
+    public string Id { get; set; } = null!;
+    public string ScopeKey { get; set; } = null!;
+    public string ScopeKeyHash { get; set; } = null!;
+    public string ActivationId { get; set; } = null!;
+    public string ActivationIdHash { get; set; } = null!;
+    public string ActivationIdOrderKey { get; set; } = null!;
+    public string? ArtifactId { get; set; }
+    public string? ArtifactIdHash { get; set; }
+    public string? ArtifactIdOrderKey { get; set; }
+    public bool IsActive { get; set; }
+    public int ScheduleCount { get; set; }
+    public string ProjectionFingerprint { get; set; } = null!;
+    public string ScheduleIdsJson { get; set; } = null!;
+    public string ScheduleFingerprintsJson { get; set; } = null!;
+    public string ContentJson { get; set; } = null!;
+    public string SchemaVersion { get; set; } = null!;
+    public long Revision { get; set; }
+}
