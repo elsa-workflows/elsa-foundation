@@ -405,6 +405,69 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
+    public async Task Durable_value_update_and_delete_join_the_checkpoint_marker_and_replay()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open("tenant-a");
+        var access = new FixedAccessor("tenant-a");
+        var values = new EfDurableValueStateStore(context, access, new NoopContinuationCodec());
+        await values.SaveAsync(DurableValue("value-update", "before"));
+        await values.SaveAsync(DurableValue("value-delete", "before"));
+        var commit = Commit("commit-durable-value") with
+        {
+            StateChanges = new RuntimeCheckpointStateChangeSet(null, null, [], [],
+                [new RuntimeStateChange<DurableValueState>(
+                    "value-update", RuntimeStateChangeOperation.Upsert,
+                    DurableValue("value-update", "after"), new Dictionary<string, string>()),
+                 new RuntimeStateChange<DurableValueState>(
+                    "value-delete", RuntimeStateChangeOperation.Delete,
+                    DurableValue("value-delete", "before"), new Dictionary<string, string>())],
+                [], [])
+        };
+
+        var store = new EfRuntimeCheckpointCommitStore(context, access);
+        await store.CommitAsync(commit, Decision());
+        await store.CommitAsync(commit, Decision());
+        Assert.Equal("after", (await values.FindAsync("workflow-a", "value-update"))!.InlineValue!.Value.GetString());
+        Assert.Null(await values.FindAsync("workflow-a", "value-delete"));
+
+        await using var restarted = database.Open("tenant-a");
+        await new EfRuntimeCheckpointCommitStore(restarted, access).CommitAsync(commit, Decision());
+        Assert.Equal(2, (await restarted.DurableValueStates.SingleAsync()).Revision);
+        Assert.Single(await restarted.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Marker_failure_rolls_back_durable_value_mutation_without_a_hidden_retry()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var interceptor = new FailMarkerInsertInterceptor();
+        await using (var context = database.Open("tenant-a", interceptor))
+        {
+            var access = new FixedAccessor("tenant-a");
+            await new EfDurableValueStateStore(context, access, new NoopContinuationCodec())
+                .SaveAsync(DurableValue("value-rollback", "before"));
+            var commit = Commit("commit-durable-rollback") with
+            {
+                StateChanges = new RuntimeCheckpointStateChangeSet(null, null, [], [],
+                    [new RuntimeStateChange<DurableValueState>(
+                        "value-rollback", RuntimeStateChangeOperation.Upsert,
+                        DurableValue("value-rollback", "after"), new Dictionary<string, string>())],
+                    [], [])
+            };
+            interceptor.Arm();
+            await Assert.ThrowsAsync<DbUpdateException>(() =>
+                new EfRuntimeCheckpointCommitStore(context, access).CommitAsync(commit, Decision()).AsTask());
+            Assert.Empty(context.ChangeTracker.Entries());
+        }
+
+        await using var restarted = database.Open("tenant-a");
+        Assert.Equal("before", (await new EfDurableValueStateStore(restarted, new FixedAccessor("tenant-a"),
+            new NoopContinuationCodec()).FindAsync("workflow-a", "value-rollback"))!.InlineValue!.Value.GetString());
+        Assert.Empty(await restarted.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
     public async Task Marker_failure_rolls_back_previously_saved_outbox_and_does_not_leak_tracker_state()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -670,10 +733,12 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         await using var context = database.Open("tenant-a");
         var store = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"));
 
-        var durableValue = new RuntimeStateChange<DurableValueState>(
-            "value-a",
+        var incident = new RuntimeStateChange<IncidentState>(
+            "incident-a",
             RuntimeStateChangeOperation.Upsert,
-            new DurableValueState("value-a", "workflow-a", "value-a", new RuntimeValueTypeDescriptor("json", null, null), DurableValueLifecycle.Result, DurableValueStorage.Inline, JsonDocument.Parse("42").RootElement, null, null, OccurredAt, new Dictionary<string, string>()),
+            new IncidentState("incident-a", "workflow-a", null, null,
+                IncidentSeverity.Error, IncidentStatus.Open, null, "test-failure", "still unsupported",
+                OccurredAt, null),
             new Dictionary<string, string>());
         var nonempty = Commit("commit-nonempty") with
         {
@@ -682,8 +747,8 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
                 null,
                 [],
                 [],
-                [durableValue],
                 [],
+                [incident],
                 [])
         };
 
@@ -776,6 +841,12 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     private static WorkflowTestScope TestScope(string id) => new(
         id, OccurredAt.AddHours(1), "tenant-a",
         new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue));
+
+    private static DurableValueState DurableValue(string id, string value) => new(
+        id, "workflow-a", id, new RuntimeValueTypeDescriptor("json", null, null),
+        DurableValueLifecycle.Result, DurableValueStorage.Inline,
+        JsonDocument.Parse(JsonSerializer.Serialize(value)).RootElement,
+        null, null, OccurredAt, new Dictionary<string, string>());
 
     private static WorkflowExecutionState Execution(string id, string tenantId) => new(
         id,

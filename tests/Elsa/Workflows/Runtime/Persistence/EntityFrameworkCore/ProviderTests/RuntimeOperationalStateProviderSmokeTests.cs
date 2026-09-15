@@ -179,6 +179,28 @@ internal static class RuntimeOperationalStateProviderSmoke
                 row.ScopeId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(testScope.ScopeId))).Revision);
             Assert.Equal(testDispatch.DispatchId,
                 (await new EfWorkflowDispatchStore(context, accessor).FindAsync(testDispatch.DispatchId))!.DispatchId);
+            var durableId = $"native-checkpoint-value-{Guid.NewGuid():N}";
+            await values.SaveAsync(Value(durableId, "workflow-a"));
+            var durableReplacement = new DurableValueState(
+                durableId, "workflow-a", durableId,
+                new RuntimeValueTypeDescriptor("json", null, null),
+                DurableValueLifecycle.Result, DurableValueStorage.Inline,
+                JsonDocument.Parse("43").RootElement, null, null, futureAt,
+                new Dictionary<string, string>());
+            var durableCommit = EmptyCheckpointCommit($"checkpoint-durable-{Guid.NewGuid():N}");
+            durableCommit = durableCommit with
+            {
+                Checkpoint = durableCommit.Checkpoint with { OccurredAt = futureAt },
+                StateChanges = new RuntimeCheckpointStateChangeSet(null, null, [], [],
+                    [new RuntimeStateChange<DurableValueState>(durableId,
+                        RuntimeStateChangeOperation.Upsert, durableReplacement,
+                        new Dictionary<string, string>())], [], [])
+            };
+            await checkpointStore.CommitAsync(durableCommit, new(RuntimeCheckpointPersistenceMode.Immediate));
+            await checkpointStore.CommitAsync(durableCommit, new(RuntimeCheckpointPersistenceMode.Immediate));
+            Assert.Equal("43", (await values.FindAsync("workflow-a", durableId))!.InlineValue!.Value.GetRawText());
+            Assert.Equal(2, (await context.DurableValueStates.AsNoTracking().SingleAsync(row =>
+                row.DurableValueId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(durableId))).Revision);
             var outboxNow = DateTimeOffset.UtcNow;
             var outboxItem = OutboxPending($"outbox-{Guid.NewGuid():N}", "workflow-a", outboxNow);
             await outbox.SavePendingAsync(outboxItem);
