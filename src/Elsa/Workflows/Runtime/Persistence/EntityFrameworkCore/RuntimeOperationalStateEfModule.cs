@@ -13,6 +13,7 @@ public static class RuntimeOperationalStateEfModule
     public const string ExecutionLivenessTableName = "elsa_runtime_execution_liveness_state";
     public const string WorkflowHoldTableName = "elsa_runtime_workflow_hold_state";
     public const string IncidentTableName = "elsa_runtime_incident_state";
+    public const string WorkflowRunHealthTableName = "elsa_runtime_workflow_run_health_state";
     public const string CheckpointCommitTableName = "elsa_runtime_checkpoint_commit";
     public const string SchemaVersion = "1.0.0";
     public const int IdentityMaximumLength = 128;

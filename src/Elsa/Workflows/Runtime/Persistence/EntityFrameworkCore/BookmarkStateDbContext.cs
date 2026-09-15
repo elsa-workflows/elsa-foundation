@@ -27,6 +27,7 @@ public abstract class BookmarkStateDbContext(DbContextOptions options) : DbConte
     public DbSet<ExecutionLivenessStateEntity> ExecutionLivenessStates => Set<ExecutionLivenessStateEntity>();
     public DbSet<WorkflowHoldStateEntity> WorkflowHoldStates => Set<WorkflowHoldStateEntity>();
     public DbSet<IncidentStateEntity> IncidentStates => Set<IncidentStateEntity>();
+    public DbSet<WorkflowRunHealthStateEntity> WorkflowRunHealthStates => Set<WorkflowRunHealthStateEntity>();
     public DbSet<RuntimeCheckpointCommitEntity> RuntimeCheckpointCommits => Set<RuntimeCheckpointCommitEntity>();
     public DbSet<RuntimePostCommitOutboxEntity> RuntimePostCommitOutbox => Set<RuntimePostCommitOutboxEntity>();
     public DbSet<WorkflowDispatchEntity> WorkflowDispatches => Set<WorkflowDispatchEntity>();
@@ -54,6 +55,7 @@ public abstract class BookmarkStateDbContext(DbContextOptions options) : DbConte
         modelBuilder.ApplyConfiguration(new ExecutionLivenessStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowHoldStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new IncidentStateEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new WorkflowRunHealthStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new RuntimeCheckpointCommitEntityConfiguration());
         modelBuilder.ApplyConfiguration(new RuntimePostCommitOutboxEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowDispatchEntityConfiguration());
