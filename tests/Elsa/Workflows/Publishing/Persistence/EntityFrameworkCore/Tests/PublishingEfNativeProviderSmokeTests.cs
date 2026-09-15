@@ -71,9 +71,33 @@ internal static class PublishingEfNativeProviderSmoke
             Assert.True(await store.TryAddAsync(review));
             Assert.False(await store.TryAddAsync(review));
 
+            var policy = new PublicationPolicy(
+                $"{prefix}-definition",
+                PublicationPolicyDefaultAction.ReplaceDefaultSlot,
+                $"{prefix}-slot",
+                0,
+                now);
+            var policyStore = new EfPublicationPolicyStore(setup, new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+            var savedPolicy = await policyStore.TrySaveAsync(policy, 0);
+            Assert.True(savedPolicy.Succeeded);
+
+            var intent = new PublicationProjectionIntent(
+                $"{prefix}-intent",
+                $"{prefix}-publication",
+                PublicationProjectionKinds.TriggerBindings,
+                PublicationProjectionOperation.Prepare,
+                PublicationProjectionIntentStatus.Pending,
+                0,
+                null,
+                null);
+            var intentStore = new EfPublicationProjectionIntentStore(setup, new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+            await intentStore.SaveAsync(intent);
+
             await using var restarted = createContext(connectionString);
             var loaded = await Store(restarted, "tenant-a").FindAsync(review.PreflightToken);
             Assert.Equal(review, loaded);
+            Assert.Equal(policy with { Revision = 1 }, await new EfPublicationPolicyStore(restarted, new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))).FindAsync(policy.WorkflowDefinitionId));
+            Assert.Equal(intent, await new EfPublicationProjectionIntentStore(restarted, new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))).FindAsync(intent.IntentId));
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 Store(restarted, "tenant-b").FindAsync(review.PreflightToken).AsTask());

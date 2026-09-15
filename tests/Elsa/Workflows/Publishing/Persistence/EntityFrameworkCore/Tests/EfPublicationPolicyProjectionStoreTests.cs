@@ -1,0 +1,272 @@
+using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
+using Elsa.Workflows.Publishing;
+using Elsa.Persistence.EntityFramework;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests;
+
+public sealed class EfPublicationPolicyProjectionStoreTests
+{
+    [Fact]
+    public async Task Policy_round_trip_uses_collision_safe_host_and_definition_keys_and_revision_cas()
+    {
+        await using var database = await Database.CreateAsync();
+        var host = Policy(null, "host-slot");
+        await using (var context = database.Context())
+        {
+            var store = database.Policies(context, "tenant-a");
+            var created = await store.TrySaveAsync(host, 0);
+            Assert.True(created.Succeeded);
+            Assert.Equal(1, created.Policy.Revision);
+
+            var loser = await store.TrySaveAsync(host with { DefaultSlotName = "loser" }, 0);
+            Assert.False(loser.Succeeded);
+            Assert.Equal("host-slot", loser.Policy.DefaultSlotName);
+
+            var definitionNamedHost = Policy("host", "definition-slot");
+            Assert.True((await store.TrySaveAsync(definitionNamedHost, 0)).Succeeded);
+            Assert.NotEqual(
+                (await store.FindAsync(null))!.DefaultSlotName,
+                (await store.FindAsync("host"))!.DefaultSlotName);
+        }
+
+        await using var restarted = database.Context();
+        var loaded = await database.Policies(restarted, "tenant-a").FindAsync("host");
+        Assert.Equal("definition-slot", loaded!.DefaultSlotName);
+        Assert.Equal(1, loaded.Revision);
+    }
+
+    [Fact]
+    public async Task Policy_update_race_returns_a_truthful_winner_without_corrupting_the_row()
+    {
+        await using var database = await Database.CreateAsync();
+        await using (var setup = database.Context())
+            await database.Policies(setup, "tenant-a").TrySaveAsync(Policy("cas", "first"), 0);
+
+        await using var first = database.Context();
+        await using var second = database.Context();
+        var firstStore = database.Policies(first, "tenant-a");
+        var secondStore = database.Policies(second, "tenant-a");
+        var results = await Task.WhenAll(
+            firstStore.TrySaveAsync(Policy("cas", "winner-a"), 1).AsTask(),
+            secondStore.TrySaveAsync(Policy("cas", "winner-b"), 1).AsTask());
+
+        Assert.Single(results, result => result.Succeeded);
+        var winner = results.Single(result => result.Succeeded).Policy;
+        Assert.Equal(2, winner.Revision);
+        await using var verify = database.Context();
+        var persisted = await database.Policies(verify, "tenant-a").FindAsync("cas");
+        Assert.Equal(winner, persisted);
+    }
+
+    [Fact]
+    public async Task Projection_intents_are_idempotent_restart_safe_scoped_and_ordered_by_full_ordinal_identity()
+    {
+        await using var database = await Database.CreateAsync();
+        var longId = new string('x', PublishingPolicyProjectionEfModule.IdentityMaximumLength);
+        await using (var context = database.Context())
+        {
+            var store = database.Intents(context, "tenant-a");
+            var first = Intent("z", "publication-1");
+            var second = Intent("a", "publication-1");
+            var longIntent = Intent(longId, "publication-1") with
+            {
+                Status = PublicationProjectionIntentStatus.Failed,
+                AttemptCount = 2,
+                NextAttemptAt = database.Now.AddMinutes(2),
+                LastFailure = new PublicationFailure("failed", "retry")
+            };
+            await store.SaveAsync(first);
+            await store.SaveAsync(first);
+            await store.SaveAsync(second);
+            await store.SaveAsync(longIntent);
+
+            var listed = await store.ListByPublicationAsync("publication-1");
+            Assert.Equal(new[] { "a", longId, "z" }, listed.Select(intent => intent.IntentId));
+            Assert.Equal(longIntent, listed.Single(intent => intent.IntentId == longId));
+
+            var delivering = first with { Status = PublicationProjectionIntentStatus.Delivering, AttemptCount = 1 };
+            Assert.True((await store.TryTransitionAsync(delivering, PublicationProjectionIntentStatus.Pending)).Succeeded);
+            var stale = await store.TryTransitionAsync(first, PublicationProjectionIntentStatus.Pending);
+            Assert.False(stale.Succeeded);
+            Assert.Equal(PublicationProjectionIntentStatus.Delivering, stale.Intent.Status);
+            Assert.Throws<InvalidOperationException>(() => store.TryTransitionAsync(
+                delivering with { PublicationId = "other-publication" },
+                PublicationProjectionIntentStatus.Delivering).AsTask().GetAwaiter().GetResult());
+        }
+
+        await using (var restarted = database.Context())
+        {
+            var store = database.Intents(restarted, "tenant-a");
+            var retry = await store.FindAsync(longId);
+            Assert.Equal(2, retry!.AttemptCount);
+            Assert.Equal("failed", retry.LastFailure!.Code);
+            Assert.Equal(database.Now.AddMinutes(2), retry.NextAttemptAt);
+            Assert.Empty(await database.Intents(restarted, "tenant-b").ListByPublicationAsync("publication-1"));
+        }
+    }
+
+    [Fact]
+    public async Task Explicit_global_access_is_separate_from_scoped_policy_and_intent_rows()
+    {
+        await using var database = await Database.CreateAsync();
+        await using (var context = database.Context())
+        {
+            var globalPolicies = database.Policies(context, PersistenceAccessContext.Global);
+            var globalIntents = database.Intents(context, PersistenceAccessContext.Global);
+            Assert.True((await globalPolicies.TrySaveAsync(Policy(null, "global"), 0)).Succeeded);
+            await globalIntents.SaveAsync(Intent("global-intent", "publication-global"));
+
+            Assert.NotNull(await globalPolicies.FindAsync(null));
+            Assert.NotNull(await globalIntents.FindAsync("global-intent"));
+        }
+
+        await using (var scoped = database.Context())
+        {
+            Assert.Null(await database.Policies(scoped, "tenant-a").FindAsync(null));
+            Assert.Null(await database.Intents(scoped, "tenant-a").FindAsync("global-intent"));
+        }
+    }
+
+    [Fact]
+    public async Task Projection_intent_status_cas_returns_one_winner_and_rereads_the_loser()
+    {
+        await using var database = await Database.CreateAsync();
+        var pending = Intent("transition-race", "publication-race");
+        await using (var setup = database.Context())
+            await database.Intents(setup, "tenant-a").SaveAsync(pending);
+
+        await using var first = database.Context();
+        await using var second = database.Context();
+        var delivering = pending with { Status = PublicationProjectionIntentStatus.Delivering, AttemptCount = 1 };
+        var results = await Task.WhenAll(
+            database.Intents(first, "tenant-a").TryTransitionAsync(delivering, PublicationProjectionIntentStatus.Pending).AsTask(),
+            database.Intents(second, "tenant-a").TryTransitionAsync(delivering, PublicationProjectionIntentStatus.Pending).AsTask());
+
+        Assert.Single(results, result => result.Succeeded);
+        Assert.All(results, result => Assert.Equal(PublicationProjectionIntentStatus.Delivering, result.Intent.Status));
+        await using var verify = database.Context();
+        Assert.Equal(delivering, await database.Intents(verify, "tenant-a").FindAsync(pending.IntentId));
+    }
+
+    [Fact]
+    public async Task Stored_projection_drift_is_rejected_before_returning_intent()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var context = database.Context();
+        context.ProjectionIntents.Add(new PublicationProjectionIntentEntity
+        {
+            Id = "drift",
+            IntentId = "intent",
+            IntentIdHash = EfRelationalIdentity.Hash("intent"),
+            IntentIdOrderKey = [1],
+            PublicationId = "publication",
+            PublicationIdHash = EfRelationalIdentity.Hash("publication"),
+            ProjectionKind = "Triggers",
+            ProjectionKindHash = EfRelationalIdentity.Hash("Triggers"),
+            Operation = nameof(PublicationProjectionOperation.Prepare),
+            Status = nameof(PublicationProjectionIntentStatus.Pending),
+            TenantId = "tenant-a",
+            TenantIdHash = EfRelationalIdentity.Hash("tenant-a"),
+            Revision = 1
+        });
+        await context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            database.Intents(context, "tenant-a").FindAsync("intent").AsTask());
+    }
+
+    [Fact]
+    public void Registration_preserves_both_EF_and_Groundwork_orders_and_rejects_foreign_policy_ownership()
+    {
+        foreach (var order in new[] { "ef-gw-ef", "gw-ef-gw" })
+        {
+            var services = new ServiceCollection();
+            new WorkflowsPublishingFeature().ConfigureServices(services);
+            var options = new PublishingEntityFrameworkCoreOptions { ConnectionString = "Data Source=:memory:" };
+            if (order == "ef-gw-ef")
+            {
+                services.AddPublishingEntityFrameworkCore(options);
+                services.AddGroundworkPublishingStores();
+                services.AddPublishingEntityFrameworkCore(options);
+            }
+            else
+            {
+                services.AddGroundworkPublishingStores();
+                services.AddPublishingEntityFrameworkCore(options);
+                services.AddGroundworkPublishingStores();
+            }
+
+            Assert.Equal(PublicationSnapshotReviewStoreBackend.EntityFramework, PublicationSnapshotReviewStoreBackend.Find(services)!.Name);
+            Assert.Equal(PublicationPolicyProjectionStoreBackend.EntityFramework, PublicationPolicyProjectionStoreBackend.Find(services)!.Name);
+            Assert.Single(services, service => service.ServiceType == typeof(IPublicationPolicyStore));
+            Assert.Single(services, service => service.ServiceType == typeof(IPublicationProjectionIntentStore));
+            Assert.Equal(typeof(EfPublicationPolicyStore), services.Single(service => service.ServiceType == typeof(EfPublicationPolicyStore)).ImplementationType);
+            Assert.Equal(typeof(EfPublicationProjectionIntentStore), services.Single(service => service.ServiceType == typeof(EfPublicationProjectionIntentStore)).ImplementationType);
+            Assert.Single(services, service => service.ServiceType == typeof(PublishingSnapshotReviewDbContext));
+        }
+
+        var foreign = new ServiceCollection();
+        foreign.AddScoped<IPublicationPolicyStore, ForeignPolicyStore>();
+        new WorkflowsPublishingFeature().ConfigureServices(foreign);
+        var before = foreign.ToArray();
+        Assert.Throws<InvalidOperationException>(() => foreign.AddPublishingEntityFrameworkCore(new PublishingEntityFrameworkCoreOptions()));
+        Assert.Equal(before, foreign);
+    }
+
+    private static PublicationPolicy Policy(string? definitionId, string slot) =>
+        new(definitionId, PublicationPolicyDefaultAction.ReplaceDefaultSlot, slot, 0, new DateTimeOffset(2026, 9, 15, 12, 0, 0, TimeSpan.FromHours(2)));
+
+    private static PublicationProjectionIntent Intent(string intentId, string publicationId) =>
+        new(intentId, publicationId, PublicationProjectionKinds.TriggerBindings, PublicationProjectionOperation.Prepare, PublicationProjectionIntentStatus.Pending, 0, null, null);
+
+    private sealed class Database : IAsyncDisposable
+    {
+        private readonly SqliteConnection connection;
+        public DateTimeOffset Now { get; } = new(2026, 9, 15, 12, 0, 0, TimeSpan.Zero);
+        private Database(SqliteConnection connection) => this.connection = connection;
+        public static async Task<Database> CreateAsync()
+        {
+            var connection = new SqliteConnection("Data Source=:memory:");
+            await connection.OpenAsync();
+            var database = new Database(connection);
+            await using var context = database.Context();
+            await context.Database.EnsureCreatedAsync();
+            return database;
+        }
+        public PublishingSnapshotReviewSqliteDbContext Context() =>
+            new(new DbContextOptionsBuilder<PublishingSnapshotReviewSqliteDbContext>().UseSqlite(connection).Options);
+        public EfPublicationPolicyStore Policies(PublishingSnapshotReviewDbContext context, string tenant) =>
+            Policies(context, PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
+        public EfPublicationPolicyStore Policies(PublishingSnapshotReviewDbContext context, PersistenceAccessContext access) =>
+            new(context, new FixedAccess(access));
+        public EfPublicationProjectionIntentStore Intents(PublishingSnapshotReviewDbContext context, string tenant) =>
+            Intents(context, PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
+        public EfPublicationProjectionIntentStore Intents(PublishingSnapshotReviewDbContext context, PersistenceAccessContext access) =>
+            new(context, new FixedAccess(access));
+        public ValueTask DisposeAsync() => connection.DisposeAsync();
+    }
+
+    private sealed class FixedAccess(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
+    {
+        public PersistenceAccessContext Current { get; } = current;
+    }
+
+    private sealed class ForeignPolicyStore : IPublicationPolicyStore
+    {
+        public ValueTask<PublicationPolicy?> FindAsync(string? workflowDefinitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<PublicationPolicyWriteResult> TrySaveAsync(PublicationPolicy policy, long expectedRevision, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+}

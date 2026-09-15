@@ -8,10 +8,14 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 public abstract class PublishingSnapshotReviewDbContext(DbContextOptions options) : DbContext(options)
 {
     public DbSet<PublicationSnapshotReviewEntity> SnapshotReviews => Set<PublicationSnapshotReviewEntity>();
+    public DbSet<PublicationPolicyEntity> Policies => Set<PublicationPolicyEntity>();
+    public DbSet<PublicationProjectionIntentEntity> ProjectionIntents => Set<PublicationProjectionIntentEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new PublicationSnapshotReviewEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new PublicationPolicyEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new PublicationProjectionIntentEntityConfiguration());
         ConfigureProvider(modelBuilder);
     }
 

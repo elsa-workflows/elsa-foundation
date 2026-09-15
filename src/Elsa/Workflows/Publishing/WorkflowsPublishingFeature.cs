@@ -56,8 +56,24 @@ public class WorkflowsPublishingFeature : IShellFeature
         services.TryAddScoped<IExecutableActivityTemplateReader>(serviceProvider =>
             serviceProvider.GetRequiredService<IExecutableActivityTemplateStore>());
         services.TryAddSingleton<IPublicationRecordStore, InMemoryPublicationRecordStore>();
+        var hadPolicyStore = services.Any(service => service.ServiceType == typeof(IPublicationPolicyStore));
+        var hadProjectionIntentStore = services.Any(service => service.ServiceType == typeof(IPublicationProjectionIntentStore));
         services.TryAddSingleton<IPublicationPolicyStore, InMemoryPublicationPolicyStore>();
         services.TryAddSingleton<IPublicationProjectionIntentStore, InMemoryPublicationProjectionIntentStore>();
+        // Only claim registrations that this feature actually added. A host-provided policy or intent
+        // descriptor must remain foreign so durable-provider registration can fail closed rather than
+        // silently treating custom behavior as the in-memory backend.
+        if (!hadPolicyStore && !hadProjectionIntentStore && PublicationPolicyProjectionStoreBackend.Find(services) is null)
+        {
+            PublicationPolicyProjectionStoreBackend.Register(
+                services,
+                new PublicationPolicyProjectionStoreBackend(
+                    PublicationPolicyProjectionStoreBackend.InMemory,
+                    [
+                        services.Last(service => service.ServiceType == typeof(IPublicationPolicyStore)),
+                        services.Last(service => service.ServiceType == typeof(IPublicationProjectionIntentStore))
+                    ]));
+        }
         // Deterministic policies hold no request or persistence state and remain safe singletons.
         services.TryAddSingleton<IPublicationPolicyResolver, PublicationPolicyResolver>();
         services.TryAddSingleton<IPublicationPreflightService, PublicationPreflightService>();
