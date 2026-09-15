@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.DependencyInjection;
@@ -32,5 +33,6 @@ public class Elsa3ImportActivitiesEntityFrameworkCoreFeature : IShellFeature
             Provider = Provider,
             ConnectionString = ConnectionString,
             ConnectionName = ConnectionName
-        });
+        })
+        .AddEfModuleMigrations<Elsa3ImportDbContext>(Provider);
 }

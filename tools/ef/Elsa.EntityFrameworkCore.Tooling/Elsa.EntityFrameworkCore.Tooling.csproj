@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Elsa\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa3\Activities\Design\Import\Persistence\EntityFrameworkCore\Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Diagnostics\OpenTelemetry\Persistence\EntityFrameworkCore\Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Diagnostics\StructuredLogs\Persistence\EntityFrameworkCore\Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Foundation\Identity\Persistence\EntityFrameworkCore\Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />

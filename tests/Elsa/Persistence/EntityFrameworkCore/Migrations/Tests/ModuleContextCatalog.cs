@@ -10,6 +10,7 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
+using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
@@ -31,7 +32,8 @@ internal static class ModuleContextCatalog
         typeof(WorkflowsDesignDbContext).Assembly,
         typeof(PublishingSnapshotReviewDbContext).Assembly,
         typeof(ExecutionPlacementDbContext).Assembly,
-        typeof(BookmarkStateDbContext).Assembly
+        typeof(BookmarkStateDbContext).Assembly,
+        typeof(Elsa3ImportDbContext).Assembly
     ];
 
     public static IReadOnlyList<Type> Contexts(string provider) => Modules
