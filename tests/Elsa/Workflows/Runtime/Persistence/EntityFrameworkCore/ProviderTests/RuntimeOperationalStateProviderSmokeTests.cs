@@ -201,6 +201,36 @@ internal static class RuntimeOperationalStateProviderSmoke
             Assert.Equal("43", (await values.FindAsync("workflow-a", durableId))!.InlineValue!.Value.GetRawText());
             Assert.Equal(2, (await context.DurableValueStates.AsNoTracking().SingleAsync(row =>
                 row.DurableValueId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(durableId))).Revision);
+            var cleanupBookmarkId = $"native-cleanup-bookmark-{Guid.NewGuid():N}";
+            var cleanupTimerId = $"native-cleanup-timer-{Guid.NewGuid():N}";
+            var cleanupWorkId = $"native-cleanup-work-{Guid.NewGuid():N}";
+            var bookmarks = new EfBookmarkStateStore(context, accessor);
+            var timers = new EfDurableTimerStore(context, accessor, codec);
+            await bookmarks.SaveAsync(new BookmarkState(
+                cleanupBookmarkId, "workflow-a", "activity-cleanup", "node-cleanup", "resume-cleanup",
+                "stimulus", "native-cleanup", JsonDocument.Parse("42").RootElement,
+                new Dictionary<string, string>(), futureAt, futureAt.AddHours(1)));
+            await timers.SaveAsync(new DurableTimer(
+                cleanupTimerId, "workflow-a", "Delay", "stimulus-cleanup",
+                futureAt.AddMinutes(10), futureAt));
+            await queue.EnqueueAsync(new RuntimeSchedulerWorkItem(
+                cleanupWorkId, "workflow-a", "command", WorkflowExecutionCommandKind.ScheduleActivity,
+                "envelope", $"enqueue-{cleanupWorkId}", futureAt, futureAt, 1));
+            var cleanupCommit = EmptyCheckpointCommit($"checkpoint-cleanup-{Guid.NewGuid():N}");
+            cleanupCommit = cleanupCommit with
+            {
+                Checkpoint = cleanupCommit.Checkpoint with { OccurredAt = futureAt },
+                StateChanges = new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], [],
+                    null, null, null,
+                    [new ActivityScopeCleanupRequest("workflow-a", "scope-cleanup", [],
+                        [cleanupBookmarkId], [cleanupTimerId], [cleanupWorkId])], null)
+            };
+            await checkpointStore.CommitAsync(cleanupCommit, new(RuntimeCheckpointPersistenceMode.Immediate));
+            await checkpointStore.CommitAsync(cleanupCommit, new(RuntimeCheckpointPersistenceMode.Immediate));
+            Assert.Null(await bookmarks.FindAsync("workflow-a", cleanupBookmarkId));
+            Assert.Null(await timers.FindAsync("workflow-a", cleanupTimerId));
+            Assert.DoesNotContain((await queue.ListAsync(new RuntimeSchedulerWorkQuery("workflow-a", 10))).Items,
+                item => item.WorkItemId == cleanupWorkId);
             var outboxNow = DateTimeOffset.UtcNow;
             var outboxItem = OutboxPending($"outbox-{Guid.NewGuid():N}", "workflow-a", outboxNow);
             await outbox.SavePendingAsync(outboxItem);

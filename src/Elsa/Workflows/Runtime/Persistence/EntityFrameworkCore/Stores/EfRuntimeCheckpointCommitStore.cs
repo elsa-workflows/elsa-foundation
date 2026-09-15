@@ -132,6 +132,10 @@ public sealed class EfRuntimeCheckpointCommitStore(
                     await EfRuntimeCheckpointParticipantStaging.StageDurableValueAsync(
                         context, durableValue, scope, writeCancellationToken);
 
+                foreach (var cleanup in commit.StateChanges.ActivityScopeCleanups)
+                    await EfRuntimeCheckpointActivityScopeCleanupParticipantStaging.StageAsync(
+                        context, cleanup, scope, writeCancellationToken);
+
                 foreach (var operational in commit.StateChanges.Operational)
                     await EfRuntimeCheckpointParticipantStaging.StageOperationalAsync(
                         context, operational, scope, writeCancellationToken);
@@ -236,6 +240,28 @@ public sealed class EfRuntimeCheckpointCommitStore(
             RequireWorkflow(change.State.WorkflowExecutionId, commit.WorkflowExecutionId, "operational state");
         }
 
+        foreach (var cleanup in commit.StateChanges.ActivityScopeCleanups)
+        {
+            RequireWorkflow(cleanup.WorkflowExecutionId, commit.WorkflowExecutionId, "activity-scope cleanup");
+            ArgumentException.ThrowIfNullOrWhiteSpace(cleanup.ExecutionScopeId);
+            foreach (var bookmarkId in cleanup.BookmarkIds)
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(bookmarkId);
+                if (bookmarkId.Length > BookmarkStateEfModule.BookmarkIdentityMaximumLength)
+                    throw new ArgumentException("Activity-scope cleanup bookmark ID exceeds the bookmark persistence contract.");
+                if (commit.StateChanges.Bookmarks.Any(change => StringComparer.Ordinal.Equals(change.StateId, bookmarkId)))
+                    throw new NotSupportedException("A bookmark change and cleanup deletion for the same ID require a proven staged-row transition.");
+            }
+            foreach (var timerId in cleanup.TimerIds)
+                EfRuntimeOperationalStoreSupport.ValidateIdentity(timerId, nameof(cleanup.TimerIds));
+            foreach (var workItemId in cleanup.SchedulerWorkItemIds)
+            {
+                EfRuntimeOperationalStoreSupport.ValidateIdentity(workItemId, nameof(cleanup.SchedulerWorkItemIds));
+                if (commit.StateChanges.ConsumedSchedulerWorkItems.Any(item => StringComparer.Ordinal.Equals(item.WorkItemId, workItemId)))
+                    throw new NotSupportedException("A claimed scheduler-work consume and scope cleanup deletion for the same ID require a proven staged-row transition.");
+            }
+        }
+
         var seenDispatches = new Dictionary<string, WorkflowDispatchRecord>(StringComparer.Ordinal);
         foreach (var change in commit.StateChanges.WorkflowDispatches)
         {
@@ -311,11 +337,10 @@ public sealed class EfRuntimeCheckpointCommitStore(
         if (changes.ActivityExecutions.Count > 0 ||
             changes.ActivityExecutionInspections.Count > 0 ||
             changes.Incidents.Count > 0 ||
-            changes.ActivityScopeCleanups.Count > 0 ||
             changes.AlterationJobTerminalChange is not null)
         {
             throw new NotSupportedException(
-                "The EF checkpoint slice supports workflow-execution, scheduler, bookmarks, durable values, operational state, dispatch, pending outbox, and claimed scheduler-work consume only; remaining participants must be staged by the complete checkpoint writer before this adapter is enabled for those runtime commits.");
+                "The EF checkpoint slice supports workflow-execution, scheduler, bookmarks, durable values, scope cleanup, operational state, dispatch, pending outbox, and claimed scheduler-work consume only; remaining participants must be staged by the complete checkpoint writer before this adapter is enabled for those runtime commits.");
         }
 
         if (commit.PostCommitIntents.Count > 0)

@@ -631,6 +631,56 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
+    public async Task Scope_cleanup_removes_exact_bookmark_timer_and_queue_resources_with_a_replayable_marker()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open("tenant-a");
+        var access = new FixedAccessor("tenant-a");
+        await SeedCleanupResourcesAsync(context, access);
+        var commit = WithScopeCleanup("commit-scope-cleanup");
+        var store = new EfRuntimeCheckpointCommitStore(context, access);
+
+        await store.CommitAsync(commit, Decision());
+        await store.CommitAsync(commit, Decision());
+        Assert.Empty(await context.Bookmarks.ToArrayAsync());
+        Assert.Empty(await context.DurableTimers.ToArrayAsync());
+        Assert.Empty(await context.SchedulerWorkItems.ToArrayAsync());
+        Assert.Single(await context.RuntimeCheckpointCommits.ToArrayAsync());
+
+        await using var restarted = database.Open("tenant-a");
+        await new EfRuntimeCheckpointCommitStore(restarted, access).CommitAsync(commit, Decision());
+        Assert.Empty(await restarted.Bookmarks.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Marker_failure_restores_all_scope_cleanup_resources_and_excludes_a_hidden_second_attempt()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var interceptor = new FailMarkerInsertInterceptor();
+        await using (var context = database.Open("tenant-a", interceptor))
+        {
+            var access = new FixedAccessor("tenant-a");
+            await SeedCleanupResourcesAsync(context, access);
+            interceptor.Arm();
+            await Assert.ThrowsAsync<DbUpdateException>(() =>
+                new EfRuntimeCheckpointCommitStore(context, access)
+                    .CommitAsync(WithScopeCleanup("commit-cleanup-failure"), Decision()).AsTask());
+            Assert.Empty(context.ChangeTracker.Entries());
+        }
+
+        await using var restarted = database.Open("tenant-a");
+        Assert.Single(await restarted.Bookmarks.ToArrayAsync());
+        Assert.Single(await restarted.DurableTimers.ToArrayAsync());
+        Assert.Single(await restarted.SchedulerWorkItems.ToArrayAsync());
+        Assert.Empty(await restarted.RuntimeCheckpointCommits.ToArrayAsync());
+        await new EfRuntimeCheckpointCommitStore(restarted, new FixedAccessor("tenant-a"))
+            .CommitAsync(WithScopeCleanup("commit-cleanup-failure"), Decision());
+        Assert.Empty(await restarted.Bookmarks.ToArrayAsync());
+        Assert.Empty(await restarted.DurableTimers.ToArrayAsync());
+        Assert.Empty(await restarted.SchedulerWorkItems.ToArrayAsync());
+    }
+
+    [Fact]
     public async Task Marker_failure_rolls_back_previously_saved_outbox_and_does_not_leak_tracker_state()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -1038,6 +1088,30 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
                 [new RuntimeStateChange<BookmarkState>(bookmark.BookmarkId, operation,
                     bookmark, new Dictionary<string, string>())], [], [], [])
         };
+    }
+
+    private static RuntimeCheckpointCommit WithScopeCleanup(string commitId)
+    {
+        var commit = Commit(commitId);
+        return commit with
+        {
+            StateChanges = new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], [],
+                null, null, null,
+                [new ActivityScopeCleanupRequest("workflow-a", "scope-a", [],
+                    ["bookmark-cleanup"], ["timer-cleanup"], ["work-cleanup"])], null)
+        };
+    }
+
+    private static async Task SeedCleanupResourcesAsync(
+        BookmarkStateDbContext context, FixedAccessor access)
+    {
+        await new EfBookmarkStateStore(context, access).SaveAsync(
+            CheckpointBookmark("bookmark-cleanup", "scope-cleanup"));
+        await new EfDurableTimerStore(context, access, new NoopContinuationCodec()).SaveAsync(
+            new DurableTimer("timer-cleanup", "workflow-a", "Delay", "stimulus-cleanup",
+                OccurredAt.AddMinutes(10), OccurredAt));
+        await new EfSchedulerWorkQueueStore(context, access, new NoopContinuationCodec()).EnqueueAsync(
+            SchedulerWork("work-cleanup"));
     }
 
     private static WorkflowExecutionState Execution(string id, string tenantId) => new(
