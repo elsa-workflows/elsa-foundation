@@ -25,10 +25,16 @@ public static class RuntimeWorkflowDispatchEntityFrameworkCoreRegistration
             if (existing is not null)
             {
                 existing.EnsureOwnsRegisteredContracts(services);
-                throw new InvalidOperationException("Runtime workflow-dispatch EF persistence refuses to replace a selected non-EF backend.");
+                if (existing.Name != RuntimeWorkflowDispatchStoreBackend.Groundwork)
+                    throw new InvalidOperationException("Runtime workflow-dispatch EF persistence refuses to replace a selected non-EF backend.");
             }
 
-            var existingContracts = RuntimeWorkflowDispatchStoreBackend.CaptureContractRegistrations(services);
+            var removeGroundwork = existing?.Name == RuntimeWorkflowDispatchStoreBackend.Groundwork
+                ? existing.PrepareRemoveOwnedArtifacts(services)
+                : null;
+            var existingContracts = existing is null
+                ? RuntimeWorkflowDispatchStoreBackend.CaptureContractRegistrations(services)
+                : [];
             RuntimeWorkflowDispatchStoreBackend.EnsureRuntimeDefaultsOwnRegisteredContracts(services, existingContracts);
             RuntimeEfContractBackendRegistration.EnsureSharedContext(services, "Runtime workflow-dispatch EF persistence");
 
@@ -52,6 +58,8 @@ public static class RuntimeWorkflowDispatchEntityFrameworkCoreRegistration
             RuntimeWorkflowDispatchStoreBackend.Register(
                 services,
                 new(RuntimeWorkflowDispatchStoreBackend.EntityFramework, [concrete, .. contracts]));
+
+            removeGroundwork?.Invoke(services);
 
             return services;
         }

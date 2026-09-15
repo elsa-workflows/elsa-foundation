@@ -21,7 +21,10 @@ public sealed class RuntimeWorkflowDispatchStoreBackend
     public const string Groundwork = "groundwork";
     public const string InMemory = "in-memory";
 
-    public RuntimeWorkflowDispatchStoreBackend(string name, IEnumerable<ServiceDescriptor> descriptors)
+    public RuntimeWorkflowDispatchStoreBackend(
+        string name,
+        IEnumerable<ServiceDescriptor> descriptors,
+        Action<IServiceCollection>? removeOwnedArtifacts = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         if (name is not (EntityFramework or Groundwork or InMemory))
@@ -30,8 +33,11 @@ public sealed class RuntimeWorkflowDispatchStoreBackend
         this.descriptors = descriptors.Distinct().ToArray();
         if (this.descriptors.Count == 0)
             throw new ArgumentException("At least one workflow-dispatch descriptor is required.", nameof(descriptors));
+        this.removeOwnedArtifacts = removeOwnedArtifacts;
         Name = name;
     }
+
+    private readonly Action<IServiceCollection>? removeOwnedArtifacts;
 
     public string Name { get; }
 
@@ -61,6 +67,28 @@ public sealed class RuntimeWorkflowDispatchStoreBackend
 
         if (descriptors.Any(descriptor => !services.Contains(descriptor)))
             throw new InvalidOperationException($"Workflow-dispatch backend '{Name}' no longer owns one of its registrations.");
+    }
+
+    public Action<IServiceCollection>? PrepareRemoveOwnedArtifacts(IServiceCollection services)
+    {
+        EnsureOwnsRegisteredContracts(services);
+        var snapshot = services.ToArray();
+        try
+        {
+            foreach (var descriptor in descriptors)
+                services.Remove(descriptor);
+            for (var index = services.Count - 1; index >= 0; index--)
+                if (ReferenceEquals(services[index].ImplementationInstance, this))
+                    services.RemoveAt(index);
+            return removeOwnedArtifacts;
+        }
+        catch
+        {
+            services.Clear();
+            foreach (var descriptor in snapshot)
+                services.Add(descriptor);
+            throw;
+        }
     }
 
     public static IReadOnlyCollection<ServiceDescriptor> CaptureContractRegistrations(IServiceCollection services) => services

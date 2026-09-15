@@ -31,10 +31,16 @@ public static class RuntimePostCommitOutboxEntityFrameworkCoreRegistration
             if (existing is not null)
             {
                 existing.EnsureOwnsRegisteredContracts(services);
-                throw new InvalidOperationException("Runtime post-commit outbox EF persistence refuses to replace a selected non-EF backend.");
+                if (existing.Name != RuntimePostCommitOutboxStoreBackend.Groundwork)
+                    throw new InvalidOperationException("Runtime post-commit outbox EF persistence refuses to replace a selected non-EF backend.");
             }
 
-            var existingContracts = RuntimePostCommitOutboxStoreBackend.CaptureContractRegistrations(services);
+            var removeGroundwork = existing?.Name == RuntimePostCommitOutboxStoreBackend.Groundwork
+                ? existing.PrepareRemoveOwnedArtifacts(services)
+                : null;
+            var existingContracts = existing is null
+                ? RuntimePostCommitOutboxStoreBackend.CaptureContractRegistrations(services)
+                : [];
             RuntimePostCommitOutboxStoreBackend.EnsureRuntimeDefaultsOwnRegisteredContracts(services, existingContracts);
             RuntimeEfContractBackendRegistration.EnsureSharedContext(services, "Runtime post-commit outbox EF persistence");
 
@@ -57,6 +63,8 @@ public static class RuntimePostCommitOutboxEntityFrameworkCoreRegistration
             RuntimePostCommitOutboxStoreBackend.Register(
                 services,
                 new(RuntimePostCommitOutboxStoreBackend.EntityFramework, [concrete, .. contracts]));
+
+            removeGroundwork?.Invoke(services);
 
             return services;
         }

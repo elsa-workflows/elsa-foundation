@@ -116,6 +116,60 @@ public sealed class GroundworkV2RuntimeRegistrationTests
         AssertScopedAlias<IWorkflowActivationAuthority, GroundworkV2WorkflowActivationAuthority>(services);
         Assert.Equal(RuntimeWorkflowAlterationStoreBackend.Groundwork, RuntimeWorkflowAlterationStoreBackend.Find(services)!.Name);
         Assert.Equal(WorkflowTestScopeStoreBackend.Groundwork, WorkflowTestScopeStoreBackend.Find(services)!.Name);
+        Assert.Equal(RuntimeWorkflowDispatchStoreBackend.Groundwork, RuntimeWorkflowDispatchStoreBackend.Find(services)!.Name);
+        Assert.Equal(RuntimePostCommitOutboxStoreBackend.Groundwork, RuntimePostCommitOutboxStoreBackend.Find(services)!.Name);
+    }
+
+    [Fact]
+    public void Groundwork_dispatch_and_outbox_transition_to_EF_after_operational_switch()
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddGroundworkV2RuntimeStores();
+        var registry = Assert.IsType<GroundworkStorageUnitRegistry>(services.Single(descriptor =>
+            descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance);
+
+        services.AddRuntimeOperationalStateEntityFrameworkCore(new()
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        });
+        var beforeOutbox = services.ToArray();
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimePostCommitOutboxEntityFrameworkCore());
+        Assert.Equal(beforeOutbox, services);
+
+        services.AddRuntimeWorkflowDispatchEntityFrameworkCore();
+        services.AddRuntimePostCommitOutboxEntityFrameworkCore();
+
+        Assert.Equal(RuntimeWorkflowDispatchStoreBackend.EntityFramework, RuntimeWorkflowDispatchStoreBackend.Find(services)!.Name);
+        Assert.Equal(RuntimePostCommitOutboxStoreBackend.EntityFramework, RuntimePostCommitOutboxStoreBackend.Find(services)!.Name);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowDispatchStore));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2RuntimePostCommitOutboxStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(EfWorkflowDispatchStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(EfRuntimePostCommitOutboxStore));
+        Assert.Equal(RuntimeArtifactStoreBackend.Groundwork, RuntimeArtifactStoreBackend.Find(services)!.Name);
+        Assert.Equal(RuntimeActivityExecutionStoreBackend.Groundwork, RuntimeActivityExecutionStoreBackend.Find(services)!.Name);
+        Assert.DoesNotContain(registry.Registrations, registration =>
+            registration.Unit.Id.Value is ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind or
+            ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind);
+    }
+
+    [Fact]
+    public void Groundwork_dispatch_transition_refuses_unowned_contract_without_mutation()
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddGroundworkV2RuntimeStores();
+        services.AddRuntimeOperationalStateEntityFrameworkCore(new()
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        });
+        services.AddScoped<IWorkflowDispatchStore>(_ => throw new InvalidOperationException("foreign"));
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeWorkflowDispatchEntityFrameworkCore());
+        Assert.Equal(before, services);
+        Assert.Equal(RuntimeWorkflowDispatchStoreBackend.Groundwork, RuntimeWorkflowDispatchStoreBackend.Find(services)!.Name);
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowDispatchStore));
     }
 
     [Fact]
