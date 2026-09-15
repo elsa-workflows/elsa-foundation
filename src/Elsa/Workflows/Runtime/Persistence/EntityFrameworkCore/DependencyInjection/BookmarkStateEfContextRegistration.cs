@@ -23,6 +23,7 @@ internal static class BookmarkStateEfContextRegistration
                 RuntimeWorkflowTestScopeEntityFrameworkCoreOptions options => options.RecoveryContinuationSigningKey,
                 RuntimeOperationalStateEntityFrameworkCoreOptions options => options.RecoveryContinuationSigningKey,
                 RuntimeDurableTimerEntityFrameworkCoreOptions options => options.RecoveryContinuationSigningKey,
+                RuntimeSchedulerWorkQueueEntityFrameworkCoreOptions options => options.RecoveryContinuationSigningKey,
                 _ => null
             })
             .Where(key => !string.IsNullOrWhiteSpace(key))
@@ -58,8 +59,9 @@ internal static class BookmarkStateEfContextRegistration
         var contextRegistrations = ContextRegistrations(services, provider);
         var operationalBackend = RuntimeOperationalStateStoreBackend.Find(services);
         var durableTimerBackend = DurableTimerStoreBackend.Find(services);
+        var schedulerWorkBackend = SchedulerWorkQueueStoreBackend.Find(services);
         if (contextRegistrations.Count > 0 &&
-            (owners.Length == 0 || contextRegistrations.Any(descriptor => !owners.Any(predicate => predicate?.Invoke(descriptor) == true) && operationalBackend?.Owns(descriptor) != true && durableTimerBackend?.Owns(descriptor) != true)))
+            (owners.Length == 0 || contextRegistrations.Any(descriptor => !owners.Any(predicate => predicate?.Invoke(descriptor) == true) && operationalBackend?.Owns(descriptor) != true && durableTimerBackend?.Owns(descriptor) != true && schedulerWorkBackend?.Owns(descriptor) != true)))
             throw new InvalidOperationException(
                 $"A {contextRegistrations.First().ServiceType.Name} registration already exists; {owner} EF persistence refuses to reuse or replace an unowned context.");
     }
@@ -185,6 +187,15 @@ internal static class BookmarkStateEfContextRegistration
             connectionName,
             defaultConnectionString,
             "Runtime durable timers");
+        EnsureCompatible(
+            services.Select(x => x.ImplementationInstance)
+                .OfType<RuntimeSchedulerWorkQueueEntityFrameworkCoreOptions>()
+                .SingleOrDefault(),
+            provider,
+            connectionString,
+            connectionName,
+            defaultConnectionString,
+            "Runtime scheduler work");
     }
 
     private static void EnsureCompatible<TOptions>(
@@ -216,6 +227,8 @@ internal static class BookmarkStateEfContextRegistration
             RuntimeOperationalStateEntityFrameworkCoreOptions options =>
                 (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeOperationalStateEfModule.DefaultSqliteConnectionString),
             RuntimeDurableTimerEntityFrameworkCoreOptions options =>
+                (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeOperationalStateEfModule.DefaultSqliteConnectionString),
+            RuntimeSchedulerWorkQueueEntityFrameworkCoreOptions options =>
                 (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeOperationalStateEfModule.DefaultSqliteConnectionString),
             _ => throw new InvalidOperationException("Unknown Runtime EF context options.")
         };

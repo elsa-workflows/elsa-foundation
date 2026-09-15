@@ -61,6 +61,33 @@ public sealed class DurableTimerEntity
     public long Revision { get; set; }
 }
 
+/// <summary>Relational envelope and fenced-claim projections for one durable scheduler work item.</summary>
+public sealed class SchedulerWorkItemEntity
+{
+    public string Id { get; set; } = null!;
+    public string ScopeKey { get; set; } = null!;
+    public string ScopeKeyHash { get; set; } = null!;
+    public string WorkflowExecutionId { get; set; } = null!;
+    public string WorkflowExecutionIdHash { get; set; } = null!;
+    public string WorkflowExecutionIdOrderKey { get; set; } = null!;
+    public string WorkItemId { get; set; } = null!;
+    public string WorkItemIdHash { get; set; } = null!;
+    public string WorkOrderKey { get; set; } = null!;
+    public long EnqueuedAtUtcTicks { get; set; }
+    public int EnqueuedAtOffsetMinutes { get; set; }
+    public long RecordedAtUtcTicks { get; set; }
+    public int RecordedAtOffsetMinutes { get; set; }
+    public string? ClaimOwnerId { get; set; }
+    public long ClaimToken { get; set; }
+    public long? ClaimedAtUtcTicks { get; set; }
+    public int? ClaimedAtOffsetMinutes { get; set; }
+    public long? VisibleAfterUtcTicks { get; set; }
+    public int? VisibleAfterOffsetMinutes { get; set; }
+    public string ContentJson { get; set; } = null!;
+    public string SchemaVersion { get; set; } = null!;
+    public long Revision { get; set; }
+}
+
 /// <summary>Relational envelope and recovery projections for one execution-liveness state.</summary>
 public sealed class ExecutionLivenessStateEntity
 {

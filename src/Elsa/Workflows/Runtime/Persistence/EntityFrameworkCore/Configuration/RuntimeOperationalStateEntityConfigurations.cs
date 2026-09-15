@@ -152,3 +152,26 @@ public sealed class SchedulerStateEntityConfiguration : IEntityTypeConfiguration
         b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdOrderKey });
     }
 }
+
+public sealed class SchedulerWorkItemEntityConfiguration : IEntityTypeConfiguration<SchedulerWorkItemEntity>
+{
+    public void Configure(EntityTypeBuilder<SchedulerWorkItemEntity> b)
+    {
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureCommon(b, RuntimeOperationalStateEfModule.SchedulerWorkTableName);
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).HasMaxLength(64).IsRequired();
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(SchedulerWorkItemEntity.WorkflowExecutionId));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureHash(b, nameof(SchedulerWorkItemEntity.WorkflowExecutionIdHash));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureOrder(b, nameof(SchedulerWorkItemEntity.WorkflowExecutionIdOrderKey));
+        // Work-item IDs are application identities and are deliberately not bounded. Their encoded value is not
+        // indexed; WorkOrderKey and WorkItemIdHash provide the bounded query projections.
+        b.Property(x => x.WorkItemId).IsRequired();
+        b.Property(x => x.WorkItemIdHash).HasMaxLength(64).IsRequired();
+        b.Property(x => x.WorkOrderKey).HasMaxLength(RuntimeOperationalStateEfModule.SchedulerWorkOrderKeyMaximumLength).IsRequired();
+        b.Property(x => x.ClaimOwnerId).IsRequired(false);
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash, x.WorkItemIdHash }).IsUnique();
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash, x.WorkOrderKey });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdOrderKey, x.WorkflowExecutionIdHash });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash, x.VisibleAfterUtcTicks, x.WorkOrderKey });
+    }
+}

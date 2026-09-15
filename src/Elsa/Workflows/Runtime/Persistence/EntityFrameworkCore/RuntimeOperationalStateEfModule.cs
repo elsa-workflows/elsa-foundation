@@ -9,6 +9,7 @@ public static class RuntimeOperationalStateEfModule
     public const string DurableValueTableName = "elsa_runtime_durable_value_state";
     public const string SchedulerTableName = "elsa_runtime_scheduler_state";
     public const string DurableTimerTableName = "elsa_runtime_durable_timer";
+    public const string SchedulerWorkTableName = "elsa_runtime_scheduler_work_item";
     public const string ExecutionLivenessTableName = "elsa_runtime_execution_liveness_state";
     public const string WorkflowHoldTableName = "elsa_runtime_workflow_hold_state";
     public const string IncidentTableName = "elsa_runtime_incident_state";
@@ -24,4 +25,5 @@ public static class RuntimeOperationalStateEfModule
     public const int DurableTimerStimulusTypeProjectionMaximumLength = ((DurableTimerStimulusTypeMaximumLength * sizeof(char) + 2) / 3) * 4;
     public const int DurableTimerStimulusHashProjectionMaximumLength = ((DurableTimerStimulusHashMaximumLength * sizeof(char) + 2) / 3) * 4;
     public const int DurableTimerClaimOrderKeyMaximumLength = 84;
+    public const int SchedulerWorkOrderKeyMaximumLength = 170;
 }

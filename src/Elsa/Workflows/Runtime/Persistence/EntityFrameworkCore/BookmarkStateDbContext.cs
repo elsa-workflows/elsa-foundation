@@ -23,6 +23,7 @@ public abstract class BookmarkStateDbContext(DbContextOptions options) : DbConte
     public DbSet<DurableValueStateEntity> DurableValueStates => Set<DurableValueStateEntity>();
     public DbSet<SchedulerStateEntity> SchedulerStates => Set<SchedulerStateEntity>();
     public DbSet<DurableTimerEntity> DurableTimers => Set<DurableTimerEntity>();
+    public DbSet<SchedulerWorkItemEntity> SchedulerWorkItems => Set<SchedulerWorkItemEntity>();
     public DbSet<ExecutionLivenessStateEntity> ExecutionLivenessStates => Set<ExecutionLivenessStateEntity>();
     public DbSet<WorkflowHoldStateEntity> WorkflowHoldStates => Set<WorkflowHoldStateEntity>();
     public DbSet<IncidentStateEntity> IncidentStates => Set<IncidentStateEntity>();
@@ -48,6 +49,7 @@ public abstract class BookmarkStateDbContext(DbContextOptions options) : DbConte
         modelBuilder.ApplyConfiguration(new DurableValueStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new SchedulerStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new DurableTimerEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new SchedulerWorkItemEntityConfiguration());
         modelBuilder.ApplyConfiguration(new ExecutionLivenessStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowHoldStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new IncidentStateEntityConfiguration());
