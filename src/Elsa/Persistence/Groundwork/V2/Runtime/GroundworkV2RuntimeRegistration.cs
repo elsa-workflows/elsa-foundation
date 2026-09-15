@@ -74,6 +74,14 @@ public static class GroundworkV2RuntimeRegistration
                 : existingTestScopeBackend.PrepareRemoveOwnedArtifacts(services);
             if (existingTestScopeBackend is not null && existingTestScopeBackend.Name != WorkflowTestScopeStoreBackend.Groundwork)
                 services.RemoveAll<WorkflowTestScopeProviderRegistration>();
+            var existingOperationalStateBackend = RuntimeOperationalStateStoreBackend.Find(services);
+            if (existingOperationalStateBackend is null)
+                RuntimeOperationalStateStoreBackend.EnsureNoUnownedRegistrations(services);
+            else
+                existingOperationalStateBackend.EnsureOwnsRegisteredContracts(services);
+            var commitExistingOperationalStateRemoval = existingOperationalStateBackend is null || existingOperationalStateBackend.Name == RuntimeOperationalStateStoreBackend.Groundwork
+                ? null
+                : existingOperationalStateBackend.PrepareRemoveOwnedArtifacts(services);
             var target = BindRuntimeTarget(services, targetName);
             if (existingActivityExecutionBackend is null)
                 RuntimeActivityExecutionStoreBackend.EnsureNoUnownedRegistrations(services);
@@ -184,6 +192,15 @@ public static class GroundworkV2RuntimeRegistration
             typeof(IDurableValueStateStore));
         ReplaceScoped<GroundworkV2SchedulerStateStore>(services, Standard<GroundworkV2SchedulerStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(ISchedulerStateStore));
+        services.RemoveAll<RuntimeOperationalStateStoreBackend>();
+        var groundworkDurableValueDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IDurableValueStateStore));
+        var groundworkSchedulerDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(ISchedulerStateStore));
+        var groundworkDurableValueConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2DurableValueStateStore));
+        var groundworkSchedulerConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2SchedulerStateStore));
+        RuntimeOperationalStateStoreBackend.Register(services, new(
+            RuntimeOperationalStateStoreBackend.Groundwork,
+            [groundworkDurableValueDescriptor, groundworkSchedulerDescriptor, groundworkDurableValueConcreteDescriptor, groundworkSchedulerConcreteDescriptor],
+            collection => GroundworkV2RuntimeUnitWithdrawal.RemoveOperationalState(collection, target)));
         ReplaceScoped<GroundworkV2ExecutionLivenessStateStore>(services, Standard<GroundworkV2ExecutionLivenessStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IExecutionLivenessStateStore));
         ReplaceScoped<GroundworkV2RuntimeRecoveryScanner>(services, provider => new(
@@ -238,6 +255,7 @@ public static class GroundworkV2RuntimeRegistration
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2SchedulerDurabilityEvidence>());
         RegisterArtifactBackend(services, target);
         RegisterActivityExecutionBackend(services, target);
+        commitExistingOperationalStateRemoval?.Invoke(services);
         commitExistingAlterationRemoval?.Invoke(services);
         commitExistingTestScopeRemoval?.Invoke(services);
         return services;
@@ -473,6 +491,12 @@ internal static class GroundworkV2RuntimeUnitWithdrawal
 
     public static void RemoveWorkflowTestScope(IServiceCollection services, string? targetName) =>
         services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind, targetName);
+
+    public static void RemoveOperationalState(IServiceCollection services, string? targetName)
+    {
+        services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.DurableValueStateDocumentKind, targetName);
+        services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.SchedulerStateDocumentKind, targetName);
+    }
 }
 
 internal sealed class GroundworkV2WorkflowExecutableCacheLoader(IPersistenceOperationScopeFactory operationScopeFactory)

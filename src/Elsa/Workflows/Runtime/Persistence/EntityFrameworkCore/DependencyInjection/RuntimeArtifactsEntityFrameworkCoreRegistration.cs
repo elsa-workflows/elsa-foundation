@@ -68,6 +68,9 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                         : null,
                     siblingScopeBackendForRepeat?.Name == WorkflowTestScopeStoreBackend.EntityFramework
                         ? siblingScopeBackendForRepeat.Owns
+                        : null,
+                    RuntimeOperationalStateStoreBackend.Find(services) is { Name: RuntimeOperationalStateStoreBackend.EntityFramework } siblingOperationalBackend
+                        ? siblingOperationalBackend.Owns
                         : null);
                 return services;
             }
@@ -92,6 +95,7 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             var existingScopeBackend = WorkflowTestScopeStoreBackend.Find(services);
             if (existingScopeBackend?.Name == WorkflowTestScopeStoreBackend.EntityFramework)
                 existingScopeBackend.EnsureOwnsRegisteredContracts(services);
+            var existingOperationalBackend = RuntimeOperationalStateStoreBackend.Find(services);
             BookmarkStateEfContextRegistration.EnsureCompatible(
                 services,
                 provider,
@@ -115,6 +119,8 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             var alterationOwnContext = alterationBackend?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework;
             var scopeBackend = existingScopeBackend;
             var scopeOwnContext = scopeBackend?.Name == WorkflowTestScopeStoreBackend.EntityFramework;
+            var operationalBackend = existingOperationalBackend;
+            var operationalOwnContext = operationalBackend?.Name == RuntimeOperationalStateStoreBackend.EntityFramework;
             BookmarkStateEfContextRegistration.EnsureContextIsAvailable(
                 services,
                 provider,
@@ -129,7 +135,8 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                     : null,
                 existingScopeBackend?.Name == WorkflowTestScopeStoreBackend.EntityFramework
                     ? existingScopeBackend.Owns
-                    : null);
+                    : null,
+                operationalOwnContext ? operationalBackend!.Owns : null);
 
             if (bookmarksOwnContext)
                 ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
@@ -146,6 +153,9 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             else if (scopeOwnContext)
                 ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
                     .Where(scopeBackend!.Owns));
+            else if (operationalOwnContext)
+                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
+                    .Where(operationalBackend!.Owns));
             else
                 switch (provider)
                 {

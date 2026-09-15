@@ -36,6 +36,6 @@ public sealed class RuntimeWorkflowAlterationStoreBackend
     }
     public Action<IServiceCollection>? PrepareRemoveOwnedArtifacts(IServiceCollection services)
     {
-        EnsureOwnsRegisteredContracts(services); foreach (var d in _descriptors.Where(x => RuntimeArtifactStoreBackend.Find(services)?.Owns(x) != true && RuntimeActivityExecutionStoreBackend.Find(services)?.Owns(x) != true && BookmarkStateStoreBackend.Find(services)?.Owns(x) != true && WorkflowExecutionStateStoreBackend.Find(services)?.Owns(x) != true && WorkflowTestScopeStoreBackend.Find(services)?.Owns(x) != true)) services.Remove(d); for (var i = services.Count - 1; i >= 0; i--) if (ReferenceEquals(services[i].ImplementationInstance, this)) services.RemoveAt(i); return _remove;
+        EnsureOwnsRegisteredContracts(services); foreach (var d in _descriptors.Where(x => RuntimeArtifactStoreBackend.Find(services)?.Owns(x) != true && RuntimeActivityExecutionStoreBackend.Find(services)?.Owns(x) != true && BookmarkStateStoreBackend.Find(services)?.Owns(x) != true && WorkflowExecutionStateStoreBackend.Find(services)?.Owns(x) != true && WorkflowTestScopeStoreBackend.Find(services)?.Owns(x) != true && RuntimeOperationalStateStoreBackend.Find(services)?.Owns(x) != true)) services.Remove(d); for (var i = services.Count - 1; i >= 0; i--) if (ReferenceEquals(services[i].ImplementationInstance, this)) services.RemoveAt(i); return _remove;
     }
 }

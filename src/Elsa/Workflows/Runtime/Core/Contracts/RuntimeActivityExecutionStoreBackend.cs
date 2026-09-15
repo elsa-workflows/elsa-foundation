@@ -107,7 +107,8 @@ public sealed class RuntimeActivityExecutionStoreBackend
                          RuntimeArtifactStoreBackend.Find(services)?.Owns(descriptor) != true &&
                          WorkflowExecutionStateStoreBackend.Find(services)?.Owns(descriptor) != true &&
                          RuntimeWorkflowAlterationStoreBackend.Find(services)?.Owns(descriptor) != true &&
-                         WorkflowTestScopeStoreBackend.Find(services)?.Owns(descriptor) != true))
+                         WorkflowTestScopeStoreBackend.Find(services)?.Owns(descriptor) != true &&
+                         RuntimeOperationalStateStoreBackend.Find(services)?.Owns(descriptor) != true))
                 services.Remove(descriptor);
             for (var index = services.Count - 1; index >= 0; index--)
             {

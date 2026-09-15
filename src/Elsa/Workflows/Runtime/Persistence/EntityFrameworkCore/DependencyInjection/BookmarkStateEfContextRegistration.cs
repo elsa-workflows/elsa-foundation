@@ -21,6 +21,7 @@ internal static class BookmarkStateEfContextRegistration
                 RuntimeWorkflowExecutionEntityFrameworkCoreOptions options => options.RecoveryContinuationSigningKey,
                 RuntimeWorkflowAlterationEntityFrameworkCoreOptions options => options.RecoveryContinuationSigningKey,
                 RuntimeWorkflowTestScopeEntityFrameworkCoreOptions options => options.RecoveryContinuationSigningKey,
+                RuntimeOperationalStateEntityFrameworkCoreOptions options => options.RecoveryContinuationSigningKey,
                 _ => null
             })
             .Where(key => !string.IsNullOrWhiteSpace(key))
@@ -54,8 +55,9 @@ internal static class BookmarkStateEfContextRegistration
         params Func<ServiceDescriptor, bool>?[] owners)
     {
         var contextRegistrations = ContextRegistrations(services, provider);
+        var operationalBackend = RuntimeOperationalStateStoreBackend.Find(services);
         if (contextRegistrations.Count > 0 &&
-            (owners.Length == 0 || contextRegistrations.Any(descriptor => !owners.Any(predicate => predicate?.Invoke(descriptor) == true))))
+            (owners.Length == 0 || contextRegistrations.Any(descriptor => !owners.Any(predicate => predicate?.Invoke(descriptor) == true) && operationalBackend?.Owns(descriptor) != true)))
             throw new InvalidOperationException(
                 $"A {contextRegistrations.First().ServiceType.Name} registration already exists; {owner} EF persistence refuses to reuse or replace an unowned context.");
     }
@@ -163,6 +165,15 @@ internal static class BookmarkStateEfContextRegistration
             connectionName,
             defaultConnectionString,
             "Runtime test scopes");
+        EnsureCompatible(
+            services.Select(x => x.ImplementationInstance)
+                .OfType<RuntimeOperationalStateEntityFrameworkCoreOptions>()
+                .SingleOrDefault(),
+            provider,
+            connectionString,
+            connectionName,
+            defaultConnectionString,
+            "Runtime operational state");
     }
 
     private static void EnsureCompatible<TOptions>(
@@ -191,6 +202,8 @@ internal static class BookmarkStateEfContextRegistration
                 (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeWorkflowAlterationEfModule.DefaultSqliteConnectionString),
             RuntimeWorkflowTestScopeEntityFrameworkCoreOptions options =>
                 (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeWorkflowTestScopeEfModule.DefaultSqliteConnectionString),
+            RuntimeOperationalStateEntityFrameworkCoreOptions options =>
+                (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeOperationalStateEfModule.DefaultSqliteConnectionString),
             _ => throw new InvalidOperationException("Unknown Runtime EF context options.")
         };
 

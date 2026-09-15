@@ -54,13 +54,15 @@ public static class RuntimeWorkflowAlterationEntityFrameworkCoreRegistration
                 EnsureOnlyCoreAlterationRegistration(services);
 
             var scopeBackend = WorkflowTestScopeStoreBackend.Find(services);
+            var operationalBackend = RuntimeOperationalStateStoreBackend.Find(services);
             var owners = new Func<ServiceDescriptor, bool>?[]
             {
                 RuntimeArtifactStoreBackend.Find(services) is { } artifactBackend ? artifactBackend.Owns : null,
                 RuntimeActivityExecutionStoreBackend.Find(services) is { } activityBackend ? activityBackend.Owns : null,
                 BookmarkStateStoreBackend.Find(services) is { } bookmarkBackend ? bookmarkBackend.Owns : null,
                 WorkflowExecutionStateStoreBackend.Find(services) is { } executionBackend ? executionBackend.Owns : null,
-                scopeBackend is { } testScopeBackend ? testScopeBackend.Owns : null
+                scopeBackend is { } testScopeBackend ? testScopeBackend.Owns : null,
+                operationalBackend?.Name == RuntimeOperationalStateStoreBackend.EntityFramework ? operationalBackend.Owns : null
             };
             BookmarkStateEfContextRegistration.EnsureRecoveryContinuationSigningKeyCompatible(services, options.RecoveryContinuationSigningKey, "Runtime alterations");
             BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, RuntimeWorkflowAlterationEfModule.DefaultSqliteConnectionString);
@@ -93,6 +95,8 @@ public static class RuntimeWorkflowAlterationEntityFrameworkCoreRegistration
                 owned.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(execution.Owns));
             else if (scope?.Name == WorkflowTestScopeStoreBackend.EntityFramework)
                 owned.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(scope.Owns));
+            else if (operationalBackend?.Name == RuntimeOperationalStateStoreBackend.EntityFramework)
+                owned.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(operationalBackend.Owns));
             else
                 owned.AddRange(AddContext(services, options, provider));
 
