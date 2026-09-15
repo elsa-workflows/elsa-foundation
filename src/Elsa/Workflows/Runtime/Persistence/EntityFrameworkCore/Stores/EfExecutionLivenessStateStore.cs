@@ -432,7 +432,7 @@ public sealed class EfExecutionLivenessStateStore(
         return tracking ? await query.SingleOrDefaultAsync(cancellationToken) : await query.AsNoTracking().SingleOrDefaultAsync(cancellationToken);
     }
 
-    private static ExecutionLivenessStateEntity ToEntity(ExecutionLivenessState state, string scope, long revision)
+    internal static ExecutionLivenessStateEntity ToEntity(ExecutionLivenessState state, string scope, long revision)
     {
         var lease = state.ExecutionLease;
         var heartbeat = state.Heartbeat;
@@ -454,7 +454,7 @@ public sealed class EfExecutionLivenessStateStore(
         };
     }
 
-    private static void Copy(ExecutionLivenessStateEntity row, ExecutionLivenessState state, string scope, long revision)
+    internal static void Copy(ExecutionLivenessStateEntity row, ExecutionLivenessState state, string scope, long revision)
     {
         var replacement = ToEntity(state, scope, revision);
         row.Id = replacement.Id; row.ScopeKey = replacement.ScopeKey; row.ScopeKeyHash = replacement.ScopeKeyHash;

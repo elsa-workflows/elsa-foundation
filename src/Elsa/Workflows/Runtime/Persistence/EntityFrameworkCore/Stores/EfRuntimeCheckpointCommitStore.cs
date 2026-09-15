@@ -128,6 +128,10 @@ public sealed class EfRuntimeCheckpointCommitStore(
                     await EfRuntimeCheckpointParticipantStaging.StageDurableValueAsync(
                         context, durableValue, scope, writeCancellationToken);
 
+                foreach (var operational in commit.StateChanges.Operational)
+                    await EfRuntimeCheckpointParticipantStaging.StageOperationalAsync(
+                        context, operational, scope, writeCancellationToken);
+
                 await EfRuntimeCheckpointDispatchParticipantStaging.StageAsync(
                     context,
                     commit,
@@ -212,6 +216,14 @@ public sealed class EfRuntimeCheckpointCommitStore(
             RequireWorkflow(change.State.WorkflowExecutionId, commit.WorkflowExecutionId, "durable value");
         }
 
+        foreach (var change in commit.StateChanges.Operational)
+        {
+            if (change.Operation is not (RuntimeStateChangeOperation.Upsert or RuntimeStateChangeOperation.Append or RuntimeStateChangeOperation.Delete))
+                throw new InvalidOperationException("The EF checkpoint writer supports operational-state upsert, append, and delete only.");
+            RequireId(change.StateId, change.State.OperationalStateId, "operational state");
+            RequireWorkflow(change.State.WorkflowExecutionId, commit.WorkflowExecutionId, "operational state");
+        }
+
         var seenDispatches = new Dictionary<string, WorkflowDispatchRecord>(StringComparer.Ordinal);
         foreach (var change in commit.StateChanges.WorkflowDispatches)
         {
@@ -288,12 +300,11 @@ public sealed class EfRuntimeCheckpointCommitStore(
             changes.ActivityExecutionInspections.Count > 0 ||
             changes.Bookmarks.Count > 0 ||
             changes.Incidents.Count > 0 ||
-            changes.Operational.Count > 0 ||
             changes.ActivityScopeCleanups.Count > 0 ||
             changes.AlterationJobTerminalChange is not null)
         {
             throw new NotSupportedException(
-                "The EF checkpoint slice supports workflow-execution, scheduler, durable values, dispatch, pending outbox, and claimed scheduler-work consume only; remaining participants must be staged by the complete checkpoint writer before this adapter is enabled for those runtime commits.");
+                "The EF checkpoint slice supports workflow-execution, scheduler, durable values, operational state, dispatch, pending outbox, and claimed scheduler-work consume only; remaining participants must be staged by the complete checkpoint writer before this adapter is enabled for those runtime commits.");
         }
 
         if (commit.PostCommitIntents.Count > 0)

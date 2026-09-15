@@ -468,6 +468,76 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
+    public async Task Operational_append_and_delete_are_marker_atomic_restartable_and_replay_safe()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open("tenant-a");
+        var access = new FixedAccessor("tenant-a");
+        var state = new ExecutionLivenessState("operational-checkpoint", "workflow-a", null, null, null, null);
+        var append = WithOperational("commit-operational-append", state, RuntimeStateChangeOperation.Append);
+        var delete = WithOperational("commit-operational-delete", state, RuntimeStateChangeOperation.Delete);
+        var store = new EfRuntimeCheckpointCommitStore(context, access);
+
+        await store.CommitAsync(append, Decision());
+        await store.CommitAsync(append, Decision());
+        Assert.Equal(1, (await context.ExecutionLivenessStates.SingleAsync()).Revision);
+        await store.CommitAsync(delete, Decision());
+        await store.CommitAsync(delete, Decision());
+        Assert.Empty(await context.ExecutionLivenessStates.ToArrayAsync());
+
+        await using var restarted = database.Open("tenant-a");
+        await new EfRuntimeCheckpointCommitStore(restarted, access).CommitAsync(append, Decision());
+        await new EfRuntimeCheckpointCommitStore(restarted, access).CommitAsync(delete, Decision());
+        Assert.Equal(2, await restarted.RuntimeCheckpointCommits.CountAsync());
+        Assert.Empty(await restarted.ExecutionLivenessStates.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Operational_ownership_update_joins_fence_validation_and_marker_in_one_revision_cas()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open("tenant-a");
+        var now = OccurredAt;
+        var access = new FixedAccessor("tenant-a");
+        var lease = new RuntimeExecutionLease("lease-operational", "workflow-a", "owner-a",
+            now, now.AddMinutes(5), 1);
+        var state = new ExecutionLivenessState("ownership:workflow-a", "workflow-a", lease, null, null, null);
+        await new EfExecutionLivenessStateStore(context, access, new NoopContinuationCodec()).SaveAsync(state);
+        var commit = WithOperational("commit-operational-fenced", state, RuntimeStateChangeOperation.Upsert) with
+        {
+            ExpectedFence = lease.ToFence()
+        };
+
+        await new EfRuntimeCheckpointCommitStore(context, access, new FixedTimeProvider(now))
+            .CommitAsync(commit, Decision());
+        Assert.Equal(3, (await context.ExecutionLivenessStates.SingleAsync()).Revision);
+        Assert.Single(await context.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Marker_failure_restores_operational_revision_and_detaches_failed_write()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var interceptor = new FailMarkerInsertInterceptor();
+        await using (var context = database.Open("tenant-a", interceptor))
+        {
+            var access = new FixedAccessor("tenant-a");
+            var state = new ExecutionLivenessState("operational-rollback", "workflow-a", null, null, null, null);
+            await new EfExecutionLivenessStateStore(context, access, new NoopContinuationCodec()).SaveAsync(state);
+            interceptor.Arm();
+            await Assert.ThrowsAsync<DbUpdateException>(() =>
+                new EfRuntimeCheckpointCommitStore(context, access)
+                    .CommitAsync(WithOperational("commit-operational-rollback", state,
+                        RuntimeStateChangeOperation.Upsert), Decision()).AsTask());
+            Assert.Empty(context.ChangeTracker.Entries());
+        }
+
+        await using var restarted = database.Open("tenant-a");
+        Assert.Equal(1, (await restarted.ExecutionLivenessStates.SingleAsync()).Revision);
+        Assert.Empty(await restarted.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
     public async Task Marker_failure_rolls_back_previously_saved_outbox_and_does_not_leak_tracker_state()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -847,6 +917,18 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         DurableValueLifecycle.Result, DurableValueStorage.Inline,
         JsonDocument.Parse(JsonSerializer.Serialize(value)).RootElement,
         null, null, OccurredAt, new Dictionary<string, string>());
+
+    private static RuntimeCheckpointCommit WithOperational(
+        string commitId, ExecutionLivenessState state, RuntimeStateChangeOperation operation)
+    {
+        var commit = Commit(commitId);
+        return commit with
+        {
+            StateChanges = new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [],
+                [new RuntimeStateChange<ExecutionLivenessState>(
+                    state.OperationalStateId, operation, state, new Dictionary<string, string>())])
+        };
+    }
 
     private static WorkflowExecutionState Execution(string id, string tenantId) => new(
         id,

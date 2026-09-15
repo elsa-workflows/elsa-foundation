@@ -137,6 +137,51 @@ internal static class EfRuntimeCheckpointParticipantStaging
         EfDurableValueStateStore.Copy(row, state, scope, checked(row.Revision + 1));
     }
 
+    /// <summary>Stages execution-liveness state without committing or clearing sibling checkpoint writes.</summary>
+    public static async ValueTask StageOperationalAsync(
+        BookmarkStateDbContext context,
+        RuntimeStateChange<ExecutionLivenessState> change,
+        string scope,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(change);
+        ArgumentException.ThrowIfNullOrWhiteSpace(scope);
+        EfRuntimeOperationalStoreSupport.ValidateIdentity(change.State.WorkflowExecutionId, nameof(change.State.WorkflowExecutionId));
+        EfRuntimeOperationalStoreSupport.ValidateIdentity(change.State.OperationalStateId, nameof(change.State.OperationalStateId));
+        cancellationToken.ThrowIfCancellationRequested();
+        if (context.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("Operational checkpoint changes require a caller-owned EF transaction.");
+
+        var state = change.State;
+        var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, state.WorkflowExecutionId, state.OperationalStateId);
+        // Read by immutable physical identity, then validate every projection; filtering a corrupt projection here
+        // would turn a drifted persisted row into an incorrect insert or silent delete miss.
+        var row = await context.ExecutionLivenessStates.SingleOrDefaultAsync(candidate => candidate.Id == id,
+            cancellationToken);
+        if (row is null)
+        {
+            if (change.Operation != RuntimeStateChangeOperation.Delete)
+                context.ExecutionLivenessStates.Add(EfExecutionLivenessStateStore.ToEntity(state, scope, 1));
+            return;
+        }
+
+        _ = EfExecutionLivenessStateStore.Read(row, scope, state.WorkflowExecutionId, state.OperationalStateId);
+        switch (change.Operation)
+        {
+            case RuntimeStateChangeOperation.Delete:
+                context.ExecutionLivenessStates.Remove(row);
+                break;
+            case RuntimeStateChangeOperation.Append:
+                throw new InvalidOperationException($"Operational state '{state.OperationalStateId}' already exists for create-only append.");
+            case RuntimeStateChangeOperation.Upsert:
+                EfExecutionLivenessStateStore.Copy(row, state, scope, checked(row.Revision + 1));
+                break;
+            default:
+                throw new InvalidOperationException($"Unsupported operational state change '{change.Operation}'.");
+        }
+    }
+
     /// <summary>
     /// Consumes one claimed scheduler-work item inside the caller-owned transaction.
     /// </summary>
