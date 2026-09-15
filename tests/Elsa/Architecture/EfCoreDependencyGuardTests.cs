@@ -163,6 +163,24 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     [Fact]
+    public void Every_admitted_Publishing_snapshot_review_project_resolves_only_its_reviewed_EF_closure()
+    {
+        var offenders = Adr0073PublishingSnapshotReviewEf.ExpectedEfPackagesByProject
+            .SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
+            {
+                var resolved = ReadProjectEfPackages(project.Key, configuration);
+                return FindUnexpectedEfPackages(resolved, project.Value)
+                    .Select(package => $"{project.Key} ({configuration}) unexpectedly resolves {package}")
+                    .Concat(FindUnexpectedEfPackages(project.Value, resolved)
+                        .Select(package => $"{project.Key} ({configuration}) no longer resolves reviewed package {package}"));
+            }))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        Assert.True(offenders.Length == 0, Report("drift from the reviewed Publishing snapshot-review EF closure", offenders));
+    }
+
+    [Fact]
     public void Every_admitted_Structured_Logs_project_resolves_only_its_reviewed_EF_closure()
     {
         var offenders = Adr0073StructuredLogsEf.ExpectedEfPackagesByProject
@@ -454,7 +472,8 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0073IdentityEf.IsProjectPath(relativePath) ||
                     Adr0073RuntimePlacementEf.IsProjectPath(relativePath) ||
                     Adr0073RuntimeBookmarksEf.IsProjectPath(relativePath) ||
-                    Adr0073DashboardRunHealthEf.IsProjectPath(relativePath)));
+                    Adr0073DashboardRunHealthEf.IsProjectPath(relativePath) ||
+                    Adr0073PublishingSnapshotReviewEf.IsProjectPath(relativePath)));
         }
         return projects;
     }
@@ -595,6 +614,7 @@ public sealed class EfCoreDependencyGuardTests
                Adr0073RuntimePlacementEf.IsSurfacePath(relativePath) ||
                Adr0073RuntimeBookmarksEf.IsSurfacePath(relativePath) ||
                Adr0073DashboardRunHealthEf.IsSurfacePath(relativePath) ||
+               Adr0073PublishingSnapshotReviewEf.IsSurfacePath(relativePath) ||
                OpenIddictPersistenceArchitectureTests.IsWorkbenchVendorEfSource(relativePath);
     }
 
@@ -846,6 +866,40 @@ public sealed class EfCoreDependencyGuardTests
 
         public static bool IsSurfacePath(string relativePath) => relativePath.StartsWith(Prefix, StringComparison.Ordinal);
         public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
+    }
+
+    /// <summary>ADR 0073's opt-in Publishing P04 single-use snapshot-review authority.</summary>
+    internal static class Adr0073PublishingSnapshotReviewEf
+    {
+        private const string Source = "src/Elsa/Workflows/Publishing/Persistence/EntityFrameworkCore/";
+        private const string Tests = "tests/Elsa/Workflows/Publishing/Persistence/EntityFrameworkCore/";
+        private static string[] CorePackages() =>
+        [
+            "Microsoft.EntityFrameworkCore",
+            "Microsoft.EntityFrameworkCore.Abstractions",
+            "Microsoft.EntityFrameworkCore.Analyzers",
+            "Microsoft.EntityFrameworkCore.Relational"
+        ];
+
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                [Source + "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                [Tests + "Tests/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                [
+                    .. CorePackages(),
+                    "Microsoft.EntityFrameworkCore.SqlServer",
+                    "Microsoft.EntityFrameworkCore.Sqlite",
+                    "Microsoft.EntityFrameworkCore.Sqlite.Core",
+                    "MySql.EntityFrameworkCore",
+                    "Npgsql.EntityFrameworkCore.PostgreSQL"
+                ]
+            };
+
+        public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
+        public static bool IsSurfacePath(string relativePath) =>
+            relativePath.StartsWith(Source, StringComparison.Ordinal) ||
+            relativePath.StartsWith(Tests, StringComparison.Ordinal);
     }
 
     /// <summary>
