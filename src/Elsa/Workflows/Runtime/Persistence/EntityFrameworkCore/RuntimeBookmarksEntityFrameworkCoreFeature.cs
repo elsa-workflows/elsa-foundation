@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
     name: "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence",
     DisplayName = "Workflows Runtime EF Core Bookmark Persistence",
     Description = "Opt-in EF Core persistence for runtime bookmark state and stimulus lookup. Groundwork remains the default.",
-    DependsOn = new object[] { "WorkflowsRuntime" })]
+    DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
 public class RuntimeBookmarksEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(

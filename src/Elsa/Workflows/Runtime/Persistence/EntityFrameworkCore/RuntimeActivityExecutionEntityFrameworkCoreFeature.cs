@@ -16,7 +16,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
     name: "WorkflowsRuntimeActivityExecutionEntityFrameworkCorePersistence",
     DisplayName = "Workflows Runtime EF Core Activity Execution Persistence",
     Description = "Opt-in EF Core persistence for activity execution state, inspection and hierarchy. Groundwork remains the default.",
-    DependsOn = new object[] { "WorkflowsRuntime" })]
+    DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
 public class RuntimeActivityExecutionEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(DisplayName = "Provider", Description = "Relational provider for the Runtime activity execution DbContext: Sqlite, SqlServer, PostgreSql, or MySql.", Category = "Persistence")]
