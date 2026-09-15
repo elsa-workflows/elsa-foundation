@@ -222,7 +222,7 @@ internal static class RuntimeOperationalStateProviderSmoke
                 Checkpoint = cleanupCommit.Checkpoint with { OccurredAt = futureAt },
                 StateChanges = new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], [],
                     null, null, null,
-                    [new ActivityScopeCleanupRequest("workflow-a", "scope-cleanup", [],
+                    [new ActivityScopeCleanupRequest("workflow-a", "scope-cleanup", ["scope-cleanup"],
                         [cleanupBookmarkId], [cleanupTimerId], [cleanupWorkId])], null)
             };
             await checkpointStore.CommitAsync(cleanupCommit, new(RuntimeCheckpointPersistenceMode.Immediate));

@@ -124,6 +124,10 @@ public sealed class EfRuntimeCheckpointCommitStore(
                         writeCancellationToken);
                 }
 
+                foreach (var activity in commit.StateChanges.ActivityExecutions)
+                    await EfRuntimeCheckpointActivityExecutionParticipantStaging.StageActivityExecutionAsync(
+                        context, activity, scope, commit.WorkflowExecutionId, writeCancellationToken);
+
                 foreach (var bookmark in commit.StateChanges.Bookmarks)
                     await EfRuntimeCheckpointParticipantStaging.StageBookmarkAsync(
                         context, bookmark, scope, writeCancellationToken);
@@ -208,6 +212,18 @@ public sealed class EfRuntimeCheckpointCommitStore(
             RequireWorkflow(scheduler.State.WorkflowExecutionId, commit.WorkflowExecutionId, "scheduler");
         }
 
+        foreach (var change in commit.StateChanges.ActivityExecutions)
+        {
+            RequireOperation(change, RuntimeStateChangeOperation.Upsert, "activity execution");
+            RequireId(change.StateId, change.State.Execution.ActivityExecutionId, "activity execution");
+            RequireWorkflow(change.State.Execution.WorkflowExecutionId, commit.WorkflowExecutionId, "activity execution");
+            change.State.EnsureValueFlowCompatible();
+            change.State.EnsureSupersessionCompatible();
+            if (!StringComparer.Ordinal.Equals(change.State.ExecutionScopeId, change.State.Provenance.ExecutionScopeId) ||
+                change.State.Attempt != change.State.Provenance.Attempt)
+                throw new InvalidOperationException("Activity execution scope and attempt must match scheduling provenance.");
+        }
+
         foreach (var change in commit.StateChanges.PostCommitOutbox)
         {
             RequireOperation(change, RuntimeStateChangeOperation.Upsert, "post-commit outbox");
@@ -244,6 +260,8 @@ public sealed class EfRuntimeCheckpointCommitStore(
         {
             RequireWorkflow(cleanup.WorkflowExecutionId, commit.WorkflowExecutionId, "activity-scope cleanup");
             ArgumentException.ThrowIfNullOrWhiteSpace(cleanup.ExecutionScopeId);
+            if (!cleanup.ActivityExecutionIds.Contains(cleanup.ExecutionScopeId, StringComparer.Ordinal))
+                throw new InvalidOperationException("Activity scope cleanup must include its outer execution scope.");
             foreach (var bookmarkId in cleanup.BookmarkIds)
             {
                 ArgumentException.ThrowIfNullOrWhiteSpace(bookmarkId);
@@ -334,13 +352,12 @@ public sealed class EfRuntimeCheckpointCommitStore(
         if (changes.Scheduler is { Operation: not RuntimeStateChangeOperation.Upsert })
             throw new NotSupportedException("The R19 EF checkpoint slice supports scheduler upserts only.");
 
-        if (changes.ActivityExecutions.Count > 0 ||
-            changes.ActivityExecutionInspections.Count > 0 ||
+        if (changes.ActivityExecutionInspections.Count > 0 ||
             changes.Incidents.Count > 0 ||
             changes.AlterationJobTerminalChange is not null)
         {
             throw new NotSupportedException(
-                "The EF checkpoint slice supports workflow-execution, scheduler, bookmarks, durable values, scope cleanup, operational state, dispatch, pending outbox, and claimed scheduler-work consume only; remaining participants must be staged by the complete checkpoint writer before this adapter is enabled for those runtime commits.");
+                "The EF checkpoint slice supports workflow-execution, scheduler, activity execution, bookmarks, durable values, scope cleanup, operational state, dispatch, pending outbox, and claimed scheduler-work consume only; remaining participants must be staged by the complete checkpoint writer before this adapter is enabled for those runtime commits.");
         }
 
         if (commit.PostCommitIntents.Count > 0)

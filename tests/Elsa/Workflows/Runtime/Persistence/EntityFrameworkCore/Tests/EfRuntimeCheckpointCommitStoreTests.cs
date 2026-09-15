@@ -653,6 +653,63 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
+    public async Task Activity_execution_upsert_and_bookmark_commit_once_with_the_checkpoint_marker()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var commit = WithActivityExecution("commit-activity", CheckpointActivity("activity-a"),
+            CheckpointBookmark("bookmark-activity", "activity"));
+        await using var context = database.Open("tenant-a");
+        var store = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"));
+        await store.CommitAsync(commit, Decision());
+        await store.CommitAsync(commit, Decision());
+        Assert.Single(await context.ActivityExecutionStates.ToArrayAsync());
+        Assert.Single(await context.Bookmarks.ToArrayAsync());
+        Assert.Single(await context.RuntimeCheckpointCommits.ToArrayAsync());
+        Assert.True((await context.ActivityExecutionStates.SingleAsync()).Revision > 0);
+    }
+
+    [Fact]
+    public async Task Marker_failure_rolls_back_activity_execution_and_allows_a_clean_retry()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var commit = WithActivityExecution("commit-activity-rollback", CheckpointActivity("activity-rollback"));
+        var interceptor = new FailMarkerInsertInterceptor();
+        await using (var context = database.Open("tenant-a", interceptor))
+        {
+            interceptor.Arm();
+            await Assert.ThrowsAsync<DbUpdateException>(() =>
+                new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"))
+                    .CommitAsync(commit, Decision()).AsTask());
+            Assert.Empty(context.ChangeTracker.Entries());
+        }
+
+        await using var restarted = database.Open("tenant-a");
+        Assert.Empty(await restarted.ActivityExecutionStates.ToArrayAsync());
+        Assert.Empty(await restarted.RuntimeCheckpointCommits.ToArrayAsync());
+        await new EfRuntimeCheckpointCommitStore(restarted, new FixedAccessor("tenant-a"))
+            .CommitAsync(commit, Decision());
+        Assert.Single(await restarted.ActivityExecutionStates.ToArrayAsync());
+        Assert.Single(await restarted.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Unsupported_activity_append_and_incomplete_scope_cleanup_fail_before_provider_io()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var capture = new CommandCaptureInterceptor();
+        await using var context = database.Open("tenant-a", capture);
+        var store = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.CommitAsync(WithActivityExecution("commit-activity-append",
+                CheckpointActivity("activity-append"), operation: RuntimeStateChangeOperation.Append),
+                Decision()).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.CommitAsync(WithScopeCleanup("commit-incomplete-cleanup", []), Decision()).AsTask());
+        Assert.Empty(capture.Commands);
+    }
+
+    [Fact]
     public async Task Marker_failure_restores_all_scope_cleanup_resources_and_excludes_a_hidden_second_attempt()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -1090,17 +1147,40 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         };
     }
 
-    private static RuntimeCheckpointCommit WithScopeCleanup(string commitId)
+    private static RuntimeCheckpointCommit WithScopeCleanup(string commitId, string[]? executionIds = null)
     {
         var commit = Commit(commitId);
         return commit with
         {
             StateChanges = new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], [],
                 null, null, null,
-                [new ActivityScopeCleanupRequest("workflow-a", "scope-a", [],
+                [new ActivityScopeCleanupRequest("workflow-a", "scope-a", executionIds ?? ["scope-a"],
                     ["bookmark-cleanup"], ["timer-cleanup"], ["work-cleanup"])], null)
         };
     }
+
+    private static RuntimeCheckpointCommit WithActivityExecution(
+        string commitId, ActivityExecutionState state, BookmarkState? bookmark = null,
+        RuntimeStateChangeOperation operation = RuntimeStateChangeOperation.Upsert)
+    {
+        var commit = Commit(commitId);
+        return commit with
+        {
+            StateChanges = new RuntimeCheckpointStateChangeSet(null, null,
+                [new RuntimeStateChange<ActivityExecutionState>(state.Execution.ActivityExecutionId,
+                    operation, state, new Dictionary<string, string>())],
+                bookmark is null ? [] : [new RuntimeStateChange<BookmarkState>(bookmark.BookmarkId,
+                    RuntimeStateChangeOperation.Upsert, bookmark, new Dictionary<string, string>())],
+                [], [], [])
+        };
+    }
+
+    private static ActivityExecutionState CheckpointActivity(string id) => new(
+        new ActivityExecution(id, "workflow-a", $"node-{id}", $"authored-{id}", "Test.Activity", "1"),
+        ActivityExecutionStatus.Completed, null, 1,
+        OccurredAt, OccurredAt, OccurredAt, null, null, null, null,
+        ActivitySchedulingProvenance.From("workflow-a", null, null, null, null, null, null, "checkpoint"),
+        null, [], [], 0, 0, new Dictionary<string, string>());
 
     private static async Task SeedCleanupResourcesAsync(
         BookmarkStateDbContext context, FixedAccessor access)
