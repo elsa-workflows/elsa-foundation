@@ -1297,6 +1297,61 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Projection_refuses_same_definition_identity_across_privileged_scopes()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        db.Definitions.AddRange(
+            new WorkflowDefinition { Id = "shared", TenantId = "tenant-a" },
+            new WorkflowDefinition { Id = "shared", TenantId = "tenant-b" });
+        db.Drafts.AddRange(
+            new WorkflowDefinitionDraft { Id = "draft-a", TenantId = "tenant-a", WorkflowDefinitionId = "shared", StateSource = "{}" },
+            new WorkflowDefinitionDraft { Id = "draft-b", TenantId = "tenant-b", WorkflowDefinitionId = "shared", StateSource = "{}" });
+        db.Versions.AddRange(
+            new WorkflowDefinitionVersion("shared", "1.0.0") { Id = "version-a", TenantId = "tenant-a" },
+            new WorkflowDefinitionVersion("shared", "2.0.0") { Id = "version-b", TenantId = "tenant-b" });
+        await db.SaveChangesAsync();
+
+        var access = new TestAccessor(
+            PersistenceAccessContext.PrivilegedAcrossScopes(
+                new PersistenceAccessPurpose("projection-scope-integrity")));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new EfWorkflowDefinitionListProjectionStore(db, access)
+                .ListByDefinitionIdsAsync(["shared"]));
+    }
+
+    [Fact]
+    public async Task Projection_preserves_unique_definition_identities_across_privileged_scopes()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        db.Definitions.AddRange(
+            new WorkflowDefinition { Id = "definition-a", TenantId = "tenant-a" },
+            new WorkflowDefinition { Id = "definition-b", TenantId = "tenant-b" });
+        db.Drafts.AddRange(
+            new WorkflowDefinitionDraft { Id = "draft-a", TenantId = "tenant-a", WorkflowDefinitionId = "definition-a", StateSource = "{}" },
+            new WorkflowDefinitionDraft { Id = "draft-b", TenantId = "tenant-b", WorkflowDefinitionId = "definition-b", StateSource = "{}" });
+        db.Versions.AddRange(
+            new WorkflowDefinitionVersion("definition-a", "1.0.0") { Id = "version-a", TenantId = "tenant-a" },
+            new WorkflowDefinitionVersion("definition-b", "2.0.0") { Id = "version-b", TenantId = "tenant-b" });
+        await db.SaveChangesAsync();
+
+        var access = new TestAccessor(
+            PersistenceAccessContext.PrivilegedAcrossScopes(
+                new PersistenceAccessPurpose("projection-scope-integrity")));
+        var projections = await new EfWorkflowDefinitionListProjectionStore(db, access)
+            .ListByDefinitionIdsAsync(["definition-a", "definition-b"]);
+
+        Assert.Equal(["definition-a", "definition-b"], projections.Select(x => x.WorkflowDefinitionId));
+        Assert.Equal(["version-a", "version-b"], projections.Select(x => x.LatestVersionId));
+    }
+
+    [Fact]
     public async Task Draft_current_and_list_use_last_modified_created_and_id_order()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

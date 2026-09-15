@@ -4,6 +4,7 @@ using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using NativeEndpoints;
 
@@ -40,6 +41,14 @@ public sealed class Endpoint(
                 _ => definition.DeletedAt is null
             })
             .ToArray();
+        if (definitions
+            .GroupBy(definition => WorkflowDefinitionIdentity.Fold(definition.Id), StringComparer.Ordinal)
+            .Any(group => group.Skip(1).Any()))
+        {
+            throw new InvalidOperationException(
+                "The workflow-definition list contains the same folded identity in multiple physical persistence scopes.");
+        }
+
         var projections = await projectionStore.ListByDefinitionIdsAsync(
             definitions.Select(definition => definition.Id).ToArray(),
             cancellationToken);

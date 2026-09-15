@@ -39,6 +39,7 @@ public sealed class EfWorkflowDefinitionListProjectionStore(WorkflowsDesignDbCon
             EfDesignSupport.EnsurePhysicalScope(db, candidate, "workflow version projection lookup");
             EfDesignSupport.EnsureDefinitionIdentityInSet(distinct, candidate.DefinitionId, "workflow version projection lookup");
         }
+        EnsureSinglePhysicalScope(drafts, versions);
 
         var latestDrafts = drafts
             .GroupBy(x => EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(x.WorkflowDefinitionId)), StringComparer.Ordinal)
@@ -66,5 +67,33 @@ public sealed class EfWorkflowDefinitionListProjectionStore(WorkflowsDesignDbCon
             var latest = rows?.FirstOrDefault();
             return new WorkflowDefinitionListProjection(id, draft?.Id, latest?.Id, latest?.Version, rows?.Length ?? 0);
         }).ToArray();
+    }
+
+    private static void EnsureSinglePhysicalScope(
+        IEnumerable<WorkflowDefinitionDraft> drafts,
+        IEnumerable<WorkflowDefinitionVersion> versions)
+    {
+        var scopesByDefinition = new Dictionary<string, HashSet<string?>>(StringComparer.Ordinal);
+
+        foreach (var draft in drafts)
+            AddScope(scopesByDefinition, draft.WorkflowDefinitionId, draft.TenantId);
+        foreach (var version in versions)
+            AddScope(scopesByDefinition, version.DefinitionId, version.TenantId);
+
+        var conflict = scopesByDefinition.FirstOrDefault(pair => pair.Value.Count > 1);
+        if (conflict.Key is not null)
+            throw new InvalidOperationException(
+                $"The workflow definition projection lookup returned lifecycle rows for definition identity '{conflict.Key}' from multiple physical persistence scopes.");
+    }
+
+    private static void AddScope(
+        IDictionary<string, HashSet<string?>> scopesByDefinition,
+        string definitionId,
+        string? tenantId)
+    {
+        var identity = EfDesignSupport.SearchKey(definitionId);
+        if (!scopesByDefinition.TryGetValue(identity, out var scopes))
+            scopesByDefinition[identity] = scopes = new HashSet<string?>(StringComparer.Ordinal);
+        scopes.Add(tenantId);
     }
 }
