@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 115
+- Discovered feature classes: 117
 
 ## Features
 
@@ -118,7 +118,9 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | RuntimeActivityExecutionEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore | IShellFeature | [RuntimeActivityExecutionEntityFrameworkCoreFeature.cs](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeActivityExecutionEntityFrameworkCoreFeature.cs) |
 | RuntimeArtifactsEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore | IShellFeature | [RuntimeArtifactsEntityFrameworkCoreFeature.cs](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeArtifactsEntityFrameworkCoreFeature.cs) |
 | RuntimeBookmarksEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore | IShellFeature | [RuntimeBookmarksEntityFrameworkCoreFeature.cs](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeBookmarksEntityFrameworkCoreFeature.cs) |
+| RuntimeWorkflowAlterationEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore | IShellFeature | [RuntimeWorkflowAlterationEntityFrameworkCoreFeature.cs](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeWorkflowAlterationEntityFrameworkCoreFeature.cs) |
 | RuntimeWorkflowExecutionEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore | IShellFeature | [RuntimeWorkflowExecutionEntityFrameworkCoreFeature.cs](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeWorkflowExecutionEntityFrameworkCoreFeature.cs) |
+| RuntimeWorkflowTestScopeEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore | IShellFeature | [RuntimeWorkflowTestScopeEntityFrameworkCoreFeature.cs](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeWorkflowTestScopeEntityFrameworkCoreFeature.cs) |
 | WorkflowsArtifactReconciliationFeature | direct IShellFeature | Elsa.Workflows.Runtime.Reconciliation | IShellFeature | [WorkflowsArtifactReconciliationFeature.cs](../../src/Elsa/Workflows/Runtime/Reconciliation/WorkflowsArtifactReconciliationFeature.cs) |
 | WorkflowsRuntimeReferenceGarbageCollectionFeature | direct IShellFeature | Elsa.Workflows.Runtime.ReferenceGarbageCollection | IShellFeature | [WorkflowsRuntimeReferenceGarbageCollectionFeature.cs](../../src/Elsa/Workflows/Runtime/ReferenceGarbageCollection/WorkflowsRuntimeReferenceGarbageCollectionFeature.cs) |
 | WorkflowsRuntimeResumptionFeature | direct IShellFeature | Elsa.Workflows.Runtime.Resumption | IShellFeature | [WorkflowsRuntimeResumptionFeature.cs](../../src/Elsa/Workflows/Runtime/Resumption/WorkflowsRuntimeResumptionFeature.cs) |

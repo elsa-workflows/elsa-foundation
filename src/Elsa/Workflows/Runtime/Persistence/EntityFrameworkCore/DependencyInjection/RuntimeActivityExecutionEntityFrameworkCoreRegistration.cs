@@ -49,7 +49,14 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
             var workflowBackend = WorkflowExecutionStateStoreBackend.Find(services);
             if (workflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework)
                 workflowBackend.EnsureOwnsRegisteredContract(services);
+            var alterationBackend = RuntimeWorkflowAlterationStoreBackend.Find(services);
+            if (alterationBackend?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework)
+                alterationBackend.EnsureOwnsRegisteredContracts(services);
+            var scopeBackend = WorkflowTestScopeStoreBackend.Find(services);
+            if (scopeBackend?.Name == WorkflowTestScopeStoreBackend.EntityFramework)
+                scopeBackend.EnsureOwnsRegisteredContracts(services);
 
+            BookmarkStateEfContextRegistration.EnsureRecoveryContinuationSigningKeyCompatible(services, options.RecoveryContinuationSigningKey, "Runtime activity executions");
             BookmarkStateEfContextRegistration.EnsureCompatible(
                 services,
                 provider,
@@ -59,6 +66,8 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
             EnsureContext(services, provider, bookmarksBackend?.Name == BookmarkStateStoreBackend.EntityFramework ? bookmarksBackend.Owns : null,
                 artifactsBackend?.Name == RuntimeArtifactStoreBackend.EntityFramework ? artifactsBackend.Owns : null,
                 workflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework ? workflowBackend.Owns : null,
+                alterationBackend?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework ? alterationBackend.Owns : null,
+                scopeBackend?.Name == WorkflowTestScopeStoreBackend.EntityFramework ? scopeBackend.Owns : null,
                 "Runtime activity executions");
             var commitExistingRemoval = existingBackend?.PrepareRemoveOwnedArtifacts(services);
 
@@ -99,6 +108,10 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
                 ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(artifactsBackend!.Owns));
             else if (workflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework)
                 ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(workflowBackend.Owns));
+            else if (alterationBackend?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework)
+                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(alterationBackend.Owns));
+            else if (scopeBackend?.Name == WorkflowTestScopeStoreBackend.EntityFramework)
+                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(scopeBackend.Owns));
             else
                 ownedInfrastructure.AddRange(AddContext(services, configured, provider));
 
@@ -165,14 +178,18 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
         var bookmarks = BookmarkStateStoreBackend.Find(services);
         var artifacts = RuntimeArtifactStoreBackend.Find(services);
         var workflow = WorkflowExecutionStateStoreBackend.Find(services);
+        var alteration = RuntimeWorkflowAlterationStoreBackend.Find(services);
+        var scope = WorkflowTestScopeStoreBackend.Find(services);
         Func<ServiceDescriptor, bool>? bookmarksOwner = bookmarks is null ? null : bookmarks.Owns;
         Func<ServiceDescriptor, bool>? artifactsOwner = artifacts is null ? null : artifacts.Owns;
         Func<ServiceDescriptor, bool>? workflowOwner = workflow is null ? null : workflow.Owns;
-        BookmarkStateEfContextRegistration.EnsureContextIsAvailable(services, provider, owner, backend.Owns, bookmarksOwner, artifactsOwner, workflowOwner);
+        Func<ServiceDescriptor, bool>? alterationOwner = alteration is null ? null : alteration.Owns;
+        Func<ServiceDescriptor, bool>? scopeOwner = scope is null ? null : scope.Owns;
+        BookmarkStateEfContextRegistration.EnsureContextIsAvailable(services, provider, owner, backend.Owns, bookmarksOwner, artifactsOwner, workflowOwner, alterationOwner, scopeOwner);
     }
 
-    private static void EnsureContext(IServiceCollection services, string provider, Func<ServiceDescriptor, bool>? bookmarksOwner, Func<ServiceDescriptor, bool>? artifactsOwner, Func<ServiceDescriptor, bool>? workflowOwner, string owner) =>
-        BookmarkStateEfContextRegistration.EnsureContextIsAvailable(services, provider, owner, bookmarksOwner, artifactsOwner, workflowOwner);
+    private static void EnsureContext(IServiceCollection services, string provider, Func<ServiceDescriptor, bool>? bookmarksOwner, Func<ServiceDescriptor, bool>? artifactsOwner, Func<ServiceDescriptor, bool>? workflowOwner, Func<ServiceDescriptor, bool>? alterationOwner, Func<ServiceDescriptor, bool>? scopeOwner, string owner) =>
+        BookmarkStateEfContextRegistration.EnsureContextIsAvailable(services, provider, owner, bookmarksOwner, artifactsOwner, workflowOwner, alterationOwner, scopeOwner);
 
     private static IReadOnlyCollection<ServiceDescriptor> AddContext(IServiceCollection services, RuntimeActivityExecutionEntityFrameworkCoreOptions options, string provider)
     {
@@ -217,7 +234,9 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
         foreach (var descriptor in ownedInfrastructure.Where(descriptor =>
                      BookmarkStateStoreBackend.Find(services)?.Owns(descriptor) != true &&
                      RuntimeArtifactStoreBackend.Find(services)?.Owns(descriptor) != true &&
-                     WorkflowExecutionStateStoreBackend.Find(services)?.Owns(descriptor) != true))
+                     WorkflowExecutionStateStoreBackend.Find(services)?.Owns(descriptor) != true &&
+                     RuntimeWorkflowAlterationStoreBackend.Find(services)?.Owns(descriptor) != true &&
+                     WorkflowTestScopeStoreBackend.Find(services)?.Owns(descriptor) != true))
             services.Remove(descriptor);
     }
 }

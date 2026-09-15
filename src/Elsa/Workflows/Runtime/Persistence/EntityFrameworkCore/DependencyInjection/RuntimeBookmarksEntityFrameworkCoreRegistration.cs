@@ -47,6 +47,12 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
                 var siblingWorkflowBackend = WorkflowExecutionStateStoreBackend.Find(services);
                 if (siblingWorkflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework)
                     siblingWorkflowBackend.EnsureOwnsRegisteredContract(services);
+                var siblingAlterationBackend = RuntimeWorkflowAlterationStoreBackend.Find(services);
+                if (siblingAlterationBackend?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework)
+                    siblingAlterationBackend.EnsureOwnsRegisteredContracts(services);
+                var siblingScopeBackend = WorkflowTestScopeStoreBackend.Find(services);
+                if (siblingScopeBackend?.Name == WorkflowTestScopeStoreBackend.EntityFramework)
+                    siblingScopeBackend.EnsureOwnsRegisteredContracts(services);
                 var existingOptions = services
                     .Select(descriptor => descriptor.ImplementationInstance)
                     .OfType<RuntimeBookmarksEntityFrameworkCoreOptions>()
@@ -69,6 +75,12 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
                         : null,
                     siblingWorkflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework
                         ? siblingWorkflowBackend.Owns
+                        : null,
+                    siblingAlterationBackend?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework
+                        ? siblingAlterationBackend.Owns
+                        : null,
+                    siblingScopeBackend?.Name == WorkflowTestScopeStoreBackend.EntityFramework
+                        ? siblingScopeBackend.Owns
                         : null);
                 return services;
             }
@@ -84,6 +96,12 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
             var workflowBackend = WorkflowExecutionStateStoreBackend.Find(services);
             if (workflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework)
                 workflowBackend.EnsureOwnsRegisteredContract(services);
+            var alterationBackend = RuntimeWorkflowAlterationStoreBackend.Find(services);
+            if (alterationBackend?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework)
+                alterationBackend.EnsureOwnsRegisteredContracts(services);
+            var scopeBackend = WorkflowTestScopeStoreBackend.Find(services);
+            if (scopeBackend?.Name == WorkflowTestScopeStoreBackend.EntityFramework)
+                scopeBackend.EnsureOwnsRegisteredContracts(services);
             BookmarkStateEfContextRegistration.EnsureContextIsAvailable(
                 services,
                 provider,
@@ -92,6 +110,12 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
                 activityOwnContext ? activityBackend!.Owns : null,
                 workflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework
                     ? workflowBackend.Owns
+                    : null,
+                alterationBackend?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework
+                    ? alterationBackend.Owns
+                    : null,
+                scopeBackend?.Name == WorkflowTestScopeStoreBackend.EntityFramework
+                    ? scopeBackend.Owns
                     : null);
 
             if (existingBackend is null && BookmarkStateStoreBackend.HasRegisteredContract(services))
@@ -115,7 +139,13 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
             if (!artifactsOwnContext && !activityOwnContext && workflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework)
                 ownedArtifacts.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
                     .Where(workflowBackend.Owns));
-            if (!artifactsOwnContext && !activityOwnContext && workflowBackend?.Name != WorkflowExecutionStateStoreBackend.EntityFramework)
+            if (!artifactsOwnContext && !activityOwnContext && workflowBackend?.Name != WorkflowExecutionStateStoreBackend.EntityFramework && alterationBackend?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework)
+                ownedArtifacts.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
+                    .Where(alterationBackend.Owns));
+            if (!artifactsOwnContext && !activityOwnContext && workflowBackend?.Name != WorkflowExecutionStateStoreBackend.EntityFramework && alterationBackend?.Name != RuntimeWorkflowAlterationStoreBackend.EntityFramework && scopeBackend?.Name == WorkflowTestScopeStoreBackend.EntityFramework)
+                ownedArtifacts.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
+                    .Where(scopeBackend.Owns));
+            if (!artifactsOwnContext && !activityOwnContext && workflowBackend?.Name != WorkflowExecutionStateStoreBackend.EntityFramework && alterationBackend?.Name != RuntimeWorkflowAlterationStoreBackend.EntityFramework && scopeBackend?.Name != WorkflowTestScopeStoreBackend.EntityFramework)
                 switch (provider)
                 {
                     case "sqlite": ownedArtifacts.AddRange(AddContext<BookmarkStateSqliteDbContext>(services, configured, EfRelationalProviderBinding.UseSqlite)); break;
@@ -189,7 +219,9 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
         foreach (var descriptor in ownedArtifacts.Where(descriptor =>
                      RuntimeArtifactStoreBackend.Find(services)?.Owns(descriptor) != true &&
                      RuntimeActivityExecutionStoreBackend.Find(services)?.Owns(descriptor) != true &&
-                     WorkflowExecutionStateStoreBackend.Find(services)?.Owns(descriptor) != true))
+                     WorkflowExecutionStateStoreBackend.Find(services)?.Owns(descriptor) != true &&
+                     RuntimeWorkflowAlterationStoreBackend.Find(services)?.Owns(descriptor) != true &&
+                     WorkflowTestScopeStoreBackend.Find(services)?.Owns(descriptor) != true))
         {
             // Artifact EF may reuse this context and records the same descriptor as a sibling owner.
             // Keep it alive while replacing only the bookmark backend; the artifact backend remains valid.

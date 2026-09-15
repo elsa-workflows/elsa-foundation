@@ -44,6 +44,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         var hadExplicitActivityExecutionContracts = RuntimeActivityExecutionStoreBackend.HasRegisteredContract(services);
         services.ClaimWorkflowTestScopeProvider(typeof(InMemoryWorkflowTestScopeStore), isInMemoryDefault: true);
+        services.ClaimWorkflowAlterationProvider(typeof(InMemoryWorkflowAlterationStore), isInMemoryDefault: true);
         services.AddPersistenceCore();
         services.TryAddScoped<IWorkflowExecutionPartitionAccessor, PersistenceWorkflowExecutionPartitionAccessor>();
 
@@ -215,8 +216,9 @@ public static class RuntimeCoreServiceCollectionExtensions
             serviceProvider.GetRequiredService<InMemoryWorkflowTestScopeStore>());
         services.TryAddSingleton<IWorkflowTestScopeAdmissionStore>(serviceProvider =>
             serviceProvider.GetRequiredService<InMemoryWorkflowTestScopeStore>());
-        services.TryAddSingleton<IWorkflowTestScopeCleanupStore>(serviceProvider =>
-            serviceProvider.GetRequiredService<InMemoryWorkflowTestScopeStore>());
+        if (WorkflowTestScopeStoreBackend.Find(services)?.Name != WorkflowTestScopeStoreBackend.EntityFramework)
+            services.TryAddSingleton<IWorkflowTestScopeCleanupStore>(serviceProvider =>
+                serviceProvider.GetRequiredService<InMemoryWorkflowTestScopeStore>());
         services.TryAddSingleton<IWorkflowDispatchStore, InMemoryWorkflowDispatchStore>();
         services.TryAddSingleton<IWorkflowDispatchQueryStore>(serviceProvider =>
             serviceProvider.GetRequiredService<IWorkflowDispatchStore>() as IWorkflowDispatchQueryStore ??

@@ -53,6 +53,27 @@ public static class GroundworkV2RuntimeRegistration
             if (existingWorkflowExecutionStateBackend is null && services.Any(descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionStateStore) && descriptor.ImplementationType != typeof(Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowExecutionStateStore)))
                 throw new InvalidOperationException("Groundwork runtime refuses to replace an unowned workflow execution state store.");
             var commitExistingWorkflowExecutionRemoval = existingWorkflowExecutionStateBackend?.PrepareRemoveOwnedArtifacts(services);
+            var existingAlterationBackend = RuntimeWorkflowAlterationStoreBackend.Find(services);
+            if (existingAlterationBackend is null)
+                RuntimeWorkflowAlterationStoreBackend.EnsureNoUnownedRegistrations(services);
+            else
+                existingAlterationBackend.EnsureOwnsRegisteredContracts(services);
+            var commitExistingAlterationRemoval = existingAlterationBackend is null || existingAlterationBackend.Name == RuntimeWorkflowAlterationStoreBackend.Groundwork
+                ? null
+                : existingAlterationBackend.PrepareRemoveOwnedArtifacts(services);
+            if (existingAlterationBackend is not null && existingAlterationBackend.Name != RuntimeWorkflowAlterationStoreBackend.Groundwork)
+                services.RemoveAll<WorkflowAlterationProviderRegistration>();
+
+            var existingTestScopeBackend = WorkflowTestScopeStoreBackend.Find(services);
+            if (existingTestScopeBackend is null)
+                WorkflowTestScopeStoreBackend.EnsureNoUnownedRegistrations(services);
+            else
+                existingTestScopeBackend.EnsureOwnsRegisteredContracts(services);
+            var commitExistingTestScopeRemoval = existingTestScopeBackend is null || existingTestScopeBackend.Name == WorkflowTestScopeStoreBackend.Groundwork
+                ? null
+                : existingTestScopeBackend.PrepareRemoveOwnedArtifacts(services);
+            if (existingTestScopeBackend is not null && existingTestScopeBackend.Name != WorkflowTestScopeStoreBackend.Groundwork)
+                services.RemoveAll<WorkflowTestScopeProviderRegistration>();
             var target = BindRuntimeTarget(services, targetName);
             if (existingActivityExecutionBackend is null)
                 RuntimeActivityExecutionStoreBackend.EnsureNoUnownedRegistrations(services);
@@ -80,6 +101,7 @@ public static class GroundworkV2RuntimeRegistration
         // worker, a test harness) still fails activation on a missing key rather than on every recovery sweep.
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateRuntimeRecoveryContinuationCodecStartupTask>());
         services.ClaimWorkflowTestScopeProvider(typeof(GroundworkV2WorkflowTestScopeStore));
+        services.ClaimWorkflowAlterationProvider(typeof(GroundworkV2WorkflowAlterationStore));
 
         RegisterExecutableStore(services, cacheOptions, target);
         var existingBookmarkBackend = BookmarkStateStoreBackend.Find(services);
@@ -137,10 +159,27 @@ public static class GroundworkV2RuntimeRegistration
             collection => GroundworkV2RuntimeUnitWithdrawal.RemoveWorkflowExecutionState(collection, target)));
         ReplaceScoped<GroundworkV2WorkflowAlterationStore>(services, Standard<GroundworkV2WorkflowAlterationStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowAlterationStore));
+        services.RemoveAll<RuntimeWorkflowAlterationStoreBackend>();
+        var groundworkAlterationConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowAlterationStore));
+        var groundworkAlterationContractDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IWorkflowAlterationStore));
+        RuntimeWorkflowAlterationStoreBackend.Register(services, new(
+            RuntimeWorkflowAlterationStoreBackend.Groundwork,
+            [groundworkAlterationConcreteDescriptor, groundworkAlterationContractDescriptor],
+            collection => GroundworkV2RuntimeUnitWithdrawal.RemoveWorkflowAlterations(collection, target)));
         ReplaceScoped<GroundworkV2WorkflowTestScopeStore>(services, Standard<GroundworkV2WorkflowTestScopeStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowTestScopeStore), typeof(IWorkflowTestScopeAdmissionStore));
         ReplaceScoped<GroundworkV2WorkflowTestScopeCleanupStore>(services, Standard<GroundworkV2WorkflowTestScopeCleanupStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowTestScopeCleanupStore));
+        services.RemoveAll<WorkflowTestScopeStoreBackend>();
+        var groundworkTestScopeConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowTestScopeStore));
+        var groundworkTestScopeCleanupDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowTestScopeCleanupStore));
+        var groundworkTestScopeStoreDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeStore));
+        var groundworkTestScopeAdmissionDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeAdmissionStore));
+        var groundworkTestScopeCleanupContractDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeCleanupStore));
+        WorkflowTestScopeStoreBackend.Register(services, new(
+            WorkflowTestScopeStoreBackend.Groundwork,
+            [groundworkTestScopeConcreteDescriptor, groundworkTestScopeCleanupDescriptor, groundworkTestScopeStoreDescriptor, groundworkTestScopeAdmissionDescriptor, groundworkTestScopeCleanupContractDescriptor],
+            collection => GroundworkV2RuntimeUnitWithdrawal.RemoveWorkflowTestScope(collection, target)));
         ReplaceScoped<GroundworkV2DurableValueStateStore>(services, Standard<GroundworkV2DurableValueStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IDurableValueStateStore));
         ReplaceScoped<GroundworkV2SchedulerStateStore>(services, Standard<GroundworkV2SchedulerStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
@@ -199,6 +238,8 @@ public static class GroundworkV2RuntimeRegistration
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2SchedulerDurabilityEvidence>());
         RegisterArtifactBackend(services, target);
         RegisterActivityExecutionBackend(services, target);
+        commitExistingAlterationRemoval?.Invoke(services);
+        commitExistingTestScopeRemoval?.Invoke(services);
         return services;
         }
         catch
@@ -423,6 +464,15 @@ internal static class GroundworkV2RuntimeUnitWithdrawal
         services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.ActivityExecutionInspectionDocumentKind, targetName);
         services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyDocumentKind, targetName);
     }
+
+    public static void RemoveWorkflowAlterations(IServiceCollection services, string? targetName)
+    {
+        services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanDocumentKind, targetName);
+        services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.WorkflowAlterationJobDocumentKind, targetName);
+    }
+
+    public static void RemoveWorkflowTestScope(IServiceCollection services, string? targetName) =>
+        services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind, targetName);
 }
 
 internal sealed class GroundworkV2WorkflowExecutableCacheLoader(IPersistenceOperationScopeFactory operationScopeFactory)
