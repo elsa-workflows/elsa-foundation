@@ -1,4 +1,7 @@
 using System.Text.Json;
+using System.Security.Claims;
+using Elsa.Attention.Core;
+using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -51,6 +54,9 @@ internal static class RuntimeOperationalStateProviderSmoke
             var scheduler = new EfSchedulerStateStore(context, accessor);
             var liveness = new EfExecutionLivenessStateStore(context, accessor, codec);
             var holds = new EfWorkflowHoldStateStore(context, accessor);
+            var executions = new EfWorkflowExecutionStateStore(context, accessor, codec);
+            var incidents = new EfIncidentStateStore(context, accessor);
+            var attention = new EfWorkflowRuntimeAttentionQuery(context, accessor);
             var value = Value("aa", "workflow-a");
             await values.SaveAsync(value);
             await values.SaveAsync(Value("aG", "workflow-a"));
@@ -65,8 +71,20 @@ internal static class RuntimeOperationalStateProviderSmoke
             Assert.Equal(1, (await liveness.FindVersionedAsync("workflow-a", "state-a"))!.Revision);
             Assert.Single(await holds.ListForWorkflowExecutionAsync("workflow-a"));
 
+            await executions.SaveAsync(Execution("workflow-faulted", scope, WorkflowExecutionStatus.Faulted));
+            await executions.SaveAsync(Execution("workflow-blocked", scope, WorkflowExecutionStatus.Running));
+            Assert.True(await incidents.TryAddAsync(Incident("incident-blocking", "workflow-blocked")));
+            var attentionSnapshot = await attention.QueryAsync(new(
+                new AttentionQueryContext(new ClaimsPrincipal(), scope),
+                10));
+            Assert.Equal(2, attentionSnapshot.TotalCount);
+            Assert.Equal(
+                [WorkflowRuntimeAttentionKind.BlockingIncident, WorkflowRuntimeAttentionKind.FaultedExecution],
+                attentionSnapshot.Records.Select(x => x.Kind));
+
             await using var transaction = await context.Database.BeginTransactionAsync();
             await values.SaveAsync(Value("rolled-back", "workflow-a"));
+            await incidents.TryAddAsync(Incident("rolled-back-incident", "workflow-blocked"));
             await transaction.RollbackAsync();
         }
 
@@ -76,8 +94,14 @@ internal static class RuntimeOperationalStateProviderSmoke
             Assert.Null(await values.FindAsync("workflow-a", "rolled-back"));
             var liveness = new EfExecutionLivenessStateStore(fresh, new FixedAccessor(scope), new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = SigningKey })));
             var holds = new EfWorkflowHoldStateStore(fresh, new FixedAccessor(scope));
+            var incidents = new EfIncidentStateStore(fresh, new FixedAccessor(scope));
+            var attention = new EfWorkflowRuntimeAttentionQuery(fresh, new FixedAccessor(scope));
             Assert.NotNull(await liveness.FindAsync("workflow-a", "state-a"));
             Assert.Single(await holds.ListForWorkflowExecutionAsync("workflow-a"));
+            Assert.Null(await incidents.FindAsync("workflow-blocked", "rolled-back-incident"));
+            Assert.Equal(2, (await attention.QueryAsync(new(
+                new AttentionQueryContext(new ClaimsPrincipal(), scope),
+                10))).TotalCount);
             await using var left = createContext(connectionString);
             await using var right = createContext(connectionString);
             var scopeKey = Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(scope);
@@ -94,5 +118,35 @@ internal static class RuntimeOperationalStateProviderSmoke
     }
 
     private static DurableValueState Value(string valueId, string workflowId) => new(valueId, workflowId, valueId, new RuntimeValueTypeDescriptor("json", null, null), DurableValueLifecycle.Result, DurableValueStorage.Inline, JsonDocument.Parse("42").RootElement, null, null, DateTimeOffset.UtcNow, new Dictionary<string, string>());
+    private static WorkflowExecutionState Execution(string id, string tenantId, WorkflowExecutionStatus status)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return new(
+            id,
+            new WorkflowExecutableIdentity($"artifact-{id}", $"definition-{id}", "version-1", "1.0.0", "hash-1"),
+            status,
+            null,
+            now,
+            now,
+            now,
+            status.IsTerminal() ? now : null,
+            null,
+            null,
+            tenantId,
+            new Dictionary<string, string>());
+    }
+
+    private static IncidentState Incident(string incidentId, string workflowExecutionId) => new(
+        incidentId,
+        workflowExecutionId,
+        null,
+        null,
+        IncidentSeverity.Critical,
+        IncidentStatus.Blocking,
+        null,
+        "ProviderSmokeFailure",
+        "provider smoke detail",
+        DateTimeOffset.UtcNow,
+        null);
     private sealed class FixedAccessor(string scope) : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(scope)); }
 }

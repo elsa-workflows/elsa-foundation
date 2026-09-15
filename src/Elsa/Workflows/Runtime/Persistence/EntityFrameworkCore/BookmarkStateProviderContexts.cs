@@ -55,5 +55,7 @@ file static class BookmarkStateProviderModel
             modelBuilder.Entity(entity).Property("ContentJson").HasColumnType(type);
             modelBuilder.Entity(entity).Property("ScopeKey").HasColumnType(type);
         }
+        modelBuilder.Entity<IncidentStateEntity>().Property("ContentJson").HasColumnType(type);
+        modelBuilder.Entity<IncidentStateEntity>().Property("ScopeKey").HasColumnType(type);
     }
 }

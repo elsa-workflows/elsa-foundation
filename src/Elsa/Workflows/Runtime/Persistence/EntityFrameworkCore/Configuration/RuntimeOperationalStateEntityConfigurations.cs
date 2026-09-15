@@ -80,6 +80,27 @@ public sealed class WorkflowHoldStateEntityConfiguration : IEntityTypeConfigurat
     }
 }
 
+public sealed class IncidentStateEntityConfiguration : IEntityTypeConfiguration<IncidentStateEntity>
+{
+    public void Configure(EntityTypeBuilder<IncidentStateEntity> b)
+    {
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureCommon(b, RuntimeOperationalStateEfModule.IncidentTableName);
+        b.HasKey(x => x.Id); b.Property(x => x.Id).HasMaxLength(64);
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(IncidentStateEntity.WorkflowExecutionId));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureHash(b, nameof(IncidentStateEntity.WorkflowExecutionIdHash));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureOrder(b, nameof(IncidentStateEntity.WorkflowExecutionIdOrderKey));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(IncidentStateEntity.IncidentId));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureHash(b, nameof(IncidentStateEntity.IncidentIdHash));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureOrder(b, nameof(IncidentStateEntity.IncidentIdOrderKey));
+        b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash, x.IncidentIdHash }).IsUnique();
+        // Keep index keys within SQL Server's 1700-byte limit. The full order projections remain on
+        // the rows for exact keyset ordering; the incident hash is a compact deterministic tie-breaker.
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdOrderKey, x.IncidentIdHash });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.Status, x.CreatedAtUtcTicks, x.WorkflowExecutionIdOrderKey, x.IncidentIdHash });
+    }
+}
+
 public sealed class DurableValueStateEntityConfiguration : IEntityTypeConfiguration<DurableValueStateEntity>
 {
     public void Configure(EntityTypeBuilder<DurableValueStateEntity> b)

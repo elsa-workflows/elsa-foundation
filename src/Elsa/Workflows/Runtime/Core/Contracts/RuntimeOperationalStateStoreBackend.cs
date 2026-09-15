@@ -42,15 +42,20 @@ public sealed class RuntimeOperationalStateStoreBackend
             "Elsa.Workflows.Runtime.Core.Services.InMemorySchedulerStateStore" or
             "Elsa.Workflows.Runtime.Core.Services.InMemoryExecutionLivenessStateStore" or
             "Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowHoldStateStore" or
-            "Elsa.Workflows.Runtime.Core.Services.InMemoryRuntimeRecoveryScanner" ||
-        descriptor.ImplementationFactory?.Method.DeclaringType?.FullName?.Contains("RuntimeCoreServiceCollectionExtensions", StringComparison.Ordinal) == true;
+            "Elsa.Workflows.Runtime.Core.Services.InMemoryRuntimeRecoveryScanner" or
+            "Elsa.Workflows.Runtime.Core.Services.InMemoryIncidentStateStore" ||
+        descriptor.ImplementationFactory?.Method.DeclaringType?.FullName is { } declaringType &&
+        (declaringType.Contains("RuntimeCoreServiceCollectionExtensions", StringComparison.Ordinal) ||
+         declaringType.Contains("WorkflowsRuntimeAttentionFeature", StringComparison.Ordinal));
 
     private static bool IsOperationalContract(Type? serviceType) =>
         serviceType == typeof(IDurableValueStateStore) ||
         serviceType == typeof(ISchedulerStateStore) ||
         serviceType == typeof(IExecutionLivenessStateStore) ||
         serviceType == typeof(IWorkflowHoldStateStore) ||
-        serviceType == typeof(IRuntimeRecoveryScanner);
+        serviceType == typeof(IRuntimeRecoveryScanner) ||
+        serviceType == typeof(IIncidentStateStore) ||
+        serviceType?.FullName == "Elsa.Workflows.Runtime.Attention.IWorkflowRuntimeAttentionQuery";
 
     public void EnsureOwnsRegisteredContracts(IServiceCollection services)
     {

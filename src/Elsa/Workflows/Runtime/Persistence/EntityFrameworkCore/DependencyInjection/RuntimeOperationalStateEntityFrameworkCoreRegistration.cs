@@ -1,4 +1,5 @@
 using Elsa.Persistence.EntityFramework;
+using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -10,7 +11,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 
-/// <summary>Registers the opt-in EF Core runtime operational-state family (R14-R17).</summary>
+/// <summary>Registers the opt-in EF Core runtime operational-state family (R14-R18).</summary>
 public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
 {
     public static IServiceCollection AddRuntimeOperationalStateEntityFrameworkCore(this IServiceCollection services, RuntimeOperationalStateEntityFrameworkCoreOptions options)
@@ -90,11 +91,23 @@ public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
             var schedulerContract = ServiceDescriptor.Scoped<ISchedulerStateStore>(provider => provider.GetRequiredService<EfSchedulerStateStore>());
             var livenessContract = ServiceDescriptor.Scoped<IExecutionLivenessStateStore>(provider => provider.GetRequiredService<EfExecutionLivenessStateStore>());
             var holdContract = ServiceDescriptor.Scoped<IWorkflowHoldStateStore>(provider => provider.GetRequiredService<EfWorkflowHoldStateStore>());
+            var incidentContract = ServiceDescriptor.Scoped<IIncidentStateStore>(provider => provider.GetRequiredService<EfIncidentStateStore>());
+            var attentionContract = ServiceDescriptor.Scoped<IWorkflowRuntimeAttentionQuery>(provider =>
+            {
+                // Attention is complete only when both halves of the composition are EF-owned. A mixed
+                // Groundwork/in-memory workflow backend must fail closed rather than silently reporting an
+                // empty EF incident projection as all-clear.
+                return provider.GetService<IWorkflowExecutionStateStore>() is EfWorkflowExecutionStateStore
+                    ? provider.GetRequiredService<EfWorkflowRuntimeAttentionQuery>()
+                    : new UnavailableWorkflowRuntimeAttentionQuery();
+            });
             var recoveryContract = ServiceDescriptor.Scoped<IRuntimeRecoveryScanner>(provider => provider.GetRequiredService<InMemoryRuntimeRecoveryScanner>());
             services.RemoveAll<IDurableValueStateStore>();
             services.RemoveAll<ISchedulerStateStore>();
             services.RemoveAll<IExecutionLivenessStateStore>();
             services.RemoveAll<IWorkflowHoldStateStore>();
+            services.RemoveAll<IIncidentStateStore>();
+            services.RemoveAll<IWorkflowRuntimeAttentionQuery>();
             services.RemoveAll<IRuntimeRecoveryScanner>();
             services.AddScoped<EfDurableValueStateStore>();
             var durableConcrete = services.Last();
@@ -104,15 +117,21 @@ public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
             var livenessConcrete = services.Last();
             services.AddScoped<EfWorkflowHoldStateStore>();
             var holdConcrete = services.Last();
+            services.AddScoped<EfIncidentStateStore>();
+            var incidentConcrete = services.Last();
+            services.AddScoped<EfWorkflowRuntimeAttentionQuery>();
+            var attentionConcrete = services.Last();
             services.AddScoped<InMemoryRuntimeRecoveryScanner>();
             var recoveryConcrete = services.Last();
             services.Add(durableContract);
             services.Add(schedulerContract);
             services.Add(livenessContract);
             services.Add(holdContract);
+            services.Add(incidentContract);
+            services.Add(attentionContract);
             services.Add(recoveryContract);
-            owned.AddRange([durableConcrete, schedulerConcrete, livenessConcrete, holdConcrete, recoveryConcrete,
-                durableContract, schedulerContract, livenessContract, holdContract, recoveryContract]);
+            owned.AddRange([durableConcrete, schedulerConcrete, livenessConcrete, holdConcrete, incidentConcrete, attentionConcrete, recoveryConcrete,
+                durableContract, schedulerContract, livenessContract, holdContract, incidentContract, attentionContract, recoveryContract]);
 
             RuntimeOperationalStateStoreBackend.Register(services, new(
                 RuntimeOperationalStateStoreBackend.EntityFramework,

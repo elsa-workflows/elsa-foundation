@@ -27,6 +27,7 @@ internal static class EfRuntimeOperationalStoreSupport
     }
 
     public static string Encode(string value) => EfRelationalIdentity.Encode(value);
+    public static string Decode(string value) => EfRelationalIdentity.Decode(value);
     public static string Hash(string value) => EfRelationalIdentity.Hash(value);
     public static string Order(string value) => Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(value, RuntimeOperationalStateEfModule.IdentityMaximumLength));
     public static string CompositeId(string scope, params string[] values)

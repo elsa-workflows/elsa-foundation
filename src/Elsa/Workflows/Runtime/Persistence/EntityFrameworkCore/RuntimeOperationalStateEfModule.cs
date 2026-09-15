@@ -10,6 +10,7 @@ public static class RuntimeOperationalStateEfModule
     public const string SchedulerTableName = "elsa_runtime_scheduler_state";
     public const string ExecutionLivenessTableName = "elsa_runtime_execution_liveness_state";
     public const string WorkflowHoldTableName = "elsa_runtime_workflow_hold_state";
+    public const string IncidentTableName = "elsa_runtime_incident_state";
     public const string SchemaVersion = "1.0.0";
     public const int IdentityMaximumLength = 128;
     public const int IdentityProjectionMaximumLength = ((IdentityMaximumLength * sizeof(char) + 2) / 3) * 4;

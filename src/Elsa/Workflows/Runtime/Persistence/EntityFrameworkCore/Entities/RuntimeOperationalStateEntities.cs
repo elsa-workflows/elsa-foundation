@@ -71,3 +71,24 @@ public sealed class WorkflowHoldStateEntity
     public string SchemaVersion { get; set; } = null!;
     public long Revision { get; set; }
 }
+
+/// <summary>Relational envelope and query projections for one runtime incident state.</summary>
+public sealed class IncidentStateEntity
+{
+    public string Id { get; set; } = null!;
+    public string ScopeKey { get; set; } = null!;
+    public string ScopeKeyHash { get; set; } = null!;
+    public string WorkflowExecutionId { get; set; } = null!;
+    public string WorkflowExecutionIdHash { get; set; } = null!;
+    public string WorkflowExecutionIdOrderKey { get; set; } = null!;
+    public string IncidentId { get; set; } = null!;
+    public string IncidentIdHash { get; set; } = null!;
+    public string IncidentIdOrderKey { get; set; } = null!;
+    public int Status { get; set; }
+    public int Severity { get; set; }
+    public long CreatedAtUtcTicks { get; set; }
+    public long? ResolvedAtUtcTicks { get; set; }
+    public string ContentJson { get; set; } = null!;
+    public string SchemaVersion { get; set; } = null!;
+    public long Revision { get; set; }
+}

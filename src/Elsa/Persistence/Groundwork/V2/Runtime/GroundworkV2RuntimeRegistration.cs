@@ -212,20 +212,24 @@ public static class GroundworkV2RuntimeRegistration
         var groundworkRecoveryDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IRuntimeRecoveryScanner));
         var groundworkHoldDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IWorkflowHoldStateStore));
         var groundworkHoldConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowHoldStateStore));
-        RuntimeOperationalStateStoreBackend.Register(services, new(
-            RuntimeOperationalStateStoreBackend.Groundwork,
-            [groundworkDurableValueDescriptor, groundworkSchedulerDescriptor, groundworkDurableValueConcreteDescriptor, groundworkSchedulerConcreteDescriptor,
-                groundworkLivenessDescriptor, groundworkLivenessConcreteDescriptor, groundworkRecoveryDescriptor,
-                groundworkHoldDescriptor, groundworkHoldConcreteDescriptor],
-            collection => GroundworkV2RuntimeUnitWithdrawal.RemoveOperationalState(collection, target)));
         ReplaceScoped<GroundworkV2IncidentStateStore>(services, Standard<GroundworkV2IncidentStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IIncidentStateStore));
         ReplaceScoped<GroundworkV2WorkflowRuntimeAttentionQuery>(services, provider => new(
                 provider.GetRequiredService<IGroundworkStorageSessionSource>(),
                 provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
                 provider.GetService<TimeProvider>(),
-                target),
+            target),
             typeof(IWorkflowRuntimeAttentionQuery));
+        var groundworkIncidentDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IIncidentStateStore));
+        var groundworkIncidentConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2IncidentStateStore));
+        var groundworkAttentionDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IWorkflowRuntimeAttentionQuery));
+        RuntimeOperationalStateStoreBackend.Register(services, new(
+            RuntimeOperationalStateStoreBackend.Groundwork,
+            [groundworkDurableValueDescriptor, groundworkSchedulerDescriptor, groundworkDurableValueConcreteDescriptor, groundworkSchedulerConcreteDescriptor,
+                groundworkLivenessDescriptor, groundworkLivenessConcreteDescriptor, groundworkRecoveryDescriptor,
+                groundworkHoldDescriptor, groundworkHoldConcreteDescriptor, groundworkIncidentDescriptor, groundworkIncidentConcreteDescriptor,
+                groundworkAttentionDescriptor],
+            collection => GroundworkV2RuntimeUnitWithdrawal.RemoveOperationalState(collection, target)));
         ReplaceScoped<GroundworkV2WorkflowDispatchStore>(services, Standard<GroundworkV2WorkflowDispatchStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowDispatchStore), typeof(IWorkflowDispatchQueryStore), typeof(IWorkflowDispatchDeleteStore),
             typeof(IWorkflowDispatchRetentionRootStore), typeof(IWorkflowDispatchAdmissionStore), typeof(IWorkflowDispatchCancellationStore));
@@ -505,6 +509,7 @@ internal static class GroundworkV2RuntimeUnitWithdrawal
         services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.SchedulerStateDocumentKind, targetName);
         services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind, targetName);
         services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.WorkflowHoldStateDocumentKind, targetName);
+        services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.IncidentStateDocumentKind, targetName);
     }
 }
 
