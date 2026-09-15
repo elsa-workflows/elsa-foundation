@@ -11,9 +11,9 @@ public sealed class RecurringTriggerScheduleEntityConfiguration : IEntityTypeCon
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureCommon(b, RuntimeOperationalStateEfModule.RecurringScheduleTableName);
         b.HasKey(x => x.Id);
         b.Property(x => x.Id).HasMaxLength(RuntimeOperationalStateEfModule.CompositeIdentityMaximumLength).IsRequired();
-        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(RecurringTriggerScheduleEntity.ScheduleId));
+        b.Property(x => x.ScheduleId).HasMaxLength(RuntimeOperationalStateEfModule.RecurringScheduleIdProjectionMaximumLength).IsRequired();
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureHash(b, nameof(RecurringTriggerScheduleEntity.ScheduleIdHash));
-        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureOrder(b, nameof(RecurringTriggerScheduleEntity.ScheduleIdOrderKey));
+        b.Property(x => x.ScheduleIdOrderKey).HasMaxLength(RuntimeOperationalStateEfModule.RecurringScheduleIdOrderKeyMaximumLength).IsRequired();
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(RecurringTriggerScheduleEntity.ArtifactId));
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureHash(b, nameof(RecurringTriggerScheduleEntity.ArtifactIdHash));
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureOrder(b, nameof(RecurringTriggerScheduleEntity.ArtifactIdOrderKey));
@@ -30,7 +30,10 @@ public sealed class RecurringTriggerScheduleEntityConfiguration : IEntityTypeCon
         b.Property(x => x.NextOccurrenceOffsetMinutes).IsRequired();
         b.Property(x => x.CreatedAtUtcTicks).IsRequired();
         b.Property(x => x.CreatedAtOffsetMinutes).IsRequired();
-        b.HasIndex(x => new { x.ScopeKeyHash, x.ScheduleIdHash, x.ScheduleId }).IsUnique();
+        // The encoded ScheduleId is deliberately not part of an index: its legal projection is large enough to
+        // exceed SQL Server/MySQL composite-index budgets. The hash is only a lookup candidate; every read rechecks
+        // the encoded identity and authoritative JSON before accepting a row.
+        b.HasIndex(x => new { x.ScopeKeyHash, x.ScheduleIdHash }).IsUnique();
         b.HasIndex(x => new { x.ScopeKeyHash, x.IsActive, x.NextOccurrenceUtcTicks, x.ScheduleIdHash });
         b.HasIndex(x => new { x.ScopeKeyHash, x.ActivationIdHash, x.ScheduleIdHash });
         b.HasIndex(x => new { x.ScopeKeyHash, x.ArtifactIdHash, x.ScheduleIdHash });

@@ -281,7 +281,7 @@ public sealed class EfRecurringTriggerScheduleStore(
 
     public async ValueTask<RecurringTriggerSchedule?> FindAsync(string scheduleId, CancellationToken cancellationToken = default)
     {
-        ValidateIdentity(scheduleId, nameof(scheduleId));
+        ValidateScheduleId(scheduleId, nameof(scheduleId));
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         var row = await context.RecurringTriggerSchedules.AsNoTracking().SingleOrDefaultAsync(x => x.Id == Id(scope, scheduleId), cancellationToken);
@@ -290,7 +290,7 @@ public sealed class EfRecurringTriggerScheduleStore(
 
     public async ValueTask<bool> TryAdvanceAsync(string scheduleId, DateTimeOffset expectedNextOccurrence, DateTimeOffset newNextOccurrence, CancellationToken cancellationToken = default)
     {
-        ValidateIdentity(scheduleId, nameof(scheduleId));
+        ValidateScheduleId(scheduleId, nameof(scheduleId));
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         context.ChangeTracker.Clear();
@@ -353,7 +353,7 @@ public sealed class EfRecurringTriggerScheduleStore(
 
     public async ValueTask DeleteAsync(string scheduleId, CancellationToken cancellationToken = default)
     {
-        ValidateIdentity(scheduleId, nameof(scheduleId));
+        ValidateScheduleId(scheduleId, nameof(scheduleId));
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         context.ChangeTracker.Clear();
@@ -490,7 +490,7 @@ public sealed class EfRecurringTriggerScheduleStore(
     private static void Copy(RecurringTriggerScheduleEntity row, RecurringTriggerSchedule schedule, string scope, long revision)
     {
         Validate(schedule);
-        row.ScopeKey = Encode(scope); row.ScopeKeyHash = Hash(scope); row.ScheduleId = Encode(schedule.ScheduleId); row.ScheduleIdHash = Hash(schedule.ScheduleId); row.ScheduleIdOrderKey = Order(schedule.ScheduleId); row.ArtifactId = Encode(schedule.ArtifactId); row.ArtifactIdHash = Hash(schedule.ArtifactId); row.ArtifactIdOrderKey = Order(schedule.ArtifactId); row.ExecutableNodeId = Encode(schedule.ExecutableNodeId); row.StimulusType = Encode(schedule.StimulusType); row.StimulusHash = Encode(schedule.StimulusHash); row.Kind = (int)schedule.Kind; row.Expression = schedule.Expression; row.NextOccurrenceUtcTicks = schedule.NextOccurrence.UtcTicks; row.NextOccurrenceOffsetMinutes = (int)schedule.NextOccurrence.Offset.TotalMinutes; row.CreatedAtUtcTicks = schedule.CreatedAt.UtcTicks; row.CreatedAtOffsetMinutes = (int)schedule.CreatedAt.Offset.TotalMinutes; row.ActivationId = schedule.ActivationId is null ? null : Encode(schedule.ActivationId); row.ActivationIdHash = schedule.ActivationId is null ? null : Hash(schedule.ActivationId); row.ActivationIdOrderKey = schedule.ActivationId is null ? null : Order(schedule.ActivationId); row.SlotId = schedule.SlotId is null ? null : Encode(schedule.SlotId); row.IsActive = schedule.IsActive; row.ContentJson = RuntimeArtifactJson.Serialize(schedule); row.SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion; row.Revision = revision;
+        row.ScopeKey = Encode(scope); row.ScopeKeyHash = Hash(scope); row.ScheduleId = Encode(schedule.ScheduleId); row.ScheduleIdHash = Hash(schedule.ScheduleId); row.ScheduleIdOrderKey = ScheduleOrder(schedule.ScheduleId); row.ArtifactId = Encode(schedule.ArtifactId); row.ArtifactIdHash = Hash(schedule.ArtifactId); row.ArtifactIdOrderKey = Order(schedule.ArtifactId); row.ExecutableNodeId = Encode(schedule.ExecutableNodeId); row.StimulusType = Encode(schedule.StimulusType); row.StimulusHash = Encode(schedule.StimulusHash); row.Kind = (int)schedule.Kind; row.Expression = schedule.Expression; row.NextOccurrenceUtcTicks = schedule.NextOccurrence.UtcTicks; row.NextOccurrenceOffsetMinutes = (int)schedule.NextOccurrence.Offset.TotalMinutes; row.CreatedAtUtcTicks = schedule.CreatedAt.UtcTicks; row.CreatedAtOffsetMinutes = (int)schedule.CreatedAt.Offset.TotalMinutes; row.ActivationId = schedule.ActivationId is null ? null : Encode(schedule.ActivationId); row.ActivationIdHash = schedule.ActivationId is null ? null : Hash(schedule.ActivationId); row.ActivationIdOrderKey = schedule.ActivationId is null ? null : Order(schedule.ActivationId); row.SlotId = schedule.SlotId is null ? null : Encode(schedule.SlotId); row.IsActive = schedule.IsActive; row.ContentJson = RuntimeArtifactJson.Serialize(schedule); row.SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion; row.Revision = revision;
     }
 
     private static RecurringTriggerSchedule Read(RecurringTriggerScheduleEntity row, string scope, string? expectedId = null)
@@ -502,7 +502,7 @@ public sealed class EfRecurringTriggerScheduleStore(
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException or InvalidOperationException or FormatException)
         { throw new InvalidDataException("The persisted EF recurring-trigger schedule content is not valid current JSON.", exception); }
         Validate(schedule);
-        if (schedule.ScheduleId != Decode(row.ScheduleId) || schedule.ArtifactId != Decode(row.ArtifactId) || schedule.ExecutableNodeId != Decode(row.ExecutableNodeId) || schedule.StimulusType != Decode(row.StimulusType) || schedule.StimulusHash != Decode(row.StimulusHash) || schedule.Kind != (RecurringScheduleKind)row.Kind || schedule.Expression != row.Expression || schedule.NextOccurrence.UtcTicks != row.NextOccurrenceUtcTicks || (int)schedule.NextOccurrence.Offset.TotalMinutes != row.NextOccurrenceOffsetMinutes || schedule.CreatedAt.UtcTicks != row.CreatedAtUtcTicks || (int)schedule.CreatedAt.Offset.TotalMinutes != row.CreatedAtOffsetMinutes || schedule.ActivationId != Optional(row.ActivationId) || schedule.SlotId != Optional(row.SlotId) || schedule.IsActive != row.IsActive || row.ScheduleIdHash != Hash(schedule.ScheduleId) || row.ScheduleIdOrderKey != Order(schedule.ScheduleId) || row.ArtifactIdHash != Hash(schedule.ArtifactId) || row.ArtifactIdOrderKey != Order(schedule.ArtifactId) || schedule.ActivationId is not null && (row.ActivationIdHash != Hash(schedule.ActivationId) || row.ActivationIdOrderKey != Order(schedule.ActivationId)) || schedule.ActivationId is null && (row.ActivationIdHash is not null || row.ActivationIdOrderKey is not null))
+        if (schedule.ScheduleId != Decode(row.ScheduleId) || schedule.ArtifactId != Decode(row.ArtifactId) || schedule.ExecutableNodeId != Decode(row.ExecutableNodeId) || schedule.StimulusType != Decode(row.StimulusType) || schedule.StimulusHash != Decode(row.StimulusHash) || schedule.Kind != (RecurringScheduleKind)row.Kind || schedule.Expression != row.Expression || schedule.NextOccurrence.UtcTicks != row.NextOccurrenceUtcTicks || (int)schedule.NextOccurrence.Offset.TotalMinutes != row.NextOccurrenceOffsetMinutes || schedule.CreatedAt.UtcTicks != row.CreatedAtUtcTicks || (int)schedule.CreatedAt.Offset.TotalMinutes != row.CreatedAtOffsetMinutes || schedule.ActivationId != Optional(row.ActivationId) || schedule.SlotId != Optional(row.SlotId) || schedule.IsActive != row.IsActive || row.ScheduleIdHash != Hash(schedule.ScheduleId) || row.ScheduleIdOrderKey != ScheduleOrder(schedule.ScheduleId) || row.ArtifactIdHash != Hash(schedule.ArtifactId) || row.ArtifactIdOrderKey != Order(schedule.ArtifactId) || schedule.ActivationId is not null && (row.ActivationIdHash != Hash(schedule.ActivationId) || row.ActivationIdOrderKey != Order(schedule.ActivationId)) || schedule.ActivationId is null && (row.ActivationIdHash is not null || row.ActivationIdOrderKey is not null))
             throw new InvalidDataException("The persisted EF recurring-trigger schedule content does not match its authoritative projections.");
         return schedule;
     }
@@ -512,8 +512,9 @@ public sealed class EfRecurringTriggerScheduleStore(
     private static void Validate(RecurringTriggerSchedule schedule)
     {
         ArgumentNullException.ThrowIfNull(schedule);
-        ValidateIdentity(schedule.ScheduleId, nameof(schedule.ScheduleId)); ValidateIdentity(schedule.ArtifactId, nameof(schedule.ArtifactId)); ValidateIdentity(schedule.ExecutableNodeId, nameof(schedule.ExecutableNodeId));
+        ValidateScheduleId(schedule.ScheduleId, nameof(schedule.ScheduleId)); ValidateIdentity(schedule.ArtifactId, nameof(schedule.ArtifactId)); ValidateIdentity(schedule.ExecutableNodeId, nameof(schedule.ExecutableNodeId));
         ArgumentException.ThrowIfNullOrWhiteSpace(schedule.StimulusType); ArgumentException.ThrowIfNullOrWhiteSpace(schedule.StimulusHash); ArgumentException.ThrowIfNullOrWhiteSpace(schedule.Expression);
+        if (schedule.StimulusHash.Length > RuntimeOperationalStateEfModule.IdentityMaximumLength) throw new ArgumentException($"Runtime identity cannot exceed {RuntimeOperationalStateEfModule.IdentityMaximumLength} UTF-16 code units.", nameof(schedule.StimulusHash));
         if (!Enum.IsDefined(schedule.Kind)) throw new ArgumentOutOfRangeException(nameof(schedule.Kind));
         if (schedule.ActivationId is not null) ValidateIdentity(schedule.ActivationId, nameof(schedule.ActivationId));
         if (schedule.ActivationId is null && schedule.SlotId is not null) throw new ArgumentException("A recurring-trigger schedule slot requires an activation.", nameof(schedule));
@@ -525,6 +526,9 @@ public sealed class EfRecurringTriggerScheduleStore(
 
     private static void ValidateIdentity(string value, string parameterName)
     { ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName); if (value.Length > RuntimeOperationalStateEfModule.IdentityMaximumLength) throw new ArgumentException($"Runtime identity cannot exceed {RuntimeOperationalStateEfModule.IdentityMaximumLength} UTF-16 code units.", parameterName); }
+    private static void ValidateScheduleId(string value, string parameterName)
+    { ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName); if (value.Length > RuntimeOperationalStateEfModule.RecurringScheduleIdMaximumLength) throw new ArgumentException($"A recurring-trigger schedule id cannot exceed {RuntimeOperationalStateEfModule.RecurringScheduleIdMaximumLength} UTF-16 code units.", parameterName); }
+    private static string ScheduleOrder(string value) => Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(value, RuntimeOperationalStateEfModule.RecurringScheduleIdMaximumLength));
     private static void ValidateActivation(string id, IReadOnlyCollection<RecurringTriggerSchedule> schedules)
     {
         ValidateIdentity(id, nameof(id)); ArgumentNullException.ThrowIfNull(schedules); var ids = new HashSet<string>(StringComparer.Ordinal); var artifacts = new HashSet<string>(StringComparer.Ordinal);

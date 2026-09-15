@@ -20,6 +20,49 @@ public sealed class EfRecurringTriggerScheduleStoreTests
     private static readonly DateTimeOffset Now = new(2026, 9, 15, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public async Task SQLite_round_trips_the_maximum_escaped_activation_fanout_schedule_id()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var context = Context(connection);
+        await context.Database.EnsureCreatedAsync();
+        var store = Store(context, "tenant-a");
+        var artifact = new string('%', RuntimeOperationalStateEfModule.IdentityMaximumLength);
+        var node = new string(':', RuntimeOperationalStateEfModule.IdentityMaximumLength);
+        var activation = new string('%', RuntimeOperationalStateEfModule.IdentityMaximumLength);
+        var stimulusHash = new string(':', RuntimeOperationalStateEfModule.IdentityMaximumLength);
+        var schedule = new RecurringTriggerSchedule(
+            RecurringTriggerSchedule.BuildFanOutId(activation, artifact, node, stimulusHash),
+            artifact,
+            node,
+            "Timer",
+            stimulusHash,
+            RecurringScheduleKind.Interval,
+            "PT1M",
+            Now,
+            DateTimeOffset.UnixEpoch,
+            activation,
+            "slot",
+            true);
+
+        Assert.Equal(RuntimeOperationalStateEfModule.RecurringScheduleIdMaximumLength, schedule.ScheduleId.Length);
+        await store.SaveAsync(schedule);
+        Assert.Equal(schedule, await store.FindAsync(schedule.ScheduleId));
+        Assert.True(await store.TryAdvanceAsync(schedule.ScheduleId, Now, Now.AddMinutes(1)));
+        Assert.Equal(Now.AddMinutes(1), (await store.FindAsync(schedule.ScheduleId))!.NextOccurrence);
+        await store.DeleteAsync(schedule.ScheduleId);
+        Assert.Null(await store.FindAsync(schedule.ScheduleId));
+
+        await store.SaveAsync(schedule);
+        await store.PrepareActivationAsync(activation, [schedule]);
+        Assert.Equal(schedule.ScheduleId, Assert.Single((await store.ListByActivationPageAsync(new RecurringTriggerScheduleActivationPageQuery(activation))).Items).ScheduleId);
+        await store.ActivateAsync(activation, null);
+        Assert.True(await store.TryAdvanceAsync(schedule.ScheduleId, Now, Now.AddMinutes(1)));
+        await store.DeleteByActivationAsync(activation);
+        Assert.Null(await store.FindAsync(schedule.ScheduleId));
+    }
+
+    [Fact]
     public async Task SQLite_round_trips_due_pages_scope_isolation_and_compare_and_swap()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
