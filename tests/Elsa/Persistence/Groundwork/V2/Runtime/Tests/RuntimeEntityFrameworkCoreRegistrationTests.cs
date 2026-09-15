@@ -3,8 +3,10 @@ using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -25,6 +27,21 @@ public sealed class RuntimeEntityFrameworkCoreRegistrationTests
         _ = new DbContextOptionsBuilder().UseSqlite(ConnectionString);
 
         services.AddRuntimeEntityFrameworkCore(Options());
+
+        var registry = Assert.IsType<GroundworkStorageUnitRegistry>(services.Single(descriptor =>
+            descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance);
+        var withdrawnCheckpointUnitIds = new[]
+        {
+            ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind,
+            ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
+            ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind,
+            ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind,
+            ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind
+        };
+        Assert.DoesNotContain(registry.Registrations, registration =>
+            withdrawnCheckpointUnitIds.Contains(registration.Unit.Id.Value, StringComparer.Ordinal));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IWorkflowDispatchDurabilityEvidence) &&
+            descriptor.ImplementationType?.Name?.StartsWith("GroundworkV2", StringComparison.Ordinal) == true);
 
         Assert.Equal(RuntimeOperationalStateStoreBackend.EntityFramework, RuntimeOperationalStateStoreBackend.Find(services)!.Name);
         Assert.Equal(RuntimeArtifactStoreBackend.EntityFramework, RuntimeArtifactStoreBackend.Find(services)!.Name);
@@ -62,6 +79,55 @@ public sealed class RuntimeEntityFrameworkCoreRegistrationTests
         Assert.Equal(beforeUnits, registry.Registrations);
         Assert.Equal(RuntimeCheckpointCommitStoreBackend.Groundwork, RuntimeCheckpointCommitStoreBackend.Find(services)!.Name);
         Assert.Equal(RuntimeActivityExecutionStoreBackend.Groundwork, RuntimeActivityExecutionStoreBackend.Find(services)!.Name);
+    }
+
+    [Fact]
+    public async Task Aggregate_EF_checkpoint_writes_a_real_SQLite_marker_after_Groundwork_withdrawal()
+    {
+        var connectionString = $"Data Source=file:aggregate-ef-checkpoint-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+        await using var keeper = new SqliteConnection(connectionString);
+        await keeper.OpenAsync();
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddPersistenceCore("tenant-a");
+        services.AddGroundworkV2RuntimeStores();
+        var options = Options();
+        options.ConnectionString = connectionString;
+        services.AddRuntimeEntityFrameworkCore(options);
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>();
+        await context.Database.EnsureCreatedAsync();
+        var commit = new RuntimeCheckpointCommit(
+            "aggregate-ef-commit",
+            new RuntimeCheckpoint("checkpoint-aggregate", "EmptyCheckpoint", "workflow-a", DateTimeOffset.UnixEpoch, [], new Dictionary<string, string>()),
+            new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], []),
+            [],
+            new Dictionary<string, string>());
+
+        var writer = scope.ServiceProvider.GetRequiredService<IRuntimeCheckpointCommitStore>();
+        Assert.IsType<EfRuntimeCheckpointCommitStore>(writer);
+        await writer.CommitAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
+        Assert.Single(await context.RuntimeCheckpointCommits.AsNoTracking().ToArrayAsync());
+    }
+
+    [Fact]
+    public void Aggregate_switch_withdraws_only_the_selected_Groundwork_target()
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddGroundworkStorageUnit(
+            ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind), "other");
+        services.AddGroundworkV2RuntimeStores("runtime");
+
+        services.AddRuntimeEntityFrameworkCore(Options());
+
+        var registry = Assert.IsType<GroundworkStorageUnitRegistry>(services.Single(descriptor =>
+            descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance);
+        Assert.Equal(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind,
+            registry.Require(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, "other").Unit.Id.Value);
+        Assert.DoesNotContain(registry.Registrations, registration =>
+            registration.TargetName == "runtime" &&
+            registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind);
     }
 
     private static RuntimeEntityFrameworkCoreOptions Options() => new()

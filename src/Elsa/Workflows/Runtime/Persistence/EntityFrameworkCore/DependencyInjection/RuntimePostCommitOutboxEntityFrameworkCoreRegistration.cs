@@ -35,7 +35,7 @@ public static class RuntimePostCommitOutboxEntityFrameworkCoreRegistration
                     throw new InvalidOperationException("Runtime post-commit outbox EF persistence refuses to replace a selected non-EF backend.");
             }
 
-            RuntimeCheckpointCompositionTransition.EnsureGroundworkCheckpointTransitionAllowed(services, "post-commit outbox");
+            RuntimeEfCheckpointCompositionTransition.EnsureGroundworkCheckpointTransitionAllowed(services, "post-commit outbox");
 
             var removeGroundwork = existing?.Name == RuntimePostCommitOutboxStoreBackend.Groundwork
                 ? existing.PrepareRemoveOwnedArtifacts(services)

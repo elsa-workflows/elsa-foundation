@@ -102,9 +102,6 @@ public static class RuntimeEntityFrameworkCoreRegistration
             services.AddRuntimePostCommitOutboxEntityFrameworkCore();
             services.AddRuntimeCheckpointCommitEntityFrameworkCore();
 
-            foreach (var snapshot in registrationSnapshots)
-                snapshot.Commit();
-
             return services;
         }
         catch
@@ -121,6 +118,17 @@ public static class RuntimeEntityFrameworkCoreRegistration
 
 internal static class RuntimeEfCheckpointCompositionTransition
 {
+    internal static bool IsActive(IServiceCollection services) =>
+        services.Any(descriptor => descriptor.ImplementationInstance is Marker);
+
+    internal static void EnsureGroundworkCheckpointTransitionAllowed(IServiceCollection services, string participant)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentException.ThrowIfNullOrWhiteSpace(participant);
+        if (!IsActive(services) && RuntimeCheckpointCommitStoreBackend.Find(services)?.Name == RuntimeCheckpointCommitStoreBackend.Groundwork)
+            throw new InvalidOperationException($"Runtime {participant} EF persistence requires the aggregate EF Runtime transition while the Groundwork checkpoint writer is selected.");
+    }
+
     internal static IDisposable Begin(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -129,7 +137,7 @@ internal static class RuntimeEfCheckpointCompositionTransition
         return new Scope(services, marker);
     }
 
-    private sealed class Marker : IRuntimeCheckpointCompositionTransition
+    private sealed class Marker
     {
     }
 

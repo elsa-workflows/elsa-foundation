@@ -76,7 +76,7 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             }
 
             var existingBackend = RuntimeArtifactStoreBackend.Find(services);
-            RuntimeCheckpointCompositionTransition.EnsureGroundworkCheckpointTransitionAllowed(services, "executable artifacts");
+            RuntimeEfCheckpointCompositionTransition.EnsureGroundworkCheckpointTransitionAllowed(services, "executable artifacts");
             if (existingBackend is not null)
                 existingBackend.EnsureOwnsRegisteredContracts(services);
             else

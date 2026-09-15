@@ -69,18 +69,6 @@ public sealed class RuntimeActivityExecutionStoreBackend
                 "Activity execution Groundwork/EF switching is unavailable while the runtime checkpoint writer still commits R07-R09 through Groundwork; complete checkpoint ownership before switching this backend.");
     }
 
-    public static void EnsureCheckpointCompositionCompatible(
-        IServiceCollection services,
-        RuntimeActivityExecutionStoreBackend? existingBackend,
-        string requestedBackend)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-        if (RuntimeCheckpointCompositionTransition.IsActive(services))
-            return;
-
-        EnsureCheckpointCompositionCompatible(existingBackend, requestedBackend);
-    }
-
     public static IReadOnlyCollection<ServiceDescriptor> CaptureSurfaceRegistrations(IServiceCollection services) => services.Where(IsSurfaceRegistration).ToArray();
 
     public static void EnsureNoUnownedRegistrations(IServiceCollection services)

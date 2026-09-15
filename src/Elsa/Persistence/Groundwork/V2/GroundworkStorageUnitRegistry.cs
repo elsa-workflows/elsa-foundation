@@ -48,15 +48,7 @@ public sealed class GroundworkStorageUnitRegistry : IRuntimePersistenceRegistrat
         GroundworkStorageUnitRegistry registry,
         IReadOnlyList<GroundworkStorageUnitRegistration> registrations) : IRuntimePersistenceRegistrationSnapshot
     {
-        private int state;
-
-        public void Commit() => Interlocked.CompareExchange(ref state, 1, 0);
-
-        public void Rollback()
-        {
-            if (Interlocked.CompareExchange(ref state, 2, 0) == 0)
-                registry.Restore(registrations);
-        }
+        public void Rollback() => registry.Restore(registrations);
     }
 
     public void Declare(StorageUnit unit, string? targetName = null)

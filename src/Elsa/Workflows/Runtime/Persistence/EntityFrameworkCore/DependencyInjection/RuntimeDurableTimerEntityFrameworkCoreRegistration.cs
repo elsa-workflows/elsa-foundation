@@ -45,7 +45,7 @@ public static class RuntimeDurableTimerEntityFrameworkCoreRegistration
                 return services;
             }
 
-            RuntimeCheckpointCompositionTransition.EnsureGroundworkCheckpointTransitionAllowed(services, "durable timers");
+            RuntimeEfCheckpointCompositionTransition.EnsureGroundworkCheckpointTransitionAllowed(services, "durable timers");
 
             if (existing is not null)
                 existing.EnsureOwnsRegisteredContracts(services);

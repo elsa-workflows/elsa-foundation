@@ -43,7 +43,7 @@ public static class RuntimeSchedulerWorkQueueEntityFrameworkCoreRegistration
                 return services;
             }
 
-            RuntimeCheckpointCompositionTransition.EnsureGroundworkCheckpointTransitionAllowed(services, "scheduler work");
+            RuntimeEfCheckpointCompositionTransition.EnsureGroundworkCheckpointTransitionAllowed(services, "scheduler work");
 
             if (existing is not null)
                 existing.EnsureOwnsRegisteredContracts(services);

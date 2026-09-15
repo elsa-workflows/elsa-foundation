@@ -13,6 +13,5 @@ public interface IRuntimePersistenceRegistrationState
 
 public interface IRuntimePersistenceRegistrationSnapshot
 {
-    void Commit();
     void Rollback();
 }

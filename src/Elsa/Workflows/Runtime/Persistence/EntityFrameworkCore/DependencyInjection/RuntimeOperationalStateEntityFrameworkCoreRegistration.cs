@@ -33,7 +33,7 @@ public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
                 return services;
             }
 
-            RuntimeCheckpointCompositionTransition.EnsureGroundworkCheckpointTransitionAllowed(services, "operational state");
+            RuntimeEfCheckpointCompositionTransition.EnsureGroundworkCheckpointTransitionAllowed(services, "operational state");
 
             if (existing is not null)
                 existing.EnsureOwnsRegisteredContracts(services);

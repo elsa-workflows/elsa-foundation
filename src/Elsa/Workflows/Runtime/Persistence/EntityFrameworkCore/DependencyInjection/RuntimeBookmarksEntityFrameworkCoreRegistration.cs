@@ -35,7 +35,7 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
 
             var existingBackend = BookmarkStateStoreBackend.Find(services);
             existingBackend?.EnsureOwnsRegisteredContract(services);
-            RuntimeCheckpointCompositionTransition.EnsureGroundworkCheckpointTransitionAllowed(services, "bookmarks");
+            RuntimeEfCheckpointCompositionTransition.EnsureGroundworkCheckpointTransitionAllowed(services, "bookmarks");
             if (existingBackend is not null && existingBackend.Name == BookmarkStateStoreBackend.EntityFramework)
             {
                 existingBackend.EnsureOwnsRegisteredAuxiliaryContracts(services);

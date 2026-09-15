@@ -305,7 +305,8 @@ public static class GroundworkV2RuntimeRegistration
             RuntimeCheckpointCommitStoreBackend.Groundwork,
             groundworkCheckpointContractDescriptor,
             groundworkCheckpointConcreteDescriptor,
-            groundworkCheckpointEvidenceDescriptor));
+            groundworkCheckpointEvidenceDescriptor,
+            collection => GroundworkV2RuntimeUnitWithdrawal.RemoveCheckpointCommit(collection, target)));
         ReplaceScoped<GroundworkV2RuntimePostCommitOutboxStore>(services, Standard<GroundworkV2RuntimePostCommitOutboxStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IRuntimePostCommitOutboxStore), typeof(IPostCommitOutboxLookupStore),
             typeof(IRuntimePostCommitOutboxClaimStore), typeof(IRuntimePostCommitOutboxClaimCompletionStore),
@@ -602,6 +603,9 @@ internal static class GroundworkV2RuntimeUnitWithdrawal
 
     public static void RemovePostCommitOutbox(IServiceCollection services, string? targetName) =>
         services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind, targetName);
+
+    public static void RemoveCheckpointCommit(IServiceCollection services, string? targetName) =>
+        services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, targetName);
 
     public static void RemoveSchedulerWorkQueue(IServiceCollection services, string? targetName) =>
         services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, targetName);
