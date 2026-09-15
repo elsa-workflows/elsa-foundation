@@ -275,7 +275,8 @@ public sealed class EfBookmarkStateStore(
         return current.Scope.Value;
     }
 
-    private static BookmarkStateEntity ToEntity(BookmarkState state, string scope, string id, long revision)
+    // Internal checkpoint staging reuses the direct store's provider-neutral projection.
+    internal static BookmarkStateEntity ToEntity(BookmarkState state, string scope, string id, long revision)
     {
         var row = new BookmarkStateEntity { Id = id };
         CopyToEntity(row, state, scope, id, revision);
@@ -285,7 +286,7 @@ public sealed class EfBookmarkStateStore(
     // R01's schema only has a numeric concurrency token. Use a fresh positive token for
     // each insertion so a stale delete cannot match a delete-and-recreate successor that
     // happens to reuse the same logical key and revision sequence.
-    private static long NewRevision()
+    internal static long NewRevision()
     {
         Span<byte> bytes = stackalloc byte[sizeof(long)];
         RandomNumberGenerator.Fill(bytes);
@@ -293,7 +294,7 @@ public sealed class EfBookmarkStateStore(
         return value == 0 ? 1 : value;
     }
 
-    private static void CopyToEntity(BookmarkStateEntity row, BookmarkState state, string scope, string id, long revision)
+    internal static void CopyToEntity(BookmarkStateEntity row, BookmarkState state, string scope, string id, long revision)
     {
         row.Id = id;
         row.ScopeKey = EfRelationalIdentity.Encode(scope);
@@ -322,7 +323,7 @@ public sealed class EfBookmarkStateStore(
         row.Revision = revision;
     }
 
-    private static BookmarkState MapChecked(BookmarkStateEntity row, string scope, string? expectedWorkflow = null, string? expectedBookmark = null, string? expectedId = null)
+    internal static BookmarkState MapChecked(BookmarkStateEntity row, string scope, string? expectedWorkflow = null, string? expectedBookmark = null, string? expectedId = null)
     {
         try
         {
@@ -362,7 +363,7 @@ public sealed class EfBookmarkStateStore(
         }
     }
 
-    private static void ValidateState(BookmarkState state)
+    internal static void ValidateState(BookmarkState state)
     {
         ArgumentNullException.ThrowIfNull(state);
         ValidateBound(state.WorkflowExecutionId, BookmarkStateEfModule.WorkflowIdentityMaximumLength, nameof(state.WorkflowExecutionId));
@@ -396,7 +397,7 @@ public sealed class EfBookmarkStateStore(
             throw new ArgumentException($"The {parameterName} value cannot exceed {maximum} characters.", parameterName);
     }
 
-    private static string CreateId(string scope, string workflowExecutionId, string bookmarkId) =>
+    internal static string CreateId(string scope, string workflowExecutionId, string bookmarkId) =>
         Hash($"{scope.Length}:{scope}{workflowExecutionId.Length}:{workflowExecutionId}{bookmarkId.Length}:{bookmarkId}");
 
     private static string StimulusLookupKey(string stimulusType, string stimulusHash) => Hash($"{stimulusType.Length}:{stimulusType}{stimulusHash}");

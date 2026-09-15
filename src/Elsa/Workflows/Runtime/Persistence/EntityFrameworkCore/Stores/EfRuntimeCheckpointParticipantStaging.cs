@@ -83,6 +83,58 @@ internal static class EfRuntimeCheckpointParticipantStaging
     }
 
     /// <summary>
+    /// Stages one bookmark state change inside the caller-owned transaction.
+    /// </summary>
+    /// <remarks>
+    /// The public bookmark store owns independent writes and clears the tracker around them. Checkpoint writes must
+    /// retain all participants in one unit of work, so this seam only changes EF tracking state. SaveChanges,
+    /// transaction creation, and commit remain the caller's responsibility.
+    /// </remarks>
+    public static async ValueTask StageBookmarkAsync(
+        BookmarkStateDbContext context,
+        RuntimeStateChange<BookmarkState> change,
+        string scope,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(change);
+        ArgumentException.ThrowIfNullOrWhiteSpace(scope);
+        ArgumentNullException.ThrowIfNull(change.State);
+        if (!StringComparer.Ordinal.Equals(change.StateId, change.State.BookmarkId))
+            throw new InvalidOperationException("Bookmark state change StateId must match its model identity.");
+        if (change.Operation is not (RuntimeStateChangeOperation.Upsert or RuntimeStateChangeOperation.Delete))
+            throw new InvalidOperationException($"The EF checkpoint writer can only project bookmark '{RuntimeStateChangeOperation.Upsert}' or '{RuntimeStateChangeOperation.Delete}' changes.");
+        EfBookmarkStateStore.ValidateState(change.State);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (context.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("Bookmark state must be staged inside a caller-owned EF transaction.");
+
+        var state = change.State;
+        var id = EfBookmarkStateStore.CreateId(scope, state.WorkflowExecutionId, state.BookmarkId);
+        // Load by immutable physical identity first. Filtering on projections would turn a corrupt row into a false
+        // insert/miss instead of allowing the authoritative content and projection checks to fail closed.
+        var row = await context.Bookmarks.SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+        if (row is null)
+        {
+            if (change.Operation == RuntimeStateChangeOperation.Upsert)
+                context.Bookmarks.Add(EfBookmarkStateStore.ToEntity(state, scope, id, EfBookmarkStateStore.NewRevision()));
+
+            // Groundwork's conditional delete is idempotent for a missing row.
+            return;
+        }
+
+        _ = EfBookmarkStateStore.MapChecked(row, scope, state.WorkflowExecutionId, state.BookmarkId, id);
+        if (change.Operation == RuntimeStateChangeOperation.Delete)
+        {
+            context.Bookmarks.Remove(row);
+            return;
+        }
+
+        EfBookmarkStateStore.CopyToEntity(row, state, scope, id, checked(row.Revision + 1));
+    }
+
+    /// <summary>
     /// Stages one durable-value state change inside the caller-owned transaction.
     /// </summary>
     /// <remarks>
