@@ -4,8 +4,6 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 public static class BookmarkStateEfModule
 {
     public const string TableName = "elsa_runtime_bookmark_state";
-    public const string DefaultConnectionName = "ElsaRuntimeBookmarks";
-    public const string DefaultSqliteConnectionString = "Data Source=elsa-runtime-bookmarks.db";
     public const string SchemaVersion = "1.0.0";
     public const int WorkflowIdentityMaximumLength = 128;
     public const int BookmarkIdentityMaximumLength = 128;

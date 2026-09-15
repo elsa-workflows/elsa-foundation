@@ -715,7 +715,7 @@ public sealed class EfBookmarkStateStoreTests
     }
 
     [Fact]
-    public void Combined_runtime_ef_registration_rejects_different_default_connections_in_either_order()
+    public void Combined_runtime_ef_registration_shares_the_one_default_connection_in_either_order()
     {
         foreach (var register in new[] { "bookmarks-first", "artifacts-first" })
         {
@@ -724,13 +724,19 @@ public sealed class EfBookmarkStateStoreTests
             if (register == "bookmarks-first")
             {
                 services.AddRuntimeBookmarksEntityFrameworkCore(new());
-                Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(new()));
+                services.AddRuntimeArtifactsEntityFrameworkCore(new());
             }
             else
             {
                 services.AddRuntimeArtifactsEntityFrameworkCore(new());
-                Assert.Throws<InvalidOperationException>(() => services.AddRuntimeBookmarksEntityFrameworkCore(new()));
+                services.AddRuntimeBookmarksEntityFrameworkCore(new());
             }
+
+            using var provider = services.BuildServiceProvider();
+            using var scope = provider.CreateScope();
+            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+            Assert.Equal(RuntimeEfModule.DefaultSqliteConnectionString,
+                scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>().Database.GetConnectionString());
         }
     }
 

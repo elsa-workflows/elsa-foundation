@@ -1,8 +1,6 @@
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
@@ -26,12 +24,7 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
                 ConnectionString = options.ConnectionString,
                 ConnectionName = options.ConnectionName
             };
-            BookmarkStateEfContextRegistration.EnsureCompatible(
-                services,
-                provider,
-                options.ConnectionString,
-                options.ConnectionName,
-                BookmarkStateEfModule.DefaultSqliteConnectionString);
+            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName);
 
             var existingBackend = BookmarkStateStoreBackend.Find(services);
             existingBackend?.EnsureOwnsRegisteredContract(services);
@@ -160,13 +153,7 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
                     ownedArtifacts.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
                         .Where(operationalBackend.Owns));
                 else
-                    switch (provider)
-                    {
-                        case "sqlite": ownedArtifacts.AddRange(AddContext<BookmarkStateSqliteDbContext>(services, configured, EfRelationalProviderBinding.UseSqlite)); break;
-                        case "sqlserver": ownedArtifacts.AddRange(AddContext<BookmarkStateSqlServerDbContext>(services, configured, EfRelationalProviderBinding.UseSqlServer)); break;
-                        case "postgresql": ownedArtifacts.AddRange(AddContext<BookmarkStatePostgreSqlDbContext>(services, configured, EfRelationalProviderBinding.UseNpgsql)); break;
-                        case "mysql": ownedArtifacts.AddRange(AddContext<BookmarkStateMySqlDbContext>(services, configured, EfRelationalProviderBinding.UseMySql)); break;
-                    }
+                    ownedArtifacts.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName));
             }
 
             var descriptorState = ServiceDescriptor.Scoped<IBookmarkStateStore>(provider => provider.GetRequiredService<EfBookmarkStateStore>());
@@ -196,35 +183,6 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
 
     public static IServiceCollection AddRuntimeBookmarkEntityFrameworkCore(this IServiceCollection services, RuntimeBookmarksEntityFrameworkCoreOptions options) =>
         services.AddRuntimeBookmarksEntityFrameworkCore(options);
-
-    private static IReadOnlyCollection<ServiceDescriptor> AddContext<TContext>(IServiceCollection services, RuntimeBookmarksEntityFrameworkCoreOptions options, Action<DbContextOptionsBuilder, string, string, string?> bind)
-        where TContext : BookmarkStateDbContext
-    {
-        var start = services.Count;
-        services.AddDbContext<TContext>((provider, builder) => bind(builder, ResolveConnectionString(provider, options), RuntimeEfModule.HistoryTableName, typeof(BookmarkStateDbContext).Assembly.GetName().Name));
-        services.AddScoped<BookmarkStateDbContext>(provider => provider.GetRequiredService<TContext>());
-        return services.Skip(start).ToArray();
-    }
-
-    private static string ResolveConnectionString(IServiceProvider provider, RuntimeBookmarksEntityFrameworkCoreOptions options)
-    {
-        if (!string.IsNullOrWhiteSpace(options.ConnectionString))
-            return options.ConnectionString;
-        var configuration = provider.GetService<IConfiguration>();
-        if (!string.IsNullOrWhiteSpace(options.ConnectionName))
-        {
-            var namedConnection = configuration?.GetConnectionString(options.ConnectionName);
-            if (string.IsNullOrWhiteSpace(namedConnection))
-                throw new InvalidOperationException($"Runtime bookmarks EF connection '{options.ConnectionName}' was not found or was empty in ConnectionStrings.");
-            return namedConnection;
-        }
-        var fallback = configuration?.GetConnectionString(BookmarkStateEfModule.DefaultConnectionName);
-        if (!string.IsNullOrWhiteSpace(fallback))
-            return fallback;
-        if (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite")
-            return BookmarkStateEfModule.DefaultSqliteConnectionString;
-        throw new InvalidOperationException("Runtime bookmarks EF requires ConnectionString or ConnectionName for a non-Sqlite provider.");
-    }
 
     private static void RemoveEfArtifacts(IServiceCollection services, IReadOnlyCollection<ServiceDescriptor> ownedArtifacts)
     {

@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
     name: "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence",
     DisplayName = "Workflows Runtime EF Core Bookmark Persistence",
     Description = "Opt-in EF Core persistence for runtime bookmark state and stimulus lookup. Groundwork remains the default.",
-    DependsOn = new object[] { "WorkflowsRuntime" })]
+    DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
 public class RuntimeBookmarksEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(
@@ -25,14 +25,14 @@ public class RuntimeBookmarksEntityFrameworkCoreFeature : IShellFeature
 
     [ManifestSetting(
         DisplayName = "Connection string",
-        Description = "Optional explicit connection string. When omitted, ConnectionName or ConnectionStrings:ElsaRuntimeBookmarks is used. Sqlite defaults to Data Source=elsa-runtime-bookmarks.db.",
+        Description = "Optional explicit connection string. When omitted, ConnectionName or ConnectionStrings:Elsa is used. Sqlite defaults to Data Source=elsa-runtime.db.",
         Category = "Persistence",
         Secret = true)]
     public string? ConnectionString { get; set; }
 
     [ManifestSetting(
         DisplayName = "Connection name",
-        Description = "Optional configuration connection-string name. When omitted, ElsaRuntimeBookmarks is used.",
+        Description = "Optional configuration connection-string name. When omitted, Elsa is used.",
         Category = "Persistence")]
     public string? ConnectionName { get; set; }
 

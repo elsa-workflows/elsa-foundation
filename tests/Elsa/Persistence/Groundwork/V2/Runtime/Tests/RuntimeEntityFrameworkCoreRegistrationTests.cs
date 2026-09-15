@@ -36,10 +36,20 @@ public sealed class RuntimeEntityFrameworkCoreRegistrationTests
             ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
             ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind,
             ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind,
-            ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind
+            ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind,
+            ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingDocumentKind,
+            ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleDocumentKind,
+            ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind,
+            ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind
         };
         Assert.DoesNotContain(registry.Registrations, registration =>
             withdrawnCheckpointUnitIds.Contains(registration.Unit.Id.Value, StringComparer.Ordinal));
+        // Groundwork registers no backend for scheduler poison or run health, so nothing withdraws those two
+        // declarations. They are the only runtime units left behind, and no EF store reads them.
+        var runtimeUnitIds = ElsaRuntimeV2StorageManifest.CreateUnits().Select(unit => unit.Id.Value).ToHashSet(StringComparer.Ordinal);
+        Assert.Equal(
+            new[] { ElsaRuntimeV2StorageManifest.SchedulerPoisonDocumentKind, ElsaRuntimeV2StorageManifest.WorkflowRunHealthStateDocumentKind }.Order(StringComparer.Ordinal),
+            registry.Registrations.Select(registration => registration.Unit.Id.Value).Where(runtimeUnitIds.Contains).Order(StringComparer.Ordinal));
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IWorkflowDispatchDurabilityEvidence) &&
             descriptor.ImplementationType?.Name?.StartsWith("GroundworkV2", StringComparison.Ordinal) == true);
 
@@ -55,6 +65,11 @@ public sealed class RuntimeEntityFrameworkCoreRegistrationTests
         Assert.Equal(RuntimeWorkflowDispatchStoreBackend.EntityFramework, RuntimeWorkflowDispatchStoreBackend.Find(services)!.Name);
         Assert.Equal(RuntimePostCommitOutboxStoreBackend.EntityFramework, RuntimePostCommitOutboxStoreBackend.Find(services)!.Name);
         Assert.Equal(RuntimeCheckpointCommitStoreBackend.EntityFramework, RuntimeCheckpointCommitStoreBackend.Find(services)!.Name);
+        Assert.Equal(WorkflowSchedulerPoisonStoreBackend.EntityFramework, WorkflowSchedulerPoisonStoreBackend.Find(services)!.Name);
+        Assert.Equal(WorkflowTriggerBindingStoreBackend.EntityFramework, WorkflowTriggerBindingStoreBackend.Find(services)!.Name);
+        Assert.Equal(RecurringTriggerScheduleStoreBackend.EntityFramework, RecurringTriggerScheduleStoreBackend.Find(services)!.Name);
+        Assert.Equal(WorkflowActivationAuthorityBackend.EntityFramework, WorkflowActivationAuthorityBackend.Find(services)!.Name);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowSchedulerPoisonStore));
 
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
@@ -115,6 +130,31 @@ public sealed class RuntimeEntityFrameworkCoreRegistrationTests
         Assert.Equal(beforeUnits, registry.Registrations);
         Assert.Equal(RuntimeCheckpointCommitStoreBackend.Groundwork, RuntimeCheckpointCommitStoreBackend.Find(services)!.Name);
         Assert.Equal(RuntimeActivityExecutionStoreBackend.Groundwork, RuntimeActivityExecutionStoreBackend.Find(services)!.Name);
+    }
+
+    /// <summary>
+    /// The last participant refuses after earlier ones already withdrew Groundwork units (trigger bindings, recurring
+    /// schedules and their shared projection state). Both the services and the storage-unit registry must come back.
+    /// </summary>
+    [Fact]
+    public void A_refusal_from_the_last_participant_restores_every_withdrawn_Groundwork_unit()
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddGroundworkV2RuntimeStores();
+        services.AddScoped<IWorkflowActivationAuthority>(_ => throw new InvalidOperationException("foreign activation authority"));
+        var beforeServices = services.ToArray();
+        var registry = Assert.IsType<GroundworkStorageUnitRegistry>(services.Single(descriptor =>
+            descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance);
+        var beforeUnits = registry.Registrations;
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeEntityFrameworkCore(Options()));
+
+        Assert.Equal(beforeServices, services);
+        Assert.Equal(beforeUnits, registry.Registrations);
+        Assert.Contains(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind);
+        Assert.Equal(WorkflowTriggerBindingStoreBackend.Groundwork, WorkflowTriggerBindingStoreBackend.Find(services)!.Name);
+        Assert.Equal(RuntimeCheckpointCommitStoreBackend.Groundwork, RuntimeCheckpointCommitStoreBackend.Find(services)!.Name);
     }
 
     [Fact]

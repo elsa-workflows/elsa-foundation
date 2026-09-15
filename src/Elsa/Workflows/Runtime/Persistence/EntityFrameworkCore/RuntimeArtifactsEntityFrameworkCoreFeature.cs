@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
     name: "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence",
     DisplayName = "Workflows Runtime EF Core Executable Artifact Persistence",
     Description = "Opt-in EF Core persistence for runtime executable artifacts, templates and source references. It applies or validates the shared Runtime migrations on shell activation; Groundwork remains the default.",
-    DependsOn = new object[] { "WorkflowsRuntime" })]
+    DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
 public class RuntimeArtifactsEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(
@@ -26,14 +26,14 @@ public class RuntimeArtifactsEntityFrameworkCoreFeature : IShellFeature
 
     [ManifestSetting(
         DisplayName = "Connection string",
-        Description = "Optional explicit connection string. When omitted, ConnectionName or ConnectionStrings:ElsaRuntimeArtifacts is used. Sqlite defaults to Data Source=elsa-runtime-artifacts.db.",
+        Description = "Optional explicit connection string. When omitted, ConnectionName or ConnectionStrings:Elsa is used. Sqlite defaults to Data Source=elsa-runtime.db.",
         Category = "Persistence",
         Secret = true)]
     public string? ConnectionString { get; set; }
 
     [ManifestSetting(
         DisplayName = "Connection name",
-        Description = "Optional configuration connection-string name. When omitted, ElsaRuntimeArtifacts is used.",
+        Description = "Optional configuration connection-string name. When omitted, Elsa is used.",
         Category = "Persistence")]
     public string? ConnectionName { get; set; }
     [ManifestSetting(

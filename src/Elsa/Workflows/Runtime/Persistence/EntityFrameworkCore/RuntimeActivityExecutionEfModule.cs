@@ -6,8 +6,6 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 /// </summary>
 public static class RuntimeActivityExecutionEfModule
 {
-    public const string DefaultConnectionName = "ElsaRuntimeActivityExecutions";
-    public const string DefaultSqliteConnectionString = "Data Source=elsa-runtime-activity-executions.db";
     public const string SchemaVersion = "1.0.0";
     public const string ActivityExecutionStateTableName = "elsa_runtime_activity_execution_state";
     public const string ActivityExecutionInspectionTableName = "elsa_runtime_activity_execution_inspection";
