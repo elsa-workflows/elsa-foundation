@@ -1,5 +1,7 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Entities;
+using System.Text.Json;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Elsa.Activities.Design.Persistence.Core.Entities;
 
@@ -47,6 +49,7 @@ public abstract class ActivityManagementProjectionRevision : TenantEntity
 /// <summary>Disclosure-safe temporal definition summary. It intentionally excludes contracts, provider payloads, layouts and diagnostics.</summary>
 public sealed class ActivityDefinitionManagementProjectionRevision : ActivityManagementProjectionRevision
 {
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     public string ActivityTypeKey { get; init; } = null!;
 
     public string Category { get; init; } = null!;
@@ -55,7 +58,64 @@ public sealed class ActivityDefinitionManagementProjectionRevision : ActivityMan
 
     public string? Description { get; init; }
 
-    public ActivityContentAuthority ContentAuthority { get; init; } = null!;
+    private ActivityContentAuthority? contentAuthority;
+
+    /// <summary>Decoded authority material. The persisted JSON and database-generated validity
+    /// marker are exposed separately so reads remain provider-side and fail closed.</summary>
+    [NotMapped]
+    public ActivityContentAuthority ContentAuthority
+    {
+        get
+        {
+            if (contentAuthority is not null)
+                return contentAuthority;
+            if (string.IsNullOrWhiteSpace(ContentAuthorityJson))
+                return null!;
+            try
+            {
+                return contentAuthority = JsonSerializer.Deserialize<ActivityContentAuthority>(ContentAuthorityJson, Json)!;
+            }
+            catch (JsonException) { return null!; }
+            catch (NotSupportedException) { return null!; }
+            catch (InvalidOperationException) { return null!; }
+            catch (ArgumentException) { return null!; }
+        }
+        init => contentAuthority = value;
+    }
+
+    /// <summary>Raw authority JSON. This is the storage column retained for compatibility.</summary>
+    public string? ContentAuthorityJson { get; private set; }
+
+    /// <summary>Database-generated semantic validity marker for the persisted authority JSON.</summary>
+    public bool ContentAuthorityIsValid { get; private set; }
+
+    /// <summary>Canonical authority JSON maintained with <see cref="ContentAuthorityJson"/>.</summary>
+    public string? ContentAuthorityCanonicalJson { get; private set; }
+
+    /// <summary>STJ-encoded JSON token for the authoritative key, used by provider-safe integrity predicates.</summary>
+    public string? ContentAuthorityAuthorityKeyJson { get; private set; }
+
+    /// <summary>STJ-encoded JSON token for the authoritative source, or the literal null token.</summary>
+    public string? ContentAuthoritySourceIdJson { get; private set; }
+
+    /// <summary>Decoded authority key persisted as an unbounded scalar for provider-safe predicates.</summary>
+    public string? ContentAuthorityAuthorityKey { get; private set; }
+
+    /// <summary>Decoded source identifier persisted as an unbounded scalar for provider-safe predicates.</summary>
+    public string? ContentAuthoritySourceId { get; private set; }
+
+    /// <summary>
+    /// Integrity digest over the raw, canonical, token and decoded scalar authority material.
+    /// Provider validity predicates compare this digest before allowing a row into a page.
+    /// </summary>
+    public string? ContentAuthorityIntegrityHash { get; private set; }
+
+    /// <summary>
+    /// Provider-safe scalar projection of <see cref="ContentAuthority"/>. Writers must derive this
+    /// value from <c>ContentAuthority.Kind</c>; it exists because JSON-converted members are not
+    /// translatable by every EF provider.
+    /// </summary>
+    public ActivityContentAuthorityKind ContentAuthorityKind { get; init; }
 
     public string? HeadVersionId { get; init; }
 
@@ -69,9 +129,9 @@ public sealed class ActivityDefinitionManagementProjectionRevision : ActivityMan
 
     public string? RecommendationProviderKey { get; init; }
 
-    public long DraftCount { get; init; }
+    public long DraftCount { get; set; }
 
-    public long VersionCount { get; init; }
+    public long VersionCount { get; set; }
 
     public DateTimeOffset UpdatedAt { get; init; }
 }

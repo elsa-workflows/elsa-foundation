@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 120
+- Discovered feature classes: 121
 
 ## Features
 
@@ -16,6 +16,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | ActivitiesBpmnInterchangeFeature | direct IWebShellFeature | Elsa.Activities.Bpmn.Interchange | IWebShellFeature | [ActivitiesBpmnInterchangeFeature.cs](../../src/Elsa/Activities/Bpmn/Interchange/ActivitiesBpmnInterchangeFeature.cs) |
 | ActivitiesControlFlowFeature | direct IShellFeature | Elsa.Activities.ControlFlow | IShellFeature | [ActivitiesControlFlowFeature.cs](../../src/Elsa/Activities/ControlFlow/ActivitiesControlFlowFeature.cs) |
 | ActivitiesDesignApiFeature | direct IWebShellFeature | Elsa.Activities.Design.Api | IWebShellFeature | [ActivitiesDesignApiFeature.cs](../../src/Elsa/Activities/Design/Api/ActivitiesDesignApiFeature.cs) |
+| ActivitiesDesignEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Activities.Design.Persistence.EntityFrameworkCore | IShellFeature | [ActivitiesDesignEntityFrameworkCoreFeature.cs](../../src/Elsa/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignEntityFrameworkCoreFeature.cs) |
 | ActivitiesDesignGroundworkPersistenceFeature | direct IShellFeature | Elsa.Activities.Design.Persistence.Groundwork | IShellFeature | [ActivitiesDesignGroundworkPersistenceFeature.cs](../../src/Elsa/Activities/Design/Persistence/Groundwork/ActivitiesDesignGroundworkPersistenceFeature.cs) |
 | ActivitiesDesignReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation | IShellFeature | [ActivitiesDesignReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/ActivitiesDesignReconciliationFeature.cs) |
 | ClrActivityReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation.Clr | IShellFeature | [ClrActivityReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/Clr/ClrActivityReconciliationFeature.cs) |

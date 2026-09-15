@@ -6,9 +6,9 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 
 ## Summary
 
-- Catalog files discovered: 68
-- Source catalogs discovered: 67
-- Source catalogs indexed from root: 63
+- Catalog files discovered: 69
+- Source catalogs discovered: 68
+- Source catalogs indexed from root: 64
 - Discovered source catalogs not linked from root index: 4
 - Root-indexed catalogs missing on disk: 0
 
@@ -27,6 +27,7 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 | [src/Elsa/Activities/ControlFlow/Switch/EXTENSION_POINTS.md](../../src/Elsa/Activities/ControlFlow/Switch/EXTENSION_POINTS.md) | Elsa.Activities.ControlFlow | Elsa.Activities | Cross-domain contributions | - | - | 0 | yes |
 | [src/Elsa/Activities/ControlFlow/While/EXTENSION_POINTS.md](../../src/Elsa/Activities/ControlFlow/While/EXTENSION_POINTS.md) | Elsa.Activities.ControlFlow | Elsa.Activities | Cross-domain contributions | - | - | 0 | yes |
 | [src/Elsa/Activities/Design/Api/EXTENSION_POINTS.md](../../src/Elsa/Activities/Design/Api/EXTENSION_POINTS.md) | Elsa.Activities.Design.Api | Elsa.Activities | Endpoint composition<br>Replacement contracts<br>Provider contributors<br>Sources and reconciliation | - | - | 0 | yes |
+| [src/Elsa/Activities/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md](../../src/Elsa/Activities/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) | Elsa.Activities.Design.Persistence.EntityFrameworkCore | Elsa.Activities | Replacement contracts<br>Provider boundary<br>Persistence semantics<br>Registration | - | - | 0 | yes |
 | [src/Elsa/Activities/Design/Persistence/Groundwork/EXTENSION_POINTS.md](../../src/Elsa/Activities/Design/Persistence/Groundwork/EXTENSION_POINTS.md) | Elsa.Activities.Design.Persistence.Groundwork | Elsa.Activities | Replacement contracts<br>v2 storage boundary<br>Atomic writer seam<br>Registration | - | - | 0 | yes |
 | [src/Elsa/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md](../../src/Elsa/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md) | Elsa.Activities.Design.Reconciliation.Clr | Elsa.Activities | Contributions to other domains<br>Replaceable services (per §2.6.2)<br>Options<br>Events | `IActivityReconciliationSource` *(Core contract — `Elsa.Activities.Design.Core`)* | - | 0 | yes |
 | [src/Elsa/Activities/Design/Reconciliation/EXTENSION_POINTS.md](../../src/Elsa/Activities/Design/Reconciliation/EXTENSION_POINTS.md) | Elsa.Activities.Design.Reconciliation | Elsa.Activities | Implementable contributor interfaces<br>Events | `IActivityReconciliationSource` *(Feature contract — `Elsa.Activities.Design.Reconciliation`)*<br>ActivityVersionsReconciling | Source (returns reconciliation models — pull pattern). | 1 | yes |

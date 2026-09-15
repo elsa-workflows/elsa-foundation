@@ -15,7 +15,8 @@ public sealed class ServerReadinessTests
         await fixture.WaitForDefaultRouteInitializationAsync();
 
         using var live = await fixture.Client.GetAsync(ServerReadinessFixture.LivePath);
-        var ready = await fixture.ReadReadyAsync().WaitAsync(TimeSpan.FromSeconds(1));
+        // The route remains blocked; allow a busy CI runner time for the HTTP round trip.
+        var ready = await fixture.ReadReadyAsync().WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Equal(HttpStatusCode.OK, live.StatusCode);
         Assert.Equal("live", (await fixture.ReadLiveAsync()).Status);

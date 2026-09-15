@@ -73,6 +73,7 @@
   <Folder Name="/src/Elsa/Activities/Design/Core/" />
   <Folder Name="/src/Elsa/Activities/Design/Persistence/">
     <Project Path="src/Elsa/Activities/Design/Persistence/Core/Elsa.Activities.Design.Persistence.Core.csproj" />
+    <Project Path="src/Elsa/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
     <Project Path="src/Elsa/Activities/Design/Persistence/Groundwork/Elsa.Activities.Design.Persistence.Groundwork.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Activities/Design/Reconciliation/">
@@ -363,6 +364,10 @@
     <Project Path="tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Activities/Design/Persistence/" />
+  <Folder Name="/tests/Elsa/Activities/Design/Persistence/EntityFrameworkCore/">
+    <Project Path="tests/Elsa/Activities/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.Tests.csproj" />
+    <Project Path="tests/Elsa/Activities/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Activities/Design/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Activities/Design/Persistence/Groundwork/TemporalProjectionTests/Elsa.Activities.Design.Persistence.Groundwork.TemporalProjectionTests.csproj" />
     <Project Path="tests/Elsa/Activities/Design/Persistence/Groundwork/Tests/Elsa.Activities.Design.Persistence.Groundwork.Tests.csproj" />
