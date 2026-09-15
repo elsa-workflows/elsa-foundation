@@ -48,8 +48,9 @@ public sealed class EfPublicationSnapshotReviewStore(
         if (entity is null)
             return null;
 
+        EnsureAuthorizedTenant(accessContextAccessor, entity.TenantId);
+        EnsureIncarnation(entity);
         var review = ToModel(entity);
-        EnsureAuthorizedTenant(accessContextAccessor, review.TenantId);
         return review;
     }
 
@@ -62,12 +63,13 @@ public sealed class EfPublicationSnapshotReviewStore(
         if (entity is null)
             return false;
 
-        var review = ToModel(entity);
-        EnsureAuthorizedTenant(accessContextAccessor, review.TenantId);
-        // The token is the immutable row identity. ExecuteDelete is one database-side operation,
-        // so concurrent contexts get exactly one affected row without a tracked stale delete.
+        EnsureAuthorizedTenant(accessContextAccessor, entity.TenantId);
+        EnsureIncarnation(entity);
+        _ = ToModel(entity);
+        // The token is the logical identity and the incarnation identifies this insertion. ExecuteDelete
+        // is one database-side operation, so a concurrent consumer or reinsertion cannot be deleted stale.
         return await context.SnapshotReviews
-            .Where(row => row.PreflightToken == preflightToken)
+            .Where(row => row.PreflightToken == preflightToken && row.Incarnation == entity.Incarnation)
             .ExecuteDeleteAsync(cancellationToken) == 1;
     }
 
@@ -82,22 +84,25 @@ public sealed class EfPublicationSnapshotReviewStore(
             query = query.Where(row => row.TenantId == scope.Value);
 
         var candidates = await query.OrderBy(row => row.ExpiresAt).ThenBy(row => row.PreflightToken)
-            .Take(maxCount).Select(row => row.PreflightToken).ToListAsync(cancellationToken);
+            .Take(maxCount).Select(row => new ExpiryCandidate(row.PreflightToken, row.Incarnation)).ToListAsync(cancellationToken);
         var deleted = 0;
-        foreach (var token in candidates)
+        foreach (var candidate in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var entity = await context.SnapshotReviews.AsNoTracking()
-                .SingleOrDefaultAsync(row => row.PreflightToken == token, cancellationToken);
+                .SingleOrDefaultAsync(row => row.PreflightToken == candidate.Token && row.Incarnation == candidate.Incarnation, cancellationToken);
             if (entity is null)
                 continue;
 
-            var review = ToModel(entity);
-            EnsureAuthorizedTenant(accessContextAccessor, review.TenantId);
-            // Re-check the expiry in the delete predicate. A concurrent consumer wins by removing
-            // the row first; a future same-token row cannot be inserted because identity is unique.
+            EnsureAuthorizedTenant(accessContextAccessor, entity.TenantId);
+            EnsureIncarnation(entity);
+            _ = ToModel(entity);
+            // Re-check the expiry and insertion incarnation in the delete predicate. A concurrent
+            // consumer or same-token reinsertion wins by making this operation affect zero rows.
             deleted += await context.SnapshotReviews
-                .Where(row => row.PreflightToken == token && row.ExpiresAt <= expiresAtOrBefore)
+                .Where(row => row.PreflightToken == candidate.Token &&
+                             row.Incarnation == candidate.Incarnation &&
+                             row.ExpiresAt <= expiresAtOrBefore)
                 .ExecuteDeleteAsync(cancellationToken) == 1 ? 1 : 0;
         }
 
@@ -107,6 +112,7 @@ public sealed class EfPublicationSnapshotReviewStore(
     private static PublicationSnapshotReviewEntity ToEntity(PublicationSnapshotReview review) => new()
     {
         PreflightToken = review.PreflightToken,
+        Incarnation = Guid.NewGuid().ToString("N"),
         CandidateHash = review.CandidateHash,
         DefinitionId = review.DefinitionId,
         Action = review.Action.ToString(),
@@ -154,6 +160,9 @@ public sealed class EfPublicationSnapshotReviewStore(
             ? throw new InvalidOperationException($"Malformed publication snapshot-review row: {field} is missing.")
             : value;
 
+    private static void EnsureIncarnation(PublicationSnapshotReviewEntity entity) =>
+        _ = Required(entity.Incarnation, nameof(entity.Incarnation));
+
     private static T Parse<T>(string? value, string field) where T : struct, Enum =>
         Enum.TryParse<T>(value, ignoreCase: false, out var result) && Enum.IsDefined(result)
             ? result
@@ -174,4 +183,6 @@ public sealed class EfPublicationSnapshotReviewStore(
 
         current.EnsureScope(new PersistenceScope(tenantId));
     }
+
+    private readonly record struct ExpiryCandidate(string Token, string Incarnation);
 }

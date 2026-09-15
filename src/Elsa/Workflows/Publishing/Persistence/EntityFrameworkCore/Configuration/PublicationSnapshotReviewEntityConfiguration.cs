@@ -11,6 +11,7 @@ public sealed class PublicationSnapshotReviewEntityConfiguration : IEntityTypeCo
         builder.ToTable(PublishingSnapshotReviewEfModule.TableName);
         builder.HasKey(row => row.PreflightToken);
         builder.Property(row => row.PreflightToken).HasMaxLength(PublishingSnapshotReviewEfModule.IdentityMaximumLength).IsRequired();
+        builder.Property(row => row.Incarnation).HasMaxLength(PublishingSnapshotReviewEfModule.IncarnationMaximumLength).IsRequired();
         builder.Property(row => row.CandidateHash).HasMaxLength(PublishingSnapshotReviewEfModule.CandidateHashMaximumLength).IsRequired();
         builder.Property(row => row.DefinitionId).HasMaxLength(PublishingSnapshotReviewEfModule.IdentityMaximumLength).IsRequired();
         builder.Property(row => row.Action).HasMaxLength(32).IsRequired();

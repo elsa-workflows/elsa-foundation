@@ -43,14 +43,24 @@ public static class PublishingEntityFrameworkCoreRegistration
                 ConnectionName = options.ConnectionName
             };
             services.AddSingleton(configured);
-            AddContext(services, configured, provider);
-            services.AddScoped<EfPublicationSnapshotReviewStore>();
+            var owned = new List<ServiceDescriptor>
+            {
+                services.Last(service => ReferenceEquals(service.ImplementationInstance, configured))
+            };
+            owned.AddRange(AddContext(services, configured, provider));
+            var concreteDescriptor = new ServiceDescriptor(
+                typeof(EfPublicationSnapshotReviewStore),
+                typeof(EfPublicationSnapshotReviewStore),
+                ServiceLifetime.Scoped);
+            services.Add(concreteDescriptor);
+            owned.Add(concreteDescriptor);
             var storeDescriptor = ServiceDescriptor.Scoped<IPublicationSnapshotReviewStore>(providerService =>
                 providerService.GetRequiredService<EfPublicationSnapshotReviewStore>());
             services.Add(storeDescriptor);
+            owned.Add(storeDescriptor);
             PublicationSnapshotReviewStoreBackend.Register(
                 services,
-                new PublicationSnapshotReviewStoreBackend(PublicationSnapshotReviewStoreBackend.EntityFramework, storeDescriptor));
+                new PublicationSnapshotReviewStoreBackend(PublicationSnapshotReviewStoreBackend.EntityFramework, owned));
             return services;
         }
         catch
@@ -62,24 +72,26 @@ public static class PublishingEntityFrameworkCoreRegistration
         }
     }
 
-    private static void AddContext(IServiceCollection services, PublishingEntityFrameworkCoreOptions options, string provider)
+    private static IReadOnlyCollection<ServiceDescriptor> AddContext(IServiceCollection services, PublishingEntityFrameworkCoreOptions options, string provider)
     {
-        switch (provider)
+        return provider switch
         {
-            case "sqlite": AddContext<PublishingSnapshotReviewSqliteDbContext>(services, options, EfRelationalProviderBinding.UseSqlite); break;
-            case "sqlserver": AddContext<PublishingSnapshotReviewSqlServerDbContext>(services, options, EfRelationalProviderBinding.UseSqlServer); break;
-            case "postgresql": AddContext<PublishingSnapshotReviewPostgreSqlDbContext>(services, options, EfRelationalProviderBinding.UseNpgsql); break;
-            case "mysql": AddContext<PublishingSnapshotReviewMySqlDbContext>(services, options, EfRelationalProviderBinding.UseMySql); break;
-            default: throw new ArgumentException($"Unknown Publishing EF provider '{options.Provider}'.", nameof(options));
-        }
+            "sqlite" => AddContext<PublishingSnapshotReviewSqliteDbContext>(services, options, EfRelationalProviderBinding.UseSqlite),
+            "sqlserver" => AddContext<PublishingSnapshotReviewSqlServerDbContext>(services, options, EfRelationalProviderBinding.UseSqlServer),
+            "postgresql" => AddContext<PublishingSnapshotReviewPostgreSqlDbContext>(services, options, EfRelationalProviderBinding.UseNpgsql),
+            "mysql" => AddContext<PublishingSnapshotReviewMySqlDbContext>(services, options, EfRelationalProviderBinding.UseMySql),
+            _ => throw new ArgumentException($"Unknown Publishing EF provider '{options.Provider}'.", nameof(options))
+        };
     }
 
-    private static void AddContext<TContext>(IServiceCollection services, PublishingEntityFrameworkCoreOptions options, Action<DbContextOptionsBuilder, string, string, string?> bind)
+    private static IReadOnlyCollection<ServiceDescriptor> AddContext<TContext>(IServiceCollection services, PublishingEntityFrameworkCoreOptions options, Action<DbContextOptionsBuilder, string, string, string?> bind)
         where TContext : PublishingSnapshotReviewDbContext
     {
+        var start = services.Count;
         services.AddDbContext<TContext>((provider, builder) =>
             bind(builder, ResolveConnection(provider, options), PublishingSnapshotReviewEfModule.HistoryTableName, typeof(PublishingSnapshotReviewDbContext).Assembly.GetName().Name));
         services.AddScoped<PublishingSnapshotReviewDbContext>(provider => provider.GetRequiredService<TContext>());
+        return services.Skip(start).ToArray();
     }
 
     private static string ResolveConnection(IServiceProvider provider, PublishingEntityFrameworkCoreOptions options)

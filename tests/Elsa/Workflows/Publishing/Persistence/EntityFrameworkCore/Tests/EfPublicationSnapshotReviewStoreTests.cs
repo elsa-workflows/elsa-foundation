@@ -4,8 +4,14 @@ using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
+using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Kernel;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Targets;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -60,6 +66,22 @@ public sealed class EfPublicationSnapshotReviewStoreTests
     }
 
     [Fact]
+    public async Task Reinserted_logical_token_gets_a_new_incarnation()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var context = database.Context();
+        var store = database.Store(context, "tenant-a");
+        var review = Review("reinsert", "tenant-a", database.Now.AddMinutes(1));
+        Assert.True(await store.TryAddAsync(review));
+        var firstIncarnation = (await context.SnapshotReviews.SingleAsync()).Incarnation;
+        Assert.True(await store.TryConsumeAsync(review.PreflightToken));
+        context.ChangeTracker.Clear();
+        Assert.True(await store.TryAddAsync(review));
+        Assert.NotEqual(firstIncarnation, (await context.SnapshotReviews.SingleAsync()).Incarnation);
+        Assert.True(await store.TryConsumeAsync(review.PreflightToken));
+    }
+
+    [Fact]
     public async Task Expiry_cleanup_is_ordered_and_bounded()
     {
         await using var database = await Database.CreateAsync();
@@ -85,16 +107,40 @@ public sealed class EfPublicationSnapshotReviewStoreTests
         context.SnapshotReviews.Add(new PublicationSnapshotReviewEntity
         {
             PreflightToken = "malformed",
+            Incarnation = Guid.NewGuid().ToString("N"),
             CandidateHash = "sha256:x",
             DefinitionId = "definition",
             Action = "NoSuchAction",
             SlotName = "default",
             PolicySource = nameof(PublicationPolicySource.Host),
+            TenantId = "tenant-a",
             SlotRevision = 0,
             ExpiresAt = database.Now.AddMinutes(1)
         });
         await context.SaveChangesAsync();
         await Assert.ThrowsAsync<InvalidOperationException>(() => database.Store(context, "tenant-a").FindAsync("malformed").AsTask());
+    }
+
+    [Fact]
+    public async Task Foreign_malformed_row_is_rejected_by_scope_before_decoding()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var context = database.Context();
+        context.SnapshotReviews.Add(new PublicationSnapshotReviewEntity
+        {
+            PreflightToken = "foreign-malformed",
+            Incarnation = Guid.NewGuid().ToString("N"),
+            CandidateHash = "sha256:x",
+            DefinitionId = "definition",
+            Action = "NoSuchAction",
+            SlotName = "default",
+            PolicySource = nameof(PublicationPolicySource.Host),
+            TenantId = "tenant-b",
+            ExpiresAt = database.Now.AddMinutes(1)
+        });
+        await context.SaveChangesAsync();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => database.Store(context, "tenant-a").FindAsync("foreign-malformed").AsTask());
+        Assert.Contains("does not belong", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -112,6 +158,59 @@ public sealed class EfPublicationSnapshotReviewStoreTests
         var foreign = new ServiceCollection();
         foreign.AddScoped<IPublicationSnapshotReviewStore, ForeignStore>();
         Assert.Throws<InvalidOperationException>(() => foreign.AddPublishingEntityFrameworkCore(options));
+    }
+
+    [Fact]
+    public void Explicit_EF_selection_wins_when_Groundwork_is_composed_before_or_after_it()
+    {
+        foreach (var compose in new[] { "ef-gw-ef", "gw-ef-gw" })
+        {
+            var services = new ServiceCollection();
+            new WorkflowsPublishingFeature().ConfigureServices(services);
+            if (compose == "ef-gw-ef")
+            {
+                services.AddPublishingEntityFrameworkCore(new PublishingEntityFrameworkCoreOptions { ConnectionString = "Data Source=registration.db" });
+                services.AddGroundworkPublishingStores();
+                services.AddPublishingEntityFrameworkCore(new PublishingEntityFrameworkCoreOptions { ConnectionString = "Data Source=registration.db" });
+            }
+            else
+            {
+                services.AddGroundworkPublishingStores();
+                services.AddPublishingEntityFrameworkCore(new PublishingEntityFrameworkCoreOptions { ConnectionString = "Data Source=registration.db" });
+                services.AddGroundworkPublishingStores();
+            }
+
+            Assert.Equal(PublicationSnapshotReviewStoreBackend.EntityFramework, PublicationSnapshotReviewStoreBackend.Find(services)!.Name);
+            Assert.Single(services, service => service.ServiceType == typeof(IPublicationSnapshotReviewStore));
+            Assert.Single(services, service => service.ServiceType == typeof(PublishingEntityFrameworkCoreOptions));
+            Assert.Single(services, service => service.ServiceType == typeof(EfPublicationSnapshotReviewStore));
+            Assert.Single(services, service => service.ServiceType == typeof(PublishingSnapshotReviewDbContext));
+            Assert.Single(services, service => service.ServiceType == typeof(IPublicationRecordStore));
+            Assert.Equal(typeof(GroundworkPublicationRecordStore), services.Last(service => service.ServiceType == typeof(IPublicationRecordStore)).ImplementationType);
+        }
+    }
+
+    [Fact]
+    public void Groundwork_registration_rolls_back_when_late_target_validation_fails()
+    {
+        var services = new ServiceCollection();
+        new WorkflowsPublishingFeature().ConfigureServices(services);
+        var registry = new GroundworkStorageUnitRegistry();
+        registry.Declare(StorageUnit.Declare(PublishingGroundworkStorageManifest.SnapshotReviewDocumentKind, "conflicting")
+            .String("id", 32, column => column.Required()).Key("id").Build(), "conflicting");
+        var bindings = new GroundworkManifestBindings();
+        bindings.Bind(typeof(PublishingGroundworkStorageManifestSource), null);
+        services.AddSingleton(bindings);
+        services.AddSingleton(registry);
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddGroundworkPublishingStores("conflicting"));
+
+        Assert.Equal(before.Length, services.Count);
+        Assert.Equal(before, services);
+        Assert.Single(registry.Registrations);
+        Assert.Equal(GroundworkTargetNames.Default, bindings.TargetFor(typeof(PublishingGroundworkStorageManifestSource)));
+        Assert.Equal(PublicationSnapshotReviewStoreBackend.InMemory, PublicationSnapshotReviewStoreBackend.Find(services)!.Name);
     }
 
     private static PublicationSnapshotReview Review(string token, string? tenantId, DateTimeOffset expiresAt) => new(

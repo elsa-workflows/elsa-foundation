@@ -4,6 +4,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities;
 public sealed class PublicationSnapshotReviewEntity
 {
     public string PreflightToken { get; set; } = "";
+    public string Incarnation { get; set; } = "";
     public string CandidateHash { get; set; } = "";
     public string DefinitionId { get; set; } = "";
     public string Action { get; set; } = "";

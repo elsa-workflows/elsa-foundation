@@ -15,5 +15,6 @@
     <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Publishing/Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Publishing/Persistence/Groundwork/Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
   </ItemGroup>
 </Project>

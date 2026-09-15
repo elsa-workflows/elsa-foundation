@@ -9,23 +9,27 @@ public sealed class PublicationSnapshotReviewStoreBackend
     public const string Groundwork = "groundwork";
     public const string EntityFramework = "entity-framework";
 
-    private readonly ServiceDescriptor descriptor;
+    private readonly IReadOnlyCollection<ServiceDescriptor> descriptors;
 
     public PublicationSnapshotReviewStoreBackend(string name, ServiceDescriptor descriptor)
+        : this(name, [descriptor])
+    {
+    }
+
+    public PublicationSnapshotReviewStoreBackend(string name, IEnumerable<ServiceDescriptor> descriptors)
     {
         if (name is not (InMemory or Groundwork or EntityFramework))
             throw new ArgumentException($"Unknown publication snapshot-review store backend '{name}'.", nameof(name));
-        ArgumentNullException.ThrowIfNull(descriptor);
-        if (descriptor.ServiceType != typeof(IPublicationSnapshotReviewStore))
-            throw new ArgumentException("The owned descriptor must register IPublicationSnapshotReviewStore.", nameof(descriptor));
-
+        ArgumentNullException.ThrowIfNull(descriptors);
+        this.descriptors = descriptors.Distinct().ToArray();
+        if (this.descriptors.Count == 0 || !this.descriptors.Any(descriptor => descriptor.ServiceType == typeof(IPublicationSnapshotReviewStore)))
+            throw new ArgumentException("The owned descriptor must register IPublicationSnapshotReviewStore.", nameof(descriptors));
         Name = name;
-        this.descriptor = descriptor;
     }
 
     public string Name { get; }
 
-    public bool Owns(ServiceDescriptor candidate) => ReferenceEquals(candidate, descriptor);
+    public bool Owns(ServiceDescriptor candidate) => descriptors.Contains(candidate);
 
     public static PublicationSnapshotReviewStoreBackend? Find(IServiceCollection services) => services
         .Select(service => service.ImplementationInstance)
@@ -43,19 +47,17 @@ public sealed class PublicationSnapshotReviewStoreBackend
     {
         ArgumentNullException.ThrowIfNull(services);
         var registrations = services.Where(service => service.ServiceType == typeof(IPublicationSnapshotReviewStore)).ToArray();
-        if (registrations.Length != 1 || !Owns(registrations[0]))
+        if (registrations.Length != 1 || !Owns(registrations[0]) || descriptors.Any(descriptor => !services.Contains(descriptor)))
             throw new InvalidOperationException($"Publication snapshot-review backend '{Name}' no longer exclusively owns its registration.");
     }
 
     public void RemoveOwnedArtifacts(IServiceCollection services)
     {
         EnsureOwnsRegisteredContract(services);
-        services.Remove(descriptor);
+        foreach (var owned in descriptors)
+            services.Remove(owned);
         for (var index = services.Count - 1; index >= 0; index--)
-        {
-            if (ReferenceEquals(services[index].ImplementationInstance, this))
-                services.RemoveAt(index);
-        }
+            if (ReferenceEquals(services[index].ImplementationInstance, this)) services.RemoveAt(index);
     }
 
     public static void EnsureNoUnownedRegistrations(IServiceCollection services)
