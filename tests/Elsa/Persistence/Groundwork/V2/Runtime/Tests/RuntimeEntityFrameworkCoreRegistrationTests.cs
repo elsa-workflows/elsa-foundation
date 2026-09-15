@@ -63,6 +63,10 @@ public sealed class RuntimeEntityFrameworkCoreRegistrationTests
 
     [Theory]
     [InlineData("Data Source=:memory:", WorkflowDispatchReadinessGuarantee.ProcessLocal)]
+    [InlineData("DataSource=:memory:", WorkflowDispatchReadinessGuarantee.ProcessLocal)]
+    [InlineData("Filename=:memory:", WorkflowDispatchReadinessGuarantee.ProcessLocal)]
+    [InlineData("Data Source=file::memory:?cache=shared", WorkflowDispatchReadinessGuarantee.ProcessLocal)]
+    [InlineData("Data Source=file:memorydb?mode=memory&cache=shared", WorkflowDispatchReadinessGuarantee.ProcessLocal)]
     [InlineData("Data Source=file:runtime-ef-readiness;Mode=Memory;Cache=Shared", WorkflowDispatchReadinessGuarantee.ProcessLocal)]
     [InlineData("Data Source=runtime-ef-readiness.db", WorkflowDispatchReadinessGuarantee.DurableReady)]
     public async Task EF_infrastructure_readiness_matches_the_actual_SQLite_database_lifetime(

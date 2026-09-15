@@ -26,12 +26,14 @@ internal sealed class EfRuntimeInfrastructureDurabilityEvidence(
 
             var connection = context.Database.GetDbConnection();
             var settings = new DbConnectionStringBuilder { ConnectionString = connection.ConnectionString };
-            var dataSource = settings.TryGetValue("Data Source", out var configuredSource)
-                ? configuredSource?.ToString() : connection.DataSource;
+            var dataSource = new[] { "Data Source", "DataSource", "Filename" }
+                .Select(alias => settings.TryGetValue(alias, out var value) ? value?.ToString() : null)
+                .FirstOrDefault(value => value is not null) ?? connection.DataSource;
             var mode = settings.TryGetValue("Mode", out var configuredMode) ? configuredMode?.ToString() : null;
             return string.Equals(mode, "Memory", StringComparison.OrdinalIgnoreCase) ||
                    string.IsNullOrWhiteSpace(dataSource) ||
                    dataSource.Equals(":memory:", StringComparison.OrdinalIgnoreCase) ||
+                   dataSource.StartsWith("file::memory:", StringComparison.OrdinalIgnoreCase) ||
                    dataSource.Contains("mode=memory", StringComparison.OrdinalIgnoreCase)
                 ? WorkflowDispatchDurabilityLevel.ProcessLocal
                 : WorkflowDispatchDurabilityLevel.Durable;
