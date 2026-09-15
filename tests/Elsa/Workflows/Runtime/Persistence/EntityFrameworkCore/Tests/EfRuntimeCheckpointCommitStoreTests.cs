@@ -187,6 +187,46 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
+    public async Task Damaged_dispatch_projection_is_rejected_as_corrupt_not_missing_before_the_marker()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open("tenant-a");
+        var access = new FixedAccessor("tenant-a");
+        var dispatch = PendingDispatch("workflow-a", "activity-projection", "tenant-a");
+        await new EfWorkflowDispatchStore(context, access).SaveAsync(dispatch);
+        var row = await context.WorkflowDispatches.SingleAsync();
+        row.ScopeKeyHash = "damaged-scope-hash";
+        await context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new EfRuntimeCheckpointCommitStore(context, access)
+                .CommitAsync(WithPendingDispatch("commit-damaged-dispatch", "intent-damaged-dispatch", dispatch),
+                    Decision()).AsTask());
+        Assert.Empty(await context.RuntimeCheckpointCommits.ToArrayAsync());
+        Assert.Empty(await context.RuntimePostCommitOutbox.ToArrayAsync());
+        Assert.Single(await context.WorkflowDispatches.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Damaged_outbox_projection_is_rejected_as_corrupt_not_missing_before_the_marker()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open("tenant-a");
+        var access = new FixedAccessor("tenant-a");
+        var commit = WithPendingIntent("commit-damaged-outbox", "intent-damaged-outbox");
+        await new EfRuntimePostCommitOutboxStore(context, access)
+            .SavePendingAsync(commit.StateChanges.PostCommitOutbox.Single().State);
+        var row = await context.RuntimePostCommitOutbox.SingleAsync();
+        row.ScopeKeyHash = "damaged-scope-hash";
+        await context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new EfRuntimeCheckpointCommitStore(context, access).CommitAsync(commit, Decision()).AsTask());
+        Assert.Empty(await context.RuntimeCheckpointCommits.ToArrayAsync());
+        Assert.Single(await context.RuntimePostCommitOutbox.ToArrayAsync());
+    }
+
+    [Fact]
     public async Task Parent_cancellation_is_recorded_with_the_checkpoint_marker()
     {
         await using var database = await TestDatabase.CreateAsync();

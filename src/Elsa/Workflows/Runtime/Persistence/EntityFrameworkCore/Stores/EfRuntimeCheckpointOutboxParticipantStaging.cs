@@ -14,8 +14,6 @@ internal static class EfRuntimeCheckpointOutboxParticipantStaging
         CancellationToken cancellationToken)
     {
         var staged = new Dictionary<string, RuntimePostCommitOutboxItem>(StringComparer.Ordinal);
-        var scopeKey = EfRelationalIdentity.Encode(scope);
-        var scopeHash = EfRelationalIdentity.Hash(scope);
 
         foreach (var change in commit.StateChanges.PostCommitOutbox)
         {
@@ -32,9 +30,10 @@ internal static class EfRuntimeCheckpointOutboxParticipantStaging
 
             staged.Add(change.StateId, candidate);
             var id = EfRuntimePostCommitOutboxStore.RowId(scope, candidate.OutboxItemId);
-            var existing = await context.RuntimePostCommitOutbox.AsNoTracking().SingleOrDefaultAsync(row =>
-                row.Id == id && row.ScopeKey == scopeKey && row.ScopeKeyHash == scopeHash,
-                cancellationToken);
+            // Only the physical identity participates in admission. ReadChecked must reject a persisted row with
+            // damaged scope/content projections rather than letting a filtered query treat it as a missing row.
+            var existing = await context.RuntimePostCommitOutbox.AsNoTracking()
+                .SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
             if (existing is null)
             {
                 context.RuntimePostCommitOutbox.Add(EfRuntimePostCommitOutboxStore.ToEntity(candidate, scope, id, 1));

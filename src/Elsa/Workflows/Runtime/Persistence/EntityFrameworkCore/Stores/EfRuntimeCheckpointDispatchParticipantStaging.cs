@@ -15,8 +15,6 @@ internal static class EfRuntimeCheckpointDispatchParticipantStaging
         Dictionary<string, WorkflowTestScope> touchedTestScopes,
         CancellationToken cancellationToken)
     {
-        var scopeKey = EfRelationalIdentity.Encode(scope);
-        var scopeHash = EfRelationalIdentity.Hash(scope);
         var staged = new Dictionary<string, WorkflowDispatchRecord>(StringComparer.Ordinal);
 
         foreach (var change in commit.StateChanges.WorkflowDispatches)
@@ -32,7 +30,7 @@ internal static class EfRuntimeCheckpointDispatchParticipantStaging
             }
 
             staged.Add(change.StateId, candidate);
-            var row = await LoadAsync(context, scope, scopeKey, scopeHash, candidate.DispatchId, cancellationToken);
+            var row = await LoadAsync(context, scope, candidate.DispatchId, cancellationToken);
             if (row is null)
             {
                 WorkflowDispatchLifecycle.ValidateNew(candidate);
@@ -58,7 +56,7 @@ internal static class EfRuntimeCheckpointDispatchParticipantStaging
                 throw new NotSupportedException(
                     "The bounded EF checkpoint slice does not combine a dispatch upsert and cancellation for the same ID.");
 
-            var row = await LoadAsync(context, scope, scopeKey, scopeHash, request.DispatchId, cancellationToken)
+            var row = await LoadAsync(context, scope, request.DispatchId, cancellationToken)
                       ?? throw new InvalidOperationException(
                           $"Workflow dispatch '{request.DispatchId}' was not found for parent cancellation.");
             var current = WorkflowDispatchEfSupport.ReadChecked(row, scope, request.DispatchId);
@@ -86,17 +84,12 @@ internal static class EfRuntimeCheckpointDispatchParticipantStaging
     private static Task<WorkflowDispatchEntity?> LoadAsync(
         BookmarkStateDbContext context,
         string scope,
-        string scopeKey,
-        string scopeHash,
         string dispatchId,
         CancellationToken cancellationToken)
     {
         var id = WorkflowDispatchEfSupport.RowId(scope, dispatchId);
-        var key = EfRelationalIdentity.Encode(dispatchId);
-        var hash = EfRelationalIdentity.Hash(dispatchId);
-        return context.WorkflowDispatches.SingleOrDefaultAsync(row =>
-            row.Id == id && row.ScopeKey == scopeKey && row.ScopeKeyHash == scopeHash &&
-            row.DispatchId == key && row.DispatchIdHash == hash,
-            cancellationToken);
+        // The projection is checked by ReadChecked after the immutable identity lookup. A corrupt scope or
+        // dispatch-ID projection must not look like an absent row or be replaced by a second insert.
+        return context.WorkflowDispatches.SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
     }
 }
