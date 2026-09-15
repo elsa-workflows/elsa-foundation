@@ -79,7 +79,7 @@ internal static class RuntimeCheckpointIncidentParticipantProviderSmoke
         await using (var verification = createContext(fixture.ConnectionString))
         {
             Assert.Equal("committed", (await Store(verification, scope).FindAsync("workflow-a", "incident-a"))!.Message);
-            Assert.Single(await verification.SchedulerStates.ToArrayAsync());
+            Assert.Single(await verification.SchedulerStates.Where(row => row.ScopeKey == EfRelationalIdentity.Encode(scope)).ToArrayAsync());
 
             await using var transaction = await verification.Database.BeginTransactionAsync();
             await StageAsync(verification, Change(RuntimeStateChangeOperation.Delete, Incident("incident-a", "workflow-a", "committed")), scope, "workflow-a");

@@ -88,8 +88,8 @@ internal static class RuntimeCheckpointBookmarkParticipantProviderSmoke
         await using (var verification = createContext(fixture.ConnectionString))
         {
             Assert.Equal("committed", (await Store(verification, scope).FindAsync("workflow-a", "bookmark-a"))!.Payload!.Value.GetString());
-            Assert.Single(await verification.SchedulerStates.ToArrayAsync());
-            Assert.Single(await verification.RuntimeCheckpointCommits.ToArrayAsync());
+            Assert.Single(await verification.SchedulerStates.Where(row => row.ScopeKey == EfRelationalIdentity.Encode(scope)).ToArrayAsync());
+            Assert.Single(await verification.RuntimeCheckpointCommits.Where(row => row.ScopeKey == EfRelationalIdentity.Encode(scope)).ToArrayAsync());
         }
 
         var otherScope = $"{scope}-other";

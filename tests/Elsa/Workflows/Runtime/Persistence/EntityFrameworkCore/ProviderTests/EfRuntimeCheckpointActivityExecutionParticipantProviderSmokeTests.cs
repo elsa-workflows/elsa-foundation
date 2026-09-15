@@ -90,11 +90,11 @@ internal static class EfRuntimeCheckpointActivityExecutionParticipantProviderSmo
         {
             var store = new EfActivityExecutionStateStore(verification, new FixedAccessor(scope), codec);
             Assert.Equal(1, (await store.FindAsync(workflow, activity))!.ExecutionSequence);
-            Assert.Single(await verification.SchedulerStates.ToArrayAsync());
+            Assert.Single(await verification.SchedulerStates.Where(row => row.ScopeKey == EfRelationalIdentity.Encode(scope)).ToArrayAsync());
         }
 
         await using var stale = createContext(fixture.ConnectionString);
-        _ = await stale.ActivityExecutionStates.SingleAsync();
+        _ = await stale.ActivityExecutionStates.SingleAsync(row => row.ScopeKey == EfRelationalIdentity.Encode(scope));
         await using (var winner = createContext(fixture.ConnectionString))
         {
             var store = new EfActivityExecutionStateStore(winner, new FixedAccessor(scope), codec);

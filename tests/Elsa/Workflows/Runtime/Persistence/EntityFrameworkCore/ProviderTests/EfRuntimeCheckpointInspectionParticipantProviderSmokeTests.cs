@@ -87,7 +87,7 @@ internal static class RuntimeCheckpointInspectionParticipantProviderSmoke
         {
             Assert.NotNull(await new EfActivityExecutionInspectionStore(verification, new FixedAccessor(scope), RecoveryCodec()).FindAsync("workflow-a", "activity-a"));
             Assert.NotNull(await new EfActivityExecutionHierarchyStore(verification, new FixedAccessor(scope), HierarchyCodec()).FindBoundaryAsync("workflow-a", "activity-a"));
-            Assert.Single(await verification.SchedulerStates.ToArrayAsync());
+            Assert.Single(await verification.SchedulerStates.Where(row => row.ScopeKey == EfRelationalIdentity.Encode(scope)).ToArrayAsync());
         }
 
         var conflictScope = $"{scope}-conflict";

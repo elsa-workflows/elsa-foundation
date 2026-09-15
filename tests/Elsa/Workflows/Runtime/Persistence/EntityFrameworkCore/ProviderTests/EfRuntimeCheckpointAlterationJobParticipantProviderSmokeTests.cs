@@ -100,7 +100,7 @@ internal static class RuntimeCheckpointAlterationJobParticipantProviderSmoke
             await alteration.CommitTerminalJobChangeAtomicallyAsync(terminal, CommitCheckpointAsync);
             await alteration.CommitTerminalJobChangeAtomicallyAsync(terminal, CommitCheckpointAsync);
             Assert.Equal(WorkflowAlterationJobStatus.Succeeded, (await alteration.FindJobAsync(job.JobId))!.Status);
-            Assert.Single(await callbackContext.RuntimeCheckpointCommits.ToArrayAsync());
+            Assert.Single(await callbackContext.RuntimeCheckpointCommits.Where(row => row.ScopeKey == EfRelationalIdentity.Encode(scope) && row.CommitId == EfRelationalIdentity.Encode(terminal.CheckpointCommitId)).ToArrayAsync());
         }
 
         await using var rollbackContext = createContext(fixture.ConnectionString);

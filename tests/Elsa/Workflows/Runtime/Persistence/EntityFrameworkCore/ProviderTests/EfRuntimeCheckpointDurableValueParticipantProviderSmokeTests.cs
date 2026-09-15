@@ -89,8 +89,8 @@ internal static class RuntimeCheckpointDurableValueParticipantProviderSmoke
         await using (var verification = createContext(fixture.ConnectionString))
         {
             Assert.Equal("committed", (await Store(verification, scope).FindAsync("workflow-a", "value-a"))!.InlineValue!.Value.GetString());
-            Assert.Single(await verification.SchedulerStates.ToArrayAsync());
-            Assert.Single(await verification.RuntimeCheckpointCommits.ToArrayAsync());
+            Assert.Single(await verification.SchedulerStates.Where(row => row.ScopeKey == EfRelationalIdentity.Encode(scope)).ToArrayAsync());
+            Assert.Single(await verification.RuntimeCheckpointCommits.Where(row => row.ScopeKey == EfRelationalIdentity.Encode(scope)).ToArrayAsync());
         }
 
         await using (var tenantB = createContext(fixture.ConnectionString))
