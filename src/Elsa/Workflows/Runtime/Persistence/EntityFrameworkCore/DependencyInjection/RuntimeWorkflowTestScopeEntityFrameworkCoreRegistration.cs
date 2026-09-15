@@ -104,6 +104,9 @@ public static class RuntimeWorkflowTestScopeEntityFrameworkCoreRegistration
             services.AddScoped<EfWorkflowTestScopeStore>();
             var concrete = services.Last();
             owned.Add(concrete);
+            services.AddScoped<EfWorkflowTestScopeCleanupStore>();
+            var cleanupConcrete = services.Last();
+            owned.Add(cleanupConcrete);
             services.RemoveAll<IWorkflowTestScopeStore>();
             services.RemoveAll<IWorkflowTestScopeAdmissionStore>();
             services.RemoveAll<IWorkflowTestScopeCleanupStore>();
@@ -111,9 +114,12 @@ public static class RuntimeWorkflowTestScopeEntityFrameworkCoreRegistration
                 serviceProvider.GetRequiredService<EfWorkflowTestScopeStore>());
             var admission = ServiceDescriptor.Scoped<IWorkflowTestScopeAdmissionStore>(serviceProvider =>
                 serviceProvider.GetRequiredService<EfWorkflowTestScopeStore>());
+            var cleanup = ServiceDescriptor.Scoped<IWorkflowTestScopeCleanupStore>(serviceProvider =>
+                serviceProvider.GetRequiredService<EfWorkflowTestScopeCleanupStore>());
             services.Add(store);
             services.Add(admission);
-            owned.AddRange([store, admission]);
+            services.Add(cleanup);
+            owned.AddRange([store, admission, cleanup]);
             WorkflowTestScopeStoreBackend.Register(
                 services,
                 new(WorkflowTestScopeStoreBackend.EntityFramework, owned));

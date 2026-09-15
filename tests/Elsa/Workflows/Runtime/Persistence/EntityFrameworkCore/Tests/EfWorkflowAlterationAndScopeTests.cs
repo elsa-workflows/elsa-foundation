@@ -43,13 +43,13 @@ public sealed class EfWorkflowAlterationAndScopeTests
         scopeFirst.AddRuntimeWorkflowTestScopeEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
         scopeFirst.AddWorkflowRuntime();
         Assert.Equal(WorkflowTestScopeStoreBackend.EntityFramework, WorkflowTestScopeStoreBackend.Find(scopeFirst)!.Name);
-        Assert.DoesNotContain(scopeFirst, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeCleanupStore));
+        Assert.Equal(typeof(EfWorkflowTestScopeCleanupStore), scopeFirst.Single(x => x.ServiceType == typeof(EfWorkflowTestScopeCleanupStore)).ImplementationType);
 
         var coreFirstScope = new ServiceCollection();
         coreFirstScope.AddWorkflowRuntime();
         coreFirstScope.AddRuntimeWorkflowTestScopeEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
         Assert.Equal(WorkflowTestScopeStoreBackend.EntityFramework, WorkflowTestScopeStoreBackend.Find(coreFirstScope)!.Name);
-        Assert.DoesNotContain(coreFirstScope, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeCleanupStore));
+        Assert.Equal(typeof(EfWorkflowTestScopeCleanupStore), coreFirstScope.Single(x => x.ServiceType == typeof(EfWorkflowTestScopeCleanupStore)).ImplementationType);
         Assert.Equal(typeof(EfWorkflowTestScopeStore), coreFirstScope.Single(x => x.ServiceType == typeof(EfWorkflowTestScopeStore)).ImplementationType);
 
         var sharedDatabasePath = Path.Combine(Path.GetTempPath(), $"elsa-runtime-order-{Guid.NewGuid():N}.db");
