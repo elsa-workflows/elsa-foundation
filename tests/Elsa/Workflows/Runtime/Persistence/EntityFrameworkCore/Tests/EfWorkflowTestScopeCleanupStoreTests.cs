@@ -91,6 +91,101 @@ public sealed class EfWorkflowTestScopeCleanupStoreTests
     }
 
     [Fact]
+    public async Task Cleanup_rejects_tampered_scope_projection_before_mutating_dispatches()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open();
+        var access = new FixedAccessor("tenant-a");
+        var scopes = new EfWorkflowTestScopeStore(context, access, Codec());
+        var dispatches = new EfWorkflowDispatchStore(context, access);
+        var cleanup = new EfWorkflowTestScopeCleanupStore(context, access, Codec());
+        var scope = Scope("cleanup-tampered-scope");
+        await scopes.CreateAsync(scope, Now);
+        var dispatch = Dispatch("tampered-scope", scope);
+        await dispatches.SaveAsync(dispatch);
+        await scopes.CloseAsync(new WorkflowTestScopeCloseRequest(
+            scope.ScopeId, WorkflowTestScopeCloseReason.ExplicitTeardown, Now.AddMinutes(1)));
+        var row = await context.WorkflowTestScopes.SingleAsync();
+        row.ScopeId = EfRelationalIdentity.Encode("tampered-scope-id");
+        await context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => cleanup.CleanupAsync(
+            scope, Now.AddMinutes(1), 100, new Dictionary<string, RuntimePostCommitIntent>()).AsTask());
+        Assert.Equal((int)WorkflowDispatchStatus.Pending,
+            (await context.WorkflowDispatches.AsNoTracking().SingleAsync()).Status);
+    }
+
+    [Fact]
+    public async Task Cleanup_rejects_tampered_dispatch_projection_instead_of_treating_it_as_missing()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open();
+        var access = new FixedAccessor("tenant-a");
+        var scopes = new EfWorkflowTestScopeStore(context, access, Codec());
+        var dispatches = new EfWorkflowDispatchStore(context, access);
+        var cleanup = new EfWorkflowTestScopeCleanupStore(context, access, Codec());
+        var scope = Scope("cleanup-tampered-dispatch");
+        await scopes.CreateAsync(scope, Now);
+        var dispatch = Dispatch("tampered-dispatch", scope);
+        await dispatches.SaveAsync(dispatch);
+        await scopes.CloseAsync(new WorkflowTestScopeCloseRequest(
+            scope.ScopeId, WorkflowTestScopeCloseReason.ExplicitTeardown, Now.AddMinutes(1)));
+        var row = await context.WorkflowDispatches.SingleAsync();
+        row.DispatchId = EfRelationalIdentity.Encode("tampered-dispatch-id");
+        await context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => cleanup.CleanupAsync(
+            scope, Now.AddMinutes(1), 100, new Dictionary<string, RuntimePostCommitIntent>()).AsTask());
+        Assert.Equal((int)WorkflowDispatchStatus.Pending,
+            (await context.WorkflowDispatches.AsNoTracking().SingleAsync()).Status);
+        Assert.Empty(await context.RuntimePostCommitOutbox.AsNoTracking().ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Cleanup_rejects_tampered_existing_outbox_projection_atomically()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open();
+        var access = new FixedAccessor("tenant-a");
+        var scopes = new EfWorkflowTestScopeStore(context, access, Codec());
+        var dispatches = new EfWorkflowDispatchStore(context, access);
+        var outbox = new EfRuntimePostCommitOutboxStore(context, access);
+        var cleanup = new EfWorkflowTestScopeCleanupStore(context, access, Codec());
+        var scope = Scope("cleanup-tampered-outbox");
+        await scopes.CreateAsync(scope, Now);
+        var dispatch = Dispatch("tampered-outbox", scope, Now.AddSeconds(1));
+        await dispatches.SaveAsync(dispatch);
+        var started = dispatch.TransitionTo(WorkflowDispatchStatus.Started, Now.AddSeconds(2));
+        await dispatches.SaveAsync(started);
+        await scopes.CloseAsync(new WorkflowTestScopeCloseRequest(
+            scope.ScopeId, WorkflowTestScopeCloseReason.ExplicitTeardown, Now.AddMinutes(1)));
+        var intent = CancellationIntent(started, Now.AddMinutes(1));
+        var outboxId = new WorkflowDispatchIdentity(
+            started.ParentWorkflowExecutionId,
+            started.ParentActivityExecutionId).ChildCancelOutboxItemId($"test-scope:{scope.ScopeId}");
+        await outbox.SavePendingAsync(new RuntimePostCommitOutboxItem(
+            outboxId,
+            intent,
+            RuntimePostCommitOutboxStatus.Pending,
+            Now.AddMinutes(1),
+            Now.AddMinutes(1),
+            RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1))));
+        var row = await context.RuntimePostCommitOutbox.SingleAsync();
+        row.OutboxItemId = EfRelationalIdentity.Encode("tampered-outbox-id");
+        await context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => cleanup.CleanupAsync(
+            scope,
+            Now.AddMinutes(1),
+            100,
+            new Dictionary<string, RuntimePostCommitIntent> { [started.DispatchId] = intent }).AsTask());
+        Assert.Equal(WorkflowDispatchStatus.Started,
+            (await dispatches.FindAsync(started.DispatchId))!.Status);
+        Assert.Equal(EfRelationalIdentity.Encode("tampered-outbox-id"),
+            (await context.RuntimePostCommitOutbox.AsNoTracking().SingleAsync()).OutboxItemId);
+    }
+
+    [Fact]
     public async Task Sqlite_cleanup_cancels_detached_dispatches_and_replays_deterministically()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -228,6 +323,48 @@ public sealed class EfWorkflowTestScopeCleanupStoreTests
         Assert.Equal(1, second.Inspected);
         Assert.Null(second.ContinuationToken);
         Assert.Equal(0, second.RemainingLive);
+    }
+
+    [Fact]
+    public async Task Sqlite_cleanup_preserves_full_ordinal_dispatch_order_for_same_timestamp()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open();
+        var access = new FixedAccessor("tenant-a");
+        var scopes = new EfWorkflowTestScopeStore(context, access, Codec());
+        var dispatches = new EfWorkflowDispatchStore(context, access);
+        var cleanup = new EfWorkflowTestScopeCleanupStore(context, access, Codec());
+        var scope = Scope("cleanup-tie-order");
+        await scopes.CreateAsync(scope, Now);
+        var first = Dispatch("tie-first", scope, Now);
+        var second = Dispatch("tie-second", scope, Now);
+        await dispatches.SaveAsync(first);
+        await dispatches.SaveAsync(second);
+        await scopes.CloseAsync(new WorkflowTestScopeCloseRequest(
+            scope.ScopeId, WorkflowTestScopeCloseReason.ExplicitTeardown, Now.AddMinutes(1)));
+
+        var expected = new[] { first.DispatchId, second.DispatchId }
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        var firstPage = await cleanup.CleanupAsync(
+            scope, Now.AddMinutes(1), 1, new Dictionary<string, RuntimePostCommitIntent>());
+        Assert.Equal(1, firstPage.Inspected);
+        Assert.NotNull(firstPage.ContinuationToken);
+        var cancelledAfterFirstPage = await context.WorkflowDispatches.AsNoTracking()
+            .Where(row => row.Status == (int)WorkflowDispatchStatus.Cancelled)
+            .Select(row => row.DispatchId)
+            .SingleAsync();
+        Assert.Equal(EfRelationalIdentity.Encode(expected[0]), cancelledAfterFirstPage);
+
+        var secondPage = await cleanup.CleanupAsync(
+            scope,
+            Now.AddMinutes(1),
+            1,
+            new Dictionary<string, RuntimePostCommitIntent>(),
+            firstPage.ContinuationToken);
+        Assert.Equal(1, secondPage.Inspected);
+        Assert.Null(secondPage.ContinuationToken);
+        Assert.Equal(0, secondPage.RemainingLive);
     }
 
     private static WorkflowTestScope Scope(string id) =>

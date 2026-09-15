@@ -21,7 +21,9 @@ public sealed class EfWorkflowTestScopeCleanupStore(
     IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowTestScopeCleanupStore
 {
     private const string CursorPurpose = "ef-runtime-test-scope-cleanup-v1";
-    private const int MaximumContinuationTokenLength = 2048;
+    // A dispatch identity is currently short, but the contract accepts 450 UTF-16 code units. A signed cursor for
+    // the full UTF-8 representation plus framing and HMAC must remain representable for every accepted identity.
+    private const int MaximumContinuationTokenLength = 4096;
     private const byte ContinuationTokenVersion = 1;
     private const int ScopeBindingLength = 32;
     private const int ContinuationHeaderLength = 1 + ScopeBindingLength + sizeof(long);
@@ -335,16 +337,8 @@ public sealed class EfWorkflowTestScopeCleanupStore(
         bool tracking,
         CancellationToken cancellationToken)
     {
-        var encodedScope = EfRelationalIdentity.Encode(accessScope);
-        var scopeHash = EfRelationalIdentity.Hash(accessScope);
-        var encodedScopeId = EfRelationalIdentity.Encode(scopeId);
-        var scopeIdHash = EfRelationalIdentity.Hash(scopeId);
         var query = _context.WorkflowTestScopes.Where(row =>
-            row.Id == WorkflowTestScopeEfSupport.Id(accessScope, scopeId) &&
-            row.AccessScopeKey == encodedScope &&
-            row.AccessScopeKeyHash == scopeHash &&
-            row.ScopeId == encodedScopeId &&
-            row.ScopeIdHash == scopeIdHash);
+            row.Id == WorkflowTestScopeEfSupport.Id(accessScope, scopeId));
         return tracking
             ? new(query.SingleOrDefaultAsync(cancellationToken))
             : new(query.AsNoTracking().SingleOrDefaultAsync(cancellationToken));
@@ -357,11 +351,7 @@ public sealed class EfWorkflowTestScopeCleanupStore(
         CancellationToken cancellationToken)
     {
         var query = _context.WorkflowDispatches.Where(row =>
-            row.Id == WorkflowDispatchEfSupport.RowId(accessScope, dispatchId) &&
-            row.ScopeKey == EfRelationalIdentity.Encode(accessScope) &&
-            row.ScopeKeyHash == EfRelationalIdentity.Hash(accessScope) &&
-            row.DispatchId == EfRelationalIdentity.Encode(dispatchId) &&
-            row.DispatchIdHash == EfRelationalIdentity.Hash(dispatchId));
+            row.Id == WorkflowDispatchEfSupport.RowId(accessScope, dispatchId));
         return tracking
             ? new(query.SingleOrDefaultAsync(cancellationToken))
             : new(query.AsNoTracking().SingleOrDefaultAsync(cancellationToken));
@@ -374,11 +364,7 @@ public sealed class EfWorkflowTestScopeCleanupStore(
         CancellationToken cancellationToken)
     {
         var query = _context.RuntimePostCommitOutbox.Where(row =>
-            row.Id == EfRuntimePostCommitOutboxStore.RowId(accessScope, outboxItemId) &&
-            row.ScopeKey == EfRelationalIdentity.Encode(accessScope) &&
-            row.ScopeKeyHash == EfRelationalIdentity.Hash(accessScope) &&
-            row.OutboxItemId == EfRelationalIdentity.Encode(outboxItemId) &&
-            row.OutboxItemIdHash == EfRelationalIdentity.Hash(outboxItemId));
+            row.Id == EfRuntimePostCommitOutboxStore.RowId(accessScope, outboxItemId));
         return tracking
             ? new(query.SingleOrDefaultAsync(cancellationToken))
             : new(query.AsNoTracking().SingleOrDefaultAsync(cancellationToken));
