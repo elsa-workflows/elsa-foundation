@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -58,6 +59,11 @@ internal static class RuntimeRecurringTriggerScheduleProviderSmoke
         {
             Assert.Equal(expectedProvider, context.Database.ProviderName);
             await context.Database.EnsureCreatedAsync();
+            var scheduleModel = context.Model.FindEntityType(typeof(RecurringTriggerScheduleEntity))!;
+            Assert.Equal(RuntimeOperationalStateEfModule.RecurringScheduleIdProjectionMaximumLength,
+                scheduleModel.FindProperty(nameof(RecurringTriggerScheduleEntity.ScheduleId))!.GetMaxLength());
+            Assert.Equal(RuntimeOperationalStateEfModule.RecurringScheduleIdOrderKeyMaximumLength,
+                scheduleModel.FindProperty(nameof(RecurringTriggerScheduleEntity.ScheduleIdOrderKey))!.GetMaxLength());
             var store = Store(context, scope);
             var early = Schedule("artifact-order", "a", now.AddMinutes(-2));
             var late = Schedule("artifact-order", "b", now.AddMinutes(-1));
@@ -71,6 +77,30 @@ internal static class RuntimeRecurringTriggerScheduleProviderSmoke
             Assert.Equal(2, firstPage.Items.Count);
             Assert.NotNull(firstPage.NextContinuationToken);
             Assert.Single((await store.ListByArtifactPageAsync(new RecurringTriggerScheduleArtifactPageQuery("artifact-order", 2, firstPage.NextContinuationToken))).Items);
+
+            var boundaryArtifact = new string('%', RuntimeOperationalStateEfModule.IdentityMaximumLength);
+            var boundaryNode = new string(':', RuntimeOperationalStateEfModule.IdentityMaximumLength);
+            var boundaryActivation = new string('%', RuntimeOperationalStateEfModule.IdentityMaximumLength);
+            var boundaryStimulusHash = new string(':', RuntimeOperationalStateEfModule.IdentityMaximumLength);
+            var boundary = new RecurringTriggerSchedule(
+                RecurringTriggerSchedule.BuildFanOutId(boundaryActivation, boundaryArtifact, boundaryNode, boundaryStimulusHash),
+                boundaryArtifact,
+                boundaryNode,
+                "Timer",
+                boundaryStimulusHash,
+                RecurringScheduleKind.Interval,
+                "PT1M",
+                now,
+                DateTimeOffset.UnixEpoch,
+                boundaryActivation,
+                "slot",
+                true);
+            Assert.Equal(RuntimeOperationalStateEfModule.RecurringScheduleIdMaximumLength, boundary.ScheduleId.Length);
+            await store.SaveAsync(boundary);
+            Assert.Equal(boundary, await store.FindAsync(boundary.ScheduleId));
+            Assert.True(await store.TryAdvanceAsync(boundary.ScheduleId, now, now.AddMinutes(1)));
+            await store.DeleteAsync(boundary.ScheduleId);
+            Assert.Null(await store.FindAsync(boundary.ScheduleId));
 
             await using var transaction = await context.Database.BeginTransactionAsync();
             var rolledBack = Schedule("artifact-rollback", "node", now);
