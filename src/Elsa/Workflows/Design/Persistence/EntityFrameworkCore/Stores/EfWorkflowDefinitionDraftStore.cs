@@ -68,7 +68,8 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
         var layouts = Layouts();
         var result = await EfDesignSupport.ReadAsync("reading workflow draft with layout", () =>
             (from draft in drafts
-             join layout in layouts on draft.IdLookupHash equals layout.WorkflowDefinitionDraftIdLookupHash into matchingLayouts
+             join layout in layouts on new { draft.TenantId, draft.IdLookupHash }
+                 equals new { layout.TenantId, IdLookupHash = layout.WorkflowDefinitionDraftIdLookupHash } into matchingLayouts
              from layout in matchingLayouts.DefaultIfEmpty()
              where draft.IdLookupHash == EfDesignSupport.LookupHash(draftId)
              select new

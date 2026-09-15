@@ -124,6 +124,59 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Draft_with_layout_reads_keep_tenant_relationships_and_reject_ambiguous_cross_scope_ids()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+
+        db.Definitions.AddRange(
+            new WorkflowDefinition { Id = "definition", TenantId = "tenant-a", Name = "Tenant A" },
+            new WorkflowDefinition { Id = "definition", TenantId = "tenant-b", Name = "Tenant B" });
+        db.Drafts.AddRange(
+            new WorkflowDefinitionDraft { Id = "shared-draft", TenantId = "tenant-a", WorkflowDefinitionId = "definition", StateSource = "{}" },
+            new WorkflowDefinitionDraft { Id = "shared-draft", TenantId = "tenant-b", WorkflowDefinitionId = "definition", StateSource = "{}" });
+        db.DraftLayouts.AddRange(
+            new WorkflowDefinitionDraftLayout
+            {
+                Id = "layout-a",
+                TenantId = "tenant-a",
+                WorkflowDefinitionDraftId = "shared-draft",
+                RecordsJson = JsonSerializer.Serialize(new[] { new DesignMetadataRecord("tenant-a-node", 1, 2) }, JsonSerializerOptions.Web)
+            },
+            new WorkflowDefinitionDraftLayout
+            {
+                Id = "layout-b",
+                TenantId = "tenant-b",
+                WorkflowDefinitionDraftId = "shared-draft",
+                RecordsJson = JsonSerializer.Serialize(new[] { new DesignMetadataRecord("tenant-b-node", 3, 4) }, JsonSerializerOptions.Web)
+            });
+        await db.SaveChangesAsync();
+
+        var serializer = new TestSerializer();
+        var tenantA = await new EfWorkflowDefinitionDraftStore(
+                db,
+                serializer,
+                new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))))
+            .FindWithLayoutByIdAsync("shared-draft");
+        var tenantB = await new EfWorkflowDefinitionDraftStore(
+                db,
+                serializer,
+                new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-b"))))
+            .FindWithLayoutByIdAsync("shared-draft");
+
+        Assert.Equal("tenant-a-node", Assert.Single(tenantA!.Layout).NodeId);
+        Assert.Equal("tenant-b-node", Assert.Single(tenantB!.Layout).NodeId);
+
+        var acrossScopes = new EfWorkflowDefinitionDraftStore(
+            db,
+            serializer,
+            new TestAccessor(PersistenceAccessContext.PrivilegedAcrossScopes(new PersistenceAccessPurpose("draft-lookup"))));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => acrossScopes.FindWithLayoutByIdAsync("shared-draft"));
+    }
+
+    [Fact]
     public void Definition_relational_key_and_child_foreign_keys_use_folded_hashes()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");
