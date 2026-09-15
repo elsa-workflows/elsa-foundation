@@ -124,6 +124,10 @@ public sealed class EfRuntimeCheckpointCommitStore(
                         writeCancellationToken);
                 }
 
+                foreach (var bookmark in commit.StateChanges.Bookmarks)
+                    await EfRuntimeCheckpointParticipantStaging.StageBookmarkAsync(
+                        context, bookmark, scope, writeCancellationToken);
+
                 foreach (var durableValue in commit.StateChanges.DurableValues)
                     await EfRuntimeCheckpointParticipantStaging.StageDurableValueAsync(
                         context, durableValue, scope, writeCancellationToken);
@@ -216,6 +220,14 @@ public sealed class EfRuntimeCheckpointCommitStore(
             RequireWorkflow(change.State.WorkflowExecutionId, commit.WorkflowExecutionId, "durable value");
         }
 
+        foreach (var change in commit.StateChanges.Bookmarks)
+        {
+            if (change.Operation is not (RuntimeStateChangeOperation.Upsert or RuntimeStateChangeOperation.Delete))
+                throw new InvalidOperationException("The EF checkpoint writer supports bookmark upsert and delete only.");
+            RequireId(change.StateId, change.State.BookmarkId, "bookmark");
+            RequireWorkflow(change.State.WorkflowExecutionId, commit.WorkflowExecutionId, "bookmark");
+        }
+
         foreach (var change in commit.StateChanges.Operational)
         {
             if (change.Operation is not (RuntimeStateChangeOperation.Upsert or RuntimeStateChangeOperation.Append or RuntimeStateChangeOperation.Delete))
@@ -298,13 +310,12 @@ public sealed class EfRuntimeCheckpointCommitStore(
 
         if (changes.ActivityExecutions.Count > 0 ||
             changes.ActivityExecutionInspections.Count > 0 ||
-            changes.Bookmarks.Count > 0 ||
             changes.Incidents.Count > 0 ||
             changes.ActivityScopeCleanups.Count > 0 ||
             changes.AlterationJobTerminalChange is not null)
         {
             throw new NotSupportedException(
-                "The EF checkpoint slice supports workflow-execution, scheduler, durable values, operational state, dispatch, pending outbox, and claimed scheduler-work consume only; remaining participants must be staged by the complete checkpoint writer before this adapter is enabled for those runtime commits.");
+                "The EF checkpoint slice supports workflow-execution, scheduler, bookmarks, durable values, operational state, dispatch, pending outbox, and claimed scheduler-work consume only; remaining participants must be staged by the complete checkpoint writer before this adapter is enabled for those runtime commits.");
         }
 
         if (commit.PostCommitIntents.Count > 0)

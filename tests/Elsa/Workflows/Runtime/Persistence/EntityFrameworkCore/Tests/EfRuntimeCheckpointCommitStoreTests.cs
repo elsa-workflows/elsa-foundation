@@ -538,6 +538,59 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
+    public async Task Bookmark_upsert_delete_and_stimulus_index_join_replayable_checkpoint_markers()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open("tenant-a");
+        var access = new FixedAccessor("tenant-a");
+        var bookmarks = new EfBookmarkStateStore(context, access);
+        var bookmark = CheckpointBookmark("bookmark-1", "before");
+        await bookmarks.SaveAsync(bookmark);
+        var update = WithBookmark("commit-bookmark-update", CheckpointBookmark("bookmark-1", "after"),
+            RuntimeStateChangeOperation.Upsert);
+        var delete = WithBookmark("commit-bookmark-delete", CheckpointBookmark("bookmark-1", "after"),
+            RuntimeStateChangeOperation.Delete);
+        var store = new EfRuntimeCheckpointCommitStore(context, access);
+
+        await store.CommitAsync(update, Decision());
+        await store.CommitAsync(update, Decision());
+        Assert.Equal("after", (await bookmarks.FindAsync("workflow-a", "bookmark-1"))!.StimulusHash);
+        await store.CommitAsync(delete, Decision());
+        await store.CommitAsync(delete, Decision());
+        Assert.Null(await bookmarks.FindAsync("workflow-a", "bookmark-1"));
+
+        await using var restarted = database.Open("tenant-a");
+        await new EfRuntimeCheckpointCommitStore(restarted, access).CommitAsync(update, Decision());
+        await new EfRuntimeCheckpointCommitStore(restarted, access).CommitAsync(delete, Decision());
+        Assert.Empty(await restarted.Bookmarks.ToArrayAsync());
+        Assert.Equal(2, await restarted.RuntimeCheckpointCommits.CountAsync());
+    }
+
+    [Fact]
+    public async Task Marker_failure_rolls_back_bookmark_update_and_avoids_sibling_flush()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var interceptor = new FailMarkerInsertInterceptor();
+        await using (var context = database.Open("tenant-a", interceptor))
+        {
+            var access = new FixedAccessor("tenant-a");
+            await new EfBookmarkStateStore(context, access).SaveAsync(CheckpointBookmark("bookmark-rollback", "before"));
+            interceptor.Arm();
+            await Assert.ThrowsAsync<DbUpdateException>(() =>
+                new EfRuntimeCheckpointCommitStore(context, access)
+                    .CommitAsync(WithBookmark("commit-bookmark-rollback",
+                        CheckpointBookmark("bookmark-rollback", "after"),
+                        RuntimeStateChangeOperation.Upsert), Decision()).AsTask());
+            Assert.Empty(context.ChangeTracker.Entries());
+        }
+
+        await using var restarted = database.Open("tenant-a");
+        Assert.Equal("before", (await new EfBookmarkStateStore(restarted, new FixedAccessor("tenant-a"))
+            .FindAsync("workflow-a", "bookmark-rollback"))!.StimulusHash);
+        Assert.Empty(await restarted.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
     public async Task Marker_failure_rolls_back_previously_saved_outbox_and_does_not_leak_tracker_state()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -927,6 +980,23 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
             StateChanges = new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [],
                 [new RuntimeStateChange<ExecutionLivenessState>(
                     state.OperationalStateId, operation, state, new Dictionary<string, string>())])
+        };
+    }
+
+    private static BookmarkState CheckpointBookmark(string id, string payload) => new(
+        id, "workflow-a", "activity-a", "node-a", "resume-a", "stimulus", payload,
+        JsonDocument.Parse(JsonSerializer.Serialize(payload)).RootElement,
+        new Dictionary<string, string> { ["kind"] = "checkpoint" }, OccurredAt, OccurredAt.AddHours(1));
+
+    private static RuntimeCheckpointCommit WithBookmark(
+        string commitId, BookmarkState bookmark, RuntimeStateChangeOperation operation)
+    {
+        var commit = Commit(commitId);
+        return commit with
+        {
+            StateChanges = new RuntimeCheckpointStateChangeSet(null, null, [],
+                [new RuntimeStateChange<BookmarkState>(bookmark.BookmarkId, operation,
+                    bookmark, new Dictionary<string, string>())], [], [], [])
         };
     }
 
