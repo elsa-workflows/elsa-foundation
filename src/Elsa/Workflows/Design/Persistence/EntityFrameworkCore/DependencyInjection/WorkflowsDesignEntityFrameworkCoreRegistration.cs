@@ -34,6 +34,9 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         // access-context accessor (and a caller's TryAdd custom accessor still wins).
         services.AddPersistenceCore();
         services.TryAddSingleton<IServiceCollection>(services);
+        // Publishing contributes this provider-neutral fallback before a persistence backend is selected.
+        // It is replaceable, while any arbitrary layout registration remains an explicit composition error.
+        services.RemoveAll<IWorkflowDefinitionVersionLayoutStore>();
         var registrationStart = services.Count;
         services.AddSingleton(options);
         switch (provider)
@@ -88,7 +91,13 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
     }
 
     private static bool HasOwnedSurfaceRegistration(IServiceCollection services) => services.Any(descriptor =>
-        OwnedServiceTypes.Contains(descriptor.ServiceType) && descriptor.ServiceType != typeof(IDesignAtomicWriter));
+        OwnedServiceTypes.Contains(descriptor.ServiceType) &&
+        descriptor.ServiceType != typeof(IDesignAtomicWriter) &&
+        !IsFallbackDescriptor(descriptor));
+
+    private static bool IsFallbackDescriptor(ServiceDescriptor descriptor) =>
+        descriptor.ImplementationType is { } implementationType &&
+        typeof(IDesignPersistenceFallback).IsAssignableFrom(implementationType);
 
     private static readonly Type[] OwnedServiceTypes =
     [

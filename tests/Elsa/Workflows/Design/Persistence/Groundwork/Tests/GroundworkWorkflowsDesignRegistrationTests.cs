@@ -22,6 +22,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 using Elsa.Testing;
 using Elsa.Tasks.Core;
+using Elsa.Workflows.Publishing;
+using Elsa.Workflows.Publishing.Services;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
 
@@ -72,6 +74,9 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
         Assert.IsType<GroundworkCloneDraftFromVersionCommand>(sp.GetRequiredService<ICloneDraftFromVersionCommand>());
         Assert.IsType<WorkflowDefinitionLookup>(sp.GetRequiredService<IWorkflowDefinitionLookup>());
         Assert.IsType<GroundworkDesignAtomicWrite>(sp.GetRequiredService<IDesignAtomicWriter>());
+        Assert.Same(
+            sp.GetRequiredService<GroundworkDesignAtomicWrite>(),
+            sp.GetRequiredService<IDesignAtomicWriter>());
         Assert.IsType<DraftOriginator>(sp.GetRequiredService<IDraftOriginator>());
         var storage = sp.GetRequiredService<GroundworkDesignStorage>();
         Assert.IsType<GroundworkDesignStorage>(storage);
@@ -95,6 +100,33 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddScoped<IWorkflowDefinitionStore, PriorStore>();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => services.AddGroundworkWorkflowsDesignStores());
+
+        Assert.Contains("already present", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Groundwork_registration_replaces_the_publishing_layout_fallback()
+    {
+        var services = new ServiceCollection();
+        new WorkflowsPublishingFeature().ConfigureServices(services);
+
+        services.AddGroundworkWorkflowsDesignStores();
+
+        var layout = Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowDefinitionVersionLayoutStore));
+        Assert.Equal(typeof(GroundworkWorkflowDefinitionVersionLayoutStore), layout.ImplementationType);
+        Assert.DoesNotContain(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowDefinitionVersionLayoutStore) &&
+            descriptor.ImplementationType == typeof(EmptyWorkflowDefinitionVersionLayoutStore));
+    }
+
+    [Fact]
+    public void Groundwork_registration_refuses_an_arbitrary_layout_registration()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IWorkflowDefinitionVersionLayoutStore, PriorLayoutStore>();
 
         var exception = Assert.Throws<InvalidOperationException>(() => services.AddGroundworkWorkflowsDesignStores());
 
@@ -250,6 +282,12 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
         public Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class PriorLayoutStore : IWorkflowDefinitionVersionLayoutStore
+    {
+        public Task<WorkflowDefinitionVersionLayout?> FindByVersionIdAsync(string workflowDefinitionVersionId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class PriorAddWorkflowDefinitionCommand : IAddWorkflowDefinitionCommand

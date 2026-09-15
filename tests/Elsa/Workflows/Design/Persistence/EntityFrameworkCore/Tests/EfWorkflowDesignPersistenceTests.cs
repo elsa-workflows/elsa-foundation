@@ -25,6 +25,8 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Commands;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Publishing;
+using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -434,6 +436,42 @@ public sealed class EfWorkflowDesignPersistenceTests
                      typeof(IUpdateDraftCommand)
                  })
             Assert.NotNull(serviceProvider.GetRequiredService(serviceType));
+    }
+
+    [Fact]
+    public void Ef_registration_replaces_the_publishing_layout_fallback()
+    {
+        var services = new ServiceCollection();
+        new WorkflowsPublishingFeature().ConfigureServices(services);
+
+        services.AddWorkflowsDesignEntityFrameworkCore(new WorkflowsDesignEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        });
+
+        Assert.DoesNotContain(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowDefinitionVersionLayoutStore) &&
+            descriptor.ImplementationType == typeof(EmptyWorkflowDefinitionVersionLayoutStore));
+        Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowDefinitionVersionLayoutStore) &&
+            descriptor.ImplementationFactory is not null);
+    }
+
+    [Fact]
+    public void Ef_registration_refuses_an_arbitrary_layout_registration()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IWorkflowDefinitionVersionLayoutStore, CustomLayoutStore>();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => services.AddWorkflowsDesignEntityFrameworkCore(
+            new WorkflowsDesignEntityFrameworkCoreOptions
+            {
+                Provider = "Sqlite",
+                ConnectionString = "Data Source=:memory:"
+            }));
+
+        Assert.Contains("already present", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2342,6 +2380,12 @@ public sealed class EfWorkflowDesignPersistenceTests
     private static string ExactLookupHash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
     private static WorkflowDefinitionState State() => new([], null, [], [], null);
     private sealed class TestIdentity(string prefix = "generated") : IIdentityGenerator { private int n; public string Generate() => $"{prefix}-{Interlocked.Increment(ref n)}"; }
+    private sealed class CustomLayoutStore : IWorkflowDefinitionVersionLayoutStore
+    {
+        public Task<WorkflowDefinitionVersionLayout?> FindByVersionIdAsync(string workflowDefinitionVersionId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
+
     private sealed class CustomDesignAtomicWriter : IDesignAtomicWriter
     {
         public Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default, IDesignAtomicWriteResultCodec<T>? resultCodec = null) => throw new NotSupportedException();

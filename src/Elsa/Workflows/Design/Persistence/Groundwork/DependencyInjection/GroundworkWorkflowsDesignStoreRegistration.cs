@@ -43,7 +43,9 @@ public static class GroundworkWorkflowsDesignStoreRegistration
             provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
             targetName,
             provider.GetRequiredService<IGroundworkPrivilegedQueryAuditSink>()));
-        services.TryAddScoped<IDesignAtomicWriter, GroundworkDesignAtomicWrite>();
+        services.TryAddScoped<GroundworkDesignAtomicWrite>();
+        services.TryAddScoped<IDesignAtomicWriter>(provider =>
+            provider.GetRequiredService<GroundworkDesignAtomicWrite>());
         services.TryAddScoped<IDraftOriginator, DraftOriginator>();
 
         ReplaceScoped<IWorkflowDefinitionStore, GroundworkWorkflowDefinitionStore>(services);
@@ -94,12 +96,19 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         (descriptor.ServiceType != typeof(IDesignAtomicWriter) || descriptor.ImplementationType == typeof(GroundworkDesignAtomicWrite));
 
     private static bool HasOwnedSurfaceRegistration(IServiceCollection services) => services.Any(descriptor =>
-        OwnedServiceTypes.Contains(descriptor.ServiceType) && descriptor.ServiceType != typeof(IDesignAtomicWriter));
+        OwnedServiceTypes.Contains(descriptor.ServiceType) &&
+        descriptor.ServiceType != typeof(IDesignAtomicWriter) &&
+        !IsFallbackDescriptor(descriptor));
+
+    private static bool IsFallbackDescriptor(ServiceDescriptor descriptor) =>
+        descriptor.ImplementationType is { } implementationType &&
+        typeof(IDesignPersistenceFallback).IsAssignableFrom(implementationType);
 
     private static readonly Type[] OwnedServiceTypes =
     [
         typeof(GroundworkDesignStorage),
         typeof(IDesignAtomicWriter),
+        typeof(GroundworkDesignAtomicWrite),
         typeof(IWorkflowDefinitionLookup),
         typeof(IWorkflowDefinitionStore),
         typeof(IWorkflowDefinitionVersionStore),
