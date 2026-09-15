@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -21,6 +22,7 @@ public sealed class RuntimeEntityFrameworkCoreRegistrationTests
     {
         var services = new ServiceCollection().AddWorkflowRuntime();
         services.AddGroundworkV2RuntimeStores();
+        _ = new DbContextOptionsBuilder().UseSqlite(ConnectionString);
 
         services.AddRuntimeEntityFrameworkCore(Options());
 
