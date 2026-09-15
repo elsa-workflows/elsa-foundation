@@ -12,52 +12,55 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests;
 [Collection(PublishingPostgreSqlContainerFixture.CollectionName)]
 public sealed class PublishingPostgreSqlSmokeTests(PublishingPostgreSqlContainerFixture fixture)
 {
+    private string ConnectionString => PublishingProviderContainerSupport.Require(fixture.IsAvailable, fixture.SkipReason, "PostgreSQL", () => fixture.ConnectionString);
+
     [SkippableFact]
-    public Task Native_provider_round_trip_consume_and_cleanup()
-    {
-        if (PublishingProviderContainerSupport.RequireNativeProviderMatrix)
-            Assert.True(fixture.IsAvailable, fixture.SkipReason ?? "PostgreSQL is unavailable.");
-        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "PostgreSQL is unavailable.");
-        return PublishingEfNativeProviderSmoke.RunAsync(fixture.ConnectionString, connectionString =>
-            new PublishingSnapshotReviewPostgreSqlDbContext(
-                new DbContextOptionsBuilder<PublishingSnapshotReviewPostgreSqlDbContext>()
-                    .UseNpgsql(connectionString)
-                    .Options));
-    }
+    public Task Native_provider_round_trip_consume_and_cleanup() =>
+        PublishingEfNativeProviderSmoke.RunAsync(ConnectionString, connectionString => PublishingNativeProvider.PostgreSql.Publishing(connectionString, []));
+
+    [SkippableFact]
+    public Task Native_provider_ledger_round_trip() =>
+        PublishingLedgerNativeProviderSmoke.RunLedgerAsync(ConnectionString, PublishingNativeProvider.PostgreSql);
+
+    [SkippableFact]
+    public Task Native_provider_ordered_activity_publication() =>
+        PublishingLedgerNativeProviderSmoke.RunOrderedPublicationAsync(ConnectionString, PublishingNativeProvider.PostgreSql);
 }
 
 [Collection(PublishingSqlServerContainerFixture.CollectionName)]
 public sealed class PublishingSqlServerSmokeTests(PublishingSqlServerContainerFixture fixture)
 {
+    private string ConnectionString => PublishingProviderContainerSupport.Require(fixture.IsAvailable, fixture.SkipReason, "SQL Server", () => fixture.ConnectionString);
+
     [SkippableFact]
-    public Task Native_provider_round_trip_consume_and_cleanup()
-    {
-        if (PublishingProviderContainerSupport.RequireNativeProviderMatrix)
-            Assert.True(fixture.IsAvailable, fixture.SkipReason ?? "SQL Server is unavailable.");
-        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "SQL Server is unavailable.");
-        return PublishingEfNativeProviderSmoke.RunAsync(fixture.ConnectionString, connectionString =>
-            new PublishingSnapshotReviewSqlServerDbContext(
-                new DbContextOptionsBuilder<PublishingSnapshotReviewSqlServerDbContext>()
-                    .UseSqlServer(connectionString)
-                    .Options));
-    }
+    public Task Native_provider_round_trip_consume_and_cleanup() =>
+        PublishingEfNativeProviderSmoke.RunAsync(ConnectionString, connectionString => PublishingNativeProvider.SqlServer.Publishing(connectionString, []));
+
+    [SkippableFact]
+    public Task Native_provider_ledger_round_trip() =>
+        PublishingLedgerNativeProviderSmoke.RunLedgerAsync(ConnectionString, PublishingNativeProvider.SqlServer);
+
+    [SkippableFact]
+    public Task Native_provider_ordered_activity_publication() =>
+        PublishingLedgerNativeProviderSmoke.RunOrderedPublicationAsync(ConnectionString, PublishingNativeProvider.SqlServer);
 }
 
 [Collection(PublishingMySqlContainerFixture.CollectionName)]
 public sealed class PublishingMySqlSmokeTests(PublishingMySqlContainerFixture fixture)
 {
+    private string ConnectionString => PublishingProviderContainerSupport.Require(fixture.IsAvailable, fixture.SkipReason, "MySQL", () => fixture.ConnectionString);
+
     [SkippableFact]
-    public Task Native_provider_round_trip_consume_and_cleanup()
-    {
-        if (PublishingProviderContainerSupport.RequireNativeProviderMatrix)
-            Assert.True(fixture.IsAvailable, fixture.SkipReason ?? "MySQL is unavailable.");
-        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "MySQL is unavailable.");
-        return PublishingEfNativeProviderSmoke.RunAsync(fixture.ConnectionString, connectionString =>
-            new PublishingSnapshotReviewMySqlDbContext(
-                new DbContextOptionsBuilder<PublishingSnapshotReviewMySqlDbContext>()
-                    .UseMySQL(connectionString)
-                    .Options));
-    }
+    public Task Native_provider_round_trip_consume_and_cleanup() =>
+        PublishingEfNativeProviderSmoke.RunAsync(ConnectionString, connectionString => PublishingNativeProvider.MySql.Publishing(connectionString, []));
+
+    [SkippableFact]
+    public Task Native_provider_ledger_round_trip() =>
+        PublishingLedgerNativeProviderSmoke.RunLedgerAsync(ConnectionString, PublishingNativeProvider.MySql);
+
+    [SkippableFact]
+    public Task Native_provider_ordered_activity_publication() =>
+        PublishingLedgerNativeProviderSmoke.RunOrderedPublicationAsync(ConnectionString, PublishingNativeProvider.MySql);
 }
 
 internal static class PublishingEfNativeProviderSmoke

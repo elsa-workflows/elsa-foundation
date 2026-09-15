@@ -37,33 +37,9 @@ public sealed class EfExecutableActivityTemplateStore(
             {
                 await using var transaction = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
                     context, "saving", template.TemplateId, () => context.Database.BeginTransactionAsync(cancellationToken));
-                var current = await FindRowByIdAsync(identity, cancellationToken);
-                var claim = await FindClaimRowAsync(identity, cancellationToken);
-                var byHash = await FindRowsByHashAsync(identity, cancellationToken);
-                if (current is not null)
-                {
-                    var existing = Read(current, identity);
-                    EnsureOwnedClaim(claim, identity);
-                    EnsureMatchingIncarnation(current, claim!);
-                    EnsureSameIdentityAndContent(existing, template);
+                if (await StageCreateAsync(template, identity, json, cancellationToken))
                     await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
-                        context, "saving", template.TemplateId, () => transaction.CommitAsync(cancellationToken));
-                    return;
-                }
-                if (claim is not null)
-                {
-                    var existingClaim = ReadClaim(claim, identity);
-                    if (existingClaim.TemplateId == template.TemplateId)
-                        throw new InvalidDataException("Executable activity template hash claim exists without its template row.");
-                    throw HashCollision(template, existingClaim.TemplateId);
-                }
-                if (byHash.Count > 0)
-                    throw HashCollision(template, byHash[0].TemplateId);
-                var incarnationId = NewIncarnationId();
-                context.ExecutableActivityTemplates.Add(ToEntity(template, identity, json, incarnationId));
-                context.ExecutableActivityTemplateHashClaims.Add(ToClaimEntity(template, identity, incarnationId));
-                await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
-                    context, "saving", template.TemplateId, () => context.SaveChangesAsync(cancellationToken));
+                        context, "saving", template.TemplateId, () => context.SaveChangesAsync(cancellationToken));
                 await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
                     context, "saving", template.TemplateId, () => transaction.CommitAsync(cancellationToken));
                 return;
@@ -90,6 +66,57 @@ public sealed class EfExecutableActivityTemplateStore(
                 throw;
             }
         }
+    }
+
+    /// <summary>The context this store reads and stages through.</summary>
+    internal BookmarkStateDbContext Context => context;
+
+    /// <summary>
+    /// Stages the template and its hash claim in the caller's open transaction without saving. An identical
+    /// template already present is content-addressed and needs nothing, so this returns <c>false</c>; a
+    /// different template under the same id or hash is refused as a conflict.
+    /// </summary>
+    internal Task<bool> StageCreateAsync(ExecutableActivityTemplate template, CancellationToken cancellationToken)
+    {
+        Validate(template);
+        var identity = new TemplateIdentity(RequireScope(), template.TemplateId, template.TemplateHash);
+        return StageCreateAsync(template, identity, SerializeEnvelope(template), cancellationToken);
+    }
+
+    private async Task<bool> StageCreateAsync(ExecutableActivityTemplate template, TemplateIdentity identity, string json, CancellationToken cancellationToken)
+    {
+        var current = await FindRowByIdAsync(identity, cancellationToken);
+        var claim = await FindClaimRowAsync(identity, cancellationToken);
+        var byHash = await FindRowsByHashAsync(identity, cancellationToken);
+        if (current is null && (NamesTemplate(claim?.TemplateId, template) || byHash.Any(row => NamesTemplate(row.TemplateId, template))))
+        {
+            // A template row and its hash claim commit together, but under read-committed isolation a racing
+            // identical create can commit between the id read and the claim and hash reads. Seeing this id's
+            // claim or row after missing it by id is that race, not corruption or a collision: read the pair again.
+            current = await FindRowByIdAsync(identity, cancellationToken);
+            claim = await FindClaimRowAsync(identity, cancellationToken);
+        }
+        if (current is not null)
+        {
+            var existing = Read(current, identity);
+            EnsureOwnedClaim(claim, identity);
+            EnsureMatchingIncarnation(current, claim!);
+            EnsureSameIdentityAndContent(existing, template);
+            return false;
+        }
+        if (claim is not null)
+        {
+            var existingClaim = ReadClaim(claim, identity);
+            if (existingClaim.TemplateId == template.TemplateId)
+                throw new InvalidDataException("Executable activity template hash claim exists without its template row.");
+            throw HashCollision(template, existingClaim.TemplateId);
+        }
+        if (byHash.Count > 0)
+            throw HashCollision(template, Decode(byHash[0].TemplateId));
+        var incarnationId = NewIncarnationId();
+        context.ExecutableActivityTemplates.Add(ToEntity(template, identity, json, incarnationId));
+        context.ExecutableActivityTemplateHashClaims.Add(ToClaimEntity(template, identity, incarnationId));
+        return true;
     }
 
     public async ValueTask<ExecutableActivityTemplate?> FindAsync(string templateId, CancellationToken cancellationToken = default)
@@ -424,6 +451,9 @@ public sealed class EfExecutableActivityTemplateStore(
     private static string Hash(string value) => EfRelationalIdentity.Hash(value);
     private static string Encode(string value) => EfRelationalIdentity.Encode(value);
     private static string Decode(string value) => EfRelationalIdentity.Decode(value);
+
+    private static bool NamesTemplate(string? encodedTemplateId, ExecutableActivityTemplate template) =>
+        encodedTemplateId is not null && StringComparer.Ordinal.Equals(Decode(encodedTemplateId), template.TemplateId);
     private static string HashClaimId(string scope, string hash) => CreateId(scope, $"templateHash:{Hash(hash)}");
     private static string OrderKey(string value) => Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(value, RuntimeArtifactEfModule.IdentityMaximumLength));
     private static RuntimeArtifactEntityFrameworkPersistenceException NormalizeProviderFailure(string operation, string identity, Exception inner) =>

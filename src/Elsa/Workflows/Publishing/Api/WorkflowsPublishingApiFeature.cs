@@ -58,7 +58,10 @@ public class WorkflowsPublishingApiFeature : IWebShellFeature
         services.TryAddScoped<IActivityDefinitionPublisher, ActivityDefinitionPublisher>();
         services.TryAddScoped<IActivitySourceVersionPublisher, SourceOwnedActivityVersionPublisher>();
         services.TryAddScoped<IActivityDraftTestRunService, ActivityDraftTestRunService>();
-        services.TryAddSingleton<IActivityDraftTestRunStore, InMemoryActivityDraftTestRunStore>();
+        PublishingPersistenceFamilyBackend.TryAddInMemory<IActivityDraftTestRunStore, InMemoryActivityDraftTestRunStore>(
+            services,
+            PublishingPersistenceFamilyBackend.ActivityDraftTestRuns,
+            PublishingPersistenceFamilyBackend.ActivityDraftTestRunContracts);
         services.TryAddSingleton<IActivityDraftTestRunCancellationPolicy, DefaultActivityDraftTestRunCancellationPolicy>();
         services.TryAddScoped<IActivityDraftDiffCandidateCompiler, ActivityDraftDiffCandidateCompiler>();
         services.TryAddScoped<IActivityUpgradePlanApplier, ApplyActivityUpgradePlanCommand>();

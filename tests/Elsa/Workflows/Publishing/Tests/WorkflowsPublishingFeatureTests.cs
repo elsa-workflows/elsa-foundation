@@ -59,6 +59,24 @@ public sealed class WorkflowsPublishingFeatureTests
     }
 
     [Fact]
+    public void Records_its_in_memory_record_and_receipt_stores_as_owners_only_when_it_added_them()
+    {
+        var services = ComposeEngine();
+        Assert.Equal(PublishingPersistenceFamilyBackend.InMemory,
+            PublishingPersistenceFamilyBackend.Find(services, PublishingPersistenceFamilyBackend.PublicationRecords)!.Name);
+        Assert.Equal(PublishingPersistenceFamilyBackend.InMemory,
+            PublishingPersistenceFamilyBackend.Find(services, PublishingPersistenceFamilyBackend.ActivityPublicationReceipts)!.Name);
+
+        // A host-provided record store stays foreign; the receipt default it did not provide is still claimed.
+        var hostProvided = new ServiceCollection();
+        hostProvided.AddSingleton<IPublicationRecordStore>(new Services.InMemoryPublicationRecordStore());
+        new WorkflowsPublishingFeature().ConfigureServices(hostProvided);
+        Assert.Null(PublishingPersistenceFamilyBackend.Find(hostProvided, PublishingPersistenceFamilyBackend.PublicationRecords));
+        Assert.Single(hostProvided, descriptor => descriptor.ServiceType == typeof(IPublicationRecordStore));
+        Assert.NotNull(PublishingPersistenceFamilyBackend.Find(hostProvided, PublishingPersistenceFamilyBackend.ActivityPublicationReceipts));
+    }
+
+    [Fact]
     public void Registers_the_publish_on_reconcile_subscriber()
     {
         var services = ComposeEngine();

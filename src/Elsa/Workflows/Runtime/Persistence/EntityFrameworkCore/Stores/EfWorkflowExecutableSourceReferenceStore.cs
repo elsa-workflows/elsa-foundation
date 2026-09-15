@@ -63,6 +63,56 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         catch { context.ChangeTracker.Clear(); throw; }
     }
 
+    /// <summary>The context this store reads and stages through.</summary>
+    internal BookmarkStateDbContext Context => context;
+
+    /// <summary>
+    /// Stages a create-only source reference in the caller's open transaction without saving. A live reference
+    /// already carrying the same identity and artifact is adopted and returns <c>false</c>: it is the one a
+    /// previous attempt of the same publication committed. Anything else under that id is a conflict.
+    /// </summary>
+    internal async Task<bool> StageCreateOrAdoptAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken)
+    {
+        Validate(reference);
+        var scope = ScopeForWrite(reference);
+        var id = CreateId(scope, reference.SourceReferenceId);
+        var existing = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
+            context,
+            "saving",
+            reference.SourceReferenceId,
+            () => context.WorkflowExecutableSourceReferences.AsNoTracking().SingleOrDefaultAsync(x =>
+                x.Id == id &&
+                x.ScopeKeyHash == Hash(scope) &&
+                x.ScopeKey == Encode(scope) &&
+                x.SourceReferenceIdHash == Hash(reference.SourceReferenceId) &&
+                x.SourceReferenceId == Encode(reference.SourceReferenceId),
+                cancellationToken));
+        if (existing is null)
+        {
+            context.WorkflowExecutableSourceReferences.Add(ToEntity(reference, scope, id));
+            return true;
+        }
+
+        var current = Read(existing, scope, reference.SourceReferenceId);
+        if (current.DeletedAt is not null || !SameArtifactBinding(current, reference))
+            throw new InvalidOperationException(
+                $"Workflow executable source reference '{reference.SourceReferenceId}' already exists for different material; source references are create-only.");
+        return false;
+    }
+
+    // Timestamps are deliberately excluded: a retry of the same publication may re-mint them, but it cannot
+    // move the reference to another artifact, definition version or tenant without being a different reference.
+    private static bool SameArtifactBinding(WorkflowExecutableSourceReference current, WorkflowExecutableSourceReference candidate) =>
+        StringComparer.Ordinal.Equals(current.ArtifactId, candidate.ArtifactId) &&
+        StringComparer.Ordinal.Equals(current.ArtifactVersion, candidate.ArtifactVersion) &&
+        StringComparer.Ordinal.Equals(current.SourceKind, candidate.SourceKind) &&
+        StringComparer.Ordinal.Equals(current.SourceId, candidate.SourceId) &&
+        StringComparer.Ordinal.Equals(current.SourceVersion, candidate.SourceVersion) &&
+        StringComparer.Ordinal.Equals(current.DefinitionId, candidate.DefinitionId) &&
+        StringComparer.Ordinal.Equals(current.DefinitionVersionId, candidate.DefinitionVersionId) &&
+        StringComparer.Ordinal.Equals(current.TenantId, candidate.TenantId) &&
+        current.Scope == candidate.Scope;
+
     public async ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceReferenceId);

@@ -1,6 +1,10 @@
+using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Services;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,6 +13,38 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.DependencyIn
 
 public static class PublishingEntityFrameworkCoreRegistration
 {
+    /// <summary>
+    /// The P01, P05 and P06 families and the reusable-activity publication commands. The commands write the P05
+    /// receipt as their last phase, so they are selected together with it: a receipt read from one backend and
+    /// written by another's command would silently lose idempotency.
+    /// </summary>
+    private static readonly LedgerFamily[] LedgerFamilies =
+    [
+        new(
+            PublishingPersistenceFamilyBackend.PublicationRecords,
+            PublishingPersistenceFamilyBackend.PublicationRecordContracts,
+            services => AddStore<IPublicationRecordStore, EfPublicationRecordStore>(services)),
+        new(
+            PublishingPersistenceFamilyBackend.ActivityPublicationReceipts,
+            PublishingPersistenceFamilyBackend.ActivityPublicationReceiptContracts,
+            services => AddStore<IActivityPublicationReceiptStore, EfActivityPublicationReceiptStore>(services)),
+        new(
+            PublishingPersistenceFamilyBackend.ActivityDraftTestRuns,
+            PublishingPersistenceFamilyBackend.ActivityDraftTestRunContracts,
+            services => AddStore<IActivityDraftTestRunStore, EfActivityDraftTestRunStore>(services)),
+        new(
+            PublishingPersistenceFamilyBackend.ActivityPublicationCommands,
+            [
+                typeof(ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>),
+                typeof(ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>)
+            ],
+            services =>
+            {
+                services.AddScoped<ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>, EfActivityPublicationCommand>();
+                services.AddScoped<ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>, EfSourceActivityPublicationCommand>();
+            })
+    ];
+
     public static IServiceCollection AddPublishingEntityFrameworkCore(
         this IServiceCollection services,
         PublishingEntityFrameworkCoreOptions options)
@@ -22,31 +58,38 @@ public static class PublishingEntityFrameworkCoreRegistration
             _ = EfRelationalProviderBinding.ExpectedProviderName(options.Provider);
             var reviewBackend = PublicationSnapshotReviewStoreBackend.Find(services);
             var policyProjectionBackend = PublicationPolicyProjectionStoreBackend.Find(services);
+            var reviewIsEntityFramework = reviewBackend?.Name == PublicationSnapshotReviewStoreBackend.EntityFramework;
 
-            if (reviewBackend?.Name == PublicationSnapshotReviewStoreBackend.EntityFramework)
-                reviewBackend.EnsureOwnsRegisteredContract(services);
+            if (reviewIsEntityFramework)
+                reviewBackend!.EnsureOwnsRegisteredContract(services);
             if (policyProjectionBackend?.Name == PublicationPolicyProjectionStoreBackend.EntityFramework)
+            {
                 policyProjectionBackend.EnsureOwnsRegisteredContracts(services);
-            if (policyProjectionBackend?.Name == PublicationPolicyProjectionStoreBackend.EntityFramework &&
-                reviewBackend?.Name != PublicationSnapshotReviewStoreBackend.EntityFramework)
-                throw new InvalidOperationException("Publication policy/projection-intent EF persistence requires the P04 snapshot-review EF context to be selected as well.");
+                if (!reviewIsEntityFramework)
+                    throw new InvalidOperationException("Publication policy/projection-intent EF persistence requires the P04 snapshot-review EF context to be selected as well.");
+            }
+            foreach (var family in LedgerFamilies)
+            {
+                if (PublishingPersistenceFamilyBackend.Find(services, family.Name) is not { Name: PublishingPersistenceFamilyBackend.EntityFramework } ledgerBackend)
+                    continue;
+                ledgerBackend.EnsureOwnsRegisteredContracts(services);
+                if (!reviewIsEntityFramework)
+                    throw new InvalidOperationException($"Publishing EF persistence for '{family.Name}' requires the P04 snapshot-review EF context to be selected as well.");
+            }
 
             var existingOptions = services.Select(service => service.ImplementationInstance)
                 .OfType<PublishingEntityFrameworkCoreOptions>()
                 .SingleOrDefault();
-            if (existingOptions is not null &&
-                (reviewBackend?.Name != PublicationSnapshotReviewStoreBackend.EntityFramework || !OptionsEqual(existingOptions, options)))
+            if (existingOptions is not null && (!reviewIsEntityFramework || !OptionsEqual(existingOptions, options)))
                 throw new InvalidOperationException("Publishing EF persistence is already registered with different provider options.");
-            if (reviewBackend?.Name == PublicationSnapshotReviewStoreBackend.EntityFramework &&
-                policyProjectionBackend?.Name == PublicationPolicyProjectionStoreBackend.EntityFramework)
-                return services;
 
-            if (reviewBackend?.Name != PublicationSnapshotReviewStoreBackend.EntityFramework)
+            if (!reviewIsEntityFramework)
             {
                 if (reviewBackend is not null)
                     reviewBackend.RemoveOwnedArtifacts(services);
                 else
                     PublicationSnapshotReviewStoreBackend.EnsureNoUnownedRegistrations(services);
+                AddSnapshotReview(services, options, provider);
             }
             if (policyProjectionBackend?.Name != PublicationPolicyProjectionStoreBackend.EntityFramework)
             {
@@ -54,53 +97,24 @@ public static class PublishingEntityFrameworkCoreRegistration
                     policyProjectionBackend.RemoveOwnedArtifacts(services);
                 else
                     PublicationPolicyProjectionStoreBackend.EnsureNoUnownedRegistrations(services);
+                AddPolicyAndProjectionIntent(services);
             }
 
-            var policyProjectionOwned = new List<ServiceDescriptor>();
-            if (reviewBackend?.Name != PublicationSnapshotReviewStoreBackend.EntityFramework)
+            foreach (var family in LedgerFamilies)
             {
-                var configured = new PublishingEntityFrameworkCoreOptions
-                {
-                    Provider = options.Provider,
-                    ConnectionString = options.ConnectionString,
-                    ConnectionName = options.ConnectionName
-                };
-                var optionsDescriptor = ServiceDescriptor.Singleton(configured);
-                services.Add(optionsDescriptor);
-                var reviewOwned = new List<ServiceDescriptor> { optionsDescriptor };
-                reviewOwned.AddRange(AddContext(services, configured, provider));
-
-                var reviewConcrete = new ServiceDescriptor(typeof(EfPublicationSnapshotReviewStore), typeof(EfPublicationSnapshotReviewStore), ServiceLifetime.Scoped);
-                services.Add(reviewConcrete);
-                reviewOwned.Add(reviewConcrete);
-                var reviewContract = ServiceDescriptor.Scoped<IPublicationSnapshotReviewStore>(providerService =>
-                    providerService.GetRequiredService<EfPublicationSnapshotReviewStore>());
-                services.Add(reviewContract);
-                reviewOwned.Add(reviewContract);
-                PublicationSnapshotReviewStoreBackend.Register(
+                // Idempotent for an EF owner; replaces the in-memory or Groundwork owner; refuses a foreign one.
+                if (!PublishingPersistenceFamilyBackend.PrepareSelection(services, family.Name, family.Contracts, PublishingPersistenceFamilyBackend.EntityFramework))
+                    continue;
+                var firstAdded = services.Count;
+                family.Register(services);
+                PublishingPersistenceFamilyBackend.RegisterAdded(
                     services,
-                    new PublicationSnapshotReviewStoreBackend(PublicationSnapshotReviewStoreBackend.EntityFramework, reviewOwned));
+                    family.Name,
+                    PublishingPersistenceFamilyBackend.EntityFramework,
+                    family.Contracts,
+                    firstAdded);
             }
 
-            var policyConcrete = new ServiceDescriptor(typeof(EfPublicationPolicyStore), typeof(EfPublicationPolicyStore), ServiceLifetime.Scoped);
-            var intentConcrete = new ServiceDescriptor(typeof(EfPublicationProjectionIntentStore), typeof(EfPublicationProjectionIntentStore), ServiceLifetime.Scoped);
-            services.Add(policyConcrete);
-            services.Add(intentConcrete);
-            var policyContract = ServiceDescriptor.Scoped<IPublicationPolicyStore>(providerService =>
-                providerService.GetRequiredService<EfPublicationPolicyStore>());
-            var intentContract = ServiceDescriptor.Scoped<IPublicationProjectionIntentStore>(providerService =>
-                providerService.GetRequiredService<EfPublicationProjectionIntentStore>());
-            services.Add(policyContract);
-            services.Add(intentContract);
-            policyProjectionOwned.Add(policyConcrete);
-            policyProjectionOwned.Add(intentConcrete);
-            policyProjectionOwned.Add(policyContract);
-            policyProjectionOwned.Add(intentContract);
-            PublicationPolicyProjectionStoreBackend.Register(
-                services,
-                new PublicationPolicyProjectionStoreBackend(
-                    PublicationPolicyProjectionStoreBackend.EntityFramework,
-                    policyProjectionOwned));
             return services;
         }
         catch
@@ -110,6 +124,48 @@ public static class PublishingEntityFrameworkCoreRegistration
                 services.Add(descriptor);
             throw;
         }
+    }
+
+    private static void AddSnapshotReview(IServiceCollection services, PublishingEntityFrameworkCoreOptions options, string provider)
+    {
+        var configured = new PublishingEntityFrameworkCoreOptions
+        {
+            Provider = options.Provider,
+            ConnectionString = options.ConnectionString,
+            ConnectionName = options.ConnectionName
+        };
+        var optionsDescriptor = ServiceDescriptor.Singleton(configured);
+        services.Add(optionsDescriptor);
+        var reviewOwned = new List<ServiceDescriptor> { optionsDescriptor };
+        reviewOwned.AddRange(AddContext(services, configured, provider));
+
+        var firstStore = services.Count;
+        AddStore<IPublicationSnapshotReviewStore, EfPublicationSnapshotReviewStore>(services);
+        reviewOwned.AddRange(services.Skip(firstStore));
+        PublicationSnapshotReviewStoreBackend.Register(
+            services,
+            new PublicationSnapshotReviewStoreBackend(PublicationSnapshotReviewStoreBackend.EntityFramework, reviewOwned));
+    }
+
+    private static void AddPolicyAndProjectionIntent(IServiceCollection services)
+    {
+        var firstStore = services.Count;
+        AddStore<IPublicationPolicyStore, EfPublicationPolicyStore>(services);
+        AddStore<IPublicationProjectionIntentStore, EfPublicationProjectionIntentStore>(services);
+        PublicationPolicyProjectionStoreBackend.Register(
+            services,
+            new PublicationPolicyProjectionStoreBackend(
+                PublicationPolicyProjectionStoreBackend.EntityFramework,
+                services.Skip(firstStore).ToArray()));
+    }
+
+    /// <summary>Registers the scoped EF store and resolves its contract through it.</summary>
+    private static void AddStore<TContract, TStore>(IServiceCollection services)
+        where TContract : class
+        where TStore : class, TContract
+    {
+        services.Add(new ServiceDescriptor(typeof(TStore), typeof(TStore), ServiceLifetime.Scoped));
+        services.Add(ServiceDescriptor.Scoped<TContract>(provider => provider.GetRequiredService<TStore>()));
     }
 
     private static IReadOnlyCollection<ServiceDescriptor> AddContext(
@@ -159,6 +215,8 @@ public static class PublishingEntityFrameworkCoreRegistration
     private static bool OptionsEqual(PublishingEntityFrameworkCoreOptions left, PublishingEntityFrameworkCoreOptions right) =>
         StringComparer.Ordinal.Equals(EfRelationalProviderBinding.Normalize(left.Provider), EfRelationalProviderBinding.Normalize(right.Provider)) &&
         left.ConnectionString == right.ConnectionString && left.ConnectionName == right.ConnectionName;
+
+    private sealed record LedgerFamily(string Name, IReadOnlyCollection<Type> Contracts, Action<IServiceCollection> Register);
 }
 
 public sealed class PublishingEntityFrameworkCoreOptions

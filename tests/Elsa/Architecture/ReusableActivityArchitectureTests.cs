@@ -51,6 +51,22 @@ public sealed class ReusableActivityArchitectureTests
             "Elsa.Workflows.Publishing.Core",
             "Elsa.Workflows.Runtime.Core");
 
+    /// <summary>
+    /// The EF counterpart commits the publication in ADR 0066 order through the Activities Design and Runtime
+    /// EF modules' own staging seams, each in its own context, so it may reach exactly those two EF modules and
+    /// never a Groundwork lane.
+    /// </summary>
+    [Fact]
+    public void Publishing_entity_framework_bridge_commits_through_the_design_and_runtime_EF_seams_only() =>
+        AssertProjectReferences(
+            "src/Elsa/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj",
+            "Elsa.Activities.Design.Persistence.Core",
+            "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
+            "Elsa.Persistence.EntityFramework",
+            "Elsa.Workflows.Publishing.Core",
+            "Elsa.Workflows.Runtime.Core",
+            "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore");
+
     [Fact]
     public void Elsa3_import_groundwork_bridge_references_design_and_runtime_core_contracts_only() =>
         AssertProjectReferences(

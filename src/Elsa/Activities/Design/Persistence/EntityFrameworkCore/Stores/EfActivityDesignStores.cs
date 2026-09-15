@@ -77,6 +77,9 @@ public sealed class EfActivityDesignStores(
     private const int MaximumPageSize = 500;
     private const int IntegrityValidationBatchSize = 256;
 
+    /// <summary>The context these stores read and write through.</summary>
+    internal ActivitiesDesignDbContext Context => db;
+
     public async Task<ActivityDefinition> GetAsync(string id, CancellationToken cancellationToken = default) =>
         await ById(Access(db.ActivityDefinitions.AsNoTracking()), id).SingleOrDefaultAsync(cancellationToken)
         ?? throw EntityNotFoundException.ForEntity(typeof(ActivityDefinition), id);
@@ -1248,7 +1251,7 @@ public sealed class EfActivityDesignStores(
         concurrencyProperty.OriginalValue = replacement;
     }
 
-    private static IQueryable<T> ById<T>(IQueryable<T> query, string id)
+    internal static IQueryable<T> ById<T>(IQueryable<T> query, string id)
         where T : Elsa.Primitives.Entities.Entity
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
@@ -1270,7 +1273,7 @@ public sealed class EfActivityDesignStores(
             .ThenBy(x => EF.Property<string>(x, "ResourceIdIdentityHash"))
             .ThenBy(x => EF.Property<string>(x, "IdIdentityHash"));
 
-    private static IQueryable<T> ByReference<T>(IQueryable<T> query, string propertyName, string value)
+    internal static IQueryable<T> ByReference<T>(IQueryable<T> query, string propertyName, string value)
         where T : class
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value);
@@ -1329,7 +1332,7 @@ public sealed class EfActivityDesignStores(
         }
     }
 
-    private static void PrepareVersion(ActivityDefinitionVersion version)
+    internal static void PrepareVersion(ActivityDefinitionVersion version)
     {
         try
         {
@@ -1452,11 +1455,11 @@ public sealed class EfActivityDesignStores(
             ActivityAuthorityIntegrity.Compute(raw, raw, keyToken, sourceToken, authority.AuthorityKey, authority.SourceId, authority.Kind));
     }
 
-    private static string ItemSortKey(ActivityDependencyItem item) =>
+    internal static string ItemSortKey(ActivityDependencyItem item) =>
         string.Join('\u001f', item.Depth, item.Owner.Kind, item.Owner.DraftId ?? item.Owner.VersionId,
             item.Occurrence.OccurrenceId, item.Dependency.VersionId);
 
-    private static void ValidateProjectionItems(IReadOnlyList<ActivityDependencyItem> items)
+    internal static void ValidateProjectionItems(IReadOnlyList<ActivityDependencyItem> items)
     {
         ArgumentNullException.ThrowIfNull(items);
         var supportedOwners = new HashSet<string>(["ActivityVersion", "ActivityDraft", "WorkflowVersion", "WorkflowDraft"], StringComparer.Ordinal);
@@ -1571,7 +1574,12 @@ public sealed class EfActivityDesignStores(
             throw new InvalidOperationException($"Activity definition '{definitionId}' is owned by provider source '{authoring.ContentAuthority.AuthorityKey}'.");
     }
 
-    private IQueryable<T> Access<T>(IQueryable<T> query) where T : Elsa.Primitives.Entities.TenantEntity
+    private IQueryable<T> Access<T>(IQueryable<T> query) where T : Elsa.Primitives.Entities.TenantEntity =>
+        AccessFilter(query, access);
+
+    /// <summary>The rows <paramref name="access"/> may see: its own scope and the global scope.</summary>
+    internal static IQueryable<T> AccessFilter<T>(IQueryable<T> query, IPersistenceAccessContextAccessor? access)
+        where T : Elsa.Primitives.Entities.TenantEntity
     {
         if (access is null || access.Current.AcrossScopes)
             return query;

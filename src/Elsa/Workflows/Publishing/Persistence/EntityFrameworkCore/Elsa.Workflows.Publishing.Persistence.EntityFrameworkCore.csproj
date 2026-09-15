@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>Opt-in EF Core persistence for publication snapshot-review authorities. Groundwork remains the default.</Description>
+    <Description>Opt-in EF Core persistence for the Publishing ledger (P01-P06) and the ordered reusable-activity publication commands. Groundwork remains the default.</Description>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
@@ -14,5 +14,10 @@
     <ProjectReference Include="..\..\Core\Elsa.Workflows.Publishing.Core.csproj" />
     <ProjectReference Include="..\..\..\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
+    <!-- The reusable-activity publication commands commit their Runtime and Activities Design phases through
+         those modules' own EF staging seams, each in its own context (ADR 0066). -->
+    <ProjectReference Include="..\..\..\..\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
 </Project>
