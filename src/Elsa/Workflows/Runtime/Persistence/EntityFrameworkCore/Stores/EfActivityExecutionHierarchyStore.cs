@@ -335,14 +335,14 @@ public sealed class EfActivityExecutionHierarchyStore(
         return depths[record.ActivityExecutionId];
     }
 
-    private ActivityExecutionHierarchyEntity ToEntity(ActivityExecutionHierarchyRecord record, string scope, string id, long revision)
+    internal static ActivityExecutionHierarchyEntity ToEntity(ActivityExecutionHierarchyRecord record, string scope, string id, long revision)
     {
         var row = new ActivityExecutionHierarchyEntity();
         CopyToEntity(row, record, scope, id, revision, null);
         return row;
     }
 
-    private static void CopyToEntity(ActivityExecutionHierarchyEntity row, ActivityExecutionHierarchyRecord record, string scope, string id, long revision, ActivityExecutionHierarchyRecord? previous)
+    internal static void CopyToEntity(ActivityExecutionHierarchyEntity row, ActivityExecutionHierarchyRecord record, string scope, string id, long revision, ActivityExecutionHierarchyRecord? previous)
     {
         if (previous is not null && (!StringComparer.Ordinal.Equals(previous.WorkflowExecutionId, record.WorkflowExecutionId) || !StringComparer.Ordinal.Equals(previous.ActivityExecutionId, record.ActivityExecutionId)))
             throw new InvalidDataException("The persisted activity execution hierarchy identity changed during replacement.");
@@ -365,7 +365,7 @@ public sealed class EfActivityExecutionHierarchyStore(
         row.Revision = revision;
     }
 
-    private static ActivityExecutionHierarchyRecord ReadChecked(ActivityExecutionHierarchyEntity row, string scope, string? expectedWorkflow = null, string? expectedActivity = null)
+    internal static ActivityExecutionHierarchyRecord ReadChecked(ActivityExecutionHierarchyEntity row, string scope, string? expectedWorkflow = null, string? expectedActivity = null)
     {
         try
         {
