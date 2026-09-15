@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -71,6 +72,80 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
+    public async Task Nonempty_execution_scheduler_and_fence_commit_as_one_replayable_unit()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var now = OccurredAt;
+        var scope = "tenant-a";
+        await using (var context = database.Open(scope))
+        {
+            var accessor = new FixedAccessor(scope);
+            var liveness = new EfExecutionLivenessStateStore(context, accessor, new NoopContinuationCodec());
+            var lease = new RuntimeExecutionLease("lease-a", "workflow-a", "owner-a", now, now.AddMinutes(5), 1);
+            await liveness.SaveAsync(new ExecutionLivenessState("ownership:workflow-a", "workflow-a", lease, null, null, null));
+
+            var commit = Commit("commit-nonempty") with
+            {
+                ExpectedFence = lease.ToFence(),
+                StateChanges = new RuntimeCheckpointStateChangeSet(
+                    new RuntimeStateChange<WorkflowExecutionState>("workflow-a", RuntimeStateChangeOperation.Upsert, Execution("workflow-a", scope), new Dictionary<string, string>()),
+                    new RuntimeStateChange<SchedulerState>("workflow-a", RuntimeStateChangeOperation.Upsert, new SchedulerState("workflow-a", 7), new Dictionary<string, string>()),
+                    [], [], [], [], [])
+            };
+
+            var store = new EfRuntimeCheckpointCommitStore(context, accessor, new FixedTimeProvider(now));
+            var first = await store.CommitAsync(commit, Decision());
+            var replay = await store.CommitAsync(commit, Decision());
+
+            Assert.Empty(first.PendingPostCommitWorkIds);
+            Assert.Empty(replay.PendingPostCommitWorkIds);
+            Assert.Equal(1, (await context.WorkflowExecutionStates.SingleAsync()).Revision);
+            Assert.Equal(1, (await context.SchedulerStates.SingleAsync()).Revision);
+            Assert.Equal(2, (await context.ExecutionLivenessStates.SingleAsync()).Revision);
+            Assert.Single(await context.RuntimeCheckpointCommits.ToArrayAsync());
+        }
+    }
+
+    [Fact]
+    public async Task Staged_sibling_concurrency_failure_rolls_back_execution_and_marker_and_clears_retryable_state()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open("tenant-a");
+        var scheduler = SchedulerRow("tenant-a", "workflow-a");
+        context.SchedulerStates.Add(scheduler);
+        await context.SaveChangesAsync();
+
+        await using (var competing = database.Open("tenant-a"))
+        {
+            var competingRow = await competing.SchedulerStates.SingleAsync();
+            competingRow.Revision++;
+            await competing.SaveChangesAsync();
+        }
+
+        // This is the sibling mutation already staged by an R15 caller. The checkpoint must not clear it before
+        // the atomic save, but a failed unit must clear the stale tracker after rollback so a later SaveChanges
+        // cannot silently retry the sibling mutation.
+        scheduler.ContentJson = scheduler.ContentJson.Replace("\"version\":1", "\"version\":2", StringComparison.Ordinal);
+        scheduler.Revision++;
+        var commit = Commit("commit-sibling-cas") with
+        {
+            StateChanges = new RuntimeCheckpointStateChangeSet(
+                new RuntimeStateChange<WorkflowExecutionState>("workflow-a", RuntimeStateChangeOperation.Upsert, Execution("workflow-a", "tenant-a"), new Dictionary<string, string>()),
+                null,
+                [], [], [], [], [])
+        };
+
+        var store = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"));
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => store.CommitAsync(commit, Decision()).AsTask());
+        Assert.Empty(context.ChangeTracker.Entries());
+
+        await using var verification = database.Open("tenant-a");
+        Assert.Null(await verification.WorkflowExecutionStates.SingleOrDefaultAsync());
+        Assert.Empty(await verification.RuntimeCheckpointCommits.ToArrayAsync());
+        Assert.Equal(2, (await verification.SchedulerStates.SingleAsync()).Revision);
+    }
+
+    [Fact]
     public async Task Marker_failure_rolls_back_a_pre_staged_sibling_and_leaves_marker_reusable()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -132,32 +207,30 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
-    public async Task Thin_marker_slice_rejects_nonempty_state_and_fence_without_writing_a_marker()
+    public async Task Checkpoint_slice_rejects_unsupported_state_without_writing_a_marker()
     {
         await using var database = await TestDatabase.CreateAsync();
         await using var context = database.Open("tenant-a");
         var store = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"));
 
-        var schedulerState = new RuntimeStateChange<SchedulerState>(
-            "workflow-a",
+        var durableValue = new RuntimeStateChange<DurableValueState>(
+            "value-a",
             RuntimeStateChangeOperation.Upsert,
-            new SchedulerState("workflow-a", 1),
+            new DurableValueState("value-a", "workflow-a", "value-a", new RuntimeValueTypeDescriptor("json", null, null), DurableValueLifecycle.Result, DurableValueStorage.Inline, JsonDocument.Parse("42").RootElement, null, null, OccurredAt, new Dictionary<string, string>()),
             new Dictionary<string, string>());
         var nonempty = Commit("commit-nonempty") with
         {
             StateChanges = new RuntimeCheckpointStateChangeSet(
                 null,
-                schedulerState,
+                null,
                 [],
                 [],
-                [],
+                [durableValue],
                 [],
                 [])
         };
 
         await Assert.ThrowsAsync<NotSupportedException>(() => store.CommitAsync(nonempty, Decision()).AsTask());
-        await Assert.ThrowsAsync<NotSupportedException>(() =>
-            store.CommitAsync(Commit("commit-fenced") with { ExpectedFence = new RuntimeExecutionFence("lease", "owner", 1) }, Decision()).AsTask());
         Assert.Empty(await context.RuntimeCheckpointCommits.ToArrayAsync());
 
         var replayable = Commit("commit-replay-fence");
@@ -181,6 +254,20 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
 
     private static RuntimeCheckpointPersistenceDecision Decision() => new(RuntimeCheckpointPersistenceMode.Immediate);
 
+    private static WorkflowExecutionState Execution(string id, string tenantId) => new(
+        id,
+        new WorkflowExecutableIdentity($"artifact-{id}", $"definition-{id}", "version-1", "1.0.0", "hash-1"),
+        WorkflowExecutionStatus.Running,
+        null,
+        OccurredAt,
+        OccurredAt,
+        OccurredAt,
+        null,
+        null,
+        null,
+        tenantId,
+        new Dictionary<string, string>());
+
     private static SchedulerStateEntity SchedulerRow(string scope, string workflowExecutionId) => new()
     {
         Id = "pre-staged-scheduler-row",
@@ -200,6 +287,17 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     private sealed class FixedAccessor(string scope) : IPersistenceAccessContextAccessor
     {
         public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(scope));
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class NoopContinuationCodec : IRuntimeRecoveryContinuationCodec
+    {
+        public string Encode(string purpose, ReadOnlySpan<byte> payload) => Convert.ToBase64String(payload);
+        public byte[] Decode(string purpose, string token) => Convert.FromBase64String(token);
     }
 
     private sealed class TestDatabase(SqliteConnection connection) : IAsyncDisposable
@@ -262,7 +360,8 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
                 Tables.Add("elsa_runtime_checkpoint_commit");
             if (isInsert && command.CommandText.Contains("elsa_runtime_scheduler_state", StringComparison.OrdinalIgnoreCase))
                 Tables.Add("elsa_runtime_scheduler_state");
-            if (command.CommandText.Contains("elsa_runtime_scheduler_state", StringComparison.OrdinalIgnoreCase) &&
+            if ((isInsert || command.CommandText.Contains("UPDATE", StringComparison.OrdinalIgnoreCase)) &&
+                command.CommandText.Contains("elsa_runtime_scheduler_state", StringComparison.OrdinalIgnoreCase) &&
                 Interlocked.Exchange(ref armed, 0) == 1)
                 throw new InvalidOperationException("Simulated later sibling participant failure.");
         }

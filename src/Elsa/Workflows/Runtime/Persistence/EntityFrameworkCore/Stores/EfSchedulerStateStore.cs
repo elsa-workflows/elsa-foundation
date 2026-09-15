@@ -92,20 +92,21 @@ public sealed class EfSchedulerStateStore(
         }
     }
 
-    private static SchedulerStateEntity ToEntity(SchedulerState state, string scope, string id, long revision) => new()
+    // Internal checkpoint staging reuses the direct store's provider-neutral projection.
+    internal static SchedulerStateEntity ToEntity(SchedulerState state, string scope, string id, long revision) => new()
     {
         Id = id, ScopeKey = EfRuntimeOperationalStoreSupport.Encode(scope), ScopeKeyHash = EfRuntimeOperationalStoreSupport.Hash(scope),
         WorkflowExecutionId = EfRuntimeOperationalStoreSupport.Encode(state.WorkflowExecutionId), WorkflowExecutionIdHash = EfRuntimeOperationalStoreSupport.Hash(state.WorkflowExecutionId), WorkflowExecutionIdOrderKey = EfRuntimeOperationalStoreSupport.Order(state.WorkflowExecutionId), Collection = Collection,
         ContentJson = EfSchedulerStateJson.Serialize(state), SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion, Revision = revision
     };
 
-    private static void Copy(SchedulerStateEntity row, SchedulerState state, string scope, long revision)
+    internal static void Copy(SchedulerStateEntity row, SchedulerState state, string scope, long revision)
     {
         var replacement = ToEntity(state, scope, row.Id, revision);
         row.ScopeKey = replacement.ScopeKey; row.ScopeKeyHash = replacement.ScopeKeyHash; row.WorkflowExecutionId = replacement.WorkflowExecutionId; row.WorkflowExecutionIdHash = replacement.WorkflowExecutionIdHash; row.WorkflowExecutionIdOrderKey = replacement.WorkflowExecutionIdOrderKey; row.Collection = replacement.Collection; row.ContentJson = replacement.ContentJson; row.SchemaVersion = replacement.SchemaVersion; row.Revision = revision;
     }
 
-    private static SchedulerState Read(SchedulerStateEntity row, string scope, string? expectedWorkflow = null)
+    internal static SchedulerState Read(SchedulerStateEntity row, string scope, string? expectedWorkflow = null)
     {
         if (row.Revision <= 0 ||
             row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope) ||

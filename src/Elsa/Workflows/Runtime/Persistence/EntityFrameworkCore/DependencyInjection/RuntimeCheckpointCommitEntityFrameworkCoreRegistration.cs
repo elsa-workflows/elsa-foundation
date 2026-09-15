@@ -5,13 +5,13 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 
-/// <summary>Registers the R19 EF checkpoint marker slice for explicit preview/test composition.</summary>
+/// <summary>Registers the bounded R19 EF checkpoint slice for explicit preview/test composition.</summary>
 public static class RuntimeCheckpointCommitEntityFrameworkCoreRegistration
 {
     /// <summary>
-    /// Registers the concrete marker adapter only after a Runtime EF context is owned by the composition.
+    /// Registers the concrete checkpoint adapter only after a Runtime EF context is owned by the composition.
     /// This preparatory R19 slice intentionally does not replace <see cref="IRuntimeCheckpointCommitStore"/>:
-    /// R20-R24 state participants, fence validation, and the complete writer remain pending.
+    /// R20-R24 state participants and the complete writer remain pending.
     /// </summary>
     public static IServiceCollection AddRuntimeCheckpointCommitEntityFrameworkCore(this IServiceCollection services)
     {

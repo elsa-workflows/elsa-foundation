@@ -9,20 +9,19 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
-/// <summary>
-/// Opt-in EF Core create-only checkpoint marker store (R19 thin slice).
-/// </summary>
+/// <summary>Opt-in EF Core checkpoint writer for the bounded R19 execution/scheduler slice.</summary>
 /// <remarks>
-/// This first slice owns the durable replay marker and the transaction boundary around it. It deliberately accepts
-/// only an empty change set: R20-R24 state participants are not silently treated as committed until their EF adapters
-/// can stage their changes through this same context. A caller may stage already-tracked EF rows before invoking this
-/// store; those rows and the marker are flushed by one transaction, which is the seam used by the R19 atomicity tests.
+/// This slice owns the durable replay marker, workflow-execution and scheduler projections, and the execution fence
+/// in one transaction. The remaining R20-R24 participants are still rejected explicitly; they are not silently
+/// treated as committed until their EF adapters can stage changes through this same context.
 /// </remarks>
 public sealed class EfRuntimeCheckpointCommitStore(
     BookmarkStateDbContext context,
-    IPersistenceAccessContextAccessor accessContextAccessor) : IRuntimeCheckpointCommitStore
+    IPersistenceAccessContextAccessor accessContextAccessor,
+    TimeProvider? timeProvider = null) : IRuntimeCheckpointCommitStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
         RuntimeCheckpointCommit commit,
@@ -44,18 +43,47 @@ public sealed class EfRuntimeCheckpointCommitStore(
             return ResolveReplay(commit, fingerprint, existing);
 
         ValidateThinSlice(commit);
+        if (commit.StateChanges.WorkflowExecution is { } workflowExecution)
+            accessContextAccessor.Current.EnsureTenantScope(workflowExecution.State.TenantId);
 
         var marker = ToEntity(commit, scope, id, fingerprint);
-        var trackedStates = context.ChangeTracker.Entries()
-            .ToDictionary(entry => entry.Entity, entry => entry.State);
-
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
-            // Do not clear the tracker. The checkpoint writer's participants share this context, and clearing here
-            // would silently discard a sibling mutation staged before the marker. Flush those already-tracked
-            // participant rows first, then add the immutable marker as the final write in this transaction. The
-            // marker is the durable commit proof, so it must never precede a participant failure.
+            // Fence validation/touch is deliberately first. The workflow and scheduler rows then join the same
+            // transaction, and the immutable marker is added only after every supported participant is staged. Do
+            // not clear the tracker: callers may have staged a sibling R14-R18 mutation on this context already.
+            if (commit.ExpectedFence is { } expectedFence)
+            {
+                await EfRuntimeCheckpointParticipantStaging.StageExecutionFenceAsync(
+                    context,
+                    scope,
+                    commit.WorkflowExecutionId,
+                    expectedFence,
+                    _timeProvider,
+                    cancellationToken);
+            }
+
+            if (commit.StateChanges.WorkflowExecution is { } workflowChange)
+            {
+                await EfRuntimeCheckpointParticipantStaging.StageWorkflowExecutionAsync(
+                    context,
+                    workflowChange,
+                    scope,
+                    cancellationToken);
+            }
+
+            if (commit.StateChanges.Scheduler is { } schedulerChange)
+            {
+                await EfRuntimeCheckpointParticipantStaging.StageSchedulerAsync(
+                    context,
+                    schedulerChange,
+                    scope,
+                    cancellationToken);
+            }
+
+            // Flush all participant rows first, then add the immutable marker as the final write in this
+            // transaction. The marker is the durable commit proof, so it must never precede a participant failure.
             await context.SaveChangesAsync(cancellationToken);
             context.RuntimeCheckpointCommits.Add(marker);
             await context.SaveChangesAsync(cancellationToken);
@@ -64,15 +92,20 @@ public sealed class EfRuntimeCheckpointCommitStore(
         }
         catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
         {
-            await RollbackAndRestoreAsync(transaction, marker, trackedStates);
+            await RollbackAndRestoreAsync(transaction);
             var winner = await FindMarkerAsync(scope, commit.CommitId, cancellationToken);
             if (winner is not null)
                 return ResolveReplay(commit, fingerprint, winner);
             throw;
         }
+        catch (OperationCanceledException)
+        {
+            await RollbackAndRestoreAsync(transaction);
+            throw;
+        }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            await RollbackAndRestoreAsync(transaction, marker, trackedStates);
+            await RollbackAndRestoreAsync(transaction);
 
             // A provider can acknowledge the commit ambiguously. The immutable marker is the only authoritative
             // reconciliation signal: if it is visible, return the original result; otherwise preserve the failure.
@@ -102,13 +135,13 @@ public sealed class EfRuntimeCheckpointCommitStore(
 
     private static void ValidateThinSlice(RuntimeCheckpointCommit commit)
     {
-        if (commit.ExpectedFence is not null)
-            throw new NotSupportedException("The R19 EF marker slice does not yet own execution-fence validation; use the complete checkpoint writer once R20-R24 participants are available.");
-
         var changes = commit.StateChanges;
-        if (changes.WorkflowExecution is not null ||
-            changes.Scheduler is not null ||
-            changes.ActivityExecutions.Count > 0 ||
+        if (changes.WorkflowExecution is { Operation: not RuntimeStateChangeOperation.Upsert })
+            throw new NotSupportedException("The R19 EF checkpoint slice supports workflow-execution upserts only.");
+        if (changes.Scheduler is { Operation: not RuntimeStateChangeOperation.Upsert })
+            throw new NotSupportedException("The R19 EF checkpoint slice supports scheduler upserts only.");
+
+        if (changes.ActivityExecutions.Count > 0 ||
             changes.ActivityExecutionInspections.Count > 0 ||
             changes.Bookmarks.Count > 0 ||
             changes.DurableValues.Count > 0 ||
@@ -123,7 +156,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
             commit.PostCommitIntents.Count > 0)
         {
             throw new NotSupportedException(
-                "The R19 EF checkpoint marker slice accepts only an empty state change set; R20-R24 participants must be staged by the complete checkpoint writer before this adapter is enabled for runtime commits.");
+                "The R19 EF checkpoint slice supports only workflow-execution and scheduler state changes; remaining R20-R24 participants must be staged by the complete checkpoint writer before this adapter is enabled for those runtime commits.");
         }
     }
 
@@ -263,10 +296,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
         IReadOnlyCollection<string> PendingPostCommitWorkIds,
         IReadOnlyCollection<string> ConsumedSchedulerWorkItemIds);
 
-    private async ValueTask RollbackAndRestoreAsync(
-        IDbContextTransaction transaction,
-        RuntimeCheckpointCommitEntity marker,
-        IReadOnlyDictionary<object, EntityState> trackedStates)
+    private async ValueTask RollbackAndRestoreAsync(IDbContextTransaction transaction)
     {
         try
         {
@@ -280,16 +310,9 @@ public sealed class EfRuntimeCheckpointCommitStore(
 
         await transaction.DisposeAsync();
 
-        var markerEntry = context.Entry(marker);
-        if (markerEntry.State != EntityState.Detached)
-            markerEntry.State = EntityState.Detached;
-
-        foreach (var entry in context.ChangeTracker.Entries())
-        {
-            if (entry.Entity == marker)
-                continue;
-            if (trackedStates.TryGetValue(entry.Entity, out var state))
-                entry.State = state;
-        }
+        // A failed unit of work must not leave Added/Modified participant rows queued for an accidental later
+        // SaveChanges call. The caller can reload and retry from durable state; preserving stale tracked values here
+        // would turn a rollback into a hidden second attempt.
+        context.ChangeTracker.Clear();
     }
 }

@@ -65,6 +65,54 @@ internal static class RuntimeOperationalStateProviderSmoke
             var executions = new EfWorkflowExecutionStateStore(context, accessor, codec);
             var incidents = new EfIncidentStateStore(context, accessor);
             var attention = new EfWorkflowRuntimeAttentionQuery(context, accessor);
+            var checkpointNow = DateTimeOffset.UtcNow;
+            var checkpointLease = new RuntimeExecutionLease(
+                "checkpoint-lease",
+                "workflow-a",
+                "checkpoint-owner",
+                checkpointNow,
+                checkpointNow.AddMinutes(5),
+                1);
+            await liveness.SaveAsync(new ExecutionLivenessState(
+                "ownership:workflow-a",
+                "workflow-a",
+                checkpointLease,
+                null,
+                null,
+                null));
+            var nonemptyCheckpoint = new RuntimeCheckpointCommit(
+                $"checkpoint-nonempty-{Guid.NewGuid():N}",
+                new RuntimeCheckpoint(
+                    "checkpoint-workflow-a",
+                    "NativeCheckpoint",
+                    "workflow-a",
+                    checkpointNow,
+                    [],
+                    new Dictionary<string, string>()),
+                new RuntimeCheckpointStateChangeSet(
+                    new RuntimeStateChange<WorkflowExecutionState>(
+                        "workflow-a",
+                        RuntimeStateChangeOperation.Upsert,
+                        Execution("workflow-a", scope, WorkflowExecutionStatus.Running),
+                        new Dictionary<string, string>()),
+                    new RuntimeStateChange<SchedulerState>(
+                        "workflow-a",
+                        RuntimeStateChangeOperation.Upsert,
+                        new SchedulerState("workflow-a", 3),
+                        new Dictionary<string, string>()),
+                    [], [], [], [], []),
+                [],
+                new Dictionary<string, string>())
+            {
+                ExpectedFence = checkpointLease.ToFence()
+            };
+            var nonemptyResult = await checkpointStore.CommitAsync(nonemptyCheckpoint, new(RuntimeCheckpointPersistenceMode.Immediate));
+            var nonemptyReplay = await checkpointStore.CommitAsync(nonemptyCheckpoint, new(RuntimeCheckpointPersistenceMode.Immediate));
+            Assert.Empty(nonemptyResult.PendingPostCommitWorkIds);
+            Assert.Empty(nonemptyReplay.PendingPostCommitWorkIds);
+            Assert.Equal("workflow-a", (await executions.FindAsync("workflow-a"))?.WorkflowExecutionId);
+            Assert.Equal(3, (await scheduler.FindAsync("workflow-a"))!.Version);
+            Assert.Equal(2, (await liveness.FindVersionedAsync("workflow-a", "ownership:workflow-a"))!.Revision);
             var outbox = new EfRuntimePostCommitOutboxStore(context, accessor);
             var outboxNow = DateTimeOffset.UtcNow;
             var outboxItem = OutboxPending($"outbox-{Guid.NewGuid():N}", "workflow-a", outboxNow);
