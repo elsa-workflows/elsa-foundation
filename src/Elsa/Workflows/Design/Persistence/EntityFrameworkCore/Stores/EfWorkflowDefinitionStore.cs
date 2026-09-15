@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 
 public sealed class EfWorkflowDefinitionStore(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access) : IWorkflowDefinitionStore
 {
-    private IQueryable<WorkflowDefinition> Query() => EfDesignSupport.InScope(db.Definitions.AsNoTracking(), access, x => x.TenantId);
+    private IQueryable<WorkflowDefinition> Query() => EfDesignSupport.InScope(db.Definitions, access, x => x.TenantId);
     public async Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => await FindByIdAsync(id, cancellationToken) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), id);
     public async Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default)
     {
@@ -17,7 +17,10 @@ public sealed class EfWorkflowDefinitionStore(WorkflowsDesignDbContext db, IPers
         var row = await EfDesignSupport.ReadAsync("reading workflow definition", () => Query().SingleOrDefaultAsync(
             x => x.IdLookupHash == lookupHash, cancellationToken));
         if (row is not null)
+        {
+            EfDesignSupport.EnsurePhysicalScope(db, row, "workflow definition lookup");
             EfDesignSupport.EnsureDefinitionIdentity(id, row.Id, "workflow definition lookup");
+        }
         return row;
     }
     public async Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default)
@@ -25,7 +28,7 @@ public sealed class EfWorkflowDefinitionStore(WorkflowsDesignDbContext db, IPers
         ArgumentNullException.ThrowIfNull(filter);
         if (filter.TenantAgnostic == true && !access.Current.AcrossScopes)
             throw new InvalidOperationException("Tenant-agnostic workflow reads require privileged across-scope access.");
-        var query = filter.TenantAgnostic == true ? db.Definitions.AsNoTracking() : Query();
+        var query = filter.TenantAgnostic == true ? db.Definitions : Query();
         if (filter.Id is not null)
         {
             var lookupHash = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(filter.Id));
@@ -58,6 +61,8 @@ public sealed class EfWorkflowDefinitionStore(WorkflowsDesignDbContext db, IPers
         if (!exactRoute && !string.IsNullOrWhiteSpace(filter.SearchTerm) && values.Count > 10_000)
             throw new InvalidOperationException("Workflow definition search exceeded the bounded result limit of 10000.");
         IEnumerable<WorkflowDefinition> validated = values;
+        foreach (var candidate in values)
+            EfDesignSupport.EnsurePhysicalScope(db, candidate, "workflow definition lookup");
         if (filter.Id is not null)
         {
             foreach (var candidate in values)

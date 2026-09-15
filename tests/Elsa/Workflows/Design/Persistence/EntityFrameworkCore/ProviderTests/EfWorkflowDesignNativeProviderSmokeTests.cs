@@ -188,6 +188,18 @@ internal static class WorkflowsDesignNativeProviderSmoke
             Assert.Equal(globalVersionId, (await new EfWorkflowDefinitionVersionStore(context, new NativeProviderSerializer(), new EfWorkflowDefinitionStore(context, acrossScopes), acrossScopes).FindByIdAsync(globalVersionId))!.Id);
             Assert.Equal(globalDraftId, (await new EfWorkflowDefinitionDraftStore(context, new NativeProviderSerializer(), acrossScopes).FindWithLayoutByIdAsync(globalDraftId))!.Draft.Id);
             Assert.NotNull(await new EfWorkflowDefinitionVersionLayoutStore(context, acrossScopes).FindByVersionIdAsync(globalVersionId));
+            var globalOnly = new FixedAccess(PersistenceAccessContext.Global);
+            var globalDefinitions = new EfWorkflowDefinitionStore(context, globalOnly);
+            Assert.Equal(globalDefinitionId, (await globalDefinitions.FindByIdAsync(globalDefinitionId))!.Id);
+            Assert.Equal(globalVersionId, (await new EfWorkflowDefinitionVersionStore(context, new NativeProviderSerializer(), globalDefinitions, globalOnly).FindByIdAsync(globalVersionId))!.Id);
+            Assert.Equal(globalDraftId, (await new EfWorkflowDefinitionDraftStore(context, new NativeProviderSerializer(), globalOnly).FindWithLayoutByIdAsync(globalDraftId))!.Draft.Id);
+            Assert.NotNull(await new EfWorkflowDefinitionVersionLayoutStore(context, globalOnly).FindByVersionIdAsync(globalVersionId));
+            var privilegedGlobal = new FixedAccess(PersistenceAccessContext.PrivilegedGlobal(new PersistenceAccessPurpose("provider-global-reader")));
+            var privilegedDefinitions = new EfWorkflowDefinitionStore(context, privilegedGlobal);
+            Assert.Equal(globalDefinitionId, (await privilegedDefinitions.FindByIdAsync(globalDefinitionId))!.Id);
+            Assert.Equal(globalVersionId, (await new EfWorkflowDefinitionVersionStore(context, new NativeProviderSerializer(), privilegedDefinitions, privilegedGlobal).FindByIdAsync(globalVersionId))!.Id);
+            Assert.Equal(globalDraftId, (await new EfWorkflowDefinitionDraftStore(context, new NativeProviderSerializer(), privilegedGlobal).FindWithLayoutByIdAsync(globalDraftId))!.Draft.Id);
+            Assert.NotNull(await new EfWorkflowDefinitionVersionLayoutStore(context, privilegedGlobal).FindByVersionIdAsync(globalVersionId));
 
             // W05: the operation ledger commits atomically with its staged mutation and replays.
             var writer = new EfDesignAtomicWriter(context, access);

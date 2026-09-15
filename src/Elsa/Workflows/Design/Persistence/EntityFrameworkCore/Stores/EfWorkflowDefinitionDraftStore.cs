@@ -10,13 +10,14 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 
 public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, IPayloadSerializer serializer, IPersistenceAccessContextAccessor access) : IWorkflowDefinitionDraftStore
 {
-    private IQueryable<WorkflowDefinitionDraft> Query() => EfDesignSupport.InScope(db.Drafts.AsNoTracking(), access, x => x.TenantId);
+    private IQueryable<WorkflowDefinitionDraft> Query() => EfDesignSupport.InScope(db.Drafts, access, x => x.TenantId);
     public async Task<WorkflowDefinitionDraft?> FindByIdAsync(string draftId, CancellationToken cancellationToken = default)
     {
         var idHash = EfDesignSupport.LookupHash(draftId);
         var row = await EfDesignSupport.ReadAsync("reading workflow draft", () => Query().SingleOrDefaultAsync(x => x.IdLookupHash == idHash, cancellationToken));
         if (row is null)
             return null;
+        EfDesignSupport.EnsurePhysicalScope(db, row, "workflow draft lookup");
         EfDesignSupport.EnsureExactIdentity(draftId, row.Id, "workflow draft lookup");
         return EfDesignSupport.MapDraft(serializer, row);
     }
@@ -28,7 +29,10 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
             .ToListAsync(cancellationToken));
         rows = rows.OrderByDescending(x => x.LastModifiedAt).ThenByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id, StringComparer.Ordinal).ToList();
         foreach (var candidate in rows)
+        {
+            EfDesignSupport.EnsurePhysicalScope(db, candidate, "workflow definition draft lookup");
             EfDesignSupport.EnsureDefinitionIdentity(workflowDefinitionId, candidate.WorkflowDefinitionId, "workflow definition draft lookup");
+        }
         return rows.FirstOrDefault() is { } row ? EfDesignSupport.MapDraft(serializer, row) : null;
     }
 
@@ -40,7 +44,10 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
             .ToListAsync(cancellationToken));
         rows = rows.OrderByDescending(x => x.LastModifiedAt).ThenByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id, StringComparer.Ordinal).ToList();
         foreach (var candidate in rows)
+        {
+            EfDesignSupport.EnsurePhysicalScope(db, candidate, "workflow definition draft lookup");
             EfDesignSupport.EnsureDefinitionIdentity(workflowDefinitionId, candidate.WorkflowDefinitionId, "workflow definition draft lookup");
+        }
         return rows.Select(x => EfDesignSupport.MapDraft(serializer, x)).ToArray();
     }
     public async Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(string draftId, CancellationToken cancellationToken = default)
@@ -48,6 +55,7 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
         var row = await EfDesignSupport.ReadAsync("reading workflow draft layout", () => Layout(draftId).SingleOrDefaultAsync(cancellationToken));
         if (row is null)
             return [];
+        EfDesignSupport.EnsurePhysicalScope(db, row, "workflow draft layout lookup");
         EfDesignSupport.EnsureExactIdentity(draftId, row.WorkflowDefinitionDraftId, "workflow draft layout lookup");
         return EfDesignSupport.ReadLayout(row.RecordsJson);
     }
@@ -57,6 +65,7 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
         var row = await EfDesignSupport.ReadAsync("reading workflow draft presentation", () => Layout(draftId).SingleOrDefaultAsync(cancellationToken));
         if (row is null)
             return [];
+        EfDesignSupport.EnsurePhysicalScope(db, row, "workflow draft presentation lookup");
         EfDesignSupport.EnsureExactIdentity(draftId, row.WorkflowDefinitionDraftId, "workflow draft presentation lookup");
         return EfDesignSupport.ReadPresentation(row.ActivityPresentationJson);
     }
@@ -84,6 +93,7 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
         if (result is null)
             return null;
 
+        EfDesignSupport.EnsurePhysicalScope(db, result.Draft, "workflow draft with layout lookup");
         EfDesignSupport.EnsureExactIdentity(draftId, result.Draft.Id, "workflow draft with layout lookup");
         if (result.LayoutDraftId is not null)
         {
@@ -99,5 +109,5 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
             EfDesignSupport.ReadPresentation(result.ActivityPresentationJson));
     }
     private IQueryable<WorkflowDefinitionDraftLayout> Layout(string id) => EfDesignSupport.InScope(db.DraftLayouts, access, x => x.TenantId).Where(x => x.WorkflowDefinitionDraftIdLookupHash == EfDesignSupport.LookupHash(id));
-    private IQueryable<WorkflowDefinitionDraftLayout> Layouts() => EfDesignSupport.InScope(db.DraftLayouts.AsNoTracking(), access, x => x.TenantId);
+    private IQueryable<WorkflowDefinitionDraftLayout> Layouts() => EfDesignSupport.InScope(db.DraftLayouts, access, x => x.TenantId);
 }

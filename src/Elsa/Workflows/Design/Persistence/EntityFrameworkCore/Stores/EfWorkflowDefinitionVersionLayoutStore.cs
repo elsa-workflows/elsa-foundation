@@ -12,6 +12,7 @@ public sealed class EfWorkflowDefinitionVersionLayoutStore(WorkflowsDesignDbCont
         var idHash = EfDesignSupport.LookupHash(workflowDefinitionVersionId);
         var row = await EfDesignSupport.ReadAsync("reading workflow version layout", () => EfDesignSupport.InScope(db.VersionLayouts, access, x => x.TenantId).Where(x => x.WorkflowDefinitionVersionIdLookupHash == idHash).SingleOrDefaultAsync(cancellationToken));
         if (row is null) return null;
+        EfDesignSupport.EnsurePhysicalScope(db, row, "workflow version layout lookup");
         EfDesignSupport.EnsureExactIdentity(workflowDefinitionVersionId, row.WorkflowDefinitionVersionId, "workflow version layout lookup");
         var records = EfDesignSupport.ReadLayout(row.RecordsJson);
         var presentation = EfDesignSupport.ReadPresentation(row.ActivityPresentationJson);

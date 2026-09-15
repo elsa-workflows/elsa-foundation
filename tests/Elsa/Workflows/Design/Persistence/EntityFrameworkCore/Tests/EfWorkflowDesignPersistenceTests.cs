@@ -192,6 +192,26 @@ public sealed class EfWorkflowDesignPersistenceTests
 
         Assert.Equal("tenant-a-node", Assert.Single(tenantA!.Layout).NodeId);
         Assert.Equal("tenant-b-node", Assert.Single(tenantB!.Layout).NodeId);
+        Assert.Null(await new EfWorkflowDefinitionStore(db, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))).FindByIdAsync("global-definition"));
+        Assert.Null(await new EfWorkflowDefinitionDraftStore(db, serializer, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))).FindWithLayoutByIdAsync("global-draft"));
+
+        var globalOnly = new TestAccessor(PersistenceAccessContext.Global);
+        var globalDefinitions = new EfWorkflowDefinitionStore(db, globalOnly);
+        var globalVersionsOnly = new EfWorkflowDefinitionVersionStore(db, serializer, globalDefinitions, globalOnly);
+        var globalDraftsOnly = new EfWorkflowDefinitionDraftStore(db, serializer, globalOnly);
+        Assert.Equal("global-definition", (await globalDefinitions.FindByIdAsync("global-definition"))!.Id);
+        Assert.Equal("global-version", (await globalVersionsOnly.FindByIdAsync("global-version"))!.Id);
+        Assert.Equal("global-node", Assert.Single((await globalDraftsOnly.FindWithLayoutByIdAsync("global-draft"))!.Layout).NodeId);
+        Assert.Equal("global-version-node", Assert.Single((await new EfWorkflowDefinitionVersionLayoutStore(db, globalOnly).FindByVersionIdAsync("global-version"))!.Records).NodeId);
+
+        var privilegedGlobal = new TestAccessor(PersistenceAccessContext.PrivilegedGlobal(new PersistenceAccessPurpose("global-reader")));
+        var privilegedDefinitions = new EfWorkflowDefinitionStore(db, privilegedGlobal);
+        var privilegedVersions = new EfWorkflowDefinitionVersionStore(db, serializer, privilegedDefinitions, privilegedGlobal);
+        var privilegedDrafts = new EfWorkflowDefinitionDraftStore(db, serializer, privilegedGlobal);
+        Assert.Equal("global-definition", (await privilegedDefinitions.FindByIdAsync("global-definition"))!.Id);
+        Assert.Equal("global-version", (await privilegedVersions.FindByIdAsync("global-version"))!.Id);
+        Assert.Equal("global-node", Assert.Single((await privilegedDrafts.FindWithLayoutByIdAsync("global-draft"))!.Layout).NodeId);
+        Assert.Equal("global-version-node", Assert.Single((await new EfWorkflowDefinitionVersionLayoutStore(db, privilegedGlobal).FindByVersionIdAsync("global-version"))!.Records).NodeId);
 
         var globalAccess = new TestAccessor(PersistenceAccessContext.PrivilegedAcrossScopes(new PersistenceAccessPurpose("draft-lookup")));
         var acrossScopes = new EfWorkflowDefinitionDraftStore(
@@ -309,6 +329,43 @@ public sealed class EfWorkflowDesignPersistenceTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => versions.ExistsAsync("requested", version.SemVerSortKey));
         await Assert.ThrowsAsync<InvalidOperationException>(() => new EfWorkflowDefinitionListProjectionStore(db, access)
             .ListByDefinitionIdsAsync(["requested"]));
+    }
+
+    [Fact]
+    public async Task Privileged_reads_fail_closed_when_physical_scope_drifted_from_authoritative_tenant()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        db.Definitions.Add(new WorkflowDefinition { Id = "drift-definition", TenantId = null, Name = "Global" });
+        db.Versions.Add(new WorkflowDefinitionVersion("drift-definition", "1.0.0", "{}") { Id = "drift-version", TenantId = null });
+        db.Drafts.Add(new WorkflowDefinitionDraft { Id = "drift-draft", TenantId = null, WorkflowDefinitionId = "drift-definition", StateSource = "{}" });
+        db.DraftLayouts.Add(new WorkflowDefinitionDraftLayout { Id = "drift-draft-layout", TenantId = null, WorkflowDefinitionDraftId = "drift-draft" });
+        db.VersionLayouts.Add(new WorkflowDefinitionVersionLayout { Id = "drift-version-layout", TenantId = null, WorkflowDefinitionVersionId = "drift-version" });
+        await db.SaveChangesAsync();
+
+        // Mutate only the authoritative residual column so the physical FK envelope remains
+        // valid while readers prove they reject a hash/key and tenant mismatch.
+        await db.Database.ExecuteSqlRawAsync($"UPDATE {WorkflowsDesignEfModule.DefinitionTable} SET TenantId = {{0}} WHERE Id = {{1}}", "tenant-a", "drift-definition");
+        await db.Database.ExecuteSqlRawAsync($"UPDATE {WorkflowsDesignEfModule.VersionTable} SET TenantId = {{0}} WHERE Id = {{1}}", "tenant-a", "drift-version");
+        await db.Database.ExecuteSqlRawAsync($"UPDATE {WorkflowsDesignEfModule.DraftTable} SET TenantId = {{0}} WHERE Id = {{1}}", "tenant-a", "drift-draft");
+        await db.Database.ExecuteSqlRawAsync($"UPDATE {WorkflowsDesignEfModule.DraftLayoutTable} SET TenantId = {{0}} WHERE Id = {{1}}", "tenant-a", "drift-draft-layout");
+        await db.Database.ExecuteSqlRawAsync($"UPDATE {WorkflowsDesignEfModule.VersionLayoutTable} SET TenantId = {{0}} WHERE Id = {{1}}", "tenant-a", "drift-version-layout");
+        db.ChangeTracker.Clear();
+
+        var access = new TestAccessor(PersistenceAccessContext.PrivilegedAcrossScopes(new PersistenceAccessPurpose("scope-integrity")));
+        var serializer = new TestSerializer();
+        var definitions = new EfWorkflowDefinitionStore(db, access);
+        var versions = new EfWorkflowDefinitionVersionStore(db, serializer, definitions, access);
+        var drafts = new EfWorkflowDefinitionDraftStore(db, serializer, access);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => definitions.FindByIdAsync("drift-definition"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => versions.FindByIdAsync("drift-version"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => drafts.FindByIdAsync("drift-draft"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => drafts.FindLayoutByDraftIdAsync("drift-draft"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => drafts.FindWithLayoutByIdAsync("drift-draft"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new EfWorkflowDefinitionVersionLayoutStore(db, access).FindByVersionIdAsync("drift-version"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new EfWorkflowDefinitionListProjectionStore(db, access).ListByDefinitionIdsAsync(["drift-definition"]));
     }
 
     [Fact]

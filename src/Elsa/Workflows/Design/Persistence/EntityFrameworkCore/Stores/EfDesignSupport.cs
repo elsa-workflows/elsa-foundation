@@ -106,6 +106,14 @@ internal static class EfDesignSupport
     public static string ScopeKey(string? tenantId) =>
         (tenantId is null ? "0" : "1") + EfRelationalIdentity.Hash(tenantId ?? string.Empty);
 
+    public static void EnsurePhysicalScope(DbContext db, Elsa.Primitives.Entities.TenantEntity entity, string operation)
+    {
+        var property = db.Entry(entity).Property<string>(ScopeKeyProperty);
+        var stored = property.CurrentValue ?? property.OriginalValue;
+        if (!StringComparer.Ordinal.Equals(stored, ScopeKey(entity.TenantId)))
+            throw new InvalidOperationException($"The {operation} returned a row with an invalid physical persistence scope.");
+    }
+
     private static DesignPersistenceException ProviderFailure(string operation, Exception exception) =>
         new(DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Provider, operation, null, exception.InnerException ?? exception);
 
@@ -114,6 +122,9 @@ internal static class EfDesignSupport
         if (access.Current.Scope is { } scope)
             return query.Where(row => EF.Property<string>(row, ScopeKeyProperty) == ScopeKey(scope.Value))
                 .Where(row => EF.Property<string>(row, "TenantId") == scope.Value);
+        if (access.Current.IsGlobal)
+            return query.Where(row => EF.Property<string>(row, ScopeKeyProperty) == ScopeKey(null))
+                .Where(row => EF.Property<string>(row, "TenantId") == null);
         if (access.Current.AcrossScopes && access.Current.AccessPolicy == PersistenceAccessPolicy.Privileged)
             return query;
         throw new InvalidOperationException("Workflow design persistence requires an explicit scope or privileged across-scope access.");

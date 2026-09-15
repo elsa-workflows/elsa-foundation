@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 
 public sealed class EfWorkflowDefinitionVersionStore(WorkflowsDesignDbContext db, IPayloadSerializer serializer, IWorkflowDefinitionStore definitions, IPersistenceAccessContextAccessor access) : IWorkflowDefinitionVersionStore
 {
-    private IQueryable<WorkflowDefinitionVersion> Query() => EfDesignSupport.InScope(db.Versions.AsNoTracking(), access, x => x.TenantId);
+    private IQueryable<WorkflowDefinitionVersion> Query() => EfDesignSupport.InScope(db.Versions, access, x => x.TenantId);
     public async Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) => await FindByIdAsync(versionId, cancellationToken) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionVersion), versionId);
     public async Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default)
     {
@@ -17,6 +17,7 @@ public sealed class EfWorkflowDefinitionVersionStore(WorkflowsDesignDbContext db
         var row = await EfDesignSupport.ReadAsync("reading workflow definition version", () => Query().SingleOrDefaultAsync(x => x.IdLookupHash == idHash, cancellationToken));
         if (row is null)
             return null;
+        EfDesignSupport.EnsurePhysicalScope(db, row, "workflow definition version lookup");
         EfDesignSupport.EnsureExactIdentity(versionId, row.Id, "workflow definition version lookup");
         return EfDesignSupport.MapVersion(serializer, row);
     }
@@ -30,7 +31,10 @@ public sealed class EfWorkflowDefinitionVersionStore(WorkflowsDesignDbContext db
             .ThenByDescending(x => x.Id)
             .ToListAsync(cancellationToken));
         foreach (var candidate in rows)
+        {
+            EfDesignSupport.EnsurePhysicalScope(db, candidate, "latest workflow definition version lookup");
             EfDesignSupport.EnsureDefinitionIdentity(definitionId, candidate.DefinitionId, "latest workflow definition version lookup");
+        }
         return rows.FirstOrDefault() is { } row ? EfDesignSupport.MapVersion(serializer, row) : null;
     }
 
@@ -43,7 +47,10 @@ public sealed class EfWorkflowDefinitionVersionStore(WorkflowsDesignDbContext db
             .ThenBy(x => x.Id)
             .ToListAsync(cancellationToken));
         foreach (var candidate in rows)
+        {
+            EfDesignSupport.EnsurePhysicalScope(db, candidate, "workflow definition version lookup");
             EfDesignSupport.EnsureDefinitionIdentity(definitionId, candidate.DefinitionId, "workflow definition version lookup");
+        }
         return rows.Select(x => EfDesignSupport.MapVersion(serializer, x)).ToArray();
     }
 
@@ -54,7 +61,10 @@ public sealed class EfWorkflowDefinitionVersionStore(WorkflowsDesignDbContext db
             .Where(x => x.DefinitionIdLookupHash == key && x.SemVerSortKey == semVerSortKey)
             .ToListAsync(cancellationToken));
         foreach (var candidate in rows)
+        {
+            EfDesignSupport.EnsurePhysicalScope(db, candidate, "workflow definition version lookup");
             EfDesignSupport.EnsureDefinitionIdentity(definitionId, candidate.DefinitionId, "workflow definition version lookup");
+        }
         return rows.Count > 0;
     }
 }

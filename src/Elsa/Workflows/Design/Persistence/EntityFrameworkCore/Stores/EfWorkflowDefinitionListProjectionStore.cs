@@ -21,18 +21,24 @@ public sealed class EfWorkflowDefinitionListProjectionStore(WorkflowsDesignDbCon
         foreach (var batch in folded.Chunk(200))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            drafts.AddRange(await EfDesignSupport.ReadAsync("reading workflow draft projections", () => EfDesignSupport.InScope(db.Drafts.AsNoTracking(), access, x => x.TenantId)
+            drafts.AddRange(await EfDesignSupport.ReadAsync("reading workflow draft projections", () => EfDesignSupport.InScope(db.Drafts, access, x => x.TenantId)
                 .Where(x => batch.Contains(x.WorkflowDefinitionIdLookupHash))
                 .ToListAsync(cancellationToken)));
-            versions.AddRange(await EfDesignSupport.ReadAsync("reading workflow version projections", () => EfDesignSupport.InScope(db.Versions.AsNoTracking(), access, x => x.TenantId)
+            versions.AddRange(await EfDesignSupport.ReadAsync("reading workflow version projections", () => EfDesignSupport.InScope(db.Versions, access, x => x.TenantId)
                 .Where(x => batch.Contains(x.DefinitionIdLookupHash))
                 .ToListAsync(cancellationToken)));
         }
 
         foreach (var candidate in drafts)
+        {
+            EfDesignSupport.EnsurePhysicalScope(db, candidate, "workflow draft projection lookup");
             EfDesignSupport.EnsureDefinitionIdentityInSet(distinct, candidate.WorkflowDefinitionId, "workflow draft projection lookup");
+        }
         foreach (var candidate in versions)
+        {
+            EfDesignSupport.EnsurePhysicalScope(db, candidate, "workflow version projection lookup");
             EfDesignSupport.EnsureDefinitionIdentityInSet(distinct, candidate.DefinitionId, "workflow version projection lookup");
+        }
 
         var latestDrafts = drafts
             .GroupBy(x => EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(x.WorkflowDefinitionId)), StringComparer.Ordinal)
