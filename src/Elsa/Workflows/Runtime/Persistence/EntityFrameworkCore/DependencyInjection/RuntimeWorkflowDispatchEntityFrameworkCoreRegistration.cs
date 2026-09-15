@@ -29,6 +29,8 @@ public static class RuntimeWorkflowDispatchEntityFrameworkCoreRegistration
                     throw new InvalidOperationException("Runtime workflow-dispatch EF persistence refuses to replace a selected non-EF backend.");
             }
 
+            RuntimeCheckpointCompositionTransition.EnsureGroundworkCheckpointTransitionAllowed(services, "workflow dispatch");
+
             var removeGroundwork = existing?.Name == RuntimeWorkflowDispatchStoreBackend.Groundwork
                 ? existing.PrepareRemoveOwnedArtifacts(services)
                 : null;

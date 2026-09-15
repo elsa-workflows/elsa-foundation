@@ -1,6 +1,7 @@
 using Groundwork.Kernel;
 using Groundwork.Kernel.Schema;
 using Elsa.Persistence.Groundwork.Targets;
+using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Persistence.Groundwork.Composition;
 
@@ -9,7 +10,7 @@ namespace Elsa.Persistence.Groundwork.Composition;
 /// identified by target and unit ID; exact repeats are idempotent, while two shapes claiming the
 /// same identity fail during service composition rather than racing at provider startup.
 /// </summary>
-public sealed class GroundworkStorageUnitRegistry
+public sealed class GroundworkStorageUnitRegistry : IRuntimePersistenceRegistrationState
 {
     private readonly Lock gate = new();
     private readonly Dictionary<(string Target, string UnitId), GroundworkStorageUnitRegistration> registrations = [];
@@ -37,6 +38,24 @@ public sealed class GroundworkStorageUnitRegistry
             registrations.Clear();
             foreach (var registration in registrationsSnapshot)
                 registrations.Add((registration.TargetName, registration.Unit.Id.Value), registration);
+        }
+    }
+
+    public IRuntimePersistenceRegistrationSnapshot CaptureSnapshot() =>
+        new RegistrationSnapshot(this, Registrations);
+
+    private sealed class RegistrationSnapshot(
+        GroundworkStorageUnitRegistry registry,
+        IReadOnlyList<GroundworkStorageUnitRegistration> registrations) : IRuntimePersistenceRegistrationSnapshot
+    {
+        private int state;
+
+        public void Commit() => Interlocked.CompareExchange(ref state, 1, 0);
+
+        public void Rollback()
+        {
+            if (Interlocked.CompareExchange(ref state, 2, 0) == 0)
+                registry.Restore(registrations);
         }
     }
 

@@ -23,7 +23,7 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
             var provider = EfRelationalProviderBinding.Normalize(options.Provider);
             _ = EfRelationalProviderBinding.ExpectedProviderName(options.Provider);
             var existingBackend = RuntimeActivityExecutionStoreBackend.Find(services);
-            RuntimeActivityExecutionStoreBackend.EnsureCheckpointCompositionCompatible(existingBackend, RuntimeActivityExecutionStoreBackend.EntityFramework);
+            RuntimeActivityExecutionStoreBackend.EnsureCheckpointCompositionCompatible(services, existingBackend, RuntimeActivityExecutionStoreBackend.EntityFramework);
             if (existingBackend?.Name == RuntimeActivityExecutionStoreBackend.EntityFramework)
             {
                 existingBackend.EnsureOwnsRegisteredContracts(services);

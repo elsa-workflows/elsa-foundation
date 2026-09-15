@@ -45,6 +45,8 @@ public static class RuntimeWorkflowTestScopeEntityFrameworkCoreRegistration
                 return services;
             }
 
+            RuntimeCheckpointCompositionTransition.EnsureGroundworkCheckpointTransitionAllowed(services, "workflow test scopes");
+
             if (existing is not null) existing.EnsureOwnsRegisteredContracts(services);
             else EnsureOnlyCoreScopeRegistrations(services);
             var alteration = RuntimeWorkflowAlterationStoreBackend.Find(services);

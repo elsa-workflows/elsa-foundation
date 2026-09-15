@@ -48,6 +48,8 @@ public static class RuntimeWorkflowAlterationEntityFrameworkCoreRegistration
                 return services;
             }
 
+            RuntimeCheckpointCompositionTransition.EnsureGroundworkCheckpointTransitionAllowed(services, "workflow alterations");
+
             if (existing is not null)
                 existing.EnsureOwnsRegisteredContracts(services);
             else
