@@ -1,9 +1,12 @@
+using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Persistence.Groundwork.Services;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -77,7 +80,11 @@ public static class GroundworkPublishingStoreRegistration
                 provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
                 targetName));
 
-            ReplaceScoped<IPublicationRecordStore, GroundworkPublicationRecordStore>(services);
+            AddGroundworkFamily(
+                services,
+                PublishingPersistenceFamilyBackend.PublicationRecords,
+                PublishingPersistenceFamilyBackend.PublicationRecordContracts,
+                () => services.Add(ServiceDescriptor.Scoped<IPublicationRecordStore, GroundworkPublicationRecordStore>()));
             if (!preserveEntityFrameworkPolicyProjection)
             {
                 var policy = ReplaceScoped<IPublicationPolicyStore, GroundworkPublicationPolicyStore>(services);
@@ -95,8 +102,16 @@ public static class GroundworkPublishingStoreRegistration
                     services,
                     new PublicationSnapshotReviewStoreBackend(PublicationSnapshotReviewStoreBackend.Groundwork, snapshotReviewDescriptor));
             }
-            ReplaceScoped<IActivityPublicationReceiptStore, GroundworkActivityPublicationReceiptStore>(services);
-            ReplaceScoped<IActivityDraftTestRunStore, GroundworkActivityDraftTestRunStore>(services);
+            AddGroundworkFamily(
+                services,
+                PublishingPersistenceFamilyBackend.ActivityPublicationReceipts,
+                PublishingPersistenceFamilyBackend.ActivityPublicationReceiptContracts,
+                () => services.Add(ServiceDescriptor.Scoped<IActivityPublicationReceiptStore, GroundworkActivityPublicationReceiptStore>()));
+            AddGroundworkFamily(
+                services,
+                PublishingPersistenceFamilyBackend.ActivityDraftTestRuns,
+                PublishingPersistenceFamilyBackend.ActivityDraftTestRunContracts,
+                () => services.Add(ServiceDescriptor.Scoped<IActivityDraftTestRunStore, GroundworkActivityDraftTestRunStore>()));
             return services;
         }
         catch
@@ -110,6 +125,67 @@ public static class GroundworkPublishingStoreRegistration
                 bindings.Restore(bindingsSnapshot);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Registers the Groundwork reusable-activity publication commands. They write the publication receipt
+    /// inside their own transaction, so they belong to whichever backend owns the receipts: an explicitly
+    /// selected Entity Framework backend keeps its own commands whichever order the two are composed in.
+    /// </summary>
+    public static IServiceCollection AddGroundworkActivityPublicationCommands(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        var snapshot = services.ToArray();
+        try
+        {
+            AddGroundworkFamily(
+                services,
+                PublishingPersistenceFamilyBackend.ActivityPublicationCommands,
+                ActivityPublicationCommandContracts,
+                () =>
+                {
+                    services.AddScoped<ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>, GroundworkActivityPublicationCommand>();
+                    services.AddScoped<ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>, GroundworkSourceActivityPublicationCommand>();
+                });
+            return services;
+        }
+        catch
+        {
+            services.Clear();
+            foreach (var descriptor in snapshot)
+                services.Add(descriptor);
+            throw;
+        }
+    }
+
+    internal static IReadOnlyCollection<Type> ActivityPublicationCommandContracts { get; } =
+    [
+        typeof(ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>),
+        typeof(ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>)
+    ];
+
+    /// <summary>
+    /// Registers one Publishing persistence family on Groundwork. An explicitly selected Entity Framework
+    /// owner is preserved; the in-memory default is replaced; a registration no backend recorded is refused.
+    /// </summary>
+    private static void AddGroundworkFamily(
+        IServiceCollection services,
+        string family,
+        IReadOnlyCollection<Type> contracts,
+        Action register)
+    {
+        if (PublishingPersistenceFamilyBackend.Find(services, family) is { Name: PublishingPersistenceFamilyBackend.EntityFramework } entityFramework)
+        {
+            entityFramework.EnsureOwnsRegisteredContracts(services);
+            return;
+        }
+
+        if (!PublishingPersistenceFamilyBackend.PrepareSelection(services, family, contracts, PublishingPersistenceFamilyBackend.Groundwork))
+            return;
+
+        var firstAdded = services.Count;
+        register();
+        PublishingPersistenceFamilyBackend.RegisterAdded(services, family, PublishingPersistenceFamilyBackend.Groundwork, contracts, firstAdded);
     }
 
     private static ServiceDescriptor ReplaceScoped<TService, TImplementation>(IServiceCollection services)

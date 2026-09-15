@@ -21,6 +21,135 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
 
             // SqlServerModelBuilderExtensions.UseIdentityColumns omitted: the module stays provider-free.
 
+            modelBuilder.Entity("Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities.ActivityDraftTestRunEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_BIN2");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ReceiptExpiresAtOffsetMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<long>("ReceiptExpiresAtUtcTicks")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(1200)
+                        .HasColumnType("nvarchar(1200)")
+                        .UseCollation("Latin1_General_BIN2");
+
+                    b.Property<string>("TenantIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_BIN2");
+
+                    b.Property<string>("TestRunId")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("nvarchar(1200)")
+                        .UseCollation("Latin1_General_BIN2");
+
+                    b.Property<string>("TestRunIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_BIN2");
+
+                    b.Property<byte[]>("TestRunIdOrderKey")
+                        .IsRequired()
+                        .HasMaxLength(902)
+                        .HasColumnType("varbinary(902)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantIdHash", "TestRunIdHash")
+                        .IsUnique()
+                        .HasDatabaseName("IX_elsa_activity_draft_test_runs_scope_testRunId");
+
+                    b.HasIndex("TenantIdHash", "ReceiptExpiresAtUtcTicks", "TestRunIdOrderKey")
+                        .HasDatabaseName("IX_elsa_activity_draft_test_runs_scope_expiry_testRunId");
+
+                    b.ToTable("elsa_activity_draft_test_runs", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities.ActivityPublicationReceiptEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_BIN2");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("nvarchar(1200)")
+                        .UseCollation("Latin1_General_BIN2");
+
+                    b.Property<string>("ReceiptKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_BIN2");
+
+                    b.Property<string>("ReceiptTenantId")
+                        .HasMaxLength(1200)
+                        .HasColumnType("nvarchar(1200)")
+                        .UseCollation("Latin1_General_BIN2");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(1200)
+                        .HasColumnType("nvarchar(1200)")
+                        .UseCollation("Latin1_General_BIN2");
+
+                    b.Property<string>("TenantIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_BIN2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantIdHash", "ReceiptKeyHash")
+                        .IsUnique()
+                        .HasDatabaseName("IX_elsa_activity_publication_receipts_scope_receiptKey");
+
+                    b.ToTable("elsa_activity_publication_receipts", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities.PublicationPolicyEntity", b =>
                 {
                     b.Property<string>("Id")
@@ -182,6 +311,120 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .HasDatabaseName("IX_elsa_publication_projection_intents_scope_publication_order");
 
                     b.ToTable("elsa_publication_projection_intents", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities.PublicationRecordEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_BIN2");
+
+                    b.Property<int?>("ActivatedAtOffsetMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<long?>("ActivatedAtUtcTicks")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ArtifactId")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("nvarchar(1200)");
+
+                    b.Property<int>("CreatedAtOffsetMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<long>("CreatedAtUtcTicks")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ExpectedSlotRevision")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("FailureCode")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FailureMessage")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PublicationId")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("nvarchar(1200)")
+                        .UseCollation("Latin1_General_BIN2");
+
+                    b.Property<string>("PublicationIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_BIN2");
+
+                    b.Property<int?>("RetiredAtOffsetMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<long?>("RetiredAtUtcTicks")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SlotId")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("nvarchar(1200)")
+                        .UseCollation("Latin1_General_BIN2");
+
+                    b.Property<string>("SlotIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_BIN2");
+
+                    b.Property<string>("SlotName")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("nvarchar(1200)");
+
+                    b.Property<string>("SourceReferenceId")
+                        .HasMaxLength(1200)
+                        .HasColumnType("nvarchar(1200)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(1200)
+                        .HasColumnType("nvarchar(1200)")
+                        .UseCollation("Latin1_General_BIN2");
+
+                    b.Property<string>("TenantIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_BIN2");
+
+                    b.Property<string>("WorkflowDefinitionId")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("nvarchar(1200)");
+
+                    b.Property<string>("WorkflowDefinitionVersionId")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("nvarchar(1200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantIdHash", "PublicationIdHash")
+                        .IsUnique()
+                        .HasDatabaseName("IX_elsa_publication_records_scope_publicationId");
+
+                    b.HasIndex("TenantIdHash", "SlotIdHash", "PublicationIdHash")
+                        .HasDatabaseName("IX_elsa_publication_records_scope_slot_publication");
+
+                    b.ToTable("elsa_publication_records", (string)null);
                 });
 
             modelBuilder.Entity("Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities.PublicationSnapshotReviewEntity", b =>

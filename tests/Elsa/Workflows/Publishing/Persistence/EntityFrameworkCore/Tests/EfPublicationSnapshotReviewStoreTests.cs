@@ -5,7 +5,6 @@ using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.DependencyInject
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
-using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -186,8 +185,9 @@ public sealed class EfPublicationSnapshotReviewStoreTests
             Assert.Single(services, service => service.ServiceType == typeof(PublishingEntityFrameworkCoreOptions));
             Assert.Single(services, service => service.ServiceType == typeof(EfPublicationSnapshotReviewStore));
             Assert.Single(services, service => service.ServiceType == typeof(PublishingSnapshotReviewDbContext));
+            // P01 is now part of the same explicit EF selection, so it too survives Groundwork in either order.
             Assert.Single(services, service => service.ServiceType == typeof(IPublicationRecordStore));
-            Assert.Equal(typeof(GroundworkPublicationRecordStore), services.Last(service => service.ServiceType == typeof(IPublicationRecordStore)).ImplementationType);
+            Assert.Single(services, service => service.ServiceType == typeof(EfPublicationRecordStore));
         }
     }
 

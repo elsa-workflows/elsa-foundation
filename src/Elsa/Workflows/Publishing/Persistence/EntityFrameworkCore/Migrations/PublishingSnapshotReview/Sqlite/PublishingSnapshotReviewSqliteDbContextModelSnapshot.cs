@@ -16,6 +16,124 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
 
+            modelBuilder.Entity("Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities.ActivityDraftTestRunEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ReceiptExpiresAtOffsetMinutes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ReceiptExpiresAtUtcTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TestRunId")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TestRunIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("TestRunIdOrderKey")
+                        .IsRequired()
+                        .HasMaxLength(902)
+                        .HasColumnType("BLOB");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantIdHash", "TestRunIdHash")
+                        .IsUnique()
+                        .HasDatabaseName("IX_elsa_activity_draft_test_runs_scope_testRunId");
+
+                    b.HasIndex("TenantIdHash", "ReceiptExpiresAtUtcTicks", "TestRunIdOrderKey")
+                        .HasDatabaseName("IX_elsa_activity_draft_test_runs_scope_expiry_testRunId");
+
+                    b.ToTable("elsa_activity_draft_test_runs", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities.ActivityPublicationReceiptEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReceiptKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReceiptTenantId")
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantIdHash", "ReceiptKeyHash")
+                        .IsUnique()
+                        .HasDatabaseName("IX_elsa_activity_publication_receipts_scope_receiptKey");
+
+                    b.ToTable("elsa_activity_publication_receipts", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities.PublicationPolicyEntity", b =>
                 {
                     b.Property<string>("Id")
@@ -169,6 +287,113 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .HasDatabaseName("IX_elsa_publication_projection_intents_scope_publication_order");
 
                     b.ToTable("elsa_publication_projection_intents", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities.PublicationRecordEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ActivatedAtOffsetMinutes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ActivatedAtUtcTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ArtifactId")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("CreatedAtOffsetMinutes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAtUtcTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ExpectedSlotRevision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FailureCode")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FailureMessage")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PublicationId")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PublicationIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("RetiredAtOffsetMinutes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("RetiredAtUtcTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SlotId")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SlotIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SlotName")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceReferenceId")
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantIdHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WorkflowDefinitionId")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WorkflowDefinitionVersionId")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantIdHash", "PublicationIdHash")
+                        .IsUnique()
+                        .HasDatabaseName("IX_elsa_publication_records_scope_publicationId");
+
+                    b.HasIndex("TenantIdHash", "SlotIdHash", "PublicationIdHash")
+                        .HasDatabaseName("IX_elsa_publication_records_scope_slot_publication");
+
+                    b.ToTable("elsa_publication_records", (string)null);
                 });
 
             modelBuilder.Entity("Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities.PublicationSnapshotReviewEntity", b =>

@@ -11,6 +11,47 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
+                name: "elsa_activity_draft_test_runs",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    TestRunId = table.Column<string>(type: "character varying(1200)", maxLength: 1200, nullable: false),
+                    TestRunIdHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    TestRunIdOrderKey = table.Column<byte[]>(type: "bytea", maxLength: 902, nullable: false),
+                    ReceiptExpiresAtUtcTicks = table.Column<long>(type: "bigint", nullable: false),
+                    ReceiptExpiresAtOffsetMinutes = table.Column<int>(type: "integer", nullable: false),
+                    Status = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    Content = table.Column<string>(type: "text", nullable: false),
+                    TenantId = table.Column<string>(type: "character varying(1200)", maxLength: 1200, nullable: true),
+                    TenantIdHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    Revision = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_elsa_activity_draft_test_runs", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "elsa_activity_publication_receipts",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    ReceiptKeyHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    IdempotencyKey = table.Column<string>(type: "character varying(1200)", maxLength: 1200, nullable: false),
+                    ReceiptTenantId = table.Column<string>(type: "character varying(1200)", maxLength: 1200, nullable: true),
+                    Status = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    Content = table.Column<string>(type: "text", nullable: false),
+                    TenantId = table.Column<string>(type: "character varying(1200)", maxLength: 1200, nullable: true),
+                    TenantIdHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_elsa_activity_publication_receipts", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "elsa_publication_policies",
                 columns: table => new
                 {
@@ -61,6 +102,39 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                 });
 
             migrationBuilder.CreateTable(
+                name: "elsa_publication_records",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    PublicationId = table.Column<string>(type: "character varying(1200)", maxLength: 1200, nullable: false),
+                    PublicationIdHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    SlotId = table.Column<string>(type: "character varying(1200)", maxLength: 1200, nullable: false),
+                    SlotIdHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    SlotName = table.Column<string>(type: "character varying(1200)", maxLength: 1200, nullable: false),
+                    WorkflowDefinitionId = table.Column<string>(type: "character varying(1200)", maxLength: 1200, nullable: false),
+                    WorkflowDefinitionVersionId = table.Column<string>(type: "character varying(1200)", maxLength: 1200, nullable: false),
+                    ArtifactId = table.Column<string>(type: "character varying(1200)", maxLength: 1200, nullable: false),
+                    SourceReferenceId = table.Column<string>(type: "character varying(1200)", maxLength: 1200, nullable: true),
+                    ExpectedSlotRevision = table.Column<long>(type: "bigint", nullable: false),
+                    Status = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    CreatedAtUtcTicks = table.Column<long>(type: "bigint", nullable: false),
+                    CreatedAtOffsetMinutes = table.Column<int>(type: "integer", nullable: false),
+                    ActivatedAtUtcTicks = table.Column<long>(type: "bigint", nullable: true),
+                    ActivatedAtOffsetMinutes = table.Column<int>(type: "integer", nullable: true),
+                    RetiredAtUtcTicks = table.Column<long>(type: "bigint", nullable: true),
+                    RetiredAtOffsetMinutes = table.Column<int>(type: "integer", nullable: true),
+                    FailureCode = table.Column<string>(type: "text", nullable: true),
+                    FailureMessage = table.Column<string>(type: "text", nullable: true),
+                    TenantId = table.Column<string>(type: "character varying(1200)", maxLength: 1200, nullable: true),
+                    TenantIdHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    Revision = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_elsa_publication_records", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "elsa_publication_snapshot_reviews",
                 columns: table => new
                 {
@@ -86,6 +160,23 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                 });
 
             migrationBuilder.CreateIndex(
+                name: "IX_elsa_activity_draft_test_runs_scope_expiry_testRunId",
+                table: "elsa_activity_draft_test_runs",
+                columns: new[] { "TenantIdHash", "ReceiptExpiresAtUtcTicks", "TestRunIdOrderKey" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_elsa_activity_draft_test_runs_scope_testRunId",
+                table: "elsa_activity_draft_test_runs",
+                columns: new[] { "TenantIdHash", "TestRunIdHash" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_elsa_activity_publication_receipts_scope_receiptKey",
+                table: "elsa_activity_publication_receipts",
+                columns: new[] { "TenantIdHash", "ReceiptKeyHash" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_elsa_publication_policies_scope_policyKey",
                 table: "elsa_publication_policies",
                 columns: new[] { "TenantIdHash", "PolicyKeyHash" },
@@ -103,6 +194,17 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                 columns: new[] { "TenantIdHash", "PublicationIdHash", "IntentIdOrderKey", "IntentIdHash" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_elsa_publication_records_scope_publicationId",
+                table: "elsa_publication_records",
+                columns: new[] { "TenantIdHash", "PublicationIdHash" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_elsa_publication_records_scope_slot_publication",
+                table: "elsa_publication_records",
+                columns: new[] { "TenantIdHash", "SlotIdHash", "PublicationIdHash" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_elsa_publication_snapshot_reviews_expiresAt_preflightToken",
                 table: "elsa_publication_snapshot_reviews",
                 columns: new[] { "ExpiresAt", "PreflightToken" });
@@ -112,10 +214,19 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "elsa_activity_draft_test_runs");
+
+            migrationBuilder.DropTable(
+                name: "elsa_activity_publication_receipts");
+
+            migrationBuilder.DropTable(
                 name: "elsa_publication_policies");
 
             migrationBuilder.DropTable(
                 name: "elsa_publication_projection_intents");
+
+            migrationBuilder.DropTable(
+                name: "elsa_publication_records");
 
             migrationBuilder.DropTable(
                 name: "elsa_publication_snapshot_reviews");

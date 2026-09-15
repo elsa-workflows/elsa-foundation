@@ -935,7 +935,10 @@ public sealed class EfCoreDependencyGuardTests
         public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
     }
 
-    /// <summary>ADR 0073's opt-in Publishing P04 single-use snapshot-review authority.</summary>
+    /// <summary>
+    /// ADR 0073's opt-in Publishing ledger (P01-P06, issues #1748, #1751 and #1737). Its ordered activity-publication
+    /// commands reach the Activities Design and Runtime EF projects, whose closures are the same core packages.
+    /// </summary>
     internal static class Adr0073PublishingSnapshotReviewEf
     {
         private const string Source = "src/Elsa/Workflows/Publishing/Persistence/EntityFrameworkCore/";

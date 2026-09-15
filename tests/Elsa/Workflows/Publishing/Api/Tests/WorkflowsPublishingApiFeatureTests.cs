@@ -76,6 +76,23 @@ public sealed class WorkflowsPublishingApiFeatureTests
     }
 
     [Fact]
+    public void Records_its_in_memory_test_run_store_as_the_owner_only_when_it_added_it()
+    {
+        var composed = new ServiceCollection();
+        new WorkflowsPublishingApiFeature().ConfigureServices(composed);
+        var owner = PublishingPersistenceFamilyBackend.Find(composed, PublishingPersistenceFamilyBackend.ActivityDraftTestRuns);
+        Assert.Equal(PublishingPersistenceFamilyBackend.InMemory, owner!.Name);
+        Assert.True(owner.Owns(Assert.Single(composed, descriptor => descriptor.ServiceType == typeof(IActivityDraftTestRunStore))));
+
+        // A host-provided store stays foreign, so a durable backend selected later refuses to replace it.
+        var hostProvided = new ServiceCollection();
+        hostProvided.AddSingleton<IActivityDraftTestRunStore, InMemoryActivityDraftTestRunStore>();
+        new WorkflowsPublishingApiFeature().ConfigureServices(hostProvided);
+        Assert.Null(PublishingPersistenceFamilyBackend.Find(hostProvided, PublishingPersistenceFamilyBackend.ActivityDraftTestRuns));
+        Assert.Single(hostProvided, descriptor => descriptor.ServiceType == typeof(IActivityDraftTestRunStore));
+    }
+
+    [Fact]
     public void CompileRequest_PreservesPreTenantConstructorAndDeconstruction()
     {
         Assert.NotNull(typeof(WorkflowExecutableCompileRequest).GetConstructor(

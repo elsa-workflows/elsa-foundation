@@ -63,6 +63,16 @@ file static class PublishingSnapshotReviewProviderModel
             nameof(PublicationPolicyEntity.PolicyKey), nameof(PublicationPolicyEntity.WorkflowDefinitionId), nameof(PublicationPolicyEntity.TenantId), nameof(PublicationPolicyEntity.DefaultSlotName));
         ConfigureStringCollation<PublicationProjectionIntentEntity>(modelBuilder, collation,
             nameof(PublicationProjectionIntentEntity.IntentId), nameof(PublicationProjectionIntentEntity.PublicationId), nameof(PublicationProjectionIntentEntity.ProjectionKind), nameof(PublicationProjectionIntentEntity.TenantId));
+        ConfigureStringCollation<PublicationRecordEntity>(modelBuilder, collation,
+            nameof(PublicationRecordEntity.Id), nameof(PublicationRecordEntity.PublicationId), nameof(PublicationRecordEntity.PublicationIdHash),
+            nameof(PublicationRecordEntity.SlotId), nameof(PublicationRecordEntity.SlotIdHash), nameof(PublicationRecordEntity.TenantId),
+            nameof(PublicationRecordEntity.TenantIdHash));
+        ConfigureStringCollation<ActivityPublicationReceiptEntity>(modelBuilder, collation,
+            nameof(ActivityPublicationReceiptEntity.Id), nameof(ActivityPublicationReceiptEntity.ReceiptKeyHash), nameof(ActivityPublicationReceiptEntity.IdempotencyKey),
+            nameof(ActivityPublicationReceiptEntity.ReceiptTenantId), nameof(ActivityPublicationReceiptEntity.TenantId), nameof(ActivityPublicationReceiptEntity.TenantIdHash));
+        ConfigureStringCollation<ActivityDraftTestRunEntity>(modelBuilder, collation,
+            nameof(ActivityDraftTestRunEntity.Id), nameof(ActivityDraftTestRunEntity.TestRunId), nameof(ActivityDraftTestRunEntity.TestRunIdHash),
+            nameof(ActivityDraftTestRunEntity.TenantId), nameof(ActivityDraftTestRunEntity.TenantIdHash));
     }
 
     public static void ConfigureMySqlCollation(ModelBuilder modelBuilder, string collation, string annotation)
@@ -71,7 +81,10 @@ file static class PublishingSnapshotReviewProviderModel
         {
             modelBuilder.Entity<PublicationSnapshotReviewEntity>().Metadata,
             modelBuilder.Entity<PublicationPolicyEntity>().Metadata,
-            modelBuilder.Entity<PublicationProjectionIntentEntity>().Metadata
+            modelBuilder.Entity<PublicationProjectionIntentEntity>().Metadata,
+            modelBuilder.Entity<PublicationRecordEntity>().Metadata,
+            modelBuilder.Entity<ActivityPublicationReceiptEntity>().Metadata,
+            modelBuilder.Entity<ActivityDraftTestRunEntity>().Metadata
         })
         {
             entity.SetAnnotation(annotation, collation);

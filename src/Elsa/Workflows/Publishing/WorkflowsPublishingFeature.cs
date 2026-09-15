@@ -55,7 +55,12 @@ public class WorkflowsPublishingFeature : IShellFeature
             serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>());
         services.TryAddScoped<IExecutableActivityTemplateReader>(serviceProvider =>
             serviceProvider.GetRequiredService<IExecutableActivityTemplateStore>());
-        services.TryAddSingleton<IPublicationRecordStore, InMemoryPublicationRecordStore>();
+        // Only claim registrations that this feature actually added, for the reason given at the policy and
+        // projection-intent stores below.
+        PublishingPersistenceFamilyBackend.TryAddInMemory<IPublicationRecordStore, InMemoryPublicationRecordStore>(
+            services,
+            PublishingPersistenceFamilyBackend.PublicationRecords,
+            PublishingPersistenceFamilyBackend.PublicationRecordContracts);
         var hadPolicyStore = services.Any(service => service.ServiceType == typeof(IPublicationPolicyStore));
         var hadProjectionIntentStore = services.Any(service => service.ServiceType == typeof(IPublicationProjectionIntentStore));
         services.TryAddSingleton<IPublicationPolicyStore, InMemoryPublicationPolicyStore>();
@@ -96,7 +101,10 @@ public class WorkflowsPublishingFeature : IShellFeature
                     PublicationSnapshotReviewStoreBackend.InMemory,
                     services.Last(service => service.ServiceType == typeof(IPublicationSnapshotReviewStore))));
         }
-        services.TryAddSingleton<IActivityPublicationReceiptStore, InMemoryActivityPublicationReceiptStore>();
+        PublishingPersistenceFamilyBackend.TryAddInMemory<IActivityPublicationReceiptStore, InMemoryActivityPublicationReceiptStore>(
+            services,
+            PublishingPersistenceFamilyBackend.ActivityPublicationReceipts,
+            PublishingPersistenceFamilyBackend.ActivityPublicationReceiptContracts);
         // Fallback layout store for in-memory compositions; a design-persistence provider overrides this with its
         // own registration so the publish flow copies the real layout sidecar onto the source reference (ADR 0039).
         services.TryAddScoped<IWorkflowDefinitionVersionLayoutStore, EmptyWorkflowDefinitionVersionLayoutStore>();

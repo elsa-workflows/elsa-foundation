@@ -185,12 +185,12 @@ relevant Runtime/Activities Design/Workflows Design replacements.
 
 | ID | Groundwork unit / physical name | Domain contract or semantic role | Evidence | Blockers | Replacement PR | Default-flip PR | Deletion PR | Disposition |
 |---|---|---|---|---|---|---|---|---|
-| P01 | `publishingPublicationRecord` / `elsa_publication_records` | Publication-record store and slot authority | E-PUBLISH | S1-S3; R/A/W | | | | Pending |
+| P01 | `publishingPublicationRecord` / `elsa_publication_records` | Publication-record store and slot authority | E-PUBLISH | S1-S3; R/A/W | | | | Opt-in EF implementation tracked by issue #1737; focused SQLite and live 3/3 native-provider smoke; Groundwork remains default |
 | P02 | `publishingPublicationPolicy` / `elsa_publication_policies` | Publication-policy store | E-PUBLISH | S1-S3; R/A/W | | | | Opt-in EF implementation tracked by issue #1751; focused SQLite and live 3/3 native-provider smoke; Groundwork remains default |
 | P03 | `publishingProjectionIntent` / `elsa_publication_projection_intents` | Projection intent and reconciliation | E-PUBLISH | S1-S3; R/A/W | | | | Opt-in EF implementation tracked by issue #1751; focused SQLite and live 3/3 native-provider smoke; Groundwork remains default |
 | P04 | `publishingSnapshotReview` / `elsa_publication_snapshot_reviews` | Expiring snapshot-review state | E-PUBLISH | S1-S3; R/A/W | #1748 | | | Opt-in EF implementation merged in #1748; Groundwork remains default |
-| P05 | `publishingActivityPublicationReceipt` / `elsa_activity_publication_receipts` | Idempotent activity-publication receipt | E-PUBLISH | S1-S3; R/A/W | | | | Pending |
-| P06 | `publishingActivityDraftTestRun` / `elsa_activity_draft_test_runs` | Activity draft test-run receipt and expiry | E-PUBLISH | S1-S3; R/A/W | | | | Pending |
+| P05 | `publishingActivityPublicationReceipt` / `elsa_activity_publication_receipts` | Idempotent activity-publication receipt | E-PUBLISH | S1-S3; R/A/W | | | | Opt-in EF implementation tracked by issue #1737; focused SQLite and live 3/3 native-provider smoke; Groundwork remains default |
+| P06 | `publishingActivityDraftTestRun` / `elsa_activity_draft_test_runs` | Activity draft test-run receipt and expiry | E-PUBLISH | S1-S3; R/A/W | | | | Opt-in EF implementation tracked by issue #1737; focused SQLite and live 3/3 native-provider smoke; Groundwork remains default |
 
 ## Workflows Design: 5 units
 

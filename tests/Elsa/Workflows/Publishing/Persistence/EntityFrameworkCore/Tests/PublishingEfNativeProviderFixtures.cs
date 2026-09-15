@@ -138,6 +138,19 @@ internal static class PublishingProviderContainerSupport
     public static bool RequireNativeProviderMatrix =>
         Environment.GetEnvironmentVariable("GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX") is "1" or "true";
 
+    /// <summary>
+    /// The provider's connection string. An unavailable provider skips the test, or fails it when the native
+    /// provider matrix is required, so a missing provider is never reported as a pass.
+    /// </summary>
+    public static string Require(bool isAvailable, string? skipReason, string provider, Func<string> connectionString)
+    {
+        var reason = skipReason ?? $"{provider} is unavailable.";
+        if (RequireNativeProviderMatrix)
+            Assert.True(isAvailable, reason);
+        Skip.IfNot(isAvailable, reason);
+        return connectionString();
+    }
+
     public static bool IsUnavailable(Exception exception) =>
         exception is DockerUnavailableException ||
         exception.GetType().Name.Contains("Docker", StringComparison.OrdinalIgnoreCase) ||

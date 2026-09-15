@@ -1,12 +1,9 @@
 using CShells.Features;
-using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.Services;
-using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Publishing.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork;
@@ -33,8 +30,7 @@ public sealed class PublishingGroundworkFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddGroundworkPublishingStores(Target);
-        services.AddScoped<ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>, GroundworkActivityPublicationCommand>();
-        services.AddScoped<ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>, GroundworkSourceActivityPublicationCommand>();
+        services.AddGroundworkActivityPublicationCommands();
         services.AddScoped<GroundworkActivityUpgradePlanStore>();
         services.AddScoped<IActivityUpgradeDiscoverySource>(sp => sp.GetRequiredService<GroundworkActivityUpgradePlanStore>());
         services.AddScoped<IActivityUpgradePlanMutationStore>(sp => sp.GetRequiredService<GroundworkActivityUpgradePlanStore>());
