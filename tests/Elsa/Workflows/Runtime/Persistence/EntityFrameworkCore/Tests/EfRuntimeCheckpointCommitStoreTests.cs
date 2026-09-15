@@ -319,6 +319,92 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
+    public async Task New_test_dispatch_and_test_execution_admit_the_same_open_scope_once_with_marker_replay()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open("tenant-a");
+        var access = new FixedAccessor("tenant-a");
+        var testScope = TestScope("scope-checkpoint");
+        await new EfWorkflowTestScopeStore(context, access, new NoopContinuationCodec())
+            .CreateAsync(testScope, OccurredAt);
+        var dispatch = PendingDispatch("workflow-a", "activity-test", "tenant-a", testScope: testScope);
+        var commit = Commit("commit-test-scope") with
+        {
+            StateChanges = new RuntimeCheckpointStateChangeSet(
+                new RuntimeStateChange<WorkflowExecutionState>(
+                    "workflow-a", RuntimeStateChangeOperation.Upsert,
+                    Execution("workflow-a", "tenant-a") with { TestScope = testScope, RunKind = WorkflowRunKind.TestRun },
+                    new Dictionary<string, string>()),
+                null, [], [], [], [], [],
+                [new RuntimeStateChange<WorkflowDispatchRecord>(dispatch.DispatchId,
+                    RuntimeStateChangeOperation.Upsert, dispatch, new Dictionary<string, string>())],
+                null, null, null, null)
+        };
+        var manager = new PassThroughRootWriteLeaseManager();
+        var store = new EfRuntimeCheckpointCommitStore(context, access, rootWriteLeaseManager: manager);
+        await store.CommitAsync(commit, Decision());
+        await store.CommitAsync(commit, Decision());
+
+        Assert.Equal(1, (await context.WorkflowTestScopes.SingleAsync()).Revision);
+        Assert.Single(await context.WorkflowExecutionStates.ToArrayAsync());
+        Assert.Single(await context.WorkflowDispatches.ToArrayAsync());
+        Assert.Single(await context.RuntimeCheckpointCommits.ToArrayAsync());
+        await using var restarted = database.Open("tenant-a");
+        await new EfRuntimeCheckpointCommitStore(restarted, access).CommitAsync(commit, Decision());
+        Assert.Equal(1, (await restarted.WorkflowTestScopes.SingleAsync()).Revision);
+    }
+
+    [Fact]
+    public async Task Closed_test_scope_rejects_new_dispatch_and_rolls_back_outbox_and_marker()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open("tenant-a");
+        var access = new FixedAccessor("tenant-a");
+        var scope = TestScope("scope-closed-checkpoint");
+        var scopes = new EfWorkflowTestScopeStore(context, access, new NoopContinuationCodec());
+        await scopes.CreateAsync(scope, OccurredAt);
+        await scopes.CloseAsync(new WorkflowTestScopeCloseRequest(
+            scope.ScopeId, WorkflowTestScopeCloseReason.ExplicitTeardown, OccurredAt.AddMinutes(1)));
+        var commit = WithPendingDispatch("commit-closed-scope", "intent-closed-scope",
+            PendingDispatch("workflow-a", "activity-closed", "tenant-a", testScope: scope));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new EfRuntimeCheckpointCommitStore(context, access).CommitAsync(commit, Decision()).AsTask());
+        Assert.Empty(await context.WorkflowDispatches.ToArrayAsync());
+        Assert.Empty(await context.RuntimePostCommitOutbox.ToArrayAsync());
+        Assert.Empty(await context.RuntimeCheckpointCommits.ToArrayAsync());
+        Assert.Equal(WorkflowTestScopeState.Closing,
+            (await scopes.FindAsync(scope.ScopeId))!.State);
+    }
+
+    [Fact]
+    public async Task Marker_failure_rolls_back_test_scope_touch_and_test_dispatch_with_outbox()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var interceptor = new FailMarkerInsertInterceptor();
+        await using (var context = database.Open("tenant-a", interceptor))
+        {
+            var access = new FixedAccessor("tenant-a");
+            var scope = TestScope("scope-test-rollback");
+            await new EfWorkflowTestScopeStore(context, access, new NoopContinuationCodec())
+                .CreateAsync(scope, OccurredAt);
+            var commit = WithPendingDispatch("commit-test-rollback", "intent-test-rollback",
+                PendingDispatch("workflow-a", "activity-test-rollback", "tenant-a", testScope: scope));
+
+            interceptor.Arm();
+            await Assert.ThrowsAsync<DbUpdateException>(() =>
+                new EfRuntimeCheckpointCommitStore(context, access).CommitAsync(commit, Decision()).AsTask());
+            Assert.Empty(context.ChangeTracker.Entries());
+        }
+
+        await using var restarted = database.Open("tenant-a");
+        Assert.Equal(0, (await restarted.WorkflowTestScopes.SingleAsync()).Revision);
+        Assert.Empty(await restarted.WorkflowDispatches.ToArrayAsync());
+        Assert.Empty(await restarted.RuntimePostCommitOutbox.ToArrayAsync());
+        Assert.Empty(await restarted.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
     public async Task Marker_failure_rolls_back_previously_saved_outbox_and_does_not_leak_tracker_state()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -656,7 +742,8 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         string parent,
         string activity,
         string tenant,
-        WorkflowDispatchMode mode = WorkflowDispatchMode.FireAndForget)
+        WorkflowDispatchMode mode = WorkflowDispatchMode.FireAndForget,
+        WorkflowTestScope? testScope = null)
     {
         var identity = new WorkflowDispatchIdentity(parent, activity);
         return new WorkflowDispatchRecord(
@@ -670,13 +757,14 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
             WorkflowDispatchStatus.Pending,
             null,
             tenant,
-            new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue),
-            WorkflowRunKind.PublishedRun,
+            testScope?.Partition ?? new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue),
+            testScope is null ? WorkflowRunKind.PublishedRun : WorkflowRunKind.TestRun,
             new WorkflowExecutionAuthoritySnapshot(parent, "initiator-1"),
             [new WorkflowDispatchInputDescriptor("orderId", "string")],
             OccurredAt,
             OccurredAt,
-            new Dictionary<string, string> { ["safe-code"] = "dispatch" });
+            new Dictionary<string, string> { ["safe-code"] = "dispatch" },
+            testScope: testScope);
     }
 
     private static RuntimeCheckpointPersistenceDecision Decision() => new(RuntimeCheckpointPersistenceMode.Immediate);
@@ -684,6 +772,10 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     private static RuntimeSchedulerWorkItem SchedulerWork(string id) => new(
         id, "workflow-a", "command", WorkflowExecutionCommandKind.ScheduleActivity,
         "envelope", $"enqueue-{id}", OccurredAt, OccurredAt, 1);
+
+    private static WorkflowTestScope TestScope(string id) => new(
+        id, OccurredAt.AddHours(1), "tenant-a",
+        new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue));
 
     private static WorkflowExecutionState Execution(string id, string tenantId) => new(
         id,

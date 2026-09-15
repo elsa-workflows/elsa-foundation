@@ -12,6 +12,7 @@ internal static class EfRuntimeCheckpointDispatchParticipantStaging
         BookmarkStateDbContext context,
         RuntimeCheckpointCommit commit,
         string scope,
+        Dictionary<string, WorkflowTestScope> touchedTestScopes,
         CancellationToken cancellationToken)
     {
         var scopeKey = EfRelationalIdentity.Encode(scope);
@@ -35,9 +36,10 @@ internal static class EfRuntimeCheckpointDispatchParticipantStaging
             if (row is null)
             {
                 WorkflowDispatchLifecycle.ValidateNew(candidate);
-                if (candidate.TestScope is not null)
-                    throw new NotSupportedException(
-                        "A new test-scoped dispatch requires the checkpoint's atomic test-scope admission participant.");
+                if (candidate.TestScope is { } testScope)
+                    await EfRuntimeCheckpointTestScopeParticipantStaging.AssertOpenAndStageAsync(
+                        context, testScope, candidate.ChildWorkflowExecutionId, commit.Checkpoint.OccurredAt,
+                        scope, touchedTestScopes, cancellationToken);
                 context.WorkflowDispatches.Add(WorkflowDispatchEfSupport.ToEntity(
                     candidate, scope, WorkflowDispatchEfSupport.RowId(scope, candidate.DispatchId), 1));
                 continue;

@@ -46,9 +46,17 @@ public sealed class EfRuntimeCheckpointCommitStore(
         ValidateCommitBoundary(commit);
         ValidateThinSlice(commit);
         if (commit.StateChanges.WorkflowExecution is { } workflowExecution)
+        {
             accessContextAccessor.Current.EnsureTenantScope(workflowExecution.State.TenantId);
+            if (workflowExecution.State.TestScope is { } testScope)
+                accessContextAccessor.Current.EnsureTenantScope(testScope.TenantId);
+        }
         foreach (var dispatch in commit.StateChanges.WorkflowDispatches)
+        {
             accessContextAccessor.Current.EnsureTenantScope(dispatch.State.TenantId);
+            if (dispatch.State.TestScope is { } testScope)
+                accessContextAccessor.Current.EnsureTenantScope(testScope.TenantId);
+        }
 
         var existing = await FindMarkerAsync(scope, commit.CommitId, cancellationToken);
         if (existing is not null)
@@ -77,6 +85,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
         async ValueTask<RuntimeCheckpointCommitStoreResult> CommitNewAsync(CancellationToken writeCancellationToken)
         {
             var marker = ToEntity(commit, scope, id, fingerprint);
+            var touchedTestScopes = new Dictionary<string, WorkflowTestScope>(StringComparer.Ordinal);
 
             await using var transaction = await context.Database.BeginTransactionAsync(writeCancellationToken);
             try
@@ -101,6 +110,8 @@ public sealed class EfRuntimeCheckpointCommitStore(
                         context,
                         workflowChange,
                         scope,
+                        commit.Checkpoint.OccurredAt,
+                        touchedTestScopes,
                         writeCancellationToken);
                 }
 
@@ -117,6 +128,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
                     context,
                     commit,
                     scope,
+                    touchedTestScopes,
                     writeCancellationToken);
 
                 await EfRuntimeCheckpointOutboxParticipantStaging.StageAsync(

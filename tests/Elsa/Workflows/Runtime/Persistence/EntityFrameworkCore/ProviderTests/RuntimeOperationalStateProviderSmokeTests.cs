@@ -156,6 +156,29 @@ internal static class RuntimeOperationalStateProviderSmoke
             Assert.Equal(futureId, (await outbox.FindAsync(futureId))!.OutboxItemId);
             Assert.Equal(futureDispatch.DispatchId,
                 (await new EfWorkflowDispatchStore(context, accessor).FindAsync(futureDispatch.DispatchId))!.DispatchId);
+            var testScope = new WorkflowTestScope(
+                $"native-checkpoint-scope-{Guid.NewGuid():N}", futureAt.AddHours(1), scope,
+                new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue));
+            var testScopes = new EfWorkflowTestScopeStore(context, accessor,
+                new HmacRuntimeRecoveryContinuationCodec(Options.Create(
+                    new RuntimeRecoveryContinuationOptions { SigningKey = SigningKey })));
+            await testScopes.CreateAsync(testScope, futureAt);
+            var testDispatch = PendingDispatch("workflow-a", "native-checkpoint-test-dispatch", scope, futureAt, testScope);
+            var testCommit = EmptyCheckpointCommit($"checkpoint-test-scope-{Guid.NewGuid():N}");
+            testCommit = testCommit with
+            {
+                Checkpoint = testCommit.Checkpoint with { OccurredAt = futureAt },
+                StateChanges = testCommit.StateChanges.WithWorkflowDispatches([
+                    new RuntimeStateChange<WorkflowDispatchRecord>(
+                        testDispatch.DispatchId, RuntimeStateChangeOperation.Upsert,
+                        testDispatch, new Dictionary<string, string>())])
+            };
+            await checkpointStore.CommitAsync(testCommit, new(RuntimeCheckpointPersistenceMode.Immediate));
+            await checkpointStore.CommitAsync(testCommit, new(RuntimeCheckpointPersistenceMode.Immediate));
+            Assert.Equal(1, (await context.WorkflowTestScopes.AsNoTracking().SingleAsync(row =>
+                row.ScopeId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(testScope.ScopeId))).Revision);
+            Assert.Equal(testDispatch.DispatchId,
+                (await new EfWorkflowDispatchStore(context, accessor).FindAsync(testDispatch.DispatchId))!.DispatchId);
             var outboxNow = DateTimeOffset.UtcNow;
             var outboxItem = OutboxPending($"outbox-{Guid.NewGuid():N}", "workflow-a", outboxNow);
             await outbox.SavePendingAsync(outboxItem);
@@ -299,7 +322,8 @@ internal static class RuntimeOperationalStateProviderSmoke
         string parent,
         string activity,
         string tenant,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        WorkflowTestScope? testScope = null)
     {
         var identity = new WorkflowDispatchIdentity(parent, activity);
         return new WorkflowDispatchRecord(
@@ -313,13 +337,14 @@ internal static class RuntimeOperationalStateProviderSmoke
             WorkflowDispatchStatus.Pending,
             null,
             tenant,
-            new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue),
-            WorkflowRunKind.PublishedRun,
+            testScope?.Partition ?? new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue),
+            testScope is null ? WorkflowRunKind.PublishedRun : WorkflowRunKind.TestRun,
             new WorkflowExecutionAuthoritySnapshot(parent, "initiator-1"),
             [new WorkflowDispatchInputDescriptor("orderId", "string")],
             createdAt,
             createdAt,
-            new Dictionary<string, string> { ["safe-code"] = "dispatch" });
+            new Dictionary<string, string> { ["safe-code"] = "dispatch" },
+            testScope: testScope);
     }
 
     private static RuntimeCheckpointCommit EmptyCheckpointCommit(string commitId) => new(

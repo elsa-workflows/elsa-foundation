@@ -22,6 +22,8 @@ internal static class EfRuntimeCheckpointParticipantStaging
         BookmarkStateDbContext context,
         RuntimeStateChange<WorkflowExecutionState> change,
         string scope,
+        DateTimeOffset occurredAt,
+        Dictionary<string, WorkflowTestScope> touchedTestScopes,
         CancellationToken cancellationToken)
     {
         var id = EfWorkflowExecutionStateStore.CreateId(scope, change.StateId);
@@ -35,6 +37,10 @@ internal static class EfRuntimeCheckpointParticipantStaging
 
         if (row is null)
         {
+            if (change.State.TestScope is { } testScope)
+                await EfRuntimeCheckpointTestScopeParticipantStaging.AssertOpenAndStageAsync(
+                    context, testScope, change.State.WorkflowExecutionId, occurredAt,
+                    scope, touchedTestScopes, cancellationToken);
             context.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntity(
                 change.State,
                 scope,
