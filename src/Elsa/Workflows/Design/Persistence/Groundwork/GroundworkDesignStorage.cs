@@ -324,7 +324,8 @@ public sealed class GroundworkDesignStorage(
     internal static void EnsureProjectedIdentity<TEntity>(
         GroundworkDesignEntry entry,
         TEntity entity,
-        string operation)
+        string operation,
+        bool requireCrossScopeProvenance = false)
         where TEntity : Entity
     {
         ArgumentNullException.ThrowIfNull(entry);
@@ -358,7 +359,11 @@ public sealed class GroundworkDesignStorage(
                 $"The {operation} returned a row whose tenant projection does not match its authoritative entity.");
         }
 
-        if (entry.Scope is { } scope && !StringComparer.Ordinal.Equals(scope.Value, tenantId))
+        // Normal scoped point reads do not return the physical scope in StoredEntry. In contrast,
+        // the privileged cross-scope query includes it, including null for a global provider row.
+        // A null physical scope must not silently authenticate tenant-owned authoritative content.
+        if ((requireCrossScopeProvenance || entry.Scope is not null) &&
+            !StringComparer.Ordinal.Equals(entry.Scope?.Value, tenantId))
         {
             throw new GroundworkQueryReadinessException(
                 $"The {operation} returned a row whose provider scope does not match its authoritative entity.");
