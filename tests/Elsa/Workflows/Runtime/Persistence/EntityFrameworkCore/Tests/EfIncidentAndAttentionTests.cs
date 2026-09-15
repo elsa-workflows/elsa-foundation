@@ -94,6 +94,24 @@ public sealed class EfIncidentAndAttentionTests
     }
 
     [Fact]
+    public async Task Attention_counts_the_full_authorized_dataset_beyond_one_provider_page()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        for (var i = 0; i <= RuntimeStorePageRequest.MaximumLimit; i++)
+        {
+            var workflowId = $"workflow-{i:D3}";
+            await fixture.Executions.SaveAsync(Execution(workflowId, "definition", WorkflowExecutionStatus.Faulted, Now, "tenant-a"));
+        }
+
+        var result = await fixture.Attention.QueryAsync(new(
+            new AttentionQueryContext(new ClaimsPrincipal(), "tenant-a"),
+            1));
+        Assert.Equal(RuntimeStorePageRequest.MaximumLimit + 1, result.TotalCount);
+        Assert.Equal("workflow-000", Assert.Single(result.Records).WorkflowExecutionId);
+    }
+
+    [Fact]
     public async Task Attention_requires_matching_tenant_scope_before_database_access()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -129,6 +147,23 @@ public sealed class EfIncidentAndAttentionTests
 
         incidentRow.Status = (int)IncidentStatus.Open;
         await fixture.Context.SaveChangesAsync();
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Attention.QueryAsync(new(
+            new AttentionQueryContext(new ClaimsPrincipal(), "tenant-a"),
+            5)).AsTask());
+    }
+
+    [Fact]
+    public async Task Attention_fails_closed_when_an_authorized_execution_tenant_projection_is_missing()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Executions.SaveAsync(Execution("fault", "definition", WorkflowExecutionStatus.Faulted, Now, "tenant-a"));
+
+        var row = await fixture.Context.WorkflowExecutionStates.SingleAsync();
+        row.TenantId = null;
+        row.TenantIdHash = null;
+        await fixture.Context.SaveChangesAsync();
+
         await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Attention.QueryAsync(new(
             new AttentionQueryContext(new ClaimsPrincipal(), "tenant-a"),
             5)).AsTask());

@@ -41,6 +41,10 @@ public sealed class EfWorkflowRuntimeAttentionQuery(
         accessContextAccessor.Current.EnsureTenantScope(request.TenantId);
         cancellationToken.ThrowIfCancellationRequested();
 
+        // A projected tenant filter alone can hide an authorized execution whose tenant column drifted away
+        // from its authoritative JSON. Validate every row in the authorized scope before computing an exact total.
+        await ValidateScopeExecutionProjectionsAsync(scope, cancellationToken);
+
         var observedAt = _timeProvider.GetUtcNow();
         var top = new List<WorkflowRuntimeAttentionRecord>(request.MaximumItems);
         var incidentQuery = IncidentQuery(scope, request.TenantId);
@@ -81,6 +85,42 @@ public sealed class EfWorkflowRuntimeAttentionQuery(
 
         var total = checked((long)observedActiveCount + observedFaultedCount);
         return new(checked((int)total), top.ToArray());
+    }
+
+    private async Task ValidateScopeExecutionProjectionsAsync(string scope, CancellationToken cancellationToken)
+    {
+        var source = context.WorkflowExecutionStates.AsNoTracking().Where(row =>
+            row.ScopeKeyHash == EfRuntimeOperationalStoreSupport.Hash(scope) &&
+            row.ScopeKey == EfRuntimeOperationalStoreSupport.Encode(scope));
+        string? lastOrderKey = null;
+        string? lastId = null;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var page = source;
+            if (lastOrderKey is not null && lastId is not null)
+            {
+                page = page.Where(row =>
+                    string.Compare(row.WorkflowExecutionIdOrderKey, lastOrderKey) > 0 ||
+                    row.WorkflowExecutionIdOrderKey == lastOrderKey && string.Compare(row.Id, lastId) > 0);
+            }
+
+            var rows = await page.OrderBy(row => row.WorkflowExecutionIdOrderKey).ThenBy(row => row.Id)
+                .Take(ProviderPageSize + 1).ToArrayAsync(cancellationToken);
+            var hasNext = rows.Length > ProviderPageSize;
+            if (hasNext)
+                rows = rows[..ProviderPageSize];
+            foreach (var row in rows)
+            {
+                var workflowExecutionId = DecodeProjection(row.WorkflowExecutionId);
+                _ = EfWorkflowExecutionStateStore.ReadChecked(row, scope, workflowExecutionId);
+            }
+
+            if (!hasNext)
+                return;
+            lastOrderKey = rows[^1].WorkflowExecutionIdOrderKey;
+            lastId = rows[^1].Id;
+        }
     }
 
     private async Task<int> ReadIncidentPagesAsync(
