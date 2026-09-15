@@ -86,13 +86,9 @@ public sealed class ArchitectureGuardTests
         var missing = new List<string>();
 
         // ProjectFiles intentionally covers the source/test domain tree used by the architecture
-        // conventions. This guard also covers benchmark project files because they are active build
-        // inputs even though they sit outside that convention's scope.
-        var activeProjects = ProjectFiles().Concat(
-            Directory.EnumerateFiles(Path.Combine(RepoRoot, "benchmarks"), "*.csproj", SearchOption.AllDirectories)
-                .Select(file => ProjectInfo.From(RepoRoot, file)));
-
-        foreach (var project in activeProjects)
+        // conventions. The benchmark project files this guard also walked were deleted when
+        // performance measurement was retired (#1668).
+        foreach (var project in ProjectFiles())
         {
             var document = XDocument.Load(project.FullPath);
             foreach (var include in document.Descendants("ProjectReference")
@@ -362,7 +358,7 @@ public sealed class ArchitectureGuardTests
     /// (its <c>Indexes</c> are empty), which fails at run time rather than at compile time.
     /// </summary>
     [Fact]
-    public void Groundwork_test_and_benchmark_code_constructs_no_retired_portable_queries()
+    public void Groundwork_test_code_constructs_no_retired_portable_queries()
     {
         // The scoped-adapter contract test drives the adapter's compatibility surface on purpose — it is the
         // test that proves each retired member still routes through an ordinary scoped session. It goes away
@@ -378,7 +374,7 @@ public sealed class ArchitectureGuardTests
             (Name: "new PortableDocumentQuery(", Pattern: @"\bnew\s+(?:[\w.]+\.|global::[\w.]+\.)?PortableDocumentQuery\s*\(")
         };
 
-        var violations = GroundworkGuardSourceFiles("tests", "benchmarks")
+        var violations = GroundworkGuardSourceFiles("tests")
             .Where(candidate => !StringComparer.Ordinal.Equals(candidate.RelativePath, scopedAdapterContractTest))
             .SelectMany(candidate =>
             {
@@ -397,7 +393,7 @@ public sealed class ArchitectureGuardTests
     }
 
     /// <summary>
-    /// Every provider store — production, test, probe or benchmark — opens on Groundwork's physical surface.
+    /// Every provider store — production, test or probe — opens on Groundwork's physical surface.
     /// The portable <c>CreateAsync</c> entry points vanish at the package bump, and a store opened through one
     /// carries no compiled routes, so a bounded read against it fails at run time.
     /// </summary>
@@ -414,7 +410,7 @@ public sealed class ArchitectureGuardTests
             "tests/Elsa/Workflows/Dashboard/Tests/GroundworkWorkflowRunHealthDataSourceTests.cs"
         };
 
-        var violations = GroundworkGuardSourceFiles("src", "tests", "benchmarks")
+        var violations = GroundworkGuardSourceFiles("src", "tests")
             .Where(candidate => !dashboardDataSourceFixtures.Contains(candidate.RelativePath))
             .Select(candidate => new
             {
@@ -430,7 +426,7 @@ public sealed class ArchitectureGuardTests
         Assert.True(
             violations.Length == 0,
             "Provider stores must be opened with OpenPhysicalAsync — through GroundworkPhysicalTestStores in " +
-            "tests and benchmarks:" + Environment.NewLine + string.Join(Environment.NewLine, violations));
+            "tests:" + Environment.NewLine + string.Join(Environment.NewLine, violations));
     }
 
     /// <summary>
@@ -441,7 +437,7 @@ public sealed class ArchitectureGuardTests
     [Fact]
     public void Every_groundwork_warning_suppression_carries_a_justification()
     {
-        var violations = GroundworkGuardSourceFiles("src", "tests", "benchmarks")
+        var violations = GroundworkGuardSourceFiles("src", "tests")
             .SelectMany(candidate =>
             {
                 var lines = File.ReadAllLines(candidate.File);
@@ -476,7 +472,7 @@ public sealed class ArchitectureGuardTests
     public void Every_groundwork_warning_suppression_covers_only_the_declarations_it_suppresses()
     {
         string[] suppressedTypes = ["DocumentStoreQuery", "PortableDocumentQuery", "IndexDeclaration", "PortableQueryDeclaration", "PhysicalizationPolicy", "IndexPhysicalizationPolicy", "DocumentStoreFactory"];
-        var violations = GroundworkGuardSourceFiles("src", "tests", "benchmarks")
+        var violations = GroundworkGuardSourceFiles("src", "tests")
             .SelectMany(candidate => StrayMembers(File.ReadAllLines(candidate.File))
                 .Select(stray => $"{candidate.RelativePath}({stray.Line}): {stray.Declaration}"))
             .ToArray();

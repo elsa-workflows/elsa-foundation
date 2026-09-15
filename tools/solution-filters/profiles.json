@@ -1,7 +1,6 @@
 {
   "solutionPath": "Elsa.Server.slnx",
   "excludeRootPathPrefixes": [
-    "benchmarks/",
     "samples/",
     "tools/"
   ],
@@ -99,8 +98,7 @@
         "tests/Elsa/Workflows/Publishing/Api/GroundworkTests/Elsa.Workflows.Publishing.Api.GroundworkTests.csproj"
       ],
       "excludeRootPathContains": [
-        "/ProviderEvidenceImporter/",
-        "/StorePerformance/"
+        "/ProviderEvidenceImporter/"
       ],
       "excludeWhenPackageReferencePrefixes": [
         "Testcontainers."

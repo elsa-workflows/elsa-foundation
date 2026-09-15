@@ -33,7 +33,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using Groundwork.Query.Model;
 using Groundwork.Sqlite;
 using Groundwork.Store;
 
@@ -100,7 +99,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         CheckpointPersistenceMode checkpointPersistenceMode,
         int maxSegmentCheckpoints)
     {
-        var databaseDirectory = Path.Join(Path.GetTempPath(), $"elsa-http-runtime-performance-{Guid.NewGuid():N}");
+        var databaseDirectory = Path.Join(Path.GetTempPath(), $"elsa-http-runtime-groundwork-{Guid.NewGuid():N}");
         Directory.CreateDirectory(databaseDirectory);
         var databasePath = Path.Join(databaseDirectory, "runtime.db");
         var connectionString = $"Data Source={databasePath}";
@@ -817,41 +816,6 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                 DateTimeOffset.UtcNow,
                 DateTimeOffset.UtcNow,
                 WorkflowExecutableReferenceScope.Published));
-    }
-
-    /// <summary>Counts physical Groundwork checkpoint commit markers in this fixture's isolated database.</summary>
-    public async Task<int> CountPhysicalCheckpointCommitsAsync()
-    {
-        await using var scope = Services.CreateAsyncScope();
-        var sessions = scope.ServiceProvider.GetRequiredService<IGroundworkStorageSessionSource>();
-        var unit = sessions.Unit(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind);
-        var access = GroundworkStorageAccessMapper.Map(
-            scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextAccessor>().Current,
-            unit.Scope,
-            "elsa-http-integration-tests");
-        var table = new TableId(unit.Name);
-        var collection = new ColumnRef(
-            table,
-            ElsaRuntimeV2StorageManifest.CollectionField,
-            QueryType.String,
-            isNullable: true,
-            maxLength: 128);
-        var id = new ColumnRef(table, ElsaRuntimeV2StorageManifest.IdField, QueryType.String, false, 128);
-        var result = sessions
-            .Open(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, access)
-            .Query(new QueryRequest(
-                table,
-                new Predicate.Equal(
-                    collection,
-                    QueryConstant.Of(
-                        collection,
-                        ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind)),
-                [new OrderTerm(id, OrderDirection.Ascending, NullOrder.Last)],
-                Projection.ColumnsOnly(id),
-                Paging.Keyset(1),
-                ResultShape.TotalCount.Instance));
-        return checked((int)(result.TotalCount ?? throw new InvalidOperationException(
-            "Groundwork checkpoint-commit count did not return its provider-side total.")));
     }
 
     /// <summary>The artifact's trigger bindings in the durable index — empty proves a failed publish wrote nothing.</summary>

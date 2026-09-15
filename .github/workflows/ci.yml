@@ -129,19 +129,11 @@ jobs:
         # semantic-merge compile breaks like #543.
         run: dotnet build Elsa.Server.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 
+      # The IAM native-query-plan capture and its artifact upload were retired with performance
+      # measurement (#1668, ADR 0073); the upload's if-no-files-found: error would otherwise fail
+      # this job now that no test writes a plan.
       - name: Test (fast unit tests, no containers)
-        env:
-          GW_EXPLAIN_ARTIFACT_DIR: ${{ github.workspace }}/TestResults/iam-native-plans
         run: dotnet test Elsa.Server.test.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603
-
-      - name: Upload IAM native query plans
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: iam-native-query-plans
-          path: TestResults/iam-native-plans/**/*.txt
-          if-no-files-found: error
-          retention-days: 14
 
   groundwork-v2-native-provider-matrix:
     name: Groundwork v2 native provider matrix
@@ -382,7 +374,8 @@ jobs:
   # Container-free architecture guards (dependency direction, endpoint security, feature
   # composition, the EF dependency allowlist). The whole project runs so a renamed or newly
   # added guard cannot silently fall out of a brittle test filter. The spec 094 coverage-ledger
-  # and benchmark-evidence suites moved to tools/ledger and run from groundwork-ledger.yml.
+  # and benchmark-evidence suites that once ran beside it were retired with performance
+  # measurement (#1668).
   groundwork-fast:
     name: Architecture guards
     needs: build-and-test

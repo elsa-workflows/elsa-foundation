@@ -6,11 +6,11 @@ using Xunit;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Shrink-only ratchet on the provider-specific plan and command-text parsing that the benchmark
-/// harness still carries (issue #1595). The parsers exist because Groundwork typed native-plan
-/// evidence (valence-works/groundwork-v2#421, #422, #423) is not complete yet; #1594 retires them
-/// route by route. Nothing may grow this footprint. When it shrinks, lower the baseline in the same
-/// change so the ratchet keeps biting.
+/// Shrink-only ratchet on provider-specific plan and command-text parsing outside shipped source
+/// (issue #1595). The store-performance benchmark harness that carried most of it was deleted when
+/// performance measurement was retired (#1668, ADR 0073), which shrank the baseline to the Groundwork
+/// baseline runner that retires with Groundwork (#1670). Nothing may grow this footprint. When it
+/// shrinks, lower the baseline in the same change so the ratchet keeps biting.
 /// </summary>
 public sealed class ProviderParsingFootprintRatchetTests
 {
@@ -20,12 +20,6 @@ public sealed class ProviderParsingFootprintRatchetTests
     /// <summary>Files whose whole purpose is parsing provider plans or command text.</summary>
     private static readonly string[] ParserFiles =
     [
-        "benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Harness/DiagnosticsNativePlan.cs",
-        "benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Harness/RuntimeNativePlan.cs",
-        "benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Harness/MongoExplainCommandInspector.cs",
-        "benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/IamNativePlanParser.cs",
-        "benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/DiagnosticsNativePlanCapture.cs",
-        "benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/SecretNativePlanCapture.cs",
         "tools/groundwork/run-e3-medium-baseline.py"
     ];
 
@@ -39,7 +33,7 @@ public sealed class ProviderParsingFootprintRatchetTests
         ("mongo-command", new Regex("\\$match|\\$sort|\\$limit|IXSCAN|COLLSCAN|SORT_MERGE", RegexOptions.CultureInvariant))
     ];
 
-    private static readonly string[] ScanRoots = ["benchmarks", "tools/groundwork"];
+    private static readonly string[] ScanRoots = ["tools/groundwork"];
 
     [Fact]
     public void Provider_parsing_footprint_matches_the_shrink_only_baseline()
@@ -59,7 +53,7 @@ public sealed class ProviderParsingFootprintRatchetTests
         {
             var allowed = baseline.MarkerOccurrences.GetValueOrDefault(marker, 0);
             if (count > allowed)
-                failures.Add($"marker '{marker}': {count} occurrences exceeds the baseline {allowed}. New provider syntax handling belongs in Groundwork typed evidence, not the harness.");
+                failures.Add($"marker '{marker}': {count} occurrences exceeds the baseline {allowed}. New provider syntax handling belongs in Groundwork typed evidence, not repository tooling.");
         }
         foreach (var (file, lines) in actual.ParserFileLines)
         {
@@ -80,7 +74,7 @@ public sealed class ProviderParsingFootprintRatchetTests
     [Fact]
     public void Shipped_source_carries_no_provider_syntax()
     {
-        // The product must speak Groundwork abstractions only; this is the boundary the harness ratchet
+        // The product must speak Groundwork abstractions only; this is the boundary the tooling ratchet
         // protects from the other side.
         var hits = new List<string>();
         foreach (var path in SourceFiles(Path.Combine(RepoRoot, "src")))

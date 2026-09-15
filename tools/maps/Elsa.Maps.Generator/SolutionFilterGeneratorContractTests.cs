@@ -84,7 +84,7 @@ public static class SolutionFilterGeneratorContractTests
         Directory.CreateDirectory(Path.Join(root, "src/Feature"));
         Directory.CreateDirectory(Path.Join(root, "src/Shared"));
         Directory.CreateDirectory(Path.Join(root, "tests"));
-        Directory.CreateDirectory(Path.Join(root, "benchmarks/Feature"));
+        Directory.CreateDirectory(Path.Join(root, "samples/Feature"));
         Directory.CreateDirectory(Path.Join(root, "tools/solution-filters"));
 
         File.WriteAllText(Path.Join(root, "Elsa.Server.slnx"),
@@ -94,7 +94,7 @@ public static class SolutionFilterGeneratorContractTests
               <Project Path="src/Shared/Shared.csproj" />
               <Project Path="tests/Comment.csproj" />
               <Project Path="tests/Container.csproj" />
-              <Project Path="benchmarks/Feature/Feature.Benchmarks.csproj" />
+              <Project Path="samples/Feature/Feature.Sample.csproj" />
             </Solution>
             """);
         File.WriteAllText(Path.Join(root, "src/Feature/Feature.csproj"),
@@ -104,7 +104,7 @@ public static class SolutionFilterGeneratorContractTests
             "<Project><!-- <PackageReference Include=\"Testcontainers.CommentOnly\" /> --></Project>");
         File.WriteAllText(Path.Join(root, "tests/Container.csproj"),
             "<Project><ItemGroup><PackageReference Include=\"Testcontainers.Real\" /></ItemGroup></Project>");
-        File.WriteAllText(Path.Join(root, "benchmarks/Feature/Feature.Benchmarks.csproj"), "<Project />");
+        File.WriteAllText(Path.Join(root, "samples/Feature/Feature.Sample.csproj"), "<Project />");
         WriteManifest(root, []);
     }
 
@@ -134,7 +134,7 @@ public static class SolutionFilterGeneratorContractTests
         var manifest = new
         {
             solutionPath = "Elsa.Server.slnx",
-            excludeRootPathPrefixes = new[] { "benchmarks\\" },
+            excludeRootPathPrefixes = new[] { "samples\\" },
             allowedExternalProjectReferences = allowedExternalReferences,
             profiles
         };

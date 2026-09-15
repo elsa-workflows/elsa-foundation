@@ -333,7 +333,7 @@ construction timings.
 | Concurrent drain (32 attempts) | 415.681 / 1,133.462 μs / 89,256 B | 711.186 / 1,232.076 μs / 105,192 B | 268.739 / 489.205 μs / 105,208 B |
 
 The full table, environment, raw iteration log, throughput, and all nine workloads are retained in
-[the 2026-07-16 Apple M2/.NET 10 benchmark results](../../benchmarks/Elsa/Activities/Runtime/Benchmarks/results/2026-07-16-m2-net10/README.md).
+[the 2026-07-16 Apple M2/.NET 10 benchmark results](../reports/evidence/095-activation-scope-benchmark/2026-07-16-m2-net10/README.md).
 The run used BenchmarkDotNet 0.15.8, .NET SDK 10.0.300, .NET 10.0.8 Arm64, one launch, three warmups,
 and twelve measured iterations. macOS denied the optional high-priority request; the complete run was
 otherwise isolated from repository builds. Variance makes the microtimings directional, not a claim

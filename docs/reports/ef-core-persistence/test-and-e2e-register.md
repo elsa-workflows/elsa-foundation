@@ -109,12 +109,44 @@ default-flip owner explicit without repeating the same text 51 times.
 
 | Current file or suite | Correctness that must move before deletion | Retired material | Owner | Replacement PR | Disposition |
 |---|---|---|---|---|---|
-| `tests/Elsa/Activities/Http/IntegrationTests/HttpEndpointRuntimePerformanceTests.cs` | HTTP status, response body/content type, workflow completion and persisted artifact | Commit-count and write-amplification comparisons | #1672/#1670 and #1668 | | Split pending |
-| `tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/Performance/IamNormalizedLookupSqliteCorrectnessTests.cs` | Timing-free normalized-name/email lookup and duplicate behavior | Native-plan/measurement acceptance | #1682 and #1668 | | Move/split pending |
-| `benchmarks/Elsa/Activities/Runtime/Benchmarks/ActivationScopeSemanticTests.cs` | Activation-scope correctness | Benchmark project and measurement harness | #1672 and #1668 | | Move pending |
-| `tools/ledger/StorePerformance/AdapterHost/Tests` | Adapter protocol, provider binding and failure correctness not expressed elsewhere | Timing, budget and native-plan evidence | #1678/#1670 and #1668 | | Map/move pending |
-| `tools/ledger/StorePerformance/Benchmarks/Tests` | Workflow completion, checkpoint/outbox, duplicate and recovery assertions not expressed elsewhere | Measurement admission, comparison and fingerprints | #1672 and #1668 | | Map/move pending |
+| `tests/Elsa/Activities/Http/IntegrationTests/HttpEndpointRuntimePerformanceTests.cs` | HTTP status, response body/content type, workflow completion and persisted artifact | Commit-count and write-amplification comparisons | #1672/#1670 and #1668 | | Retired by owner decision (#1668); correctness moved to `HttpEndpointCheckpointPolicyEquivalenceTests.cs` in the same project, asserted for Immediate and Coalesced. Mandatory durability boundaries stay covered by `RuntimeCheckpointCoalescingPolicyTests`; the EF port remains T37's |
+| `tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/Performance/IamNormalizedLookupSqliteCorrectnessTests.cs` | Timing-free normalized-name/email lookup and duplicate behavior | Native-plan/measurement acceptance | #1682 and #1668 | | Retired by owner decision (#1668); moved out of `Performance/` to `tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/IamNormalizedLookupSqliteCorrectnessTests.cs`, which asserts the scenario's lookups, membership and revision-guarded update directly with no harness dependency; the native-plan test is retired. Duplicate normalized-name/email/role behavior is expressed by `AspNetCoreIdentityConcurrencyContractTests` and EF-owned `EfCoreIdentityFrameworkContractTests` (T60) |
+| `benchmarks/Elsa/Activities/Runtime/Benchmarks/ActivationScopeSemanticTests.cs` | Activation-scope correctness | Benchmark project and measurement harness | #1672 and #1668 | | Retired by owner decision (#1668); per-attempt semantics moved to `tests/Elsa/Activities/Runtime/Tests/ActivationScopeSemanticTests.cs`, now against the production `ActivityActivator`/`ClrActivityActivator` rather than the benchmark's strategy models. Burst-only and conditional candidate assertions are not ported (rejected by ADR 0045, never shipped); the intrinsic-workload assertion is not ported (it checked a counter the harness set itself) |
+| `tools/ledger/StorePerformance/AdapterHost/Tests` | Adapter protocol, provider binding and failure correctness not expressed elsewhere | Timing, budget and native-plan evidence | #1678/#1670 and #1668 | | Retired by owner decision (#1668). Native-plan capture/parsing, fingerprint, probe and admission tests are measurement-only or Groundwork-specific; the workload-over-Groundwork runs are mapped below, and the one unexpressed obligation moved to `GroundworkV2RuntimePostCommitOutboxStoreTests` (T26) |
+| `tools/ledger/StorePerformance/Benchmarks/Tests` | Workflow completion, checkpoint/outbox, duplicate and recovery assertions not expressed elsewhere | Measurement admission, comparison and fingerprints | #1672 and #1668 | | Retired by owner decision (#1668). These tests ran the workload oracle against test-local fakes, not product stores; the obligations the oracle encodes are mapped below |
 | `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsDrainLoadTests.cs` | Drain ordering, bounded batches, no-loss/retry behavior | None merely because the class name contains `Load` | #1681 | | Preserve |
+
+### Retired store-performance workload mapping (#1668)
+
+The workload oracles ran either against test-local fakes (`Benchmarks/Tests`) or against Groundwork
+SQLite stores through the benchmark adapter host (`AdapterHost/Tests`); neither project ran in a CI
+gate. Each workload's timing-independent obligations are expressed by these existing suites:
+
+| Retired workload | Obligations the oracle checked | Where they are expressed |
+|---|---|---|
+| `checkpoint-commit` | Replay equivalence, conflicting-replay and stale-fence refusal, no duplicated post-commit work, reread through another client | `RuntimeCheckpointCommitTests`; `GroundworkV2RuntimeCheckpointWriterTests` (T26) |
+| `bookmark-lookup` | Bounded ordered stimulus pages, page boundary, scope isolation | `GroundworkV2BookmarkStateStoreTests` (T26); EF bookmark suites (T65/T66) |
+| `recovery-scan` | Bounded continuation paging, live and terminal exclusion, stability after reopen | `RuntimeRecoveryScannerTests`; `GroundworkV2ExecutionLivenessStoreTests` (T26), including the v1.2 production-scanner traversal |
+| `queue-drain` | FIFO, bounded claims, one owner under contention, expired reclaim with a higher fence, stale-acknowledgement refusal, poison relationship, restart | `GroundworkV2WorkflowSchedulerWorkQueueTests`, `GroundworkV2WorkflowSchedulerPoisonStoreTests` (T26) |
+| `outbox-drain` | Bounded ordered claims, retry delay, reclaim fence, stale-completion refusal, restart, one owner under contention | `RuntimePostCommitOutboxStoreTests`; `GroundworkV2RuntimePostCommitOutboxStoreTests` (T26), where #1668 added the contention case as a deterministic read-then-write interleaving |
+| `trigger-binding-stimulus-lookup` | Bounded binding and source-reference pages, scope isolation | `GroundworkV2WorkflowTriggerBindingStoreTests`, `GroundworkV2WorkflowExecutableSourceReferenceStoreTests` (T26) |
+| `recurring-schedule-selection` | Due cutoff and order, revision-guarded advance, stale-advance refusal, publication projection, restart | `GroundworkV2RecurringTriggerScheduleStoreTests` (T26) |
+| `due-timer-selection` | Due selection, fenced claims, claim compare-and-swap under interleaving, stale-transition refusal | `GroundworkV2DurableTimerStateStoreTests` (T26) |
+| `distributed-placement-takeover` | One winner for first and expired-takeover claims, stale-release refusal | `EfExecutionPlacementStoreTests` (T61); T36 |
+| `distributed-command-send-lease-ack` | Contiguous unique sends, bounded leases, redelivery after expiry and reopen, stale-acknowledgement refusal | `EfExecutionCommandTransportTests` (T63); T36 |
+| `iam-normalized-lookup-update` | Normalized name/email/role lookup, membership, revision-guarded update | `IamNormalizedLookupSqliteCorrectnessTests` (T40); T60 |
+| `secret-create-read-list` | Tenant-local normalized-name uniqueness, bounded pages, concurrent create | `SecretTenantIsolationTests`; `SqliteEfSecretRepositoryTests`; `GroundworkV2SecretRepositoryTests` (T30) |
+| `diagnostics-durable-history` | Structured-log cursor and lifetime high-water across retention and reopen, bounded resource and trace pages, ordered trace detail | T54 and T56; T05 and T08 |
+
+Measurement admission, comparison, gates, budgets, native-plan capture and parsing, provider probes,
+composition fingerprints and the harness's self-tests carried no product correctness. The spec 094
+coverage-ledger validator (`tools/ledger/Elsa.Groundwork.Ledger.Tests`) checked Groundwork
+project-management artifacts and Groundwork service lifetimes only; it was removed with the harness,
+and the final no-Groundwork audit remains #1670's. The Runtime engine benchmark asserted only workflow
+completion beside commit, dispatch, read, materialization and fusion-engagement counts, and never ran in
+CI; completion under both checkpoint policies is covered by `RuntimeCheckpointCoalescingTests` and fusion
+behavior by `ReplaySafeFusionGuardrailTests`. The OpenTelemetry trace-list benchmark compared against a frozen
+Groundwork v1 comparand that no longer exists; v2 trace-list correctness is covered by T05.
 
 No benchmark, timing measurement, timing budget, or performance workflow is required or permitted as
 replacement evidence. Historical results may remain archived and must be described as historical.

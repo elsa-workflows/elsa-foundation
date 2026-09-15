@@ -75,8 +75,8 @@ jobs:
           fi
           existing=$(jq -r --arg t "$title" 'map(select(.title == $t)) | .[0].number // empty' <<<"$issues")
 
-          # No "main is broken" claim: this is called by a benchmark gate too, where a budget
-          # miss on a workload with documented runner-class variance is not a broken main.
+          # No "main is broken" claim: the body states which gate failed and leaves the diagnosis
+          # to the run. (The benchmark gate that motivated this wording was retired in #1668.)
           body=$(cat <<EOF
           The **$GATE** gate failed against \`main\`.
 
