@@ -123,6 +123,8 @@ public sealed class EfWorkflowRunHealthDataSourceTests
         var services = new ServiceCollection();
         services.AddPersistenceCore("tenant-a");
         services.AddRuntimeOperationalStateEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
+        Assert.Throws<InvalidOperationException>(() => services.AddWorkflowRunHealthEntityFrameworkCore());
+        services.AddRuntimeWorkflowExecutionEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
         services.AddWorkflowRunHealthEntityFrameworkCore();
 
         using var provider = services.BuildServiceProvider();

@@ -22,6 +22,7 @@ public sealed class EfWorkflowRunHealthDataSource(
 {
     private const int MaximumBucketCount = 744;
     private const int MaximumTopDefinitions = 5;
+    private const int MaximumSourceRows = 100_000;
 
     public bool IsAvailable => true;
 
@@ -42,8 +43,12 @@ public sealed class EfWorkflowRunHealthDataSource(
         var buckets = request.Buckets.Select(range => new MutableBucket(range)).ToArray();
         var failures = new Dictionary<string, FailureCount>(StringComparer.Ordinal);
 
-        await foreach (var row in QueryStartedRows(scope, request.Query).AsAsyncEnumerable().WithCancellation(cancellationToken))
+        var startedRows = 0;
+        await foreach (var row in QueryStartedRows(scope, request.Query).Take(MaximumSourceRows + 1)
+                           .AsAsyncEnumerable().WithCancellation(cancellationToken))
         {
+            if (++startedRows > MaximumSourceRows)
+                throw new WorkflowRunHealthQueryException("The workflow run-health query exceeds its bounded source-row limit.");
             var projection = ReadChecked(row, scope);
             if (projection.StartedAt is not { } startedAt)
                 continue;
@@ -67,8 +72,12 @@ public sealed class EfWorkflowRunHealthDataSource(
         }
 
         var runningCount = 0;
-        await foreach (var row in QueryRunningRows(scope, request.Query).AsAsyncEnumerable().WithCancellation(cancellationToken))
+        var runningRows = 0;
+        await foreach (var row in QueryRunningRows(scope, request.Query).Take(MaximumSourceRows + 1)
+                           .AsAsyncEnumerable().WithCancellation(cancellationToken))
         {
+            if (++runningRows > MaximumSourceRows)
+                throw new WorkflowRunHealthQueryException("The running workflow query exceeds its bounded source-row limit.");
             var projection = ReadChecked(row, scope);
             if (projection.Status == WorkflowExecutionStatus.Running)
                 runningCount = checked(runningCount + 1);
