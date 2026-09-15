@@ -82,8 +82,10 @@ public sealed class EfDesignAtomicWriter(
         {
             throw SerializationFailure(operationKind, exception);
         }
+        var scopeKey = EfDesignSupport.ScopeKey(tenantId);
         var existing = await EfDesignSupport.ReadAsync("reading design operation marker", () => db.Operations.AsNoTracking().SingleOrDefaultAsync(
-            x => x.TenantId == tenantId &&
+            x => EF.Property<string>(x, EfDesignSupport.ScopeKeyProperty) == scopeKey &&
+                 x.TenantId == tenantId &&
                  x.OperationKindLookupHash == EfDesignSupport.LookupHash(operationKind) &&
                  x.OperationKeyLookupHash == EfDesignSupport.LookupHash(key.Value),
             cancellationToken));
@@ -209,7 +211,8 @@ public sealed class EfDesignAtomicWriter(
             await CleanupAsync(transaction, exception, operationKind, rollback: true);
             db.ChangeTracker.Clear();
             var winner = await EfDesignSupport.ReadAsync("reading design operation winner", () => db.Operations.AsNoTracking().SingleOrDefaultAsync(
-                x => x.TenantId == tenantId &&
+                x => EF.Property<string>(x, EfDesignSupport.ScopeKeyProperty) == scopeKey &&
+                     x.TenantId == tenantId &&
                      x.OperationKindLookupHash == EfDesignSupport.LookupHash(operationKind) &&
                      x.OperationKeyLookupHash == EfDesignSupport.LookupHash(key.Value),
                 cancellationToken));
@@ -301,6 +304,7 @@ public sealed class EfDesignAtomicWriter(
         Exception commitException,
         IDesignAtomicWriteResultCodec<T> resultCodec)
     {
+        var scopeKey = EfDesignSupport.ScopeKey(tenantId);
         using var timeoutSource = new CancellationTokenSource(timeout);
         while (true)
         {
@@ -308,7 +312,8 @@ public sealed class EfDesignAtomicWriter(
             try
             {
                 var winner = await EfDesignSupport.ReadAsync("reconciling design operation marker", () => db.Operations.AsNoTracking().SingleOrDefaultAsync(
-                    x => x.TenantId == tenantId &&
+                    x => EF.Property<string>(x, EfDesignSupport.ScopeKeyProperty) == scopeKey &&
+                         x.TenantId == tenantId &&
                          x.OperationKindLookupHash == EfDesignSupport.LookupHash(operationKind) &&
                          x.OperationKeyLookupHash == EfDesignSupport.LookupHash(operationKey),
                     timeoutSource.Token));

@@ -11,12 +11,15 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Serialization.Core;
+using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 
 internal static class EfDesignSupport
 {
+    public const string ScopeKeyProperty = "ScopeKey";
+
     public static async Task<T> ReadAsync<T>(string operation, Func<Task<T>> read)
     {
         try
@@ -95,13 +98,22 @@ internal static class EfDesignSupport
     public static string LookupHash(string value) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 
+    /// <summary>
+    /// Returns a provider-safe physical scope identity. The leading marker keeps the global scope
+    /// distinct from every non-null tenant; callers retain and validate the authoritative TenantId
+    /// as the residual collision check for this hash-backed key.
+    /// </summary>
+    public static string ScopeKey(string? tenantId) =>
+        (tenantId is null ? "0" : "1") + EfRelationalIdentity.Hash(tenantId ?? string.Empty);
+
     private static DesignPersistenceException ProviderFailure(string operation, Exception exception) =>
         new(DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Provider, operation, null, exception.InnerException ?? exception);
 
     public static IQueryable<T> InScope<T>(IQueryable<T> query, IPersistenceAccessContextAccessor access, Func<T, string?> tenant) where T : class
     {
         if (access.Current.Scope is { } scope)
-            return query.Where(row => EF.Property<string>(row, "TenantId") == scope.Value);
+            return query.Where(row => EF.Property<string>(row, ScopeKeyProperty) == ScopeKey(scope.Value))
+                .Where(row => EF.Property<string>(row, "TenantId") == scope.Value);
         if (access.Current.AcrossScopes && access.Current.AccessPolicy == PersistenceAccessPolicy.Privileged)
             return query;
         throw new InvalidOperationException("Workflow design persistence requires an explicit scope or privileged across-scope access.");

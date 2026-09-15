@@ -133,10 +133,15 @@ public sealed class EfWorkflowDesignPersistenceTests
 
         db.Definitions.AddRange(
             new WorkflowDefinition { Id = "definition", TenantId = "tenant-a", Name = "Tenant A" },
-            new WorkflowDefinition { Id = "definition", TenantId = "tenant-b", Name = "Tenant B" });
+            new WorkflowDefinition { Id = "definition", TenantId = "tenant-b", Name = "Tenant B" },
+            new WorkflowDefinition { Id = "definition", TenantId = null, Name = "Global duplicate" },
+            new WorkflowDefinition { Id = "global-definition", TenantId = null, Name = "Global" });
+        db.Versions.Add(new WorkflowDefinitionVersion("global-definition", "1.0.0", "{}"){ Id = "global-version", TenantId = null });
         db.Drafts.AddRange(
             new WorkflowDefinitionDraft { Id = "shared-draft", TenantId = "tenant-a", WorkflowDefinitionId = "definition", StateSource = "{}" },
-            new WorkflowDefinitionDraft { Id = "shared-draft", TenantId = "tenant-b", WorkflowDefinitionId = "definition", StateSource = "{}" });
+            new WorkflowDefinitionDraft { Id = "shared-draft", TenantId = "tenant-b", WorkflowDefinitionId = "definition", StateSource = "{}" },
+            new WorkflowDefinitionDraft { Id = "shared-draft", TenantId = null, WorkflowDefinitionId = "definition", StateSource = "{}" },
+            new WorkflowDefinitionDraft { Id = "global-draft", TenantId = null, WorkflowDefinitionId = "global-definition", StateSource = "{}" });
         db.DraftLayouts.AddRange(
             new WorkflowDefinitionDraftLayout
             {
@@ -151,7 +156,26 @@ public sealed class EfWorkflowDesignPersistenceTests
                 TenantId = "tenant-b",
                 WorkflowDefinitionDraftId = "shared-draft",
                 RecordsJson = JsonSerializer.Serialize(new[] { new DesignMetadataRecord("tenant-b-node", 3, 4) }, JsonSerializerOptions.Web)
+            },
+            new WorkflowDefinitionDraftLayout
+            {
+                Id = "global-shared-layout",
+                TenantId = null,
+                WorkflowDefinitionDraftId = "shared-draft",
+                RecordsJson = JsonSerializer.Serialize(new[] { new DesignMetadataRecord("global-shared-node", 9, 10) }, JsonSerializerOptions.Web)
+            },
+            new WorkflowDefinitionDraftLayout
+            {
+                Id = "global-layout",
+                TenantId = null,
+                WorkflowDefinitionDraftId = "global-draft",
+                RecordsJson = JsonSerializer.Serialize(new[] { new DesignMetadataRecord("global-node", 5, 6) }, JsonSerializerOptions.Web)
             });
+        db.VersionLayouts.Add(new WorkflowDefinitionVersionLayout
+        {
+            Id = "global-version-layout", TenantId = null, WorkflowDefinitionVersionId = "global-version",
+            RecordsJson = JsonSerializer.Serialize(new[] { new DesignMetadataRecord("global-version-node", 7, 8) }, JsonSerializerOptions.Web)
+        });
         await db.SaveChangesAsync();
 
         var serializer = new TestSerializer();
@@ -169,10 +193,22 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.Equal("tenant-a-node", Assert.Single(tenantA!.Layout).NodeId);
         Assert.Equal("tenant-b-node", Assert.Single(tenantB!.Layout).NodeId);
 
+        var globalAccess = new TestAccessor(PersistenceAccessContext.PrivilegedAcrossScopes(new PersistenceAccessPurpose("draft-lookup")));
         var acrossScopes = new EfWorkflowDefinitionDraftStore(
             db,
             serializer,
-            new TestAccessor(PersistenceAccessContext.PrivilegedAcrossScopes(new PersistenceAccessPurpose("draft-lookup"))));
+            globalAccess);
+        var global = await acrossScopes.FindWithLayoutByIdAsync("global-draft");
+        Assert.Equal("global-node", Assert.Single(global!.Layout).NodeId);
+        Assert.Equal("global-definition", (await new EfWorkflowDefinitionStore(db, globalAccess).FindByIdAsync("global-definition"))!.Id);
+        var globalVersions = new EfWorkflowDefinitionVersionStore(
+            db,
+            serializer,
+            new EfWorkflowDefinitionStore(db, globalAccess),
+            globalAccess);
+        Assert.Equal("global-version", (await globalVersions.FindByIdAsync("global-version"))!.Id);
+        var globalVersionLayout = await new EfWorkflowDefinitionVersionLayoutStore(db, globalAccess).FindByVersionIdAsync("global-version");
+        Assert.Equal("global-version-node", Assert.Single(globalVersionLayout!.Records).NodeId);
         await Assert.ThrowsAsync<InvalidOperationException>(() => acrossScopes.FindWithLayoutByIdAsync("shared-draft"));
     }
 
@@ -184,24 +220,24 @@ public sealed class EfWorkflowDesignPersistenceTests
         using var db = Create(connection);
 
         var definition = db.Model.FindEntityType(typeof(WorkflowDefinition))!;
-        Assert.Equal(["TenantId", "IdLookupHash"], definition.FindPrimaryKey()!.Properties.Select(property => property.Name));
+        Assert.Equal(["ScopeKey", "IdLookupHash"], definition.FindPrimaryKey()!.Properties.Select(property => property.Name));
         Assert.Equal(
-            ["TenantId", "DefinitionIdLookupHash"],
+            ["ScopeKey", "DefinitionIdLookupHash"],
             db.Model.FindEntityType(typeof(WorkflowDefinitionVersion))!.GetForeignKeys().Single().Properties.Select(property => property.Name));
         Assert.Equal(
-            ["TenantId", "WorkflowDefinitionIdLookupHash"],
+            ["ScopeKey", "WorkflowDefinitionIdLookupHash"],
             db.Model.FindEntityType(typeof(WorkflowDefinitionDraft))!.GetForeignKeys().Single().Properties.Select(property => property.Name));
         Assert.Equal(
-            ["TenantId", "IdLookupHash"],
+            ["ScopeKey", "IdLookupHash"],
             db.Model.FindEntityType(typeof(WorkflowDefinitionVersion))!.FindPrimaryKey()!.Properties.Select(property => property.Name));
         Assert.Equal(
-            ["TenantId", "IdLookupHash"],
+            ["ScopeKey", "IdLookupHash"],
             db.Model.FindEntityType(typeof(WorkflowDefinitionDraft))!.FindPrimaryKey()!.Properties.Select(property => property.Name));
         Assert.Equal(
-            ["TenantId", "WorkflowDefinitionDraftIdLookupHash"],
+            ["ScopeKey", "WorkflowDefinitionDraftIdLookupHash"],
             db.Model.FindEntityType(typeof(WorkflowDefinitionDraftLayout))!.GetForeignKeys().Single().Properties.Select(property => property.Name));
         Assert.Equal(
-            ["TenantId", "WorkflowDefinitionVersionIdLookupHash"],
+            ["ScopeKey", "WorkflowDefinitionVersionIdLookupHash"],
             db.Model.FindEntityType(typeof(WorkflowDefinitionVersionLayout))!.GetForeignKeys().Single().Properties.Select(property => property.Name));
     }
 

@@ -68,14 +68,15 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
         var layouts = Layouts();
         var result = await EfDesignSupport.ReadAsync("reading workflow draft with layout", () =>
             (from draft in drafts
-             join layout in layouts on new { draft.TenantId, draft.IdLookupHash }
-                 equals new { layout.TenantId, IdLookupHash = layout.WorkflowDefinitionDraftIdLookupHash } into matchingLayouts
+             join layout in layouts on new { ScopeKey = EF.Property<string>(draft, EfDesignSupport.ScopeKeyProperty), draft.IdLookupHash }
+                 equals new { ScopeKey = EF.Property<string>(layout, EfDesignSupport.ScopeKeyProperty), IdLookupHash = layout.WorkflowDefinitionDraftIdLookupHash } into matchingLayouts
              from layout in matchingLayouts.DefaultIfEmpty()
              where draft.IdLookupHash == EfDesignSupport.LookupHash(draftId)
              select new
              {
                  Draft = draft,
                  LayoutDraftId = layout == null ? null : layout.WorkflowDefinitionDraftId,
+                 LayoutTenantId = layout == null ? null : layout.TenantId,
                  RecordsJson = layout == null ? null : layout.RecordsJson,
                  ActivityPresentationJson = layout == null ? null : layout.ActivityPresentationJson
              }).SingleOrDefaultAsync(cancellationToken));
@@ -85,7 +86,11 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
 
         EfDesignSupport.EnsureExactIdentity(draftId, result.Draft.Id, "workflow draft with layout lookup");
         if (result.LayoutDraftId is not null)
+        {
             EfDesignSupport.EnsureExactIdentity(draftId, result.LayoutDraftId, "workflow draft layout lookup");
+            if (!StringComparer.Ordinal.Equals(result.Draft.TenantId, result.LayoutTenantId))
+                throw new InvalidOperationException("The workflow draft layout lookup returned a row from a different persistence scope.");
+        }
 
         var draft = EfDesignSupport.MapDraft(serializer, result.Draft);
         return new DraftWithLayout(

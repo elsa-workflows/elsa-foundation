@@ -61,6 +61,9 @@ internal static class WorkflowsDesignNativeProviderSmoke
         var trailingVersionId = versionId + " ";
         var draftId = $"provider-draft-{Guid.NewGuid():N}";
         var trailingDraftId = draftId + " ";
+        var globalDefinitionId = $"provider-global-definition-{Guid.NewGuid():N}";
+        var globalVersionId = $"provider-global-version-{Guid.NewGuid():N}";
+        var globalDraftId = $"provider-global-draft-{Guid.NewGuid():N}";
         var access = new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
 
         await using (var context = createContext(fixture.ConnectionString))
@@ -82,6 +85,11 @@ internal static class WorkflowsDesignNativeProviderSmoke
                 {
                     Id = trailingDefinitionId, TenantId = tenant, Name = "Native provider definition ",
                     Description = "Native provider description "
+                },
+                new WorkflowDefinition
+                {
+                    Id = globalDefinitionId, TenantId = null, Name = "Native global definition",
+                    Description = "Native global description"
                 });
             await context.SaveChangesAsync();
             var definitions = new EfWorkflowDefinitionStore(context, access);
@@ -100,6 +108,10 @@ internal static class WorkflowsDesignNativeProviderSmoke
                 new WorkflowDefinitionVersion(trailingDefinitionId, "1.0.0", "{}")
                 {
                     Id = trailingVersionId, TenantId = tenant, CreatedAt = Now, LastModifiedAt = Now
+                },
+                new WorkflowDefinitionVersion(globalDefinitionId, "1.0.0", "{}")
+                {
+                    Id = globalVersionId, TenantId = null, CreatedAt = Now, LastModifiedAt = Now
                 });
             await context.SaveChangesAsync();
             var versions = new EfWorkflowDefinitionVersionStore(context, new NativeProviderSerializer(), definitions, access);
@@ -119,6 +131,11 @@ internal static class WorkflowsDesignNativeProviderSmoke
                 {
                     Id = trailingDraftId, TenantId = tenant, WorkflowDefinitionId = trailingDefinitionId, StateSource = "{}",
                     CreatedAt = Now, LastModifiedAt = Now
+                },
+                new WorkflowDefinitionDraft
+                {
+                    Id = globalDraftId, TenantId = null, WorkflowDefinitionId = globalDefinitionId, StateSource = "{}",
+                    CreatedAt = Now, LastModifiedAt = Now
                 });
             context.DraftLayouts.AddRange(
                 new WorkflowDefinitionDraftLayout
@@ -129,6 +146,11 @@ internal static class WorkflowsDesignNativeProviderSmoke
                 new WorkflowDefinitionDraftLayout
                 {
                     Id = $"provider-draft-layout-{Guid.NewGuid():N} ", TenantId = tenant, WorkflowDefinitionDraftId = trailingDraftId,
+                    CreatedAt = Now, LastModifiedAt = Now
+                },
+                new WorkflowDefinitionDraftLayout
+                {
+                    Id = $"provider-global-draft-layout-{Guid.NewGuid():N}", TenantId = null, WorkflowDefinitionDraftId = globalDraftId,
                     CreatedAt = Now, LastModifiedAt = Now
                 });
             context.VersionLayouts.AddRange(
@@ -141,6 +163,11 @@ internal static class WorkflowsDesignNativeProviderSmoke
                 {
                     Id = $"provider-layout-{Guid.NewGuid():N} ", TenantId = tenant, WorkflowDefinitionVersionId = trailingVersionId,
                     CreatedAt = Now, LastModifiedAt = Now
+                },
+                new WorkflowDefinitionVersionLayout
+                {
+                    Id = $"provider-global-layout-{Guid.NewGuid():N}", TenantId = null, WorkflowDefinitionVersionId = globalVersionId,
+                    CreatedAt = Now, LastModifiedAt = Now
                 });
             await context.SaveChangesAsync();
             var drafts = new EfWorkflowDefinitionDraftStore(context, new NativeProviderSerializer(), access);
@@ -152,6 +179,15 @@ internal static class WorkflowsDesignNativeProviderSmoke
             Assert.Equal(trailingDraftId, (await drafts.FindWithLayoutByIdAsync(trailingDraftId))!.Draft.Id);
             Assert.NotNull(await new EfWorkflowDefinitionVersionLayoutStore(context, access).FindByVersionIdAsync(versionId));
             Assert.NotNull(await new EfWorkflowDefinitionVersionLayoutStore(context, access).FindByVersionIdAsync(trailingVersionId));
+
+            // Global rows use the same physical scope envelope but remain visible only through
+            // explicit privileged cross-scope access. This also proves nullable TenantId rows
+            // can be tracked and related without nullable relational keys.
+            var acrossScopes = new FixedAccess(PersistenceAccessContext.PrivilegedAcrossScopes(new PersistenceAccessPurpose("provider-global-smoke")));
+            Assert.Equal(globalDefinitionId, (await new EfWorkflowDefinitionStore(context, acrossScopes).FindByIdAsync(globalDefinitionId))!.Id);
+            Assert.Equal(globalVersionId, (await new EfWorkflowDefinitionVersionStore(context, new NativeProviderSerializer(), new EfWorkflowDefinitionStore(context, acrossScopes), acrossScopes).FindByIdAsync(globalVersionId))!.Id);
+            Assert.Equal(globalDraftId, (await new EfWorkflowDefinitionDraftStore(context, new NativeProviderSerializer(), acrossScopes).FindWithLayoutByIdAsync(globalDraftId))!.Draft.Id);
+            Assert.NotNull(await new EfWorkflowDefinitionVersionLayoutStore(context, acrossScopes).FindByVersionIdAsync(globalVersionId));
 
             // W05: the operation ledger commits atomically with its staged mutation and replays.
             var writer = new EfDesignAtomicWriter(context, access);
@@ -184,11 +220,15 @@ internal static class WorkflowsDesignNativeProviderSmoke
         {
             await using var transaction = await transactionContext.Database.BeginTransactionAsync();
             transactionContext.Definitions.Add(new WorkflowDefinition { Id = rollbackId, TenantId = tenant, Name = "Rolled back" });
+            transactionContext.Definitions.Add(new WorkflowDefinition { Id = rollbackId + "-global", TenantId = null, Name = "Global rolled back" });
             await transactionContext.SaveChangesAsync();
             await transaction.RollbackAsync();
         }
         await using (var reopened = createContext(fixture.ConnectionString))
+        {
             Assert.Null(await reopened.Definitions.SingleOrDefaultAsync(x => x.TenantId == tenant && x.Id == rollbackId));
+            Assert.Null(await reopened.Definitions.SingleOrDefaultAsync(x => x.TenantId == null && x.Id == rollbackId + "-global"));
+        }
 
         var concurrentId = $"provider-concurrent-{Guid.NewGuid():N}";
         var startGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);

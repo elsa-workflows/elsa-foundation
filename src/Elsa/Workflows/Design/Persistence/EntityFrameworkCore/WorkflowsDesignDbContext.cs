@@ -3,6 +3,7 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Configuration;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
+using Elsa.Primitives.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
@@ -50,6 +51,18 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
 
     private void PrepareDefinitionKeys()
     {
+        foreach (var entry in ChangeTracker.Entries()
+                     .Where(entry => entry.Entity is TenantEntity or DesignOperationEntity)
+                     .Where(entry => entry.State is EntityState.Added or EntityState.Modified))
+        {
+            var tenantId = entry.Entity switch
+            {
+                TenantEntity tenant => tenant.TenantId,
+                DesignOperationEntity operation => operation.TenantId,
+                _ => throw new InvalidOperationException("Unsupported workflow-design tenant entity.")
+            };
+            entry.Property(Stores.EfDesignSupport.ScopeKeyProperty).CurrentValue = Stores.EfDesignSupport.ScopeKey(tenantId);
+        }
         foreach (var entry in ChangeTracker.Entries<WorkflowDefinition>()
                      .Where(entry => entry.State is EntityState.Added or EntityState.Modified))
             Stores.EfDesignSupport.SetDefinitionSearchKeys(this, entry.Entity);
