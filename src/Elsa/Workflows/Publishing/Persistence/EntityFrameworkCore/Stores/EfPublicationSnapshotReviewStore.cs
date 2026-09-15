@@ -22,7 +22,8 @@ public sealed class EfPublicationSnapshotReviewStore(
         if (await context.SnapshotReviews.AsNoTracking().AnyAsync(row => row.PreflightToken == review.PreflightToken, cancellationToken))
             return false;
 
-        context.SnapshotReviews.Add(ToEntity(review));
+        var entity = ToEntity(review);
+        context.SnapshotReviews.Add(entity);
         try
         {
             await context.SaveChangesAsync(cancellationToken);
@@ -30,12 +31,17 @@ public sealed class EfPublicationSnapshotReviewStore(
         }
         catch (DbUpdateException)
         {
-            context.ChangeTracker.Clear();
             // A unique-token conflict is the expected create-only idempotency result. Do not hide
             // unrelated database failures: only return false when the token is now present.
             if (await context.SnapshotReviews.AsNoTracking().AnyAsync(row => row.PreflightToken == review.PreflightToken, cancellationToken))
                 return false;
             throw;
+        }
+        finally
+        {
+            // ExecuteDelete bypasses tracking. Detach only this write so a later same-context
+            // consume, cleanup, or logical-token reinsertion cannot collide with stale state.
+            context.Entry(entity).State = EntityState.Detached;
         }
     }
 

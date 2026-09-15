@@ -73,11 +73,10 @@ public sealed class EfPublicationSnapshotReviewStoreTests
         var store = database.Store(context, "tenant-a");
         var review = Review("reinsert", "tenant-a", database.Now.AddMinutes(1));
         Assert.True(await store.TryAddAsync(review));
-        var firstIncarnation = (await context.SnapshotReviews.SingleAsync()).Incarnation;
+        var firstIncarnation = (await context.SnapshotReviews.AsNoTracking().SingleAsync()).Incarnation;
         Assert.True(await store.TryConsumeAsync(review.PreflightToken));
-        context.ChangeTracker.Clear();
         Assert.True(await store.TryAddAsync(review));
-        Assert.NotEqual(firstIncarnation, (await context.SnapshotReviews.SingleAsync()).Incarnation);
+        Assert.NotEqual(firstIncarnation, (await context.SnapshotReviews.AsNoTracking().SingleAsync()).Incarnation);
         Assert.True(await store.TryConsumeAsync(review.PreflightToken));
     }
 
@@ -97,6 +96,8 @@ public sealed class EfPublicationSnapshotReviewStoreTests
         Assert.Null(await store.FindAsync("z"));
         Assert.NotNull(await store.FindAsync("middle"));
         Assert.NotNull(await store.FindAsync("active"));
+        Assert.True(await store.TryAddAsync(Review("z", "tenant-a", database.Now.AddMinutes(1))));
+        Assert.NotNull(await store.FindAsync("z"));
     }
 
     [Fact]
