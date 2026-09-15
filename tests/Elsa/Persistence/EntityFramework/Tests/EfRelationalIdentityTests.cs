@@ -25,6 +25,15 @@ public sealed class EfRelationalIdentityTests
     }
 
     [Fact]
+    public void Length_framed_hash_preserves_existing_runtime_ids_without_delimiter_collisions()
+    {
+        Assert.Equal(EfRelationalIdentity.Hash("8:tenant-a10:workflow-a"),
+            EfRelationalIdentity.HashLengthFramed("tenant-a", "workflow-a"));
+        Assert.NotEqual(EfRelationalIdentity.HashLengthFramed("tenant-a", "plan\u001fx"),
+            EfRelationalIdentity.HashLengthFramed("tenant-a\u001fplan", "x"));
+    }
+
+    [Fact]
     public void Decode_rejects_malformed_base64_and_odd_byte_lengths()
     {
         Assert.Throws<InvalidOperationException>(() => EfRelationalIdentity.Decode("not-base64"));
@@ -44,5 +53,17 @@ public sealed class EfRelationalIdentityTests
         Assert.Equal((ushort)'a', BinaryPrimitives.ReadUInt16BigEndian(key.AsSpan(0, 2)));
         Assert.Equal((ushort)0, BinaryPrimitives.ReadUInt16BigEndian(key.AsSpan(2, 2)));
         Assert.Equal((ushort)2, BinaryPrimitives.ReadUInt16BigEndian(key.AsSpan(6, 2)));
+    }
+
+    [Fact]
+    public void Unbounded_text_key_preserves_exact_utf16_ordinal_order()
+    {
+        string[] values = ["a", "a\u0000", "a\uD800", "a\uFFFD", "b", new string('x', 451) + "-2", new string('x', 451) + "-1"];
+        var expected = values.OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        var projected = values.OrderBy(EfRelationalIdentity.CreateOrdinalTextOrderKey, StringComparer.Ordinal).ToArray();
+
+        Assert.Equal(expected, projected);
+        Assert.NotEqual(EfRelationalIdentity.CreateOrdinalTextOrderKey("a\uD800"),
+            EfRelationalIdentity.CreateOrdinalTextOrderKey("a\uFFFD"));
     }
 }

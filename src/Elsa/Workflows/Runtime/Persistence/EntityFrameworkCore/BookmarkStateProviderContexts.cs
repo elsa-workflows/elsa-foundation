@@ -50,6 +50,18 @@ file static class BookmarkStateProviderModel
             modelBuilder.Entity(entity).Property("ContentJson").HasColumnType(type);
             modelBuilder.Entity(entity).Property("ScopeKey").HasColumnType(type);
         }
+        foreach (var entity in new[] { typeof(DurableTimerEntity) })
+        {
+            modelBuilder.Entity(entity).Property("ContentJson").HasColumnType(type);
+            modelBuilder.Entity(entity).Property("ScopeKey").HasColumnType(type);
+            modelBuilder.Entity(entity).Property("StimulusType").HasColumnType(type);
+            modelBuilder.Entity(entity).Property("StimulusHash").HasColumnType(type);
+            modelBuilder.Entity(entity).Property("ClaimOwnerId").HasColumnType(type);
+        }
+        modelBuilder.Entity<SchedulerWorkItemEntity>().Property("ContentJson").HasColumnType(type);
+        modelBuilder.Entity<SchedulerWorkItemEntity>().Property("ScopeKey").HasColumnType(type);
+        modelBuilder.Entity<SchedulerWorkItemEntity>().Property("WorkItemId").HasColumnType(type);
+        modelBuilder.Entity<SchedulerWorkItemEntity>().Property("ClaimOwnerId").HasColumnType(type);
         foreach (var entity in new[] { typeof(ExecutionLivenessStateEntity), typeof(WorkflowHoldStateEntity) })
         {
             modelBuilder.Entity(entity).Property("ContentJson").HasColumnType(type);
@@ -57,5 +69,25 @@ file static class BookmarkStateProviderModel
         }
         modelBuilder.Entity<IncidentStateEntity>().Property("ContentJson").HasColumnType(type);
         modelBuilder.Entity<IncidentStateEntity>().Property("ScopeKey").HasColumnType(type);
+        modelBuilder.Entity<WorkflowRunHealthStateEntity>().Property("ContentJson").HasColumnType(type);
+        modelBuilder.Entity<WorkflowRunHealthStateEntity>().Property("ScopeKey").HasColumnType(type);
+        modelBuilder.Entity<RuntimeCheckpointCommitEntity>().Property("PendingPostCommitWorkIdsJson").HasColumnType(type);
+        modelBuilder.Entity<RuntimeCheckpointCommitEntity>().Property("ConsumedSchedulerWorkItemIdsJson").HasColumnType(type);
+        modelBuilder.Entity<RuntimeCheckpointCommitEntity>().Property("ContentJson").HasColumnType(type);
+        modelBuilder.Entity<RuntimePostCommitOutboxEntity>().Property("ScopeKey").HasColumnType(type);
+        modelBuilder.Entity<RuntimePostCommitOutboxEntity>().Property("OutboxItemId").HasColumnType(type);
+        modelBuilder.Entity<RuntimePostCommitOutboxEntity>().Property("WorkflowExecutionId").HasColumnType(type);
+        modelBuilder.Entity<RuntimePostCommitOutboxEntity>().Property("ContentJson").HasColumnType(type);
+        modelBuilder.Entity<WorkflowDispatchEntity>().Property("ScopeKey").HasColumnType(type);
+        modelBuilder.Entity<WorkflowDispatchEntity>().Property("DispatchId").HasColumnType(type);
+        modelBuilder.Entity<WorkflowDispatchEntity>().Property("ParentWorkflowExecutionId").HasColumnType(type);
+        modelBuilder.Entity<WorkflowDispatchEntity>().Property("ParentActivityExecutionId").HasColumnType(type);
+        modelBuilder.Entity<WorkflowDispatchEntity>().Property("ChildWorkflowExecutionId").HasColumnType(type);
+        modelBuilder.Entity<WorkflowDispatchEntity>().Property("ChildArtifactId").HasColumnType(type);
+        modelBuilder.Entity<WorkflowDispatchEntity>().Property("TestScopeId").HasColumnType(type);
+        modelBuilder.Entity<WorkflowDispatchEntity>().Property("TenantId").HasColumnType(type);
+        modelBuilder.Entity<WorkflowDispatchEntity>().Property("ContentJson").HasColumnType(type);
+        modelBuilder.Entity<WorkflowSchedulerPoisonEntity>().Property("ScopeKey").HasColumnType(type);
+        modelBuilder.Entity<WorkflowSchedulerPoisonEntity>().Property("ContentJson").HasColumnType(type);
     }
 }

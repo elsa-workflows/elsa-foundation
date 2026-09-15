@@ -101,6 +101,26 @@ public sealed class IncidentStateEntityConfiguration : IEntityTypeConfiguration<
     }
 }
 
+public sealed class RuntimeCheckpointCommitEntityConfiguration : IEntityTypeConfiguration<RuntimeCheckpointCommitEntity>
+{
+    public void Configure(EntityTypeBuilder<RuntimeCheckpointCommitEntity> b)
+    {
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureCommon(b, RuntimeOperationalStateEfModule.CheckpointCommitTableName);
+        b.HasKey(x => x.Id); b.Property(x => x.Id).HasMaxLength(RuntimeOperationalStateEfModule.CompositeIdentityMaximumLength);
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(RuntimeCheckpointCommitEntity.CommitId));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureHash(b, nameof(RuntimeCheckpointCommitEntity.CommitIdHash));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureOrder(b, nameof(RuntimeCheckpointCommitEntity.CommitIdOrderKey));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(RuntimeCheckpointCommitEntity.WorkflowExecutionId));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureHash(b, nameof(RuntimeCheckpointCommitEntity.WorkflowExecutionIdHash));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureOrder(b, nameof(RuntimeCheckpointCommitEntity.WorkflowExecutionIdOrderKey));
+        b.Property(x => x.Fingerprint).HasMaxLength(64).IsRequired();
+        b.Property(x => x.PendingPostCommitWorkIdsJson).IsRequired();
+        b.Property(x => x.ConsumedSchedulerWorkItemIdsJson).IsRequired();
+        b.HasIndex(x => new { x.ScopeKeyHash, x.CommitIdHash, x.CommitId }).IsUnique();
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash, x.CommitIdOrderKey });
+    }
+}
+
 public sealed class DurableValueStateEntityConfiguration : IEntityTypeConfiguration<DurableValueStateEntity>
 {
     public void Configure(EntityTypeBuilder<DurableValueStateEntity> b)
@@ -130,5 +150,28 @@ public sealed class SchedulerStateEntityConfiguration : IEntityTypeConfiguration
         b.Property(x => x.Collection).HasMaxLength(128).IsRequired();
         b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash, x.WorkflowExecutionId }).IsUnique();
         b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdOrderKey });
+    }
+}
+
+public sealed class SchedulerWorkItemEntityConfiguration : IEntityTypeConfiguration<SchedulerWorkItemEntity>
+{
+    public void Configure(EntityTypeBuilder<SchedulerWorkItemEntity> b)
+    {
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureCommon(b, RuntimeOperationalStateEfModule.SchedulerWorkTableName);
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).HasMaxLength(64).IsRequired();
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(SchedulerWorkItemEntity.WorkflowExecutionId));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureHash(b, nameof(SchedulerWorkItemEntity.WorkflowExecutionIdHash));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureOrder(b, nameof(SchedulerWorkItemEntity.WorkflowExecutionIdOrderKey));
+        // Work-item IDs are application identities and are deliberately not bounded. Their encoded value is not
+        // indexed; WorkOrderKey and WorkItemIdHash provide the bounded query projections.
+        b.Property(x => x.WorkItemId).IsRequired();
+        b.Property(x => x.WorkItemIdHash).HasMaxLength(64).IsRequired();
+        b.Property(x => x.WorkOrderKey).HasMaxLength(RuntimeOperationalStateEfModule.SchedulerWorkOrderKeyMaximumLength).IsRequired();
+        b.Property(x => x.ClaimOwnerId).IsRequired(false);
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash, x.WorkItemIdHash }).IsUnique();
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash, x.WorkOrderKey });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdOrderKey, x.WorkflowExecutionIdHash });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash, x.VisibleAfterUtcTicks, x.WorkOrderKey });
     }
 }

@@ -432,7 +432,7 @@ public sealed class EfExecutionLivenessStateStore(
         return tracking ? await query.SingleOrDefaultAsync(cancellationToken) : await query.AsNoTracking().SingleOrDefaultAsync(cancellationToken);
     }
 
-    private static ExecutionLivenessStateEntity ToEntity(ExecutionLivenessState state, string scope, long revision)
+    internal static ExecutionLivenessStateEntity ToEntity(ExecutionLivenessState state, string scope, long revision)
     {
         var lease = state.ExecutionLease;
         var heartbeat = state.Heartbeat;
@@ -454,7 +454,7 @@ public sealed class EfExecutionLivenessStateStore(
         };
     }
 
-    private static void Copy(ExecutionLivenessStateEntity row, ExecutionLivenessState state, string scope, long revision)
+    internal static void Copy(ExecutionLivenessStateEntity row, ExecutionLivenessState state, string scope, long revision)
     {
         var replacement = ToEntity(state, scope, revision);
         row.Id = replacement.Id; row.ScopeKey = replacement.ScopeKey; row.ScopeKeyHash = replacement.ScopeKeyHash;
@@ -466,7 +466,8 @@ public sealed class EfExecutionLivenessStateStore(
         row.ContentJson = replacement.ContentJson; row.SchemaVersion = replacement.SchemaVersion; row.Revision = revision;
     }
 
-    private static ExecutionLivenessState Read(ExecutionLivenessStateEntity row, string scope, string? expectedWorkflow = null, string? expectedOperational = null)
+    // Internal checkpoint staging uses the same envelope/projection validation before touching the ownership fence.
+    internal static ExecutionLivenessState Read(ExecutionLivenessStateEntity row, string scope, string? expectedWorkflow = null, string? expectedOperational = null)
     {
         if (row.Revision <= 0 || row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) || row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))
             throw new InvalidDataException("The execution-liveness row scope or revision projection is corrupt.");

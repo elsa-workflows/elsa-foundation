@@ -71,7 +71,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : GroundworkV2RuntimeSto
         ValidateCommitBoundary(commit);
         EnsureTenantScope(context, commit);
         RequireCommitCapabilities(commit);
-        var access = StorageAccess.Scoped(new StorageScope(context.Scope.Value));
+        var access = StorageAccess.Scoped(new StorageScope(context.Scope!.Value));
         var fingerprint = RuntimeCheckpointCommitFingerprint.Compute(commit);
 
         // Replay resolution deliberately precedes root-write lease handling. A replayed commit performs no

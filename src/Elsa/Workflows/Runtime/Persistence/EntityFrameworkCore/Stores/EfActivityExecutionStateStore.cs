@@ -149,14 +149,14 @@ public sealed class EfActivityExecutionStateStore(
         return new RuntimeStorePage<ActivityExecutionState>(query, items, next);
     }
 
-    private ActivityExecutionStateEntity ToEntity(ActivityExecutionState state, string scope, string id, long revision)
+    internal static ActivityExecutionStateEntity ToEntity(ActivityExecutionState state, string scope, string id, long revision)
     {
         var row = new ActivityExecutionStateEntity();
         CopyToEntity(row, state, scope, id, revision, null);
         return row;
     }
 
-    private static void CopyToEntity(ActivityExecutionStateEntity row, ActivityExecutionState state, string scope, string id, long revision, ActivityExecutionState? previous)
+    internal static void CopyToEntity(ActivityExecutionStateEntity row, ActivityExecutionState state, string scope, string id, long revision, ActivityExecutionState? previous)
     {
         if (previous is not null && (!StringComparer.Ordinal.Equals(previous.Execution.WorkflowExecutionId, state.Execution.WorkflowExecutionId) ||
                                      !StringComparer.Ordinal.Equals(previous.Execution.ActivityExecutionId, state.Execution.ActivityExecutionId)))
@@ -185,7 +185,7 @@ public sealed class EfActivityExecutionStateStore(
         row.Revision = revision;
     }
 
-    private static ActivityExecutionState ReadChecked(ActivityExecutionStateEntity row, string scope, string? expectedWorkflow = null, string? expectedActivityOrParent = null, bool expectedParent = false)
+    internal static ActivityExecutionState ReadChecked(ActivityExecutionStateEntity row, string scope, string? expectedWorkflow = null, string? expectedActivityOrParent = null, bool expectedParent = false)
     {
         try
         {

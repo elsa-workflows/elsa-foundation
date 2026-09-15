@@ -21,15 +21,15 @@ public sealed class EfWorkflowTestScopeStore(
 
     public async ValueTask<WorkflowTestScopeRecord> CreateAsync(WorkflowTestScope scope, DateTimeOffset createdAt, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(scope); cancellationToken.ThrowIfCancellationRequested(); var accessScope = RequireScope(); EnsureAccess(scope); var key = EfRelationalIdentity.Encode(accessScope); var accessScopeHash = EfRelationalIdentity.Hash(accessScope); var encodedScopeId = EfRelationalIdentity.Encode(scope.ScopeId); var scopeIdHash = EfRelationalIdentity.Hash(scope.ScopeId); var id = Id(accessScope, scope.ScopeId); var existing = await _context.WorkflowTestScopes.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.AccessScopeKey == key && x.AccessScopeKeyHash == accessScopeHash && x.ScopeId == encodedScopeId && x.ScopeIdHash == scopeIdHash, cancellationToken); if (existing is not null) return Existing(existing, accessScope, scope);
-        var record = WorkflowTestScopeTransitions.Create(null, scope, createdAt); _context.WorkflowTestScopes.Add(ToEntity(record, accessScope, id));
+        ArgumentNullException.ThrowIfNull(scope); cancellationToken.ThrowIfCancellationRequested(); var accessScope = RequireScope(); EnsureAccess(scope); var key = EfRelationalIdentity.Encode(accessScope); var accessScopeHash = EfRelationalIdentity.Hash(accessScope); var encodedScopeId = EfRelationalIdentity.Encode(scope.ScopeId); var scopeIdHash = EfRelationalIdentity.Hash(scope.ScopeId); var id = WorkflowTestScopeEfSupport.Id(accessScope, scope.ScopeId); var existing = await _context.WorkflowTestScopes.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.AccessScopeKey == key && x.AccessScopeKeyHash == accessScopeHash && x.ScopeId == encodedScopeId && x.ScopeIdHash == scopeIdHash, cancellationToken); if (existing is not null) return Existing(existing, accessScope, scope);
+        var record = WorkflowTestScopeTransitions.Create(null, scope, createdAt); _context.WorkflowTestScopes.Add(WorkflowTestScopeEfSupport.ToEntity(record, accessScope, id));
         try { await _context.SaveChangesAsync(cancellationToken); return record; }
         catch (DbUpdateException) { _context.ChangeTracker.Clear(); var winner = await _context.WorkflowTestScopes.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.AccessScopeKey == key && x.AccessScopeKeyHash == accessScopeHash && x.ScopeId == encodedScopeId && x.ScopeIdHash == scopeIdHash, cancellationToken); if (winner is not null) return Existing(winner, accessScope, scope); throw; }
     }
 
     public async ValueTask<WorkflowTestScopeRecord?> FindAsync(string scopeId, CancellationToken cancellationToken = default)
     {
-        ValidateScopeId(scopeId); var accessScope = RequireScope(); var row = await _context.WorkflowTestScopes.AsNoTracking().SingleOrDefaultAsync(x => x.Id == Id(accessScope, scopeId) && x.AccessScopeKey == EfRelationalIdentity.Encode(accessScope) && x.AccessScopeKeyHash == EfRelationalIdentity.Hash(accessScope) && x.ScopeId == EfRelationalIdentity.Encode(scopeId) && x.ScopeIdHash == EfRelationalIdentity.Hash(scopeId), cancellationToken); return row is null ? null : Read(row, accessScope, scopeId);
+        ValidateScopeId(scopeId); var accessScope = RequireScope(); var row = await _context.WorkflowTestScopes.AsNoTracking().SingleOrDefaultAsync(x => x.Id == WorkflowTestScopeEfSupport.Id(accessScope, scopeId) && x.AccessScopeKey == EfRelationalIdentity.Encode(accessScope) && x.AccessScopeKeyHash == EfRelationalIdentity.Hash(accessScope) && x.ScopeId == EfRelationalIdentity.Encode(scopeId) && x.ScopeIdHash == EfRelationalIdentity.Hash(scopeId), cancellationToken); return row is null ? null : WorkflowTestScopeEfSupport.Read(row, accessScope, scopeId);
     }
 
     public async ValueTask<WorkflowTestScopeCloseResult> CloseAsync(WorkflowTestScopeCloseRequest request, CancellationToken cancellationToken = default)
@@ -40,15 +40,15 @@ public sealed class EfWorkflowTestScopeStore(
         {
             cancellationToken.ThrowIfCancellationRequested();
             var row = await _context.WorkflowTestScopes
-                .SingleOrDefaultAsync(x => x.Id == Id(accessScope, request.ScopeId) && x.AccessScopeKey == EfRelationalIdentity.Encode(accessScope) && x.AccessScopeKeyHash == EfRelationalIdentity.Hash(accessScope) && x.ScopeId == EfRelationalIdentity.Encode(request.ScopeId) && x.ScopeIdHash == EfRelationalIdentity.Hash(request.ScopeId), cancellationToken);
+                .SingleOrDefaultAsync(x => x.Id == WorkflowTestScopeEfSupport.Id(accessScope, request.ScopeId) && x.AccessScopeKey == EfRelationalIdentity.Encode(accessScope) && x.AccessScopeKeyHash == EfRelationalIdentity.Hash(accessScope) && x.ScopeId == EfRelationalIdentity.Encode(request.ScopeId) && x.ScopeIdHash == EfRelationalIdentity.Hash(request.ScopeId), cancellationToken);
             if (row is null)
                 return new WorkflowTestScopeCloseResult(WorkflowTestScopeCloseDisposition.NotFound, null);
 
-            var result = WorkflowTestScopeTransitions.Close(Read(row, accessScope, request.ScopeId), request);
+            var result = WorkflowTestScopeTransitions.Close(WorkflowTestScopeEfSupport.Read(row, accessScope, request.ScopeId), request);
             if (result.Disposition != WorkflowTestScopeCloseDisposition.Accepted)
                 return result;
 
-            Copy(row, result.Record!, accessScope, checked(row.Revision + 1));
+            WorkflowTestScopeEfSupport.Copy(row, result.Record!, checked(row.Revision + 1));
             try
             {
                 await _context.SaveChangesAsync(cancellationToken);
@@ -71,15 +71,15 @@ public sealed class EfWorkflowTestScopeStore(
         {
             cancellationToken.ThrowIfCancellationRequested();
             var row = await _context.WorkflowTestScopes
-                .SingleOrDefaultAsync(x => x.Id == Id(accessScope, scopeId) && x.AccessScopeKey == EfRelationalIdentity.Encode(accessScope) && x.AccessScopeKeyHash == EfRelationalIdentity.Hash(accessScope) && x.ScopeId == EfRelationalIdentity.Encode(scopeId) && x.ScopeIdHash == EfRelationalIdentity.Hash(scopeId), cancellationToken)
+                .SingleOrDefaultAsync(x => x.Id == WorkflowTestScopeEfSupport.Id(accessScope, scopeId) && x.AccessScopeKey == EfRelationalIdentity.Encode(accessScope) && x.AccessScopeKeyHash == EfRelationalIdentity.Hash(accessScope) && x.ScopeId == EfRelationalIdentity.Encode(scopeId) && x.ScopeIdHash == EfRelationalIdentity.Hash(scopeId), cancellationToken)
                 ?? throw new KeyNotFoundException($"Workflow test scope '{scopeId}' was not found.");
-            var current = Read(row, accessScope, scopeId);
+            var current = WorkflowTestScopeEfSupport.Read(row, accessScope, scopeId);
             if (current.State == WorkflowTestScopeState.Closed)
                 return current;
 
             var updated = WorkflowTestScopeTransitions.Complete(current, completedAt);
 
-            Copy(row, updated, accessScope, checked(row.Revision + 1));
+            WorkflowTestScopeEfSupport.Copy(row, updated, checked(row.Revision + 1));
             try
             {
                 await _context.SaveChangesAsync(cancellationToken);
@@ -118,7 +118,7 @@ public sealed class EfWorkflowTestScopeStore(
                 throw new ArgumentException("The workflow test-scope cursor belongs to another persistence scope.", nameof(query));
 
             var continuation = DecodeCursorIdentity(token[1], nameof(query));
-            q = q.Where(x => x.ScopeIdOrderKey.CompareTo(Order(continuation)) > 0);
+            q = q.Where(x => x.ScopeIdOrderKey.CompareTo(WorkflowTestScopeEfSupport.Order(continuation)) > 0);
         }
 
         var rows = await q.OrderBy(x => x.ScopeIdOrderKey)
@@ -129,9 +129,9 @@ public sealed class EfWorkflowTestScopeStore(
             rows.RemoveAt(rows.Count - 1);
 
         return new(
-            rows.Select(x => Read(x, accessScope)).ToArray(),
+            rows.Select(x => WorkflowTestScopeEfSupport.Read(x, accessScope)).ToArray(),
             more
-                ? _codec.Encode(CursorPurpose, Encoding.UTF8.GetBytes($"{EfRelationalIdentity.Encode(accessScope)}\u001f{EfRelationalIdentity.Encode(Read(rows[^1], accessScope).Scope.ScopeId)}"))
+                ? _codec.Encode(CursorPurpose, Encoding.UTF8.GetBytes($"{EfRelationalIdentity.Encode(accessScope)}\u001f{EfRelationalIdentity.Encode(WorkflowTestScopeEfSupport.Read(rows[^1], accessScope).Scope.ScopeId)}"))
                 : null);
     }
 
@@ -148,11 +148,11 @@ public sealed class EfWorkflowTestScopeStore(
         var accessScope = RequireScope();
         _access.Current.EnsureTenantScope(scope.TenantId);
         var row = await _context.WorkflowTestScopes
-            .SingleOrDefaultAsync(x => x.Id == Id(accessScope, scope.ScopeId) && x.AccessScopeKey == EfRelationalIdentity.Encode(accessScope) && x.AccessScopeKeyHash == EfRelationalIdentity.Hash(accessScope) && x.ScopeId == EfRelationalIdentity.Encode(scope.ScopeId) && x.ScopeIdHash == EfRelationalIdentity.Hash(scope.ScopeId), ct);
+            .SingleOrDefaultAsync(x => x.Id == WorkflowTestScopeEfSupport.Id(accessScope, scope.ScopeId) && x.AccessScopeKey == EfRelationalIdentity.Encode(accessScope) && x.AccessScopeKeyHash == EfRelationalIdentity.Hash(accessScope) && x.ScopeId == EfRelationalIdentity.Encode(scope.ScopeId) && x.ScopeIdHash == EfRelationalIdentity.Hash(scope.ScopeId), ct);
         if (row is null)
             throw new TestScopeAdmissionException("The workflow test scope is not open in the current persistence context.");
 
-        var record = Read(row, accessScope, scope.ScopeId);
+        var record = WorkflowTestScopeEfSupport.Read(row, accessScope, scope.ScopeId);
         if (record.State != WorkflowTestScopeState.Open ||
             record.Scope.IsExpired(observedAt) ||
             !WorkflowTestScope.ContextEquals(record.Scope, scope))
@@ -177,8 +177,6 @@ public sealed class EfWorkflowTestScopeStore(
     private string RequireScope() => _access.Current.Scope?.Value ?? throw new InvalidOperationException("Runtime EF test-scope persistence requires an ordinary scoped persistence access context.");
     private void EnsureAccess(WorkflowTestScope scope) => _access.Current.EnsureTenantScope(scope.TenantId);
     private static void ValidateScopeId(string scopeId) { ArgumentException.ThrowIfNullOrWhiteSpace(scopeId); if (scopeId.Length > WorkflowTestScope.MaximumScopeIdLength) throw new ArgumentException($"A workflow test-scope ID must be at most {WorkflowTestScope.MaximumScopeIdLength} UTF-16 code units.", nameof(scopeId)); }
-    private static string Id(string accessScope, string scopeId) => EfRelationalIdentity.Hash(accessScope + "\u001f" + scopeId);
-    private static string Order(string value) => Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(value, WorkflowTestScope.MaximumScopeIdLength));
     private string[] DecodeCursor(string cursor)
     {
         try
@@ -214,35 +212,5 @@ public sealed class EfWorkflowTestScopeStore(
         if (query.ContinuationToken?.Length > 2048)
             throw new ArgumentOutOfRangeException(nameof(query.ContinuationToken));
     }
-    private static WorkflowTestScopeRecord Existing(WorkflowTestScopeEntity row, string accessScope, WorkflowTestScope requested) { var existing = Read(row, accessScope); return WorkflowTestScopeTransitions.Create(existing, requested, existing.CreatedAt); }
-    private static WorkflowTestScopeEntity ToEntity(WorkflowTestScopeRecord record, string accessScope, string id) => new() { Id = id, AccessScopeKey = EfRelationalIdentity.Encode(accessScope), AccessScopeKeyHash = EfRelationalIdentity.Hash(accessScope), ScopeId = EfRelationalIdentity.Encode(record.Scope.ScopeId), ScopeIdHash = EfRelationalIdentity.Hash(record.Scope.ScopeId), ScopeIdOrderKey = Order(record.Scope.ScopeId), TenantId = record.Scope.TenantId is null ? null : EfRelationalIdentity.Encode(record.Scope.TenantId), TenantIdHash = record.Scope.TenantId is null ? null : EfRelationalIdentity.Hash(record.Scope.TenantId), Partition = EfRelationalIdentity.Encode(record.Scope.Partition.Value), PartitionHash = EfRelationalIdentity.Hash(record.Scope.Partition.Value), PartitionOrderKey = Order(record.Scope.Partition.Value), ExpiresAtUtcTicks = record.Scope.ExpiresAt.UtcTicks, State = (int)record.State, Revision = 0, ContentJson = RuntimeArtifactJson.Serialize(record), SchemaVersion = RuntimeWorkflowTestScopeEfModule.SchemaVersion };
-    private static WorkflowTestScopeRecord Read(WorkflowTestScopeEntity row, string accessScope, string? expectedScopeId = null)
-    {
-        var record = RuntimeArtifactJson.Deserialize<WorkflowTestScopeRecord>(row.ContentJson);
-        var tenant = record.Scope.TenantId;
-        var partition = record.Scope.Partition.Value;
-        var valid =
-            (expectedScopeId is null || StringComparer.Ordinal.Equals(record.Scope.ScopeId, expectedScopeId)) &&
-            (tenant is null || StringComparer.Ordinal.Equals(tenant, accessScope)) &&
-            row.Id == Id(accessScope, record.Scope.ScopeId) &&
-            row.SchemaVersion == RuntimeWorkflowTestScopeEfModule.SchemaVersion &&
-            row.AccessScopeKey == EfRelationalIdentity.Encode(accessScope) &&
-            row.AccessScopeKeyHash == EfRelationalIdentity.Hash(accessScope) &&
-            row.ScopeId == EfRelationalIdentity.Encode(record.Scope.ScopeId) &&
-            row.ScopeIdHash == EfRelationalIdentity.Hash(record.Scope.ScopeId) &&
-            row.ScopeIdOrderKey == Order(record.Scope.ScopeId) &&
-            row.TenantId == (tenant is null ? null : EfRelationalIdentity.Encode(tenant)) &&
-            row.TenantIdHash == (tenant is null ? null : EfRelationalIdentity.Hash(tenant)) &&
-            row.Partition == EfRelationalIdentity.Encode(partition) &&
-            row.PartitionHash == EfRelationalIdentity.Hash(partition) &&
-            row.PartitionOrderKey == Order(partition) &&
-            row.ExpiresAtUtcTicks == record.Scope.ExpiresAt.UtcTicks &&
-            row.State == (int)record.State &&
-            row.Revision >= 0;
-        if (!valid)
-            throw new InvalidDataException("The workflow test-scope projections do not match its durable content.");
-
-        return record;
-    }
-    private static void Copy(WorkflowTestScopeEntity row, WorkflowTestScopeRecord record, string accessScope, long revision) { row.State = (int)record.State; row.ExpiresAtUtcTicks = record.Scope.ExpiresAt.UtcTicks; row.Revision = revision; row.ContentJson = RuntimeArtifactJson.Serialize(record); }
+    private static WorkflowTestScopeRecord Existing(WorkflowTestScopeEntity row, string accessScope, WorkflowTestScope requested) { var existing = WorkflowTestScopeEfSupport.Read(row, accessScope); return WorkflowTestScopeTransitions.Create(existing, requested, existing.CreatedAt); }
 }

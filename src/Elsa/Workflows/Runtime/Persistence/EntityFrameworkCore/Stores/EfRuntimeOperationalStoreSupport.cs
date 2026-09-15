@@ -35,18 +35,7 @@ internal static class EfRuntimeOperationalStoreSupport
         ArgumentException.ThrowIfNullOrWhiteSpace(scope);
         ArgumentNullException.ThrowIfNull(values);
 
-        var identity = new StringBuilder();
-        AppendLengthFramed(identity, scope);
-        foreach (var value in values)
-            AppendLengthFramed(identity, value);
-
-        return Hash(identity.ToString());
-    }
-
-    private static void AppendLengthFramed(StringBuilder target, string value)
-    {
-        ArgumentNullException.ThrowIfNull(value);
-        target.Append(value.Length).Append(':').Append(value);
+        return EfRelationalIdentity.HashLengthFramed([scope, .. values]);
     }
 
     public static void EnsureScope(string actual, string expected) {

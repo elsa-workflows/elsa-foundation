@@ -242,14 +242,16 @@ public sealed class EfWorkflowExecutionStateStore(
         return source;
     }
 
-    private WorkflowExecutionStateEntity ToEntity(WorkflowExecutionState state, string scope, string id, long revision)
+    // Internal checkpoint staging reuses the same projection as the direct store. Keeping this seam internal
+    // prevents the atomic writer from growing a second, subtly different workflow-execution envelope.
+    internal static WorkflowExecutionStateEntity ToEntity(WorkflowExecutionState state, string scope, string id, long revision)
     {
         var row = new WorkflowExecutionStateEntity();
         CopyToEntity(row, state, scope, id, revision);
         return row;
     }
 
-    private static void CopyToEntity(WorkflowExecutionStateEntity row, WorkflowExecutionState state, string scope, string id, long revision)
+    internal static void CopyToEntity(WorkflowExecutionStateEntity row, WorkflowExecutionState state, string scope, string id, long revision)
     {
         var timestamp = WorkflowExecutionStateHistory.SortTimestamp(state);
         var tenant = state.TenantId;
@@ -277,6 +279,8 @@ public sealed class EfWorkflowExecutionStateStore(
             throw new InvalidDataException("The persisted workflow execution state is not valid current data.", exception);
         }
     }
+
+    internal static string CreateIdForAtomicParticipant(string scope, string id) => CreateId(scope, id);
 
     private static WorkflowExecutionState ReadCheckedCore(WorkflowExecutionStateEntity row, string scope, string expectedId)
     {
@@ -349,7 +353,8 @@ public sealed class EfWorkflowExecutionStateStore(
     private static string OrderKey(string value) => Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(value, RuntimeWorkflowExecutionEfModule.IdentityMaximumLength));
     // Length framing makes the composite identity unambiguous; EfRelationalIdentity hashes the
     // UTF-16 code units directly so distinct opaque values (including lone surrogates) remain distinct.
-    private static string CreateId(string scope, string id) => Hash($"workflow-execution:{scope.Length}:{scope}{id.Length}:{id}");
+    // The checkpoint staging seam must use the same framed identity as direct workflow-execution persistence.
+    internal static string CreateId(string scope, string id) => Hash($"workflow-execution:{scope.Length}:{scope}{id.Length}:{id}");
     private static long NewRevision() { Span<byte> bytes = stackalloc byte[8]; RandomNumberGenerator.Fill(bytes); var result = BitConverter.ToInt64(bytes) & (long.MaxValue >> 1); return result == 0 ? 1 : result; }
     private static InvalidOperationException Normalize(string action, string id, Exception exception) => new($"EF workflow execution state {action} failed for '{id}'.", exception);
 

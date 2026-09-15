@@ -290,13 +290,14 @@ public sealed class EfWorkflowAlterationStore(
         ArgumentNullException.ThrowIfNull(change);
         var scopeKey = Key(RequireScope());
         var row = await _context.WorkflowAlterationJobs.AsNoTracking()
-            .SingleOrDefaultAsync(x => x.Id == Id(scopeKey, change.JobId) && x.ScopeKey == EfRelationalIdentity.Encode(scopeKey) && x.ScopeKeyHash == EfRelationalIdentity.Hash(scopeKey) && x.JobId == EfRelationalIdentity.Encode(change.JobId) && x.JobIdHash == EfRelationalIdentity.Hash(change.JobId), cancellationToken)
+            .SingleOrDefaultAsync(x => x.Id == Id(scopeKey, change.JobId), cancellationToken)
             ?? throw new KeyNotFoundException($"Alteration job '{change.JobId}' was not found.");
         ValidateTerminalChange(ReadJob(row, scopeKey, change.JobId), change);
     }
     public async ValueTask ApplyTerminalJobChangeAsync(WorkflowAlterationJobTerminalChange change, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(change);
+        EfRuntimeAlterationCheckpointParticipationGate.RejectIndependentTerminalWrite(_context);
         var scopeKey = Key(RequireScope());
         var row = await _context.WorkflowAlterationJobs
             .SingleOrDefaultAsync(x => x.Id == Id(scopeKey, change.JobId) && x.ScopeKey == EfRelationalIdentity.Encode(scopeKey) && x.ScopeKeyHash == EfRelationalIdentity.Hash(scopeKey) && x.JobId == EfRelationalIdentity.Encode(change.JobId) && x.JobIdHash == EfRelationalIdentity.Hash(change.JobId), cancellationToken)
@@ -320,17 +321,19 @@ public sealed class EfWorkflowAlterationStore(
     }
 
     /// <summary>
-    /// The runtime checkpoint callback receives no context or transaction enlistment handle. Until a shared
-    /// checkpoint transaction seam exists, rejecting it is safer than allowing a Groundwork or other provider write
-    /// to commit before this EF store applies the terminal job transition.
+    /// The callback must enter the EF checkpoint writer on this exact DbContext with matching job evidence. The
+    /// writer stages the terminal transition and marker in one transaction; a no-op or unrelated EF callback cannot
+    /// establish that boundary and fails closed.
     /// </summary>
-    public ValueTask CommitTerminalJobChangeAtomicallyAsync(WorkflowAlterationJobTerminalChange change, Func<CancellationToken, ValueTask> commitWorkflowCheckpointAsync, CancellationToken cancellationToken = default)
+    public async ValueTask CommitTerminalJobChangeAtomicallyAsync(WorkflowAlterationJobTerminalChange change, Func<CancellationToken, ValueTask> commitWorkflowCheckpointAsync, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(change);
         ArgumentNullException.ThrowIfNull(commitWorkflowCheckpointAsync);
         cancellationToken.ThrowIfCancellationRequested();
-        throw new InvalidOperationException(
-            "EF alteration terminal checkpoint callbacks are unavailable until the runtime supplies a transaction enlistment seam shared by the checkpoint store and this DbContext. Use ApplyTerminalJobChangeAsync for the direct alteration-store transition.");
+        await ValidateTerminalJobChangeAsync(change, cancellationToken);
+        using var gate = EfRuntimeAlterationCheckpointParticipationGate.Begin(_context, change, Key(RequireScope()));
+        await commitWorkflowCheckpointAsync(cancellationToken);
+        await gate.VerifyDurableAsync(cancellationToken);
     }
 
     private async Task<WorkflowAlterationPlanEntity> RequirePlan(string planId, CancellationToken ct) { ArgumentException.ThrowIfNullOrWhiteSpace(planId); var scopeKey = Key(RequireScope()); return await _context.WorkflowAlterationPlans.SingleOrDefaultAsync(x => x.Id == Id(scopeKey, planId) && x.ScopeKey == EfRelationalIdentity.Encode(scopeKey) && x.ScopeKeyHash == EfRelationalIdentity.Hash(scopeKey) && x.PlanId == EfRelationalIdentity.Encode(planId) && x.PlanIdHash == EfRelationalIdentity.Hash(planId), ct) ?? throw new KeyNotFoundException($"Alteration plan '{planId}' was not found."); }
@@ -347,7 +350,7 @@ public sealed class EfWorkflowAlterationStore(
             throw new ArgumentException("The alteration cursor contains an invalid identity.", parameterName, exception);
         }
     }
-    private static string Id(string scope, string id) => EfRelationalIdentity.Hash(scope + "\u001f" + id);
+    internal static string Id(string scope, string id) => EfRelationalIdentity.HashLengthFramed(scope, id);
     private static bool IsTerminal(WorkflowAlterationPlanStatus status) => status is WorkflowAlterationPlanStatus.Completed or WorkflowAlterationPlanStatus.CompletedWithFailures or WorkflowAlterationPlanStatus.Failed or WorkflowAlterationPlanStatus.Cancelled;
     private static bool IsTerminal(WorkflowAlterationJobStatus status) => status is WorkflowAlterationJobStatus.Succeeded or WorkflowAlterationJobStatus.Failed or WorkflowAlterationJobStatus.Cancelled;
     private static string ActiveKey(DateTimeOffset at, string id) =>
@@ -410,7 +413,7 @@ public sealed class EfWorkflowAlterationStore(
         public bool Equals(KeyValuePair<string, string> x, KeyValuePair<string, string> y) => StringComparer.Ordinal.Equals(x.Key, y.Key) && StringComparer.Ordinal.Equals(x.Value, y.Value);
         public int GetHashCode(KeyValuePair<string, string> obj) => HashCode.Combine(StringComparer.Ordinal.GetHashCode(obj.Key), StringComparer.Ordinal.GetHashCode(obj.Value));
     }
-    private static void ValidateTerminalChange(WorkflowAlterationJobState job, WorkflowAlterationJobTerminalChange change)
+    internal static void ValidateTerminalChange(WorkflowAlterationJobState job, WorkflowAlterationJobTerminalChange change)
     {
         if (IsTerminal(job.Status))
         {
@@ -471,7 +474,7 @@ public sealed class EfWorkflowAlterationStore(
     private static void CopyPlan(WorkflowAlterationPlanEntity r, WorkflowAlterationPlanState p, string scope, string? activeOrderKey = null, UnsealedCleanupIntent? cleanup = null, bool clearCleanup = false) { r.Status = (int)p.Status; r.ActiveOrderKey = activeOrderKey ?? r.ActiveOrderKey; r.CreatedAtUtcTicks = p.CreatedAt.UtcTicks; r.Revision = p.Revision; r.ContentJson = RuntimeArtifactJson.Serialize(p); if (clearCleanup) { r.CleanupTerminalStatus = null; r.CleanupSafeFailureJson = null; r.CleanupCompletedAtUtcTicks = null; r.CleanupDeletedCount = 0; } else if (cleanup is not null) { r.CleanupTerminalStatus = (int)cleanup.TerminalStatus; r.CleanupSafeFailureJson = cleanup.SafeFailure is null ? null : RuntimeArtifactJson.Serialize(cleanup.SafeFailure); r.CleanupCompletedAtUtcTicks = cleanup.CompletedAt.UtcTicks; r.CleanupDeletedCount = cleanup.DeletedCount; } }
     private static WorkflowAlterationPlanState CopyPlan(WorkflowAlterationPlanState p, WorkflowAlterationPlanStatus? status = null, string? captureCursor = null, bool replaceCaptureCursor = false, long? capturedSoFar = null, long? targetCount = null, long? succeededJobCount = null, long? failedJobCount = null, long? cancelledJobCount = null, DateTimeOffset? sealedAt = null, bool replaceSealedAt = false, DateTimeOffset? startedAt = null, bool replaceStartedAt = false, DateTimeOffset? completedAt = null, bool replaceCompletedAt = false, DateTimeOffset? cancellationRequestedAt = null, bool replaceCancellationRequestedAt = false, WorkflowAlterationSafeFailure? safeFailure = null, long? revision = null) => new(p.PlanId, p.AuthorityScope, p.SubmittedBy, p.IdempotencyKeyHash, p.CanonicalRequestHash, p.ProtectedPayload, p.Target, status ?? p.Status, p.CreatedAt, replaceCaptureCursor ? captureCursor : p.CaptureCursor, capturedSoFar ?? p.CapturedSoFar, targetCount ?? p.TargetCount, succeededJobCount ?? p.SucceededJobCount, failedJobCount ?? p.FailedJobCount, cancelledJobCount ?? p.CancelledJobCount, replaceSealedAt ? sealedAt : p.SealedAt, replaceStartedAt ? startedAt : p.StartedAt, replaceCompletedAt ? completedAt : p.CompletedAt, replaceCancellationRequestedAt ? cancellationRequestedAt : p.CancellationRequestedAt, safeFailure ?? p.SafeFailure, revision ?? p.Revision, p.AlterationDescriptors);
     private static WorkflowAlterationJobEntity ToJob(WorkflowAlterationJobState j, string scope) => new() { Id = Id(scope, j.JobId), ScopeKey = EfRelationalIdentity.Encode(scope), ScopeKeyHash = EfRelationalIdentity.Hash(scope), JobId = EfRelationalIdentity.Encode(j.JobId), JobIdHash = EfRelationalIdentity.Hash(j.JobId), JobIdOrderKey = Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(j.JobId, RuntimeWorkflowAlterationEfModule.IdentityMaximumLength)), PlanId = EfRelationalIdentity.Encode(j.PlanId), PlanIdHash = EfRelationalIdentity.Hash(j.PlanId), WorkflowExecutionId = EfRelationalIdentity.Encode(j.WorkflowExecutionId), WorkflowExecutionIdOrderKey = Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(j.WorkflowExecutionId, RuntimeWorkflowAlterationEfModule.IdentityMaximumLength)), WorkflowExecutionIdHash = EfRelationalIdentity.Hash(j.WorkflowExecutionId), TenantPartition = EfRelationalIdentity.Encode(j.TenantPartition), TenantPartitionHash = EfRelationalIdentity.Hash(j.TenantPartition), CaptureOrdinal = j.CaptureOrdinal, ClaimableAtUtcTicks = j.Status == WorkflowAlterationJobStatus.Pending ? j.CreatedAt.UtcTicks : j.Claim?.ExpiresAt.UtcTicks, Status = (int)j.Status, CheckpointCommitId = j.CheckpointCommitId is null ? null : EfRelationalIdentity.Encode(j.CheckpointCommitId), CheckpointCommitIdHash = j.CheckpointCommitId is null ? null : EfRelationalIdentity.Hash(j.CheckpointCommitId), Revision = j.Revision, ContentJson = RuntimeArtifactJson.Serialize(j), SchemaVersion = RuntimeWorkflowAlterationEfModule.SchemaVersion };
-    private static WorkflowAlterationJobState ReadJob(WorkflowAlterationJobEntity row, string scope, string? expectedJobId = null)
+    internal static WorkflowAlterationJobState ReadJob(WorkflowAlterationJobEntity row, string scope, string? expectedJobId = null)
     {
         var job = RuntimeArtifactJson.Deserialize<WorkflowAlterationJobState>(row.ContentJson);
         var checkpoint = job.CheckpointCommitId;
@@ -504,6 +507,6 @@ public sealed class EfWorkflowAlterationStore(
 
         return job;
     }
-    private static void CopyJob(WorkflowAlterationJobEntity r, WorkflowAlterationJobState j, string scope) { var copy = ToJob(j, scope); r.JobId = copy.JobId; r.JobIdHash = copy.JobIdHash; r.JobIdOrderKey = copy.JobIdOrderKey; r.PlanId = copy.PlanId; r.PlanIdHash = copy.PlanIdHash; r.WorkflowExecutionId = copy.WorkflowExecutionId; r.WorkflowExecutionIdOrderKey = copy.WorkflowExecutionIdOrderKey; r.WorkflowExecutionIdHash = copy.WorkflowExecutionIdHash; r.TenantPartition = copy.TenantPartition; r.TenantPartitionHash = copy.TenantPartitionHash; r.CaptureOrdinal = copy.CaptureOrdinal; r.ClaimableAtUtcTicks = copy.ClaimableAtUtcTicks; r.Status = copy.Status; r.CheckpointCommitId = copy.CheckpointCommitId; r.CheckpointCommitIdHash = copy.CheckpointCommitIdHash; r.Revision = copy.Revision; r.ContentJson = copy.ContentJson; }
+    internal static void CopyJob(WorkflowAlterationJobEntity r, WorkflowAlterationJobState j, string scope) { var copy = ToJob(j, scope); r.JobId = copy.JobId; r.JobIdHash = copy.JobIdHash; r.JobIdOrderKey = copy.JobIdOrderKey; r.PlanId = copy.PlanId; r.PlanIdHash = copy.PlanIdHash; r.WorkflowExecutionId = copy.WorkflowExecutionId; r.WorkflowExecutionIdOrderKey = copy.WorkflowExecutionIdOrderKey; r.WorkflowExecutionIdHash = copy.WorkflowExecutionIdHash; r.TenantPartition = copy.TenantPartition; r.TenantPartitionHash = copy.TenantPartitionHash; r.CaptureOrdinal = copy.CaptureOrdinal; r.ClaimableAtUtcTicks = copy.ClaimableAtUtcTicks; r.Status = copy.Status; r.CheckpointCommitId = copy.CheckpointCommitId; r.CheckpointCommitIdHash = copy.CheckpointCommitIdHash; r.Revision = copy.Revision; r.ContentJson = copy.ContentJson; }
     private async Task SaveConcurrency(WorkflowAlterationPlanEntity row, CancellationToken ct, string id) { try { await _context.SaveChangesAsync(ct); } catch (DbUpdateException) { _context.ChangeTracker.Clear(); throw new WorkflowAlterationConcurrencyException(id); } }
 }

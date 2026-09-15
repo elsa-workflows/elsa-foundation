@@ -122,14 +122,14 @@ public sealed class EfActivityExecutionInspectionStore(
         return new ActivityExecutionInspectionSummaryPage(query, items, totalCount, next);
     }
 
-    private static ActivityExecutionInspectionEntity ToEntity(ActivityExecutionInspectionProjection projection, string scope, string id, long revision)
+    internal static ActivityExecutionInspectionEntity ToEntity(ActivityExecutionInspectionProjection projection, string scope, string id, long revision)
     {
         var row = new ActivityExecutionInspectionEntity();
         CopyToEntity(row, projection, scope, id, revision, null);
         return row;
     }
 
-    private static void CopyToEntity(ActivityExecutionInspectionEntity row, ActivityExecutionInspectionProjection projection, string scope, string id, long revision, ActivityExecutionInspectionProjection? previous)
+    internal static void CopyToEntity(ActivityExecutionInspectionEntity row, ActivityExecutionInspectionProjection projection, string scope, string id, long revision, ActivityExecutionInspectionProjection? previous)
     {
         if (previous is not null && (!StringComparer.Ordinal.Equals(previous.WorkflowExecutionId, projection.WorkflowExecutionId) ||
                                      !StringComparer.Ordinal.Equals(previous.ActivityExecutionId, projection.ActivityExecutionId)))
@@ -156,7 +156,7 @@ public sealed class EfActivityExecutionInspectionStore(
         row.Revision = revision;
     }
 
-    private static ActivityExecutionInspectionProjection ReadChecked(ActivityExecutionInspectionEntity row, string scope, string? expectedWorkflow = null, string? expectedActivity = null)
+    internal static ActivityExecutionInspectionProjection ReadChecked(ActivityExecutionInspectionEntity row, string scope, string? expectedWorkflow = null, string? expectedActivity = null)
     {
         try
         {

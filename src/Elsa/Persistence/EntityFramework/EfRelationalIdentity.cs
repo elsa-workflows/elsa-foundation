@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
+using System.Text;
 
 namespace Elsa.Persistence.EntityFramework;
 
@@ -12,6 +13,19 @@ public static class EfRelationalIdentity
     {
         ArgumentNullException.ThrowIfNull(value);
         return Convert.ToHexString(SHA256.HashData(EncodeUtf16CodeUnits(value)));
+    }
+
+    /// <summary>Hashes several opaque identities without delimiter collisions between adjacent values.</summary>
+    public static string HashLengthFramed(params string[] values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        var identity = new StringBuilder();
+        foreach (var value in values)
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            identity.Append(value.Length).Append(':').Append(value);
+        }
+        return Hash(identity.ToString());
     }
 
     public static string Encode(string value)
@@ -52,6 +66,20 @@ public static class EfRelationalIdentity
             BinaryPrimitives.WriteUInt16BigEndian(result.AsSpan(index * sizeof(char), sizeof(char)), value[index]);
         BinaryPrimitives.WriteUInt16BigEndian(result.AsSpan(result.Length - sizeof(ushort)), checked((ushort)value.Length));
         return result;
+    }
+
+    /// <summary>
+    /// Lossless ordinal text projection for identities whose length has no contract-enforced upper bound.
+    /// Four uppercase hexadecimal digits per UTF-16 code unit preserve StringComparer.Ordinal, including
+    /// embedded NUL and lone surrogate code units; a shorter prefix sorts before its extension.
+    /// </summary>
+    public static string CreateOrdinalTextOrderKey(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var bytes = new byte[checked(value.Length * sizeof(char))];
+        for (var index = 0; index < value.Length; index++)
+            BinaryPrimitives.WriteUInt16BigEndian(bytes.AsSpan(index * sizeof(char), sizeof(char)), value[index]);
+        return Convert.ToHexString(bytes);
     }
 
     private static byte[] EncodeUtf16CodeUnits(string value)

@@ -229,7 +229,7 @@ public sealed class EfIncidentStateStore(
             row.WorkflowExecutionIdHash == EfRuntimeOperationalStoreSupport.Hash(workflowExecutionId) &&
             row.WorkflowExecutionId == EfRuntimeOperationalStoreSupport.Encode(workflowExecutionId));
 
-    private static IncidentStateEntity ToEntity(IncidentState state, string scope, string id, long revision) => new()
+    internal static IncidentStateEntity ToEntity(IncidentState state, string scope, string id, long revision) => new()
     {
         Id = id,
         ScopeKey = EfRuntimeOperationalStoreSupport.Encode(scope),
@@ -249,7 +249,7 @@ public sealed class EfIncidentStateStore(
         Revision = revision
     };
 
-    private static void Copy(IncidentStateEntity row, IncidentState state, string scope, long revision)
+    internal static void Copy(IncidentStateEntity row, IncidentState state, string scope, long revision)
     {
         var replacement = ToEntity(state, scope, row.Id, revision);
         row.ScopeKey = replacement.ScopeKey;
@@ -269,7 +269,7 @@ public sealed class EfIncidentStateStore(
         row.Revision = revision;
     }
 
-    private static void Validate(IncidentState state)
+    internal static void Validate(IncidentState state)
     {
         ArgumentNullException.ThrowIfNull(state);
         EfRuntimeOperationalStoreSupport.ValidateIdentity(state.WorkflowExecutionId, nameof(state.WorkflowExecutionId));

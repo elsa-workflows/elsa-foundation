@@ -35,6 +35,7 @@ public static class RuntimeWorkflowExecutionEntityFrameworkCoreRegistration
                     WorkflowTestScopeStoreBackend.Find(services) is { } repeatScopes ? repeatScopes.Owns : null);
                 return services;
             }
+            RuntimeEfCheckpointCompositionTransition.EnsureGroundworkCheckpointTransitionAllowed(services, "workflow execution");
             if (existing is not null) existing.EnsureOwnsRegisteredContract(services);
             else
             {

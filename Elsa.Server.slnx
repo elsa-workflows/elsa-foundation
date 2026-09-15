@@ -238,7 +238,9 @@
   <Folder Name="/src/Elsa/Workflows/Dashboard/">
     <Project Path="src/Elsa/Workflows/Dashboard/Elsa.Workflows.Dashboard.csproj" />
   </Folder>
-  <Folder Name="/src/Elsa/Workflows/Dashboard/Persistence/" />
+  <Folder Name="/src/Elsa/Workflows/Dashboard/Persistence/">
+    <Project Path="src/Elsa/Workflows/Dashboard/Persistence/EntityFrameworkCore/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj" />
+  </Folder>
   <Folder Name="/src/Elsa/Workflows/Dashboard/Persistence/Groundwork/">
     <Project Path="src/Elsa/Workflows/Dashboard/Persistence/Groundwork/V2/Elsa.Workflows.Dashboard.Persistence.Groundwork.V2.csproj" />
   </Folder>
@@ -585,6 +587,10 @@
     <Project Path="tests/Elsa/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Dashboard/Persistence/" />
+  <Folder Name="/tests/Elsa/Workflows/Dashboard/Persistence/EntityFrameworkCore/">
+    <Project Path="tests/Elsa/Workflows/Dashboard/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests.csproj" />
+    <Project Path="tests/Elsa/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Workflows/Dashboard/Persistence/Groundwork/" />
   <Folder Name="/tests/Elsa/Workflows/Dashboard/Persistence/Groundwork/V2/">
     <Project Path="tests/Elsa/Workflows/Dashboard/Persistence/Groundwork/V2/Tests/Elsa.Workflows.Dashboard.Persistence.Groundwork.V2.Tests.csproj" />

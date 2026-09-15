@@ -127,7 +127,8 @@ public sealed class EfDurableValueStateStore(
         return new RuntimeStorePage<DurableValueState>(query, items, next);
     }
 
-    private static DurableValueStateEntity ToEntity(DurableValueState state, string scope, string id, long revision) => new()
+    // Internal checkpoint staging reuses the direct store's provider-neutral projection.
+    internal static DurableValueStateEntity ToEntity(DurableValueState state, string scope, string id, long revision) => new()
     {
         Id = id, ScopeKey = EfRuntimeOperationalStoreSupport.Encode(scope), ScopeKeyHash = EfRuntimeOperationalStoreSupport.Hash(scope),
         WorkflowExecutionId = EfRuntimeOperationalStoreSupport.Encode(state.WorkflowExecutionId), WorkflowExecutionIdHash = EfRuntimeOperationalStoreSupport.Hash(state.WorkflowExecutionId), WorkflowExecutionIdOrderKey = EfRuntimeOperationalStoreSupport.Order(state.WorkflowExecutionId),
@@ -135,13 +136,13 @@ public sealed class EfDurableValueStateStore(
         ContentJson = RuntimeArtifactJson.Serialize(state), SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion, Revision = revision
     };
 
-    private static void Copy(DurableValueStateEntity row, DurableValueState state, string scope, long revision)
+    internal static void Copy(DurableValueStateEntity row, DurableValueState state, string scope, long revision)
     {
         var replacement = ToEntity(state, scope, row.Id, revision);
         row.ScopeKey = replacement.ScopeKey; row.ScopeKeyHash = replacement.ScopeKeyHash; row.WorkflowExecutionId = replacement.WorkflowExecutionId; row.WorkflowExecutionIdHash = replacement.WorkflowExecutionIdHash; row.WorkflowExecutionIdOrderKey = replacement.WorkflowExecutionIdOrderKey; row.DurableValueId = replacement.DurableValueId; row.DurableValueIdHash = replacement.DurableValueIdHash; row.DurableValueIdOrderKey = replacement.DurableValueIdOrderKey; row.ContentJson = replacement.ContentJson; row.SchemaVersion = replacement.SchemaVersion; row.Revision = revision;
     }
 
-    private static DurableValueState Read(DurableValueStateEntity row, string scope, string? expectedWorkflow = null, string? expectedValue = null)
+    internal static DurableValueState Read(DurableValueStateEntity row, string scope, string? expectedWorkflow = null, string? expectedValue = null)
     {
         if (row.Revision <= 0 ||
             row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope) ||

@@ -30,6 +30,64 @@ public sealed class SchedulerStateEntity
     public long Revision { get; set; }
 }
 
+/// <summary>Relational envelope and claim projections for one durable timer.</summary>
+public sealed class DurableTimerEntity
+{
+    public string Id { get; set; } = null!;
+    public string ScopeKey { get; set; } = null!;
+    public string ScopeKeyHash { get; set; } = null!;
+    public string WorkflowExecutionId { get; set; } = null!;
+    public string WorkflowExecutionIdHash { get; set; } = null!;
+    public string WorkflowExecutionIdOrderKey { get; set; } = null!;
+    public string TimerId { get; set; } = null!;
+    public string TimerIdHash { get; set; } = null!;
+    public string TimerIdOrderKey { get; set; } = null!;
+    public string StimulusType { get; set; } = null!;
+    public string StimulusHash { get; set; } = null!;
+    public long DueTimeUtcTicks { get; set; }
+    public int DueTimeOffsetMinutes { get; set; }
+    public long CreatedAtUtcTicks { get; set; }
+    public int CreatedAtOffsetMinutes { get; set; }
+    public string ClaimOrderKey { get; set; } = null!;
+    public string? ClaimOwnerId { get; set; }
+    public long ClaimToken { get; set; }
+    public long? ClaimedAtUtcTicks { get; set; }
+    public int? ClaimedAtOffsetMinutes { get; set; }
+    public long? VisibleAfterUtcTicks { get; set; }
+    public int? VisibleAfterOffsetMinutes { get; set; }
+    public int FailureCount { get; set; }
+    public string ContentJson { get; set; } = null!;
+    public string SchemaVersion { get; set; } = null!;
+    public long Revision { get; set; }
+}
+
+/// <summary>Relational envelope and fenced-claim projections for one durable scheduler work item.</summary>
+public sealed class SchedulerWorkItemEntity
+{
+    public string Id { get; set; } = null!;
+    public string ScopeKey { get; set; } = null!;
+    public string ScopeKeyHash { get; set; } = null!;
+    public string WorkflowExecutionId { get; set; } = null!;
+    public string WorkflowExecutionIdHash { get; set; } = null!;
+    public string WorkflowExecutionIdOrderKey { get; set; } = null!;
+    public string WorkItemId { get; set; } = null!;
+    public string WorkItemIdHash { get; set; } = null!;
+    public string WorkOrderKey { get; set; } = null!;
+    public long EnqueuedAtUtcTicks { get; set; }
+    public int EnqueuedAtOffsetMinutes { get; set; }
+    public long RecordedAtUtcTicks { get; set; }
+    public int RecordedAtOffsetMinutes { get; set; }
+    public string? ClaimOwnerId { get; set; }
+    public long ClaimToken { get; set; }
+    public long? ClaimedAtUtcTicks { get; set; }
+    public int? ClaimedAtOffsetMinutes { get; set; }
+    public long? VisibleAfterUtcTicks { get; set; }
+    public int? VisibleAfterOffsetMinutes { get; set; }
+    public string ContentJson { get; set; } = null!;
+    public string SchemaVersion { get; set; } = null!;
+    public long Revision { get; set; }
+}
+
 /// <summary>Relational envelope and recovery projections for one execution-liveness state.</summary>
 public sealed class ExecutionLivenessStateEntity
 {
@@ -89,6 +147,27 @@ public sealed class IncidentStateEntity
     public long CreatedAtUtcTicks { get; set; }
     public long? ResolvedAtUtcTicks { get; set; }
     public string ContentJson { get; set; } = null!;
+    public string SchemaVersion { get; set; } = null!;
+    public long Revision { get; set; }
+}
+
+/// <summary>Immutable create-only replay marker for one runtime checkpoint commit.</summary>
+public sealed class RuntimeCheckpointCommitEntity
+{
+    public string Id { get; set; } = null!;
+    public string ScopeKey { get; set; } = null!;
+    public string ScopeKeyHash { get; set; } = null!;
+    public string CommitId { get; set; } = null!;
+    public string CommitIdHash { get; set; } = null!;
+    public string CommitIdOrderKey { get; set; } = null!;
+    public string WorkflowExecutionId { get; set; } = null!;
+    public string WorkflowExecutionIdHash { get; set; } = null!;
+    public string WorkflowExecutionIdOrderKey { get; set; } = null!;
+    public long OccurredAtUtcTicks { get; set; }
+    public string Fingerprint { get; set; } = null!;
+    public string ContentJson { get; set; } = null!;
+    public string PendingPostCommitWorkIdsJson { get; set; } = null!;
+    public string ConsumedSchedulerWorkItemIdsJson { get; set; } = null!;
     public string SchemaVersion { get; set; } = null!;
     public long Revision { get; set; }
 }

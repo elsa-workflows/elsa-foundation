@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -12,6 +13,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -43,13 +45,13 @@ public sealed class EfWorkflowAlterationAndScopeTests
         scopeFirst.AddRuntimeWorkflowTestScopeEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
         scopeFirst.AddWorkflowRuntime();
         Assert.Equal(WorkflowTestScopeStoreBackend.EntityFramework, WorkflowTestScopeStoreBackend.Find(scopeFirst)!.Name);
-        Assert.DoesNotContain(scopeFirst, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeCleanupStore));
+        Assert.Equal(typeof(EfWorkflowTestScopeCleanupStore), scopeFirst.Single(x => x.ServiceType == typeof(EfWorkflowTestScopeCleanupStore)).ImplementationType);
 
         var coreFirstScope = new ServiceCollection();
         coreFirstScope.AddWorkflowRuntime();
         coreFirstScope.AddRuntimeWorkflowTestScopeEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
         Assert.Equal(WorkflowTestScopeStoreBackend.EntityFramework, WorkflowTestScopeStoreBackend.Find(coreFirstScope)!.Name);
-        Assert.DoesNotContain(coreFirstScope, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeCleanupStore));
+        Assert.Equal(typeof(EfWorkflowTestScopeCleanupStore), coreFirstScope.Single(x => x.ServiceType == typeof(EfWorkflowTestScopeCleanupStore)).ImplementationType);
         Assert.Equal(typeof(EfWorkflowTestScopeStore), coreFirstScope.Single(x => x.ServiceType == typeof(EfWorkflowTestScopeStore)).ImplementationType);
 
         var sharedDatabasePath = Path.Combine(Path.GetTempPath(), $"elsa-runtime-order-{Guid.NewGuid():N}.db");
@@ -526,7 +528,105 @@ public sealed class EfWorkflowAlterationAndScopeTests
         var job = await fixture.Store.ClaimNextAsync(plan.PlanId, "worker", plan.CreatedAt.AddMinutes(2), TimeSpan.FromMinutes(1));
         var change = new WorkflowAlterationJobTerminalChange(job!.JobId, job.Claim!.Token, WorkflowAlterationJobStatus.Succeeded, [], WorkflowAlterationIdentity.CreateCheckpointCommitId(job.JobId, 1), plan.CreatedAt.AddMinutes(3));
         await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.CommitTerminalJobChangeAtomicallyAsync(change, _ => ValueTask.CompletedTask).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.CommitTerminalJobChangeAtomicallyAsync(change,
+            cancellationToken => fixture.Store.ApplyTerminalJobChangeAsync(change, cancellationToken)).AsTask());
         Assert.Equal(WorkflowAlterationJobStatus.Running, (await fixture.Store.FindJobAsync(job.JobId))!.Status);
+    }
+
+    [Fact]
+    public async Task Checkpoint_marker_terminalizes_claimed_alteration_job_in_the_same_ef_transaction()
+    {
+        await using var db = await Database.CreateAsync();
+        await using var fixture = db.Open("tenant-a");
+        var plan = Plan();
+        await fixture.Store.AdmitAsync(plan);
+        await fixture.Store.CaptureAsync(plan.PlanId, 0,
+            [new WorkflowAlterationCapturedTarget("execution-1", "tenant-a")], null);
+        await fixture.Store.SealAsync(plan.PlanId, 1, plan.CreatedAt.AddMinutes(1));
+        var job = (await fixture.Store.ClaimNextAsync(plan.PlanId, "worker", plan.CreatedAt.AddMinutes(2),
+            TimeSpan.FromMinutes(1)))!;
+        var terminal = new WorkflowAlterationJobTerminalChange(
+            job.JobId, job.Claim!.Token, WorkflowAlterationJobStatus.Succeeded, [],
+            WorkflowAlterationIdentity.CreateCheckpointCommitId(job.JobId, 1), plan.CreatedAt.AddMinutes(3));
+        var checkpoint = CheckpointFor(job, terminal);
+        var store = new EfRuntimeCheckpointCommitStore(fixture.Context, new Accessor("tenant-a"));
+
+        async ValueTask CommitCheckpointAsync(CancellationToken cancellationToken) =>
+            _ = await store.CommitAsync(checkpoint, new(RuntimeCheckpointPersistenceMode.Immediate), cancellationToken);
+        await fixture.Store.CommitTerminalJobChangeAtomicallyAsync(terminal, CommitCheckpointAsync);
+        await fixture.Store.CommitTerminalJobChangeAtomicallyAsync(terminal, CommitCheckpointAsync);
+        var stored = (await fixture.Store.FindJobAsync(job.JobId))!;
+        Assert.Equal(WorkflowAlterationJobStatus.Succeeded, stored.Status);
+        Assert.Equal(terminal.CheckpointCommitId, stored.CheckpointCommitId);
+        Assert.Equal(job.Revision + 1, stored.Revision);
+        Assert.Single(await fixture.Context.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Alteration_callback_rejects_a_different_ef_context_before_the_checkpoint_writes()
+    {
+        await using var db = await Database.CreateAsync();
+        await using var owner = db.Open("tenant-a");
+        var plan = Plan("wrong-context-plan");
+        await owner.Store.AdmitAsync(plan);
+        await owner.Store.CaptureAsync(plan.PlanId, 0,
+            [new WorkflowAlterationCapturedTarget("execution-1", "tenant-a")], null);
+        await owner.Store.SealAsync(plan.PlanId, 1, plan.CreatedAt.AddMinutes(1));
+        var job = (await owner.Store.ClaimNextAsync(plan.PlanId, "worker", plan.CreatedAt.AddMinutes(2),
+            TimeSpan.FromMinutes(1)))!;
+        var terminal = new WorkflowAlterationJobTerminalChange(
+            job.JobId, job.Claim!.Token, WorkflowAlterationJobStatus.Succeeded, [],
+            WorkflowAlterationIdentity.CreateCheckpointCommitId(job.JobId, 1), plan.CreatedAt.AddMinutes(3));
+        var checkpoint = CheckpointFor(job, terminal);
+        await using var foreign = db.Open("tenant-a");
+        var foreignWriter = new EfRuntimeCheckpointCommitStore(foreign.Context, new Accessor("tenant-a"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            owner.Store.CommitTerminalJobChangeAtomicallyAsync(terminal, async cancellationToken =>
+            {
+                await foreignWriter.CommitAsync(checkpoint, new(RuntimeCheckpointPersistenceMode.Immediate), cancellationToken);
+            }).AsTask());
+        var wrongScopeWriter = new EfRuntimeCheckpointCommitStore(owner.Context, new Accessor("tenant-b"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            owner.Store.CommitTerminalJobChangeAtomicallyAsync(terminal, async cancellationToken =>
+            {
+                await wrongScopeWriter.CommitAsync(checkpoint, new(RuntimeCheckpointPersistenceMode.Immediate), cancellationToken);
+            }).AsTask());
+        Assert.Equal(WorkflowAlterationJobStatus.Running, (await owner.Store.FindJobAsync(job.JobId))!.Status);
+        Assert.Empty(await owner.Context.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Alteration_callback_marker_failure_rolls_back_job_and_retries_cleanly()
+    {
+        await using var db = await Database.CreateAsync();
+        var interceptor = new MarkerInsertFailureInterceptor();
+        await using var fixture = db.Open("tenant-a", interceptor);
+        var plan = Plan("marker-rollback-plan");
+        await fixture.Store.AdmitAsync(plan);
+        await fixture.Store.CaptureAsync(plan.PlanId, 0,
+            [new WorkflowAlterationCapturedTarget("execution-1", "tenant-a")], null);
+        await fixture.Store.SealAsync(plan.PlanId, 1, plan.CreatedAt.AddMinutes(1));
+        var job = (await fixture.Store.ClaimNextAsync(plan.PlanId, "worker", plan.CreatedAt.AddMinutes(2),
+            TimeSpan.FromMinutes(1)))!;
+        var terminal = new WorkflowAlterationJobTerminalChange(
+            job.JobId, job.Claim!.Token, WorkflowAlterationJobStatus.Succeeded, [],
+            WorkflowAlterationIdentity.CreateCheckpointCommitId(job.JobId, 1), plan.CreatedAt.AddMinutes(3));
+        var checkpoint = CheckpointFor(job, terminal);
+        var writer = new EfRuntimeCheckpointCommitStore(fixture.Context, new Accessor("tenant-a"));
+        async ValueTask CommitCheckpointAsync(CancellationToken cancellationToken) =>
+            _ = await writer.CommitAsync(checkpoint, new(RuntimeCheckpointPersistenceMode.Immediate), cancellationToken);
+
+        interceptor.Arm();
+        await Assert.ThrowsAsync<DbUpdateException>(() =>
+            fixture.Store.CommitTerminalJobChangeAtomicallyAsync(terminal, CommitCheckpointAsync).AsTask());
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+        Assert.Equal(WorkflowAlterationJobStatus.Running, (await fixture.Store.FindJobAsync(job.JobId))!.Status);
+        Assert.Empty(await fixture.Context.RuntimeCheckpointCommits.ToArrayAsync());
+
+        await fixture.Store.CommitTerminalJobChangeAtomicallyAsync(terminal, CommitCheckpointAsync);
+        Assert.Equal(WorkflowAlterationJobStatus.Succeeded, (await fixture.Store.FindJobAsync(job.JobId))!.Status);
+        Assert.Single(await fixture.Context.RuntimeCheckpointCommits.ToArrayAsync());
     }
 
     [Fact]
@@ -666,19 +766,80 @@ public sealed class EfWorkflowAlterationAndScopeTests
         await Assert.ThrowsAsync<InvalidDataException>(() => restarted.Store.FindPlanAsync(plan.PlanId).AsTask());
     }
 
-    private static WorkflowAlterationPlanState Plan(string id = "plan-1", DateTimeOffset? createdAt = null) { var now = createdAt ?? DateTimeOffset.UtcNow; return WorkflowAlterationPlanState.CreateCapturing(id, new("tenant-a", "system", "root"), new("subject", "correlation"), "idem-" + id, "canonical-" + id, new("key", "AES", "cipher"), WorkflowAlterationTargetSelector.ForExecutionIds(["execution-1"]), now); }
+    [Fact]
+    public async Task Alteration_keys_keep_delimiter_colliding_scope_and_plan_pairs_separate()
+    {
+        await using var db = await Database.CreateAsync();
+        const string firstScope = "tenant-a";
+        const string firstPlanId = "plan\u001fx";
+        const string secondScope = "tenant-a\u001fplan";
+        const string secondPlanId = "x";
+        Assert.Equal(EfRelationalIdentity.Hash(firstScope + "\u001f" + firstPlanId),
+            EfRelationalIdentity.Hash(secondScope + "\u001f" + secondPlanId));
+        await using (var first = db.Open(firstScope))
+            await first.Store.AdmitAsync(Plan(firstPlanId, tenant: firstScope));
+        await using (var second = db.Open(secondScope))
+            await second.Store.AdmitAsync(Plan(secondPlanId, tenant: secondScope));
+        await using (var first = db.Open(firstScope))
+        {
+            Assert.Equal(firstPlanId, (await first.Store.FindPlanAsync(firstPlanId))!.PlanId);
+            Assert.Null(await first.Store.FindPlanAsync(secondPlanId));
+        }
+        await using (var second = db.Open(secondScope))
+        {
+            Assert.Equal(secondPlanId, (await second.Store.FindPlanAsync(secondPlanId))!.PlanId);
+            Assert.Null(await second.Store.FindPlanAsync(firstPlanId));
+        }
+    }
+
+    private static WorkflowAlterationPlanState Plan(string id = "plan-1", DateTimeOffset? createdAt = null, string tenant = "tenant-a") { var now = createdAt ?? DateTimeOffset.UtcNow; return WorkflowAlterationPlanState.CreateCapturing(id, new(tenant, "system", "root"), new("subject", "correlation"), "idem-" + id, "canonical-" + id, new("key", "AES", "cipher"), WorkflowAlterationTargetSelector.ForExecutionIds(["execution-1"]), now); }
+    private static RuntimeCheckpointCommit CheckpointFor(
+        WorkflowAlterationJobState job, WorkflowAlterationJobTerminalChange terminal) => new(
+        terminal.CheckpointCommitId,
+        new RuntimeCheckpoint($"checkpoint:{terminal.CheckpointCommitId}", "runtime.alteration.job",
+            job.WorkflowExecutionId, terminal.CompletedAt, [], new Dictionary<string, string>()),
+        new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], [],
+            null, null, null, null, null, null, terminal),
+        [], new Dictionary<string, string>());
     private sealed class Database : IAsyncDisposable
     {
         private readonly SqliteConnection _keeper; private readonly string _cs;
         private Database(SqliteConnection keeper, string cs) { _keeper = keeper; _cs = cs; }
         public static async Task<Database> CreateAsync() { var cs = $"Data Source=file:alteration-{Guid.NewGuid():N};Mode=Memory;Cache=Shared"; var keeper = new SqliteConnection(cs); await keeper.OpenAsync(); await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(keeper).Options); await context.Database.EnsureCreatedAsync(); return new(keeper, cs); }
-        public Fixture Open(string scope) => new(_cs, scope); public ValueTask DisposeAsync() => _keeper.DisposeAsync();
+        public Fixture Open(string scope, DbCommandInterceptor? interceptor = null) => new(_cs, scope, interceptor); public ValueTask DisposeAsync() => _keeper.DisposeAsync();
     }
     private sealed class Fixture : IAsyncDisposable
     {
         private readonly SqliteConnection _connection; public readonly BookmarkStateSqliteDbContext Context; public readonly EfWorkflowAlterationStore Store; public readonly EfWorkflowTestScopeStore ScopeStore;
-        public Fixture(string cs, string scope) { _connection = new SqliteConnection(cs); _connection.Open(); Context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(_connection).Options); var access = new Accessor(scope); var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) })); Store = new(Context, access, codec); ScopeStore = new(Context, access, codec); }
+        public Fixture(string cs, string scope, DbCommandInterceptor? interceptor = null) { _connection = new SqliteConnection(cs); _connection.Open(); var options = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(_connection); if (interceptor is not null) options.AddInterceptors(interceptor); Context = new BookmarkStateSqliteDbContext(options.Options); var access = new Accessor(scope); var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) })); Store = new(Context, access, codec); ScopeStore = new(Context, access, codec); }
         public async ValueTask DisposeAsync() { await Context.DisposeAsync(); await _connection.DisposeAsync(); }
     }
     private sealed class Accessor(string value) : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(value)); }
+    private sealed class MarkerInsertFailureInterceptor : DbCommandInterceptor
+    {
+        private int armed;
+        public void Arm() => Interlocked.Exchange(ref armed, 1);
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            ThrowIfArmed(command);
+            return ValueTask.FromResult(result);
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            ThrowIfArmed(command);
+            return ValueTask.FromResult(result);
+        }
+
+        private void ThrowIfArmed(DbCommand command)
+        {
+            if (command.CommandText.Contains("elsa_runtime_checkpoint_commit", StringComparison.OrdinalIgnoreCase) &&
+                command.CommandText.Contains("INSERT", StringComparison.OrdinalIgnoreCase) &&
+                Interlocked.Exchange(ref armed, 0) == 1)
+                throw new DbUpdateException("Simulated alteration checkpoint marker insert failure.");
+        }
+    }
 }
