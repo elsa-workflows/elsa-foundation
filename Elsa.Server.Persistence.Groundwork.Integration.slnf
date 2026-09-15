@@ -53,6 +53,8 @@
       "src/Elsa/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj",
       "src/Elsa/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj",
       "src/Elsa/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj",
+      "src/Elsa/Workflows/Publishing/Elsa.Workflows.Publishing.csproj",
+      "src/Elsa/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj",
       "src/Elsa/Workflows/Publishing/Persistence/Groundwork/Elsa.Workflows.Publishing.Persistence.Groundwork.csproj",
       "src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj",
       "src/Elsa/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed.csproj",
@@ -88,6 +90,7 @@
       "tests/Elsa/Secrets/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Secrets.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj",
       "tests/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "tests/Elsa/Testing/Elsa.Testing.csproj",
+      "tests/Elsa/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests.csproj",
       "tests/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests.csproj",
       "tests/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj"
