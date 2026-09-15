@@ -135,6 +135,9 @@ public sealed class PublishingMySqlContainerFixture : IAsyncLifetime
 
 internal static class PublishingProviderContainerSupport
 {
+    public static bool RequireNativeProviderMatrix =>
+        Environment.GetEnvironmentVariable("GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX") is "1" or "true";
+
     public static bool IsUnavailable(Exception exception) =>
         exception is DockerUnavailableException ||
         exception.GetType().Name.Contains("Docker", StringComparison.OrdinalIgnoreCase) ||

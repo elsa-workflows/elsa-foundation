@@ -13,6 +13,12 @@ public static class PublishingPolicyProjectionEfModule
     public const int IdentityMaximumLength = 450;
     public const int HashMaximumLength = 64;
     public const int PolicyKeyMaximumLength = IdentityMaximumLength + 16;
+    // Provider text columns contain EfRelationalIdentity's lossless Base64 projection. Base64 is
+    // ASCII, so these bounds are character counts as well as byte counts for UTF-8 providers.
+    public const int EncodedIdentityMaximumLength = 1200;
+    public const int EncodedPolicyKeyMaximumLength = 1244;
+    public const int EncodedFailureCodeMaximumLength = 344;
+    public const int EncodedFailureMessageMaximumLength = 1368;
     // EfRelationalIdentity.CreateOrderKey is a fixed-width two-byte-per-code-unit binary key plus a length suffix.
     public const int IntentIdOrderKeyMaximumLength = (IdentityMaximumLength + 1) * sizeof(char);
     public const int SchemaVersionMaximumLength = 32;

@@ -14,12 +14,45 @@ internal static class EfPublishingStoreSupport
         var current = accessor.Current ?? throw new InvalidOperationException("Publishing persistence access context is missing.");
         if (current.AcrossScopes)
             throw new InvalidOperationException("Publishing policy and projection-intent stores require an explicit global or scoped persistence access context.");
-        return current.Scope?.Value;
+        var tenantId = current.Scope?.Value;
+        if (tenantId is not null)
+            EnsureIdentity(tenantId, nameof(tenantId));
+        return tenantId;
     }
 
     public static string TenantHash(string? tenantId) => EfRelationalIdentity.Hash(tenantId ?? "");
 
     public static string Hash(string value) => EfRelationalIdentity.Hash(value);
+
+    public static string Encode(string value) => EfRelationalIdentity.Encode(value);
+
+    public static string? EncodeNullable(string? value) => value is null ? null : Encode(value);
+
+    public static string DecodeIdentity(string encoded, string field) =>
+        DecodeValue(encoded, IdentityMaximumLength, field);
+
+    public static string? DecodeNullableIdentity(string? encoded, string field) =>
+        encoded is null ? null : DecodeIdentity(encoded, field);
+
+    public static string DecodeValue(string encoded, int maximumLength, string field)
+    {
+        EnsurePersistedValue(encoded, EncodedMaximumLength(maximumLength), field);
+        string value;
+        try
+        {
+            value = EfRelationalIdentity.Decode(encoded);
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw new InvalidOperationException($"Malformed persisted publication state: {field} is not a valid encoded value.", exception);
+        }
+
+        EnsureValue(value, maximumLength, field);
+        return value;
+    }
+
+    public static int EncodedMaximumLength(int maximumLength) =>
+        checked(((maximumLength * sizeof(char) + 2) / 3) * 4);
 
     public static byte[] OrderKey(string value)
     {

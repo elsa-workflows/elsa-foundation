@@ -16,9 +16,7 @@ public sealed class EfPublicationPolicyStore(
         cancellationToken.ThrowIfCancellationRequested();
         var tenantId = EfPublishingStoreSupport.TenantValue(accessContextAccessor);
         var key = EfPublishingStoreSupport.PolicyKey(workflowDefinitionId);
-        var row = await QueryScope(tenantId)
-            .Where(candidate => candidate.PolicyKeyHash == EfPublishingStoreSupport.Hash(key) && candidate.PolicyKey == key)
-            .SingleOrDefaultAsync(cancellationToken);
+        var row = await FindEntityAsync(tenantId, key, cancellationToken);
         return row is null ? null : ToModel(row);
     }
 
@@ -34,8 +32,7 @@ public sealed class EfPublicationPolicyStore(
 
         var tenantId = EfPublishingStoreSupport.TenantValue(accessContextAccessor);
         var key = EfPublishingStoreSupport.PolicyKey(policy.WorkflowDefinitionId);
-        var keyHash = EfPublishingStoreSupport.Hash(key);
-        var row = await FindEntityForUpdateAsync(tenantId, keyHash, key, cancellationToken);
+        var row = await FindEntityForUpdateAsync(tenantId, key, cancellationToken);
 
         if (row is null)
         {
@@ -78,21 +75,39 @@ public sealed class EfPublicationPolicyStore(
         }
     }
 
-    private IQueryable<PublicationPolicyEntity> QueryScope(string? tenantId) =>
-        context.Policies.AsNoTracking().Where(row => row.TenantIdHash == EfPublishingStoreSupport.TenantHash(tenantId) && row.TenantId == tenantId);
+    private async Task<PublicationPolicyEntity?> FindEntityAsync(
+        string? tenantId,
+        string key,
+        CancellationToken cancellationToken)
+    {
+        // Hashes are the only indexed lookup keys. The encoded residuals are checked after a
+        // bounded candidate read so a hash collision can never silently alias another policy.
+        var candidates = await context.Policies.AsNoTracking()
+            .Where(candidate => candidate.TenantIdHash == EfPublishingStoreSupport.TenantHash(tenantId) &&
+                                candidate.PolicyKeyHash == EfPublishingStoreSupport.Hash(key))
+            .Take(2)
+            .ToArrayAsync(cancellationToken);
+        if (candidates.Length == 0)
+            return null;
+
+        var encodedTenantId = EfPublishingStoreSupport.EncodeNullable(tenantId);
+        var encodedKey = EfPublishingStoreSupport.Encode(key);
+        if (candidates.Length != 1 ||
+            !StringComparer.Ordinal.Equals(candidates[0].TenantId, encodedTenantId) ||
+            !StringComparer.Ordinal.Equals(candidates[0].PolicyKey, encodedKey))
+            throw new InvalidOperationException("A publication policy hash candidate did not match its encoded identity residual.");
+
+        return candidates[0];
+    }
 
     private async Task<PublicationPolicyEntity?> FindEntityForUpdateAsync(
         string? tenantId,
-        string keyHash,
         string key,
         CancellationToken cancellationToken)
     {
         // A tracking query can return an older instance already held by this DbContext. Read a fresh
         // snapshot first, then attach it with its database revision as the concurrency original value.
-        var row = await context.Policies.AsNoTracking()
-            .Where(candidate => candidate.TenantIdHash == EfPublishingStoreSupport.TenantHash(tenantId) && candidate.TenantId == tenantId)
-            .Where(candidate => candidate.PolicyKeyHash == keyHash && candidate.PolicyKey == key)
-            .SingleOrDefaultAsync(cancellationToken);
+        var row = await FindEntityAsync(tenantId, key, cancellationToken);
         if (row is null)
             return null;
 
@@ -123,14 +138,14 @@ public sealed class EfPublicationPolicyStore(
         return new PublicationPolicyEntity
         {
             Id = EfPublishingStoreSupport.PhysicalId(tenantId, key),
-            PolicyKey = key,
+            PolicyKey = EfPublishingStoreSupport.Encode(key),
             PolicyKeyHash = EfPublishingStoreSupport.Hash(key),
-            WorkflowDefinitionId = policy.WorkflowDefinitionId,
+            WorkflowDefinitionId = EfPublishingStoreSupport.EncodeNullable(policy.WorkflowDefinitionId),
             WorkflowDefinitionIdHash = policy.WorkflowDefinitionId is null ? null : EfPublishingStoreSupport.Hash(policy.WorkflowDefinitionId),
-            TenantId = tenantId,
+            TenantId = EfPublishingStoreSupport.EncodeNullable(tenantId),
             TenantIdHash = EfPublishingStoreSupport.TenantHash(tenantId),
             DefaultAction = policy.DefaultAction.ToString(),
-            DefaultSlotName = policy.DefaultSlotName,
+            DefaultSlotName = EfPublishingStoreSupport.Encode(policy.DefaultSlotName),
             Revision = policy.Revision,
             UpdatedAtUtcTicks = updated.UtcTicks,
             UpdatedAtOffsetMinutes = updated.OffsetMinutes
@@ -142,7 +157,7 @@ public sealed class EfPublicationPolicyStore(
         Validate(policy);
         var updated = EfPublishingStoreSupport.DateTimeOffsetParts(policy.UpdatedAt);
         row.DefaultAction = policy.DefaultAction.ToString();
-        row.DefaultSlotName = policy.DefaultSlotName;
+        row.DefaultSlotName = EfPublishingStoreSupport.Encode(policy.DefaultSlotName);
         row.Revision = policy.Revision;
         row.UpdatedAtUtcTicks = updated.UtcTicks;
         row.UpdatedAtOffsetMinutes = updated.OffsetMinutes;
@@ -150,34 +165,33 @@ public sealed class EfPublicationPolicyStore(
 
     private static PublicationPolicy ToModel(PublicationPolicyEntity row)
     {
-        EfPublishingStoreSupport.EnsurePersistedValue(row.PolicyKey, PublishingPolicyProjectionEfModule.PolicyKeyMaximumLength, nameof(row.PolicyKey));
-        if (row.TenantId is not null)
-            EfPublishingStoreSupport.EnsurePersistedValue(row.TenantId, EfPublishingStoreSupport.IdentityMaximumLength, nameof(row.TenantId));
-        if (!StringComparer.Ordinal.Equals(row.TenantIdHash, EfPublishingStoreSupport.TenantHash(row.TenantId)) ||
-            !StringComparer.Ordinal.Equals(row.Id, EfPublishingStoreSupport.PhysicalId(row.TenantId, row.PolicyKey)))
+        var policyKey = EfPublishingStoreSupport.DecodeValue(row.PolicyKey, PublishingPolicyProjectionEfModule.PolicyKeyMaximumLength, nameof(row.PolicyKey));
+        var tenantId = EfPublishingStoreSupport.DecodeNullableIdentity(row.TenantId, nameof(row.TenantId));
+        if (!StringComparer.Ordinal.Equals(row.TenantIdHash, EfPublishingStoreSupport.TenantHash(tenantId)) ||
+            !StringComparer.Ordinal.Equals(row.Id, EfPublishingStoreSupport.PhysicalId(tenantId, policyKey)))
             throw new InvalidOperationException("The persisted publication policy scope projection is corrupt.");
-        EfPublishingStoreSupport.EnsureHash(row.PolicyKey, row.PolicyKeyHash, nameof(row.PolicyKey));
-        if (row.WorkflowDefinitionId is null)
+        EfPublishingStoreSupport.EnsureHash(policyKey, row.PolicyKeyHash, nameof(row.PolicyKey));
+        var workflowDefinitionId = EfPublishingStoreSupport.DecodeNullableIdentity(row.WorkflowDefinitionId, nameof(row.WorkflowDefinitionId));
+        if (workflowDefinitionId is null)
         {
-            if (!StringComparer.Ordinal.Equals(row.PolicyKey, "host") || row.WorkflowDefinitionIdHash is not null)
+            if (!StringComparer.Ordinal.Equals(policyKey, "host") || row.WorkflowDefinitionIdHash is not null)
                 throw new InvalidOperationException("The persisted publication policy identity projection is corrupt.");
         }
         else
         {
-            EfPublishingStoreSupport.EnsurePersistedValue(row.WorkflowDefinitionId, EfPublishingStoreSupport.IdentityMaximumLength, nameof(row.WorkflowDefinitionId));
-            EfPublishingStoreSupport.EnsureHash(row.WorkflowDefinitionId, row.WorkflowDefinitionIdHash ?? "", nameof(row.WorkflowDefinitionId));
-            if (!StringComparer.Ordinal.Equals(row.PolicyKey, EfPublishingStoreSupport.PolicyKey(row.WorkflowDefinitionId)))
+            EfPublishingStoreSupport.EnsureHash(workflowDefinitionId, row.WorkflowDefinitionIdHash ?? "", nameof(row.WorkflowDefinitionId));
+            if (!StringComparer.Ordinal.Equals(policyKey, EfPublishingStoreSupport.PolicyKey(workflowDefinitionId)))
                 throw new InvalidOperationException("The persisted publication policy key projection is corrupt.");
         }
 
         if (!Enum.TryParse<PublicationPolicyDefaultAction>(row.DefaultAction, ignoreCase: false, out var action) ||
             !Enum.IsDefined(action) || !StringComparer.Ordinal.Equals(row.DefaultAction, action.ToString()))
             throw new InvalidOperationException("Malformed persisted publication policy: default action is invalid.");
-        EfPublishingStoreSupport.EnsurePersistedValue(row.DefaultSlotName, EfPublishingStoreSupport.IdentityMaximumLength, nameof(row.DefaultSlotName));
+        var defaultSlotName = EfPublishingStoreSupport.DecodeIdentity(row.DefaultSlotName, nameof(row.DefaultSlotName));
         var updatedAt = EfPublishingStoreSupport.DateTimeOffset(row.UpdatedAtUtcTicks, row.UpdatedAtOffsetMinutes);
         if (row.Revision < 1)
             throw new InvalidOperationException("Malformed persisted publication policy: revision is invalid.");
-        return new PublicationPolicy(row.WorkflowDefinitionId, action, row.DefaultSlotName, row.Revision, updatedAt);
+        return new PublicationPolicy(workflowDefinitionId, action, defaultSlotName, row.Revision, updatedAt);
     }
 
     private static void Validate(PublicationPolicy policy)

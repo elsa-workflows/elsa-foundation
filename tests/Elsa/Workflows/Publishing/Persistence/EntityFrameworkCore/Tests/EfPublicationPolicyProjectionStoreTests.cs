@@ -72,6 +72,85 @@ public sealed class EfPublicationPolicyProjectionStoreTests
     }
 
     [Fact]
+    public async Task Opaque_utf16_identities_are_encoded_round_trip_and_cas_safe()
+    {
+        await using var database = await Database.CreateAsync();
+        const string tenant = "tenant-\0-\uD800";
+        const string definition = "definition-\0-\uD801";
+        const string slot = "slot-\0-\uD802";
+        const string intentId = "intent-\0-\uD803";
+        const string publicationId = "publication-\0-\uD804";
+        const string projectionKind = "kind-\0-\uD805";
+        const string failureCode = "failure-\0-\uD806";
+        const string failureMessage = "message-\0-\uD807";
+
+        var policy = Policy(definition, slot);
+        var intent = Intent(intentId, publicationId) with
+        {
+            ProjectionKind = projectionKind,
+            Status = PublicationProjectionIntentStatus.Failed,
+            AttemptCount = 2,
+            LastFailure = new PublicationFailure(failureCode, failureMessage)
+        };
+        await using (var context = database.Context())
+        {
+            var policyStore = database.Policies(context, tenant);
+            var intentStore = database.Intents(context, tenant);
+            Assert.True((await policyStore.TrySaveAsync(policy, 0)).Succeeded);
+            await intentStore.SaveAsync(intent);
+
+            var storedPolicy = await context.Policies.AsNoTracking().SingleAsync();
+            Assert.Equal(EfRelationalIdentity.Encode(tenant), storedPolicy.TenantId);
+            Assert.Equal(EfRelationalIdentity.Encode($"workflow:{definition.Length}:{definition}"), storedPolicy.PolicyKey);
+            Assert.Equal(EfRelationalIdentity.Encode(definition), storedPolicy.WorkflowDefinitionId);
+            Assert.Equal(EfRelationalIdentity.Encode(slot), storedPolicy.DefaultSlotName);
+
+            var storedIntent = await context.ProjectionIntents.AsNoTracking().SingleAsync();
+            Assert.Equal(EfRelationalIdentity.Encode(tenant), storedIntent.TenantId);
+            Assert.Equal(EfRelationalIdentity.Encode(intentId), storedIntent.IntentId);
+            Assert.Equal(EfRelationalIdentity.Encode(publicationId), storedIntent.PublicationId);
+            Assert.Equal(EfRelationalIdentity.Encode(projectionKind), storedIntent.ProjectionKind);
+            Assert.Equal(EfRelationalIdentity.Encode(failureCode), storedIntent.LastFailureCode);
+            Assert.Equal(EfRelationalIdentity.Encode(failureMessage), storedIntent.LastFailureMessage);
+
+            Assert.Equal(policy with { Revision = 1 }, (await policyStore.FindAsync(definition)));
+            Assert.Equal(intent, (await intentStore.FindAsync(intentId)));
+            Assert.Equal(intent, Assert.Single(await intentStore.ListByPublicationAsync(publicationId)));
+
+            var transitioned = intent with { Status = PublicationProjectionIntentStatus.Delivering, AttemptCount = 3 };
+            var cas = await intentStore.TryTransitionAsync(transitioned, PublicationProjectionIntentStatus.Failed);
+            Assert.True(cas.Succeeded);
+            Assert.Equal(transitioned, cas.Intent);
+        }
+
+        await using var restarted = database.Context();
+        Assert.Equal(policy with { Revision = 1 }, await database.Policies(restarted, tenant).FindAsync(definition));
+        Assert.Equal(intent with { Status = PublicationProjectionIntentStatus.Delivering, AttemptCount = 3 },
+            await database.Intents(restarted, tenant).FindAsync(intentId));
+    }
+
+    [Fact]
+    public async Task Hash_only_candidates_fail_closed_when_the_encoded_residual_does_not_match()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var context = database.Context();
+        var policyStore = database.Policies(context, "tenant-a");
+        await policyStore.TrySaveAsync(Policy("definition", "slot"), 0);
+        var policyRow = await context.Policies.SingleAsync();
+        policyRow.PolicyKey = EfRelationalIdentity.Encode("workflow:9:not-the-key");
+        await context.SaveChangesAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => policyStore.FindAsync("definition").AsTask());
+
+        var intentStore = database.Intents(context, "tenant-a");
+        var intent = Intent("intent", "publication");
+        await intentStore.SaveAsync(intent);
+        var intentRow = await context.ProjectionIntents.SingleAsync();
+        intentRow.PublicationId = EfRelationalIdentity.Encode("not-the-publication");
+        await context.SaveChangesAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => intentStore.ListByPublicationAsync(intent.PublicationId).AsTask());
+    }
+
+    [Fact]
     public async Task Projection_intents_are_idempotent_restart_safe_scoped_and_ordered_by_full_ordinal_identity()
     {
         await using var database = await Database.CreateAsync();

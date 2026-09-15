@@ -58,17 +58,21 @@ public sealed class EfPublicationProjectionIntentStore(
         cancellationToken.ThrowIfCancellationRequested();
         var tenantId = EfPublishingStoreSupport.TenantValue(accessContextAccessor);
         var publicationHash = EfPublishingStoreSupport.Hash(publicationId);
+        var tenantHash = EfPublishingStoreSupport.TenantHash(tenantId);
         var rows = await context.ProjectionIntents.AsNoTracking()
-            .Where(row => row.TenantIdHash == EfPublishingStoreSupport.TenantHash(tenantId) &&
-                          row.TenantId == tenantId &&
-                          row.PublicationIdHash == publicationHash &&
-                          row.PublicationId == publicationId)
+            .Where(row => row.TenantIdHash == tenantHash && row.PublicationIdHash == publicationHash)
             .OrderBy(row => row.IntentIdOrderKey)
             .ThenBy(row => row.IntentIdHash)
             .Take(PublishingPolicyProjectionEfModule.MaximumMaterializedListEntries + 1)
             .ToArrayAsync(cancellationToken);
         if (rows.Length > PublishingPolicyProjectionEfModule.MaximumMaterializedListEntries)
             throw new InvalidOperationException($"Publication projection intents exceeded the bounded list limit of {PublishingPolicyProjectionEfModule.MaximumMaterializedListEntries}.");
+
+        var encodedTenantId = EfPublishingStoreSupport.EncodeNullable(tenantId);
+        var encodedPublicationId = EfPublishingStoreSupport.Encode(publicationId);
+        if (rows.Any(row => !StringComparer.Ordinal.Equals(row.TenantId, encodedTenantId) ||
+                            !StringComparer.Ordinal.Equals(row.PublicationId, encodedPublicationId)))
+            throw new InvalidOperationException("A publication projection-intent hash candidate did not match its encoded identity residual.");
 
         return rows.Select(ToModel).ToArray();
     }
@@ -108,11 +112,30 @@ public sealed class EfPublicationProjectionIntentStore(
         }
     }
 
-    private Task<PublicationProjectionIntentEntity?> FindEntityAsync(string? tenantId, string intentId, CancellationToken cancellationToken) =>
-        context.ProjectionIntents.AsNoTracking()
-            .Where(row => row.TenantIdHash == EfPublishingStoreSupport.TenantHash(tenantId) && row.TenantId == tenantId)
-            .Where(row => row.IntentIdHash == EfPublishingStoreSupport.Hash(intentId) && row.IntentId == intentId)
-            .SingleOrDefaultAsync(cancellationToken);
+    private async Task<PublicationProjectionIntentEntity?> FindEntityAsync(
+        string? tenantId,
+        string intentId,
+        CancellationToken cancellationToken)
+    {
+        // Hashes are the only indexed lookup keys. The encoded residuals are checked after a
+        // bounded candidate read so a hash collision can never silently alias another intent.
+        var candidates = await context.ProjectionIntents.AsNoTracking()
+            .Where(row => row.TenantIdHash == EfPublishingStoreSupport.TenantHash(tenantId) &&
+                          row.IntentIdHash == EfPublishingStoreSupport.Hash(intentId))
+            .Take(2)
+            .ToArrayAsync(cancellationToken);
+        if (candidates.Length == 0)
+            return null;
+
+        var encodedTenantId = EfPublishingStoreSupport.EncodeNullable(tenantId);
+        var encodedIntentId = EfPublishingStoreSupport.Encode(intentId);
+        if (candidates.Length != 1 ||
+            !StringComparer.Ordinal.Equals(candidates[0].TenantId, encodedTenantId) ||
+            !StringComparer.Ordinal.Equals(candidates[0].IntentId, encodedIntentId))
+            throw new InvalidOperationException("A publication projection-intent hash candidate did not match its encoded identity residual.");
+
+        return candidates[0];
+    }
 
     private async Task<PublicationProjectionIntentEntity?> FindEntityForUpdateAsync(
         string? tenantId,
@@ -121,10 +144,7 @@ public sealed class EfPublicationProjectionIntentStore(
     {
         // A tracking query can return an older instance already held by this DbContext. Read a fresh
         // snapshot first, then attach it with its database revision as the concurrency original value.
-        var row = await context.ProjectionIntents.AsNoTracking()
-            .Where(row => row.TenantIdHash == EfPublishingStoreSupport.TenantHash(tenantId) && row.TenantId == tenantId)
-            .Where(row => row.IntentIdHash == EfPublishingStoreSupport.Hash(intentId) && row.IntentId == intentId)
-            .SingleOrDefaultAsync(cancellationToken);
+        var row = await FindEntityAsync(tenantId, intentId, cancellationToken);
         if (row is null)
             return null;
 
@@ -148,21 +168,21 @@ public sealed class EfPublicationProjectionIntentStore(
         return new PublicationProjectionIntentEntity
         {
             Id = EfPublishingStoreSupport.PhysicalId(tenantId, intent.IntentId),
-            IntentId = intent.IntentId,
+            IntentId = EfPublishingStoreSupport.Encode(intent.IntentId),
             IntentIdHash = EfPublishingStoreSupport.Hash(intent.IntentId),
             IntentIdOrderKey = EfPublishingStoreSupport.OrderKey(intent.IntentId),
-            PublicationId = intent.PublicationId,
+            PublicationId = EfPublishingStoreSupport.Encode(intent.PublicationId),
             PublicationIdHash = EfPublishingStoreSupport.Hash(intent.PublicationId),
-            ProjectionKind = intent.ProjectionKind,
+            ProjectionKind = EfPublishingStoreSupport.Encode(intent.ProjectionKind),
             ProjectionKindHash = EfPublishingStoreSupport.Hash(intent.ProjectionKind),
             Operation = intent.Operation.ToString(),
             Status = intent.Status.ToString(),
             AttemptCount = intent.AttemptCount,
             NextAttemptAtUtcTicks = nextAttemptAtUtcTicks,
             NextAttemptAtOffsetMinutes = nextAttemptAtOffsetMinutes,
-            LastFailureCode = intent.LastFailure?.Code,
-            LastFailureMessage = intent.LastFailure?.Message,
-            TenantId = tenantId,
+            LastFailureCode = intent.LastFailure is null ? null : EfPublishingStoreSupport.Encode(intent.LastFailure.Code),
+            LastFailureMessage = intent.LastFailure is null ? null : EfPublishingStoreSupport.Encode(intent.LastFailure.Message),
+            TenantId = EfPublishingStoreSupport.EncodeNullable(tenantId),
             TenantIdHash = EfPublishingStoreSupport.TenantHash(tenantId),
             Revision = 1
         };
@@ -170,7 +190,7 @@ public sealed class EfPublicationProjectionIntentStore(
 
     private static void CopyMutable(PublicationProjectionIntentEntity row, PublicationProjectionIntent intent)
     {
-        var next = ToEntity(intent, row.TenantId);
+        var next = ToEntity(intent, EfPublishingStoreSupport.DecodeNullableIdentity(row.TenantId, nameof(row.TenantId)));
         row.Status = next.Status;
         row.AttemptCount = next.AttemptCount;
         row.NextAttemptAtUtcTicks = next.NextAttemptAtUtcTicks;
@@ -182,17 +202,16 @@ public sealed class EfPublicationProjectionIntentStore(
 
     private static PublicationProjectionIntent ToModel(PublicationProjectionIntentEntity row)
     {
-        EfPublishingStoreSupport.EnsurePersistedValue(row.IntentId, EfPublishingStoreSupport.IdentityMaximumLength, nameof(row.IntentId));
-        EfPublishingStoreSupport.EnsurePersistedValue(row.PublicationId, EfPublishingStoreSupport.IdentityMaximumLength, nameof(row.PublicationId));
-        EfPublishingStoreSupport.EnsurePersistedValue(row.ProjectionKind, EfPublishingStoreSupport.IdentityMaximumLength, nameof(row.ProjectionKind));
-        if (row.TenantId is not null)
-            EfPublishingStoreSupport.EnsurePersistedValue(row.TenantId, EfPublishingStoreSupport.IdentityMaximumLength, nameof(row.TenantId));
-        if (!StringComparer.Ordinal.Equals(row.TenantIdHash, EfPublishingStoreSupport.TenantHash(row.TenantId)) ||
-            !StringComparer.Ordinal.Equals(row.Id, EfPublishingStoreSupport.PhysicalId(row.TenantId, row.IntentId)))
+        var intentId = EfPublishingStoreSupport.DecodeIdentity(row.IntentId, nameof(row.IntentId));
+        var publicationId = EfPublishingStoreSupport.DecodeIdentity(row.PublicationId, nameof(row.PublicationId));
+        var projectionKind = EfPublishingStoreSupport.DecodeIdentity(row.ProjectionKind, nameof(row.ProjectionKind));
+        var tenantId = EfPublishingStoreSupport.DecodeNullableIdentity(row.TenantId, nameof(row.TenantId));
+        if (!StringComparer.Ordinal.Equals(row.TenantIdHash, EfPublishingStoreSupport.TenantHash(tenantId)) ||
+            !StringComparer.Ordinal.Equals(row.Id, EfPublishingStoreSupport.PhysicalId(tenantId, intentId)))
             throw new InvalidOperationException("The persisted publication projection-intent scope projection is corrupt.");
-        EfPublishingStoreSupport.EnsureProjection(row.IntentId, row.IntentIdHash, row.IntentIdOrderKey, nameof(row.IntentId));
-        EfPublishingStoreSupport.EnsureHash(row.PublicationId, row.PublicationIdHash, nameof(row.PublicationId));
-        EfPublishingStoreSupport.EnsureHash(row.ProjectionKind, row.ProjectionKindHash, nameof(row.ProjectionKind));
+        EfPublishingStoreSupport.EnsureProjection(intentId, row.IntentIdHash, row.IntentIdOrderKey, nameof(row.IntentId));
+        EfPublishingStoreSupport.EnsureHash(publicationId, row.PublicationIdHash, nameof(row.PublicationId));
+        EfPublishingStoreSupport.EnsureHash(projectionKind, row.ProjectionKindHash, nameof(row.ProjectionKind));
         if (row.Revision < 1 || row.AttemptCount < 0)
             throw new InvalidOperationException("Malformed persisted publication projection intent: revision or attempt count is invalid.");
         if (!Enum.TryParse<PublicationProjectionOperation>(row.Operation, ignoreCase: false, out var operation) ||
@@ -210,11 +229,12 @@ public sealed class EfPublicationProjectionIntentStore(
             throw new InvalidOperationException("Malformed persisted publication projection intent: failure details are incomplete.");
         if (row.LastFailureCode is not null)
         {
-            EfPublishingStoreSupport.EnsurePersistedValue(row.LastFailureCode, PublishingPolicyProjectionEfModule.FailureCodeMaximumLength, nameof(row.LastFailureCode));
-            EfPublishingStoreSupport.EnsurePersistedValue(row.LastFailureMessage, PublishingPolicyProjectionEfModule.FailureMessageMaximumLength, nameof(row.LastFailureMessage));
+            var failureCode = EfPublishingStoreSupport.DecodeValue(row.LastFailureCode, PublishingPolicyProjectionEfModule.FailureCodeMaximumLength, nameof(row.LastFailureCode));
+            var failureMessage = EfPublishingStoreSupport.DecodeValue(row.LastFailureMessage!, PublishingPolicyProjectionEfModule.FailureMessageMaximumLength, nameof(row.LastFailureMessage));
+            var failure = new PublicationFailure(failureCode, failureMessage);
+            return new PublicationProjectionIntent(intentId, publicationId, projectionKind, operation, status, row.AttemptCount, nextAttempt, failure);
         }
-        var failure = row.LastFailureCode is null ? null : new PublicationFailure(row.LastFailureCode, row.LastFailureMessage!);
-        return new PublicationProjectionIntent(row.IntentId, row.PublicationId, row.ProjectionKind, operation, status, row.AttemptCount, nextAttempt, failure);
+        return new PublicationProjectionIntent(intentId, publicationId, projectionKind, operation, status, row.AttemptCount, nextAttempt, null);
     }
 
     private static void EnsureImmutableIdentity(PublicationProjectionIntent current, PublicationProjectionIntent next)

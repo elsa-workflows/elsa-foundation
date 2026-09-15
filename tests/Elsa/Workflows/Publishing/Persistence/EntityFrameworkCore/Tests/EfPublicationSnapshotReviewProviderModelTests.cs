@@ -23,16 +23,19 @@ public sealed class EfPublicationSnapshotReviewProviderModelTests
 
         var policy = context.Model.FindEntityType(typeof(PublicationPolicyEntity))!;
         Assert.Equal(PublishingPolicyProjectionEfModule.PolicyTableName, policy.GetTableName());
-        Assert.Equal(PublishingPolicyProjectionEfModule.IdentityMaximumLength, policy.FindProperty(nameof(PublicationPolicyEntity.DefaultSlotName))!.GetMaxLength());
+        Assert.Equal(PublishingPolicyProjectionEfModule.EncodedPolicyKeyMaximumLength, policy.FindProperty(nameof(PublicationPolicyEntity.PolicyKey))!.GetMaxLength());
+        Assert.Equal(PublishingPolicyProjectionEfModule.EncodedIdentityMaximumLength, policy.FindProperty(nameof(PublicationPolicyEntity.WorkflowDefinitionId))!.GetMaxLength());
+        Assert.Equal(PublishingPolicyProjectionEfModule.EncodedIdentityMaximumLength, policy.FindProperty(nameof(PublicationPolicyEntity.DefaultSlotName))!.GetMaxLength());
         Assert.Contains(policy.GetIndexes(), index => index.IsUnique &&
             index.Properties.Select(property => property.Name).SequenceEqual([
                 nameof(PublicationPolicyEntity.TenantIdHash),
-                nameof(PublicationPolicyEntity.PolicyKeyHash),
-                nameof(PublicationPolicyEntity.PolicyKey)]));
+                nameof(PublicationPolicyEntity.PolicyKeyHash)]));
 
         var intent = context.Model.FindEntityType(typeof(PublicationProjectionIntentEntity))!;
         Assert.Equal(PublishingPolicyProjectionEfModule.ProjectionIntentTableName, intent.GetTableName());
-        Assert.Equal(PublishingPolicyProjectionEfModule.IdentityMaximumLength, intent.FindProperty(nameof(PublicationProjectionIntentEntity.IntentId))!.GetMaxLength());
+        Assert.Equal(PublishingPolicyProjectionEfModule.EncodedIdentityMaximumLength, intent.FindProperty(nameof(PublicationProjectionIntentEntity.IntentId))!.GetMaxLength());
+        Assert.Equal(PublishingPolicyProjectionEfModule.EncodedFailureCodeMaximumLength, intent.FindProperty(nameof(PublicationProjectionIntentEntity.LastFailureCode))!.GetMaxLength());
+        Assert.Equal(PublishingPolicyProjectionEfModule.EncodedFailureMessageMaximumLength, intent.FindProperty(nameof(PublicationProjectionIntentEntity.LastFailureMessage))!.GetMaxLength());
         Assert.Equal(PublishingPolicyProjectionEfModule.IntentIdOrderKeyMaximumLength, intent.FindProperty(nameof(PublicationProjectionIntentEntity.IntentIdOrderKey))!.GetMaxLength());
         Assert.Contains(intent.GetIndexes(), index =>
             index.Properties.Select(property => property.Name).SequenceEqual([
