@@ -15,6 +15,7 @@ public sealed class WorkflowActivationSlotEntityConfiguration : IEntityTypeConfi
         b.Property(x => x.SlotId).HasMaxLength(RuntimeActivationSlotEfModule.SlotIdProjectionMaximumLength).IsRequired();
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureHash(b, nameof(WorkflowActivationSlotEntity.SlotIdHash));
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureOrder(b, nameof(WorkflowActivationSlotEntity.SlotIdOrderKey));
+        b.Property(x => x.SlotIdOrderKey).HasMaxLength(RuntimeActivationSlotEfModule.SlotIdOrderKeyMaximumLength).IsRequired();
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(WorkflowActivationSlotEntity.WorkflowDefinitionId));
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureHash(b, nameof(WorkflowActivationSlotEntity.WorkflowDefinitionIdHash));
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureOrder(b, nameof(WorkflowActivationSlotEntity.WorkflowDefinitionIdOrderKey));
@@ -27,7 +28,10 @@ public sealed class WorkflowActivationSlotEntityConfiguration : IEntityTypeConfi
         b.Property(x => x.ActiveActivationUniquenessKey).HasMaxLength(64).IsRequired();
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(WorkflowActivationSlotEntity.SourceKind), nullable: true);
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(WorkflowActivationSlotEntity.SourceId), nullable: true);
-        b.HasIndex(x => new { x.ScopeKeyHash, x.SlotIdHash, x.SlotId }).IsUnique();
+        // Keep the uniqueness index hash-backed: the full encoded identity exceeds SQL Server and MySQL
+        // nonclustered-key budgets at the legal composite slot-id boundary. Read paths recheck the exact
+        // encoded identity and authoritative slot-id hash, so the hash pair is only the bounded admission key.
+        b.HasIndex(x => new { x.ScopeKeyHash, x.SlotIdHash }).IsUnique();
         // The full ordinal projections are intentionally wider than SQL Server's nonclustered-key
         // budget when combined. Keep the lookup index hash-backed; the provider may sort the bounded page.
         b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowDefinitionIdHash, x.SlotNameHash, x.SlotIdHash });

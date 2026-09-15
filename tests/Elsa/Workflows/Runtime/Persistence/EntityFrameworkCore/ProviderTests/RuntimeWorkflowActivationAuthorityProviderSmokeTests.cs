@@ -67,6 +67,14 @@ internal static class RuntimeWorkflowActivationAuthorityProviderSmoke
             Assert.Equal(1, first.Slot.Revision);
             Assert.Equal(first.Slot, await authority.FindAsync("definition-native", "default"));
 
+            var maximumDefinitionId = new string('d', RuntimeOperationalStateEfModule.IdentityMaximumLength);
+            var maximumSlotName = new string('s', RuntimeOperationalStateEfModule.IdentityMaximumLength);
+            var boundary = await authority.TryActivateAsync(new(maximumDefinitionId, maximumSlotName, "activation-boundary", Publishing, 0, Now));
+            Assert.True(boundary.Succeeded);
+            Assert.Equal(boundary.Slot, await authority.FindAsync(maximumDefinitionId, maximumSlotName));
+            var boundaryRelease = await authority.TryDeactivateAsync(maximumDefinitionId, maximumSlotName, Publishing, boundary.Slot.Revision, Now);
+            Assert.True(boundaryRelease.Succeeded);
+
             var duplicatePlacement = await authority.TryActivateAsync(new("definition-native", "canary", "activation-a", Publishing, 0, Now));
             Assert.False(duplicatePlacement.Succeeded);
             Assert.Equal(WorkflowActivationConflict.RevisionMismatch, duplicatePlacement.Conflict);

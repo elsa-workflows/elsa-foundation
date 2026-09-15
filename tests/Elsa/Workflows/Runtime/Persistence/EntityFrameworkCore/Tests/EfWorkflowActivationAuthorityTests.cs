@@ -104,6 +104,28 @@ public sealed class EfWorkflowActivationAuthorityTests
     }
 
     [Fact]
+    public async Task SQLite_accepts_maximum_definition_and_slot_name_identities()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var context = NewContext(connection);
+        await context.Database.EnsureCreatedAsync();
+        var authority = new EfWorkflowActivationAuthority(context, new Accessor("tenant-a"));
+        var definitionId = new string('d', RuntimeOperationalStateEfModule.IdentityMaximumLength);
+        var slotName = new string('s', RuntimeOperationalStateEfModule.IdentityMaximumLength);
+        var request = new WorkflowActivationSlotRequest(definitionId, slotName, "activation-boundary", WorkflowActivationSource.Publishing, 0, Now);
+
+        var activated = await authority.TryActivateAsync(request);
+        Assert.True(activated.Succeeded);
+        Assert.Equal(activated.Slot, await authority.FindAsync(definitionId, slotName));
+        Assert.Equal(slotName, (await authority.ListByDefinitionAsync(definitionId)).Single().SlotName);
+
+        var deactivated = await authority.TryDeactivateAsync(definitionId, slotName, WorkflowActivationSource.Publishing, activated.Slot.Revision, Now);
+        Assert.True(deactivated.Succeeded);
+        Assert.Null((await authority.FindAsync(definitionId, slotName))!.ActiveActivationId);
+    }
+
+    [Fact]
     public async Task SQLite_concurrent_first_claims_have_one_winner_and_one_cas_conflict()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

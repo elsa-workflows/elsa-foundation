@@ -194,6 +194,42 @@ public sealed class EfWorkflowTriggerBindingStoreTests
     }
 
     [Fact]
+    public async Task Activation_delete_fails_closed_when_a_binding_row_is_corrupt()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+        await context.Database.EnsureCreatedAsync();
+        var store = new EfWorkflowTriggerBindingStore(context, new Accessor("tenant-a"));
+        await store.PrepareActivationAsync("activation-corrupt-row", [Binding("corrupt-row", "activation-corrupt-row", "corrupt-row-hash")]);
+        var row = await context.WorkflowTriggerBindings.SingleAsync();
+        row.ContentJson = "corrupt";
+        await context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.DeleteByActivationAsync("activation-corrupt-row").AsTask());
+        Assert.Single(await context.WorkflowTriggerBindings.AsNoTracking().ToArrayAsync());
+        Assert.Single(await context.WorkflowTriggerBindingProjectionStates.AsNoTracking().ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Activation_delete_fails_closed_when_projection_state_is_corrupt()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+        await context.Database.EnsureCreatedAsync();
+        var store = new EfWorkflowTriggerBindingStore(context, new Accessor("tenant-a"));
+        await store.PrepareActivationAsync("activation-corrupt-state", [Binding("corrupt-state", "activation-corrupt-state", "corrupt-state-hash")]);
+        var state = await context.WorkflowTriggerBindingProjectionStates.SingleAsync();
+        state.ContentJson = "corrupt";
+        await context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.DeleteByActivationAsync("activation-corrupt-state").AsTask());
+        Assert.Single(await context.WorkflowTriggerBindings.AsNoTracking().ToArrayAsync());
+        Assert.Single(await context.WorkflowTriggerBindingProjectionStates.AsNoTracking().ToArrayAsync());
+    }
+
+    [Fact]
     public async Task Activation_replaces_only_the_prior_active_projection_and_split_artifacts_roll_back()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

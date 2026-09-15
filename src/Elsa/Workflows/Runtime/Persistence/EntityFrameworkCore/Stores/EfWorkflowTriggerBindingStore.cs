@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -171,9 +172,15 @@ public sealed class EfWorkflowTriggerBindingStore(
         var scope = RequireScope();
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         var rows = await RowsForActivation(scope, activationId, cancellationToken);
+        foreach (var row in rows)
+            _ = Read(row, scope, Decode(row.TriggerBindingId));
         context.WorkflowTriggerBindings.RemoveRange(rows);
         var state = await context.WorkflowTriggerBindingProjectionStates.SingleOrDefaultAsync(x => x.Id == ProjectionId(scope, activationId), cancellationToken);
-        if (state is not null) context.WorkflowTriggerBindingProjectionStates.Remove(state);
+        if (state is not null)
+        {
+            EnsureProjection(state, rows, scope, activationId);
+            context.WorkflowTriggerBindingProjectionStates.Remove(state);
+        }
         await CommitMutationAndClearAsync(transaction, cancellationToken, $"Trigger-binding activation projection '{activationId}' deletion");
     }
 
@@ -307,7 +314,15 @@ public sealed class EfWorkflowTriggerBindingStore(
     {
         if (e.Id != Id(scope, Decode(e.TriggerBindingId)) || e.ScopeKey != Encode(scope) || e.ScopeKeyHash != Hash(scope) || expectedId is not null && e.TriggerBindingId != Encode(expectedId) || e.SchemaVersion != RuntimeTriggerBindingEfModule.SchemaVersion || e.Revision <= 0)
             throw new InvalidDataException("The persisted EF trigger-binding row does not match its identity envelope.");
-        var x = RuntimeArtifactJson.Deserialize<WorkflowTriggerBinding>(e.ContentJson);
+        WorkflowTriggerBinding x;
+        try
+        {
+            x = RuntimeArtifactJson.Deserialize<WorkflowTriggerBinding>(e.ContentJson);
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException or InvalidOperationException or FormatException)
+        {
+            throw new InvalidDataException("The persisted EF trigger-binding content is not valid current JSON.", exception);
+        }
         Validate(x);
         if (x.TriggerBindingId != Decode(e.TriggerBindingId) || x.ArtifactId != Decode(e.ArtifactId) || x.DefinitionId != Decode(e.DefinitionId) || x.ArtifactVersion != Decode(e.ArtifactVersion) || x.ArtifactHash != Decode(e.ArtifactHash) || x.ExecutableNodeId != Decode(e.ExecutableNodeId) || x.StimulusType != Decode(e.StimulusType) || x.StimulusHash != Decode(e.StimulusHash) || x.CorrelationScope != DecodeOptional(e.CorrelationScope) || x.ActivationId != DecodeOptional(e.ActivationId) || x.SlotId != DecodeOptional(e.SlotId) || x.Cardinality != (TriggerCardinality)e.Cardinality || x.IsActive != e.IsActive || x.CreatedAt.UtcTicks != e.CreatedAtUtcTicks || (int)x.CreatedAt.Offset.TotalMinutes != e.CreatedAtOffsetMinutes || e.TriggerBindingIdHash != Hash(x.TriggerBindingId) || e.TriggerBindingIdOrderKey != Order(x.TriggerBindingId) || e.ArtifactIdHash != Hash(x.ArtifactId) || e.ArtifactIdOrderKey != Order(x.ArtifactId) || e.StimulusLookupKey != Lookup(x.StimulusType, x.StimulusHash) || e.StimulusTypeLookupKey != Lookup(x.StimulusType) || x.ActivationId is not null && (e.ActivationIdHash != Hash(x.ActivationId) || e.ActivationIdOrderKey != Order(x.ActivationId)) || x.ActivationId is null && (e.ActivationIdHash is not null || e.ActivationIdOrderKey is not null))
             throw new InvalidDataException("The persisted EF trigger-binding content does not match its authoritative projections.");

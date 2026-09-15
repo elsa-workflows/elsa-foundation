@@ -235,7 +235,7 @@ public sealed class EfWorkflowActivationAuthority(
         row.ScopeKeyHash = Hash(scope);
         row.SlotId = Encode(slot.SlotId);
         row.SlotIdHash = Hash(slot.SlotId);
-        row.SlotIdOrderKey = Order(slot.SlotId);
+        row.SlotIdOrderKey = SlotIdOrder(slot.SlotId);
         row.WorkflowDefinitionId = Encode(slot.WorkflowDefinitionId);
         row.WorkflowDefinitionIdHash = Hash(slot.WorkflowDefinitionId);
         row.WorkflowDefinitionIdOrderKey = Order(slot.WorkflowDefinitionId);
@@ -275,7 +275,7 @@ public sealed class EfWorkflowActivationAuthority(
             expectedDefinitionId is not null && slot.WorkflowDefinitionId != expectedDefinitionId ||
             expectedSlotName is not null && slot.SlotName != expectedSlotName ||
             row.SlotId != Encode(slot.SlotId) || row.SlotIdHash != Hash(slot.SlotId) ||
-            row.SlotIdOrderKey != Order(slot.SlotId) ||
+            row.SlotIdOrderKey != SlotIdOrder(slot.SlotId) ||
             slot.SlotId != WorkflowActivationSlotIdentity.Create(slot.WorkflowDefinitionId, slot.SlotName) ||
             row.WorkflowDefinitionId != Encode(slot.WorkflowDefinitionId) || row.WorkflowDefinitionIdHash != Hash(slot.WorkflowDefinitionId) ||
             row.WorkflowDefinitionIdOrderKey != Order(slot.WorkflowDefinitionId) ||
@@ -324,6 +324,7 @@ public sealed class EfWorkflowActivationAuthority(
     private static string Encode(string value) => EfRuntimeOperationalStoreSupport.Encode(value);
     private static string Hash(string value) => EfRuntimeOperationalStoreSupport.Hash(value);
     private static string Order(string value) => EfRuntimeOperationalStoreSupport.Order(value);
+    private static string SlotIdOrder(string value) => Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(value, RuntimeActivationSlotEfModule.SlotIdMaximumLength));
     private static string? EncodeOptional(string? value) => value is null ? null : Encode(value);
     private static string? HashOptional(string? value) => value is null ? null : Hash(value);
     private static string? OrderOptional(string? value) => value is null ? null : Order(value);
