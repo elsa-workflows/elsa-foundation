@@ -68,6 +68,15 @@ public static class GroundworkV2RuntimeRegistration
             var commitExistingOutboxRemoval = existingOutboxBackend is not null && existingOutboxBackend.Name != RuntimePostCommitOutboxStoreBackend.Groundwork
                 ? existingOutboxBackend.PrepareRemoveOwnedArtifacts(services)
                 : null;
+            var existingCheckpointBackend = RuntimeCheckpointCommitStoreBackend.Find(services);
+            if (existingCheckpointBackend is null)
+            {
+                var checkpointContracts = services.Where(descriptor => descriptor.ServiceType == typeof(IRuntimeCheckpointCommitStore)).ToArray();
+                if (checkpointContracts.Length > 1 || checkpointContracts.Any(descriptor => !RuntimeCheckpointCommitStoreBackend.IsRuntimeDefault(descriptor)))
+                    throw new InvalidOperationException("Groundwork runtime refuses to replace an unowned checkpoint writer.");
+            }
+            else
+                existingCheckpointBackend.EnsureOwnsRegisteredContract(services);
             var existingWorkflowExecutionStateBackend = WorkflowExecutionStateStoreBackend.Find(services);
             existingWorkflowExecutionStateBackend?.EnsureOwnsRegisteredContract(services);
             if (existingWorkflowExecutionStateBackend is null && services.Any(descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionStateStore) && descriptor.ImplementationType != typeof(Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowExecutionStateStore)))
@@ -260,6 +269,7 @@ public static class GroundworkV2RuntimeRegistration
             RuntimeWorkflowDispatchStoreBackend.Groundwork,
             [groundworkDispatchConcreteDescriptor, .. groundworkDispatchContractDescriptors],
             collection => GroundworkV2RuntimeUnitWithdrawal.RemoveWorkflowDispatch(collection, target)));
+        existingCheckpointBackend?.RemoveOwnedRegistrations(services);
         ReplaceScoped<GroundworkV2RuntimeCheckpointWriter>(services, provider => new(
                 provider.GetRequiredService<IGroundworkStorageSessionSource>(),
                 provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
@@ -267,6 +277,12 @@ public static class GroundworkV2RuntimeRegistration
                 provider.GetService<TimeProvider>(),
                 provider.GetService<IWorkflowExecutableRootWriteLeaseManager>()),
             typeof(IRuntimeCheckpointCommitStore));
+        var groundworkCheckpointConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2RuntimeCheckpointWriter));
+        var groundworkCheckpointContractDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IRuntimeCheckpointCommitStore));
+        RuntimeCheckpointCommitStoreBackend.Register(services, new(
+            RuntimeCheckpointCommitStoreBackend.Groundwork,
+            groundworkCheckpointContractDescriptor,
+            groundworkCheckpointConcreteDescriptor));
         ReplaceScoped<GroundworkV2RuntimePostCommitOutboxStore>(services, Standard<GroundworkV2RuntimePostCommitOutboxStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IRuntimePostCommitOutboxStore), typeof(IPostCommitOutboxLookupStore),
             typeof(IRuntimePostCommitOutboxClaimStore), typeof(IRuntimePostCommitOutboxClaimCompletionStore),

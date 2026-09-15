@@ -98,7 +98,8 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
         Assert.DoesNotContain(groundworkFirst, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowAlterationStore));
         Assert.DoesNotContain(groundworkFirst, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowTestScopeStore));
         Assert.DoesNotContain(groundworkFirst, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowTestScopeCleanupStore));
-        Assert.DoesNotContain(groundworkFirst, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeCleanupStore));
+        Assert.Single(groundworkFirst, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeCleanupStore));
+        Assert.Single(groundworkFirst, descriptor => descriptor.ServiceType == typeof(EfWorkflowTestScopeCleanupStore));
         Assert.Single(groundworkFirst, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
         Assert.Single(groundworkFirst, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
         Assert.DoesNotContain(groundworkFirst

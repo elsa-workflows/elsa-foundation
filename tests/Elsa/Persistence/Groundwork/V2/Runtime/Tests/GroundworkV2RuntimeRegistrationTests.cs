@@ -118,6 +118,9 @@ public sealed class GroundworkV2RuntimeRegistrationTests
         Assert.Equal(WorkflowTestScopeStoreBackend.Groundwork, WorkflowTestScopeStoreBackend.Find(services)!.Name);
         Assert.Equal(RuntimeWorkflowDispatchStoreBackend.Groundwork, RuntimeWorkflowDispatchStoreBackend.Find(services)!.Name);
         Assert.Equal(RuntimePostCommitOutboxStoreBackend.Groundwork, RuntimePostCommitOutboxStoreBackend.Find(services)!.Name);
+        var checkpointBackend = RuntimeCheckpointCommitStoreBackend.Find(services)!;
+        Assert.Equal(RuntimeCheckpointCommitStoreBackend.Groundwork, checkpointBackend.Name);
+        checkpointBackend.EnsureOwnsRegisteredContract(services);
     }
 
     [Fact]
@@ -170,6 +173,32 @@ public sealed class GroundworkV2RuntimeRegistrationTests
         Assert.Equal(before, services);
         Assert.Equal(RuntimeWorkflowDispatchStoreBackend.Groundwork, RuntimeWorkflowDispatchStoreBackend.Find(services)!.Name);
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowDispatchStore));
+    }
+
+    [Fact]
+    public void Groundwork_checkpoint_registration_is_idempotent_and_refuses_unowned_contracts_without_mutation()
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddGroundworkV2RuntimeStores();
+        services.AddGroundworkV2RuntimeStores();
+
+        var selected = RuntimeCheckpointCommitStoreBackend.Find(services)!;
+        Assert.Equal(RuntimeCheckpointCommitStoreBackend.Groundwork, selected.Name);
+        selected.EnsureOwnsRegisteredContract(services);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IRuntimeCheckpointCommitStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2RuntimeCheckpointWriter));
+
+        services.AddScoped<IRuntimeCheckpointCommitStore>(_ => throw new InvalidOperationException("foreign"));
+        var before = services.ToArray();
+        Assert.Throws<InvalidOperationException>(() => services.AddGroundworkV2RuntimeStores());
+        Assert.Equal(before, services);
+        Assert.Same(selected, RuntimeCheckpointCommitStoreBackend.Find(services));
+
+        var unowned = new ServiceCollection().AddWorkflowRuntime();
+        unowned.AddScoped<IRuntimeCheckpointCommitStore>(_ => throw new InvalidOperationException("foreign"));
+        var unownedBefore = unowned.ToArray();
+        Assert.Throws<InvalidOperationException>(() => unowned.AddGroundworkV2RuntimeStores());
+        Assert.Equal(unownedBefore, unowned);
     }
 
     [Fact]
