@@ -92,4 +92,31 @@ public sealed class GroundworkManifestBindings
                 return bindings.Values.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         }
     }
+
+    /// <summary>Captures the binding state so a composite registration can roll back atomically.</summary>
+    public GroundworkManifestBindingsSnapshot Capture()
+    {
+        lock (gate)
+            return new GroundworkManifestBindingsSnapshot(bindings.ToArray(), explicitBindings.ToHashSet());
+    }
+
+    /// <summary>Restores a state captured before a composite registration began.</summary>
+    public void Restore(GroundworkManifestBindingsSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        lock (gate)
+        {
+            bindings.Clear();
+            foreach (var (source, target) in snapshot.Bindings)
+                bindings.Add(source, target);
+            explicitBindings.Clear();
+            foreach (var source in snapshot.ExplicitBindings)
+                explicitBindings.Add(source);
+        }
+    }
 }
+
+/// <summary>An immutable copy of Groundwork manifest target bindings.</summary>
+public sealed record GroundworkManifestBindingsSnapshot(
+    IReadOnlyList<KeyValuePair<Type, string>> Bindings,
+    IReadOnlySet<Type> ExplicitBindings);

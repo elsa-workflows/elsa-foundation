@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,31 +28,74 @@ public static class GroundworkPublishingStoreRegistration
         string? targetName = null)
     {
         ArgumentNullException.ThrowIfNull(services);
-        services.AddPersistenceCore();
-        services.AddGroundworkStorageLane<PublishingGroundworkStorageManifestSource>(targetName);
-        foreach (var unit in PublishingGroundworkStorageManifest.CreateUnits())
-            services.AddGroundworkStorageUnit(unit, targetName);
+        var snapshot = services.ToArray();
+        var registry = services
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<GroundworkStorageUnitRegistry>()
+            .SingleOrDefault();
+        var registrySnapshot = registry?.Registrations.ToArray();
+        var bindings = services
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<GroundworkManifestBindings>()
+            .SingleOrDefault();
+        var bindingsSnapshot = bindings?.Capture();
+        try
+        {
+            var existingBackend = PublicationSnapshotReviewStoreBackend.Find(services);
+            var preserveEntityFrameworkReviewStore = existingBackend?.Name == PublicationSnapshotReviewStoreBackend.EntityFramework;
+            if (!preserveEntityFrameworkReviewStore)
+            {
+                if (existingBackend is not null)
+                    existingBackend.RemoveOwnedArtifacts(services);
+                else
+                    PublicationSnapshotReviewStoreBackend.EnsureNoUnownedRegistrations(services);
+            }
 
-        services.TryAddSingleton<PublishingGroundworkDocumentSerializer>();
-        services.TryAddScoped(provider => new GroundworkPublishingStorage(
-            provider.GetRequiredService<IGroundworkStorageSessionSource>(),
-            provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
-            targetName));
+            services.AddPersistenceCore();
+            services.AddGroundworkStorageLane<PublishingGroundworkStorageManifestSource>(targetName);
+            foreach (var unit in PublishingGroundworkStorageManifest.CreateUnits())
+                services.AddGroundworkStorageUnit(unit, targetName);
 
-        ReplaceScoped<IPublicationRecordStore, GroundworkPublicationRecordStore>(services);
-        ReplaceScoped<IPublicationPolicyStore, GroundworkPublicationPolicyStore>(services);
-        ReplaceScoped<IPublicationProjectionIntentStore, GroundworkPublicationProjectionIntentStore>(services);
-        ReplaceScoped<IPublicationSnapshotReviewStore, GroundworkPublicationSnapshotReviewStore>(services);
-        ReplaceScoped<IActivityPublicationReceiptStore, GroundworkActivityPublicationReceiptStore>(services);
-        ReplaceScoped<IActivityDraftTestRunStore, GroundworkActivityDraftTestRunStore>(services);
-        return services;
+            services.TryAddSingleton<PublishingGroundworkDocumentSerializer>();
+            services.TryAddScoped(provider => new GroundworkPublishingStorage(
+                provider.GetRequiredService<IGroundworkStorageSessionSource>(),
+                provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
+                targetName));
+
+            ReplaceScoped<IPublicationRecordStore, GroundworkPublicationRecordStore>(services);
+            ReplaceScoped<IPublicationPolicyStore, GroundworkPublicationPolicyStore>(services);
+            ReplaceScoped<IPublicationProjectionIntentStore, GroundworkPublicationProjectionIntentStore>(services);
+            if (!preserveEntityFrameworkReviewStore)
+            {
+                var snapshotReviewDescriptor = ReplaceScoped<IPublicationSnapshotReviewStore, GroundworkPublicationSnapshotReviewStore>(services);
+                PublicationSnapshotReviewStoreBackend.Register(
+                    services,
+                    new PublicationSnapshotReviewStoreBackend(PublicationSnapshotReviewStoreBackend.Groundwork, snapshotReviewDescriptor));
+            }
+            ReplaceScoped<IActivityPublicationReceiptStore, GroundworkActivityPublicationReceiptStore>(services);
+            ReplaceScoped<IActivityDraftTestRunStore, GroundworkActivityDraftTestRunStore>(services);
+            return services;
+        }
+        catch
+        {
+            services.Clear();
+            foreach (var descriptor in snapshot)
+                services.Add(descriptor);
+            if (registry is not null && registrySnapshot is not null)
+                registry.Restore(registrySnapshot);
+            if (bindings is not null && bindingsSnapshot is not null)
+                bindings.Restore(bindingsSnapshot);
+            throw;
+        }
     }
 
-    private static void ReplaceScoped<TService, TImplementation>(IServiceCollection services)
+    private static ServiceDescriptor ReplaceScoped<TService, TImplementation>(IServiceCollection services)
         where TService : class
         where TImplementation : class, TService
     {
         services.RemoveAll<TService>();
-        services.AddScoped<TService, TImplementation>();
+        var descriptor = ServiceDescriptor.Scoped<TService, TImplementation>();
+        services.Add(descriptor);
+        return descriptor;
     }
 }

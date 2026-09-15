@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 118
+- Discovered feature classes: 119
 
 ## Features
 
@@ -102,6 +102,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | WorkflowsExecutionEvidenceFeature | direct IWebShellFeature | Elsa.Workflows.ExecutionEvidence | IWebShellFeature | [WorkflowsExecutionEvidenceFeature.cs](../../src/Elsa/Workflows/ExecutionEvidence/WorkflowsExecutionEvidenceFeature.cs) |
 | WorkflowsPublishingFeature | direct IShellFeature | Elsa.Workflows.Publishing | IShellFeature | [WorkflowsPublishingFeature.cs](../../src/Elsa/Workflows/Publishing/WorkflowsPublishingFeature.cs) |
 | WorkflowsPublishingApiFeature | direct IWebShellFeature | Elsa.Workflows.Publishing.Api | IWebShellFeature | [WorkflowsPublishingApiFeature.cs](../../src/Elsa/Workflows/Publishing/Api/WorkflowsPublishingApiFeature.cs) |
+| PublishingEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore | IShellFeature | [PublishingEntityFrameworkCoreFeature.cs](../../src/Elsa/Workflows/Publishing/Persistence/EntityFrameworkCore/PublishingEntityFrameworkCoreFeature.cs) |
 | PublishingGroundworkFeature | direct IShellFeature | Elsa.Workflows.Publishing.Persistence.Groundwork | IShellFeature | [PublishingGroundworkFeature.cs](../../src/Elsa/Workflows/Publishing/Persistence/Groundwork/PublishingGroundworkFeature.cs) |
 | WorkflowsRuntimeAttentionFeature | direct IShellFeature | Elsa.Workflows.Runtime | IShellFeature | [WorkflowsRuntimeAttentionFeature.cs](../../src/Elsa/Workflows/Runtime/Attention/WorkflowsRuntimeAttentionFeature.cs) |
 | WorkflowsRuntimeTracingFeature | direct IShellFeature | Elsa.Workflows.Runtime | IShellFeature | [WorkflowsRuntimeTracingFeature.cs](../../src/Elsa/Workflows/Runtime/Tracing/WorkflowsRuntimeTracingFeature.cs) |
