@@ -491,7 +491,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
         ScopeKeyHash = EfRuntimeOperationalStoreSupport.Hash(scope),
         OutboxItemId = EfRuntimeOperationalStoreSupport.Encode(item.OutboxItemId),
         OutboxItemIdHash = EfRuntimeOperationalStoreSupport.Hash(item.OutboxItemId),
-        OutboxItemIdOrderKey = OrderKey(item.OutboxItemId),
+        OutboxItemIdOrderKey = OutboxOrderKey(item.OutboxItemId),
         WorkflowExecutionId = EfRuntimeOperationalStoreSupport.Encode(item.Intent.WorkflowExecutionId),
         WorkflowExecutionIdHash = EfRuntimeOperationalStoreSupport.Hash(item.Intent.WorkflowExecutionId),
         WorkflowExecutionIdOrderKey = OrderKey(item.Intent.WorkflowExecutionId),
@@ -566,7 +566,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
         var physicalId = RuntimePostCommitOutboxIdentity.CreateProjectionValue(outboxItemId);
         if (row.Id != RowId(scope, outboxItemId) ||
             row.OutboxItemIdHash != EfRuntimeOperationalStoreSupport.Hash(outboxItemId) ||
-            row.OutboxItemIdOrderKey != OrderKey(outboxItemId))
+            row.OutboxItemIdOrderKey != OutboxOrderKey(outboxItemId))
         {
             throw new InvalidDataException("The post-commit outbox logical identity projection is corrupt.");
         }
@@ -633,7 +633,10 @@ public sealed class EfRuntimePostCommitOutboxStore(
             scope,
             RuntimePostCommitOutboxIdentity.CreateProjectionValue(outboxItemId));
 
-    internal static string OrderKey(string value)
+    internal static string OutboxOrderKey(string value)
+        => EfRelationalIdentity.CreateOrdinalTextOrderKey(value);
+
+    private static string OrderKey(string value)
     {
         var physical = RuntimePostCommitOutboxIdentity.CreateProjectionValue(value);
         var prefix = physical[..Math.Min(physical.Length, RuntimePostCommitOutboxEfModule.PhysicalIdentityOrderPrefixMaximumLength)];

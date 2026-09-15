@@ -65,25 +65,28 @@ public sealed class EfRuntimePostCommitOutboxStoreTests
     public async Task Equal_time_long_identity_order_is_bounded_deterministic_and_restart_stable()
     {
         await using var database = await TestDatabase.CreateAsync();
-        var firstId = new string('x', 451) + "-first";
-        var secondId = new string('x', 451) + "-second";
+        var ids = Enumerable.Range(0, 20)
+            .Select(index => new string('x', 451) + $"-{index:D2}")
+            .Reverse()
+            .ToArray();
+        var expectedOrder = ids.OrderBy(id => id, StringComparer.Ordinal).ToArray();
         string[] firstOrder;
         await using (var context = database.Open("tenant-a"))
         {
             var store = new EfRuntimePostCommitOutboxStore(context, new FixedAccessor("tenant-a"));
-            await store.SavePendingAsync(PendingAt(firstId, Now, "workflow-a", "publish"));
-            await store.SavePendingAsync(PendingAt(secondId, Now, "workflow-a", "publish"));
-            firstOrder = (await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10)))
+            foreach (var id in ids)
+                await store.SavePendingAsync(PendingAt(id, Now, "workflow-a", "publish"));
+            firstOrder = (await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 20)))
                 .Select(item => item.OutboxItemId).ToArray();
+            Assert.Equal(expectedOrder.Take(3), (await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 3)))
+                .Select(item => item.OutboxItemId));
         }
 
         await using var restarted = database.Open("tenant-a");
         var secondOrder = (await new EfRuntimePostCommitOutboxStore(restarted, new FixedAccessor("tenant-a"))
-                .GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10)))
+                .GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 20)))
             .Select(item => item.OutboxItemId).ToArray();
-        Assert.Equal(2, firstOrder.Length);
-        Assert.Contains(firstId, firstOrder);
-        Assert.Contains(secondId, firstOrder);
+        Assert.Equal(expectedOrder, firstOrder);
         Assert.Equal(firstOrder, secondOrder);
     }
 

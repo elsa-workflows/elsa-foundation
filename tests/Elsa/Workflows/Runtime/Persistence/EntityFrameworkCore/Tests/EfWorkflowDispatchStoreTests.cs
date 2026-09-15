@@ -67,6 +67,41 @@ public sealed class EfWorkflowDispatchStoreTests
     }
 
     [Fact]
+    public async Task Equal_time_dispatch_pages_follow_the_full_logical_id_ordinal_order()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open();
+        var store = new EfWorkflowDispatchStore(context, new FixedAccessor("tenant-a"));
+        var records = Enumerable.Range(0, 20)
+            .Select(index => Pending("parent-order", $"activity-{index:D2}", createdAt: Now))
+            .ToArray();
+        foreach (var record in records.Reverse())
+            await store.SaveAsync(record);
+
+        var expected = records.Select(record => record.DispatchId)
+            .OrderBy(id => id, StringComparer.Ordinal).ToArray();
+        var actual = new List<string>();
+        DateTimeOffset? afterCreatedAt = null;
+        string? afterDispatchId = null;
+        do
+        {
+            var page = await store.QueryAsync(new WorkflowDispatchQuery(
+                parentWorkflowExecutionId: "parent-order",
+                take: 3,
+                afterCreatedAt: afterCreatedAt,
+                afterDispatchId: afterDispatchId));
+            if (page.Count == 0)
+                break;
+            actual.AddRange(page.Select(record => record.DispatchId));
+            var last = page.Last();
+            afterCreatedAt = last.CreatedAt;
+            afterDispatchId = last.DispatchId;
+        } while (actual.Count < records.Length);
+
+        Assert.Equal(expected, actual);
+    }
+
+    [Fact]
     public async Task Sqlite_cancellation_and_snapshot_delete_are_fenced()
     {
         await using var database = await TestDatabase.CreateAsync();

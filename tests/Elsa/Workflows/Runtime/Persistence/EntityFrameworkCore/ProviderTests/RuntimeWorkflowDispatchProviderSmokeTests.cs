@@ -78,6 +78,51 @@ internal static class RuntimeWorkflowDispatchProviderSmoke
             Assert.NotNull(cancelled);
             Assert.True(await store.TryDeleteAsync(cancelled!));
             Assert.Null(await store.FindAsync(second.DispatchId));
+
+            // Equal timestamps must use the entire logical dispatch identity for keyset continuation, not the
+            // old prefix-plus-digest projection. This also proves the wide order column is not provider-indexed.
+            var equalTime = DateTimeOffset.UtcNow;
+            var equalRecords = Enumerable.Range(0, 20)
+                .Select(index => Pending("parent-equal-time", $"activity-{index:D2}", scope, equalTime))
+                .ToArray();
+            foreach (var record in equalRecords.Reverse())
+                await store.SaveAsync(record);
+            var expectedDispatchIds = equalRecords.Select(record => record.DispatchId)
+                .OrderBy(id => id, StringComparer.Ordinal).ToArray();
+            var dispatchIds = new List<string>();
+            DateTimeOffset? afterCreatedAt = null;
+            string? afterDispatchId = null;
+            while (dispatchIds.Count < equalRecords.Length)
+            {
+                var equalPage = await store.QueryAsync(new WorkflowDispatchQuery(
+                    parentWorkflowExecutionId: "parent-equal-time", take: 3,
+                    afterCreatedAt: afterCreatedAt, afterDispatchId: afterDispatchId));
+                Assert.NotEmpty(equalPage);
+                dispatchIds.AddRange(equalPage.Select(record => record.DispatchId));
+                afterCreatedAt = equalPage.Last().CreatedAt;
+                afterDispatchId = equalPage.Last().DispatchId;
+            }
+            Assert.Equal(expectedDispatchIds, dispatchIds);
+
+            var outbox = new EfRuntimePostCommitOutboxStore(context, access);
+            var longIds = Enumerable.Range(0, 20)
+                .Select(index => new string('x', 451) + $"-{index:D2}")
+                .Reverse()
+                .ToArray();
+            foreach (var id in longIds)
+            {
+                await outbox.SavePendingAsync(new RuntimePostCommitOutboxItem(
+                    id,
+                    new RuntimePostCommitIntent($"intent-{id[^2..]}", "workflow-long", "test.intent", equalTime, null, null, null),
+                    RuntimePostCommitOutboxStatus.Pending,
+                    equalTime,
+                    equalTime));
+            }
+            var expectedOutboxIds = longIds.OrderBy(id => id, StringComparer.Ordinal).ToArray();
+            Assert.Equal(expectedOutboxIds, (await outbox.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(equalTime, 20, workflowExecutionId: "workflow-long")))
+                .Select(item => item.OutboxItemId));
+            Assert.Equal(expectedOutboxIds.Take(3), (await outbox.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(equalTime, 3, workflowExecutionId: "workflow-long")))
+                .Select(item => item.OutboxItemId));
         }
 
         await using var reopened = createContext(fixture.ConnectionString);

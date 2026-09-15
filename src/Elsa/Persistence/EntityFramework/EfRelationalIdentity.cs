@@ -54,6 +54,20 @@ public static class EfRelationalIdentity
         return result;
     }
 
+    /// <summary>
+    /// Lossless ordinal text projection for identities whose length has no contract-enforced upper bound.
+    /// Four uppercase hexadecimal digits per UTF-16 code unit preserve StringComparer.Ordinal, including
+    /// embedded NUL and lone surrogate code units; a shorter prefix sorts before its extension.
+    /// </summary>
+    public static string CreateOrdinalTextOrderKey(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var bytes = new byte[checked(value.Length * sizeof(char))];
+        for (var index = 0; index < value.Length; index++)
+            BinaryPrimitives.WriteUInt16BigEndian(bytes.AsSpan(index * sizeof(char), sizeof(char)), value[index]);
+        return Convert.ToHexString(bytes);
+    }
+
     private static byte[] EncodeUtf16CodeUnits(string value)
     {
         var bytes = new byte[checked(value.Length * sizeof(char))];

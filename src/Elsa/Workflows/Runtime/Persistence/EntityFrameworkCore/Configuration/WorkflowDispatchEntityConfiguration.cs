@@ -15,7 +15,7 @@ public sealed class WorkflowDispatchEntityConfiguration : IEntityTypeConfigurati
         b.Property(x => x.ScopeKeyHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.DispatchId).IsRequired();
         b.Property(x => x.DispatchIdHash).HasMaxLength(64).IsRequired();
-        b.Property(x => x.DispatchIdOrderKey).HasMaxLength(RuntimeWorkflowDispatchEfModule.OrderKeyMaximumLength).IsRequired();
+        b.Property(x => x.DispatchIdOrderKey).HasMaxLength(RuntimeWorkflowDispatchEfModule.IdentityMaximumLength * 4).IsRequired();
         b.Property(x => x.ParentWorkflowExecutionId).IsRequired();
         b.Property(x => x.ParentWorkflowExecutionIdHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.ParentWorkflowExecutionIdOrderKey).HasMaxLength(RuntimeWorkflowDispatchEfModule.OrderKeyMaximumLength).IsRequired();
@@ -40,9 +40,9 @@ public sealed class WorkflowDispatchEntityConfiguration : IEntityTypeConfigurati
         // prefix length. The full encoded identity is still validated on every read and the deterministic row ID
         // prevents ordinary duplicate inserts.
         b.HasIndex(x => new { x.ScopeKeyHash, x.DispatchIdHash }).IsUnique();
-        b.HasIndex(x => new { x.ScopeKeyHash, x.ParentWorkflowExecutionIdHash, x.CreatedAtUtcTicks, x.DispatchIdOrderKey });
-        b.HasIndex(x => new { x.ScopeKeyHash, x.ChildWorkflowExecutionIdHash, x.CreatedAtUtcTicks, x.DispatchIdOrderKey });
-        b.HasIndex(x => new { x.ScopeKeyHash, x.Status, x.CreatedAtUtcTicks, x.DispatchIdOrderKey });
-        b.HasIndex(x => new { x.ScopeKeyHash, x.TestScopeIdHash, x.CreatedAtUtcTicks, x.DispatchIdOrderKey });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.ParentWorkflowExecutionIdHash, x.CreatedAtUtcTicks });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.ChildWorkflowExecutionIdHash, x.CreatedAtUtcTicks });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.Status, x.CreatedAtUtcTicks });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.TestScopeIdHash, x.CreatedAtUtcTicks });
     }
 }

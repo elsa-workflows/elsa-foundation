@@ -10,6 +10,9 @@ internal static class WorkflowDispatchEfSupport
 {
     public static string RowId(string scope, string dispatchId) => EfRuntimeOperationalStoreSupport.CompositeId(scope, dispatchId);
 
+    public static string DispatchOrderKey(string value)
+        => EfRelationalIdentity.CreateOrdinalTextOrderKey(value);
+
     public static string OrderKey(string value)
     {
         var prefix = value[..Math.Min(value.Length, RuntimeWorkflowDispatchEfModule.OrderKeyPrefixMaximumLength)];
@@ -30,7 +33,7 @@ internal static class WorkflowDispatchEfSupport
         ScopeKeyHash = EfRelationalIdentity.Hash(scope),
         DispatchId = EfRelationalIdentity.Encode(record.DispatchId),
         DispatchIdHash = EfRelationalIdentity.Hash(record.DispatchId),
-        DispatchIdOrderKey = OrderKey(record.DispatchId),
+        DispatchIdOrderKey = DispatchOrderKey(record.DispatchId),
         ParentWorkflowExecutionId = EfRelationalIdentity.Encode(record.ParentWorkflowExecutionId),
         ParentWorkflowExecutionIdHash = EfRelationalIdentity.Hash(record.ParentWorkflowExecutionId),
         ParentWorkflowExecutionIdOrderKey = OrderKey(record.ParentWorkflowExecutionId),
@@ -128,7 +131,7 @@ internal static class WorkflowDispatchEfSupport
         var valid =
             row.Id == RowId(scope, dispatchId) &&
             row.DispatchIdHash == EfRelationalIdentity.Hash(dispatchId) &&
-            row.DispatchIdOrderKey == OrderKey(dispatchId) &&
+            row.DispatchIdOrderKey == DispatchOrderKey(dispatchId) &&
             StringComparer.Ordinal.Equals(record.DispatchId, dispatchId) &&
             row.ParentWorkflowExecutionId == EfRelationalIdentity.Encode(record.ParentWorkflowExecutionId) &&
             row.ParentWorkflowExecutionIdHash == EfRelationalIdentity.Hash(record.ParentWorkflowExecutionId) &&

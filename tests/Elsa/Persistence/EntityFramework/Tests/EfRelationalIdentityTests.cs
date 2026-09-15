@@ -45,4 +45,16 @@ public sealed class EfRelationalIdentityTests
         Assert.Equal((ushort)0, BinaryPrimitives.ReadUInt16BigEndian(key.AsSpan(2, 2)));
         Assert.Equal((ushort)2, BinaryPrimitives.ReadUInt16BigEndian(key.AsSpan(6, 2)));
     }
+
+    [Fact]
+    public void Unbounded_text_key_preserves_exact_utf16_ordinal_order()
+    {
+        string[] values = ["a", "a\u0000", "a\uD800", "a\uFFFD", "b", new string('x', 451) + "-2", new string('x', 451) + "-1"];
+        var expected = values.OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        var projected = values.OrderBy(EfRelationalIdentity.CreateOrdinalTextOrderKey, StringComparer.Ordinal).ToArray();
+
+        Assert.Equal(expected, projected);
+        Assert.NotEqual(EfRelationalIdentity.CreateOrdinalTextOrderKey("a\uD800"),
+            EfRelationalIdentity.CreateOrdinalTextOrderKey("a\uFFFD"));
+    }
 }

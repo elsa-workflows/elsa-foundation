@@ -8,8 +8,8 @@ public static class RuntimeWorkflowDispatchEfModule
     public const int IdentityMaximumLength = 450;
     public const int IdentityProjectionMaximumLength = ((IdentityMaximumLength * sizeof(char) + 2) / 3) * 4;
     public const int ScopeProjectionMaximumLength = RuntimeOperationalStateEfModule.ScopeProjectionMaximumLength;
-    // A fixed ordinal prefix plus a full digest keeps every composite index within the narrowest supported
-    // provider key limits without imposing an artificial limit on opaque parent/activity identities.
+    // Auxiliary parent/child projection only. DispatchId has a full ordinal text key; the candidate indexes
+    // exclude that column to remain within SQL Server/MySQL key-width limits.
     public const int OrderKeyPrefixMaximumLength = 32;
     public const int OrderKeyMaximumLength = (OrderKeyPrefixMaximumLength + 1) * sizeof(char) * 2 + 64;
 }

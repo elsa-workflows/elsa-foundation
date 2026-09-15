@@ -143,7 +143,7 @@ public sealed class EfWorkflowDispatchStore(
         }
         if (query.AfterCreatedAt is { } afterCreatedAt)
         {
-            var orderKey = WorkflowDispatchEfSupport.OrderKey(query.AfterDispatchId!);
+            var orderKey = WorkflowDispatchEfSupport.DispatchOrderKey(query.AfterDispatchId!);
             source = source.Where(x => x.CreatedAtUtcTicks > afterCreatedAt.UtcTicks ||
                                        x.CreatedAtUtcTicks == afterCreatedAt.UtcTicks && string.Compare(x.DispatchIdOrderKey, orderKey) > 0);
         }
