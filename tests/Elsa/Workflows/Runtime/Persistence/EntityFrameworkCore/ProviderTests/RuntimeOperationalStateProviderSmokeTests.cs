@@ -117,6 +117,24 @@ internal static class RuntimeOperationalStateProviderSmoke
             Assert.Equal(3, (await scheduler.FindAsync("workflow-a"))!.Version);
             Assert.Equal(2, (await liveness.FindVersionedAsync("workflow-a", "ownership:workflow-a"))!.Revision);
             var outbox = new EfRuntimePostCommitOutboxStore(context, accessor);
+            var futureAt = DateTimeOffset.UtcNow.AddDays(3);
+            var futureCommit = EmptyCheckpointCommit($"checkpoint-outbox-{Guid.NewGuid():N}");
+            var futureIntent = new RuntimePostCommitIntent(
+                "native-folded-intent", "workflow-a", "provider-smoke.outbox", futureAt, null, null, null);
+            var futureId = RuntimePostCommitOutboxIdentity.CreateLogicalValue(futureCommit.CommitId, futureIntent.IntentId);
+            var futureItem = new RuntimePostCommitOutboxItem(
+                futureId, futureIntent, RuntimePostCommitOutboxStatus.Pending, futureAt, futureAt);
+            futureCommit = futureCommit with
+            {
+                Checkpoint = futureCommit.Checkpoint with { OccurredAt = futureAt },
+                PostCommitIntents = [futureIntent],
+                StateChanges = futureCommit.StateChanges.WithPostCommitOutbox([
+                    new RuntimeStateChange<RuntimePostCommitOutboxItem>(
+                        futureId, RuntimeStateChangeOperation.Upsert, futureItem, new Dictionary<string, string>())])
+            };
+            Assert.Equal([futureId], (await checkpointStore.CommitAsync(futureCommit, new(RuntimeCheckpointPersistenceMode.Immediate))).PendingPostCommitWorkIds);
+            Assert.Equal([futureId], (await checkpointStore.CommitAsync(futureCommit, new(RuntimeCheckpointPersistenceMode.Immediate))).PendingPostCommitWorkIds);
+            Assert.Equal(futureId, (await outbox.FindAsync(futureId))!.OutboxItemId);
             var outboxNow = DateTimeOffset.UtcNow;
             var outboxItem = OutboxPending($"outbox-{Guid.NewGuid():N}", "workflow-a", outboxNow);
             await outbox.SavePendingAsync(outboxItem);

@@ -600,7 +600,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
         return item;
     }
 
-    private static void ValidatePending(RuntimePostCommitOutboxItem item)
+    internal static void ValidatePending(RuntimePostCommitOutboxItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
         if (item.Status != RuntimePostCommitOutboxStatus.Pending)
@@ -646,7 +646,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
             EfRelationalIdentity.Hash(physical);
     }
 
-    private static bool PendingItemsEquivalent(
+    internal static bool PendingItemsEquivalent(
         RuntimePostCommitOutboxItem left,
         RuntimePostCommitOutboxItem right) =>
         left.Status == RuntimePostCommitOutboxStatus.Pending &&
@@ -669,7 +669,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
         left.DeliveryFencingToken == right.DeliveryFencingToken &&
         left.DeliveryVisibleAfter == right.DeliveryVisibleAfter;
 
-    private static bool IntentsEquivalent(RuntimePostCommitIntent left, RuntimePostCommitIntent right) =>
+    internal static bool IntentsEquivalent(RuntimePostCommitIntent left, RuntimePostCommitIntent right) =>
         StringComparer.Ordinal.Equals(left.IntentId, right.IntentId) &&
         StringComparer.Ordinal.Equals(left.WorkflowExecutionId, right.WorkflowExecutionId) &&
         StringComparer.Ordinal.Equals(left.Kind, right.Kind) &&

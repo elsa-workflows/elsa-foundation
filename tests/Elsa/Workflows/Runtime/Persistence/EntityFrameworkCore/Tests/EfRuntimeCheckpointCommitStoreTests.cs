@@ -110,6 +110,112 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
+    public async Task Folded_pending_outbox_is_committed_and_replayed_with_the_marker()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var commit = WithPendingIntent("commit-outbox", "intent-outbox");
+        var id = RuntimePostCommitOutboxIdentity.CreateLogicalValue(commit.CommitId, "intent-outbox");
+
+        await using (var context = database.Open("tenant-a"))
+        {
+            var store = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"));
+            Assert.Equal([id], (await store.CommitAsync(commit, Decision())).PendingPostCommitWorkIds);
+            Assert.Equal([id], (await store.CommitAsync(commit, Decision())).PendingPostCommitWorkIds);
+            var outbox = new EfRuntimePostCommitOutboxStore(context, new FixedAccessor("tenant-a"));
+            Assert.Equal(id, (await outbox.FindAsync(id))!.OutboxItemId);
+            Assert.Single(await context.RuntimeCheckpointCommits.ToArrayAsync());
+        }
+
+        await using var restarted = database.Open("tenant-a");
+        Assert.Equal([id], (await new EfRuntimeCheckpointCommitStore(restarted, new FixedAccessor("tenant-a"))
+            .CommitAsync(commit, Decision())).PendingPostCommitWorkIds);
+        Assert.Equal(id, (await new EfRuntimePostCommitOutboxStore(restarted, new FixedAccessor("tenant-a"))
+            .FindAsync(id))!.OutboxItemId);
+    }
+
+    [Fact]
+    public async Task Marker_failure_rolls_back_previously_saved_outbox_and_does_not_leak_tracker_state()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var commit = WithPendingIntent("commit-outbox-rollback", "intent-outbox-rollback");
+        var interceptor = new FailMarkerInsertInterceptor();
+        await using (var context = database.Open("tenant-a", interceptor))
+        {
+            interceptor.Arm();
+            var store = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"));
+            await Assert.ThrowsAsync<DbUpdateException>(() => store.CommitAsync(commit, Decision()).AsTask());
+            Assert.Empty(context.ChangeTracker.Entries());
+            await context.SaveChangesAsync();
+        }
+
+        await using var reopened = database.Open("tenant-a");
+        Assert.Empty(await reopened.RuntimePostCommitOutbox.ToArrayAsync());
+        Assert.Empty(await reopened.RuntimeCheckpointCommits.ToArrayAsync());
+        Assert.Single((await new EfRuntimeCheckpointCommitStore(reopened, new FixedAccessor("tenant-a"))
+            .CommitAsync(commit, Decision())).PendingPostCommitWorkIds);
+    }
+
+    [Fact]
+    public async Task Conflicting_existing_outbox_refuses_marker_and_preserves_original_pending_intent()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open("tenant-a");
+        var commit = WithPendingIntent("commit-outbox-conflict", "intent-conflict");
+        var id = RuntimePostCommitOutboxIdentity.CreateLogicalValue(commit.CommitId, "intent-conflict");
+        var different = new RuntimePostCommitIntent("intent-conflict", "workflow-a", "other.kind", OccurredAt, null, null, null);
+        var outbox = new EfRuntimePostCommitOutboxStore(context, new FixedAccessor("tenant-a"));
+        await outbox.SavePendingAsync(new RuntimePostCommitOutboxItem(id, different, RuntimePostCommitOutboxStatus.Pending, OccurredAt, OccurredAt));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"))
+                .CommitAsync(commit, Decision()).AsTask());
+        Assert.Equal("other.kind", (await outbox.FindAsync(id))!.Intent.Kind);
+        Assert.Empty(await context.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Intent_without_folded_outbox_change_fails_closed_before_provider_io()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var interceptor = new CommandCaptureInterceptor();
+        await using var context = database.Open("tenant-a", interceptor);
+        var intent = new RuntimePostCommitIntent("unfolded", "workflow-a", "test.intent", OccurredAt, null, null, null);
+        var commit = Commit("commit-unfolded") with { PostCommitIntents = [intent] };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"))
+                .CommitAsync(commit, Decision()).AsTask());
+        Assert.Empty(interceptor.Commands);
+        Assert.Empty(await context.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Folded_outbox_with_a_different_intent_fails_closed_before_provider_io()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var interceptor = new CommandCaptureInterceptor();
+        await using var context = database.Open("tenant-a", interceptor);
+        var commit = WithPendingIntent("commit-mismatched-intent", "intent-mismatch");
+        var original = Assert.Single(commit.StateChanges.PostCommitOutbox);
+        var alteredIntent = new RuntimePostCommitIntent(
+            "intent-mismatch", "workflow-a", "other.kind", OccurredAt, null, null, null);
+        var altered = new RuntimePostCommitOutboxItem(
+            original.StateId, alteredIntent, RuntimePostCommitOutboxStatus.Pending, OccurredAt, OccurredAt);
+        commit = commit with
+        {
+            StateChanges = commit.StateChanges.WithPostCommitOutbox([
+                original with { State = altered }])
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"))
+                .CommitAsync(commit, Decision()).AsTask());
+        Assert.Empty(interceptor.Commands);
+        Assert.Empty(await context.RuntimePostCommitOutbox.ToArrayAsync());
+        Assert.Empty(await context.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
     public async Task Staged_sibling_concurrency_failure_rolls_back_execution_and_marker_and_clears_retryable_state()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -332,6 +438,20 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         [],
         new Dictionary<string, string>());
 
+    private static RuntimeCheckpointCommit WithPendingIntent(string commitId, string intentId)
+    {
+        var commit = Commit(commitId);
+        var intent = new RuntimePostCommitIntent(intentId, "workflow-a", "test.intent", OccurredAt, null, null, null);
+        var id = RuntimePostCommitOutboxIdentity.CreateLogicalValue(commitId, intentId);
+        var item = new RuntimePostCommitOutboxItem(id, intent, RuntimePostCommitOutboxStatus.Pending, OccurredAt, OccurredAt);
+        return commit with
+        {
+            PostCommitIntents = [intent],
+            StateChanges = commit.StateChanges.WithPostCommitOutbox([
+                new RuntimeStateChange<RuntimePostCommitOutboxItem>(id, RuntimeStateChangeOperation.Upsert, item, new Dictionary<string, string>())])
+        };
+    }
+
     private static RuntimeCheckpointPersistenceDecision Decision() => new(RuntimeCheckpointPersistenceMode.Immediate);
 
     private static WorkflowExecutionState Execution(string id, string tenantId) => new(
@@ -413,6 +533,41 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         {
             Commands.Add(command.CommandText);
             return ValueTask.FromResult(result);
+        }
+    }
+
+    private sealed class FailMarkerInsertInterceptor : DbCommandInterceptor
+    {
+        private int armed;
+
+        public void Arm() => Interlocked.Exchange(ref armed, 1);
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            ThrowIfArmed(command);
+            return ValueTask.FromResult(result);
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            ThrowIfArmed(command);
+            return ValueTask.FromResult(result);
+        }
+
+        private void ThrowIfArmed(DbCommand command)
+        {
+            if (command.CommandText.Contains("elsa_runtime_checkpoint_commit", StringComparison.OrdinalIgnoreCase) &&
+                command.CommandText.Contains("INSERT", StringComparison.OrdinalIgnoreCase) &&
+                Interlocked.Exchange(ref armed, 0) == 1)
+                throw new DbUpdateException("Simulated checkpoint marker insert failure.");
         }
     }
 

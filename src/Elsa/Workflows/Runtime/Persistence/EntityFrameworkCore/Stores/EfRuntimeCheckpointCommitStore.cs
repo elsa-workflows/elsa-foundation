@@ -112,6 +112,12 @@ public sealed class EfRuntimeCheckpointCommitStore(
                         writeCancellationToken);
                 }
 
+                await EfRuntimeCheckpointOutboxParticipantStaging.StageAsync(
+                    context,
+                    commit,
+                    scope,
+                    writeCancellationToken);
+
                 // Flush all participant rows first, then add the immutable marker as the final write in this
                 // transaction. The marker is the durable commit proof, so it must never precede a participant failure.
                 await context.SaveChangesAsync(writeCancellationToken);
@@ -161,6 +167,14 @@ public sealed class EfRuntimeCheckpointCommitStore(
             RequireOperation(scheduler, RuntimeStateChangeOperation.Upsert, "scheduler");
             RequireId(scheduler.StateId, scheduler.State.WorkflowExecutionId, "scheduler");
             RequireWorkflow(scheduler.State.WorkflowExecutionId, commit.WorkflowExecutionId, "scheduler");
+        }
+
+        foreach (var change in commit.StateChanges.PostCommitOutbox)
+        {
+            RequireOperation(change, RuntimeStateChangeOperation.Upsert, "post-commit outbox");
+            RequireId(change.StateId, change.State.OutboxItemId, "post-commit outbox");
+            RequireWorkflow(change.State.Intent.WorkflowExecutionId, commit.WorkflowExecutionId, "post-commit outbox");
+            EfRuntimePostCommitOutboxStore.ValidatePending(change.State);
         }
     }
 
@@ -220,12 +234,35 @@ public sealed class EfRuntimeCheckpointCommitStore(
             changes.WorkflowDispatches.Count > 0 ||
             changes.WorkflowDispatchCancellations.Count > 0 ||
             changes.ConsumedSchedulerWorkItems.Count > 0 ||
-            changes.AlterationJobTerminalChange is not null ||
-            changes.PostCommitOutbox.Count > 0 ||
-            commit.PostCommitIntents.Count > 0)
+            changes.AlterationJobTerminalChange is not null)
         {
             throw new NotSupportedException(
-                "The R19 EF checkpoint slice supports only workflow-execution and scheduler state changes; remaining R20-R24 participants must be staged by the complete checkpoint writer before this adapter is enabled for those runtime commits.");
+                "The R19 EF checkpoint slice supports workflow-execution, scheduler, and pending outbox changes only; remaining participants must be staged by the complete checkpoint writer before this adapter is enabled for those runtime commits.");
+        }
+
+        if (commit.PostCommitIntents.Count > 0)
+        {
+            var pendingIds = changes.PostCommitOutbox.Select(change => change.StateId)
+                .ToHashSet(StringComparer.Ordinal);
+            var intents = new Dictionary<string, RuntimePostCommitIntent>(StringComparer.Ordinal);
+            foreach (var intent in commit.PostCommitIntents)
+            {
+                var id = RuntimePostCommitOutboxIdentity.CreateLogicalValue(commit.CommitId, intent.IntentId);
+                if (intents.TryGetValue(id, out var duplicate) &&
+                    !EfRuntimePostCommitOutboxStore.IntentsEquivalent(duplicate, intent))
+                    throw new InvalidOperationException($"Post-commit intent '{id}' occurs more than once with conflicting content.");
+                intents[id] = intent;
+            }
+            if (!pendingIds.SetEquals(intents.Keys))
+                throw new InvalidOperationException(
+                    "A checkpoint with post-commit intents must include their pending outbox state changes in the same atomic unit.");
+
+            foreach (var change in changes.PostCommitOutbox)
+            {
+                if (!EfRuntimePostCommitOutboxStore.IntentsEquivalent(intents[change.StateId], change.State.Intent))
+                    throw new InvalidOperationException(
+                        $"Post-commit outbox item '{change.StateId}' does not match its checkpoint intent.");
+            }
         }
     }
 
@@ -252,14 +289,18 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 commit.WorkflowExecutionId,
                 commit.Checkpoint.OccurredAt,
                 fingerprint,
-                Array.Empty<string>(),
+                PendingOutboxIds(commit),
                 Array.Empty<string>()),
             JsonOptions),
-        PendingPostCommitWorkIdsJson = JsonSerializer.Serialize(Array.Empty<string>(), JsonOptions),
+        PendingPostCommitWorkIdsJson = JsonSerializer.Serialize(PendingOutboxIds(commit), JsonOptions),
         ConsumedSchedulerWorkItemIdsJson = JsonSerializer.Serialize(Array.Empty<string>(), JsonOptions),
         SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion,
         Revision = 1
     };
+
+    private static string[] PendingOutboxIds(RuntimeCheckpointCommit commit) =>
+        commit.StateChanges.PostCommitOutbox.Select(change => change.StateId)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
 
     private static RuntimeCheckpointCommitEntity ReadChecked(
         RuntimeCheckpointCommitEntity row,
