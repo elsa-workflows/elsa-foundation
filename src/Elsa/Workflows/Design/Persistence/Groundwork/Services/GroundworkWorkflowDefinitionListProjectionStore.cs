@@ -16,9 +16,10 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore(
     IGroundworkStorageSessionSource sessions,
     IPayloadSerializer payloadSerializer,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    string? targetName = null) : IWorkflowDefinitionListProjectionStore
+    string? targetName = null,
+    IGroundworkPrivilegedQueryAuditSink? auditSink = null) : IWorkflowDefinitionListProjectionStore
 {
-    private readonly GroundworkDesignStorage storage = new(sessions, accessContextAccessor, targetName);
+    private readonly GroundworkDesignStorage storage = new(sessions, accessContextAccessor, targetName, auditSink);
     private readonly System.Text.Json.JsonSerializerOptions json =
         GroundworkDesignDocumentSerialization.Create(payloadSerializer);
 
@@ -53,6 +54,7 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore(
                     storage.Order(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, WorkflowsDesignStorageManifest.DraftIdField, descending: true)
                 ],
                 WorkflowsDesignStorageManifest.DraftByDefinitionIndex,
+                acrossScopes: accessContextAccessor.Current.AcrossScopes,
                 cancellationToken: cancellationToken));
             versionRows.AddRange(storage.Query(
                 WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
@@ -66,6 +68,7 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore(
                     storage.Order(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind, WorkflowsDesignStorageManifest.VersionIdField)
                 ],
                 WorkflowsDesignStorageManifest.VersionByDefinitionIndex,
+                acrossScopes: accessContextAccessor.Current.AcrossScopes,
                 cancellationToken: cancellationToken));
         }
 

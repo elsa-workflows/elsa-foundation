@@ -53,6 +53,32 @@ public sealed class GroundworkWorkflowDefinitionVersionLayoutStoreTests
     }
 
     [Fact]
+    public async Task FindByVersionId_rejects_projected_version_relationship_drift()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        var layout = Layout("l1", "v1");
+        layout.TenantId = DesignGroundworkTestAccess.DefaultScopeValue;
+        var options = GroundworkDesignDocumentSerialization.Create(new FakePayloadSerializer());
+        var values = GroundworkDesignStorage.Values(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind,
+            layout,
+            options,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutCollection)
+            .Values
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        values[WorkflowsDesignStorageManifest.LayoutVersionIdField] = "forged-version";
+        raw.InsertRaw(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind,
+            new StorageValues(values));
+        var store = new GroundworkWorkflowDefinitionVersionLayoutStore(
+            raw,
+            DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+
+        Assert.Null(await store.FindByVersionIdAsync("v1"));
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() => store.FindByVersionIdAsync("forged-version"));
+    }
+
+    [Fact]
     public async Task FindByVersionId_returns_null_when_absent()
     {
         var (store, raw) = Seeded(Layout("l1", "v1"));

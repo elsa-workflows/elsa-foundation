@@ -49,6 +49,33 @@ public sealed class GroundworkWorkflowDefinitionVersionStoreTests
     }
 
     [Fact]
+    public async Task FindById_rejects_projected_relationship_drift()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        var version = Version("v1", "def1", "1.0.0");
+        version.TenantId = DesignGroundworkTestAccess.DefaultScopeValue;
+        var options = GroundworkDesignDocumentSerialization.Create(Payloads);
+        var values = GroundworkDesignStorage.Values(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
+            version,
+            options,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection)
+            .Values
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        values[WorkflowsDesignStorageManifest.VersionDefinitionIdField] = "forged-definition";
+        raw.InsertRaw(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
+            new StorageValues(values));
+        var store = new GroundworkWorkflowDefinitionVersionStore(
+            raw,
+            new GroundworkWorkflowDefinitionStore(raw, DesignGroundworkTestAccess.DefaultAccessContextAccessor),
+            Payloads,
+            DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() => store.FindByIdAsync("v1"));
+    }
+
+    [Fact]
     public async Task Definition_id_relationship_queries_use_the_folded_identity()
     {
         var fixture = Seeded([Version("v1", "Definition-1", "1.0.0")]);

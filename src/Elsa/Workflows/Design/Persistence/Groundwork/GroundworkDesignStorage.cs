@@ -315,6 +315,88 @@ public sealed class GroundworkDesignStorage(
             $"The {operation} returned a row whose workflow-definition identity does not match the requested identities.");
     }
 
+    /// <summary>
+    /// Verifies that the provider projections used to route a point read still describe the
+    /// authoritative entity retained in the payload. A projection is only a query accelerator;
+    /// accepting drift here would let a stale relationship route return or mutate another
+    /// aggregate. The check is deliberately exact and fails closed on missing or non-string values.
+    /// </summary>
+    internal static void EnsureProjectedIdentity<TEntity>(
+        GroundworkDesignEntry entry,
+        TEntity entity,
+        string operation)
+        where TEntity : Entity
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentNullException.ThrowIfNull(entity);
+
+        var values = entry.Entry.Values.Values;
+        EnsureProjectedString(values, WorkflowsDesignStorageManifest.IdField, entity.Id, operation);
+        switch (entity)
+        {
+            case WorkflowDefinitionVersion version:
+                EnsureProjectedString(values, WorkflowsDesignStorageManifest.VersionIdField, version.Id, operation);
+                EnsureProjectedString(values, WorkflowsDesignStorageManifest.VersionDefinitionIdField, version.DefinitionId, operation);
+                break;
+            case WorkflowDefinitionDraft draft:
+                EnsureProjectedString(values, WorkflowsDesignStorageManifest.DraftIdField, draft.Id, operation);
+                EnsureProjectedString(values, WorkflowsDesignStorageManifest.DraftDefinitionIdField, draft.WorkflowDefinitionId, operation);
+                break;
+            case WorkflowDefinitionVersionLayout layout:
+                EnsureProjectedString(values, WorkflowsDesignStorageManifest.LayoutVersionIdField, layout.WorkflowDefinitionVersionId, operation);
+                break;
+            default:
+                throw new GroundworkQueryReadinessException(
+                    $"The {operation} returned an undeclared workflow-design entity type '{typeof(TEntity).Name}'.");
+        }
+
+        var tenantId = (entity as TenantEntity)?.TenantId;
+        if (!TryProjectedString(values, WorkflowsDesignStorageManifest.TenantIdField, out var projectedTenantId) ||
+            !StringComparer.Ordinal.Equals(projectedTenantId, tenantId))
+        {
+            throw new GroundworkQueryReadinessException(
+                $"The {operation} returned a row whose tenant projection does not match its authoritative entity.");
+        }
+
+        if (entry.Scope is { } scope && !StringComparer.Ordinal.Equals(scope.Value, tenantId))
+        {
+            throw new GroundworkQueryReadinessException(
+                $"The {operation} returned a row whose provider scope does not match its authoritative entity.");
+        }
+    }
+
+    private static void EnsureProjectedString(
+        IReadOnlyDictionary<string, object?> values,
+        string field,
+        string? expected,
+        string operation)
+    {
+        if (!TryProjectedString(values, field, out var actual) || !StringComparer.Ordinal.Equals(actual, expected))
+            throw new GroundworkQueryReadinessException(
+                $"The {operation} returned a row whose '{field}' projection does not match its authoritative entity.");
+    }
+
+    private static bool TryProjectedString(
+        IReadOnlyDictionary<string, object?> values,
+        string field,
+        out string? value)
+    {
+        if (!values.TryGetValue(field, out var raw))
+        {
+            value = null;
+            return false;
+        }
+
+        if (raw is null)
+        {
+            value = null;
+            return true;
+        }
+
+        value = raw as string;
+        return value is not null;
+    }
+
     private static void EnsureDefinitionIdentity(GroundworkDesignEntry entry, string requestedId)
     {
         var actualId = entry.Entry.Values.Values.TryGetValue(WorkflowsDesignStorageManifest.DefinitionIdField, out var value) &&

@@ -116,6 +116,7 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
     {
         var document = GroundworkDesignStorage.DeserializeDocument<WorkflowDefinitionDraft>(entry.Entry, jsonOptions);
         accessContextAccessor.Current.EnsureTenantScope(document.Entity.TenantId);
+        GroundworkDesignStorage.EnsureProjectedIdentity(entry, document.Entity, "workflow draft point read");
         if (expectedWorkflowDefinitionIds is not null)
             GroundworkDesignStorage.EnsureDefinitionIdentityInSet(
                 expectedWorkflowDefinitionIds,

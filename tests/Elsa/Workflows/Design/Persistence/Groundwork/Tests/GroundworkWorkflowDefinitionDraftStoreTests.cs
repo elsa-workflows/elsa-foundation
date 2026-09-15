@@ -64,6 +64,32 @@ public sealed class GroundworkWorkflowDefinitionDraftStoreTests
     }
 
     [Fact]
+    public async Task FindById_rejects_projected_tenant_drift()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        var draft = Draft("d1", "def1");
+        draft.TenantId = DesignGroundworkTestAccess.DefaultScopeValue;
+        var options = GroundworkDesignDocumentSerialization.Create(Payloads);
+        var values = GroundworkDesignStorage.Values(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+            draft,
+            options,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection)
+            .Values
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        values[WorkflowsDesignStorageManifest.TenantIdField] = "forged-tenant";
+        raw.InsertRaw(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+            new StorageValues(values));
+        var store = new GroundworkWorkflowDefinitionDraftStore(
+            new GroundworkDesignStorage(raw, DesignGroundworkTestAccess.DefaultAccessContextAccessor),
+            Payloads,
+            DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() => store.FindByIdAsync("d1"));
+    }
+
+    [Fact]
     public async Task FindByWorkflowDefinitionId_returns_null_when_absent()
     {
         var (store, raw) = Seeded((Draft("d1", "def1"), null, null));
