@@ -50,6 +50,12 @@ internal static class RuntimeOperationalStateProviderSmoke
             await context.Database.EnsureCreatedAsync();
             var accessor = new FixedAccessor(scope);
             var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = SigningKey }));
+            var checkpointStore = new EfRuntimeCheckpointCommitStore(context, accessor);
+            var checkpoint = EmptyCheckpointCommit($"checkpoint-{Guid.NewGuid():N}");
+            var checkpointResult = await checkpointStore.CommitAsync(checkpoint, new(RuntimeCheckpointPersistenceMode.Immediate));
+            var checkpointReplay = await checkpointStore.CommitAsync(checkpoint, new(RuntimeCheckpointPersistenceMode.Immediate));
+            Assert.Empty(checkpointResult.PendingPostCommitWorkIds);
+            Assert.Empty(checkpointReplay.PendingPostCommitWorkIds);
             var values = new EfDurableValueStateStore(context, accessor, codec);
             var scheduler = new EfSchedulerStateStore(context, accessor);
             var liveness = new EfExecutionLivenessStateStore(context, accessor, codec);
@@ -148,5 +154,17 @@ internal static class RuntimeOperationalStateProviderSmoke
         "provider smoke detail",
         DateTimeOffset.UtcNow,
         null);
+    private static RuntimeCheckpointCommit EmptyCheckpointCommit(string commitId) => new(
+        commitId,
+        new RuntimeCheckpoint(
+            $"checkpoint-{commitId}",
+            "EmptyCheckpoint",
+            "workflow-a",
+            DateTimeOffset.UtcNow,
+            [],
+            new Dictionary<string, string>()),
+        new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], []),
+        [],
+        new Dictionary<string, string>());
     private sealed class FixedAccessor(string scope) : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(scope)); }
 }

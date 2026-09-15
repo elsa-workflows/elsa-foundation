@@ -101,6 +101,26 @@ public sealed class IncidentStateEntityConfiguration : IEntityTypeConfiguration<
     }
 }
 
+public sealed class RuntimeCheckpointCommitEntityConfiguration : IEntityTypeConfiguration<RuntimeCheckpointCommitEntity>
+{
+    public void Configure(EntityTypeBuilder<RuntimeCheckpointCommitEntity> b)
+    {
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureCommon(b, RuntimeOperationalStateEfModule.CheckpointCommitTableName);
+        b.HasKey(x => x.Id); b.Property(x => x.Id).HasMaxLength(RuntimeOperationalStateEfModule.CompositeIdentityMaximumLength);
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(RuntimeCheckpointCommitEntity.CommitId));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureHash(b, nameof(RuntimeCheckpointCommitEntity.CommitIdHash));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureOrder(b, nameof(RuntimeCheckpointCommitEntity.CommitIdOrderKey));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(RuntimeCheckpointCommitEntity.WorkflowExecutionId));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureHash(b, nameof(RuntimeCheckpointCommitEntity.WorkflowExecutionIdHash));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureOrder(b, nameof(RuntimeCheckpointCommitEntity.WorkflowExecutionIdOrderKey));
+        b.Property(x => x.Fingerprint).HasMaxLength(64).IsRequired();
+        b.Property(x => x.PendingPostCommitWorkIdsJson).IsRequired();
+        b.Property(x => x.ConsumedSchedulerWorkItemIdsJson).IsRequired();
+        b.HasIndex(x => new { x.ScopeKeyHash, x.CommitIdHash, x.CommitId }).IsUnique();
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash, x.CommitIdOrderKey });
+    }
+}
+
 public sealed class DurableValueStateEntityConfiguration : IEntityTypeConfiguration<DurableValueStateEntity>
 {
     public void Configure(EntityTypeBuilder<DurableValueStateEntity> b)
