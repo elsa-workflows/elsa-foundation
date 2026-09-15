@@ -1,4 +1,5 @@
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -19,6 +20,29 @@ public sealed class EfPublicationSnapshotReviewProviderModelTests
         Assert.Equal(PublishingSnapshotReviewEfModule.TableName, entity.GetTableName());
         Assert.Equal(expiryColumnType, entity.FindProperty("ExpiresAt")!.GetColumnType());
         Assert.Equal("PreflightToken", entity.FindPrimaryKey()!.Properties.Single().Name);
+
+        var policy = context.Model.FindEntityType(typeof(PublicationPolicyEntity))!;
+        Assert.Equal(PublishingPolicyProjectionEfModule.PolicyTableName, policy.GetTableName());
+        Assert.Equal(PublishingPolicyProjectionEfModule.EncodedPolicyKeyMaximumLength, policy.FindProperty(nameof(PublicationPolicyEntity.PolicyKey))!.GetMaxLength());
+        Assert.Equal(PublishingPolicyProjectionEfModule.EncodedIdentityMaximumLength, policy.FindProperty(nameof(PublicationPolicyEntity.WorkflowDefinitionId))!.GetMaxLength());
+        Assert.Equal(PublishingPolicyProjectionEfModule.EncodedIdentityMaximumLength, policy.FindProperty(nameof(PublicationPolicyEntity.DefaultSlotName))!.GetMaxLength());
+        Assert.Contains(policy.GetIndexes(), index => index.IsUnique &&
+            index.Properties.Select(property => property.Name).SequenceEqual([
+                nameof(PublicationPolicyEntity.TenantIdHash),
+                nameof(PublicationPolicyEntity.PolicyKeyHash)]));
+
+        var intent = context.Model.FindEntityType(typeof(PublicationProjectionIntentEntity))!;
+        Assert.Equal(PublishingPolicyProjectionEfModule.ProjectionIntentTableName, intent.GetTableName());
+        Assert.Equal(PublishingPolicyProjectionEfModule.EncodedIdentityMaximumLength, intent.FindProperty(nameof(PublicationProjectionIntentEntity.IntentId))!.GetMaxLength());
+        Assert.Equal(PublishingPolicyProjectionEfModule.EncodedFailureCodeMaximumLength, intent.FindProperty(nameof(PublicationProjectionIntentEntity.LastFailureCode))!.GetMaxLength());
+        Assert.Equal(PublishingPolicyProjectionEfModule.EncodedFailureMessageMaximumLength, intent.FindProperty(nameof(PublicationProjectionIntentEntity.LastFailureMessage))!.GetMaxLength());
+        Assert.Equal(PublishingPolicyProjectionEfModule.IntentIdOrderKeyMaximumLength, intent.FindProperty(nameof(PublicationProjectionIntentEntity.IntentIdOrderKey))!.GetMaxLength());
+        Assert.Contains(intent.GetIndexes(), index =>
+            index.Properties.Select(property => property.Name).SequenceEqual([
+                nameof(PublicationProjectionIntentEntity.TenantIdHash),
+                nameof(PublicationProjectionIntentEntity.PublicationIdHash),
+                nameof(PublicationProjectionIntentEntity.IntentIdOrderKey),
+                nameof(PublicationProjectionIntentEntity.IntentIdHash)]));
     }
 
     private static PublishingSnapshotReviewDbContext CreateContext(string provider) => provider switch

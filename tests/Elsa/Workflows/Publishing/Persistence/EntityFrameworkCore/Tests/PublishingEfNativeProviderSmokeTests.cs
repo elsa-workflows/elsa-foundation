@@ -15,6 +15,8 @@ public sealed class PublishingPostgreSqlSmokeTests(PublishingPostgreSqlContainer
     [SkippableFact]
     public Task Native_provider_round_trip_consume_and_cleanup()
     {
+        if (PublishingProviderContainerSupport.RequireNativeProviderMatrix)
+            Assert.True(fixture.IsAvailable, fixture.SkipReason ?? "PostgreSQL is unavailable.");
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "PostgreSQL is unavailable.");
         return PublishingEfNativeProviderSmoke.RunAsync(fixture.ConnectionString, connectionString =>
             new PublishingSnapshotReviewPostgreSqlDbContext(
@@ -30,6 +32,8 @@ public sealed class PublishingSqlServerSmokeTests(PublishingSqlServerContainerFi
     [SkippableFact]
     public Task Native_provider_round_trip_consume_and_cleanup()
     {
+        if (PublishingProviderContainerSupport.RequireNativeProviderMatrix)
+            Assert.True(fixture.IsAvailable, fixture.SkipReason ?? "SQL Server is unavailable.");
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "SQL Server is unavailable.");
         return PublishingEfNativeProviderSmoke.RunAsync(fixture.ConnectionString, connectionString =>
             new PublishingSnapshotReviewSqlServerDbContext(
@@ -45,6 +49,8 @@ public sealed class PublishingMySqlSmokeTests(PublishingMySqlContainerFixture fi
     [SkippableFact]
     public Task Native_provider_round_trip_consume_and_cleanup()
     {
+        if (PublishingProviderContainerSupport.RequireNativeProviderMatrix)
+            Assert.True(fixture.IsAvailable, fixture.SkipReason ?? "MySQL is unavailable.");
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "MySQL is unavailable.");
         return PublishingEfNativeProviderSmoke.RunAsync(fixture.ConnectionString, connectionString =>
             new PublishingSnapshotReviewMySqlDbContext(
@@ -71,9 +77,71 @@ internal static class PublishingEfNativeProviderSmoke
             Assert.True(await store.TryAddAsync(review));
             Assert.False(await store.TryAddAsync(review));
 
+            var policy = new PublicationPolicy(
+                $"{prefix}-definition",
+                PublicationPolicyDefaultAction.ReplaceDefaultSlot,
+                $"{prefix}-slot",
+                0,
+                now);
+            var policyStore = new EfPublicationPolicyStore(setup, new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+            var savedPolicy = await policyStore.TrySaveAsync(policy, 0);
+            Assert.True(savedPolicy.Succeeded);
+
+            var intent = new PublicationProjectionIntent(
+                $"{prefix}-intent",
+                $"{prefix}-publication",
+                PublicationProjectionKinds.TriggerBindings,
+                PublicationProjectionOperation.Prepare,
+                PublicationProjectionIntentStatus.Pending,
+                0,
+                null,
+                null);
+            var intentStore = new EfPublicationProjectionIntentStore(setup, new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+            await intentStore.SaveAsync(intent);
+
+            // Exercise provider text handling with opaque UTF-16 code units. The domain values must
+            // round-trip unchanged even when a provider rejects NUL and lone-surrogate text.
+            const string opaqueTenant = "tenant-\0-\uD800";
+            const string opaqueDefinition = "definition-\0-\uD801";
+            const string opaqueSlot = "slot-\0-\uD802";
+            const string opaqueIntentId = "intent-\0-\uD803";
+            const string opaquePublicationId = "publication-\0-\uD804";
+            const string opaqueProjectionKind = "kind-\0-\uD805";
+            const string opaqueFailureCode = "failure-\0-\uD806";
+            const string opaqueFailureMessage = "message-\0-\uD807";
+            var opaquePolicy = new PublicationPolicy(
+                opaqueDefinition,
+                PublicationPolicyDefaultAction.ReplaceDefaultSlot,
+                opaqueSlot,
+                0,
+                now);
+            var opaquePolicyStore = new EfPublicationPolicyStore(setup, new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope(opaqueTenant))));
+            Assert.True((await opaquePolicyStore.TrySaveAsync(opaquePolicy, 0)).Succeeded);
+            var opaqueIntent = new PublicationProjectionIntent(
+                opaqueIntentId,
+                opaquePublicationId,
+                opaqueProjectionKind,
+                PublicationProjectionOperation.Prepare,
+                PublicationProjectionIntentStatus.Failed,
+                2,
+                now.AddMinutes(2),
+                new PublicationFailure(opaqueFailureCode, opaqueFailureMessage));
+            var opaqueIntentStore = new EfPublicationProjectionIntentStore(setup, new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope(opaqueTenant))));
+            await opaqueIntentStore.SaveAsync(opaqueIntent);
+
             await using var restarted = createContext(connectionString);
             var loaded = await Store(restarted, "tenant-a").FindAsync(review.PreflightToken);
             Assert.Equal(review, loaded);
+            Assert.Equal(policy with { Revision = 1 }, await new EfPublicationPolicyStore(restarted, new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))).FindAsync(policy.WorkflowDefinitionId));
+            Assert.Equal(intent, await new EfPublicationProjectionIntentStore(restarted, new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))).FindAsync(intent.IntentId));
+            var opaqueAccess = new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope(opaqueTenant)));
+            var opaquePolicyRead = new EfPublicationPolicyStore(restarted, opaqueAccess);
+            var opaqueIntentRead = new EfPublicationProjectionIntentStore(restarted, opaqueAccess);
+            Assert.Equal(opaquePolicy with { Revision = 1 }, await opaquePolicyRead.FindAsync(opaqueDefinition));
+            Assert.Equal(opaqueIntent, await opaqueIntentRead.FindAsync(opaqueIntentId));
+            Assert.Equal(opaqueIntent, Assert.Single(await opaqueIntentRead.ListByPublicationAsync(opaquePublicationId)));
+            var opaqueTransition = opaqueIntent with { Status = PublicationProjectionIntentStatus.Delivering, AttemptCount = 3 };
+            Assert.True((await opaqueIntentRead.TryTransitionAsync(opaqueTransition, PublicationProjectionIntentStatus.Failed)).Succeeded);
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 Store(restarted, "tenant-b").FindAsync(review.PreflightToken).AsTask());

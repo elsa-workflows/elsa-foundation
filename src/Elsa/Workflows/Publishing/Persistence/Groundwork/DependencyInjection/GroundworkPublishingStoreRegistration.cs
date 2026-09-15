@@ -43,12 +43,27 @@ public static class GroundworkPublishingStoreRegistration
         {
             var existingBackend = PublicationSnapshotReviewStoreBackend.Find(services);
             var preserveEntityFrameworkReviewStore = existingBackend?.Name == PublicationSnapshotReviewStoreBackend.EntityFramework;
+            if (preserveEntityFrameworkReviewStore)
+                existingBackend!.EnsureOwnsRegisteredContract(services);
+
+            var existingPolicyProjectionBackend = PublicationPolicyProjectionStoreBackend.Find(services);
+            var preserveEntityFrameworkPolicyProjection = existingPolicyProjectionBackend?.Name == PublicationPolicyProjectionStoreBackend.EntityFramework;
+            if (preserveEntityFrameworkPolicyProjection)
+                existingPolicyProjectionBackend!.EnsureOwnsRegisteredContracts(services);
+
             if (!preserveEntityFrameworkReviewStore)
             {
                 if (existingBackend is not null)
                     existingBackend.RemoveOwnedArtifacts(services);
                 else
                     PublicationSnapshotReviewStoreBackend.EnsureNoUnownedRegistrations(services);
+            }
+            if (!preserveEntityFrameworkPolicyProjection)
+            {
+                if (existingPolicyProjectionBackend is not null)
+                    existingPolicyProjectionBackend.RemoveOwnedArtifacts(services);
+                else
+                    PublicationPolicyProjectionStoreBackend.EnsureNoUnownedRegistrations(services);
             }
 
             services.AddPersistenceCore();
@@ -63,8 +78,16 @@ public static class GroundworkPublishingStoreRegistration
                 targetName));
 
             ReplaceScoped<IPublicationRecordStore, GroundworkPublicationRecordStore>(services);
-            ReplaceScoped<IPublicationPolicyStore, GroundworkPublicationPolicyStore>(services);
-            ReplaceScoped<IPublicationProjectionIntentStore, GroundworkPublicationProjectionIntentStore>(services);
+            if (!preserveEntityFrameworkPolicyProjection)
+            {
+                var policy = ReplaceScoped<IPublicationPolicyStore, GroundworkPublicationPolicyStore>(services);
+                var projectionIntent = ReplaceScoped<IPublicationProjectionIntentStore, GroundworkPublicationProjectionIntentStore>(services);
+                PublicationPolicyProjectionStoreBackend.Register(
+                    services,
+                    new PublicationPolicyProjectionStoreBackend(
+                        PublicationPolicyProjectionStoreBackend.Groundwork,
+                        [policy, projectionIntent]));
+            }
             if (!preserveEntityFrameworkReviewStore)
             {
                 var snapshotReviewDescriptor = ReplaceScoped<IPublicationSnapshotReviewStore, GroundworkPublicationSnapshotReviewStore>(services);

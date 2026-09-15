@@ -17,9 +17,7 @@ public sealed class PublishingSnapshotReviewSqlServerDbContext(DbContextOptions<
     protected override void ConfigureProvider(ModelBuilder modelBuilder)
     {
         PublishingSnapshotReviewProviderModel.ConfigureDateTime(modelBuilder, "bigint");
-        var entity = modelBuilder.Entity<PublicationSnapshotReviewEntity>();
-        foreach (var property in new[] { nameof(PublicationSnapshotReviewEntity.PreflightToken), nameof(PublicationSnapshotReviewEntity.DefinitionId), nameof(PublicationSnapshotReviewEntity.SlotName), nameof(PublicationSnapshotReviewEntity.TenantId) })
-            entity.Property(property).UseCollation("Latin1_General_BIN2");
+        PublishingSnapshotReviewProviderModel.ConfigureSqlServerCollation(modelBuilder, "Latin1_General_BIN2");
     }
 }
 
@@ -47,10 +45,7 @@ public sealed class PublishingSnapshotReviewMySqlDbContext(DbContextOptions<Publ
     {
         modelBuilder.Model.SetAnnotation(CharacterSetAnnotation, CharacterSet);
         modelBuilder.UseCollation(Collation);
-        var entity = modelBuilder.Entity<PublicationSnapshotReviewEntity>();
-        entity.Metadata.SetAnnotation(CollationAnnotation, Collation);
-        foreach (var property in new[] { nameof(PublicationSnapshotReviewEntity.PreflightToken), nameof(PublicationSnapshotReviewEntity.DefinitionId), nameof(PublicationSnapshotReviewEntity.SlotName), nameof(PublicationSnapshotReviewEntity.TenantId) })
-            entity.Property(property).Metadata.SetAnnotation(CollationAnnotation, Collation);
+        PublishingSnapshotReviewProviderModel.ConfigureMySqlCollation(modelBuilder, Collation, CollationAnnotation);
         PublishingSnapshotReviewProviderModel.ConfigureDateTime(modelBuilder, "bigint");
     }
 }
@@ -59,4 +54,37 @@ file static class PublishingSnapshotReviewProviderModel
 {
     public static void ConfigureDateTime(ModelBuilder modelBuilder, string type) =>
         modelBuilder.Entity<PublicationSnapshotReviewEntity>().Property(row => row.ExpiresAt).HasColumnType(type);
+
+    public static void ConfigureSqlServerCollation(ModelBuilder modelBuilder, string collation)
+    {
+        ConfigureStringCollation<PublicationSnapshotReviewEntity>(modelBuilder, collation,
+            nameof(PublicationSnapshotReviewEntity.PreflightToken), nameof(PublicationSnapshotReviewEntity.DefinitionId), nameof(PublicationSnapshotReviewEntity.SlotName), nameof(PublicationSnapshotReviewEntity.TenantId));
+        ConfigureStringCollation<PublicationPolicyEntity>(modelBuilder, collation,
+            nameof(PublicationPolicyEntity.PolicyKey), nameof(PublicationPolicyEntity.WorkflowDefinitionId), nameof(PublicationPolicyEntity.TenantId), nameof(PublicationPolicyEntity.DefaultSlotName));
+        ConfigureStringCollation<PublicationProjectionIntentEntity>(modelBuilder, collation,
+            nameof(PublicationProjectionIntentEntity.IntentId), nameof(PublicationProjectionIntentEntity.PublicationId), nameof(PublicationProjectionIntentEntity.ProjectionKind), nameof(PublicationProjectionIntentEntity.TenantId));
+    }
+
+    public static void ConfigureMySqlCollation(ModelBuilder modelBuilder, string collation, string annotation)
+    {
+        foreach (var entity in new[]
+        {
+            modelBuilder.Entity<PublicationSnapshotReviewEntity>().Metadata,
+            modelBuilder.Entity<PublicationPolicyEntity>().Metadata,
+            modelBuilder.Entity<PublicationProjectionIntentEntity>().Metadata
+        })
+        {
+            entity.SetAnnotation(annotation, collation);
+            foreach (var property in entity.GetProperties().Where(property => property.ClrType == typeof(string)))
+                property.SetAnnotation(annotation, collation);
+        }
+    }
+
+    private static void ConfigureStringCollation<TEntity>(ModelBuilder modelBuilder, string collation, params string[] properties)
+        where TEntity : class
+    {
+        var entity = modelBuilder.Entity<TEntity>();
+        foreach (var property in properties)
+            entity.Property(property).UseCollation(collation);
+    }
 }
