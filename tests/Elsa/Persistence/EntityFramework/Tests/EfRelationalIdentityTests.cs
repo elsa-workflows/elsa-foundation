@@ -25,6 +25,15 @@ public sealed class EfRelationalIdentityTests
     }
 
     [Fact]
+    public void Length_framed_hash_preserves_existing_runtime_ids_without_delimiter_collisions()
+    {
+        Assert.Equal(EfRelationalIdentity.Hash("8:tenant-a10:workflow-a"),
+            EfRelationalIdentity.HashLengthFramed("tenant-a", "workflow-a"));
+        Assert.NotEqual(EfRelationalIdentity.HashLengthFramed("tenant-a", "plan\u001fx"),
+            EfRelationalIdentity.HashLengthFramed("tenant-a\u001fplan", "x"));
+    }
+
+    [Fact]
     public void Decode_rejects_malformed_base64_and_odd_byte_lengths()
     {
         Assert.Throws<InvalidOperationException>(() => EfRelationalIdentity.Decode("not-base64"));

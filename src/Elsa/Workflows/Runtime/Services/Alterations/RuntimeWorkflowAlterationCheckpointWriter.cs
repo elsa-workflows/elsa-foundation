@@ -79,10 +79,9 @@ public sealed class RuntimeWorkflowAlterationCheckpointWriter(
             builder.PostCommitIntents.ToArray(),
             metadata);
 
-        await _alterationStore.CommitTerminalJobChangeAtomicallyAsync(
-            request.TerminalJobChange,
-            cancellationToken => CommitCheckpointAsync(commit, cancellationToken),
-            cancellationToken);
+        // The provider-facing checkpoint owns the entire transaction, including the typed terminal job change.
+        // An unrestricted alteration-store callback cannot prevent side effects before provider participation.
+        await _checkpointCommitter.CommitAsync(commit, cancellationToken);
         return new WorkflowAlterationCheckpointWriteResult(request.TerminalJobChange.CheckpointCommitId, request.TerminalJobChange);
     }
 
@@ -107,8 +106,4 @@ public sealed class RuntimeWorkflowAlterationCheckpointWriter(
                 job.SafeFailure));
     }
 
-    private async ValueTask CommitCheckpointAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
-    {
-        await _checkpointCommitter.CommitAsync(commit, cancellationToken);
-    }
 }

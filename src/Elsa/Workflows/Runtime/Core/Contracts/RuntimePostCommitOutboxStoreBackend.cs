@@ -68,8 +68,7 @@ public sealed class RuntimePostCommitOutboxStoreBackend
 
     public static bool IsRuntimeDefault(ServiceDescriptor descriptor) =>
         ContractTypes.Contains(descriptor.ServiceType) &&
-        descriptor.ImplementationFactory?.Method.DeclaringType?.FullName?.Contains(
-            "RuntimeCoreServiceCollectionExtensions", StringComparison.Ordinal) == true ||
+        RuntimeCoreRegistrationOwnership.IsCoreFactory(descriptor) ||
         descriptor.ServiceType == typeof(IWorkflowDispatchRedriveStore) &&
         descriptor.ImplementationType?.FullName == "Elsa.Workflows.Runtime.Services.ScopedWorkflowDispatchRedriveStore";
 

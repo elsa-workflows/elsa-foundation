@@ -228,7 +228,7 @@ public sealed class EfWorkflowRunHealthDataSource(
     }
 
     private static string CompositeId(string scope, string workflowExecutionId) =>
-        Hash($"{scope.Length}:{scope}{workflowExecutionId.Length}:{workflowExecutionId}");
+        EfRelationalIdentity.HashLengthFramed(scope, workflowExecutionId);
 
     private static string Encode(string value) => EfRelationalIdentity.Encode(value);
     private static string Decode(string value) => EfRelationalIdentity.Decode(value);

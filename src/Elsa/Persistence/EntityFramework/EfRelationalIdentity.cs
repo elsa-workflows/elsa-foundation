@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
+using System.Text;
 
 namespace Elsa.Persistence.EntityFramework;
 
@@ -12,6 +13,19 @@ public static class EfRelationalIdentity
     {
         ArgumentNullException.ThrowIfNull(value);
         return Convert.ToHexString(SHA256.HashData(EncodeUtf16CodeUnits(value)));
+    }
+
+    /// <summary>Hashes several opaque identities without delimiter collisions between adjacent values.</summary>
+    public static string HashLengthFramed(params string[] values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        var identity = new StringBuilder();
+        foreach (var value in values)
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            identity.Append(value.Length).Append(':').Append(value);
+        }
+        return Hash(identity.ToString());
     }
 
     public static string Encode(string value)

@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Alterations;
 using System.Globalization;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
@@ -83,6 +84,21 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ArgumentNullException.ThrowIfNull(commit);
         ArgumentNullException.ThrowIfNull(decision);
         cancellationToken.ThrowIfCancellationRequested();
+
+        if (commit.StateChanges.AlterationJobTerminalChange is { } terminal &&
+            _alterationStore is InMemoryWorkflowAlterationStore inMemoryAlterations)
+        {
+            RuntimeCheckpointCommitStoreResult? result = null;
+            await inMemoryAlterations.CommitTerminalJobChangeAtomicallyAsync(terminal, async ct =>
+                result = await CommitCoreAsync(commit, decision, ct), cancellationToken);
+            return result ?? throw new InvalidOperationException("The alteration checkpoint gate did not produce a checkpoint result.");
+        }
+
+        return await CommitCoreAsync(commit, decision, cancellationToken);
+    }
+
+    private async ValueTask<RuntimeCheckpointCommitStoreResult> CommitCoreAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken)
+    {
 
         await _state.WriteGate.WaitAsync(cancellationToken);
         try

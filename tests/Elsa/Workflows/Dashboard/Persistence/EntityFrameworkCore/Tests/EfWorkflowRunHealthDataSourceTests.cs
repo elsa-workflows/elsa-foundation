@@ -121,10 +121,22 @@ public sealed class EfWorkflowRunHealthDataSourceTests
     public void Registration_requires_runtime_ef_context_and_replaces_source()
     {
         var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
         services.AddPersistenceCore("tenant-a");
         services.AddRuntimeOperationalStateEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
         Assert.Throws<InvalidOperationException>(() => services.AddWorkflowRunHealthEntityFrameworkCore());
         services.AddRuntimeWorkflowExecutionEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
+        Assert.Throws<InvalidOperationException>(() => services.AddWorkflowRunHealthEntityFrameworkCore());
+        services.AddRuntimeArtifactsEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
+        services.AddRuntimeActivityExecutionEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
+        services.AddRuntimeBookmarksEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
+        services.AddRuntimeWorkflowTestScopeEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
+        services.AddRuntimeWorkflowAlterationEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
+        services.AddRuntimeSchedulerWorkQueueEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
+        services.AddRuntimeDurableTimerEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
+        services.AddRuntimeWorkflowDispatchEntityFrameworkCore();
+        services.AddRuntimePostCommitOutboxEntityFrameworkCore();
+        services.AddRuntimeCheckpointCommitEntityFrameworkCore();
         services.AddWorkflowRunHealthEntityFrameworkCore();
 
         using var provider = services.BuildServiceProvider();

@@ -350,8 +350,7 @@ public sealed class EfWorkflowAlterationStore(
             throw new ArgumentException("The alteration cursor contains an invalid identity.", parameterName, exception);
         }
     }
-    internal static string Id(string scope, string id) =>
-        EfRelationalIdentity.Hash($"{scope.Length}:{scope}{id.Length}:{id}");
+    internal static string Id(string scope, string id) => EfRelationalIdentity.HashLengthFramed(scope, id);
     private static bool IsTerminal(WorkflowAlterationPlanStatus status) => status is WorkflowAlterationPlanStatus.Completed or WorkflowAlterationPlanStatus.CompletedWithFailures or WorkflowAlterationPlanStatus.Failed or WorkflowAlterationPlanStatus.Cancelled;
     private static bool IsTerminal(WorkflowAlterationJobStatus status) => status is WorkflowAlterationJobStatus.Succeeded or WorkflowAlterationJobStatus.Failed or WorkflowAlterationJobStatus.Cancelled;
     private static string ActiveKey(DateTimeOffset at, string id) =>

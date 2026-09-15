@@ -3,6 +3,7 @@ using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
@@ -1095,7 +1096,7 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
-    public void Registration_exposes_only_the_preview_marker_adapter_after_an_owned_runtime_context_exists()
+    public void Registration_rejects_a_partial_ef_composition_without_changing_contracts()
     {
         var services = new ServiceCollection();
         services.AddRuntimeOperationalStateEntityFrameworkCore(new()
@@ -1103,10 +1104,77 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
             Provider = "Sqlite",
             ConnectionString = "Data Source=:memory:"
         });
+        var before = services.ToArray();
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeCheckpointCommitEntityFrameworkCore());
+        Assert.Equal(before, services);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IRuntimeCheckpointCommitStore));
+    }
+
+    [Fact]
+    public void Registration_owns_the_public_checkpoint_contract_only_after_every_participant_is_ef_owned()
+    {
+        var services = CompleteEfServices();
+        services.AddRuntimeCheckpointCommitEntityFrameworkCore();
         services.AddRuntimeCheckpointCommitEntityFrameworkCore();
 
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(EfRuntimeCheckpointCommitStore));
-        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IRuntimeCheckpointCommitStore));
+        var marker = RuntimeCheckpointCommitStoreBackend.Find(services)!;
+        Assert.Equal(RuntimeCheckpointCommitStoreBackend.EntityFramework, marker.Name);
+        marker.EnsureOwnsRegisteredContract(services);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IRuntimeCheckpointCommitStore));
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        Assert.IsType<EfRuntimeCheckpointCommitStore>(scope.ServiceProvider.GetRequiredService<IRuntimeCheckpointCommitStore>());
+    }
+
+    [Fact]
+    public async Task Registered_checkpoint_contract_commits_a_real_sqlite_marker_without_groundwork()
+    {
+        var connection = $"Data Source=file:ef-checkpoint-di-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+        await using var keeper = new SqliteConnection(connection);
+        await keeper.OpenAsync();
+        var services = CompleteEfServices(connection);
+        services.AddRuntimeCheckpointCommitEntityFrameworkCore();
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>();
+        await context.Database.EnsureCreatedAsync();
+
+        var writer = scope.ServiceProvider.GetRequiredService<IRuntimeCheckpointCommitStore>();
+        Assert.IsType<EfRuntimeCheckpointCommitStore>(writer);
+        await writer.CommitAsync(Commit("di-checkpoint"), Decision());
+        Assert.Single(await context.RuntimeCheckpointCommits.AsNoTracking().ToArrayAsync());
+    }
+
+    [Fact]
+    public void Registration_rejects_a_tampered_dispatch_backend_without_any_mutation()
+    {
+        var services = CompleteEfServices();
+        services.Remove(services.Single(descriptor => descriptor.ServiceType == typeof(IWorkflowDispatchStore)));
+        services.AddScoped<IWorkflowDispatchStore>(_ => throw new InvalidOperationException("foreign"));
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeCheckpointCommitEntityFrameworkCore());
+        Assert.Equal(before, services);
+        Assert.Null(RuntimeCheckpointCommitStoreBackend.Find(services));
+    }
+
+    private static ServiceCollection CompleteEfServices(string connection = "Data Source=:memory:")
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddPersistenceCore("tenant-a");
+        services.AddRuntimeOperationalStateEntityFrameworkCore(new() { ConnectionString = connection });
+        services.AddRuntimeArtifactsEntityFrameworkCore(new() { ConnectionString = connection });
+        services.AddRuntimeActivityExecutionEntityFrameworkCore(new() { ConnectionString = connection });
+        services.AddRuntimeBookmarksEntityFrameworkCore(new() { ConnectionString = connection });
+        services.AddRuntimeWorkflowExecutionEntityFrameworkCore(new() { ConnectionString = connection });
+        services.AddRuntimeWorkflowTestScopeEntityFrameworkCore(new() { ConnectionString = connection });
+        services.AddRuntimeWorkflowAlterationEntityFrameworkCore(new() { ConnectionString = connection });
+        services.AddRuntimeSchedulerWorkQueueEntityFrameworkCore(new() { ConnectionString = connection });
+        services.AddRuntimeDurableTimerEntityFrameworkCore(new() { ConnectionString = connection });
+        services.AddRuntimeWorkflowDispatchEntityFrameworkCore();
+        services.AddRuntimePostCommitOutboxEntityFrameworkCore();
+        return services;
     }
 
     [Fact]

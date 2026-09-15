@@ -370,6 +370,26 @@ public sealed class EfWorkflowDispatchStoreTests
         Assert.Null(RuntimeWorkflowDispatchStoreBackend.Find(services));
     }
 
+    [Fact]
+    public void Registration_rejects_a_foreign_factory_even_if_its_name_resembles_runtime_core()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddRuntimeOperationalStateEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
+        services.Remove(services.Single(descriptor => descriptor.ServiceType == typeof(IWorkflowDispatchQueryStore)));
+        services.AddScoped<IWorkflowDispatchQueryStore>(ForeignRuntimeCoreServiceCollectionExtensions.ResolveDispatchQuery);
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeWorkflowDispatchEntityFrameworkCore());
+        Assert.Equal(before, services);
+    }
+
+    private static class ForeignRuntimeCoreServiceCollectionExtensions
+    {
+        public static IWorkflowDispatchQueryStore ResolveDispatchQuery(IServiceProvider _) =>
+            throw new InvalidOperationException("The foreign registration must not be resolved.");
+    }
+
     private static async Task StageSiblingRevisionAsync(BookmarkStateSqliteDbContext context, string dispatchId)
     {
         var row = await context.WorkflowDispatches.SingleAsync(x =>

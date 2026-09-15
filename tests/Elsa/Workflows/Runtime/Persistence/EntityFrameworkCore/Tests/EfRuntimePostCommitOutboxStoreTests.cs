@@ -318,6 +318,27 @@ public sealed class EfRuntimePostCommitOutboxStoreTests
     }
 
     [Fact]
+    public void Registration_rejects_a_foreign_outbox_factory_with_a_core_like_type_name()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddRuntimeOperationalStateEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
+        services.AddRuntimeWorkflowDispatchEntityFrameworkCore();
+        services.Remove(services.Single(descriptor => descriptor.ServiceType == typeof(IPostCommitOutboxLookupStore)));
+        services.AddScoped<IPostCommitOutboxLookupStore>(ForeignRuntimeCoreServiceCollectionExtensions.ResolveOutboxLookup);
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimePostCommitOutboxEntityFrameworkCore());
+        Assert.Equal(before, services);
+    }
+
+    private static class ForeignRuntimeCoreServiceCollectionExtensions
+    {
+        public static IPostCommitOutboxLookupStore ResolveOutboxLookup(IServiceProvider _) =>
+            throw new InvalidOperationException("The foreign registration must not be resolved.");
+    }
+
+    [Fact]
     public async Task Public_dispatch_and_outbox_contracts_resolve_the_shared_sqlite_context()
     {
         var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-runtime-di-{Guid.NewGuid():N}.db");
