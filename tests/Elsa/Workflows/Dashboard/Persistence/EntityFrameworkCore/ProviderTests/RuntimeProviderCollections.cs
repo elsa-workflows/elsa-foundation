@@ -1,0 +1,13 @@
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests;
+using Xunit;
+
+namespace Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests;
+
+[CollectionDefinition(RuntimeBookmarksPostgreSqlFixture.CollectionName)]
+public sealed class RuntimeBookmarksPostgreSqlCollection : ICollectionFixture<RuntimeBookmarksPostgreSqlFixture>;
+
+[CollectionDefinition(RuntimeBookmarksSqlServerFixture.CollectionName)]
+public sealed class RuntimeBookmarksSqlServerCollection : ICollectionFixture<RuntimeBookmarksSqlServerFixture>;
+
+[CollectionDefinition(RuntimeBookmarksMySqlFixture.CollectionName)]
+public sealed class RuntimeBookmarksMySqlCollection : ICollectionFixture<RuntimeBookmarksMySqlFixture>;
