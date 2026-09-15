@@ -58,6 +58,11 @@ public sealed class EfSchedulerWorkQueueStore(
             Detach(entity);
             throw;
         }
+        catch (DbUpdateException)
+        {
+            Detach(entity);
+            throw;
+        }
     }
 
     public async ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(
@@ -133,6 +138,11 @@ public sealed class EfSchedulerWorkQueueStore(
                 Detach(row);
                 throw;
             }
+            catch (DbUpdateException)
+            {
+                Detach(row);
+                throw;
+            }
         }
 
         throw TransitionDidNotSettle("dequeue", workflowExecutionId);
@@ -164,6 +174,11 @@ public sealed class EfSchedulerWorkQueueStore(
                 Detach(row);
             }
             catch (OperationCanceledException)
+            {
+                Detach(row);
+                throw;
+            }
+            catch (DbUpdateException)
             {
                 Detach(row);
                 throw;
@@ -236,6 +251,11 @@ public sealed class EfSchedulerWorkQueueStore(
                 Detach(updated);
                 throw;
             }
+            catch (DbUpdateException)
+            {
+                Detach(updated);
+                throw;
+            }
         }
 
         throw TransitionDidNotSettle("claim", request.WorkflowExecutionId);
@@ -278,6 +298,11 @@ public sealed class EfSchedulerWorkQueueStore(
             Detach(updated);
             throw;
         }
+        catch (DbUpdateException)
+        {
+            Detach(updated);
+            throw;
+        }
     }
 
     public async ValueTask<RuntimeSchedulerWorkClaimTransitionResult> CompleteClaimAsync(
@@ -306,6 +331,11 @@ public sealed class EfSchedulerWorkQueueStore(
             return RuntimeSchedulerWorkClaimTransitionResult.Stale;
         }
         catch (OperationCanceledException)
+        {
+            Detach(row);
+            throw;
+        }
+        catch (DbUpdateException)
         {
             Detach(row);
             throw;
@@ -346,6 +376,11 @@ public sealed class EfSchedulerWorkQueueStore(
             return RuntimeSchedulerWorkClaimTransitionResult.Stale;
         }
         catch (OperationCanceledException)
+        {
+            Detach(row);
+            throw;
+        }
+        catch (DbUpdateException)
         {
             Detach(row);
             throw;

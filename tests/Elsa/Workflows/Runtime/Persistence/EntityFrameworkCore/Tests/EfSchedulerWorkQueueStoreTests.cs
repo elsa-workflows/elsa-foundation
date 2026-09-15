@@ -4,9 +4,11 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -180,6 +182,41 @@ public sealed class EfSchedulerWorkQueueStoreTests
     }
 
     [Fact]
+    public async Task Failed_queue_mutations_do_not_flush_into_a_later_sibling_save()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var now = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+
+        await using (var failedEnqueue = database.Open("tenant-a", new FailOnceSaveChangesInterceptor()))
+        {
+            await Assert.ThrowsAsync<DbUpdateException>(() => failedEnqueue.Store.EnqueueAsync(Work("wf-failed-enqueue", "work-1", 1)).AsTask());
+            await SaveSiblingStateAsync(failedEnqueue, "workflow-sibling-enqueue");
+        }
+
+        await using (var afterEnqueue = database.Open("tenant-a"))
+        {
+            Assert.Empty((await afterEnqueue.Store.ListAsync(new RuntimeSchedulerWorkQuery("wf-failed-enqueue"))).Items);
+            Assert.True(await afterEnqueue.Context.SchedulerStates.AnyAsync(row => row.WorkflowExecutionId == EfRelationalIdentity.Encode("workflow-sibling-enqueue")));
+        }
+
+        await using (var seed = database.Open("tenant-a"))
+            await seed.Store.EnqueueAsync(Work("wf-failed-update", "work-1", 1));
+
+        await using (var failedUpdate = database.Open("tenant-a", new FailOnceSaveChangesInterceptor()))
+        {
+            await Assert.ThrowsAsync<DbUpdateException>(() => failedUpdate.Store.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wf-failed-update", "owner-a", now, TimeSpan.FromMinutes(1))).AsTask());
+            await SaveSiblingStateAsync(failedUpdate, "workflow-sibling-update");
+        }
+
+        await using var afterUpdate = database.Open("tenant-a");
+        var row = await afterUpdate.Context.SchedulerWorkItems.SingleAsync(entity => entity.WorkflowExecutionId == EfRelationalIdentity.Encode("wf-failed-update"));
+        Assert.Null(row.ClaimOwnerId);
+        Assert.Equal(0, row.ClaimToken);
+        Assert.Equal(1, row.Revision);
+        Assert.True(await afterUpdate.Context.SchedulerStates.AnyAsync(entity => entity.WorkflowExecutionId == EfRelationalIdentity.Encode("workflow-sibling-update")));
+    }
+
+    [Fact]
     public async Task Projection_drift_fails_closed_on_visible_row()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -249,7 +286,7 @@ public sealed class EfSchedulerWorkQueueStoreTests
             return new TestDatabase(keeper, connectionString);
         }
 
-        public TestFixture Open(string scope) => new(connectionString, scope);
+        public TestFixture Open(string scope, SaveChangesInterceptor? interceptor = null) => new(connectionString, scope, interceptor);
         public ValueTask DisposeAsync() => keeper.DisposeAsync();
     }
 
@@ -259,11 +296,14 @@ public sealed class EfSchedulerWorkQueueStoreTests
         public BookmarkStateSqliteDbContext Context { get; }
         public EfSchedulerWorkQueueStore Store { get; }
 
-        public TestFixture(string connectionString, string scope)
+        public TestFixture(string connectionString, string scope, SaveChangesInterceptor? interceptor)
         {
             connection = new SqliteConnection(connectionString);
             connection.Open();
-            Context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            var options = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection);
+            if (interceptor is not null)
+                options.AddInterceptors(interceptor);
+            Context = new BookmarkStateSqliteDbContext(options.Options);
             Store = new EfSchedulerWorkQueueStore(Context, new FixedAccessor(scope), new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) })));
         }
 
@@ -277,5 +317,36 @@ public sealed class EfSchedulerWorkQueueStoreTests
     private sealed class FixedAccessor(string scope) : IPersistenceAccessContextAccessor
     {
         public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(scope));
+    }
+
+    private static async Task SaveSiblingStateAsync(TestFixture fixture, string workflowExecutionId)
+    {
+        fixture.Context.SchedulerStates.Add(new SchedulerStateEntity
+        {
+            Id = $"sibling-{workflowExecutionId}",
+            ScopeKey = EfRelationalIdentity.Encode("tenant-a"),
+            ScopeKeyHash = EfRelationalIdentity.Hash("tenant-a"),
+            WorkflowExecutionId = EfRelationalIdentity.Encode(workflowExecutionId),
+            WorkflowExecutionIdHash = EfRelationalIdentity.Hash(workflowExecutionId),
+            WorkflowExecutionIdOrderKey = Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(workflowExecutionId, RuntimeOperationalStateEfModule.IdentityMaximumLength)),
+            Collection = "schedulerState",
+            ContentJson = "{}",
+            SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion,
+            Revision = 1
+        });
+        await fixture.Context.SaveChangesAsync();
+    }
+
+    private sealed class FailOnceSaveChangesInterceptor : SaveChangesInterceptor
+    {
+        private int shouldFail = 1;
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default) =>
+            Interlocked.Exchange(ref shouldFail, 0) == 1
+                ? ValueTask.FromException<InterceptionResult<int>>(new DbUpdateException("Injected queue save failure."))
+                : base.SavingChangesAsync(eventData, result, cancellationToken);
     }
 }
