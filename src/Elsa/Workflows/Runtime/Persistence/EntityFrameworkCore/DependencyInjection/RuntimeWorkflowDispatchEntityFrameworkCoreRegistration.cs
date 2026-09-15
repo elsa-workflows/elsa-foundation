@@ -1,28 +1,66 @@
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 
-/// <summary>Registers the R21 dispatch adapter for explicit EF preview composition.</summary>
+/// <summary>Registers the R21 dispatch adapter for explicit EF composition.</summary>
 public static class RuntimeWorkflowDispatchEntityFrameworkCoreRegistration
 {
-    /// <summary>
-    /// Registers the concrete adapter only after an EF operational-state context owns the shared model. Public
-    /// dispatch contracts remain untouched until test-scope admission and complete checkpoint composition are wired.
-    /// </summary>
+    /// <summary>Replaces the Runtime-owned in-memory dispatch family with its shared-context EF implementation.</summary>
     public static IServiceCollection AddRuntimeWorkflowDispatchEntityFrameworkCore(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-        if (RuntimeOperationalStateStoreBackend.Find(services)?.Name != RuntimeOperationalStateStoreBackend.EntityFramework ||
-            !services.Any(descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext)))
+        var snapshot = services.ToArray();
+        try
         {
-            throw new InvalidOperationException(
-                "Runtime workflow-dispatch EF persistence requires an owned Runtime EF operational-state context. Register Runtime operational-state EF persistence first.");
-        }
+            var existing = RuntimeWorkflowDispatchStoreBackend.Find(services);
+            if (existing?.Name == RuntimeWorkflowDispatchStoreBackend.EntityFramework)
+            {
+                existing.EnsureOwnsRegisteredContracts(services);
+                RuntimeEfContractBackendRegistration.EnsureSharedContext(services, "Runtime workflow-dispatch EF persistence");
+                return services;
+            }
 
-        services.TryAddScoped<EfWorkflowDispatchStore>();
-        return services;
+            if (existing is not null)
+            {
+                existing.EnsureOwnsRegisteredContracts(services);
+                throw new InvalidOperationException("Runtime workflow-dispatch EF persistence refuses to replace a selected non-EF backend.");
+            }
+
+            var existingContracts = RuntimeWorkflowDispatchStoreBackend.CaptureContractRegistrations(services);
+            RuntimeWorkflowDispatchStoreBackend.EnsureRuntimeDefaultsOwnRegisteredContracts(services, existingContracts);
+            RuntimeEfContractBackendRegistration.EnsureSharedContext(services, "Runtime workflow-dispatch EF persistence");
+
+            foreach (var descriptor in existingContracts)
+                services.Remove(descriptor);
+
+            services.AddScoped<EfWorkflowDispatchStore>();
+            var concrete = services.Last();
+            var contracts = new[]
+            {
+                ServiceDescriptor.Scoped<IWorkflowDispatchStore>(provider => provider.GetRequiredService<EfWorkflowDispatchStore>()),
+                ServiceDescriptor.Scoped<IWorkflowDispatchQueryStore>(provider => provider.GetRequiredService<EfWorkflowDispatchStore>()),
+                ServiceDescriptor.Scoped<IWorkflowDispatchDeleteStore>(provider => provider.GetRequiredService<EfWorkflowDispatchStore>()),
+                ServiceDescriptor.Scoped<IWorkflowDispatchRetentionRootStore>(provider => provider.GetRequiredService<EfWorkflowDispatchStore>()),
+                ServiceDescriptor.Scoped<IWorkflowDispatchAdmissionStore>(provider => provider.GetRequiredService<EfWorkflowDispatchStore>()),
+                ServiceDescriptor.Scoped<IWorkflowDispatchCancellationStore>(provider => provider.GetRequiredService<EfWorkflowDispatchStore>())
+            };
+            foreach (var descriptor in contracts)
+                services.Add(descriptor);
+
+            RuntimeWorkflowDispatchStoreBackend.Register(
+                services,
+                new(RuntimeWorkflowDispatchStoreBackend.EntityFramework, [concrete, .. contracts]));
+
+            return services;
+        }
+        catch
+        {
+            services.Clear();
+            foreach (var descriptor in snapshot)
+                services.Add(descriptor);
+            throw;
+        }
     }
 }

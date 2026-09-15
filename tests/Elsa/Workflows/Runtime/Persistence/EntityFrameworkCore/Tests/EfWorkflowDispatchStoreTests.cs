@@ -2,7 +2,9 @@ using System.Data.Common;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
@@ -320,7 +322,39 @@ public sealed class EfWorkflowDispatchStoreTests
     }
 
     [Fact]
-    public void Preview_registration_keeps_public_dispatch_contracts_unreplaced()
+    public void Registration_replaces_all_public_dispatch_contracts_and_is_idempotent()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddRuntimeOperationalStateEntityFrameworkCore(new()
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        });
+        services.AddRuntimeWorkflowDispatchEntityFrameworkCore();
+        services.AddRuntimeWorkflowDispatchEntityFrameworkCore();
+
+        Assert.Contains(services, x => x.ServiceType == typeof(EfWorkflowDispatchStore));
+        Assert.Equal(RuntimeWorkflowDispatchStoreBackend.EntityFramework, RuntimeWorkflowDispatchStoreBackend.Find(services)!.Name);
+        Assert.All(new[]
+        {
+            typeof(IWorkflowDispatchStore),
+            typeof(IWorkflowDispatchQueryStore),
+            typeof(IWorkflowDispatchDeleteStore),
+            typeof(IWorkflowDispatchRetentionRootStore),
+            typeof(IWorkflowDispatchAdmissionStore),
+            typeof(IWorkflowDispatchCancellationStore)
+        }, serviceType =>
+        {
+            var descriptors = services.Where(x => x.ServiceType == serviceType).ToArray();
+            Assert.Single(descriptors);
+            Assert.NotNull(descriptors[0].ImplementationFactory);
+            Assert.True(RuntimeWorkflowDispatchStoreBackend.Find(services)!.Owns(descriptors[0]));
+        });
+    }
+
+    [Fact]
+    public void Registration_rejects_an_explicit_dispatch_contract_without_mutation()
     {
         var services = new ServiceCollection();
         services.AddRuntimeOperationalStateEntityFrameworkCore(new()
@@ -328,9 +362,12 @@ public sealed class EfWorkflowDispatchStoreTests
             Provider = "Sqlite",
             ConnectionString = "Data Source=:memory:"
         });
-        services.AddRuntimeWorkflowDispatchEntityFrameworkCore();
-        Assert.Contains(services, x => x.ServiceType == typeof(EfWorkflowDispatchStore));
-        Assert.DoesNotContain(services, x => x.ServiceType == typeof(IWorkflowDispatchStore));
+        services.AddSingleton<IWorkflowDispatchStore, InMemoryWorkflowDispatchStore>();
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeWorkflowDispatchEntityFrameworkCore());
+        Assert.Equal(before, services);
+        Assert.Null(RuntimeWorkflowDispatchStoreBackend.Find(services));
     }
 
     private static async Task StageSiblingRevisionAsync(BookmarkStateSqliteDbContext context, string dispatchId)

@@ -1,29 +1,71 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 
-/// <summary>Registers the R20 EF post-commit outbox adapter for explicit preview/test composition.</summary>
+/// <summary>Registers the R20 EF post-commit outbox adapter for explicit EF composition.</summary>
 public static class RuntimePostCommitOutboxEntityFrameworkCoreRegistration
 {
-    /// <summary>
-    /// Registers the concrete R20 adapter only after Runtime EF owns the shared context. The runtime outbox
-    /// contracts remain untouched until R21 dispatch projection and redrive can be composed atomically.
-    /// </summary>
+    /// <summary>Replaces the Runtime-owned in-memory outbox family with its shared-context EF implementation.</summary>
     public static IServiceCollection AddRuntimePostCommitOutboxEntityFrameworkCore(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-
-        if (RuntimeOperationalStateStoreBackend.Find(services)?.Name != RuntimeOperationalStateStoreBackend.EntityFramework ||
-            !services.Any(descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext)))
+        var snapshot = services.ToArray();
+        try
         {
-            throw new InvalidOperationException(
-                "Runtime post-commit outbox EF persistence requires an owned Runtime EF operational-state context. Register Runtime operational-state EF persistence first.");
-        }
+            var dispatch = RuntimeWorkflowDispatchStoreBackend.Find(services);
+            if (dispatch?.Name != RuntimeWorkflowDispatchStoreBackend.EntityFramework)
+                throw new InvalidOperationException(
+                    "Runtime post-commit outbox EF persistence requires the EF workflow-dispatch backend so dispatch projection and redrive cannot be split across providers.");
+            dispatch.EnsureOwnsRegisteredContracts(services);
 
-        services.TryAddScoped<EfRuntimePostCommitOutboxStore>();
-        return services;
+            var existing = RuntimePostCommitOutboxStoreBackend.Find(services);
+            if (existing?.Name == RuntimePostCommitOutboxStoreBackend.EntityFramework)
+            {
+                existing.EnsureOwnsRegisteredContracts(services);
+                RuntimeEfContractBackendRegistration.EnsureSharedContext(services, "Runtime post-commit outbox EF persistence");
+                return services;
+            }
+
+            if (existing is not null)
+            {
+                existing.EnsureOwnsRegisteredContracts(services);
+                throw new InvalidOperationException("Runtime post-commit outbox EF persistence refuses to replace a selected non-EF backend.");
+            }
+
+            var existingContracts = RuntimePostCommitOutboxStoreBackend.CaptureContractRegistrations(services);
+            RuntimePostCommitOutboxStoreBackend.EnsureRuntimeDefaultsOwnRegisteredContracts(services, existingContracts);
+            RuntimeEfContractBackendRegistration.EnsureSharedContext(services, "Runtime post-commit outbox EF persistence");
+
+            foreach (var descriptor in existingContracts)
+                services.Remove(descriptor);
+
+            services.AddScoped<EfRuntimePostCommitOutboxStore>();
+            var concrete = services.Last();
+            var contracts = new[]
+            {
+                ServiceDescriptor.Scoped<IRuntimePostCommitOutboxStore>(provider => provider.GetRequiredService<EfRuntimePostCommitOutboxStore>()),
+                ServiceDescriptor.Scoped<IPostCommitOutboxLookupStore>(provider => provider.GetRequiredService<EfRuntimePostCommitOutboxStore>()),
+                ServiceDescriptor.Scoped<IRuntimePostCommitOutboxClaimStore>(provider => provider.GetRequiredService<EfRuntimePostCommitOutboxStore>()),
+                ServiceDescriptor.Scoped<IRuntimePostCommitOutboxClaimCompletionStore>(provider => provider.GetRequiredService<EfRuntimePostCommitOutboxStore>()),
+                ServiceDescriptor.Scoped<IWorkflowDispatchRedriveStore>(provider => provider.GetRequiredService<EfRuntimePostCommitOutboxStore>())
+            };
+            foreach (var descriptor in contracts)
+                services.Add(descriptor);
+
+            RuntimePostCommitOutboxStoreBackend.Register(
+                services,
+                new(RuntimePostCommitOutboxStoreBackend.EntityFramework, [concrete, .. contracts]));
+
+            return services;
+        }
+        catch
+        {
+            services.Clear();
+            foreach (var descriptor in snapshot)
+                services.Add(descriptor);
+            throw;
+        }
     }
 }

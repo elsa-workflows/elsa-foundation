@@ -1,6 +1,7 @@
 using System.Data.Common;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
@@ -251,7 +252,39 @@ public sealed class EfRuntimePostCommitOutboxStoreTests
     }
 
     [Fact]
-    public void Preview_registration_does_not_replace_runtime_contracts()
+    public void Registration_replaces_all_public_outbox_contracts_after_dispatch_and_is_idempotent()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddRuntimeOperationalStateEntityFrameworkCore(new()
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        });
+        services.AddRuntimeWorkflowDispatchEntityFrameworkCore();
+        services.AddRuntimePostCommitOutboxEntityFrameworkCore();
+        services.AddRuntimePostCommitOutboxEntityFrameworkCore();
+
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(EfRuntimePostCommitOutboxStore));
+        Assert.Equal(RuntimePostCommitOutboxStoreBackend.EntityFramework, RuntimePostCommitOutboxStoreBackend.Find(services)!.Name);
+        Assert.All(new[]
+        {
+            typeof(IRuntimePostCommitOutboxStore),
+            typeof(IPostCommitOutboxLookupStore),
+            typeof(IRuntimePostCommitOutboxClaimStore),
+            typeof(IRuntimePostCommitOutboxClaimCompletionStore),
+            typeof(IWorkflowDispatchRedriveStore)
+        }, serviceType =>
+        {
+            var descriptors = services.Where(x => x.ServiceType == serviceType).ToArray();
+            Assert.Single(descriptors);
+            Assert.NotNull(descriptors[0].ImplementationFactory);
+            Assert.True(RuntimePostCommitOutboxStoreBackend.Find(services)!.Owns(descriptors[0]));
+        });
+    }
+
+    [Fact]
+    public void Registration_rejects_outbox_without_an_EF_dispatch_backend()
     {
         var services = new ServiceCollection();
         services.AddRuntimeOperationalStateEntityFrameworkCore(new()
@@ -259,12 +292,72 @@ public sealed class EfRuntimePostCommitOutboxStoreTests
             Provider = "Sqlite",
             ConnectionString = "Data Source=:memory:"
         });
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimePostCommitOutboxEntityFrameworkCore());
+        Assert.Equal(before, services);
+        Assert.Null(RuntimePostCommitOutboxStoreBackend.Find(services));
+    }
+
+    [Fact]
+    public void Registration_rejects_an_explicit_outbox_contract_without_mutation()
+    {
+        var services = new ServiceCollection();
+        services.AddRuntimeOperationalStateEntityFrameworkCore(new()
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        });
+        services.AddRuntimeWorkflowDispatchEntityFrameworkCore();
+        services.AddScoped<IRuntimePostCommitOutboxStore>(_ => throw new InvalidOperationException("foreign"));
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimePostCommitOutboxEntityFrameworkCore());
+        Assert.Equal(before, services);
+        Assert.Null(RuntimePostCommitOutboxStoreBackend.Find(services));
+    }
+
+    [Fact]
+    public async Task Public_dispatch_and_outbox_contracts_resolve_the_shared_sqlite_context()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-runtime-di-{Guid.NewGuid():N}.db");
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddRuntimeOperationalStateEntityFrameworkCore(new()
+        {
+            Provider = "Sqlite",
+            ConnectionString = $"Data Source={databasePath}"
+        });
+        services.AddRuntimeWorkflowDispatchEntityFrameworkCore();
         services.AddRuntimePostCommitOutboxEntityFrameworkCore();
 
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(EfRuntimePostCommitOutboxStore));
-        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IRuntimePostCommitOutboxStore));
-        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IRuntimePostCommitOutboxClaimStore));
-        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IRuntimePostCommitOutboxClaimCompletionStore));
+        try
+        {
+            await using var provider = services.BuildServiceProvider();
+            await using var scope = provider.CreateAsyncScope();
+            scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(
+                PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+            var context = scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>();
+            await context.Database.EnsureCreatedAsync();
+
+            var dispatch = scope.ServiceProvider.GetRequiredService<IWorkflowDispatchStore>();
+            var outbox = scope.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxStore>();
+            Assert.IsType<EfWorkflowDispatchStore>(dispatch);
+            Assert.IsType<EfRuntimePostCommitOutboxStore>(outbox);
+            Assert.Same(dispatch, scope.ServiceProvider.GetRequiredService<EfWorkflowDispatchStore>());
+            Assert.Same(outbox, scope.ServiceProvider.GetRequiredService<EfRuntimePostCommitOutboxStore>());
+
+            var item = Pending("di-outbox", "workflow-di");
+            await scope.ServiceProvider.GetRequiredService<EfRuntimePostCommitOutboxStore>().SavePendingAsync(item);
+            Assert.Equal(item.OutboxItemId, (await scope.ServiceProvider
+                .GetRequiredService<IPostCommitOutboxLookupStore>()
+                .FindAsync(item.OutboxItemId))!.OutboxItemId);
+        }
+        finally
+        {
+            if (File.Exists(databasePath))
+                File.Delete(databasePath);
+        }
     }
 
     private static RuntimePostCommitOutboxItem Pending(
