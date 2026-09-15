@@ -60,8 +60,9 @@ internal static class BookmarkStateEfContextRegistration
         var operationalBackend = RuntimeOperationalStateStoreBackend.Find(services);
         var durableTimerBackend = DurableTimerStoreBackend.Find(services);
         var schedulerWorkBackend = SchedulerWorkQueueStoreBackend.Find(services);
+        var schedulerPoisonBackend = WorkflowSchedulerPoisonStoreBackend.Find(services);
         if (contextRegistrations.Count > 0 &&
-            (owners.Length == 0 || contextRegistrations.Any(descriptor => !owners.Any(predicate => predicate?.Invoke(descriptor) == true) && operationalBackend?.Owns(descriptor) != true && durableTimerBackend?.Owns(descriptor) != true && schedulerWorkBackend?.Owns(descriptor) != true)))
+            (owners.Length == 0 || contextRegistrations.Any(descriptor => !owners.Any(predicate => predicate?.Invoke(descriptor) == true) && operationalBackend?.Owns(descriptor) != true && durableTimerBackend?.Owns(descriptor) != true && schedulerWorkBackend?.Owns(descriptor) != true && schedulerPoisonBackend?.Owns(descriptor) != true)))
             throw new InvalidOperationException(
                 $"A {contextRegistrations.First().ServiceType.Name} registration already exists; {owner} EF persistence refuses to reuse or replace an unowned context.");
     }
@@ -196,6 +197,15 @@ internal static class BookmarkStateEfContextRegistration
             connectionName,
             defaultConnectionString,
             "Runtime scheduler work");
+        EnsureCompatible(
+            services.Select(x => x.ImplementationInstance)
+                .OfType<RuntimeSchedulerPoisonEntityFrameworkCoreOptions>()
+                .SingleOrDefault(),
+            provider,
+            connectionString,
+            connectionName,
+            defaultConnectionString,
+            "Runtime scheduler poison");
     }
 
     private static void EnsureCompatible<TOptions>(
@@ -229,6 +239,8 @@ internal static class BookmarkStateEfContextRegistration
             RuntimeDurableTimerEntityFrameworkCoreOptions options =>
                 (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeOperationalStateEfModule.DefaultSqliteConnectionString),
             RuntimeSchedulerWorkQueueEntityFrameworkCoreOptions options =>
+                (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeOperationalStateEfModule.DefaultSqliteConnectionString),
+            RuntimeSchedulerPoisonEntityFrameworkCoreOptions options =>
                 (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeOperationalStateEfModule.DefaultSqliteConnectionString),
             _ => throw new InvalidOperationException("Unknown Runtime EF context options.")
         };
