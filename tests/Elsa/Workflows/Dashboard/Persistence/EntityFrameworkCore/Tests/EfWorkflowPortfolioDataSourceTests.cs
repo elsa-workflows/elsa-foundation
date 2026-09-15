@@ -183,6 +183,24 @@ public sealed class EfWorkflowPortfolioDataSourceTests : IAsyncLifetime
     }
 
     [Fact]
+    public void Registration_refuses_replaced_design_context_without_mutating_services()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddPersistenceCore(Tenant);
+        services.AddSingleton<IPayloadSerializer>(PayloadSerializer);
+        services.AddWorkflowsDesignEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
+        services.AddRuntimeArtifactsEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
+        var ownedContext = services.Single(descriptor => descriptor.ServiceType == typeof(WorkflowsDesignDbContext));
+        services.Remove(ownedContext);
+        services.AddScoped<WorkflowsDesignDbContext>(_ => throw new InvalidOperationException("Foreign Design context."));
+        var snapshot = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddWorkflowPortfolioEntityFrameworkCore());
+        Assert.Equal(snapshot, services);
+    }
+
+    [Fact]
     public void Registration_replaces_the_default_source_when_both_ef_lanes_own_their_contexts()
     {
         var services = new ServiceCollection();

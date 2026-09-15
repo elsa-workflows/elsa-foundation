@@ -17,10 +17,15 @@ public static class WorkflowPortfolioEntityFrameworkCoreRegistration
         ArgumentNullException.ThrowIfNull(services);
 
         var designBackend = DesignPersistenceBackend.Find(services);
-        if (designBackend?.Name != DesignPersistenceBackend.EntityFramework ||
-            !services.Any(descriptor => descriptor.ServiceType == typeof(WorkflowsDesignDbContext)))
+        if (designBackend?.Name != DesignPersistenceBackend.EntityFramework)
             throw new InvalidOperationException(
                 "Dashboard workflow portfolio EF persistence requires the EF-owned Workflows Design context. Register Workflows Design EF persistence first.");
+
+        designBackend.EnsureOwnsRegisteredContracts(services);
+        var designContext = services.SingleOrDefault(descriptor => descriptor.ServiceType == typeof(WorkflowsDesignDbContext));
+        if (designContext is null || !designBackend.Owns(designContext))
+            throw new InvalidOperationException(
+                "Dashboard workflow portfolio EF persistence requires the Workflows Design backend to own its context.");
 
         var runtimeBackend = RuntimeArtifactStoreBackend.Find(services);
         if (runtimeBackend?.Name != RuntimeArtifactStoreBackend.EntityFramework)
