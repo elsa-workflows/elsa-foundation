@@ -52,6 +52,20 @@ public sealed class EfSchedulerWorkQueueStoreTests
     }
 
     [Fact]
+    public async Task List_uses_utf8_stable_hash_for_equal_time_and_sequence_ties()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Store.EnqueueAsync(Work("wf-tie", "work-0", 7));
+        await fixture.Store.EnqueueAsync(Work("wf-tie", "work-2", 7));
+
+        // These IDs intentionally sort in opposite orders under the old UTF-16 hash and the
+        // queue's UTF-8 stable hash. The latter is the Groundwork-compatible tie-break contract.
+        var items = (await fixture.Store.ListAsync(new RuntimeSchedulerWorkQuery("wf-tie"))).Items;
+        Assert.Equal(new[] { "work-2", "work-0" }, items.Select(item => item.WorkItemId));
+    }
+
+    [Fact]
     public async Task Pending_workflow_discovery_is_scoped_and_bounded()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -131,6 +145,38 @@ public sealed class EfSchedulerWorkQueueStoreTests
         await using var restarted = database.Open("tenant-a");
         Assert.Empty((await restarted.Store.ListAsync(new RuntimeSchedulerWorkQuery("wf-rollback"))).Items);
         Assert.NotNull(claim);
+    }
+
+    [Fact]
+    public async Task Active_claim_inspection_reads_all_rows_in_bounded_pages()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        const int claimCount = RuntimeStorePageRequest.MaximumLimit + 1;
+        var now = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+
+        for (var index = 0; index < claimCount; index++)
+            await fixture.Store.EnqueueAsync(Work("wf-active-page", $"work-{index:D4}", index));
+
+        var rows = await fixture.Context.SchedulerWorkItems.ToArrayAsync();
+        foreach (var row in rows)
+        {
+            row.ClaimOwnerId = EfRelationalIdentity.Encode("owner-page");
+            row.ClaimToken = 1;
+            row.ClaimedAtUtcTicks = now.UtcTicks;
+            row.ClaimedAtOffsetMinutes = 0;
+            row.VisibleAfterUtcTicks = now.AddMinutes(1).UtcTicks;
+            row.VisibleAfterOffsetMinutes = 0;
+            row.Revision = 2;
+        }
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var claims = await fixture.Store.ListActiveClaimsAsync("wf-active-page", now);
+        Assert.Equal(claimCount, claims.Count);
+        Assert.All(claims, claim => Assert.Equal("owner-page", claim.OwnerId));
+        Assert.Equal("work-0000", claims.First().Item.WorkItemId);
+        Assert.Equal($"work-{claimCount - 1:D4}", claims.Last().Item.WorkItemId);
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -395,18 +396,34 @@ public sealed class EfSchedulerWorkQueueStore(
         var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
         var workflowKey = EfRuntimeOperationalStoreSupport.Encode(workflowExecutionId);
         var workflowHash = EfRuntimeOperationalStoreSupport.Hash(workflowExecutionId);
-        var rows = await context.SchedulerWorkItems.AsNoTracking()
-            .Where(row => row.ScopeKey == scopeKey && row.ScopeKeyHash == scopeHash &&
-                          row.WorkflowExecutionId == workflowKey && row.WorkflowExecutionIdHash == workflowHash &&
-                          row.ClaimOwnerId != null && row.ClaimedAtUtcTicks != null &&
-                          row.VisibleAfterUtcTicks != null && row.VisibleAfterUtcTicks > now.UtcTicks)
-            .OrderBy(row => row.WorkOrderKey)
-            .ToArrayAsync(cancellationToken);
-        return rows.Select(row =>
+        var claims = new List<RuntimeSchedulerWorkClaim>();
+        string? after = null;
+        do
         {
-            var item = ReadChecked(row, scope, workflowExecutionId);
-            return ToClaim(row, item);
-        }).ToArray();
+            var source = context.SchedulerWorkItems.AsNoTracking()
+                .Where(row => row.ScopeKey == scopeKey && row.ScopeKeyHash == scopeHash &&
+                              row.WorkflowExecutionId == workflowKey && row.WorkflowExecutionIdHash == workflowHash &&
+                              row.ClaimOwnerId != null && row.ClaimedAtUtcTicks != null &&
+                              row.VisibleAfterUtcTicks != null && row.VisibleAfterUtcTicks > now.UtcTicks);
+            if (after is not null)
+                source = source.Where(row => row.WorkOrderKey.CompareTo(after) > 0);
+
+            var rows = await source
+                .OrderBy(row => row.WorkOrderKey)
+                .Take(checked(RuntimeStorePageRequest.MaximumLimit + 1))
+                .ToArrayAsync(cancellationToken);
+            var hasNext = rows.Length > RuntimeStorePageRequest.MaximumLimit;
+            var selected = hasNext ? rows[..RuntimeStorePageRequest.MaximumLimit] : rows;
+            foreach (var row in selected)
+            {
+                var item = ReadChecked(row, scope, workflowExecutionId);
+                claims.Add(ToClaim(row, item));
+            }
+
+            after = hasNext ? selected[^1].WorkOrderKey : null;
+        } while (after is not null);
+
+        return claims;
     }
 
     private async Task<SchedulerWorkItemEntity?> LoadClaimAsync(
@@ -583,10 +600,15 @@ public sealed class EfSchedulerWorkQueueStore(
 
     private static string WorkOrderKey(RuntimeSchedulerWorkItem item) =>
         string.Concat(
-            EfRuntimeOperationalStoreSupport.Hash(item.WorkflowExecutionId), ".",
+            StableOrderHash(item.WorkflowExecutionId), ".",
             item.RecordedAt.UtcTicks.ToString("D19", CultureInfo.InvariantCulture), ".",
             (item.Sequence ?? long.MaxValue).ToString("D20", CultureInfo.InvariantCulture), ".",
-            EfRuntimeOperationalStoreSupport.Hash(item.WorkItemId));
+            StableOrderHash(item.WorkItemId));
+
+    // Groundwork's queue ordering is part of the provider-neutral contract. Keep this separate from
+    // EfRelationalIdentity.Hash, whose UTF-16/uppercase representation is the physical identity format.
+    private static string StableOrderHash(string value) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
     private string EncodeCursor(string scopeHash, string workflowHash, string orderKey) =>
         continuationCodec.Encode(CursorPurpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(new QueueCursor(1, scopeHash, workflowHash, orderKey))));
