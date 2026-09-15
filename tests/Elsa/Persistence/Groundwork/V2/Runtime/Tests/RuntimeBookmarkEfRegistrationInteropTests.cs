@@ -2,6 +2,7 @@ using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -18,6 +19,9 @@ namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
 
 public sealed class RuntimeBookmarkEfRegistrationInteropTests
 {
+    private const string SharedRecoveryContinuationSigningKey =
+        "ef-runtime-sibling-shared-signing-key-32-bytes";
+
     private static readonly RuntimeBookmarksEntityFrameworkCoreOptions EfOptions = new()
     {
         Provider = "Sqlite",
@@ -35,14 +39,28 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
         Provider = "Sqlite",
         ConnectionString = "Data Source=:memory:",
         HierarchyCursorSigningKey = "ef-runtime-activity-switch-hierarchy-key-32-bytes",
-        RecoveryContinuationSigningKey = "ef-runtime-activity-switch-signing-key-32-bytes"
+        RecoveryContinuationSigningKey = SharedRecoveryContinuationSigningKey
     };
 
     private static readonly RuntimeWorkflowExecutionEntityFrameworkCoreOptions WorkflowEfOptions = new()
     {
         Provider = "Sqlite",
         ConnectionString = "Data Source=:memory:",
-        RecoveryContinuationSigningKey = "ef-runtime-workflow-switch-signing-key-32-bytes"
+        RecoveryContinuationSigningKey = SharedRecoveryContinuationSigningKey
+    };
+
+    private static readonly RuntimeWorkflowAlterationEntityFrameworkCoreOptions AlterationEfOptions = new()
+    {
+        Provider = "Sqlite",
+        ConnectionString = "Data Source=:memory:",
+        RecoveryContinuationSigningKey = SharedRecoveryContinuationSigningKey
+    };
+
+    private static readonly RuntimeWorkflowTestScopeEntityFrameworkCoreOptions ScopeEfOptions = new()
+    {
+        Provider = "Sqlite",
+        ConnectionString = "Data Source=:memory:",
+        RecoveryContinuationSigningKey = SharedRecoveryContinuationSigningKey
     };
 
     [Fact]
@@ -62,6 +80,79 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
         Assert.Single(efFirst, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionStateStore));
         Assert.DoesNotContain(efFirst, descriptor => descriptor.ServiceType == typeof(EfWorkflowExecutionStateStore));
         Assert.Single(efFirst, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowExecutionStateStore));
+    }
+
+    [Fact]
+    public void Alteration_and_test_scope_backends_switch_both_directions_without_stale_units()
+    {
+        var groundworkFirst = new ServiceCollection().AddWorkflowRuntime();
+        groundworkFirst.AddGroundworkV2RuntimeStores();
+        Assert.Equal(RuntimeWorkflowAlterationStoreBackend.Groundwork, RuntimeWorkflowAlterationStoreBackend.Find(groundworkFirst)!.Name);
+        Assert.Equal(WorkflowTestScopeStoreBackend.Groundwork, WorkflowTestScopeStoreBackend.Find(groundworkFirst)!.Name);
+
+        groundworkFirst.AddRuntimeWorkflowAlterationEntityFrameworkCore(AlterationEfOptions);
+        groundworkFirst.AddRuntimeWorkflowTestScopeEntityFrameworkCore(ScopeEfOptions);
+
+        Assert.Equal(RuntimeWorkflowAlterationStoreBackend.EntityFramework, RuntimeWorkflowAlterationStoreBackend.Find(groundworkFirst)!.Name);
+        Assert.Equal(WorkflowTestScopeStoreBackend.EntityFramework, WorkflowTestScopeStoreBackend.Find(groundworkFirst)!.Name);
+        Assert.DoesNotContain(groundworkFirst, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowAlterationStore));
+        Assert.DoesNotContain(groundworkFirst, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowTestScopeStore));
+        Assert.DoesNotContain(groundworkFirst, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowTestScopeCleanupStore));
+        Assert.DoesNotContain(groundworkFirst, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeCleanupStore));
+        Assert.Single(groundworkFirst, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
+        Assert.Single(groundworkFirst, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+        Assert.DoesNotContain(groundworkFirst
+            .Where(descriptor => descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry))
+            .SelectMany(descriptor => ((GroundworkStorageUnitRegistry)descriptor.ImplementationInstance!).Registrations),
+            registration => registration.Unit.Id.Value is ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanDocumentKind
+                or ElsaRuntimeV2StorageManifest.WorkflowAlterationJobDocumentKind
+                or ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind);
+
+        groundworkFirst.AddGroundworkV2RuntimeStores();
+        Assert.Equal(RuntimeWorkflowAlterationStoreBackend.Groundwork, RuntimeWorkflowAlterationStoreBackend.Find(groundworkFirst)!.Name);
+        Assert.Equal(WorkflowTestScopeStoreBackend.Groundwork, WorkflowTestScopeStoreBackend.Find(groundworkFirst)!.Name);
+        Assert.Single(groundworkFirst, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowAlterationStore));
+        Assert.Single(groundworkFirst, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowTestScopeStore));
+        Assert.Single(groundworkFirst, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowTestScopeCleanupStore));
+        Assert.Single(groundworkFirst, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeCleanupStore));
+        Assert.DoesNotContain(groundworkFirst, descriptor => descriptor.ServiceType == typeof(EfWorkflowAlterationStore));
+        Assert.DoesNotContain(groundworkFirst, descriptor => descriptor.ServiceType == typeof(EfWorkflowTestScopeStore));
+        Assert.Equal(ElsaRuntimeV2StorageManifest.CreateUnits().Count, Assert.IsType<GroundworkStorageUnitRegistry>(groundworkFirst.Single(descriptor => descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance).Registrations.Count);
+
+        groundworkFirst.AddGroundworkV2RuntimeStores();
+        Assert.Equal(ElsaRuntimeV2StorageManifest.CreateUnits().Count, Assert.IsType<GroundworkStorageUnitRegistry>(groundworkFirst.Single(descriptor => descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance).Registrations.Count);
+
+        var efFirst = new ServiceCollection().AddWorkflowRuntime();
+        efFirst.AddRuntimeWorkflowAlterationEntityFrameworkCore(AlterationEfOptions);
+        efFirst.AddRuntimeWorkflowTestScopeEntityFrameworkCore(ScopeEfOptions);
+        efFirst.AddGroundworkV2RuntimeStores();
+        Assert.Equal(RuntimeWorkflowAlterationStoreBackend.Groundwork, RuntimeWorkflowAlterationStoreBackend.Find(efFirst)!.Name);
+        Assert.Equal(WorkflowTestScopeStoreBackend.Groundwork, WorkflowTestScopeStoreBackend.Find(efFirst)!.Name);
+        Assert.DoesNotContain(efFirst, descriptor => descriptor.ServiceType == typeof(EfWorkflowAlterationStore));
+        Assert.DoesNotContain(efFirst, descriptor => descriptor.ServiceType == typeof(EfWorkflowTestScopeStore));
+        Assert.DoesNotContain(efFirst, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
+        Assert.DoesNotContain(efFirst, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+        Assert.Single(efFirst, descriptor => descriptor.ServiceType == typeof(IWorkflowTestScopeCleanupStore));
+    }
+
+    [Fact]
+    public void Groundwork_backend_conflicts_leave_the_service_and_manifest_snapshots_unchanged()
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddGroundworkV2RuntimeStores();
+        var foreignAlteration = ServiceDescriptor.Scoped<IWorkflowAlterationStore>(_ =>
+            throw new NotSupportedException("foreign alteration store"));
+        var foreignScope = ServiceDescriptor.Scoped<IWorkflowTestScopeAdmissionStore>(_ =>
+            throw new NotSupportedException("foreign test-scope admission store"));
+        services.Add(foreignAlteration);
+        services.Add(foreignScope);
+        var serviceSnapshot = services.ToArray();
+        var registrySnapshot = Registry(services).Registrations;
+
+        Assert.Throws<InvalidOperationException>(() => services.AddGroundworkV2RuntimeStores());
+
+        Assert.Equal(serviceSnapshot, services);
+        Assert.Equal(registrySnapshot, Registry(services).Registrations);
     }
 
     [Theory]

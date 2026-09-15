@@ -112,6 +112,8 @@ public sealed class GroundworkV2RuntimeRegistrationTests
         AssertScopedAlias<IWorkflowTriggerBindingStore, GroundworkV2WorkflowTriggerBindingStore>(services);
         AssertScopedAlias<IRecurringTriggerScheduleStore, GroundworkV2RecurringTriggerScheduleStore>(services);
         AssertScopedAlias<IWorkflowActivationAuthority, GroundworkV2WorkflowActivationAuthority>(services);
+        Assert.Equal(RuntimeWorkflowAlterationStoreBackend.Groundwork, RuntimeWorkflowAlterationStoreBackend.Find(services)!.Name);
+        Assert.Equal(WorkflowTestScopeStoreBackend.Groundwork, WorkflowTestScopeStoreBackend.Find(services)!.Name);
     }
 
     [Fact]

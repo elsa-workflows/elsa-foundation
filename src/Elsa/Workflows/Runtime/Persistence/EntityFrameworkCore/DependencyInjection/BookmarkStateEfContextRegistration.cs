@@ -8,6 +8,32 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjec
 
 internal static class BookmarkStateEfContextRegistration
 {
+    public static void EnsureRecoveryContinuationSigningKeyCompatible(
+        IServiceCollection services,
+        string? requestedKey,
+        string owner)
+    {
+        var configuredKeys = services
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .Select(instance => instance switch
+            {
+                RuntimeActivityExecutionEntityFrameworkCoreOptions options => options.RecoveryContinuationSigningKey,
+                RuntimeWorkflowExecutionEntityFrameworkCoreOptions options => options.RecoveryContinuationSigningKey,
+                RuntimeWorkflowAlterationEntityFrameworkCoreOptions options => options.RecoveryContinuationSigningKey,
+                RuntimeWorkflowTestScopeEntityFrameworkCoreOptions options => options.RecoveryContinuationSigningKey,
+                _ => null
+            })
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .Cast<string>()
+            .Append(requestedKey)
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        if (configuredKeys.Length > 1)
+            throw new InvalidOperationException($"Combined Runtime EF persistence requires one compatible recovery-continuation signing key; {owner} would compose conflicting non-null keys.");
+    }
+
     public static void EnsureContextIsAvailable<TContext>(
         IServiceCollection services,
         Func<ServiceDescriptor, bool>? ownsExistingContext,
@@ -119,6 +145,24 @@ internal static class BookmarkStateEfContextRegistration
             connectionName,
             defaultConnectionString,
             "Runtime workflow executions");
+        EnsureCompatible(
+            services.Select(x => x.ImplementationInstance)
+                .OfType<RuntimeWorkflowAlterationEntityFrameworkCoreOptions>()
+                .SingleOrDefault(),
+            provider,
+            connectionString,
+            connectionName,
+            defaultConnectionString,
+            "Runtime alterations");
+        EnsureCompatible(
+            services.Select(x => x.ImplementationInstance)
+                .OfType<RuntimeWorkflowTestScopeEntityFrameworkCoreOptions>()
+                .SingleOrDefault(),
+            provider,
+            connectionString,
+            connectionName,
+            defaultConnectionString,
+            "Runtime test scopes");
     }
 
     private static void EnsureCompatible<TOptions>(
@@ -143,6 +187,10 @@ internal static class BookmarkStateEfContextRegistration
                 (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeActivityExecutionEfModule.DefaultSqliteConnectionString),
             RuntimeWorkflowExecutionEntityFrameworkCoreOptions options =>
                 (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeWorkflowExecutionEfModule.DefaultSqliteConnectionString),
+            RuntimeWorkflowAlterationEntityFrameworkCoreOptions options =>
+                (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeWorkflowAlterationEfModule.DefaultSqliteConnectionString),
+            RuntimeWorkflowTestScopeEntityFrameworkCoreOptions options =>
+                (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeWorkflowTestScopeEfModule.DefaultSqliteConnectionString),
             _ => throw new InvalidOperationException("Unknown Runtime EF context options.")
         };
 

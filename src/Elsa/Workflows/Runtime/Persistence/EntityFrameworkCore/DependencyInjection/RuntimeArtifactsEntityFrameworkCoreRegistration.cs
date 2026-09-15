@@ -37,6 +37,12 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                 var siblingWorkflowBackendForRepeat = WorkflowExecutionStateStoreBackend.Find(services);
                 if (siblingWorkflowBackendForRepeat?.Name == WorkflowExecutionStateStoreBackend.EntityFramework)
                     siblingWorkflowBackendForRepeat.EnsureOwnsRegisteredContract(services);
+                var siblingAlterationBackendForRepeat = RuntimeWorkflowAlterationStoreBackend.Find(services);
+                if (siblingAlterationBackendForRepeat?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework)
+                    siblingAlterationBackendForRepeat.EnsureOwnsRegisteredContracts(services);
+                var siblingScopeBackendForRepeat = WorkflowTestScopeStoreBackend.Find(services);
+                if (siblingScopeBackendForRepeat?.Name == WorkflowTestScopeStoreBackend.EntityFramework)
+                    siblingScopeBackendForRepeat.EnsureOwnsRegisteredContracts(services);
                 var existing = services.Select(x => x.ImplementationInstance).OfType<RuntimeArtifactsEntityFrameworkCoreOptions>().SingleOrDefault();
                 if (existing is null ||
                     !string.Equals(EfRelationalProviderBinding.Normalize(existing.Provider), EfRelationalProviderBinding.Normalize(options.Provider), StringComparison.Ordinal) ||
@@ -56,6 +62,12 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                         : null,
                     siblingWorkflowBackendForRepeat?.Name == WorkflowExecutionStateStoreBackend.EntityFramework
                         ? siblingWorkflowBackendForRepeat.Owns
+                        : null,
+                    siblingAlterationBackendForRepeat?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework
+                        ? siblingAlterationBackendForRepeat.Owns
+                        : null,
+                    siblingScopeBackendForRepeat?.Name == WorkflowTestScopeStoreBackend.EntityFramework
+                        ? siblingScopeBackendForRepeat.Owns
                         : null);
                 return services;
             }
@@ -74,6 +86,12 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             var existingWorkflowBackend = WorkflowExecutionStateStoreBackend.Find(services);
             if (existingWorkflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework)
                 existingWorkflowBackend.EnsureOwnsRegisteredContract(services);
+            var existingAlterationBackend = RuntimeWorkflowAlterationStoreBackend.Find(services);
+            if (existingAlterationBackend?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework)
+                existingAlterationBackend.EnsureOwnsRegisteredContracts(services);
+            var existingScopeBackend = WorkflowTestScopeStoreBackend.Find(services);
+            if (existingScopeBackend?.Name == WorkflowTestScopeStoreBackend.EntityFramework)
+                existingScopeBackend.EnsureOwnsRegisteredContracts(services);
             BookmarkStateEfContextRegistration.EnsureCompatible(
                 services,
                 provider,
@@ -93,6 +111,10 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             var bookmarksOwnContext = bookmarksBackend?.Name == BookmarkStateStoreBackend.EntityFramework;
             var activityBackend = existingActivityBackend;
             var activityOwnContext = activityBackend?.Name == RuntimeActivityExecutionStoreBackend.EntityFramework;
+            var alterationBackend = existingAlterationBackend;
+            var alterationOwnContext = alterationBackend?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework;
+            var scopeBackend = existingScopeBackend;
+            var scopeOwnContext = scopeBackend?.Name == WorkflowTestScopeStoreBackend.EntityFramework;
             BookmarkStateEfContextRegistration.EnsureContextIsAvailable(
                 services,
                 provider,
@@ -101,6 +123,12 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                 activityOwnContext ? activityBackend!.Owns : null,
                 existingWorkflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework
                     ? existingWorkflowBackend.Owns
+                    : null,
+                existingAlterationBackend?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework
+                    ? existingAlterationBackend.Owns
+                    : null,
+                existingScopeBackend?.Name == WorkflowTestScopeStoreBackend.EntityFramework
+                    ? existingScopeBackend.Owns
                     : null);
 
             if (bookmarksOwnContext)
@@ -112,6 +140,12 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             else if (existingWorkflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework)
                 ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
                     .Where(existingWorkflowBackend.Owns));
+            else if (alterationOwnContext)
+                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
+                    .Where(alterationBackend!.Owns));
+            else if (scopeOwnContext)
+                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
+                    .Where(scopeBackend!.Owns));
             else
                 switch (provider)
                 {

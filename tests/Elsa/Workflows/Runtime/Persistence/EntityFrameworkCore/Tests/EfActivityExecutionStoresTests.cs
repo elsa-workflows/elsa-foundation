@@ -570,7 +570,7 @@ public sealed class EfActivityExecutionStoresTests
             Provider = "Sqlite",
             ConnectionString = connectionString,
             HierarchyCursorSigningKey = "ef-runtime-activity-withdrawal-hierarchy-key-32-bytes",
-            RecoveryContinuationSigningKey = "ef-runtime-activity-withdrawal-signing-key-32-bytes"
+            RecoveryContinuationSigningKey = "ef-runtime-workflow-withdrawal-signing-key-32-bytes"
         });
 
         var activityBackend = Assert.IsType<RuntimeActivityExecutionStoreBackend>(RuntimeActivityExecutionStoreBackend.Find(services));

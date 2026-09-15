@@ -35,7 +35,9 @@ public sealed class WorkflowExecutionStateStoreBackend
         foreach (var descriptor in descriptors.Where(descriptor =>
                      RuntimeArtifactStoreBackend.Find(services)?.Owns(descriptor) != true &&
                      RuntimeActivityExecutionStoreBackend.Find(services)?.Owns(descriptor) != true &&
-                     BookmarkStateStoreBackend.Find(services)?.Owns(descriptor) != true))
+                     BookmarkStateStoreBackend.Find(services)?.Owns(descriptor) != true &&
+                     RuntimeWorkflowAlterationStoreBackend.Find(services)?.Owns(descriptor) != true &&
+                     WorkflowTestScopeStoreBackend.Find(services)?.Owns(descriptor) != true))
             services.Remove(descriptor);
         for (var i = services.Count - 1; i >= 0; i--) if (ReferenceEquals(services[i].ImplementationInstance, this)) services.RemoveAt(i);
         return removeOwnedArtifacts;

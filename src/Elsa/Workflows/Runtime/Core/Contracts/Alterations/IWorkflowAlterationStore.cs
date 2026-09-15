@@ -40,7 +40,9 @@ public interface IWorkflowAlterationStore
     ValueTask ApplyTerminalJobChangeAsync(WorkflowAlterationJobTerminalChange change, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Runs the workflow checkpoint write (which carries the terminal-job transition) as one provider transaction.
+    /// Runs the direct alteration-store terminal transition and the supplied callback on one provider transaction
+    /// when the provider can prove that both operations share a transaction. This method does not coordinate
+    /// unrelated checkpoint storage units. A durable provider that cannot establish that boundary must fail closed.
     /// The default keeps legacy providers source-compatible; durable providers must override it instead of composing
     /// separate calls.
     /// </summary>

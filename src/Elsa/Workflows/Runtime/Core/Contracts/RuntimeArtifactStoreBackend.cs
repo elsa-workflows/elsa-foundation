@@ -122,7 +122,9 @@ public sealed class RuntimeArtifactStoreBackend
             foreach (var descriptor in descriptors.Where(descriptor =>
                          BookmarkStateStoreBackend.Find(services)?.Owns(descriptor) != true &&
                          RuntimeActivityExecutionStoreBackend.Find(services)?.Owns(descriptor) != true &&
-                         WorkflowExecutionStateStoreBackend.Find(services)?.Owns(descriptor) != true))
+                         WorkflowExecutionStateStoreBackend.Find(services)?.Owns(descriptor) != true &&
+                         RuntimeWorkflowAlterationStoreBackend.Find(services)?.Owns(descriptor) != true &&
+                         WorkflowTestScopeStoreBackend.Find(services)?.Owns(descriptor) != true))
             {
                 // Bookmark EF may reuse this context and records the same descriptor as a sibling owner.
                 // Keep it alive while replacing only the artifact backend; the bookmark backend remains valid.
