@@ -49,12 +49,21 @@ internal static class RuntimeOperationalStateProviderSmoke
             var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = SigningKey }));
             var values = new EfDurableValueStateStore(context, accessor, codec);
             var scheduler = new EfSchedulerStateStore(context, accessor);
+            var liveness = new EfExecutionLivenessStateStore(context, accessor, codec);
+            var holds = new EfWorkflowHoldStateStore(context, accessor);
             var value = Value("aa", "workflow-a");
             await values.SaveAsync(value);
             await values.SaveAsync(Value("aG", "workflow-a"));
             await scheduler.SaveAsync(new SchedulerState("workflow-a", 4));
+            var livenessState = new ExecutionLivenessState("state-a", "workflow-a", null, null, null, null);
+            Assert.Equal(ExecutionLivenessStateWriteStatus.Saved, (await liveness.TrySaveAsync(livenessState, 0)).Status);
+            await holds.SaveAsync(new WorkflowHoldState(
+                "global-control",
+                activeHolds: [WorkflowHold.ForWorkflowExecution("embedded", "workflow-a", DateTimeOffset.UtcNow, "provider-smoke", "provider smoke hold")]));
             Assert.Equal("aG", (await values.ListPageAsync(new DurableValueStatePageQuery("workflow-a", 1))).Items.Single().DurableValueId);
             Assert.Equal(4, (await scheduler.FindAsync("workflow-a"))!.Version);
+            Assert.Equal(1, (await liveness.FindVersionedAsync("workflow-a", "state-a"))!.Revision);
+            Assert.Single(await holds.ListForWorkflowExecutionAsync("workflow-a"));
 
             await using var transaction = await context.Database.BeginTransactionAsync();
             await values.SaveAsync(Value("rolled-back", "workflow-a"));
@@ -65,6 +74,10 @@ internal static class RuntimeOperationalStateProviderSmoke
         {
             var values = new EfDurableValueStateStore(fresh, new FixedAccessor(scope), new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = SigningKey })));
             Assert.Null(await values.FindAsync("workflow-a", "rolled-back"));
+            var liveness = new EfExecutionLivenessStateStore(fresh, new FixedAccessor(scope), new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = SigningKey })));
+            var holds = new EfWorkflowHoldStateStore(fresh, new FixedAccessor(scope));
+            Assert.NotNull(await liveness.FindAsync("workflow-a", "state-a"));
+            Assert.Single(await holds.ListForWorkflowExecutionAsync("workflow-a"));
             await using var left = createContext(connectionString);
             await using var right = createContext(connectionString);
             var scopeKey = Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(scope);

@@ -193,14 +193,6 @@ public static class GroundworkV2RuntimeRegistration
         ReplaceScoped<GroundworkV2SchedulerStateStore>(services, Standard<GroundworkV2SchedulerStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(ISchedulerStateStore));
         services.RemoveAll<RuntimeOperationalStateStoreBackend>();
-        var groundworkDurableValueDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IDurableValueStateStore));
-        var groundworkSchedulerDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(ISchedulerStateStore));
-        var groundworkDurableValueConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2DurableValueStateStore));
-        var groundworkSchedulerConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2SchedulerStateStore));
-        RuntimeOperationalStateStoreBackend.Register(services, new(
-            RuntimeOperationalStateStoreBackend.Groundwork,
-            [groundworkDurableValueDescriptor, groundworkSchedulerDescriptor, groundworkDurableValueConcreteDescriptor, groundworkSchedulerConcreteDescriptor],
-            collection => GroundworkV2RuntimeUnitWithdrawal.RemoveOperationalState(collection, target)));
         ReplaceScoped<GroundworkV2ExecutionLivenessStateStore>(services, Standard<GroundworkV2ExecutionLivenessStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IExecutionLivenessStateStore));
         ReplaceScoped<GroundworkV2RuntimeRecoveryScanner>(services, provider => new(
@@ -211,6 +203,21 @@ public static class GroundworkV2RuntimeRegistration
             typeof(IRuntimeRecoveryScanner));
         ReplaceScoped<GroundworkV2WorkflowHoldStateStore>(services, Standard<GroundworkV2WorkflowHoldStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowHoldStateStore));
+        var groundworkDurableValueDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IDurableValueStateStore));
+        var groundworkSchedulerDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(ISchedulerStateStore));
+        var groundworkDurableValueConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2DurableValueStateStore));
+        var groundworkSchedulerConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2SchedulerStateStore));
+        var groundworkLivenessDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IExecutionLivenessStateStore));
+        var groundworkLivenessConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2ExecutionLivenessStateStore));
+        var groundworkRecoveryDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IRuntimeRecoveryScanner));
+        var groundworkHoldDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IWorkflowHoldStateStore));
+        var groundworkHoldConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowHoldStateStore));
+        RuntimeOperationalStateStoreBackend.Register(services, new(
+            RuntimeOperationalStateStoreBackend.Groundwork,
+            [groundworkDurableValueDescriptor, groundworkSchedulerDescriptor, groundworkDurableValueConcreteDescriptor, groundworkSchedulerConcreteDescriptor,
+                groundworkLivenessDescriptor, groundworkLivenessConcreteDescriptor, groundworkRecoveryDescriptor,
+                groundworkHoldDescriptor, groundworkHoldConcreteDescriptor],
+            collection => GroundworkV2RuntimeUnitWithdrawal.RemoveOperationalState(collection, target)));
         ReplaceScoped<GroundworkV2IncidentStateStore>(services, Standard<GroundworkV2IncidentStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IIncidentStateStore));
         ReplaceScoped<GroundworkV2WorkflowRuntimeAttentionQuery>(services, provider => new(
@@ -496,6 +503,8 @@ internal static class GroundworkV2RuntimeUnitWithdrawal
     {
         services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.DurableValueStateDocumentKind, targetName);
         services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.SchedulerStateDocumentKind, targetName);
+        services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind, targetName);
+        services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.WorkflowHoldStateDocumentKind, targetName);
     }
 }
 

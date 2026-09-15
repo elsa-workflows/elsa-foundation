@@ -10,7 +10,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 
-/// <summary>Registers the opt-in EF Core durable-value and scheduler-state family.</summary>
+/// <summary>Registers the opt-in EF Core runtime operational-state family (R14-R17).</summary>
 public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
 {
     public static IServiceCollection AddRuntimeOperationalStateEntityFrameworkCore(this IServiceCollection services, RuntimeOperationalStateEntityFrameworkCoreOptions options)
@@ -88,15 +88,31 @@ public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
 
             var durableContract = ServiceDescriptor.Scoped<IDurableValueStateStore>(provider => provider.GetRequiredService<EfDurableValueStateStore>());
             var schedulerContract = ServiceDescriptor.Scoped<ISchedulerStateStore>(provider => provider.GetRequiredService<EfSchedulerStateStore>());
+            var livenessContract = ServiceDescriptor.Scoped<IExecutionLivenessStateStore>(provider => provider.GetRequiredService<EfExecutionLivenessStateStore>());
+            var holdContract = ServiceDescriptor.Scoped<IWorkflowHoldStateStore>(provider => provider.GetRequiredService<EfWorkflowHoldStateStore>());
+            var recoveryContract = ServiceDescriptor.Scoped<IRuntimeRecoveryScanner>(provider => provider.GetRequiredService<InMemoryRuntimeRecoveryScanner>());
             services.RemoveAll<IDurableValueStateStore>();
             services.RemoveAll<ISchedulerStateStore>();
+            services.RemoveAll<IExecutionLivenessStateStore>();
+            services.RemoveAll<IWorkflowHoldStateStore>();
+            services.RemoveAll<IRuntimeRecoveryScanner>();
             services.AddScoped<EfDurableValueStateStore>();
             var durableConcrete = services.Last();
             services.AddScoped<EfSchedulerStateStore>();
             var schedulerConcrete = services.Last();
+            services.AddScoped<EfExecutionLivenessStateStore>();
+            var livenessConcrete = services.Last();
+            services.AddScoped<EfWorkflowHoldStateStore>();
+            var holdConcrete = services.Last();
+            services.AddScoped<InMemoryRuntimeRecoveryScanner>();
+            var recoveryConcrete = services.Last();
             services.Add(durableContract);
             services.Add(schedulerContract);
-            owned.AddRange([durableConcrete, schedulerConcrete, durableContract, schedulerContract]);
+            services.Add(livenessContract);
+            services.Add(holdContract);
+            services.Add(recoveryContract);
+            owned.AddRange([durableConcrete, schedulerConcrete, livenessConcrete, holdConcrete, recoveryConcrete,
+                durableContract, schedulerContract, livenessContract, holdContract, recoveryContract]);
 
             RuntimeOperationalStateStoreBackend.Register(services, new(
                 RuntimeOperationalStateStoreBackend.EntityFramework,
@@ -117,6 +133,8 @@ public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
     public static IServiceCollection AddRuntimeSchedulerEntityFrameworkCore(this IServiceCollection services, RuntimeOperationalStateEntityFrameworkCoreOptions options) => services.AddRuntimeOperationalStateEntityFrameworkCore(options);
     public static IServiceCollection AddRuntimeDurableValueStateEntityFrameworkCore(this IServiceCollection services, RuntimeDurableValueStateEntityFrameworkCoreOptions options) => services.AddRuntimeOperationalStateEntityFrameworkCore(options.ToOperationalOptions());
     public static IServiceCollection AddRuntimeSchedulerStateEntityFrameworkCore(this IServiceCollection services, RuntimeSchedulerStateEntityFrameworkCoreOptions options) => services.AddRuntimeOperationalStateEntityFrameworkCore(options.ToOperationalOptions());
+    public static IServiceCollection AddRuntimeExecutionLivenessStateEntityFrameworkCore(this IServiceCollection services, RuntimeExecutionLivenessStateEntityFrameworkCoreOptions options) => services.AddRuntimeOperationalStateEntityFrameworkCore(options.ToOperationalOptions());
+    public static IServiceCollection AddRuntimeWorkflowHoldStateEntityFrameworkCore(this IServiceCollection services, RuntimeWorkflowHoldStateEntityFrameworkCoreOptions options) => services.AddRuntimeOperationalStateEntityFrameworkCore(options.ToOperationalOptions());
 
     private static bool OptionsEqual(RuntimeOperationalStateEntityFrameworkCoreOptions left, RuntimeOperationalStateEntityFrameworkCoreOptions right) =>
         StringComparer.Ordinal.Equals(EfRelationalProviderBinding.Normalize(left.Provider), EfRelationalProviderBinding.Normalize(right.Provider)) &&
@@ -185,6 +203,24 @@ public sealed class RuntimeDurableValueStateEntityFrameworkCoreOptions
 }
 
 public sealed class RuntimeSchedulerStateEntityFrameworkCoreOptions
+{
+    public string Provider { get; set; } = "Sqlite";
+    public string? ConnectionString { get; set; }
+    public string? ConnectionName { get; set; }
+    public string? RecoveryContinuationSigningKey { get; set; }
+    internal RuntimeOperationalStateEntityFrameworkCoreOptions ToOperationalOptions() => new() { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName, RecoveryContinuationSigningKey = RecoveryContinuationSigningKey };
+}
+
+public sealed class RuntimeExecutionLivenessStateEntityFrameworkCoreOptions
+{
+    public string Provider { get; set; } = "Sqlite";
+    public string? ConnectionString { get; set; }
+    public string? ConnectionName { get; set; }
+    public string? RecoveryContinuationSigningKey { get; set; }
+    internal RuntimeOperationalStateEntityFrameworkCoreOptions ToOperationalOptions() => new() { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName, RecoveryContinuationSigningKey = RecoveryContinuationSigningKey };
+}
+
+public sealed class RuntimeWorkflowHoldStateEntityFrameworkCoreOptions
 {
     public string Provider { get; set; } = "Sqlite";
     public string? ConnectionString { get; set; }

@@ -1,12 +1,14 @@
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -158,6 +160,146 @@ public sealed class EfDurableValueAndSchedulerStateTests
     }
 
     [Fact]
+    public async Task Execution_liveness_supports_create_only_cas_versioned_reads_and_bounded_pages_after_restart()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var stateA = Liveness("workflow-a", "state-z");
+        var stateB = Liveness("workflow-a", "state-a");
+        await using (var tenantA = database.Open("tenant-a"))
+        {
+            var created = await tenantA.Liveness.TrySaveAsync(stateA, expectedRevision: 0);
+            Assert.Equal(ExecutionLivenessStateWriteStatus.Saved, created.Status);
+            Assert.Equal(1, created.Revision);
+            Assert.Equal(1, (await tenantA.Liveness.FindVersionedAsync("workflow-a", "state-z"))!.Revision);
+
+            var createConflict = await tenantA.Liveness.TrySaveAsync(stateA, expectedRevision: 0);
+            Assert.Equal(ExecutionLivenessStateWriteStatus.RevisionConflict, createConflict.Status);
+            Assert.Equal(1, createConflict.Revision);
+
+            var replaced = await tenantA.Liveness.TrySaveAsync(stateA, expectedRevision: 1);
+            Assert.Equal(ExecutionLivenessStateWriteStatus.Saved, replaced.Status);
+            Assert.Equal(2, replaced.Revision);
+            var stale = await tenantA.Liveness.TrySaveAsync(stateA, expectedRevision: 1);
+            Assert.Equal(ExecutionLivenessStateWriteStatus.RevisionConflict, stale.Status);
+            Assert.Equal(2, stale.Revision);
+
+            await tenantA.Liveness.SaveAsync(stateB);
+            var first = await tenantA.Liveness.ListPageAsync(new ExecutionLivenessStatePageQuery("workflow-a", 1));
+            Assert.Equal("state-a", first.Items.Single().OperationalStateId);
+            Assert.NotNull(first.NextContinuationToken);
+            var second = await tenantA.Liveness.ListPageAsync(new ExecutionLivenessStatePageQuery("workflow-a", 1, first.NextContinuationToken));
+            Assert.Equal("state-z", second.Items.Single().OperationalStateId);
+
+            var all = await tenantA.Liveness.ListAllPageAsync(new RuntimeStorePageRequest(1));
+            Assert.Equal("workflow-a", all.Items.Single().WorkflowExecutionId);
+            Assert.NotNull(all.NextContinuationToken);
+        }
+
+        await using var restarted = database.Open("tenant-a");
+        Assert.Equal(2, (await restarted.Liveness.FindVersionedAsync("workflow-a", "state-z"))!.Revision);
+        await using var tenantB = database.Open("tenant-b");
+        Assert.Null(await tenantB.Liveness.FindAsync("workflow-a", "state-z"));
+    }
+
+    [Fact]
+    public async Task Execution_liveness_recovery_pages_are_bounded_due_ordered_and_fail_closed_on_corruption()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var now = DateTimeOffset.UtcNow;
+        await fixture.Liveness.SaveAsync(Liveness("workflow-a", "state-detected", interruptedAt: now.AddMinutes(-5)));
+        await fixture.Liveness.SaveAsync(Liveness("workflow-a", "state-lease", leaseAcquiredAt: now.AddMinutes(-3), leaseExpiresAt: now.AddMinutes(1)));
+        await fixture.Liveness.SaveAsync(Liveness("workflow-a", "state-heartbeat", heartbeatRecordedAt: now.AddMinutes(-2.5)));
+        await fixture.Liveness.SaveAsync(Liveness("workflow-a", "state-live", leaseAcquiredAt: now, leaseExpiresAt: now.AddHours(1), heartbeatRecordedAt: now));
+
+        var request = new RuntimeRecoveryScanRequest(now, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(2), 2);
+        var first = await fixture.Recovery.ScanPageAsync(request);
+        Assert.Equal(["state-detected", "state-lease"], first.Items.Select(x => x.OperationalStateId));
+        Assert.NotNull(first.NextContinuationToken);
+        var second = await fixture.Recovery.ScanPageAsync(new RuntimeRecoveryScanRequest(now, request.LeaseTimeout, request.HeartbeatTimeout, 2, continuationToken: first.NextContinuationToken));
+        Assert.Equal(["state-heartbeat"], second.Items.Select(x => x.OperationalStateId));
+        Assert.Null(second.NextContinuationToken);
+
+        var row = await fixture.Context.ExecutionLivenessStates.SingleAsync(x => x.OperationalStateId == EfRelationalIdentity.Encode("state-live"));
+        row.Revision = 0;
+        await fixture.Context.SaveChangesAsync();
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Liveness.FindAsync("workflow-a", "state-live").AsTask());
+    }
+
+    [Fact]
+    public async Task Execution_liveness_persists_lease_heartbeat_and_fencing_across_restart()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var now = new DateTimeOffset(2026, 9, 15, 12, 0, 0, TimeSpan.Zero);
+        var clock = new FixedTimeProvider(now);
+        RuntimeExecutionLease first;
+        await using (var fixture = database.Open("tenant-a"))
+        {
+            var ownership = new RuntimeExecutionOwnershipService(
+                fixture.Liveness,
+                clock,
+                new RuntimeExecutionOwnershipOptions { OwnerId = "owner-a", LeaseDuration = TimeSpan.FromMinutes(1) });
+            first = await ownership.AcquireAsync("workflow-a");
+            Assert.Equal(1, first.FencingToken);
+            Assert.Equal(RuntimeExecutionOwnershipTransitionStatus.Applied, (await ownership.HeartbeatAsync(first)).Status);
+        }
+
+        await using (var restarted = database.Open("tenant-a"))
+        {
+            var ownership = new RuntimeExecutionOwnershipService(
+                restarted.Liveness,
+                clock,
+                new RuntimeExecutionOwnershipOptions { OwnerId = "owner-a", LeaseDuration = TimeSpan.FromMinutes(1) });
+            var second = await ownership.AcquireAsync("workflow-a");
+            Assert.Equal(2, second.FencingToken);
+            await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(() => ownership.EnsureCurrentAsync("workflow-a", first.FencingToken).AsTask());
+            Assert.Equal(RuntimeExecutionOwnershipTransitionStatus.Applied, (await ownership.ReleaseAsync(second)).Status);
+        }
+    }
+
+    [Fact]
+    public async Task Execution_liveness_recovery_owner_filter_fences_route_candidates()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var now = DateTimeOffset.UtcNow;
+        await fixture.Liveness.SaveAsync(Liveness("workflow-a", "state-owner-a", ownerId: "owner-a", leaseAcquiredAt: now.AddMinutes(-3), leaseExpiresAt: now.AddMinutes(1)));
+        await fixture.Liveness.SaveAsync(Liveness("workflow-a", "state-owner-b", ownerId: "owner-b", leaseAcquiredAt: now.AddMinutes(-3), leaseExpiresAt: now.AddMinutes(1)));
+
+        var request = new RuntimeRecoveryScanRequest(now, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(2), 10, ownerId: "owner-a");
+        var page = await fixture.Recovery.ScanPageAsync(request);
+        Assert.Equal(["state-owner-a"], page.Items.Select(x => x.OperationalStateId));
+        Assert.Null(page.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task Workflow_holds_are_keyed_by_control_plane_id_and_global_embedded_holds_are_workflow_visible()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using (var fixture = database.Open("tenant-a"))
+        {
+            await fixture.Holds.SaveAsync(new WorkflowHoldState("workflow-state", "workflow-a", [WorkflowHold.ForWorkflowExecution("direct", "workflow-a", DateTimeOffset.UtcNow, "test", "direct")]));
+            await fixture.Holds.SaveAsync(new WorkflowHoldState("global-state", activeHolds: [WorkflowHold.ForWorkflowExecution("embedded", "workflow-b", DateTimeOffset.UtcNow, "test", "embedded")]));
+            await fixture.Holds.SaveAsync(new WorkflowHoldState("other-state", "workflow-c", [WorkflowHold.ForWorkflowExecution("other", "workflow-c", DateTimeOffset.UtcNow, "test", "other")]));
+
+            Assert.Equal("workflow-state", (await fixture.Holds.FindAsync("workflow-state"))!.ControlPlaneStateId);
+            Assert.Equal(["workflow-state"], (await fixture.Holds.ListForWorkflowExecutionAsync("workflow-a")).Select(x => x.ControlPlaneStateId));
+            Assert.Equal(["global-state"], (await fixture.Holds.ListForWorkflowExecutionAsync("workflow-b")).Select(x => x.ControlPlaneStateId));
+            Assert.Collection(await fixture.Holds.ListAllAsync(),
+                state => Assert.Equal("global-state", state.ControlPlaneStateId),
+                state => Assert.Equal("other-state", state.ControlPlaneStateId),
+                state => Assert.Equal("workflow-state", state.ControlPlaneStateId));
+        }
+
+        await using var restarted = database.Open("tenant-a");
+        Assert.Single(await restarted.Holds.ListForWorkflowExecutionAsync("workflow-a"));
+        var row = await restarted.Context.WorkflowHoldStates.SingleAsync(x => x.ControlPlaneStateId == EfRelationalIdentity.Encode("global-state"));
+        row.ContentJson = "not-json";
+        await restarted.Context.SaveChangesAsync();
+        await Assert.ThrowsAsync<InvalidDataException>(() => restarted.Holds.FindAsync("global-state").AsTask());
+    }
+
+    [Fact]
     public void Registration_is_opt_in_and_repeated_identical_registration_is_stable()
     {
         IServiceCollection services = new ServiceCollection();
@@ -169,6 +311,26 @@ public sealed class EfDurableValueAndSchedulerStateTests
         Assert.Equal(RuntimeOperationalStateStoreBackend.EntityFramework, RuntimeOperationalStateStoreBackend.Find(services)!.Name);
         Assert.Contains(services, x => x.ServiceType == typeof(IDurableValueStateStore));
         Assert.Contains(services, x => x.ServiceType == typeof(ISchedulerStateStore));
+    }
+
+    [Fact]
+    public async Task Registration_replaces_core_defaults_with_the_complete_ef_operational_family()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddRuntimeOperationalStateEntityFrameworkCore(new RuntimeOperationalStateEntityFrameworkCoreOptions
+        {
+            ConnectionString = "Data Source=:memory:",
+            RecoveryContinuationSigningKey = "shared-runtime-signing-key-32-bytes"
+        });
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>();
+        await context.Database.OpenConnectionAsync();
+        await context.Database.EnsureCreatedAsync();
+        Assert.IsType<EfExecutionLivenessStateStore>(scope.ServiceProvider.GetRequiredService<IExecutionLivenessStateStore>());
+        Assert.IsType<EfWorkflowHoldStateStore>(scope.ServiceProvider.GetRequiredService<IWorkflowHoldStateStore>());
+        Assert.True(scope.ServiceProvider.GetRequiredService<IRuntimeRecoveryScanner>() is IRuntimeRecoveryPagedScanner { SupportsPaging: true });
     }
 
     [Fact]
@@ -234,6 +396,27 @@ public sealed class EfDurableValueAndSchedulerStateTests
     private static DurableValueState Value(string durableValueId, string workflowExecutionId) =>
         new(durableValueId, workflowExecutionId, "value-id", new RuntimeValueTypeDescriptor("json", null, null), DurableValueLifecycle.Result, DurableValueStorage.Inline, JsonDocument.Parse("{\"answer\":42}").RootElement, null, null, DateTimeOffset.UtcNow, new Dictionary<string, string> { ["source"] = "test" });
 
+    private static ExecutionLivenessState Liveness(
+        string workflowExecutionId,
+        string operationalStateId,
+        string ownerId = "owner",
+        DateTimeOffset? interruptedAt = null,
+        DateTimeOffset? leaseAcquiredAt = null,
+        DateTimeOffset? leaseExpiresAt = null,
+        DateTimeOffset? heartbeatRecordedAt = null)
+    {
+        var lease = leaseAcquiredAt is { } acquired
+            ? new RuntimeExecutionLease("lease-" + operationalStateId, workflowExecutionId, ownerId, acquired, leaseExpiresAt ?? acquired.AddHours(1), 1)
+            : null;
+        var heartbeat = heartbeatRecordedAt is { } recorded
+            ? new RuntimeHeartbeat("heartbeat-" + operationalStateId, workflowExecutionId, ownerId, lease?.LeaseId, recorded)
+            : null;
+        var interrupted = interruptedAt is { } interruptedTime
+            ? new InterruptedExecutionState("interrupt-" + operationalStateId, workflowExecutionId, lease?.LeaseId, "checkpoint", RuntimeInterruptionReason.HostStopped, RuntimeInterruptionStatus.Detected, interruptedTime)
+            : null;
+        return new ExecutionLivenessState(operationalStateId, workflowExecutionId, lease, heartbeat, null, interrupted);
+    }
+
     private sealed class TestDatabase : IAsyncDisposable
     {
         private readonly SqliteConnection _keeper;
@@ -265,6 +448,9 @@ public sealed class EfDurableValueAndSchedulerStateTests
         public BookmarkStateSqliteDbContext Context { get; }
         public EfDurableValueStateStore Values { get; }
         public EfSchedulerStateStore Scheduler { get; }
+        public EfExecutionLivenessStateStore Liveness { get; }
+        public EfWorkflowHoldStateStore Holds { get; }
+        public InMemoryRuntimeRecoveryScanner Recovery { get; }
 
         public TestFixture(string connectionString, string scope)
         {
@@ -274,6 +460,10 @@ public sealed class EfDurableValueAndSchedulerStateTests
             var accessor = new Accessor(scope);
             Values = new EfDurableValueStateStore(Context, accessor, new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) })));
             Scheduler = new EfSchedulerStateStore(Context, accessor);
+            var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) }));
+            Liveness = new EfExecutionLivenessStateStore(Context, accessor, codec);
+            Holds = new EfWorkflowHoldStateStore(Context, accessor);
+            Recovery = new InMemoryRuntimeRecoveryScanner(Liveness, codec);
         }
 
         public async ValueTask DisposeAsync()
@@ -281,6 +471,11 @@ public sealed class EfDurableValueAndSchedulerStateTests
             await Context.DisposeAsync();
             await _connection.DisposeAsync();
         }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 
     private sealed class Accessor : IPersistenceAccessContextAccessor

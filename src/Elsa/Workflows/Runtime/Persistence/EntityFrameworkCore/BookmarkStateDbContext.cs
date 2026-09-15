@@ -22,6 +22,8 @@ public abstract class BookmarkStateDbContext(DbContextOptions options) : DbConte
     public DbSet<WorkflowTestScopeEntity> WorkflowTestScopes => Set<WorkflowTestScopeEntity>();
     public DbSet<DurableValueStateEntity> DurableValueStates => Set<DurableValueStateEntity>();
     public DbSet<SchedulerStateEntity> SchedulerStates => Set<SchedulerStateEntity>();
+    public DbSet<ExecutionLivenessStateEntity> ExecutionLivenessStates => Set<ExecutionLivenessStateEntity>();
+    public DbSet<WorkflowHoldStateEntity> WorkflowHoldStates => Set<WorkflowHoldStateEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -40,6 +42,8 @@ public abstract class BookmarkStateDbContext(DbContextOptions options) : DbConte
         modelBuilder.ApplyConfiguration(new WorkflowTestScopeEntityConfiguration());
         modelBuilder.ApplyConfiguration(new DurableValueStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new SchedulerStateEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new ExecutionLivenessStateEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new WorkflowHoldStateEntityConfiguration());
         ConfigureProvider(modelBuilder);
     }
 

@@ -2,7 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
-/// <summary>Tracks ownership of the durable-value and scheduler-state provider family.</summary>
+/// <summary>Tracks ownership of the runtime operational-state provider family.</summary>
 public sealed class RuntimeOperationalStateStoreBackend
 {
     public const string EntityFramework = "entity-framework";
@@ -31,8 +31,7 @@ public sealed class RuntimeOperationalStateStoreBackend
     public static void EnsureNoUnownedRegistrations(IServiceCollection services)
     {
         var unowned = services.Where(x =>
-            (x.ServiceType == typeof(IDurableValueStateStore) || x.ServiceType == typeof(ISchedulerStateStore)) &&
-            !IsRuntimeCoreDefault(x));
+            IsOperationalContract(x.ServiceType) && !IsRuntimeCoreDefault(x));
         if (unowned.Any())
             throw new InvalidOperationException("An explicit runtime operational-state store registration is already present; the selected backend refuses to replace it implicitly.");
     }
@@ -40,12 +39,23 @@ public sealed class RuntimeOperationalStateStoreBackend
     private static bool IsRuntimeCoreDefault(ServiceDescriptor descriptor) =>
         descriptor.ImplementationType?.FullName is
             "Elsa.Workflows.Runtime.Core.Services.InMemoryDurableValueStateStore" or
-            "Elsa.Workflows.Runtime.Core.Services.InMemorySchedulerStateStore";
+            "Elsa.Workflows.Runtime.Core.Services.InMemorySchedulerStateStore" or
+            "Elsa.Workflows.Runtime.Core.Services.InMemoryExecutionLivenessStateStore" or
+            "Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowHoldStateStore" or
+            "Elsa.Workflows.Runtime.Core.Services.InMemoryRuntimeRecoveryScanner" ||
+        descriptor.ImplementationFactory?.Method.DeclaringType?.FullName?.Contains("RuntimeCoreServiceCollectionExtensions", StringComparison.Ordinal) == true;
+
+    private static bool IsOperationalContract(Type? serviceType) =>
+        serviceType == typeof(IDurableValueStateStore) ||
+        serviceType == typeof(ISchedulerStateStore) ||
+        serviceType == typeof(IExecutionLivenessStateStore) ||
+        serviceType == typeof(IWorkflowHoldStateStore) ||
+        serviceType == typeof(IRuntimeRecoveryScanner);
 
     public void EnsureOwnsRegisteredContracts(IServiceCollection services)
     {
-        var current = services.Where(x => x.ServiceType == typeof(IDurableValueStateStore) || x.ServiceType == typeof(ISchedulerStateStore)).ToArray();
-        if (current.Length != 2 || current.Any(x => !Owns(x)) || _descriptors.Any(x => !services.Contains(x)))
+        var current = services.Where(x => IsOperationalContract(x.ServiceType)).ToArray();
+        if (current.Any(x => !Owns(x)) || _descriptors.Any(x => !services.Contains(x)))
             throw new InvalidOperationException($"Runtime operational-state backend '{Name}' no longer exclusively owns its registrations.");
     }
 

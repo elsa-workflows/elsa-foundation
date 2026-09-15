@@ -11,8 +11,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 [ManifestFeatureCategory("Persistence")]
 [ShellFeature(
     name: "WorkflowsRuntimeOperationalStateEntityFrameworkCorePersistence",
-    DisplayName = "Workflows Runtime EF Core Durable Values and Scheduler State Persistence",
-    Description = "Opt-in EF Core persistence for runtime durable values and scheduler state. Groundwork remains the default.",
+    DisplayName = "Workflows Runtime EF Core Operational State Persistence",
+    Description = "Opt-in EF Core persistence for runtime operational state, execution liveness, and workflow holds. Groundwork remains the default.",
     DependsOn = new object[] { "WorkflowsRuntime" })]
 public sealed class RuntimeOperationalStateEntityFrameworkCoreFeature : IShellFeature
 {

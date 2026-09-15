@@ -18,7 +18,7 @@ internal static class RuntimeOperationalStateEntityConfigurationHelpers
 
     public static void ConfigureIdentity<T>(EntityTypeBuilder<T> b, string property, bool nullable = false) where T : class
     {
-        b.Property(property).HasMaxLength(RuntimeOperationalStateEfModule.IdentityMaximumLength);
+        b.Property(property).HasMaxLength(RuntimeOperationalStateEfModule.IdentityProjectionMaximumLength);
         if (!nullable) b.Property(property).IsRequired();
     }
 
@@ -35,6 +35,51 @@ internal static class RuntimeOperationalStateEntityConfigurationHelpers
     }
 }
 
+public sealed class ExecutionLivenessStateEntityConfiguration : IEntityTypeConfiguration<ExecutionLivenessStateEntity>
+{
+    public void Configure(EntityTypeBuilder<ExecutionLivenessStateEntity> b)
+    {
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureCommon(b, RuntimeOperationalStateEfModule.ExecutionLivenessTableName);
+        b.HasKey(x => x.Id); b.Property(x => x.Id).HasMaxLength(64);
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(ExecutionLivenessStateEntity.WorkflowExecutionId));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureHash(b, nameof(ExecutionLivenessStateEntity.WorkflowExecutionIdHash));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureOrder(b, nameof(ExecutionLivenessStateEntity.WorkflowExecutionIdOrderKey));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(ExecutionLivenessStateEntity.OperationalStateId));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureHash(b, nameof(ExecutionLivenessStateEntity.OperationalStateIdHash));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureOrder(b, nameof(ExecutionLivenessStateEntity.OperationalStateIdOrderKey));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(ExecutionLivenessStateEntity.LeaseOwnerId), nullable: true);
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(ExecutionLivenessStateEntity.HeartbeatOwnerId), nullable: true);
+        b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash, x.OperationalStateIdHash }).IsUnique();
+        // Keep provider index keys below SQL Server's 1700-byte limit. The full order projections remain on the
+        // rows for exact keyset ordering; the hash tie-breaker gives each route a compact, deterministic index key.
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdOrderKey, x.OperationalStateIdHash });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.InterruptedStatus, x.InterruptedAtUtcTicks, x.WorkflowExecutionIdOrderKey, x.OperationalStateIdHash });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.LeaseExpiresAtUtcTicks, x.WorkflowExecutionIdOrderKey, x.OperationalStateIdHash });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.LeaseAcquiredAtUtcTicks, x.WorkflowExecutionIdOrderKey, x.OperationalStateIdHash });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.HeartbeatRecordedAtUtcTicks, x.WorkflowExecutionIdOrderKey, x.OperationalStateIdHash });
+    }
+}
+
+public sealed class WorkflowHoldStateEntityConfiguration : IEntityTypeConfiguration<WorkflowHoldStateEntity>
+{
+    public void Configure(EntityTypeBuilder<WorkflowHoldStateEntity> b)
+    {
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureCommon(b, RuntimeOperationalStateEfModule.WorkflowHoldTableName);
+        b.HasKey(x => x.Id); b.Property(x => x.Id).HasMaxLength(64);
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(WorkflowHoldStateEntity.ControlPlaneStateId));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureHash(b, nameof(WorkflowHoldStateEntity.ControlPlaneStateIdHash));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureOrder(b, nameof(WorkflowHoldStateEntity.ControlPlaneStateIdOrderKey));
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(WorkflowHoldStateEntity.WorkflowExecutionId), nullable: true);
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureHash(b, nameof(WorkflowHoldStateEntity.WorkflowExecutionIdHash), nullable: true);
+        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureOrder(b, nameof(WorkflowHoldStateEntity.WorkflowExecutionIdOrderKey), nullable: true);
+        b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
+        b.HasIndex(x => new { x.ScopeKeyHash, x.ControlPlaneStateIdHash }).IsUnique();
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash, x.WorkflowExecutionIdOrderKey });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.ControlPlaneStateIdOrderKey });
+    }
+}
+
 public sealed class DurableValueStateEntityConfiguration : IEntityTypeConfiguration<DurableValueStateEntity>
 {
     public void Configure(EntityTypeBuilder<DurableValueStateEntity> b)
@@ -47,14 +92,7 @@ public sealed class DurableValueStateEntityConfiguration : IEntityTypeConfigurat
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(DurableValueStateEntity.DurableValueId));
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureHash(b, nameof(DurableValueStateEntity.DurableValueIdHash));
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureOrder(b, nameof(DurableValueStateEntity.DurableValueIdOrderKey));
-        b.HasIndex(x => new
-        {
-            x.ScopeKeyHash,
-            x.WorkflowExecutionIdHash,
-            x.WorkflowExecutionId,
-            x.DurableValueIdHash,
-            x.DurableValueId
-        }).IsUnique();
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash, x.DurableValueIdHash }).IsUnique();
         b.HasIndex(x => new { x.ScopeKeyHash, x.DurableValueIdOrderKey });
     }
 }
