@@ -1,14 +1,7 @@
 using CShells.Features;
-using Elsa.Activities.Design.Persistence.Groundwork.Services;
-using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Platform.PackageManifest.Generator.Hints;
-using Elsa.Workflows.Design.Persistence.Groundwork;
-using Elsa3.Activities.Design.Import.Contracts;
-using Elsa3.Activities.Design.Import.Persistence.Groundwork.Services;
+using Elsa3.Activities.Design.Import.Persistence.Groundwork.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa3.Activities.Design.Import.Persistence.Groundwork;
 
@@ -27,18 +20,5 @@ namespace Elsa3.Activities.Design.Import.Persistence.Groundwork;
     DependsOn = new object[] { "ActivitiesDesignGroundworkPersistence" })]
 public class Elsa3ImportActivitiesGroundworkFeature : IShellFeature
 {
-    public void ConfigureServices(IServiceCollection services)
-    {
-        foreach (var unit in Elsa3ImportStorageManifest.CreateUnits())
-            services.AddGroundworkStorageUnit(unit);
-        services.TryAddScoped<GroundworkDesignStorage>(provider => new(
-            provider.GetRequiredService<IGroundworkStorageSessionSource>(),
-            provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
-            auditSink: provider.GetService<IGroundworkPrivilegedQueryAuditSink>()));
-        services.TryAddScoped<GroundworkActivityManagementProjectionWriter>();
-        services.RemoveAll<IReusableActivityImportOperationStore>();
-        services.AddScoped<IReusableActivityImportOperationStore, GroundworkReusableActivityImportOperationStore>();
-        services.RemoveAll<IReusableActivityImportCommand>();
-        services.AddScoped<IReusableActivityImportCommand, GroundworkReusableActivityImportCommand>();
-    }
+    public void ConfigureServices(IServiceCollection services) => services.AddElsa3ImportGroundworkPersistence();
 }

@@ -32,11 +32,7 @@ public static class Elsa3ImportStorageManifest
         CreateUnits().Single(unit => StringComparer.Ordinal.Equals(unit.Id.Value, unitId));
 
     public static string ReceiptId(string idempotencyKey, ReusableActivityImportAccessScope accessScope) =>
-        ReusableActivityImportIdentity.Create(
-            "receipt",
-            accessScope.TenantScope,
-            accessScope.UserId,
-            idempotencyKey);
+        ReusableActivityImportIdentity.Receipt(idempotencyKey, accessScope);
 
     private static StorageUnit CreateUnit(string id, string name) =>
         StorageUnit.Declare(id, name)

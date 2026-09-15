@@ -1436,6 +1436,97 @@ public sealed class ActivitiesDesignEntityFrameworkCoreTests
     }
 
     [Fact]
+    public async Task Sqlite_projection_of_an_unpublished_head_version_carries_the_head_id_without_a_head_reference()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<ActivitiesDesignSqliteDbContext>().UseSqlite(connection).Options;
+        await using var db = new ActivitiesDesignSqliteDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+        var definition = Definition("imported", "tenant-a");
+        var authoring = new ActivityDefinitionAuthoringState { Id = "imported", DefinitionId = "imported", TenantId = "tenant-a", ContentAuthority = new(ActivityContentAuthorityKind.Design, "elsa3.collection-import"), HeadVersionId = "imported-v1" };
+        db.ActivityDefinitions.Add(definition);
+        db.ActivityDefinitionVersions.Add(Version("imported", "imported-v1", "tenant-a"));
+        db.ActivityDefinitionAuthoringStates.Add(authoring);
+        await db.SaveChangesAsync();
+
+        await new EfActivityManagementProjectionWriter(db).WriteAsync(new(DateTimeOffset.UtcNow, [new(definition, authoring)], [], []));
+
+        var projection = await db.ActivityDefinitionManagementProjections.SingleAsync();
+        Assert.Equal("imported-v1", projection.HeadVersionId);
+        Assert.Null(projection.Head);
+        Assert.Null(projection.HeadProviderKey);
+    }
+
+    [Fact]
+    public async Task Sqlite_projection_rejects_a_head_naming_a_version_of_another_definition_or_tenant()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<ActivitiesDesignSqliteDbContext>().UseSqlite(connection).Options;
+        await using var db = new ActivitiesDesignSqliteDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+        var definition = Definition("d1", "tenant-a");
+        db.ActivityDefinitions.AddRange(definition, Definition("d2", "tenant-a"), Definition("d1", "tenant-b"));
+        db.ActivityDefinitionVersions.AddRange(Version("d2", "other-definition-version", "tenant-a"), Version("d1", "other-tenant-version", "tenant-b"));
+        await db.SaveChangesAsync();
+        var writer = new EfActivityManagementProjectionWriter(db);
+
+        foreach (var head in new[] { "other-definition-version", "other-tenant-version" })
+        {
+            var authoring = new ActivityDefinitionAuthoringState { Id = "d1", DefinitionId = "d1", TenantId = "tenant-a", ContentAuthority = new(ActivityContentAuthorityKind.Design, WellKnownActivityContentAuthorities.Design), HeadVersionId = head };
+            await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(new(DateTimeOffset.UtcNow, [new(definition, authoring)], [], [])));
+        }
+
+        Assert.Empty(await db.ActivityDefinitionManagementProjections.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Sqlite_atomic_write_runs_inside_a_caller_owned_transaction_supplied_by_the_factory()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<ActivitiesDesignSqliteDbContext>().UseSqlite(connection).Options;
+        await using var db = new ActivitiesDesignSqliteDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+        await using var outer = await db.Database.BeginTransactionAsync();
+        var handles = new List<NonOwningTransaction>();
+        var writer = new EfDesignAtomicWrite(db, transactionFactory: _ =>
+        {
+            var handle = new NonOwningTransaction(outer.TransactionId);
+            handles.Add(handle);
+            return Task.FromResult<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction>(handle);
+        });
+
+        var result = await writer.ExecuteAsync(
+            new(new EfDesignOperationIdentity("outer.v1", "key"), "request", ["activityDefinition"], "tenant-a"),
+            (context, _) =>
+            {
+                context.Db.ActivityDefinitions.Add(Definition("inside-outer", "tenant-a"));
+                return Task.FromResult(EfDesignAtomicWriteStageResult.Accepted("result", "{}"));
+            });
+
+        Assert.Equal(EfDesignAtomicWriteStatus.Committed, result.Status);
+        Assert.True(Assert.Single(handles).Committed);
+        await outer.RollbackAsync();
+        db.ChangeTracker.Clear();
+        Assert.Empty(await db.ActivityDefinitions.ToListAsync());
+        Assert.Empty(await db.ActivityDesignOperations.ToListAsync());
+    }
+
+    private sealed class NonOwningTransaction(Guid transactionId) : Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction
+    {
+        public bool Committed { get; private set; }
+        public Guid TransactionId => transactionId;
+        public void Commit() => Committed = true;
+        public Task CommitAsync(CancellationToken cancellationToken = default) { Commit(); return Task.CompletedTask; }
+        public void Rollback() { }
+        public Task RollbackAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public void Dispose() { }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    [Fact]
     public async Task Sqlite_projection_rejects_child_for_existing_definition_in_another_tenant()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

@@ -94,9 +94,18 @@ public sealed record EfDesignAtomicWriteResult(EfDesignAtomicWriteStatus Status,
     public static EfDesignAtomicWriteResult Rejected() => new(EfDesignAtomicWriteStatus.Rejected, null, null);
 }
 
-public sealed class EfDesignAtomicWrite(ActivitiesDesignDbContext db, IPersistenceAccessContextAccessor? accessContextAccessor = null) : IDesignAtomicWriter
+/// <param name="transactionFactory">
+/// Supplies the transaction an attempt runs in. It defaults to a new transaction on <paramref name="db"/>;
+/// a caller that owns a wider transaction passes a non-owning handle so the operation runs inside it.
+/// </param>
+public sealed class EfDesignAtomicWrite(
+    ActivitiesDesignDbContext db,
+    IPersistenceAccessContextAccessor? accessContextAccessor = null,
+    Func<CancellationToken, Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction>>? transactionFactory = null) : IDesignAtomicWriter
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private readonly Func<CancellationToken, Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction>> beginTransaction =
+        transactionFactory ?? (token => db.Database.BeginTransactionAsync(token));
 
     public Task<EfDesignAtomicWriteResult> ExecuteAsync(EfDesignAtomicWriteRequest request, Func<EfDesignAtomicWriteContext, CancellationToken, Task<EfDesignAtomicWriteStageResult>> stage, CancellationToken cancellationToken = default) =>
         ExecuteAsync(request, null, stage, cancellationToken);
@@ -121,7 +130,7 @@ public sealed class EfDesignAtomicWrite(ActivitiesDesignDbContext db, IPersisten
             if (beforeAttempt is not null)
                 await beforeAttempt(cancellationToken);
 
-            transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+            transaction = await beginTransaction(cancellationToken);
             var marker = await db.ActivityDesignOperations.SingleOrDefaultAsync(x =>
                 x.TenantScopeKey == scopeKey &&
                 x.OperationKindIdentityHash == operationKindIdentityHash &&

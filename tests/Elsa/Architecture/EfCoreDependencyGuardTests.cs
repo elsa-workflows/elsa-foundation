@@ -276,6 +276,25 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     [Fact]
+    public void Every_admitted_Elsa3_import_EF_project_resolves_only_its_reviewed_closure()
+    {
+        var offenders = Adr0073Elsa3ImportEf.ExpectedEfPackagesByProject
+            .SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
+            {
+                var resolved = ReadProjectEfPackages(project.Key, configuration);
+                var unexpected = FindUnexpectedEfPackages(resolved, project.Value)
+                    .Select(package => $"{project.Key} ({configuration}) unexpectedly resolves {package}");
+                var missing = FindUnexpectedEfPackages(project.Value, resolved)
+                    .Select(package => $"{project.Key} ({configuration}) no longer resolves reviewed package {package}");
+                return unexpected.Concat(missing);
+            }))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        Assert.True(offenders.Length == 0, Report("drift from the reviewed Elsa 3 import EF closure", offenders));
+    }
+
+    [Fact]
     public void Workbench_package_allowlist_rejects_an_unreviewed_transitive_wrapper()
     {
         const string assets = """
@@ -513,7 +532,8 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0073DashboardRunHealthEf.IsProjectPath(relativePath) ||
                     Adr0073PublishingSnapshotReviewEf.IsProjectPath(relativePath) ||
                     Adr0073WorkflowsDesignEf.IsProjectPath(relativePath) ||
-                    Adr0073ActivitiesDesignEf.IsProjectPath(relativePath)));
+                    Adr0073ActivitiesDesignEf.IsProjectPath(relativePath) ||
+                    Adr0073Elsa3ImportEf.IsProjectPath(relativePath)));
         }
         return projects;
     }
@@ -657,6 +677,7 @@ public sealed class EfCoreDependencyGuardTests
                Adr0073PublishingSnapshotReviewEf.IsSurfacePath(relativePath) ||
                Adr0073WorkflowsDesignEf.IsSurfacePath(relativePath) ||
                Adr0073ActivitiesDesignEf.IsSurfacePath(relativePath) ||
+               Adr0073Elsa3ImportEf.IsSurfacePath(relativePath) ||
                OpenIddictPersistenceArchitectureTests.IsWorkbenchVendorEfSource(relativePath);
     }
 
@@ -1095,6 +1116,46 @@ public sealed class EfCoreDependencyGuardTests
                 ],
                 ["tests/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
+            };
+
+        public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
+
+        public static bool IsSurfacePath(string relativePath) =>
+            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
+
+        public static bool IsProjectPath(string relativePath) =>
+            ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
+
+        private static string[] CorePackages() =>
+        [
+            "Microsoft.EntityFrameworkCore",
+            "Microsoft.EntityFrameworkCore.Abstractions",
+            "Microsoft.EntityFrameworkCore.Analyzers",
+            "Microsoft.EntityFrameworkCore.Relational"
+        ];
+    }
+
+    /// <summary>
+    /// ADR 0073's Elsa 3 import ledger admission for issue #1738 (L01-L03). The production adapter is
+    /// provider-neutral; SQLite and the SQL Server provider-mismatch binding belong to the behavioral test
+    /// project, and SQL Server, PostgreSQL, and MySQL engines only to the live-provider smoke.
+    /// </summary>
+    internal static class Adr0073Elsa3ImportEf
+    {
+        public static readonly string[] SurfacePathPrefixes =
+        [
+            "src/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/",
+            "tests/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/"
+        ];
+
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["src/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["tests/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/Tests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core", "Microsoft.EntityFrameworkCore.SqlServer"],
+                ["tests/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                [.. CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
             };
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;

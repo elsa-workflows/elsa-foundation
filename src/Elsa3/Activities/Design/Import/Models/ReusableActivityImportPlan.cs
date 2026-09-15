@@ -260,4 +260,15 @@ public static class ReusableActivityImportIdentity
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceDefinitionId);
         return $"elsa3.workflow.{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sourceDefinitionId)))}";
     }
+
+    /// <summary>The receipt identity of one idempotency key within the exact tenant-plus-user operation scope.</summary>
+    public static string Receipt(string idempotencyKey, ReusableActivityImportAccessScope accessScope)
+    {
+        ArgumentNullException.ThrowIfNull(accessScope);
+        return Create("receipt", accessScope.TenantScope, accessScope.UserId, idempotencyKey);
+    }
+
+    /// <summary>The tenant-owned provenance binding identity of one imported Design definition.</summary>
+    public static string DefinitionBinding(string targetDocumentKind, string targetDefinitionId) =>
+        Create("definition-binding", targetDocumentKind, targetDefinitionId);
 }

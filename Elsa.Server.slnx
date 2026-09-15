@@ -288,6 +288,7 @@
     <Project Path="src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj" />
   </Folder>
   <Folder Name="/src/Elsa3/Activities/Design/Import/Persistence/">
+    <Project Path="src/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
     <Project Path="src/Elsa3/Activities/Design/Import/Persistence/Groundwork/Elsa3.Activities.Design.Import.Persistence.Groundwork.csproj" />
   </Folder>
   <Folder Name="/src/Elsa3/Mapping/" />
@@ -649,6 +650,14 @@
     <Project Path="tests/Elsa/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa3/" />
+  <Folder Name="/tests/Elsa3/Activities/" />
+  <Folder Name="/tests/Elsa3/Activities/Design/" />
+  <Folder Name="/tests/Elsa3/Activities/Design/Import/" />
+  <Folder Name="/tests/Elsa3/Activities/Design/Import/Persistence/" />
+  <Folder Name="/tests/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/">
+    <Project Path="tests/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
+    <Project Path="tests/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/Tests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa3/Mapping/">
     <Project Path="tests/Elsa3/Mapping/Tests/Elsa3.Mapping.Tests.csproj" />
   </Folder>

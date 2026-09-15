@@ -59,6 +59,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/Elsa/Persistence/EntityFramework/EfRelationalExceptionClassifier.cs",
         "src/Elsa/Persistence/EntityFramework/EfRelationalIdentity.cs",
         "src/Elsa/Persistence/EntityFramework/EfRelationalProviderBinding.cs",
+        "src/Elsa/Persistence/EntityFramework/EfSharedTransaction.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Configuration/SecretRecordConfiguration.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/DependencyInjection/SecretsEntityFrameworkCoreRegistration.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Entities/SecretRecord.cs",

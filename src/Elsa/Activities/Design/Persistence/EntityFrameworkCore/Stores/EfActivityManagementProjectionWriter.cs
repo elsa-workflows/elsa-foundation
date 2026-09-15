@@ -67,8 +67,11 @@ public sealed class EfActivityManagementProjectionWriter(ActivitiesDesignDbConte
         }
     }
 
-    /// <summary>Applies a checkpoint using the caller's already-open transaction.</summary>
-    internal Task<long> WriteInCurrentTransactionAsync(EfActivityManagementProjectionMutation mutation, CancellationToken cancellationToken = default) =>
+    /// <summary>
+    /// Applies a checkpoint using the caller's already-open transaction. The caller owns commit and
+    /// rollback, which is what lets another module's atomic write include the checkpoint.
+    /// </summary>
+    public Task<long> WriteInCurrentTransactionAsync(EfActivityManagementProjectionMutation mutation, CancellationToken cancellationToken = default) =>
         WriteCoreAsync(mutation, cancellationToken);
 
     private async Task<long> WriteCoreAsync(EfActivityManagementProjectionMutation mutation, CancellationToken cancellationToken)
@@ -224,7 +227,7 @@ public sealed class EfActivityManagementProjectionWriter(ActivitiesDesignDbConte
 
     private async Task<ActivityDefinitionManagementProjectionRevision> ToDefinition(EfActivityManagementDefinitionChange change, long sequence, DateTimeOffset changedAt, ActivityDefinitionManagementProjectionRevision? current, CancellationToken token)
     {
-        var head = await FindPublicationAsync(change.Authoring.HeadVersionId, change.Definition.TenantId);
+        var head = await FindHeadPublicationAsync(change.Authoring.HeadVersionId, change.Definition.Id, change.Definition.TenantId, token);
         var recommendation = await FindPublicationAsync(change.Authoring.RecommendedVersionId, change.Definition.TenantId);
         if (head is not null && (head.DefinitionId != change.Definition.Id || head.TenantId != change.Definition.TenantId) ||
             recommendation is not null && (recommendation.DefinitionId != change.Definition.Id || recommendation.TenantId != change.Definition.TenantId))
@@ -284,6 +287,26 @@ public sealed class EfActivityManagementProjectionWriter(ActivitiesDesignDbConte
     private async Task<ActivityDefinitionVersionPublication?> FindPublicationAsync(string? versionId, string? tenantId)
     {
         if (versionId is null) return null;
+        return await FindPublicationOrDefaultAsync(versionId, tenantId)
+               ?? throw new InvalidOperationException($"Activity publication '{versionId}' was not found for the projection definition.");
+    }
+
+    /// <summary>
+    /// A head names an immutable version, and a version can be the head before it has a publication: an
+    /// imported Elsa 3 version is. Such a head projects no head reference, as it does in Groundwork. A head
+    /// that names no version of this definition in this tenant is still corrupt and fails closed.
+    /// </summary>
+    private async Task<ActivityDefinitionVersionPublication?> FindHeadPublicationAsync(string? versionId, string definitionId, string? tenantId, CancellationToken token)
+    {
+        if (versionId is null) return null;
+        var publication = await FindPublicationOrDefaultAsync(versionId, tenantId);
+        if (publication is not null || await UnpublishedHeadVersionExistsAsync(versionId, definitionId, tenantId, token))
+            return publication;
+        throw new InvalidOperationException($"Activity publication '{versionId}' was not found for the projection definition.");
+    }
+
+    private async Task<ActivityDefinitionVersionPublication?> FindPublicationOrDefaultAsync(string versionId, string? tenantId)
+    {
         var tracked = db.ChangeTracker.Entries<ActivityDefinitionVersionPublication>()
             .Select(x => x.Entity)
             .FirstOrDefault(x => x.DefinitionVersionId == versionId && x.TenantId == tenantId);
@@ -293,11 +316,30 @@ public sealed class EfActivityManagementProjectionWriter(ActivitiesDesignDbConte
                 versionId,
                 tenantId)
             .SingleOrDefaultAsync(x => x.DefinitionVersionId == versionId && x.TenantId == tenantId);
-        if (publication is null)
-            throw new InvalidOperationException($"Activity publication '{versionId}' was not found for the projection definition.");
-        if (publication.TenantId != tenantId)
+        if (publication is not null && publication.TenantId != tenantId)
             throw new InvalidOperationException("Definition projection publication ownership does not match its definition.");
         return publication;
+    }
+
+    private async Task<bool> UnpublishedHeadVersionExistsAsync(string versionId, string definitionId, string? tenantId, CancellationToken token)
+    {
+        if (db.ChangeTracker.Entries<ActivityDefinitionVersion>().Any(x =>
+                x.State != EntityState.Deleted &&
+                StringComparer.Ordinal.Equals(x.Entity.Id, versionId) &&
+                StringComparer.Ordinal.Equals(x.Entity.DefinitionId, definitionId) &&
+                StringComparer.Ordinal.Equals(x.Entity.TenantId, tenantId)))
+            return true;
+        var candidates = await db.ActivityDefinitionVersions.AsNoTracking()
+            .Where(x =>
+                EF.Property<string>(x, "TenantScopeKey") == ActivitiesDesignDbContext.NormalizeTenantKey(tenantId) &&
+                EF.Property<string>(x, "IdIdentityHash") == ActivitiesDesignDbContext.ComputeIdentityHash(versionId))
+            .Select(x => new { x.Id, x.DefinitionId, x.TenantId })
+            .Take(2)
+            .ToListAsync(token);
+        return candidates.Any(x =>
+            StringComparer.Ordinal.Equals(x.Id, versionId) &&
+            StringComparer.Ordinal.Equals(x.DefinitionId, definitionId) &&
+            StringComparer.Ordinal.Equals(x.TenantId, tenantId));
     }
 
     private static ActivityManagementVersionProjectionReference ToReference(ActivityDefinitionVersionPublication publication) =>
