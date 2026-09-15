@@ -103,6 +103,7 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
             Assert.Equal("artifact-workflow-a", manager.ArtifactId);
             Assert.Equal("checkpoint:commit-nonempty", manager.LeaseId);
             Assert.Equal(1, (await context.WorkflowExecutionStates.SingleAsync()).Revision);
+            Assert.Equal(0, (await context.WorkflowRunHealthStates.SingleAsync()).IncidentCount);
             Assert.Equal(1, (await context.SchedulerStates.SingleAsync()).Revision);
             Assert.Equal(2, (await context.ExecutionLivenessStates.SingleAsync()).Revision);
             Assert.Single(await context.RuntimeCheckpointCommits.ToArrayAsync());
@@ -508,32 +509,32 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
-    public async Task Operational_append_and_delete_are_marker_atomic_restartable_and_replay_safe()
+    public async Task Operational_upserts_are_marker_atomic_restartable_and_replay_safe()
     {
         await using var database = await TestDatabase.CreateAsync();
         await using var context = database.Open("tenant-a");
         var access = new FixedAccessor("tenant-a");
         var state = new ExecutionLivenessState("operational-checkpoint", "workflow-a", null, null, null, null);
-        var append = WithOperational("commit-operational-append", state, RuntimeStateChangeOperation.Append);
-        var delete = WithOperational("commit-operational-delete", state, RuntimeStateChangeOperation.Delete);
+        var initial = WithOperational("commit-operational-initial", state, RuntimeStateChangeOperation.Upsert);
+        var update = WithOperational("commit-operational-update", state, RuntimeStateChangeOperation.Upsert);
         var store = new EfRuntimeCheckpointCommitStore(context, access);
 
-        await store.CommitAsync(append, Decision());
-        await store.CommitAsync(append, Decision());
+        await store.CommitAsync(initial, Decision());
+        await store.CommitAsync(initial, Decision());
         Assert.Equal(1, (await context.ExecutionLivenessStates.SingleAsync()).Revision);
-        await store.CommitAsync(delete, Decision());
-        await store.CommitAsync(delete, Decision());
-        Assert.Empty(await context.ExecutionLivenessStates.ToArrayAsync());
+        await store.CommitAsync(update, Decision());
+        await store.CommitAsync(update, Decision());
+        Assert.Equal(2, (await context.ExecutionLivenessStates.SingleAsync()).Revision);
 
         await using var restarted = database.Open("tenant-a");
-        await new EfRuntimeCheckpointCommitStore(restarted, access).CommitAsync(append, Decision());
-        await new EfRuntimeCheckpointCommitStore(restarted, access).CommitAsync(delete, Decision());
+        await new EfRuntimeCheckpointCommitStore(restarted, access).CommitAsync(initial, Decision());
+        await new EfRuntimeCheckpointCommitStore(restarted, access).CommitAsync(update, Decision());
         Assert.Equal(2, await restarted.RuntimeCheckpointCommits.CountAsync());
-        Assert.Empty(await restarted.ExecutionLivenessStates.ToArrayAsync());
+        Assert.Equal(2, (await restarted.ExecutionLivenessStates.SingleAsync()).Revision);
     }
 
     [Fact]
-    public async Task Operational_ownership_update_joins_fence_validation_and_marker_in_one_revision_cas()
+    public async Task Operational_update_joins_fence_validation_and_marker_without_overwriting_ownership()
     {
         await using var database = await TestDatabase.CreateAsync();
         await using var context = database.Open("tenant-a");
@@ -541,8 +542,9 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         var access = new FixedAccessor("tenant-a");
         var lease = new RuntimeExecutionLease("lease-operational", "workflow-a", "owner-a",
             now, now.AddMinutes(5), 1);
-        var state = new ExecutionLivenessState("ownership:workflow-a", "workflow-a", lease, null, null, null);
-        await new EfExecutionLivenessStateStore(context, access, new NoopContinuationCodec()).SaveAsync(state);
+        var ownership = new ExecutionLivenessState("ownership:workflow-a", "workflow-a", lease, null, null, null);
+        await new EfExecutionLivenessStateStore(context, access, new NoopContinuationCodec()).SaveAsync(ownership);
+        var state = new ExecutionLivenessState("operational-fenced", "workflow-a", null, null, null, null);
         var commit = WithOperational("commit-operational-fenced", state, RuntimeStateChangeOperation.Upsert) with
         {
             ExpectedFence = lease.ToFence()
@@ -550,8 +552,30 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
 
         await new EfRuntimeCheckpointCommitStore(context, access, new FixedTimeProvider(now))
             .CommitAsync(commit, Decision());
-        Assert.Equal(3, (await context.ExecutionLivenessStates.SingleAsync()).Revision);
+        Assert.Equal(2, (await context.ExecutionLivenessStates.SingleAsync(row => row.OperationalStateId ==
+            EfRelationalIdentity.Encode("ownership:workflow-a"))).Revision);
+        Assert.Equal(1, (await context.ExecutionLivenessStates.SingleAsync(row => row.OperationalStateId ==
+            EfRelationalIdentity.Encode("operational-fenced"))).Revision);
         Assert.Single(await context.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Operational_append_delete_and_reserved_ownership_fail_before_provider_io()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var capture = new CommandCaptureInterceptor();
+        await using var context = database.Open("tenant-a", capture);
+        var store = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"));
+        var state = new ExecutionLivenessState("operational-a", "workflow-a", null, null, null, null);
+        var reserved = new ExecutionLivenessState("ownership:workflow-a", "workflow-a", null, null, null, null);
+        foreach (var unsupported in new[]
+                 {
+                     WithOperational("commit-operational-append", state, RuntimeStateChangeOperation.Append),
+                     WithOperational("commit-operational-delete", state, RuntimeStateChangeOperation.Delete),
+                     WithOperational("commit-reserved-ownership", reserved, RuntimeStateChangeOperation.Upsert)
+                 })
+            await Assert.ThrowsAsync<InvalidOperationException>(() => store.CommitAsync(unsupported, Decision()).AsTask());
+        Assert.Empty(capture.Commands);
     }
 
     [Fact]
@@ -666,6 +690,70 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         Assert.Single(await context.Bookmarks.ToArrayAsync());
         Assert.Single(await context.RuntimeCheckpointCommits.ToArrayAsync());
         Assert.True((await context.ActivityExecutionStates.SingleAsync()).Revision > 0);
+    }
+
+    [Fact]
+    public async Task Workflow_activity_inspection_incident_and_run_health_share_one_replayable_marker()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open("tenant-a");
+        var commit = WithWorkflowIncidentAndInspection("commit-full-projection");
+        var store = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"),
+            new FixedTimeProvider(OccurredAt), new PassThroughRootWriteLeaseManager());
+
+        await store.CommitAsync(commit, Decision());
+        await store.CommitAsync(commit, Decision());
+        Assert.Single(await context.WorkflowExecutionStates.ToArrayAsync());
+        Assert.Single(await context.ActivityExecutionStates.ToArrayAsync());
+        Assert.Single(await context.ActivityExecutionInspections.ToArrayAsync());
+        Assert.Single(await context.ActivityExecutionHierarchies.ToArrayAsync());
+        Assert.Single(await context.IncidentStates.ToArrayAsync());
+        Assert.Equal(1, (await context.WorkflowRunHealthStates.SingleAsync()).IncidentCount);
+        Assert.Equal(1, (await context.WorkflowRunHealthStates.SingleAsync()).IncidentBearingCount);
+        Assert.Single(await context.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Inspection_without_its_own_scope_uses_provenance_for_checkpoint_hierarchy()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open("tenant-a");
+        await new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"),
+                new FixedTimeProvider(OccurredAt), new PassThroughRootWriteLeaseManager())
+            .CommitAsync(WithWorkflowIncidentAndInspection("commit-provenance-scope", true), Decision());
+
+        Assert.Equal(EfRelationalIdentity.Encode("scope-inspected"),
+            (await context.ActivityExecutionHierarchies.SingleAsync()).ExecutionScopeId);
+        Assert.Single(await context.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Marker_failure_rolls_back_run_health_incident_inspection_and_workflow_together()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var commit = WithWorkflowIncidentAndInspection("commit-full-projection-failure");
+        var interceptor = new FailMarkerInsertInterceptor();
+        await using (var context = database.Open("tenant-a", interceptor))
+        {
+            interceptor.Arm();
+            await Assert.ThrowsAsync<DbUpdateException>(() =>
+                new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"),
+                    new FixedTimeProvider(OccurredAt), new PassThroughRootWriteLeaseManager())
+                    .CommitAsync(commit, Decision()).AsTask());
+            Assert.Empty(context.ChangeTracker.Entries());
+        }
+
+        await using var restarted = database.Open("tenant-a");
+        Assert.Empty(await restarted.WorkflowRunHealthStates.ToArrayAsync());
+        Assert.Empty(await restarted.IncidentStates.ToArrayAsync());
+        Assert.Empty(await restarted.ActivityExecutionInspections.ToArrayAsync());
+        Assert.Empty(await restarted.ActivityExecutionHierarchies.ToArrayAsync());
+        Assert.Empty(await restarted.WorkflowExecutionStates.ToArrayAsync());
+        Assert.Empty(await restarted.RuntimeCheckpointCommits.ToArrayAsync());
+        await new EfRuntimeCheckpointCommitStore(restarted, new FixedAccessor("tenant-a"),
+                new FixedTimeProvider(OccurredAt), new PassThroughRootWriteLeaseManager())
+            .CommitAsync(commit, Decision());
+        Assert.Equal(1, (await restarted.WorkflowRunHealthStates.SingleAsync()).IncidentCount);
     }
 
     [Fact]
@@ -997,7 +1085,7 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
-    public async Task Checkpoint_slice_rejects_unsupported_state_without_writing_a_marker()
+    public async Task Checkpoint_slice_rejects_unsupported_incident_delete_without_writing_a_marker()
     {
         await using var database = await TestDatabase.CreateAsync();
         await using var context = database.Open("tenant-a");
@@ -1005,9 +1093,9 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
 
         var incident = new RuntimeStateChange<IncidentState>(
             "incident-a",
-            RuntimeStateChangeOperation.Upsert,
+            RuntimeStateChangeOperation.Delete,
             new IncidentState("incident-a", "workflow-a", null, null,
-                IncidentSeverity.Error, IncidentStatus.Open, null, "test-failure", "still unsupported",
+                IncidentSeverity.Error, IncidentStatus.Open, null, "test-failure", "delete unsupported",
                 OccurredAt, null),
             new Dictionary<string, string>());
         var nonempty = Commit("commit-nonempty") with
@@ -1022,7 +1110,7 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
                 [])
         };
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => store.CommitAsync(nonempty, Decision()).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.CommitAsync(nonempty, Decision()).AsTask());
         Assert.Empty(await context.RuntimeCheckpointCommits.ToArrayAsync());
 
         var replayable = Commit("commit-replay-fence");
@@ -1174,6 +1262,43 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
                 [], [], [])
         };
     }
+
+    private static RuntimeCheckpointCommit WithWorkflowIncidentAndInspection(
+        string commitId, bool inspectionUsesProvenanceOnly = false)
+    {
+        var commit = Commit(commitId);
+        var workflow = Execution("workflow-a", "tenant-a");
+        var activity = CheckpointActivity("activity-inspected");
+        var inspection = CheckpointInspection("activity-inspected");
+        if (inspectionUsesProvenanceOnly)
+            inspection = inspection with { ExecutionScopeId = null };
+        var incident = new IncidentState("incident-inspected", "workflow-a", null, null,
+            IncidentSeverity.Error, IncidentStatus.Open, null, "test-failure", "checkpoint projection",
+            OccurredAt, null);
+        return commit with
+        {
+            StateChanges = new RuntimeCheckpointStateChangeSet(
+                new RuntimeStateChange<WorkflowExecutionState>("workflow-a", RuntimeStateChangeOperation.Upsert,
+                    workflow, new Dictionary<string, string>()),
+                null,
+                [new RuntimeStateChange<ActivityExecutionState>(activity.Execution.ActivityExecutionId,
+                    RuntimeStateChangeOperation.Upsert, activity, new Dictionary<string, string>())],
+                [], [],
+                [new RuntimeStateChange<IncidentState>(incident.IncidentId,
+                    RuntimeStateChangeOperation.Append, incident, new Dictionary<string, string>())],
+                [], null,
+                [new RuntimeStateChange<ActivityExecutionInspectionProjection>(inspection.ActivityExecutionId,
+                    RuntimeStateChangeOperation.Upsert, inspection, new Dictionary<string, string>())],
+                null, null, null)
+        };
+    }
+
+    private static ActivityExecutionInspectionProjection CheckpointInspection(string id) => new(
+        id, "workflow-a", $"node-{id}", $"authored-{id}", "Test.Activity", "1",
+        ActivityExecutionStatus.Completed, null, 1, OccurredAt, OccurredAt, OccurredAt,
+        "checkpoint-1", "checkpoint-1", OccurredAt,
+        ActivitySchedulingProvenance.From("workflow-a", null, null, null, null, null, "scope-inspected", "checkpoint"),
+        ["Done"], [], [], [], new Dictionary<string, string>(), "scope-inspected");
 
     private static ActivityExecutionState CheckpointActivity(string id) => new(
         new ActivityExecution(id, "workflow-a", $"node-{id}", $"authored-{id}", "Test.Activity", "1"),

@@ -114,8 +114,23 @@ internal static class RuntimeOperationalStateProviderSmoke
             Assert.Empty(nonemptyResult.PendingPostCommitWorkIds);
             Assert.Empty(nonemptyReplay.PendingPostCommitWorkIds);
             Assert.Equal("workflow-a", (await executions.FindAsync("workflow-a"))?.WorkflowExecutionId);
+            Assert.Equal(0, (await context.WorkflowRunHealthStates.SingleAsync()).IncidentCount);
             Assert.Equal(3, (await scheduler.FindAsync("workflow-a"))!.Version);
             Assert.Equal(2, (await liveness.FindVersionedAsync("workflow-a", "ownership:workflow-a"))!.Revision);
+            var checkpointIncident = new IncidentState("native-checkpoint-incident", "workflow-a", null, null,
+                IncidentSeverity.Error, IncidentStatus.Open, null, "provider-checkpoint", "native health fold",
+                checkpointNow, null);
+            var incidentCommit = EmptyCheckpointCommit($"checkpoint-incident-{Guid.NewGuid():N}");
+            incidentCommit = incidentCommit with
+            {
+                StateChanges = new RuntimeCheckpointStateChangeSet(null, null, [], [], [],
+                    [new RuntimeStateChange<IncidentState>(checkpointIncident.IncidentId,
+                        RuntimeStateChangeOperation.Append, checkpointIncident, new Dictionary<string, string>())], [])
+            };
+            await checkpointStore.CommitAsync(incidentCommit, new(RuntimeCheckpointPersistenceMode.Immediate));
+            await checkpointStore.CommitAsync(incidentCommit, new(RuntimeCheckpointPersistenceMode.Immediate));
+            Assert.Equal(1, (await context.WorkflowRunHealthStates.SingleAsync()).IncidentCount);
+            Assert.Equal("native-checkpoint-incident", (await incidents.FindAsync("workflow-a", "native-checkpoint-incident"))!.IncidentId);
             var outbox = new EfRuntimePostCommitOutboxStore(context, accessor);
             var futureAt = DateTimeOffset.UtcNow.AddDays(3);
             var futureCommit = EmptyCheckpointCommit($"checkpoint-outbox-{Guid.NewGuid():N}");
@@ -266,9 +281,10 @@ internal static class RuntimeOperationalStateProviderSmoke
             var attentionSnapshot = await attention.QueryAsync(new(
                 new AttentionQueryContext(new ClaimsPrincipal(), scope),
                 10));
-            Assert.Equal(2, attentionSnapshot.TotalCount);
+            Assert.Equal(3, attentionSnapshot.TotalCount);
             Assert.Equal(
-                [WorkflowRuntimeAttentionKind.BlockingIncident, WorkflowRuntimeAttentionKind.FaultedExecution],
+                [WorkflowRuntimeAttentionKind.BlockingIncident, WorkflowRuntimeAttentionKind.FaultedExecution,
+                    WorkflowRuntimeAttentionKind.OpenIncident],
                 attentionSnapshot.Records.Select(x => x.Kind));
 
             await using var transaction = await context.Database.BeginTransactionAsync();
@@ -306,7 +322,7 @@ internal static class RuntimeOperationalStateProviderSmoke
             Assert.NotNull(await liveness.FindAsync("workflow-a", "state-a"));
             Assert.Single(await holds.ListForWorkflowExecutionAsync("workflow-a"));
             Assert.Null(await incidents.FindAsync("workflow-blocked", "rolled-back-incident"));
-            Assert.Equal(2, (await attention.QueryAsync(new(
+            Assert.Equal(3, (await attention.QueryAsync(new(
                 new AttentionQueryContext(new ClaimsPrincipal(), scope),
                 10))).TotalCount);
             await using var left = createContext(connectionString);
