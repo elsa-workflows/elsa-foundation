@@ -76,6 +76,79 @@ internal static class EfRuntimeCheckpointParticipantStaging
         EfSchedulerStateStore.Copy(row, change.State, scope, checked(row.Revision + 1));
     }
 
+    /// <summary>
+    /// Consumes one claimed scheduler-work item inside the caller-owned transaction.
+    /// </summary>
+    /// <remarks>
+    /// This is deliberately a direct EF bulk delete rather than a tracked remove. Renewal advances the provider
+    /// revision while preserving the owner/token fence, so revision must not participate in consumption. The
+    /// owner/token/workflow/scope predicate is the atomic fence; a zero-row result is the exact claim-conflict
+    /// outcome. The source query is no-tracking and ExecuteDelete does not mutate the change tracker, allowing the
+    /// caller to stage sibling participants and the immutable checkpoint marker on the same context safely.
+    /// </remarks>
+    public static async ValueTask StageConsumedSchedulerWorkAsync(
+        BookmarkStateDbContext context,
+        ConsumedSchedulerWorkItem consumed,
+        string scope,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(consumed);
+        ArgumentException.ThrowIfNullOrWhiteSpace(scope);
+        if (scope.Length > 256)
+            throw new ArgumentException("Runtime persistence scope cannot exceed 256 UTF-16 code units.", nameof(scope));
+        EfRuntimeOperationalStoreSupport.ValidateIdentity(consumed.WorkflowExecutionId, nameof(consumed.WorkflowExecutionId));
+        ArgumentException.ThrowIfNullOrWhiteSpace(consumed.WorkItemId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(consumed.ClaimOwnerId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (context.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("Consumed scheduler work must be staged inside a caller-owned EF transaction.");
+
+        var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, consumed.WorkflowExecutionId, consumed.WorkItemId);
+        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
+        var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
+        var workflowKey = EfRuntimeOperationalStoreSupport.Encode(consumed.WorkflowExecutionId);
+        var workflowHash = EfRuntimeOperationalStoreSupport.Hash(consumed.WorkflowExecutionId);
+        var workItemKey = EfRuntimeOperationalStoreSupport.Encode(consumed.WorkItemId);
+        var workItemHash = EfRuntimeOperationalStoreSupport.Hash(consumed.WorkItemId);
+        var ownerKey = EfRuntimeOperationalStoreSupport.Encode(consumed.ClaimOwnerId);
+
+        var existing = await context.SchedulerWorkItems.AsNoTracking().SingleOrDefaultAsync(row =>
+            row.Id == id &&
+            row.ScopeKey == scopeKey && row.ScopeKeyHash == scopeHash &&
+            row.WorkflowExecutionId == workflowKey && row.WorkflowExecutionIdHash == workflowHash &&
+            row.WorkItemId == workItemKey && row.WorkItemIdHash == workItemHash,
+            cancellationToken);
+        if (existing is null)
+            throw new RuntimeSchedulerWorkConsumeConflictException(consumed.WorkflowExecutionId, consumed.WorkItemId);
+
+        _ = EfSchedulerWorkQueueStore.ReadChecked(
+            existing,
+            scope,
+            consumed.WorkflowExecutionId,
+            consumed.WorkItemId);
+        if (existing.ClaimOwnerId is null ||
+            !StringComparer.Ordinal.Equals(existing.ClaimOwnerId, ownerKey) ||
+            existing.ClaimToken != consumed.FencingToken)
+        {
+            throw new RuntimeSchedulerWorkConsumeConflictException(consumed.WorkflowExecutionId, consumed.WorkItemId);
+        }
+
+        // Do not include Revision: an in-flight renewal is allowed to replay the same owner/token consume. A
+        // successor reclaim changes ClaimToken and is rejected by this atomic predicate.
+        var deleted = await context.SchedulerWorkItems
+            .Where(row =>
+                row.Id == id &&
+                row.ScopeKey == scopeKey && row.ScopeKeyHash == scopeHash &&
+                row.WorkflowExecutionId == workflowKey && row.WorkflowExecutionIdHash == workflowHash &&
+                row.WorkItemId == workItemKey && row.WorkItemIdHash == workItemHash &&
+                row.ClaimOwnerId == ownerKey && row.ClaimToken == consumed.FencingToken)
+            .ExecuteDeleteAsync(cancellationToken);
+        if (deleted != 1)
+            throw new RuntimeSchedulerWorkConsumeConflictException(consumed.WorkflowExecutionId, consumed.WorkItemId);
+    }
+
     public static async ValueTask StageExecutionFenceAsync(
         BookmarkStateDbContext context,
         string scope,
