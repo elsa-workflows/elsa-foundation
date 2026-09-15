@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>
-      Opt-in EF Core persistence for the workflow run-health Dashboard reader. The reader consumes
-      the Runtime run-health projection; Groundwork remains the default composition.
+      Opt-in EF Core persistence for the workflow portfolio and run-health Dashboard readers. The
+      readers consume Design and Runtime projections; Groundwork remains the default composition.
     </Description>
   </PropertyGroup>
   <ItemGroup>
@@ -13,6 +13,7 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\..\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\Elsa.Workflows.Dashboard.csproj" />
   </ItemGroup>
