@@ -50,11 +50,21 @@ public sealed class PublishWorkflowRequestHandler(
     public async Task<PublishedWorkflowView> Handle(PublishWorkflow request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+        // Both dependencies are optional, and either one missing blocks publication the same way. Name the
+        // ones that are actually absent and the feature that composes each, so the reported code identifies
+        // the gap in composition rather than pointing every reader at expression validation.
         if (expressionValidator is null || workflowVersionStore is null)
+        {
+            var missing = new List<string>();
+            if (expressionValidator is null)
+                missing.Add($"{nameof(IExpressionDraftSemanticValidator)} (composed by WorkflowDesignValidations)");
+            if (workflowVersionStore is null)
+                missing.Add($"{nameof(IWorkflowDefinitionVersionStore)} (composed by the design persistence feature)");
             throw new ExpressionPublicationValidationException(new(
                 ExpressionDraftValidationState.Unavailable,
                 [],
-                "expression-validation-unavailable"));
+                $"expression-validation-unavailable: publishing could not resolve {string.Join(" and ", missing)}"));
+        }
         Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinitionVersion version;
         try
         {

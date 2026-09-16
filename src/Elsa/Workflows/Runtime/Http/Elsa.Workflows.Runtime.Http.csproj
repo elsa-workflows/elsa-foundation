@@ -1,9 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.Abstractions" />
-    <PackageReference Include="Microsoft.AspNetCore.Authorization" />
-    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" />
+    <!-- Authentication, authorization and HttpContext come from the shared framework, matching
+         Elsa.Http.Core, which this project exchanges those types with. A standalone Microsoft.AspNetCore.*
+         package here would declare the same type names as the framework's and break that exchange at load
+         time. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
 	  <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>

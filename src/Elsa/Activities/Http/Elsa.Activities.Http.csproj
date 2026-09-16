@@ -1,9 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <!-- HttpContext and friends come from the shared framework, matching Elsa.Http.Core, which this project
+         exchanges those types with. A standalone Microsoft.AspNetCore.* package here would declare the same
+         type names as the framework's and break that exchange at load time. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="CShells.AspNetCore.Abstractions" />
-    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />

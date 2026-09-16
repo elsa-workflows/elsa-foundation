@@ -26,17 +26,14 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | Fluid.Core | 2.31.0 | Elsa.Expressions.Liquid (2.31.0)<br>Elsa3.Mapping (2.31.0) |
 | GitHub.Copilot.SDK | 1.0.4 | Elsa.Agent.GitHubCopilot (1.0.4) |
 | Jint | 4.9.1 | Elsa.Expressions.JavaScript.Jint (4.9.1)<br>Elsa.Expressions.JavaScript.Jint.Tests (4.9.1) |
-| Microsoft.AspNetCore.Authentication.Abstractions | 2.3.11 | Elsa.Activities.Testing (2.3.11)<br>Elsa.Workflows.Runtime.Http (2.3.11) |
+| Microsoft.AspNetCore.Authentication.Abstractions | 2.3.11 | Elsa.Activities.Testing (2.3.11) |
 | Microsoft.AspNetCore.Authentication.JwtBearer | 10.0.10 | Elsa.Foundation.Identity.Oidc (10.0.10) |
 | Microsoft.AspNetCore.Authentication.OpenIdConnect | 10.0.10 | Elsa.Foundation.Identity.Oidc (10.0.10) |
-| Microsoft.AspNetCore.Authorization | 10.0.10 | Elsa.Activities.Http.Tests (10.0.10)<br>Elsa.Http (10.0.10)<br>Elsa.Workflows.Runtime.Http (10.0.10)<br>Elsa.Workflows.Runtime.Http.Tests (10.0.10) |
-| Microsoft.AspNetCore.Authorization.Policy | 2.3.10 | Elsa.Http (2.3.10) |
-| Microsoft.AspNetCore.Http | 2.3.10 | Elsa.Activities.Http.Tests (2.3.10)<br>Elsa.Http (2.3.10)<br>Elsa.Workflows.Runtime.Http.Tests (2.3.10) |
-| Microsoft.AspNetCore.Http.Abstractions | 2.3.10 | Elsa.Activities.Http (2.3.10)<br>Elsa.Activities.Testing (2.3.10)<br>Elsa.Http.Core (2.3.10)<br>Elsa.Workflows.Runtime.Http (2.3.10) |
+| Microsoft.AspNetCore.Authorization | 10.0.10 | Elsa.Activities.Http.Tests (10.0.10)<br>Elsa.Workflows.Runtime.Http.Tests (10.0.10) |
+| Microsoft.AspNetCore.Http | 2.3.10 | Elsa.Activities.Http.Tests (2.3.10)<br>Elsa.Workflows.Runtime.Http.Tests (2.3.10) |
+| Microsoft.AspNetCore.Http.Abstractions | 2.3.10 | Elsa.Activities.Testing (2.3.10) |
 | Microsoft.AspNetCore.OpenApi | 10.0.10 | Elsa.Activities.Design.Tests (10.0.10)<br>Elsa.Agent.Api (10.0.10)<br>Elsa.Architecture.Tests (10.0.10)<br>Elsa.Diagnostics.OpenTelemetry.Tests (10.0.10)<br>Elsa.Diagnostics.StructuredLogs.Tests (10.0.10)<br>Elsa.Foundation.Identity.Tests (10.0.10)<br>Elsa.Secrets.Api (10.0.10)<br>Elsa.Secrets.Tests (10.0.10)<br>Elsa.Studio.Preferences.Api (10.0.10)<br>Elsa.Studio.Preferences.Tests (10.0.10)<br>Elsa.Workbench (10.0.10)<br>Elsa.Workflows.Design.Api.Tests (10.0.10)<br>Elsa.Workflows.Publishing.Api.Tests (10.0.10) |
-| Microsoft.AspNetCore.Routing | 2.3.10 | Elsa.Activities.Http.Tests (2.3.10)<br>Elsa.Activities.Testing (2.3.10)<br>Elsa.Http (2.3.10) |
-| Microsoft.AspNetCore.Routing.Abstractions | 2.3.10 | Elsa.Http.Core (2.3.10) |
-| Microsoft.AspNetCore.StaticFiles | 2.3.10 | Elsa.Http (2.3.10) |
+| Microsoft.AspNetCore.Routing | 2.3.10 | Elsa.Activities.Http.Tests (2.3.10)<br>Elsa.Activities.Testing (2.3.10) |
 | Microsoft.AspNetCore.TestHost | 10.0.10 | Elsa.Activities.Design.Tests (10.0.10)<br>Elsa.Activities.Http.IntegrationTests (10.0.10)<br>Elsa.Api.Compatibility.Testing (10.0.10)<br>Elsa.Architecture.Tests (10.0.10)<br>Elsa.Diagnostics.OpenTelemetry.Tests (10.0.10)<br>Elsa.Diagnostics.StructuredLogs.Tests (10.0.10)<br>Elsa.Foundation.Identity.Tests (10.0.10)<br>Elsa.Modularity.Tests (10.0.10)<br>Elsa.Secrets.Tests (10.0.10)<br>Elsa.Studio.Preferences.Tests (10.0.10)<br>Elsa.Workflows.ExecutionEvidence.Tests (10.0.10)<br>Elsa.Workflows.Publishing.Api.Tests (10.0.10)<br>Elsa.Workflows.Runtime.Api.Tests (10.0.10) |
 | Microsoft.CodeAnalysis.CSharp | 5.0.0 | Elsa.Api.Compatibility.Testing (5.0.0)<br>Elsa.Architecture.Tests (5.0.0)<br>Elsa.Workflows.Design.CodeGeneration (5.0.0)<br>Elsa.Workflows.Design.CodeGeneration.Tests (5.0.0) |
 | Microsoft.Data.SqlClient | 7.0.2 | Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests (7.0.2) |
@@ -198,7 +195,6 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Activities.Http](../../src/Elsa/Activities/Http/Elsa.Activities.Http.csproj) | source | CShells.Abstractions | 0.0.29-preview.147 |
 | [Elsa.Activities.Http](../../src/Elsa/Activities/Http/Elsa.Activities.Http.csproj) | source | CShells.AspNetCore.Abstractions | 0.0.29-preview.147 |
 | [Elsa.Activities.Http](../../src/Elsa/Activities/Http/Elsa.Activities.Http.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.79 |
-| [Elsa.Activities.Http](../../src/Elsa/Activities/Http/Elsa.Activities.Http.csproj) | source | Microsoft.AspNetCore.Http.Abstractions | 2.3.10 |
 | [Elsa.Activities.Http](../../src/Elsa/Activities/Http/Elsa.Activities.Http.csproj) | source | Microsoft.Extensions.Http | 10.0.10 |
 | [Elsa.Activities.Http](../../src/Elsa/Activities/Http/Elsa.Activities.Http.csproj) | source | Microsoft.Extensions.Options | 10.0.10 |
 | [Elsa.Activities.Http.IntegrationTests](../../tests/Elsa/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj) | test | Microsoft.AspNetCore.TestHost | 10.0.10 |
@@ -573,16 +569,9 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Git](../../src/Elsa/Git/Elsa.Git.csproj) | source | Microsoft.Extensions.Logging.Abstractions | 10.0.10 |
 | [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | CShells.Abstractions | 0.0.29-preview.147 |
 | [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.79 |
-| [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | Microsoft.AspNetCore.Authorization | 10.0.10 |
-| [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | Microsoft.AspNetCore.Authorization.Policy | 2.3.10 |
-| [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | Microsoft.AspNetCore.Http | 2.3.10 |
-| [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | Microsoft.AspNetCore.Routing | 2.3.10 |
-| [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | Microsoft.AspNetCore.StaticFiles | 2.3.10 |
 | [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | Microsoft.Extensions.Http | 10.0.10 |
 | [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | Microsoft.Extensions.Logging.Abstractions | 10.0.10 |
 | [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | Microsoft.Extensions.Options | 10.0.10 |
-| [Elsa.Http.Core](../../src/Elsa/Http/Core/Elsa.Http.Core.csproj) | source | Microsoft.AspNetCore.Http.Abstractions | 2.3.10 |
-| [Elsa.Http.Core](../../src/Elsa/Http/Core/Elsa.Http.Core.csproj) | source | Microsoft.AspNetCore.Routing.Abstractions | 2.3.10 |
 | [Elsa.Http.JavaScript](../../src/Elsa/Http/JavaScript/Elsa.Http.JavaScript.csproj) | source | CShells.Abstractions | 0.0.29-preview.147 |
 | [Elsa.Http.JavaScript](../../src/Elsa/Http/JavaScript/Elsa.Http.JavaScript.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.79 |
 | [Elsa.Http.JavaScript](../../src/Elsa/Http/JavaScript/Elsa.Http.JavaScript.csproj) | source | Microsoft.Extensions.Caching.Abstractions | 10.0.10 |
@@ -1036,9 +1025,6 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Workflows.Runtime.Distributed.Tests](../../tests/Elsa/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj) | test | xunit.runner.visualstudio | 3.1.5 |
 | [Elsa.Workflows.Runtime.Http](../../src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | CShells.Abstractions | 0.0.29-preview.147 |
 | [Elsa.Workflows.Runtime.Http](../../src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.79 |
-| [Elsa.Workflows.Runtime.Http](../../src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | Microsoft.AspNetCore.Authentication.Abstractions | 2.3.11 |
-| [Elsa.Workflows.Runtime.Http](../../src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | Microsoft.AspNetCore.Authorization | 10.0.10 |
-| [Elsa.Workflows.Runtime.Http](../../src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | Microsoft.AspNetCore.Http.Abstractions | 2.3.10 |
 | [Elsa.Workflows.Runtime.Http.Tests](../../tests/Elsa/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj) | test | Microsoft.AspNetCore.Authorization | 10.0.10 |
 | [Elsa.Workflows.Runtime.Http.Tests](../../tests/Elsa/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj) | test | Microsoft.AspNetCore.Http | 2.3.10 |
 | [Elsa.Workflows.Runtime.Http.Tests](../../tests/Elsa/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj) | test | Microsoft.Extensions.DependencyInjection | 10.0.10 |

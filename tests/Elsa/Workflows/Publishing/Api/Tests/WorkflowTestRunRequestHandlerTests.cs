@@ -161,7 +161,10 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.Equal("Rejected", rejected.Status);
         Assert.Contains("validation is unavailable", rejected.Reason, StringComparison.OrdinalIgnoreCase);
         Assert.Equal("Unavailable", rejected.Metadata["expressionValidation.state"]);
-        Assert.Equal("expression-validation-unavailable", rejected.Metadata["expressionValidation.code"]);
+        var code = rejected.Metadata["expressionValidation.code"];
+        Assert.StartsWith("expression-validation-unavailable:", code, StringComparison.Ordinal);
+        Assert.Contains(nameof(InvalidOperationException), code, StringComparison.Ordinal);
+        Assert.Contains("Validation provider failed.", code, StringComparison.Ordinal);
         Assert.Empty(await _executableStore.ListAllAsync());
     }
 
