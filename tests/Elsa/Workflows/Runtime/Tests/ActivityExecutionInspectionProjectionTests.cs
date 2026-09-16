@@ -1,8 +1,8 @@
 using System.Security.Claims;
 using System.Text.Json;
-using Elsa.Foundation.Identity.Abstractions;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Foundation.Identity.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Extensions;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Handlers;

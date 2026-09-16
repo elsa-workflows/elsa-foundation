@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Foundation.Identity.Extensions;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Commands;
 using Elsa.Workflows.Runtime.Api.Contracts;

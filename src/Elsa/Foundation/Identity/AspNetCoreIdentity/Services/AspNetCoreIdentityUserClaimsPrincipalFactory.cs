@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Microsoft.AspNetCore.Identity;
 

@@ -1,5 +1,5 @@
 using Elsa.Api.AspNetCore;
-using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Foundation.Identity.Extensions;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing;
 using Elsa.Workflows.Publishing.Api;

@@ -1,6 +1,6 @@
 using Elsa.Api.AspNetCore;
 using NativeEndpoints;
-using Elsa.Foundation.Identity.Abstractions.Authentication;
+using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
 using Microsoft.AspNetCore.Antiforgery;

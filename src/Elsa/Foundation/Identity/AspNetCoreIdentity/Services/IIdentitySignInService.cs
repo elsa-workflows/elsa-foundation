@@ -1,4 +1,4 @@
-using Elsa.Foundation.Identity.Abstractions.Authentication;
+using Elsa.Foundation.Identity.Core.Authentication;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
 

@@ -1,7 +1,8 @@
 using Elsa.Api.AspNetCore;
 using System.Globalization;
 using NativeEndpoints;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;

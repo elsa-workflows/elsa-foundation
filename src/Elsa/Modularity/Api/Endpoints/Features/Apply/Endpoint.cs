@@ -1,5 +1,5 @@
 using Elsa.Api.AspNetCore;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Modularity.Api.Authorization;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Models;

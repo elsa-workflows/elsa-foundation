@@ -1,4 +1,5 @@
-using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Modularity.Api.Authorization;
 using Xunit;
 

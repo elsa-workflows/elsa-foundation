@@ -1,4 +1,4 @@
-using Elsa.Foundation.Identity.Abstractions.Authentication;
+using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Api.Models;
 using System.Text.Json;
 using System.Text.Json.Serialization;

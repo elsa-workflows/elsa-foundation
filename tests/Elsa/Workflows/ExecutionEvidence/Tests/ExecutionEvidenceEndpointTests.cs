@@ -1,7 +1,7 @@
 using Elsa.Api.AspNetCore;
-using Elsa.Foundation.Identity.Abstractions.Authentication;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Foundation.Identity.Core.Authentication;
+using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Extensions;
 using Elsa.Workflows.ExecutionEvidence.Contracts;
 using Elsa.Workflows.ExecutionEvidence.Endpoints;
 using Elsa.Workflows.Runtime.Core.Constants;

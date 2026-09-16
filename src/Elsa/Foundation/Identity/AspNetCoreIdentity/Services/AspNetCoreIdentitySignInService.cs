@@ -1,4 +1,4 @@
-using Elsa.Foundation.Identity.Abstractions.Authentication;
+using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;

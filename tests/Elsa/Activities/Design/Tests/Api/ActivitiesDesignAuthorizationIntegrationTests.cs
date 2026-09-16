@@ -1,7 +1,8 @@
 using Elsa.Activities.Design.Api.Authorization;
 using Elsa.Activities.Design.Tests.Api.Support;
 using Elsa.Api.AspNetCore;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;

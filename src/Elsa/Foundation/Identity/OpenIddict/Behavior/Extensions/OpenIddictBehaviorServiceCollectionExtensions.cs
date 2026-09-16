@@ -1,6 +1,6 @@
 using CShells.Lifecycle;
-using Elsa.Foundation.Identity.Abstractions.Authentication;
-using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Foundation.Identity.Core.Authentication;
+using Elsa.Foundation.Identity.Extensions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;

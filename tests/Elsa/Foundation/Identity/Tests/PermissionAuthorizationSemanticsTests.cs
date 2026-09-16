@@ -1,6 +1,6 @@
 using System.Security.Claims;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;

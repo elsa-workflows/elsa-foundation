@@ -5,7 +5,7 @@ using CShells.DependencyInjection;
 using CShells.FastEndpoints.Features;
 using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Models;
-using Elsa.Foundation.Identity.Abstractions;
+using Elsa.Foundation.Identity;
 using Elsa.Foundation.Identity.Oidc;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;

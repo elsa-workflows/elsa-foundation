@@ -1,6 +1,6 @@
 using System.Security.Claims;
 using System.Text.RegularExpressions;
-using Elsa.Foundation.Identity.Abstractions.Authentication;
+using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Studio.Preferences.Core.Exceptions;
 using Elsa.Studio.Preferences.Core.Models;
 

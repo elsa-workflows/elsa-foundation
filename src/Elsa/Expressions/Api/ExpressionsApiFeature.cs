@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Expressions.Api.Capabilities;
 using Elsa.Expressions.Api.Authorization;
-using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Foundation.Identity.Extensions;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Hosting;
 using NativeEndpoints;

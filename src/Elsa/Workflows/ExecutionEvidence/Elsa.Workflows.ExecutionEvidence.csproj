@@ -12,7 +12,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
-    <ProjectReference Include="..\..\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
+    <ProjectReference Include="..\..\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="..\..\Foundation\Identity\Elsa.Foundation.Identity.csproj" />
     <ProjectReference Include="..\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
 

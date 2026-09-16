@@ -1,7 +1,7 @@
 using System.Data.Common;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Foundation.Identity.Abstractions.Iam;
-using Elsa.Foundation.Identity.Abstractions.Ownership;
+using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Core.Iam;
+using Elsa.Foundation.Identity.Core.Ownership;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;

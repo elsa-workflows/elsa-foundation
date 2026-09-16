@@ -1,5 +1,6 @@
 using System.Security.Claims;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
 
 namespace Elsa.Foundation.Identity.Tests;
 

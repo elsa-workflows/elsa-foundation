@@ -344,7 +344,7 @@ internal static class PermissionAuthorizationBoundaryScanner
     private static readonly ImmutableHashSet<string> ReviewedAllowlist =
         ImmutableHashSet.Create(
             StringComparer.Ordinal,
-            "src/Elsa/Foundation/Identity/Abstractions/Authorization/AuthorizationContracts.cs",
+            "src/Elsa/Foundation/Identity/Authorization/AuthorizationServices.cs",
             "src/Elsa/Foundation/Identity/Api/Endpoints/Token.cs",
             "src/Elsa/Foundation/Identity/Api/Services/ClaimsAuthSessionService.cs",
             "src/Elsa/Foundation/Identity/AspNetCoreIdentity/Services/DefaultAuthSessionService.cs",

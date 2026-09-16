@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="Core\Elsa.Foundation.Identity.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Api/**/*;AspNetCoreIdentity/**/*;Core/**/*;Oidc/**/*;OpenIddict/**/*;Persistence/**/*" />
+    <EmbeddedResource Remove="Api/**/*;AspNetCoreIdentity/**/*;Core/**/*;Oidc/**/*;OpenIddict/**/*;Persistence/**/*" />
+    <None Remove="Api/**/*;AspNetCoreIdentity/**/*;Core/**/*;Oidc/**/*;OpenIddict/**/*;Persistence/**/*" />
+  </ItemGroup>
+
+</Project>

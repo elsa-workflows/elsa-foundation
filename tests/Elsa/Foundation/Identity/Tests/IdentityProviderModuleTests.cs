@@ -1,8 +1,8 @@
 using System.Security.Claims;
-using Elsa.Foundation.Identity.Abstractions;
-using Elsa.Foundation.Identity.Abstractions.Authentication;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.Core.Authentication;
+using Elsa.Foundation.Identity.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.Api.Extensions;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;

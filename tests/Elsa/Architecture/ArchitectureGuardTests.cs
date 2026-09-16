@@ -1101,7 +1101,8 @@ internal static class PersistenceProviderNeutralityBoundary
     public static IReadOnlyList<string> ProjectNames { get; } =
     [
         "Elsa.Workflows.Runtime.Core",
-        "Elsa.Foundation.Identity.Abstractions",
+        "Elsa.Foundation.Identity.Core",
+        "Elsa.Foundation.Identity",
         "Elsa.Secrets.Core",
         "Elsa.Workflows.Runtime.Distributed"
     ];

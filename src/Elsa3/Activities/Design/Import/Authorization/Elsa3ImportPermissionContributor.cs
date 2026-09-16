@@ -1,4 +1,4 @@
-using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa3.Activities.Design.Import.Endpoints;
 
 namespace Elsa3.Activities.Design.Import.Authorization;

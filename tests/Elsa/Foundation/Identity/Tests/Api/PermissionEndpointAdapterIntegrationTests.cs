@@ -1,8 +1,8 @@
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Compatibility.Testing.Endpoints;
-using Elsa.Foundation.Identity.Abstractions;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Foundation.Identity.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Extensions;
 using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.Api.Extensions;
 using FastEndpoints;

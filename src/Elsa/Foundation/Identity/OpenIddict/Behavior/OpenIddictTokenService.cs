@@ -1,15 +1,15 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text.Json;
-using Elsa.Foundation.Identity.Abstractions.Authentication;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Core.Authentication;
+using Elsa.Foundation.Identity.Core.Authorization;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
 using OpenIddict.Validation;
-using TokenValidationResult = Elsa.Foundation.Identity.Abstractions.Authentication.TokenValidationResult;
+using TokenValidationResult = Elsa.Foundation.Identity.Core.Authentication.TokenValidationResult;
 
 namespace Elsa.Foundation.Identity.OpenIddict;
 

@@ -3,7 +3,7 @@ using Elsa.Activities.Design.Api.Handlers;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
 using Elsa.Api.AspNetCore;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Authorization;
 using NativeEndpoints;
 
 namespace Elsa.Activities.Design.Api.Endpoints.Drafts.Diff;

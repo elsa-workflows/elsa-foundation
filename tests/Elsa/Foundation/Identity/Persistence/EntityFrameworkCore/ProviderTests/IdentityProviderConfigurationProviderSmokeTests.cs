@@ -1,5 +1,5 @@
-using Elsa.Foundation.Identity.Abstractions.Iam;
-using Elsa.Foundation.Identity.Abstractions.Ownership;
+using Elsa.Foundation.Identity.Core.Iam;
+using Elsa.Foundation.Identity.Core.Ownership;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;

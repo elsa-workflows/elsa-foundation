@@ -88,7 +88,7 @@ not automatic constitution violations.
 | Domain | Catalog |
 |---|---|
 | Agent core (sessions, policy, context, proposals, provider facade, audit) | [`src/Elsa/Agent/Core/EXTENSION_POINTS.md`](src/Elsa/Agent/Core/EXTENSION_POINTS.md) |
-| Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities) | [`src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md) |
+| Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities) | [`src/Elsa/Foundation/Identity/Core/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Core/EXTENSION_POINTS.md) |
 | Foundation Identity ASP.NET Core Identity EF adapter (opt-in framework stores, authentication, session invalidation, and seeding over the shared EF authority) | [`src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Foundation Identity EF persistence (opt-in complete IAM authority and provider-configuration backend; OpenIddict boundary) | [`src/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/README.md`](src/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/README.md) |
 | Workflow Agent (workflow explain/troubleshoot/change-proposal contribution) | [`src/Elsa/Agent/Workflows/EXTENSION_POINTS.md`](src/Elsa/Agent/Workflows/EXTENSION_POINTS.md) |

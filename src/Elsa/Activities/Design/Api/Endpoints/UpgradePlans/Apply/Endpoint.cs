@@ -3,7 +3,7 @@ using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Services;
 using Elsa.Api.AspNetCore;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Authorization;
 using NativeEndpoints;
 
 namespace Elsa.Activities.Design.Api.Endpoints.UpgradePlans.Apply;

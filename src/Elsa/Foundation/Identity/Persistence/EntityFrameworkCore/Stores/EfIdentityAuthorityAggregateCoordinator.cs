@@ -1,5 +1,5 @@
 using System.Globalization;
-using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Persistence.EntityFramework;

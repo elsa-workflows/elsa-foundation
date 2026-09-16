@@ -1,6 +1,6 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Api.AspNetCore;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Primitives.Diagnostics;
 using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Publishing.Api.Authorization;

@@ -1,5 +1,5 @@
 using Elsa.Activities.Design.Core.Models;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
 
 namespace Elsa.Activities.Design.Api.Contracts;
 

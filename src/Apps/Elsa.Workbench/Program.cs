@@ -30,7 +30,7 @@ using Elsa.Diagnostics.StructuredLogs;
 using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Expressions.Api;
-using Elsa.Foundation.Identity.Abstractions;
+using Elsa.Foundation.Identity;
 using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.Oidc;

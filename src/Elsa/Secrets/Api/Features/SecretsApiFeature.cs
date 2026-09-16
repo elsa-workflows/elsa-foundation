@@ -2,7 +2,7 @@ using Elsa.Api.AspNetCore;
 using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
-using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Foundation.Identity.Extensions;
 using Elsa.Secrets.Api;
 using Elsa.Secrets.Api.Authorization;
 using Elsa.Secrets.Extensions;

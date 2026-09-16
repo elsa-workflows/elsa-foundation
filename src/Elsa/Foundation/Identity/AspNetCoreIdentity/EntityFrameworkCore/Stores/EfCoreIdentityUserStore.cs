@@ -1,6 +1,6 @@
 using System.Security.Claims;
-using Elsa.Foundation.Identity.Abstractions.Iam;
-using Elsa.Foundation.Identity.Abstractions.Ownership;
+using Elsa.Foundation.Identity.Core.Iam;
+using Elsa.Foundation.Identity.Core.Ownership;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;

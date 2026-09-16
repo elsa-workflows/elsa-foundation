@@ -1,4 +1,4 @@
-using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.Core.Iam;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 
