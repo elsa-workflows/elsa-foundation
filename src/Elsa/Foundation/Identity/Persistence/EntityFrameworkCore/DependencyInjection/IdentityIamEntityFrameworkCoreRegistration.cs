@@ -71,7 +71,6 @@ public static class IdentityIamEntityFrameworkCoreRegistration
             throw new InvalidOperationException("Identity IAM EF persistence conflicts with an unowned host registration.");
 
         if (existingAuthorityBackend is not null &&
-            !string.Equals(existingAuthorityBackend.Name, "groundwork", StringComparison.Ordinal) &&
             !string.Equals(existingAuthorityBackend.Name, StoreBackendName, StringComparison.Ordinal))
             IdentityAuthorityStoreBackend.EnsureCompatible(existingAuthorityBackend.Name, StoreBackendName);
 
@@ -92,7 +91,7 @@ public static class IdentityIamEntityFrameworkCoreRegistration
         if (existingRegistration is not null)
             throw new InvalidOperationException("Identity IAM EF persistence registration is incomplete.");
 
-        if (existingBackend is not null && !string.Equals(existingBackend.Name, "groundwork", StringComparison.Ordinal))
+        if (existingBackend is not null)
             IdentityApplicationCredentialStoreBackend.EnsureCompatible(existingBackend.Name, StoreBackendName);
 
         services.AddFoundationIdentityAbstractions();

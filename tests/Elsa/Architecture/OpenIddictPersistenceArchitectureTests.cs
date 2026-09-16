@@ -227,7 +227,7 @@ public sealed class OpenIddictPersistenceArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToArray();
         Assert.Equal(
-            ["Microsoft.EntityFrameworkCore.InMemory", "OpenIddict.EntityFrameworkCore"],
+            ["Microsoft.EntityFrameworkCore.InMemory", "Microsoft.EntityFrameworkCore.Sqlite", "OpenIddict.EntityFrameworkCore"],
             testVendorPackages);
     }
 

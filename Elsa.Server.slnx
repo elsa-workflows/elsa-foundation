@@ -81,6 +81,7 @@
     <Project Path="src/Elsa/Caching/Memory/Elsa.Caching.Memory.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Diagnostics/">
+    <Project Path="src/Elsa/Diagnostics/Persistence/Elsa.Diagnostics.Persistence.csproj" />
     <Project Path="src/Elsa/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Diagnostics/OpenTelemetry/">
@@ -89,9 +90,6 @@
   </Folder>
   <Folder Name="/src/Elsa/Diagnostics/OpenTelemetry/Persistence/">
     <Project Path="src/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj" />
-  </Folder>
-  <Folder Name="/src/Elsa/Diagnostics/Persistence/">
-    <Project Path="src/Elsa/Diagnostics/Persistence/Elsa.Diagnostics.Persistence.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Diagnostics/StructuredLogs/">
     <Project Path="src/Elsa/Diagnostics/StructuredLogs/Core/Elsa.Diagnostics.StructuredLogs.Core.csproj" />

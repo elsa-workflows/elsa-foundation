@@ -23,9 +23,8 @@ public static class AspNetCoreIdentityServiceCollectionExtensions
     /// </summary>
     /// <remarks>
     /// A concrete persistence integration supplies the ASP.NET Core Identity core services, cookie scheme,
-    /// durable Elsa IAM stores, and optional administrator seeding. The EF Core integration is the
-    /// first-party durable implementation and is registered with
-    /// <c>AddFoundationAspNetCoreIdentityEntityFrameworkCore</c>.
+    /// durable Elsa IAM stores, and optional administrator seeding, and is composed through that
+    /// module's own registration extension.
     /// </remarks>
     public static IServiceCollection AddFoundationAspNetCoreIdentity(this IServiceCollection services, Action<AspNetCoreIdentityOptions>? configure = null)
     {
