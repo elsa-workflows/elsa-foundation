@@ -14,6 +14,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Publishing.Api.Handlers;
 
@@ -51,7 +52,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
     IWorkflowTestScopeStore? testScopeStore = null,
     IWorkflowExecutionPartitionAccessor? partitionAccessor = null,
     IPersistenceAccessContextAccessor? accessContextAccessor = null,
-    IExpressionDraftSemanticValidator? expressionValidator = null)
+    IExpressionDraftSemanticValidator? expressionValidator = null,
+    ILogger<StartWorkflowTestRunRequestHandler>? logger = null)
     : IWorkflowTestRunStarter
 {
     public const string RequestedBy = "workflow-designer-test-run";
@@ -130,7 +132,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
             expressionValidator,
             (await workflowVersionStore.GetWithDefinitionAsync(request.VersionId, cancellationToken)).State,
             request.VersionId,
-            cancellationToken);
+            cancellationToken,
+            logger);
         if (!CanProceed(versionValidation, request.AcknowledgeUnavailableExpressionValidation))
             return await RejectExpressionValidationAsync(
                 testRunId,
@@ -185,7 +188,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
                 expressionValidator,
                 request.State,
                 request.SnapshotId,
-                cancellationToken);
+                cancellationToken,
+                logger);
             if (!CanProceed(validation, request.AcknowledgeUnavailableExpressionValidation))
                 return await RejectExpressionValidationAsync(
                     testRunId,
@@ -437,7 +441,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         {
             ["expressionValidation.state"] = (validation?.State ?? ExpressionDraftValidationState.Unavailable).ToString(),
             ["expressionValidation.code"] = validation?.Code ??
-                (validation is null ? "expression-validation-unavailable" : $"expression-validation-{validation.State.ToString().ToLowerInvariant()}"),
+                (validation is null ? ExpressionDraftSemanticValidation.UnavailableCode : $"expression-validation-{validation.State.ToString().ToLowerInvariant()}"),
             ["expressionValidation.unavailableAcknowledged"] = unavailableAcknowledged.ToString(),
             ["expressionValidation.diagnostics"] = JsonSerializer.Serialize(diagnostics)
         };
