@@ -69,6 +69,7 @@ public sealed class WorkflowDispatchRetentionCollectorTests
             dispatchStore,
             new SnapshotConflictDeleteStore(),
             new InMemoryWorkflowExecutionStateStore(),
+            new AccessContextAccessor(PersistenceAccessContext.Global),
             NullLogger<WorkflowDispatchRetentionCollector>.Instance);
 
         var result = await collector.SweepAsync();
@@ -93,6 +94,58 @@ public sealed class WorkflowDispatchRetentionCollectorTests
     [Fact]
     public async Task Repeated_sweeps_advance_past_a_full_retained_prefix()
     {
+        var (dispatchStore, executions, eligible) = await NewFullRetainedPrefixAsync();
+        var collector = NewCollector(dispatchStore, executions);
+
+        var first = await collector.SweepAsync();
+        var second = await collector.SweepAsync();
+
+        Assert.Equal(0, first.DeletedCount);
+        Assert.Equal(1, second.DeletedCount);
+        Assert.Null(await dispatchStore.FindAsync(eligible.DispatchId));
+    }
+
+    [Fact]
+    public async Task Sweeps_in_different_persistence_scopes_keep_separate_cursor_positions()
+    {
+        // A host runs one scoped collector per persistence scope against one singleton cursor. The first page is a full
+        // retained prefix, so scope A's sweep leaves a continuation pointing past it. Scope B must not inherit that
+        // position: it has to start from its own first page, or it would skip its older records.
+        var (dispatchStore, executions, eligible) = await NewFullRetainedPrefixAsync();
+        var cursor = new WorkflowDispatchRetentionCursor();
+        var scopeA = NewCollector(dispatchStore, executions, PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")), cursor);
+        var scopeB = NewCollector(dispatchStore, executions, PersistenceAccessContext.Scoped(new PersistenceScope("tenant-b")), cursor);
+
+        var firstInA = await scopeA.SweepAsync();
+        var firstInB = await scopeB.SweepAsync();
+
+        Assert.Equal(0, firstInA.DeletedCount);
+        Assert.Equal(0, firstInB.DeletedCount);
+        Assert.NotNull(await dispatchStore.FindAsync(eligible.DispatchId));
+
+        // Scope A still resumes from where it stopped.
+        var secondInA = await scopeA.SweepAsync();
+
+        Assert.Equal(1, secondInA.DeletedCount);
+        Assert.Null(await dispatchStore.FindAsync(eligible.DispatchId));
+    }
+
+    [Fact]
+    public void Global_and_across_scopes_sweeps_are_different_partitions()
+    {
+        var global = WorkflowDispatchRetentionCursor.PartitionOf(PersistenceAccessContext.Global);
+        var acrossScopes = WorkflowDispatchRetentionCursor.PartitionOf(
+            PersistenceAccessContext.PrivilegedAcrossScopes(new PersistenceAccessPurpose("dispatch-retention-test")));
+
+        Assert.NotEqual(global, acrossScopes);
+    }
+
+    /// <summary>
+    /// One more terminal dispatch than a page holds. The first page is entirely retained, because each parent execution
+    /// still exists; only the last record, past the page, is eligible for deletion.
+    /// </summary>
+    private static async ValueTask<(InMemoryWorkflowDispatchStore DispatchStore, InMemoryWorkflowExecutionStateStore Executions, WorkflowDispatchRecord Eligible)> NewFullRetainedPrefixAsync()
+    {
         var dispatchStore = new InMemoryWorkflowDispatchStore();
         var executions = new InMemoryWorkflowExecutionStateStore();
         WorkflowDispatchRecord? eligible = null;
@@ -110,20 +163,26 @@ public sealed class WorkflowDispatchRetentionCollectorTests
             else
                 eligible = pending;
         }
-        var collector = NewCollector(dispatchStore, executions);
-
-        var first = await collector.SweepAsync();
-        var second = await collector.SweepAsync();
-
-        Assert.Equal(0, first.DeletedCount);
-        Assert.Equal(1, second.DeletedCount);
-        Assert.Null(await dispatchStore.FindAsync(eligible!.DispatchId));
+        return (dispatchStore, executions, eligible!);
     }
 
     private static WorkflowDispatchRetentionCollector NewCollector(
         InMemoryWorkflowDispatchStore dispatchStore,
-        IWorkflowExecutionStateStore executionStore) =>
-        new(dispatchStore, dispatchStore, executionStore, NullLogger<WorkflowDispatchRetentionCollector>.Instance);
+        IWorkflowExecutionStateStore executionStore,
+        PersistenceAccessContext? access = null,
+        WorkflowDispatchRetentionCursor? cursor = null) =>
+        new(
+            dispatchStore,
+            dispatchStore,
+            executionStore,
+            new AccessContextAccessor(access ?? PersistenceAccessContext.Global),
+            NullLogger<WorkflowDispatchRetentionCollector>.Instance,
+            cursor);
+
+    private sealed class AccessContextAccessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
+    {
+        public PersistenceAccessContext Current { get; } = current;
+    }
 
     private static async ValueTask<InMemoryWorkflowDispatchStore> NewTerminalDispatchStoreAsync()
     {
