@@ -17,6 +17,24 @@ requirement is optional. Replacement, default-flip, and deletion PR cells stay b
 merged PR exists. Historical performance rows may be retired by policy, but their timing-independent
 correctness requirements must first move to an EF-neutral or EF-owned row.
 
+## Deletion step — 2026-09-16
+
+The removal step of #1670 landed on `claude/delete-groundwork` (replace with the merged PR number
+when the control room opens it). After it, no first-party Groundwork or MongoDB production code,
+package, transitive runtime dependency, shell feature, host wiring, tool, workflow, configuration,
+test project or guard remains under `src/`, `tests/`, `tools/`, `docker/`, `e2e-tests/`, `.github/`
+or the repository package configuration. The entry-level registers record the per-row disposition:
+the [storage-unit register](ef-core-persistence/storage-unit-register.md) marks every unit deleted,
+the [repository-surface register](ef-core-persistence/repository-surface-register.md) marks the
+package, feed, solution, workflow and guard surfaces, and the
+[test and e2e register](ef-core-persistence/test-and-e2e-register.md) names which coverage was
+re-pointed at EF Core and which was dropped.
+
+Two things this step deliberately did not do: it did not touch `docs/adr/`, `specs/`,
+`docs/reports/archive/` or `docs/reports/evidence/`, which stay truthful history; and it did not
+amend either constitution, where framework §2.24 and ADR 0042's superseded direction remain a
+ratification question for the owner rather than an implementation edit.
+
 ## Verified baseline
 
 - 14 Groundwork production projects: 232 C# files and 46,809 lines.
