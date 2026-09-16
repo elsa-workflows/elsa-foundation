@@ -59,7 +59,7 @@ public sealed class PublishWorkflowRequestHandler(
             if (expressionValidator is null)
                 missing.Add($"{nameof(IExpressionDraftSemanticValidator)} (composed by WorkflowDesignValidations)");
             if (workflowVersionStore is null)
-                missing.Add($"{nameof(IWorkflowDefinitionVersionStore)} (composed by the design persistence feature, e.g. WorkflowsDesignEntityFrameworkCore)");
+                missing.Add($"{nameof(IWorkflowDefinitionVersionStore)} (composed by the design persistence feature)");
             throw new ExpressionPublicationValidationException(new(
                 ExpressionDraftValidationState.Unavailable,
                 [],
