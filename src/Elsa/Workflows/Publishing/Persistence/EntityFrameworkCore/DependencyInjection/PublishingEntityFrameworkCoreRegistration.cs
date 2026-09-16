@@ -1,9 +1,19 @@
+using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
+using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
+using Elsa.Locking.Core;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Primitives.Contracts;
+using Elsa.Serialization.Core;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Services;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -42,8 +52,54 @@ public static class PublishingEntityFrameworkCoreRegistration
             {
                 services.AddScoped<ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>, EfActivityPublicationCommand>();
                 services.AddScoped<ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>, EfSourceActivityPublicationCommand>();
-            })
+            }),
+        new(
+            PublishingPersistenceFamilyBackend.ActivityUpgradeMutation,
+            PublishingPersistenceFamilyBackend.ActivityUpgradeMutationContracts,
+            AddActivityUpgrade)
     ];
+
+    /// <summary>
+    /// The A12/A13 upgrade bridge. Discovery, the atomic mutation and the published-draft resolver are one
+    /// object because an apply rechecks its own discovery inside the transaction it commits in; the rebuild
+    /// coordinator converges the same derived view after an ordinary Design edit. Both reach the Activities
+    /// Design and Workflows Design EF contexts directly, so they are constructed explicitly and refuse,
+    /// with a message naming the missing lane, a host that did not put both catalogs on EF.
+    /// </summary>
+    private static void AddActivityUpgrade(IServiceCollection services)
+    {
+        services.AddScoped(provider => new EfActivityUpgradePlanStore(
+            RequiredContext<ActivitiesDesignDbContext>(provider, "Activities Design"),
+            RequiredContext<WorkflowsDesignDbContext>(provider, "Workflows Design"),
+            provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
+            provider.GetRequiredService<IPayloadSerializer>(),
+            provider.GetRequiredService<IActivityStructureService>(),
+            provider.GetRequiredService<IActivityProviderRegistry>(),
+            provider.GetRequiredService<ActivityContractAuthoringValidator>(),
+            provider.GetServices<IActivityProviderReferenceRewriter>(),
+            provider.GetRequiredService<IIdentityGenerator>(),
+            provider.GetRequiredService<IDistributedLockProvider>(),
+            provider.GetService<TimeProvider>()));
+        services.AddScoped<IActivityUpgradeDiscoverySource>(provider => provider.GetRequiredService<EfActivityUpgradePlanStore>());
+        services.AddScoped<IActivityUpgradePlanMutationStore>(provider => provider.GetRequiredService<EfActivityUpgradePlanStore>());
+        services.AddScoped<IActivityUpgradePublishedDraftResolver>(provider => provider.GetRequiredService<EfActivityUpgradePlanStore>());
+        services.AddScoped<IActivityDependencyProjectionRebuildCoordinator>(provider => new EfActivityDependencyProjectionRebuildCoordinator(
+            RequiredContext<ActivitiesDesignDbContext>(provider, "Activities Design"),
+            RequiredContext<WorkflowsDesignDbContext>(provider, "Workflows Design"),
+            provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
+            provider.GetRequiredService<IPayloadSerializer>(),
+            provider.GetRequiredService<IActivityDefinitionVersionPublicationStore>(),
+            provider.GetRequiredService<IActivityTemplateDependencyDiscovererRegistry>(),
+            provider.GetRequiredService<IActivityStructureService>(),
+            provider.GetRequiredService<IActivityDependencyProjectionRebuilder>(),
+            provider.GetRequiredService<IIdentityGenerator>(),
+            provider.GetService<TimeProvider>() ?? TimeProvider.System));
+    }
+
+    private static TContext RequiredContext<TContext>(IServiceProvider provider, string lane) where TContext : DbContext =>
+        provider.GetService<TContext>()
+        ?? throw new InvalidOperationException(
+            $"Publishing EF activity-upgrade persistence requires the EF {lane} module; select it before composing the Publishing EF feature.");
 
     public static IServiceCollection AddPublishingEntityFrameworkCore(
         this IServiceCollection services,

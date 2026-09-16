@@ -13,7 +13,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 [ShellFeature(
     name: "WorkflowsPublishingEntityFrameworkCore",
     DisplayName = "Workflows Publishing EF Core Persistence",
-    Description = "Opt-in EF Core persistence for the Publishing ledger (publication records, snapshot reviews, policies, projection intents, activity-publication and draft test-run receipts) and the ordered reusable-activity publication commands, which require the Activities Design and Runtime EF modules. Groundwork remains the default.",
+    Description = "Opt-in EF Core persistence for the Publishing ledger (publication records, snapshot reviews, policies, projection intents, activity-publication and draft test-run receipts), the ordered reusable-activity publication commands, and the cross-catalog activity-upgrade bridge (discovery, atomic apply and dependency-projection rebuild). These require the Activities Design, Workflows Design and Runtime EF modules. Groundwork remains the default.",
     DependsOn = new object[] { "WorkflowsPublishing" })]
 public class PublishingEntityFrameworkCoreFeature : IShellFeature
 {
