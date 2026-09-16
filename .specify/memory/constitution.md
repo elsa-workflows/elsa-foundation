@@ -4,25 +4,41 @@ This constitution file is the Elsa-specific quality-gate layer: gates, allowed e
 ratification state, and governance. Canonical term lookup lives in ../../docs/glossary/.
 
 Sync Impact Report (4.0.1 -> 4.0.2, 2026-09-16)
-- Bump rationale: PATCH. Editorial propagation from accepted ADR 0073, which made EF Core the only
-  first-party persistence family. No gate is added, removed, or redefined, and no architectural text
-  changes, so this is a factual sync with the tree rather than an amendment. Recorded on Sipke
-  Schoorstra's decision of 2026-09-16.
-- Modified: §E2 domain-package examples. `Elsa.Persistence.EFCore{,.Sqlite}` and
-  `Elsa.Persistence.Groundwork.*` -> `Elsa.Persistence.EntityFramework` plus the per-domain
-  `<Domain>.Persistence.EntityFrameworkCore` shape; `Elsa.Secrets.Persistence.Groundwork` ->
-  `Elsa.Secrets.Persistence.EntityFrameworkCore`. All three named packages were deleted from the
-  tree, the first two well before the Groundwork removal.
+- Bump rationale: PATCH. Factual sync with the tree, in two parts: propagation from accepted ADR 0073,
+  which made EF Core the only first-party persistence family, and a reconciliation of every package
+  name in this document against the shipped projects. No gate is added, removed, or redefined, and no
+  naming rule gains new guidance, so this is a clarification rather than an amendment. Recorded on
+  Sipke Schoorstra's decision of 2026-09-16.
+- Modified: §E2.1 domain tree. Removed the "Surface package(s)" column; the table now records purpose
+  only and defers package enumeration to the generated domain map. By this date roughly a quarter of
+  the column named packages that no longer existed (`Elsa.Api.FastEndpoints`,
+  `Elsa.Activities.Testing`, `Elsa.Activities.Composition.*`, `Elsa.Workflows.Publishing.Api.Core`,
+  `Elsa.Persistence.EFCore{,.Sqlite}`, `Elsa.Persistence.Groundwork.*`,
+  `Elsa.Secrets.Persistence.Groundwork`). The generated map is regenerated with the tree and cannot
+  drift the same way. Added the four shipped domains the table omitted: `Elsa.Attention`, `Elsa.Git`,
+  `Elsa.Studio`, `Elsa.Workflows.Dashboard`. Refreshed the `Elsa.Api` and `Elsa.Persistence` purpose
+  sentences, which described superseded packages.
 - Modified: §E2.2.1 Design persistence. The `.EFCore` and `.EFCore.Sqlite` project pair is replaced by
   the single `Elsa.Workflows.Design.Persistence.EntityFrameworkCore` project, which carries all four
   supported providers with per-provider migrations rather than a project per provider.
-- Modified: §E5 minimum-project-size worked examples. Dropped `Elsa.Persistence.EFCore.Sqlite`, which
-  no longer exists.
-- Modified: §E6 R7 provider prefixes. `EFCore…`/`Groundwork…`/`Sqlite…` -> `Ef…`, which is the
-  convention actually in use (141 types; `EFCore…` appears zero times and `EfCore…` on seven older
-  types). R5's jargon list and R3's wire-identifier example no longer name Groundwork.
+- Modified: §E2.7 Elsa 3 import. The adapter module was named `Elsa3.Workflows.Import`, which never
+  shipped; it now names `Elsa3.Activities.Design.Import` with its `Elsa3.Models` and `Elsa3.Mapping`
+  support projects. Scope statements are unchanged.
+- Modified: §E5 minimum-project-size worked examples. Dropped `Elsa.Persistence.EFCore.Sqlite` and
+  `Elsa.Expressions.JavaScript.Libraries`, neither of which exists. Recorded that the migration-boundary
+  class has no live example: `Elsa3.Activities.Design.Import` measured 56 lines in the 2026-07-04 audit
+  and has since grown past the threshold, and no Elsa 3 project is under it today.
+- Modified: §E6 R7 provider prefixes. `EFCore…`/`Groundwork…`/`Sqlite…` -> `Ef…`, the convention
+  actually in use; `EFCore…` has never appeared on a type. R5's jargon list and R3's wire-identifier
+  example no longer name Groundwork.
 - Unchanged deliberately: §E2.5's `ElsaDbContextBase` opt-in text, which ADR 0042 predicted would
   become obsolete. The prediction inverted; that text reads correctly again.
+- Unchanged deliberately: package names that appear as history (earlier sync reports, the retired
+  `Elsa.Common` leakage, the removed `Elsa.Scheduling`/`Elsa.Messaging`/`Elsa.Notifications` drafts),
+  as intent (`Elsa.Foundation.Core` is held back), or as a reservation (`Elsa.Server` is reserved for a
+  future product host).
+- Open, not decided here: §E2.7 names import adapters `Elsa3.<Domain>.Import`, but `Elsa3.Mapping`
+  does not follow that pattern. Whether to rename the project or widen the rule is an owner decision.
 
 Sync Impact Report (4.0.0 -> 4.0.1, 2026-09-11)
 - Bump rationale: PATCH. Factual sync with the tree; no gate added, removed, or redefined.
@@ -149,35 +165,44 @@ and the Elsa-specific decomposition in §E2.
 
 ### §E2.1 The Elsa domain tree
 
-Applying framework §2.18's methodology to Elsa, the root-level domains are
-*(table refreshed 2026-07-02 to match the shipped tree — MD-4, Elsa 4
-architecture review; the generated [domain map](../../docs/maps/domain-map.md)
-owns always-fresh enumeration and project counts)*:
+Applying framework §2.18's methodology to Elsa, the root-level domains are listed below *(domains
+reconciled against the shipped tree 2026-09-16)*. This table records only what a generated map cannot:
+each domain's purpose. It deliberately names no packages. Package names changed faster than this
+table was maintained, and by 2026-09-16 roughly a quarter of the names it listed no longer existed.
+The generated [domain map](../../docs/maps/domain-map.md) owns package enumeration and project counts,
+and it is regenerated with the tree, so it cannot drift the same way.
 
-| Domain | Purpose (one verb-led sentence) | Surface package(s) |
-|---|---|---|
-| `Elsa.Activities` | Provides the activity system: design-time activity definitions, reconciliation, composition, runtime activity handling, and the built-in activity libraries. | `Elsa.Activities.Design.*`, `Elsa.Activities.Runtime{,.Core}`, `Elsa.Activities.Composition.*`, `Elsa.Activities.{ControlFlow,Flowchart,Primitives,Sequence,Testing}` |
-| `Elsa.Agent` | Hosts AI-agent sessions and capabilities behind provider modules. | `Elsa.Agent.Core`, `Elsa.Agent.Api`, `Elsa.Agent.{Anthropic,GitHubCopilot,Workflows}` |
-| `Elsa.Api` | Exposes application APIs through endpoint-framework adapters. | `Elsa.Api.FastEndpoints` |
-| `Elsa.Caching` | Provides caching contracts and providers. | `Elsa.Caching.Core`, `Elsa.Caching.Memory` |
-| `Elsa.Diagnostics` | Streams and persists diagnostics: console logs, structured logs, and OpenTelemetry ingestion. | `Elsa.Diagnostics.ConsoleLogStreaming`, `Elsa.Diagnostics.StructuredLogs{,.*}`, `Elsa.Diagnostics.OpenTelemetry{,.*}` |
-| `Elsa.Events` | Publishes and delivers in-process events (framework §2.6 unified event model). | `Elsa.Events.Core`, `Elsa.Events`, `Elsa.Events.Strategies` |
-| `Elsa.Expressions` | Evaluates expressions inside workflow steps. | `Elsa.Expressions.Core`, `Elsa.Expressions`, `Elsa.Expressions.JavaScript.*` |
-| `Elsa.Foundation` | Provides application-foundation services such as identity. | `Elsa.Foundation.Identity.*` |
-| `Elsa.Http` | Provides HTTP content, routing, download, and cache behavior. | `Elsa.Http.Core`, `Elsa.Http`, `Elsa.Http.JavaScript` |
-| `Elsa.Locking` | Provides distributed locking. | `Elsa.Locking.Core`, `Elsa.Locking.FileSystem`, `Elsa.Locking.<Provider>` |
-| `Elsa.Mediator` | Routes commands and requests in-process. | `Elsa.Mediator.Core`, `Elsa.Mediator` |
-| `Elsa.Modularity` | Discovers, describes, enables, validates, and composes modules and features. | `Elsa.Modularity.Core`, `Elsa.Modularity.Api`, `Elsa.Modularity.Nuplane` |
-| `Elsa.Persistence` | Persists application state through domain-specific ports and provider adapters. | `Elsa.Persistence.EntityFramework`, `<Domain>.Persistence.EntityFrameworkCore` |
-| `Elsa.Pipelines` | Defines pipeline contracts for composable middleware. | `Elsa.Pipelines.Core` |
-| `Elsa.Primitives` | Provides dependency-free base primitives and hosting seams (charter in §E2.3). | `Elsa.Primitives`, `Elsa.Primitives.Hosting` |
-| `Elsa.Secrets` | Stores and resolves secrets. | `Elsa.Secrets.Core`, `Elsa.Secrets`, `Elsa.Secrets.Api`, `Elsa.Secrets.Persistence.EntityFrameworkCore` |
-| `Elsa.Serialization` | Serialises payloads and workflow models. | `Elsa.Serialization.Core`, `Elsa.Serialization.Newtonsoft`, `Elsa.Serialization.SystemText` |
-| `Elsa.Tasks` | Schedules background work inside the host. | `Elsa.Tasks.Core`, `Elsa.Tasks`, `Elsa.Tasks.Schedules` (helper) |
-| `Elsa.Workflows.Design` | Designs workflow definitions: contracts, models, validations, reconciliation, and design-time persistence. | `Elsa.Workflows.Design.Core`, `Elsa.Workflows.Design.{Api,JavaScript}`, `Elsa.Workflows.Design.{Reconciliation,Validations}.*`, `Elsa.Workflows.Design.Persistence.*` |
-| `Elsa.Workflows.Runtime` | Executes workflows: instances, execution pipeline, bookmarks, runtime persistence. | `Elsa.Workflows.Runtime.Core`, `Elsa.Workflows.Runtime.{Api,Http,JavaScript}` |
-| `Elsa.Workflows.Publishing` | Publishes executable workflow artifacts from designed definitions. | `Elsa.Workflows.Publishing.Api`, `Elsa.Workflows.Publishing.Api.Core` |
-| `Elsa3` | Imports Elsa 3 definitions one-way at the migration boundary (§E2.7). | `Elsa3.Models`, `Elsa3.Mapping`, `Elsa3.Activities.Design.Import` |
+| Domain | Purpose (one verb-led sentence) |
+|---|---|
+| `Elsa.Activities` | Provides the activity system: design-time activity definitions, reconciliation, reusable-activity composition, runtime activity handling, and the built-in activity libraries. |
+| `Elsa.Agent` | Hosts AI-agent sessions and capabilities behind provider modules. |
+| `Elsa.Api` | Exposes application APIs through the endpoint framework and publishes the client capability document. |
+| `Elsa.Attention` | Aggregates permission-scoped attention items from domain contributors behind one query endpoint. |
+| `Elsa.Caching` | Provides caching contracts and providers. |
+| `Elsa.Diagnostics` | Streams and persists diagnostics: console logs, structured logs, and OpenTelemetry ingestion. |
+| `Elsa.Events` | Publishes and delivers in-process events (framework §2.6 unified event model). |
+| `Elsa.Expressions` | Evaluates expressions inside workflow steps. |
+| `Elsa.Foundation` | Provides application-foundation services such as identity. |
+| `Elsa.Git` | Wraps the git executable for sources that reconcile workflow definitions from a repository. |
+| `Elsa.Http` | Provides HTTP content, routing, download, and cache behavior. |
+| `Elsa.Locking` | Provides distributed locking. |
+| `Elsa.Mediator` | Routes commands and requests in-process. |
+| `Elsa.Modularity` | Discovers, describes, enables, validates, and composes modules and features. |
+| `Elsa.Persistence` | Provides the shared EF Core persistence policy that each domain's `*.Persistence.EntityFrameworkCore` module builds on (ADR 0073). |
+| `Elsa.Pipelines` | Defines pipeline contracts for composable middleware. |
+| `Elsa.Primitives` | Provides dependency-free base primitives and hosting seams (charter in §E2.3). |
+| `Elsa.Secrets` | Stores and resolves secrets. |
+| `Elsa.Serialization` | Serialises payloads and workflow models. |
+| `Elsa.Studio` | Persists Studio client state, currently per-user preferences. |
+| `Elsa.Tasks` | Schedules background work inside the host. |
+| `Elsa.Workflows.Dashboard` | Serves workflow run-health and portfolio queries from Runtime and Design projections. |
+| `Elsa.Workflows.Design` | Designs workflow definitions: contracts, models, validations, reconciliation, and design-time persistence. |
+| `Elsa.Workflows.Publishing` | Publishes executable workflow artifacts from designed definitions. |
+| `Elsa.Workflows.Runtime` | Executes workflows: instances, execution pipeline, bookmarks, runtime persistence. |
+| `Elsa3` | Imports Elsa 3 definitions one-way at the migration boundary (§E2.7). |
+
+Host and test-only groupings that appear in the generated map — `Elsa.Workbench`, `Elsa.Architecture`,
+`Elsa.Samples`, `Elsa.Testing` — are not domains and are intentionally absent.
 
 Three domains listed in earlier drafts — `Elsa.Scheduling`, `Elsa.Messaging`,
 and `Elsa.Notifications` — do not exist in code and are removed from the pinned
@@ -300,7 +325,7 @@ Visualisation of an executed instance happens at the application layer, traversi
 
 ### §E2.7 Elsa 3 backward compatibility — import-only
 
-Elsa 4's compatibility with Elsa 3 is bounded to **import**. A dedicated adapter module — `Elsa3.Workflows.Import` (and analogous siblings as needed for activities, instances, or other Elsa 3 artefacts) — maps Elsa 3 workflow definitions, activity descriptors, and persistence schemas into the Elsa 4 entity model. Once imported, Elsa 4 runs them natively through its own runtime.
+Elsa 4's compatibility with Elsa 3 is bounded to **import**. Dedicated adapter modules — today `Elsa3.Activities.Design.Import`, supported by `Elsa3.Models` and `Elsa3.Mapping`, with siblings added as needed for workflows, instances, or other Elsa 3 artefacts — map Elsa 3 workflow definitions, activity descriptors, and persistence schemas into the Elsa 4 entity model. Once imported, Elsa 4 runs them natively through its own runtime.
 
 **In scope:**
 
@@ -472,7 +497,7 @@ Rationale, rejected alternatives and the supporting measurements are recorded in
 
 **Reversibility.** If, e.g., `Elsa.Serialization.Newtonsoft` and `Elsa.Serialization.SystemText` become demanded by applications outside Elsa, they could graduate into separately published features that Elsa's other features pull in via NuGet. The packaging is reversible per framework §2.16 (refactor-cost test) — preserving NuGet identity insulates consumers from the restructuring.
 
-**Minimum project size (framework §2.16.1 — Elsa interpretive note).** Elsa's tree intentionally contains many sub-100-LoC projects; the 2026-07-04 audit ([MD-5 amendment report](../../docs/reports/elsa-4-w21-md5-minimum-project-size-amendment.md)) found all 13 of them exempt under the §2.16.1 exemption test, so the guidance ratifies the current shape rather than triggering a merge campaign. An exemption permits a small project; it does not require one: the 2026-09 maintainability pass merged eight of them into their parents where no dependency-direction or packaging reason held them apart. Worked examples per exception class: contracts-only `.Core` seams (`Elsa.Locking.Core`, `Elsa.Caching.Core`), primitives projects (`Elsa.Primitives.Hosting`), provider leaves (`Elsa.Locking.FileSystem`), the §E2.7 migration boundary (`Elsa3.Activities.Design.Import`), Layer-2 helpers (`Elsa.Serialization.Newtonsoft`), and independently-composable `[ShellFeature]` units / cross-domain contribution seams (`Elsa.Expressions.JavaScript.Libraries`, `Elsa.Http.JavaScript`). New sub-100-LoC projects that fit none of the six classes need the one-sentence justification of §2.16.1.
+**Minimum project size (framework §2.16.1 — Elsa interpretive note).** Elsa's tree intentionally contains many sub-100-LoC projects; the 2026-07-04 audit ([MD-5 amendment report](../../docs/reports/elsa-4-w21-md5-minimum-project-size-amendment.md)) found all 13 of them exempt under the §2.16.1 exemption test, so the guidance ratifies the current shape rather than triggering a merge campaign. An exemption permits a small project; it does not require one: the 2026-09 maintainability pass merged eight of them into their parents where no dependency-direction or packaging reason held them apart. Worked examples per exception class: contracts-only `.Core` seams (`Elsa.Locking.Core`, `Elsa.Caching.Core`), primitives projects (`Elsa.Primitives.Hosting`), provider leaves (`Elsa.Locking.FileSystem`), the §E2.7 migration boundary, Layer-2 helpers (`Elsa.Serialization.Newtonsoft`), and independently-composable `[ShellFeature]` units / cross-domain contribution seams (`Elsa.Http.JavaScript`). The migration-boundary class currently has no live example: the audit's example, `Elsa3.Activities.Design.Import`, measured 56 lines then and has since grown past two thousand, so it no longer needs the exemption, and no Elsa 3 project is under the threshold today. The class stays valid for future boundary projects. New sub-100-LoC projects that fit none of the six classes need the one-sentence justification of §2.16.1.
 
 **Nuplane strategy.** Elsa adopts **Strategy B** per framework §3: the host pins the Line A baseline contracts; Nuplane dynamically loads Layer-3 implementations, helper libraries, and optional features. A domain's `.Core` is not host-pinned, because a clean host carries no domains; Nuplane promotes it to a shared assembly within that domain's subtree when the domain is installed, for first-party and third-party domains alike. Strategy A is not adopted as Elsa's default, but is not hard-excluded for specific deployment contexts.
 
