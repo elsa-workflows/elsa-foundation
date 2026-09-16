@@ -4,7 +4,7 @@ Shared **policy** surface for first-party EF Core persistence: history-table nam
 provider guard, and migrate/validate apply modes. It began as the ADR 0072 Secrets pilot
 and now serves the accepted ADR 0073 migration program.
 
-It is **not** a second Groundwork, not a mandatory Elsa `DbContext` base, and not a place to
+It is **not** a second storage library, not a mandatory Elsa `DbContext` base, and not a place to
 accumulate entity configuration. Module-owned derived contexts remain first-class
 (framework §2.9).
 
@@ -12,7 +12,7 @@ accumulate entity configuration. Module-owned derived contexts remain first-clas
 
 Accepted [ADR 0073](../../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
 makes EF Core the only first-party persistence implementation family. It supersedes ADR 0042's
-Groundwork-only policy, ADR 0065's proposed Groundwork target/lane topology, and ADR 0072's bounded
+single-storage-library policy, ADR 0065's proposed target/lane topology, and ADR 0072's bounded
 EF lane while preserving each record's distinct history. The Secrets implementation remains opt-in
 until its migration slice proves four-provider parity and performs the explicit default flip.
 

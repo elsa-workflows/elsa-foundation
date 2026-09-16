@@ -8,11 +8,11 @@ This module owns the Foundation-native `DispatchWorkflow` activity and its child
 
 Cross-workflow dispatch increments durable `DispatchNestingDepth` exactly once. Root starts and legacy payloads begin at zero; the default maximum child depth is 32 and hosts can configure a positive alternative through `DispatchWorkflowRuntimeFeature.MaxNestingDepth`. Delivery and replay preserve the staged depth and recheck the configured limit before materialization.
 
-The in-memory provider proves asynchronous semantics and replay convergence within one process. It is not process-crash durable. Groundwork persists executable dependency metadata, closure-wide artifact lease fencing, dispatch lifecycle state, and post-commit delivery evidence.
+The in-memory provider proves asynchronous semantics and replay convergence within one process. It is not process-crash durable. The EF Core runtime module persists executable dependency metadata, closure-wide artifact lease fencing, dispatch lifecycle state, and post-commit delivery evidence.
 
 The runtime feature registers the default allow start policy. Hosts may replace `IWorkflowExecutableStartPolicy` with exactly one implementation to deny future child materialization using immutable executable/authority context. Policy denial does not rewrite the artifact or affect already-materialized execution state.
 
-#678 persists dispatch records, retained executable dependencies, and post-commit outbox state through the Groundwork runtime checkpoint transaction. The provider-backed stores preserve deterministic identities, fenced claim completion, and authenticated inspection across process restart.
+#678 persists dispatch records, retained executable dependencies, and post-commit outbox state through the runtime checkpoint transaction. The provider-backed stores preserve deterministic identities, fenced claim completion, and authenticated inspection across process restart.
 
 #679 adds successful `WaitForCompletion=true` execution. The parent wait checkpoint atomically records its non-expiring bookmark, suspended activity, Pending dispatch record, child ID output, and child-start intent. A successful child terminal checkpoint records the Completed dispatch projection and one deterministic parent-resume intent containing only policy-safe outputs. Resume delivery is performed by the global post-commit pump and retries with positive backoff until bookmark consumption is durably observable; duplicate delivery before or after consumption converges without a second logical completion. Unbounded retries emit payload-free structured warnings for operational alerting.
 

@@ -20,14 +20,14 @@ provider package. Equivalent repeated registrations are idempotent; a
 different provider, connection string, or connection name fails before registrations are partially changed.
 Direct host registrations for a selected feature's replacement contracts conflict with explicit EF selection
 and fail instead of being silently removed or winning by registration order. Startup validation also rejects
-a registration added after a feature. Selection is order-independent with the Groundwork Identity feature,
-and each authority has exactly one owner. Groundwork remains the existing default until the later rollout
+a registration added after a feature. Selection is order-independent, and each authority has exactly
+one owner. Broader rollout gates remain in the later rollout
 gate explicitly flips host composition.
 
 The module preserves tenant/global access checks, tenant-first effective fallback for provider configurations,
 lossless record round trips, bounded and stably ordered queries, uniqueness reservations, atomic aggregate and
 relationship writes, replay receipts, and optimistic compare-and-swap revisions. Provider-specific migrations,
-runtime schema initialization, default host selection, and Groundwork deletion are later rollout gates.
+runtime schema initialization and default host selection are later rollout gates.
 
 OpenIddict remains in its separate vendor-owned context. This module does not reference, configure, or merge
 `OpenIddictIdentityDbContext`.
@@ -36,4 +36,4 @@ OpenIddict remains in its separate vendor-owned context. This module does not re
 
 - Contract ownership and replacement semantics: [Foundation Identity abstractions](../../Abstractions/EXTENSION_POINTS.md).
 - ASP.NET Core Identity adapter composition and framework surfaces: [ASP.NET Core Identity EF adapter](../../AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md).
-- Known persistence implementations and backend composition: [Foundation Identity persistence](../Groundwork/EXTENSION_POINTS.md).
+- Known persistence implementations and backend composition: [Foundation Identity persistence](../EntityFrameworkCore/EXTENSION_POINTS.md).

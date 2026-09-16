@@ -25,7 +25,7 @@ compiler validates and pins the selected alias/version into each executable.
 |---|---|---|
 | `IActivityPublishingAuthorizationContext` | `HttpContextActivityPublishingAuthorizationContext` (scoped) | A host authenticates activity publish/test-run requests through another transport. Authorization is a transport concern; the engine neither registers nor depends on this contract. |
 | `IWorkflowTestRunStore` | `InMemoryWorkflowTestRunStore` (singleton) | Test-run projections need shared/durable retention. Runtime owns the matching scope lifecycle; expiry opens an operation scope and closes Runtime before removing the projection. |
-| `IActivityDraftTestRunStore` | `InMemoryActivityDraftTestRunStore` (singleton) | Activity draft Test Run receipts, idempotency, and status lookup must survive restart. The Groundwork Publishing package replaces this default. |
+| `IActivityDraftTestRunStore` | `InMemoryActivityDraftTestRunStore` (singleton) | Activity draft Test Run receipts, idempotency, and status lookup must survive restart. The Publishing EF Core package replaces this default. |
 | `IActivityDraftTestRunCancellationPolicy` | `DefaultActivityDraftTestRunCancellationPolicy` (singleton) | A host needs to suppress or further constrain cancellation while advertising the effective capability truthfully. |
 
 Register replacements before the feature's `TryAdd` defaults, or use `services.Replace(...)`.
@@ -65,7 +65,7 @@ apply ordinary route-group conventions such as API-prefixing, CORS, rate limitin
 
 ## Persistence-provider notes
 
-`Elsa.Workflows.Publishing.Persistence.Groundwork`'s `AddGroundworkPublishingStores()` composes durable
+`Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore`'s `AddPublishingEntityFrameworkCore(...)` composes durable
 implementations for **both** the engine's authority stores (documented in the
 [engine persistence checklist](../EXTENSION_POINTS.md#persistence-provider-checklist)) and this feature's
 `IActivityDraftTestRunStore`. A durable activity-draft receipt store must:

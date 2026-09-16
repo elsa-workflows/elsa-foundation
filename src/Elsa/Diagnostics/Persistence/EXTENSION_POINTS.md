@@ -2,7 +2,7 @@
 
 This is the owning catalog for the provider-neutral diagnostics persistence lifecycle helpers. The
 library owns bounded draining, durable acknowledgement, retry, retention, shutdown, and loss
-classification. It contains no Groundwork or EF Core types.
+classification. It contains no EF Core types.
 
 ## Overridable contracts
 
@@ -24,7 +24,7 @@ that needs fan-out must place it behind one implementation instead of resolving 
 - **Conflict behavior:** one target is required by the `DiagnosticsDrain` constructor. Host DI must
   select one concrete store/provider implementation; two explicit selections are a configuration
   conflict and must be rejected.
-- **Dependency rule:** implementations live in concrete persistence projects. Groundwork types never
+- **Dependency rule:** implementations live in concrete persistence projects. Provider types never
   cross this contract.
 
 ### `IDiagnosticsPersistenceObserver` *(Feature contract — `Elsa.Diagnostics.Persistence`)*
@@ -62,7 +62,7 @@ extension seam.
   Repeating the same contribution is idempotent.
 - **Ordering:** one shared coordinator starts drains from either Generic Host or CShell activation and
   awaits every stop before provider sessions can be disposed. CShell start runs in `Default`, after
-  Groundwork provider admission in `Prepare`; shell termination also runs in `Default`. If provider
+  provider admission in `Prepare`; shell termination also runs in `Default`. If provider
   startup fails first, stop and async disposal make the drain terminal without issuing provider I/O.
 
 Diagnostics drain targets and observers remain single-implementation Replacement contracts, not

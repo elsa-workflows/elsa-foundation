@@ -18,7 +18,7 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 
 - **Kind:** atomic persistence command.
 - **Purpose:** commits one selected dependency closure across Activity Design and Workflow Design.
-- **Default implementation:** `GroundworkReusableActivityImportCommand`, registered by `Elsa3ImportActivitiesGroundworkFeature`.
+- **Default implementation:** `EfReusableActivityImportCommand`, registered by `Elsa3ImportActivitiesEntityFrameworkCoreFeature`.
 - **Opt-in EF Core implementation:** `EfReusableActivityImportCommand`, registered by `Elsa3ImportActivitiesEntityFrameworkCoreFeature`.
   It enlists the import ledger, Activities Design, and Workflows Design contexts in one `EfSharedTransaction`
   and writes through those lanes' own commands and atomic writers, so all three must name the same database;
@@ -28,7 +28,7 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
   provenance bindings are tenant-owned Design resources. User identity never participates in a
   provenance binding, so another user in the same tenant reuses exact imported resources.
 - **Composition:** the generic `Elsa3ImportActivitiesFeature` depends only on mapping and contracts.
-  A host selects `Elsa3ImportActivitiesGroundworkFeature` or `Elsa3ImportActivitiesEntityFrameworkCoreFeature`
+  A host selects `Elsa3ImportActivitiesEntityFrameworkCoreFeature` or `Elsa3ImportActivitiesEntityFrameworkCoreFeature`
   explicitly. Both register through `Elsa3ImportPersistenceBackend`: a repeat is idempotent, either order
   switches cleanly, and a custom store or command is refused rather than silently replaced.
 
@@ -36,7 +36,7 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 
 - **Kind:** scoped durable operation store.
 - **Purpose:** stores immutable expiring collection handles and reads completed apply receipts.
-- **Default implementation:** `GroundworkReusableActivityImportOperationStore`; opt-in EF Core
+- **Default implementation:** `EfReusableActivityImportOperationStore`; opt-in EF Core
   implementation `EfReusableActivityImportOperationStore`.
 - **Invariant:** collection and receipt writes are append-only, and reads are bound to the exact
   ambient tenant plus user scope; authorization mismatches are indistinguishable from absence.

@@ -1,6 +1,6 @@
 # Extension points — Workflows.Design.Persistence.EntityFrameworkCore domain
 
-Opt-in EF Core provider for workflow-design persistence. Groundwork remains the default provider;
+Opt-in EF Core provider for workflow-design persistence.
 one backend is selected per shell through the provider registration contract.
 
 ## Replacement contracts

@@ -135,10 +135,67 @@ jobs:
       - name: Test (fast unit tests, no containers)
         run: dotnet test Elsa.Server.test.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603
 
-  ef-native-provider-matrix:
-    name: EF native provider matrix
+  # Every EF test project that starts Testcontainers. The fast "Build & test" lane excludes any
+  # project that references Testcontainers, so without this job these suites would run in no gate at
+  # all. One matrix leg per project keeps each family inside the timeout and names the failure.
+  #
+  # `require` arms the suite's own required-provider variable, measured per project rather than
+  # assumed: a fixture that reads a different name would otherwise leave the lane silently skipping
+  # while the job still reported green. Legs with an empty `require` have no such variable in their
+  # fixtures; they self-skip when a container is unavailable, which is recorded rather than hidden.
+  ef-container-suites:
+    name: EF container suites (${{ matrix.suite }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: migrations
+            project: tests/Elsa/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj
+            require: ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX
+          - suite: runtime
+            project: tests/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj
+            require: ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS
+          - suite: runtime-distributed
+            project: tests/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj
+            require: ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS
+          - suite: activities-design
+            project: tests/Elsa/Activities/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj
+            require: ELSA_ACTIVITIES_DESIGN_EF_REQUIRE_NATIVE_PROVIDERS
+          - suite: publishing
+            project: tests/Elsa/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests.csproj
+            require: ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX
+          - suite: elsa3-import
+            project: tests/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj
+            require: ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX
+          - suite: workflows-design
+            project: tests/Elsa/Workflows/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj
+            require: ''
+          - suite: identity
+            project: tests/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj
+            require: ''
+          - suite: opentelemetry
+            project: tests/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests.csproj
+            require: ''
+          - suite: structured-logs
+            project: tests/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests.csproj
+            require: ''
+          - suite: studio-preferences
+            project: tests/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj
+            require: ''
+          - suite: secrets-sqlserver
+            project: tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj
+            require: ''
+          - suite: secrets-mysql
+            project: tests/Elsa/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj
+            require: ''
+          - suite: transaction-topology
+            project: tests/Elsa/Persistence/EntityFrameworkCore/TransactionTopology/Tests/Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests.csproj
+            require: ''
+          - suite: mysql-feasibility
+            project: tests/Elsa/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj
+            require: ''
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -155,57 +212,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      # These suites start their own Testcontainers databases. Required mode turns an unavailable
-      # PostgreSQL, SQL Server or MySQL container into a failure, so the matrix cannot silently
-      # degrade into a lane of skips that still reports green.
-      - name: Restore the EF native provider proofs
-        run: |
-          dotnet restore tests/Elsa/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj -p:WarningsNotAsErrors=NU1603
-          dotnet restore tests/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj -p:WarningsNotAsErrors=NU1603
-          dotnet restore tests/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj -p:WarningsNotAsErrors=NU1603
+      - name: Arm the suite's required-provider mode
+        if: ${{ matrix.require != '' }}
+        run: echo "${{ matrix.require }}=1" >> "$GITHUB_ENV"
 
-      # Schema install/validate on a fresh database and an isolated migration history per module:
-      # this replaces the retired schema-plan and scaffold lanes.
-      - name: Prove module migrations on every native provider
-        env:
-          ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX: 1
-        run: >-
-          dotnet test
-          tests/Elsa/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj
-          -c Release --no-restore
-          -p:WarningsNotAsErrors=NU1603
+      - name: Restore
+        run: dotnet restore ${{ matrix.project }} -p:WarningsNotAsErrors=NU1603
 
-      # Fresh-database migrate, checkpoint commit, replay and rollback for the complete Runtime
-      # aggregate: this replaces the retired runtime failure/restart lane.
-      - name: Prove the Runtime EF aggregate on every native provider
-        env:
-          ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX: 1
-        run: >-
-          dotnet test
-          tests/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj
-          -c Release --no-restore
-          -p:WarningsNotAsErrors=NU1603
-
-      - name: Prove the Elsa 3 import ledger on every native provider
-        env:
-          ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX: 1
-        run: >-
-          dotnet test
-          tests/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj
-          -c Release --no-restore
-          -p:WarningsNotAsErrors=NU1603
-
-      - name: Restore the Runtime execution-placement EF provider proof
-        run: dotnet restore tests/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj -p:WarningsNotAsErrors=NU1603
-
-      - name: Prove Runtime execution-placement EF on every relational provider
-        env:
-          ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS: 1
-        run: >-
-          dotnet test
-          tests/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj
-          -c Release --no-restore
-          -p:WarningsNotAsErrors=NU1603
+      - name: Test
+        run: dotnet test ${{ matrix.project }} -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 
   # Secrets EF composition on a native PostgreSQL: configuration-driven CShells composition,
   # migration/validation, CRUD/OCC, runtime resolution, restart persistence and the packed-module
@@ -303,7 +318,7 @@ jobs:
     name: Alert on a red main
     needs:
       - build-and-test
-      - ef-native-provider-matrix
+      - ef-container-suites
       - secrets-ef-composition
       - architecture-guards
     if: ${{ failure() && github.event_name == 'push' }}

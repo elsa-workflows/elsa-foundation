@@ -3,10 +3,8 @@
 This opt-in provider replaces exactly `IExecutionPlacementStore` with
 `EfExecutionPlacementStore`. It owns one provider-neutral EF Core model and does not register,
 replace, or depend on the distributed command transport. `WorkflowsRuntimeDistributed` remains the
-default in-memory composition; the Groundwork feature remains the default durable composition for
-the existing distributed family until a separately authorized default-flip and deletion slice. In a mixed
-composition Groundwork retains its two command-transport units, while the unused Groundwork placement-unit
-declaration is skipped or withdrawn in either registration order so only the EF D01 schema is provisioned.
+default in-memory composition; this feature is the durable one, and placement and command-transport
+ownership stay independently selectable.
 
 ## Provider boundary
 
@@ -42,14 +40,12 @@ The opt-in D02-D03 provider replaces exactly `IExecutionCommandTransport` with t
 transport adapter. It owns both the per-execution stream-head and ordered transport-item entities in
 one dedicated EF context, so send, lease, and acknowledgement can update the projection and item in
 one relational transaction. It does not register or replace `IExecutionPlacementStore`; D01 placement
-ownership remains independently selectable. Groundwork remains the default for the transport during
-the repository-first milestone, and its command-stream/transport units are withdrawn only when this
-EF transport is explicitly selected.
+ownership remains independently selectable; the in-memory transport remains in place until this EF
+transport is explicitly selected.
 
 The production project references only provider-neutral EF Core/Relational packages. SQLite, SQL
 Server, PostgreSQL, and MySQL engine packages remain test or host responsibilities. Provider contexts
-bind the same model and no domain contract exposes EF types, persistence entities, `IQueryable`, SQL,
-or Groundwork types.
+bind the same model and no domain contract exposes EF types, persistence entities, `IQueryable`, or SQL.
 
 The complete transport item is persisted as a lossless JSON payload alongside typed routing and
 queue-management columns. The original UTF-16 workflow-execution identity, partition, envelope
@@ -72,5 +68,5 @@ rows and comes from the durable head.
 
 The D02-D03 implementation is tracked by [#1720](https://github.com/elsa-workflows/elsa-foundation/issues/1720).
 Its SQLite behavior suite and SQL Server/PostgreSQL/MySQL live smoke suite are the executable proof;
-provider-specific migrations, default flips, Groundwork/Mongo removal, and broad host journeys remain
+provider-specific migrations, default flips, and broad host journeys remain
 deferred by that task.

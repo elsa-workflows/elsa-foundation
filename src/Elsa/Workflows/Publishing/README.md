@@ -25,11 +25,11 @@ compilation/node-metadata fan-in, and the `PublishWorkflow` mediator handler. Ev
 process-local (`InMemory*`), which is convenient for tests and single-process development but must be made
 durable for a production host.
 
-For Groundwork-backed authority state, reference `Elsa.Workflows.Publishing.Persistence.Groundwork` and
+For EF Core-backed authority state, reference `Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore` and
 compose:
 
 ```csharp
-services.AddGroundworkPublishingStores();
+services.AddPublishingEntityFrameworkCore(new() { Provider = "Sqlite" });
 ```
 
 This replaces (or, when composed first, prevents) the in-memory defaults for
@@ -63,7 +63,7 @@ This feature satisfies one Design-owned contribution contract (#1283):
   design lane's permanent-delete command refuses outright (HTTP 501) on any host where no publication
   check is composed, so composing this feature is what makes permanent deletion available at all.
   Contract semantics: [design-persistence extension-point
-  catalog](../Design/Persistence/Groundwork/EXTENSION_POINTS.md#contributor-interfaces).
+  catalog](../Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md#contributor-interfaces).
 
 The engine registers one independent event subscriber for a Design-side event (spec 147, #1157):
 

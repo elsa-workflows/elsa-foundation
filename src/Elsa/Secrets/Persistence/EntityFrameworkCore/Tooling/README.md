@@ -63,7 +63,7 @@ found and tells the operator to rerun `apply`; it never rewrites secret rows imp
 Use the deployment sequence in [tools/ef/README.md](../../../../../../tools/ef/README.md): back
 up and quiesce writes, run `pending`, select exactly one provider and apply it with a short-lived
 least-privilege migration identity, verify migration history and table shape, then start the application with
-`MigratePolicy=Validate`. Keep `SecretsGroundworkPersistence` disabled when this feature is
+`MigratePolicy=Validate`. Keep `SecretsEntityFrameworkCore` disabled when this feature is
 enabled. A failed apply stops the rollout; inspect migration history and table shape before retrying.
 
 Prefer additive/expand-contract migrations so an application rollback can be considered
