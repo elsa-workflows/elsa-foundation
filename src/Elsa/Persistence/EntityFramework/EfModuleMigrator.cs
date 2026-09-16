@@ -1,4 +1,5 @@
 using CShells.Lifecycle;
+using CShells.Features;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -57,8 +58,12 @@ public static class EfModuleMigrationServiceCollectionExtensions
         if (services.Any(descriptor => descriptor.ServiceType == typeof(EfModuleMigrator<TContext>)))
             return services;
         services.AddSingleton<EfModuleMigrator<TContext>>();
-        services.AddSingleton<IShellInitializer>(provider => provider.GetRequiredService<EfModuleMigrator<TContext>>());
+        // CShells runs initializers by lifecycle phase, not registration order, and shell tasks and seeders
+        // run at Start. Schema has to exist before any of them touches a store, so migrations run at Prepare.
+        services.AddShellInitializer<EfModuleMigrator<TContext>>(LifecyclePhase.Prepare, 0);
+        // Plain hosts have no shell lifecycle; there the hosted service is what applies the migrations.
         services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<EfModuleMigrator<TContext>>());
         return services;
     }
+
 }

@@ -1,3 +1,4 @@
+using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore.DependencyInjection;
@@ -87,6 +88,25 @@ public sealed class ModuleMigrationTests : IDisposable
     }
 
     [Fact]
+    public void Migrations_are_registered_in_the_prepare_phase_ahead_of_shell_tasks()
+    {
+        var services = new ServiceCollection();
+        services.AddActivitiesDesignEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = ConnectionString });
+        services.AddEfModuleMigrations<ActivitiesDesignDbContext>("Sqlite");
+
+        var registration = Assert.Single(services
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<ShellInitializerRegistration>()
+            .Where(candidate => candidate.InitializerType == typeof(EfModuleMigrator<ActivitiesDesignDbContext>)));
+
+        // CShells runs initializers by phase. Shell tasks and seeders register at Start, so a module's schema
+        // must be applied in an earlier phase or they read tables that do not exist yet.
+        Assert.Equal(LifecyclePhase.Prepare, registration.Phase);
+        Assert.True(registration.Phase < LifecyclePhase.Start);
+        Assert.Equal(0, registration.Order);
+    }
+
+    [Fact]
     public async Task A_migrator_left_behind_by_a_backend_switch_does_nothing()
     {
         var services = new ServiceCollection();
@@ -101,6 +121,17 @@ public sealed class ModuleMigrationTests : IDisposable
     {
         if (File.Exists(databasePath))
             File.Delete(databasePath);
+    }
+
+    private sealed class ReadsActivitiesOnInitialization(IServiceScopeFactory scopes) : IShellInitializer
+    {
+        public int? Count { get; private set; }
+
+        public async Task InitializeAsync(CancellationToken cancellationToken = default)
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            Count = await scope.ServiceProvider.GetRequiredService<ActivitiesDesignDbContext>().ActivityDefinitions.CountAsync(cancellationToken);
+        }
     }
 
     private static string PlaceholderConnection(string provider) => provider switch

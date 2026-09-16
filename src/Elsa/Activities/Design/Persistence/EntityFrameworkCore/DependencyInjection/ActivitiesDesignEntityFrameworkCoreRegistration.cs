@@ -238,7 +238,7 @@ public sealed class ActivitiesDesignEntityFrameworkCoreOptions
 
 public static class ActivitiesDesignEfModule
 {
-    public const string DefaultConnectionName = "Elsa";
-    public const string DefaultSqliteConnectionString = "Data Source=elsa-activities-design.db";
+    public const string DefaultConnectionName = EfConnectionDefaults.ConnectionName;
+    public const string DefaultSqliteConnectionString = EfConnectionDefaults.SqliteConnectionString;
     public const string HistoryTableName = "__EFMigrationsHistory_activities_design";
 }

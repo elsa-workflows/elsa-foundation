@@ -22,7 +22,7 @@ public class RuntimeActivityExecutionEntityFrameworkCoreFeature : IShellFeature
     [ManifestSetting(DisplayName = "Provider", Description = "Relational provider for the Runtime activity execution DbContext: Sqlite, SqlServer, PostgreSql, or MySql.", Category = "Persistence")]
     public string Provider { get; set; } = "Sqlite";
 
-    [ManifestSetting(DisplayName = "Connection string", Description = "Optional explicit connection string. When omitted, ConnectionName or ConnectionStrings:Elsa is used. Sqlite defaults to Data Source=elsa-runtime.db.", Category = "Persistence", Secret = true)]
+    [ManifestSetting(DisplayName = "Connection string", Description = "Optional explicit connection string. When omitted, ConnectionName or ConnectionStrings:Elsa is used. Sqlite defaults to Data Source=elsa.db.", Category = "Persistence", Secret = true)]
     public string? ConnectionString { get; set; }
 
     [ManifestSetting(DisplayName = "Connection name", Description = "Optional configuration connection-string name. When omitted, Elsa is used.", Category = "Persistence")]

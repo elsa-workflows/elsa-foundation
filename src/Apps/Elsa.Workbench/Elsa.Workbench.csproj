@@ -16,6 +16,9 @@
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+		<PackageReference Include="MySql.EntityFrameworkCore" />
+		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
 		<PackageReference Include="OpenIddict.EntityFrameworkCore" />
 		<PackageReference Include="Nuplane" />
 		<PackageReference Include="Nuplane.Admin" />
@@ -91,6 +94,17 @@
 			enablable via shells.json. Default shells keep SecretsGroundworkPersistence; do not enable both.
 		-->
 		<ProjectReference Include="..\..\Elsa\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\Elsa\Diagnostics\OpenTelemetry\Persistence\EntityFrameworkCore\Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\Elsa\Diagnostics\StructuredLogs\Persistence\EntityFrameworkCore\Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\Elsa\Foundation\Identity\AspNetCoreIdentity\EntityFrameworkCore\Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Persistence\EntityFrameworkCore\Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\Elsa\Studio\Preferences\Persistence\EntityFrameworkCore\Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Dashboard\Persistence\EntityFrameworkCore\Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Persistence\EntityFrameworkCore\Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Distributed\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Dashboard\Elsa.Workflows.Dashboard.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\JavaScript\Elsa.Workflows.Design.JavaScript.csproj" />
 		<!--

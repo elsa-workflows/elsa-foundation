@@ -25,7 +25,12 @@
             }
           },
           "DiagnosticsOpenTelemetry": {},
-          "DiagnosticsGroundworkPersistence": {},
+          "DiagnosticsOpenTelemetryEntityFrameworkCore": {
+            "ConnectionString": "Data Source=elsa-diagnostics.db"
+          },
+          "DiagnosticsStructuredLogsEntityFrameworkCore": {
+            "ConnectionString": "Data Source=elsa-diagnostics.db"
+          },
           "DiagnosticsOpenTelemetryEngineBridge": {},
           "DiagnosticsStructuredLogs": {},
           "Events": {},
@@ -43,8 +48,9 @@
               "http://localhost:5089"
             ]
           },
-          "IdentityGroundworkPersistence": {},
-          "FoundationIdentityAspNetCoreIdentityGroundwork": {
+          "IdentityIamEntityFrameworkCore": {},
+          "IdentityProviderConfigurationEntityFrameworkCore": {},
+          "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
             "IsDevelopmentOrDemo": true,
             "SeedAdminUserName": "admin",
             "SeedAdminPassword": "Password123!",
@@ -64,17 +70,18 @@
             "Model": "auto",
             "BaseDirectory": ".elsa/copilot"
           },
-          "GroundworkProviderSqlite": {},
-          "GroundworkWorkflowRuntime": {
+          "WorkflowsRuntimeEntityFrameworkCore": {
             "CacheWorkflowExecutables": true,
             "WorkflowExecutableCacheCapacity": 256,
-            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key"
+            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key",
+            "HierarchyCursorSigningKey": "development-demo-only-hierarchy-cursor-signing-key"
           },
-          "ActivitiesDesignGroundworkPersistence": {},
-          "WorkflowsDesignGroundworkPersistence": {},
+          "ActivitiesDesignEntityFrameworkCore": {},
+          "WorkflowsDesignEntityFrameworkCore": {},
           "WorkflowsRuntimeDistributed": {},
-          "WorkflowsRuntimeDistributedGroundworkPersistence": {},
-          "GroundworkWorkflowDashboard": {},
+          "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence": {},
+          "WorkflowsDashboardEntityFrameworkCore": {},
           "Http": {},
           "HttpJavaScript": {},
           "JavaScriptActivities": {},
@@ -152,13 +159,13 @@
           "SampleNuplaneActivities": {},
           "Secrets": {},
           "SecretsApi": {},
-          "SecretsGroundworkPersistence": {},
+          "SecretsEntityFrameworkCore": {},
           "Serialization": {},
           "AttentionApi": {},
           "ModularityAttention": {},
           "StudioPreferences": {},
           "StudioPreferencesApi": {},
-          "StudioPreferencesGroundworkPersistence": {},
+          "StudioPreferencesEntityFrameworkCore": {},
           "Tasks": {},
           "WeatherForecastSample": {},
           "WorkflowsDesignApi": {},
@@ -167,7 +174,7 @@
           "WorkflowsRuntimeAttention": {},
           "WorkflowsPublishing": {},
           "WorkflowsPublishingApi": {},
-          "WorkflowsPublishingGroundwork": {},
+          "WorkflowsPublishingEntityFrameworkCore": {},
           "WorkflowsRuntimeApi": {
             "WorkflowAlterationPayloadProtectionActiveKeyId": "development-demo-only",
             "WorkflowAlterationPayloadProtectionKeys": {

@@ -18,6 +18,12 @@ public static class RuntimeOperationalStateEfModule
     public const int IdentityMaximumLength = 128;
     public const int IdentityProjectionMaximumLength = ((IdentityMaximumLength * sizeof(char) + 2) / 3) * 4;
     public const int CompositeIdentityMaximumLength = IdentityMaximumLength * 2 + 8;
+    /// <summary>
+    /// Checkpoint commit ids are composed by the runtime (work item, incident and outcome segments) and run
+    /// past <see cref="IdentityMaximumLength"/>; Groundwork keys them by document id, which allows 450.
+    /// </summary>
+    public const int CommitIdentityMaximumLength = 450;
+    public const int CommitIdentityProjectionMaximumLength = ((CommitIdentityMaximumLength * sizeof(char) + 2) / 3) * 4;
     public const int ScopeProjectionMaximumLength = ((256 * sizeof(char) + 2) / 3) * 4;
     public const int OrderKeyMaximumLength = (IdentityMaximumLength + 1) * sizeof(char) * 2;
     public const int DurableTimerStimulusTypeMaximumLength = 256;

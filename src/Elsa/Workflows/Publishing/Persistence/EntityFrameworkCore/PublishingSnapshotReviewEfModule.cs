@@ -9,7 +9,7 @@ public static class PublishingSnapshotReviewEfModule
     public const int IdentityMaximumLength = 256;
     public const int CandidateHashMaximumLength = 128;
     public const int IncarnationMaximumLength = 32;
-    public const string DefaultConnectionName = "ElsaPublishing";
-    public const string DefaultSqliteConnectionString = "Data Source=elsa-publishing.db";
+    public const string DefaultConnectionName = EfConnectionDefaults.ConnectionName;
+    public const string DefaultSqliteConnectionString = EfConnectionDefaults.SqliteConnectionString;
     public static string HistoryTableName => EfMigrationsHistory.TableName("ElsaPublishingSnapshotReview");
 }

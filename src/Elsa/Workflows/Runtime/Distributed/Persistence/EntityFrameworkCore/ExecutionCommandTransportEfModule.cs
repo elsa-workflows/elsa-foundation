@@ -8,8 +8,8 @@ public static class ExecutionCommandTransportEfModule
     public const string HistoryModuleName = "ElsaDistributedCommandTransport";
     public const string StreamHeadTableName = "elsa_distributed_command_stream_head";
     public const string TransportItemTableName = "elsa_distributed_command_transport";
-    public const string DefaultConnectionName = "ElsaDistributedCommandTransport";
-    public const string DefaultSqliteConnectionString = "Data Source=elsa-distributed-command-transport.db";
+    public const string DefaultConnectionName = EfConnectionDefaults.ConnectionName;
+    public const string DefaultSqliteConnectionString = EfConnectionDefaults.SqliteConnectionString;
     public const int WorkflowExecutionIdOrderKeyWidth = DistributedRuntimeIdentityConstraints.MaximumLength * sizeof(char) + sizeof(ushort);
     public const int TransportItemIdMaximumLength = 10 + (DistributedRuntimeIdentityConstraints.MaximumLength * 3) + 1 + 19;
     public static string HistoryTableName => EfMigrationsHistory.TableName(HistoryModuleName);

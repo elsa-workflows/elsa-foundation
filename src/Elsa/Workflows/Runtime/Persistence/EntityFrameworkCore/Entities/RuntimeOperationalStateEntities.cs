@@ -159,7 +159,6 @@ public sealed class RuntimeCheckpointCommitEntity
     public string ScopeKeyHash { get; set; } = null!;
     public string CommitId { get; set; } = null!;
     public string CommitIdHash { get; set; } = null!;
-    public string CommitIdOrderKey { get; set; } = null!;
     public string WorkflowExecutionId { get; set; } = null!;
     public string WorkflowExecutionIdHash { get; set; } = null!;
     public string WorkflowExecutionIdOrderKey { get; set; } = null!;

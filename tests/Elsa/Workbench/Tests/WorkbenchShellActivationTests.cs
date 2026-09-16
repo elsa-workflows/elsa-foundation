@@ -38,13 +38,13 @@ public sealed class WorkbenchShellActivationTests
         "WorkflowDesignValidations",
         "WorkflowsRuntimeResumption",
         // One Groundwork provider connection, with every persistence lane enabled by its own feature.
-        "GroundworkProviderSqlite",
-        "GroundworkWorkflowRuntime",
-        "ActivitiesDesignGroundworkPersistence",
-        "WorkflowsDesignGroundworkPersistence",
-        "WorkflowsRuntimeDistributedGroundworkPersistence",
-        "WorkflowsPublishingGroundwork",
-        "GroundworkWorkflowDashboard"
+        "WorkflowsRuntimeEntityFrameworkCore",
+        "ActivitiesDesignEntityFrameworkCore",
+        "WorkflowsDesignEntityFrameworkCore",
+        "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence",
+        "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence",
+        "WorkflowsPublishingEntityFrameworkCore",
+        "WorkflowsDashboardEntityFrameworkCore"
     ];
 
     /// <summary>Features a stock shell may leave unlisted that must still be in the runtime catalog.</summary>
@@ -121,8 +121,8 @@ public sealed class WorkbenchShellActivationTests
         // workflow performance budget is measured against.
         AssertSetting(catalog, "WorkflowsRuntimeCheckpointPersistence", "Mode", "Coalesced");
         AssertSetting(catalog, "WorkflowsRuntimeCheckpointPersistence", "MaxSegmentCheckpoints", "50");
-        AssertSetting(catalog, "GroundworkWorkflowRuntime", "CacheWorkflowExecutables", "true");
-        AssertSetting(catalog, "GroundworkWorkflowRuntime", "WorkflowExecutableCacheCapacity", "256");
+        AssertSetting(catalog, "WorkflowsRuntimeEntityFrameworkCore", "CacheWorkflowExecutables", "true");
+        AssertSetting(catalog, "WorkflowsRuntimeEntityFrameworkCore", "WorkflowExecutableCacheCapacity", "256");
     }
 
     /// <summary>
@@ -133,8 +133,8 @@ public sealed class WorkbenchShellActivationTests
     /// </summary>
     [Theory]
     [InlineData("FoundationIdentityOpenIddict:SigningKey", "No signing key is configured for the OpenIddict identity module")]
-    [InlineData("GroundworkWorkflowRuntime:RecoveryContinuationSigningKey", "Runtime recovery continuation signing key must be configured")]
-    [InlineData("FoundationIdentityAspNetCoreIdentityGroundwork:SeedAdminPassword", "SeedAdminUserName is configured but SeedAdminPassword is not")]
+    [InlineData("WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey", "Runtime recovery continuation signing key must be configured")]
+    [InlineData("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminPassword", "SeedAdminUserName is configured but SeedAdminPassword is not")]
     public async Task Production_shell_without_a_required_secret_fails_activation(string featureSetting, string expectedError)
     {
         var shell = WorkbenchShell.Production.Without(featureSetting);

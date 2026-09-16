@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.BookmarkState.PostgreSql
 {
     [DbContext(typeof(BookmarkStatePostgreSqlDbContext))]
-    [Migration("20260915205121_Initial")]
+    [Migration("20260915234725_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -1131,18 +1131,13 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
 
                     b.Property<string>("CommitId")
                         .IsRequired()
-                        .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasMaxLength(1200)
+                        .HasColumnType("character varying(1200)");
 
                     b.Property<string>("CommitIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
-
-                    b.Property<string>("CommitIdOrderKey")
-                        .IsRequired()
-                        .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
 
                     b.Property<string>("ConsumedSchedulerWorkItemIdsJson")
                         .IsRequired()
@@ -1200,10 +1195,10 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ScopeKeyHash", "CommitIdHash", "CommitId")
+                    b.HasIndex("ScopeKeyHash", "CommitIdHash")
                         .IsUnique();
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "CommitIdOrderKey");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash");
 
                     b.ToTable("elsa_runtime_checkpoint_commit", (string)null);
                 });

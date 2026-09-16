@@ -11,10 +11,10 @@ public static class RuntimeEfModule
     public const string HistoryModuleName = "ElsaRuntime";
 
     /// <summary>The <c>ConnectionStrings</c> entry every Runtime participant falls back to.</summary>
-    public const string DefaultConnectionName = "Elsa";
+    public const string DefaultConnectionName = EfConnectionDefaults.ConnectionName;
 
     /// <summary>The database every Runtime participant uses on SQLite when no connection is configured.</summary>
-    public const string DefaultSqliteConnectionString = "Data Source=elsa-runtime.db";
+    public const string DefaultSqliteConnectionString = EfConnectionDefaults.SqliteConnectionString;
 
     public static string HistoryTableName => EfMigrationsHistory.TableName(HistoryModuleName);
 }

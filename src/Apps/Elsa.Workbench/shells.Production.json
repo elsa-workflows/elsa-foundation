@@ -3,8 +3,9 @@
     "Shells": {
       "default": {
         "Features": {
-          "IdentityGroundworkPersistence": {},
-          "FoundationIdentityAspNetCoreIdentityGroundwork": {
+          "IdentityIamEntityFrameworkCore": {},
+          "IdentityProviderConfigurationEntityFrameworkCore": {},
+          "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
             "IsDevelopmentOrDemo": false,
             "SeedAdminUserName": "admin",
             "SeedAdminPassword": "",
@@ -22,8 +23,9 @@
               "development-demo-only": ""
             }
           },
-          "GroundworkWorkflowRuntime": {
-            "RecoveryContinuationSigningKey": ""
+          "WorkflowsRuntimeEntityFrameworkCore": {
+            "RecoveryContinuationSigningKey": "",
+            "HierarchyCursorSigningKey": ""
           }
         }
       }

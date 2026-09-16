@@ -452,7 +452,6 @@ public sealed class EfRuntimeCheckpointCommitStore(
         ScopeKeyHash = EfRuntimeOperationalStoreSupport.Hash(scope),
         CommitId = EfRuntimeOperationalStoreSupport.Encode(commit.CommitId),
         CommitIdHash = EfRuntimeOperationalStoreSupport.Hash(commit.CommitId),
-        CommitIdOrderKey = EfRuntimeOperationalStoreSupport.Order(commit.CommitId),
         WorkflowExecutionId = EfRuntimeOperationalStoreSupport.Encode(commit.WorkflowExecutionId),
         WorkflowExecutionIdHash = EfRuntimeOperationalStoreSupport.Hash(commit.WorkflowExecutionId),
         WorkflowExecutionIdOrderKey = EfRuntimeOperationalStoreSupport.Order(commit.WorkflowExecutionId),
@@ -492,7 +491,6 @@ public sealed class EfRuntimeCheckpointCommitStore(
             row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope) ||
             row.CommitId != EfRuntimeOperationalStoreSupport.Encode(expectedCommitId) ||
             row.CommitIdHash != EfRuntimeOperationalStoreSupport.Hash(expectedCommitId) ||
-            row.CommitIdOrderKey != EfRuntimeOperationalStoreSupport.Order(expectedCommitId) ||
             row.Id != EfRuntimeOperationalStoreSupport.CompositeId(scope, expectedCommitId))
         {
             throw new InvalidDataException("The persisted runtime checkpoint marker identity or scope projection is corrupt.");

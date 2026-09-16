@@ -78,7 +78,7 @@ public sealed class SecretsPersistenceGateOwnershipTests
     }
 
     [Fact]
-    public void Default_workbench_shells_keep_groundwork_secrets()
+    public void Default_workbench_shells_use_entity_framework_secrets()
     {
         var relativePaths = new[]
         {
@@ -103,8 +103,8 @@ public sealed class SecretsPersistenceGateOwnershipTests
         });
         foreach (var features in featuresByShellConfig)
         {
-            Assert.Contains("SecretsGroundworkPersistence", features);
-            Assert.DoesNotContain("SecretsEntityFrameworkCore", features);
+            Assert.Contains("SecretsEntityFrameworkCore", features);
+            Assert.DoesNotContain("SecretsGroundworkPersistence", features);
         }
     }
 

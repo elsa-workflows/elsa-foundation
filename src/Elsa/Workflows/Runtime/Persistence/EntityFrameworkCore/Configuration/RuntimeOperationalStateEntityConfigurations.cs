@@ -107,17 +107,18 @@ public sealed class RuntimeCheckpointCommitEntityConfiguration : IEntityTypeConf
     {
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureCommon(b, RuntimeOperationalStateEfModule.CheckpointCommitTableName);
         b.HasKey(x => x.Id); b.Property(x => x.Id).HasMaxLength(RuntimeOperationalStateEfModule.CompositeIdentityMaximumLength);
-        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(RuntimeCheckpointCommitEntity.CommitId));
+        b.Property(x => x.CommitId).HasMaxLength(RuntimeOperationalStateEfModule.CommitIdentityProjectionMaximumLength).IsRequired();
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureHash(b, nameof(RuntimeCheckpointCommitEntity.CommitIdHash));
-        RuntimeOperationalStateEntityConfigurationHelpers.ConfigureOrder(b, nameof(RuntimeCheckpointCommitEntity.CommitIdOrderKey));
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureIdentity(b, nameof(RuntimeCheckpointCommitEntity.WorkflowExecutionId));
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureHash(b, nameof(RuntimeCheckpointCommitEntity.WorkflowExecutionIdHash));
         RuntimeOperationalStateEntityConfigurationHelpers.ConfigureOrder(b, nameof(RuntimeCheckpointCommitEntity.WorkflowExecutionIdOrderKey));
         b.Property(x => x.Fingerprint).HasMaxLength(64).IsRequired();
         b.Property(x => x.PendingPostCommitWorkIdsJson).IsRequired();
         b.Property(x => x.ConsumedSchedulerWorkItemIdsJson).IsRequired();
-        b.HasIndex(x => new { x.ScopeKeyHash, x.CommitIdHash, x.CommitId }).IsUnique();
-        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash, x.CommitIdOrderKey });
+        // A long commit id is too wide to index on every provider; its hash owns identity and the encoded
+        // residual is compared ordinally after the hash lookup.
+        b.HasIndex(x => new { x.ScopeKeyHash, x.CommitIdHash }).IsUnique();
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash });
     }
 }
 

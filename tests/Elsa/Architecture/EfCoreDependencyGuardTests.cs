@@ -28,6 +28,11 @@ public sealed class EfCoreDependencyGuardTests
         "Microsoft.EntityFrameworkCore.Relational",
         "Microsoft.EntityFrameworkCore.Sqlite",
         "Microsoft.EntityFrameworkCore.Sqlite.Core",
+        // The supported host composes every first-party module on EF, so it carries all four provider
+        // engines and lets an operator select one per module.
+        "Microsoft.EntityFrameworkCore.SqlServer",
+        "MySql.EntityFrameworkCore",
+        "Npgsql.EntityFrameworkCore.PostgreSQL",
         "OpenIddict.EntityFrameworkCore",
         "OpenIddict.EntityFrameworkCore.Models"
     ];
@@ -340,9 +345,11 @@ public sealed class EfCoreDependencyGuardTests
             """;
 
         Assert.True(ResolvesEfCore(assets));
+        // The allowed set is spelled out here rather than borrowed from a project's reviewed closure, so this
+        // stays a test of the detector even as a project's closure legitimately grows.
         Assert.Equal(
             ["Npgsql.EntityFrameworkCore.PostgreSQL"],
-            FindUnexpectedEfPackages(ReadEfDependencyPackages(assets), AllowedWorkbenchEfPackages));
+            FindUnexpectedEfPackages(ReadEfDependencyPackages(assets), ["Microsoft.EntityFrameworkCore"]));
     }
 
     [Theory]
