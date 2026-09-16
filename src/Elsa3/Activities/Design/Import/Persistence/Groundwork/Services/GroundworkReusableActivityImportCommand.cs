@@ -56,7 +56,7 @@ public sealed class GroundworkReusableActivityImportCommand(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(mutation);
-        ValidateMutation(mutation);
+        ReusableActivityImportCommitRules.Validate(mutation);
         if (mutation.AccessScope is not null)
         {
             EnsureCurrentScope(mutation.AccessScope);
@@ -258,69 +258,21 @@ public sealed class GroundworkReusableActivityImportCommand(
         }
     }
 
-    private static void ValidateMutation(ReusableActivityImportMutation mutation)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(mutation.PlanId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(mutation.CollectionId);
-        if (mutation.SourceVersionIds.Count != mutation.SourceVersionIds.Distinct(StringComparer.Ordinal).Count())
-            throw new ArgumentException("Elsa 3 import source version identities must be unique.", nameof(mutation));
-        foreach (var activity in mutation.Activities)
-        {
-            if (!StringComparer.Ordinal.Equals(activity.Version.DefinitionId, activity.Definition.Id) ||
-                !StringComparer.Ordinal.Equals(activity.AuthoringState.DefinitionId, activity.Definition.Id))
-                throw new ArgumentException("Imported activity definition/version/authoring identities do not align.", nameof(mutation));
-            if (!StringComparer.Ordinal.Equals(activity.Version.SourceKind, Elsa3WorkflowDefinitionSourceKind) ||
-                string.IsNullOrWhiteSpace(activity.Version.SourceId))
-                throw new ArgumentException("Imported activity versions must identify their Elsa 3 source version.", nameof(mutation));
-        }
-        foreach (var workflow in mutation.Workflows)
-        {
-            if (!StringComparer.Ordinal.Equals(workflow.Version.DefinitionId, workflow.Definition.Id))
-                throw new ArgumentException("Imported workflow definition/version identities do not align.", nameof(mutation));
-            if (!mutation.SourceVersionIds.Contains(workflow.SourceVersionId, StringComparer.Ordinal))
-                throw new ArgumentException("Imported workflow source identity is not part of the selected source versions.", nameof(mutation));
-        }
-    }
-
     private static IReadOnlyList<DefinitionImportBinding> BuildDefinitionBindings(
-        ReusableActivityImportMutation mutation)
-    {
-        var sourceDefinitionsByVersion = mutation.Workflows.ToDictionary(
-            x => x.SourceVersionId,
-            x => x.SourceDefinitionId,
-            StringComparer.Ordinal);
-        var bindings = mutation.Workflows.Select(workflow => new DefinitionImportBinding
+        ReusableActivityImportMutation mutation) =>
+        ReusableActivityImportCommitRules.DefinitionBindings(mutation)
+            .Select(binding => new DefinitionImportBinding
             {
-                Id = BindingId(WorkflowDefinitionKind, workflow.Definition.Id),
-                TargetDocumentKind = WorkflowDefinitionKind,
-                TargetDefinitionId = workflow.Definition.Id,
-                SourceKind = Elsa3WorkflowDefinitionSourceKind,
-                SourceDefinitionId = workflow.SourceDefinitionId,
-                TenantId = workflow.Definition.TenantId,
-                CreatedAt = workflow.Definition.CreatedAt,
-                LastModifiedAt = workflow.Definition.CreatedAt
+                Id = binding.Id,
+                TargetDocumentKind = binding.TargetDocumentKind,
+                TargetDefinitionId = binding.TargetDefinitionId,
+                SourceKind = binding.SourceKind,
+                SourceDefinitionId = binding.SourceDefinitionId,
+                TenantId = binding.TenantId,
+                CreatedAt = binding.CreatedAt,
+                LastModifiedAt = binding.CreatedAt
             })
-            .Concat(mutation.Activities.Select(activity =>
-            {
-                if (!sourceDefinitionsByVersion.TryGetValue(activity.Version.SourceId!, out var sourceDefinitionId))
-                    throw new ArgumentException(
-                        $"Imported activity source version '{activity.Version.SourceId}' has no matching workflow lineage.",
-                        nameof(mutation));
-                return new DefinitionImportBinding
-                {
-                    Id = BindingId(ActivityDefinitionKind, activity.Definition.Id),
-                    TargetDocumentKind = ActivityDefinitionKind,
-                    TargetDefinitionId = activity.Definition.Id,
-                    SourceKind = Elsa3WorkflowDefinitionSourceKind,
-                    SourceDefinitionId = sourceDefinitionId,
-                    TenantId = activity.Definition.TenantId,
-                    CreatedAt = activity.Definition.CreatedAt,
-                    LastModifiedAt = activity.Definition.CreatedAt
-                };
-            }))
             .ToArray();
-        return bindings;
-    }
 
     private static IReadOnlyList<ImportSaveCandidate> Coalesce(
         IEnumerable<ImportSaveCandidate> candidates,
@@ -601,68 +553,18 @@ public sealed class GroundworkReusableActivityImportCommand(
                 envelope.ContentJson,
                 envelope.Version,
                 envelope.UpdatedAt));
-        var expectedFingerprint = ReusableActivityImportOperationService.SelectionFingerprint(
-            mutation.CollectionId,
-            mutation.PlanId,
-            mutation.SourceVersionIds,
-            scope);
-        if (!StringComparer.Ordinal.Equals(receipt.CollectionHandle, mutation.CollectionId) ||
-            !StringComparer.Ordinal.Equals(receipt.PlanId, mutation.PlanId) ||
-            !StringComparer.Ordinal.Equals(receipt.SelectionFingerprint, expectedFingerprint) ||
-            !StringComparer.Ordinal.Equals(receipt.AccessScope.TenantId, scope.TenantId) ||
-            !StringComparer.Ordinal.Equals(receipt.AccessScope.UserId, scope.UserId))
+        if (!ReusableActivityImportCommitRules.Matches(receipt, mutation))
             throw new ReusableActivityImportIdempotencyConflictException(idempotencyKey);
         return receipt;
     }
 
     private ReusableActivityImportReceipt BuildReceipt(
         ReusableActivityImportMutation mutation,
-        IReadOnlySet<(string Kind, string Id)> created)
-    {
-        var scope = mutation.AccessScope!;
-        var idempotencyKey = mutation.IdempotencyKey!;
-        var sources = mutation.SourceVersionIds.Order(StringComparer.Ordinal).Select(sourceVersionId =>
-        {
-            var workflow = mutation.Workflows.Single(x => StringComparer.Ordinal.Equals(x.SourceVersionId, sourceVersionId));
-            var activity = mutation.Activities.SingleOrDefault(x => StringComparer.Ordinal.Equals(x.Version.SourceId, sourceVersionId));
-            return new ReusableActivityImportSourceReceipt(
-                workflow.SourceDefinitionId,
-                sourceVersionId,
-                workflow.Definition.Id,
-                workflow.Version.Id,
-                Disposition(WorkflowVersionKind, workflow.Version.Id, created),
-                $"/design/workflows/definitions/{Uri.EscapeDataString(workflow.Definition.Id)}/versions/{Uri.EscapeDataString(workflow.Version.Id)}",
-                activity?.Definition.Id,
-                activity?.Version.Id,
-                activity is null ? null : Disposition(ActivityDefinitionKind, activity.Definition.Id, created),
-                activity is null ? null : Disposition(ActivityVersionKind, activity.Version.Id, created),
-                activity is null ? null : $"/design/activities/definitions/{Uri.EscapeDataString(activity.Definition.Id)}",
-                activity is null ? null : $"/design/activities/versions/{Uri.EscapeDataString(activity.Version.Id)}");
-        }).ToArray();
-        var receiptId = Elsa3ImportStorageManifest.ReceiptId(idempotencyKey, scope);
-        return new(
-            receiptId,
-            mutation.CollectionId,
-            mutation.PlanId,
-            idempotencyKey,
-            ReusableActivityImportOperationService.SelectionFingerprint(
-                mutation.CollectionId,
-                mutation.PlanId,
-                mutation.SourceVersionIds,
-                scope),
-            scope,
-            ReusableActivityImportReceiptStatus.Applied,
-            _timeProvider.GetUtcNow(),
-            sources);
-    }
-
-    private static ReusableActivityImportResourceDisposition Disposition(
-        string kind,
-        string id,
         IReadOnlySet<(string Kind, string Id)> created) =>
-        created.Contains((kind, id))
-            ? ReusableActivityImportResourceDisposition.Created
-            : ReusableActivityImportResourceDisposition.Reused;
+        ReusableActivityImportCommitRules.BuildReceipt(
+            mutation,
+            (kind, id) => created.Contains((kind, id)),
+            _timeProvider.GetUtcNow());
 
     private async ValueTask<ImportDocument?> LoadAsync(
         string kind,
@@ -833,9 +735,6 @@ public sealed class GroundworkReusableActivityImportCommand(
 
     private static string ScopeIdentity(ReusableActivityImportAccessScope accessScope) =>
         ReusableActivityImportIdentity.Create("scope", accessScope.TenantScope, accessScope.UserId);
-
-    private static string BindingId(string targetDocumentKind, string targetDefinitionId) =>
-        ReusableActivityImportIdentity.Create("definition-binding", targetDocumentKind, targetDefinitionId);
 
     private sealed class DefinitionImportBinding : TenantEntity
     {

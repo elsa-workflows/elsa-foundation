@@ -176,6 +176,8 @@ Durable keys are namespaced strings controlled by providers, not CLR `FullName` 
 - Put Groundwork types in Core contracts. Rejected because persistence invariants remain provider-neutral.
 - Use only in-memory storage for the first slice. Rejected because full restart/resume is the release gate.
 
+> **Amendment 2026-09-16 (issue #1738).** This decision is kept as the July 2026 record. Accepted [ADR 0073](../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md) superseded ADR 0042 and made EF Core the only first-party persistence family, so the premise that EF is a retiring provider no longer holds. Opt-in EF Core implementations are being added per storage unit, as the [storage-unit register](../../docs/reports/ef-core-persistence/storage-unit-register.md) records; the Elsa 3 import ledger (L01-L03) has one under issue #1738. Groundwork remains the default until each unit's migration and default-flip gates pass.
+
 ## R15. Clean break and Elsa 3 import are separate compatibility policies
 
 **Decision**: Remove `WorkflowDefinitionActivity`, `WorkflowIdentity`-backed workflow catalog reconciliation, and `UsableAsActivity`. Retain the explicit separate-workflow execution activity. Provide Elsa 3 collection-aware plan/apply conversion that produces an activity definition plus a wrapper workflow, with deterministic identities, exact rewrites, atomic closures, and explicit cycle diagnostics.

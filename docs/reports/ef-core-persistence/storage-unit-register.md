@@ -211,9 +211,9 @@ Activities Design and Runtime owners.
 
 | ID | Groundwork unit / physical name | Domain contract or semantic role | Evidence | Blockers | Replacement PR | Default-flip PR | Deletion PR | Disposition |
 |---|---|---|---|---|---|---|---|---|
-| L01 | `elsa3ReusableImportCollection` / `elsa3_reusable_import_collections` | `IReusableActivityImportOperationStore`; collection state | E-PUBLISH | S1-S3; A/R | | | | Pending |
-| L02 | `elsa3ReusableImportReceipt` / `elsa3_reusable_import_receipts` | Idempotent import receipt | E-PUBLISH | S1-S3; A/R | | | | Pending |
-| L03 | `elsa3ReusableImportDefinitionBinding` / `elsa3_reusable_import_definition_bindings` | Imported definition binding used by `IReusableActivityImportCommand` | E-PUBLISH | S1-S3; A/R | | | | Pending |
+| L01 | `elsa3ReusableImportCollection` / `elsa3_reusable_import_collections` | `IReusableActivityImportOperationStore`; collection state | E-PUBLISH | S1-S3; A/R | | | | Opt-in EF implementation tracked by issue #1738; focused SQLite and live 3/3 native-provider smoke; Groundwork remains default |
+| L02 | `elsa3ReusableImportReceipt` / `elsa3_reusable_import_receipts` | Idempotent import receipt | E-PUBLISH | S1-S3; A/R | | | | Opt-in EF implementation tracked by issue #1738; focused SQLite and live 3/3 native-provider smoke; Groundwork remains default |
+| L03 | `elsa3ReusableImportDefinitionBinding` / `elsa3_reusable_import_definition_bindings` | Imported definition binding used by `IReusableActivityImportCommand` | E-PUBLISH | S1-S3; A/R | | | | Opt-in EF implementation tracked by issue #1738; focused SQLite and live 3/3 native-provider smoke; Groundwork remains default |
 
 ## Secrets and Studio Preferences: 2 units
 

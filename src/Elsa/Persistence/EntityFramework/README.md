@@ -25,6 +25,7 @@ until its migration slice proves four-provider parity and performs the explicit 
 | `EfMigratePolicy` | `AutoMigrate` vs `Validate` (fail if pending) |
 | `EfDatabaseMigrator.ApplyAsync` | Guard, then `MigrateAsync` (EF 9+ takes the database lock) or fail closed |
 | `EfRelationalProviderBinding` | Invoke host-supplied `UseSqlite` / `UseSqlServer` / `UseNpgsql` / `UseMySQL` without this package referencing those engines |
+| `EfSharedTransaction` | Own one connection and one transaction for several module contexts that must commit together; refuse split targets and provider mismatches |
 
 ## Custom migrate loops
 

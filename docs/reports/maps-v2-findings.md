@@ -12,8 +12,8 @@ This is a point-in-time report from generated map facts. It is not a constitutio
 - Discovered source catalogs not linked from root index: 4
 - Root-indexed catalogs missing on disk: 0
 - Runtime-to-design direct reference signals: 0
-- Design-to-runtime direct reference signals: 11
-- Bridge-like direct reference shapes: 21
+- Design-to-runtime direct reference signals: 12
+- Bridge-like direct reference shapes: 22
 
 ## Reference Signals
 
@@ -27,6 +27,7 @@ This is a point-in-time report from generated map facts. It is not a constitutio
 - Elsa.Activities.Graph.Design -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa.Workflows.Design.Persistence.EntityFrameworkCore -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa.Workflows.Design.Persistence.Groundwork -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
+- Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa3.Activities.Design.Import.Persistence.Groundwork -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
 
 ## Next Map Work

@@ -80,6 +80,20 @@ public sealed class ReusableActivityArchitectureTests
             "Elsa.Workflows.Runtime.Core",
             "Elsa3.Activities.Design.Import");
 
+    // The EF bridge commits one import across both Design lanes and its own ledger; like the Groundwork
+    // bridge it reaches Runtime only for the persistence access-context contract, so it cannot write
+    // Runtime templates or source references.
+    [Fact]
+    public void Elsa3_import_ef_bridge_references_design_ef_lanes_and_runtime_core_contracts_only() =>
+        AssertProjectReferences(
+            "src/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj",
+            "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
+            "Elsa.Persistence.EntityFramework",
+            "Elsa.Serialization.Core",
+            "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
+            "Elsa.Workflows.Runtime.Core",
+            "Elsa3.Activities.Design.Import");
+
     [Fact]
     public void New_reusable_activity_surface_does_not_reference_legacy_workflow_as_activity_types()
     {

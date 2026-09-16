@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 123
+- Discovered feature classes: 124
 
 ## Features
 
@@ -133,5 +133,6 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | WorkflowsRuntimeRecurringTriggersFeature | direct IShellFeature | Elsa.Workflows.Runtime.Scheduling | IShellFeature | [WorkflowsRuntimeRecurringTriggersFeature.cs](../../src/Elsa/Workflows/Runtime/Scheduling/WorkflowsRuntimeRecurringTriggersFeature.cs) |
 | WorkflowsRuntimeSchedulingFeature | direct IShellFeature | Elsa.Workflows.Runtime.Scheduling | IShellFeature | [WorkflowsRuntimeSchedulingFeature.cs](../../src/Elsa/Workflows/Runtime/Scheduling/WorkflowsRuntimeSchedulingFeature.cs) |
 | Elsa3ImportActivitiesFeature | direct IWebShellFeature | Elsa3.Activities.Design.Import | IWebShellFeature | [Elsa3ImportActivitiesFeature.cs](../../src/Elsa3/Activities/Design/Import/Elsa3ImportActivitiesFeature.cs) |
+| Elsa3ImportActivitiesEntityFrameworkCoreFeature | direct IShellFeature | Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore | IShellFeature | [Elsa3ImportActivitiesEntityFrameworkCoreFeature.cs](../../src/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3ImportActivitiesEntityFrameworkCoreFeature.cs) |
 | Elsa3ImportActivitiesGroundworkFeature | direct IShellFeature | Elsa3.Activities.Design.Import.Persistence.Groundwork | IShellFeature | [Elsa3ImportActivitiesGroundworkFeature.cs](../../src/Elsa3/Activities/Design/Import/Persistence/Groundwork/Elsa3ImportActivitiesGroundworkFeature.cs) |
 | Elsa3MappingFeature | direct IShellFeature | Elsa3.Mapping | IShellFeature | [Elsa3MappingFeature.cs](../../src/Elsa3/Mapping/Elsa3MappingFeature.cs) |

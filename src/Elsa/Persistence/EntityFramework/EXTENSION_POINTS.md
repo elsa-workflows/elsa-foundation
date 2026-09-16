@@ -16,3 +16,11 @@ Hosts register the derived context that matches the selected relational provider
 `EfMigratePolicy.Validate` refuses to start when pending migrations exist.
 Secrets registers that apply on both `IHostedService` and CShells `IShellInitializer`
 so a feature enable or reload uses the same policy as a cold start.
+
+## Shared transactions
+
+`EfSharedTransaction` is the owner a cross-module write uses when several module contexts must commit
+as one unit. It constructs fresh instances of the configured contexts, shares one connection and one
+transaction between them, commits or rolls back once, and refuses contexts that name different providers
+or connection strings. Module atomic writers join it through their transaction-factory seam
+(`EfSharedTransaction.BeginOperationAsync`); a writer that rolls back makes the owner rollback-only.

@@ -32,7 +32,12 @@ The model retains exact identity material through deterministic hashes where pro
 collapse distinct values, uses optimistic concurrency tokens, and commits operation markers with
 their mutations. Reads and list operations use bounded pages with deterministic ordering. JSON
 conversion failures cross the adapter boundary as `DesignPersistenceException` serialization failures;
-provider failures retain cancellation, concurrency, and domain-conflict contracts.
+provider failures retain cancellation, concurrency, and domain-conflict contracts. `EfDesignAtomicWrite`
+accepts a transaction factory and `EfActivityManagementProjectionWriter.WriteInCurrentTransactionAsync`
+writes into the caller's transaction, so a cross-module owner such as `EfSharedTransaction` can include
+Activities Design writes in its unit. A management projection whose head names an existing but not yet
+published version carries the head id without a head reference, as Groundwork does; a head naming no version
+of that definition in that tenant still fails closed.
 
 ## Registration
 
