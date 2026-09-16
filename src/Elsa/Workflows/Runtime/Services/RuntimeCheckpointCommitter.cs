@@ -126,6 +126,10 @@ public sealed class RuntimeCheckpointCommitter
             ? commit
             : commit with { StateChanges = stateChanges };
 
+        // The structural checkpoint rules are applied here, to the exact commit the store receives, rather than inside
+        // any store: every store is handed an already-validated commit, so the rules cannot differ between providers.
+        RuntimeCheckpointCommitValidator.Validate(commitToPersist);
+
         // #1254: the store deletes the claimed item inside this call, but MarkConsumedDurably can only run once it
         // returns. A claim renewal firing in between finds nothing and would read that as a successor having stolen the
         // item. Publishing the attempt lets the drainer's renewal loop recognize its own consume as the explanation

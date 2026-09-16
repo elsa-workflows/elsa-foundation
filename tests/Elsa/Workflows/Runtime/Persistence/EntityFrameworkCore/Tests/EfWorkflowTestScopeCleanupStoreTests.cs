@@ -19,6 +19,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class EfWorkflowTestScopeCleanupStoreTests
 {
+    private const string CancelChildIntentKind = "Elsa.Activities.DispatchWorkflow.CancelChild";
     private static readonly DateTimeOffset Now = new(2026, 9, 15, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
@@ -245,6 +246,65 @@ public sealed class EfWorkflowTestScopeCleanupStoreTests
     }
 
     [Fact]
+    public async Task Sqlite_late_cleaner_converges_on_a_cancellation_an_earlier_cleaner_committed_and_delivery_completed()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var access = new FixedAccessor("tenant-a");
+        await using var setup = database.Open();
+        var scopes = new EfWorkflowTestScopeStore(setup, access, Codec());
+        var dispatches = new EfWorkflowDispatchStore(setup, access);
+        var scope = Scope("cleanup-concurrent");
+        await scopes.CreateAsync(scope, Now);
+        var dispatch = Dispatch("concurrent", scope);
+        await dispatches.SaveAsync(dispatch);
+        var started = dispatch.TransitionTo(WorkflowDispatchStatus.Started, Now.AddSeconds(1));
+        await dispatches.SaveAsync(started);
+        await scopes.CloseAsync(new WorkflowTestScopeCloseRequest(
+            scope.ScopeId, WorkflowTestScopeCloseReason.ExplicitTeardown, Now.AddMinutes(1)));
+        var closingAt = (await scopes.FindAsync(scope.ScopeId))!.ClosingAt!.Value;
+        var intents = new Dictionary<string, RuntimePostCommitIntent> { [started.DispatchId] = CancellationIntent(started, closingAt) };
+        var outboxId = new WorkflowDispatchIdentity(
+            started.ParentWorkflowExecutionId,
+            started.ParentActivityExecutionId).ChildCancelOutboxItemId($"test-scope:{scope.ScopeId}");
+
+        // The late cleaner has already selected the unmarked dispatch. Before its transaction begins, an earlier cleaner on
+        // its own connection commits the cancellation and delivery claims and completes it.
+        RuntimePostCommitOutboxItem? delivered = null;
+        var interleaving = new BeforeFirstTransactionInterceptor(async () =>
+        {
+            await using var earlierContext = database.OpenOnOwnConnection();
+            var earlier = await new EfWorkflowTestScopeCleanupStore(earlierContext, access, Codec())
+                .CleanupAsync(scope, closingAt, 100, intents);
+            Assert.Equal(1, earlier.CancellationQueued);
+            var outbox = new EfRuntimePostCommitOutboxStore(earlierContext, access);
+            var claim = Assert.Single(await outbox.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+                "deliverer", closingAt.AddSeconds(1), TimeSpan.FromMinutes(5), 10, intentKind: CancelChildIntentKind)));
+            Assert.Equal(outboxId, claim.OutboxItemId);
+            await outbox.RecordDeliveryResultAsync(claim, new RuntimePostCommitOutboxDeliveryResult(
+                outboxId, RuntimePostCommitOutboxStatus.Delivered, closingAt.AddSeconds(2)));
+            delivered = await outbox.FindAsync(outboxId);
+        });
+        await using var lateContext = database.Open(interleaving);
+
+        var late = await new EfWorkflowTestScopeCleanupStore(lateContext, access, Codec())
+            .CleanupAsync(scope, closingAt, 100, intents);
+
+        Assert.NotNull(delivered);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, delivered!.Status);
+        Assert.Equal(1, late.Inspected);
+        Assert.Equal(1, late.CancellationQueued);
+        await using var verify = database.Open();
+        var rows = await verify.RuntimePostCommitOutbox.AsNoTracking().ToArrayAsync();
+        Assert.Equal(EfRelationalIdentity.Encode(outboxId), Assert.Single(rows).OutboxItemId);
+        var after = (await new EfRuntimePostCommitOutboxStore(verify, access).FindAsync(outboxId))!;
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, after.Status);
+        Assert.True(delivered.IsEquivalentTo(after), "The late cleaner must leave the delivered cancellation exactly as delivery left it.");
+        var child = (await new EfWorkflowDispatchStore(verify, access).FindAsync(started.DispatchId))!;
+        Assert.Equal(WorkflowDispatchStatus.Started, child.Status);
+        Assert.True(WorkflowDispatchLifecycle.IsTestScopeCancellationRequested(child));
+    }
+
+    [Fact]
     public async Task Sqlite_missing_started_intent_rolls_back_every_participant()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -407,7 +467,7 @@ public sealed class EfWorkflowTestScopeCleanupStoreTests
         return new RuntimePostCommitIntent(
             identity.ChildCancelIntentId,
             started.ParentWorkflowExecutionId,
-            "Elsa.Activities.DispatchWorkflow.CancelChild",
+            CancelChildIntentKind,
             requestedAt,
             started.ParentActivityExecutionId,
             identity.ChildCancelIdempotencyKey,
@@ -448,7 +508,27 @@ public sealed class EfWorkflowTestScopeCleanupStoreTests
             return new BookmarkStateSqliteDbContext(builder.Options);
         }
 
+        public BookmarkStateSqliteDbContext OpenOnOwnConnection() =>
+            new(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(keeper.ConnectionString).Options);
+
         public ValueTask DisposeAsync() => keeper.DisposeAsync();
+    }
+
+    /// <summary>Runs <paramref name="interleave"/> once, after the context's reads and before its first transaction begins.</summary>
+    private sealed class BeforeFirstTransactionInterceptor(Func<Task> interleave) : DbTransactionInterceptor
+    {
+        private int ran;
+
+        public override async ValueTask<InterceptionResult<DbTransaction>> TransactionStartingAsync(
+            DbConnection connection,
+            TransactionStartingEventData eventData,
+            InterceptionResult<DbTransaction> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Exchange(ref ran, 1) == 0)
+                await interleave();
+            return result;
+        }
     }
 
     private sealed class FailDispatchUpdateInterceptor : DbCommandInterceptor

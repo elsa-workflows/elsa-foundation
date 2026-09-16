@@ -1,6 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
-using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
@@ -122,14 +121,7 @@ public sealed class InMemoryWorkflowTestScopeStore :
         cancellationToken.ThrowIfCancellationRequested();
         lock (_state.SyncRoot)
         {
-            if (!_state.WorkflowTestScopes.TryGetValue(scope.ScopeId, out var record) ||
-                record.State != WorkflowTestScopeState.Open ||
-                record.Scope.IsExpired(observedAt) ||
-                !WorkflowTestScope.ContextEquals(record.Scope, scope))
-            {
-                throw new TestScopeAdmissionException("The workflow test scope is not open in the current persistence context.");
-            }
-
+            WorkflowTestScopeAdmission.EnsureOpen(_state.WorkflowTestScopes.GetValueOrDefault(scope.ScopeId), scope, observedAt);
             return ValueTask.CompletedTask;
         }
     }
@@ -234,22 +226,12 @@ public sealed class InMemoryWorkflowTestScopeStore :
             RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)));
         if (_state.OutboxItems.TryGetValue(outboxItemId, out var existing))
         {
-            if (!Equivalent(existing.Intent, intent))
-                throw new InvalidOperationException("The workflow test-scope cancellation outbox item conflicts with committed responsibility.");
+            // Converge on the responsibility already recorded and leave the item exactly as it is: it may already be
+            // claimed, delivered, or retried, and writing it back as pending would regress it.
+            WorkflowDispatchLifecycle.EnsureTestScopeCancellationResponsibility(existing, intent);
             return;
         }
 
         _state.OutboxItems.Add(outboxItemId, item);
     }
-
-    private static bool Equivalent(RuntimePostCommitIntent left, RuntimePostCommitIntent right) =>
-        StringComparer.Ordinal.Equals(left.IntentId, right.IntentId) &&
-        StringComparer.Ordinal.Equals(left.WorkflowExecutionId, right.WorkflowExecutionId) &&
-        StringComparer.Ordinal.Equals(left.Kind, right.Kind) &&
-        left.RecordedAt == right.RecordedAt &&
-        StringComparer.Ordinal.Equals(left.ActivityExecutionId, right.ActivityExecutionId) &&
-        StringComparer.Ordinal.Equals(left.IdempotencyKey, right.IdempotencyKey) &&
-        Nullable.Equals(left.Payload, right.Payload) &&
-        left.Metadata.Count == right.Metadata.Count &&
-        left.Metadata.All(item => right.Metadata.TryGetValue(item.Key, out var value) && StringComparer.Ordinal.Equals(item.Value, value));
 }

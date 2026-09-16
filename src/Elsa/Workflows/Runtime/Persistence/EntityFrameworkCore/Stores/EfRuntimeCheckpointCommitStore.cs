@@ -3,6 +3,7 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -40,10 +41,11 @@ public sealed class EfRuntimeCheckpointCommitStore(
         var fingerprint = RuntimeCheckpointCommitFingerprint.Compute(commit);
         var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, commit.CommitId);
 
-        // Match the established checkpoint funnel: identity admission happens before marker reads, transaction
-        // creation, or any other provider I/O. A malformed state change must not be able to reach EF by using this
-        // preview adapter's narrower participant set as an excuse to bypass the shared boundary.
-        ValidateCommitBoundary(commit);
+        // The commit's structural rules were applied by RuntimeCheckpointCommitValidator in the application layer before
+        // the commit reached this store. What is checked here is only reserved-key integrity and this provider's storage
+        // limits and capability, still before marker reads, transaction creation, or any other provider I/O.
+        RuntimeExecutionOwnershipStateId.EnsureNotWritten(commit.StateChanges.Operational);
+        ValidateStorageLimits(commit);
         ValidateThinSlice(commit);
         if (commit.StateChanges.WorkflowExecution is { } workflowExecution)
         {
@@ -94,7 +96,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
         async ValueTask<RuntimeCheckpointCommitStoreResult> CommitNewAsync(CancellationToken writeCancellationToken)
         {
             var marker = ToEntity(commit, scope, id, fingerprint);
-            var touchedTestScopes = new Dictionary<string, WorkflowTestScope>(StringComparer.Ordinal);
+            var touchedTestScopes = new Dictionary<string, WorkflowTestScopeRecord>(StringComparer.Ordinal);
 
             await using var transaction = await context.Database.BeginTransactionAsync(writeCancellationToken);
             try
@@ -228,172 +230,24 @@ public sealed class EfRuntimeCheckpointCommitStore(
         }
     }
 
-    private static void ValidateCommitBoundary(RuntimeCheckpointCommit commit)
+    /// <summary>
+    /// Identity lengths this provider's columns can hold for activity-scope cleanup targets. These describe EF's storage
+    /// model, not the checkpoint contract, and are checked before any provider I/O.
+    /// </summary>
+    private static void ValidateStorageLimits(RuntimeCheckpointCommit commit)
     {
-        if (commit.StateChanges.WorkflowExecution is { } workflow)
-        {
-            RequireOperation(workflow, RuntimeStateChangeOperation.Upsert, "workflow execution");
-            RequireId(workflow.StateId, workflow.State.WorkflowExecutionId, "workflow execution");
-            RequireWorkflow(workflow.State.WorkflowExecutionId, commit.WorkflowExecutionId, "workflow execution");
-        }
-
-        if (commit.StateChanges.Scheduler is { } scheduler)
-        {
-            RequireOperation(scheduler, RuntimeStateChangeOperation.Upsert, "scheduler");
-            RequireId(scheduler.StateId, scheduler.State.WorkflowExecutionId, "scheduler");
-            RequireWorkflow(scheduler.State.WorkflowExecutionId, commit.WorkflowExecutionId, "scheduler");
-        }
-
-        foreach (var change in commit.StateChanges.ActivityExecutions)
-        {
-            RequireOperation(change, RuntimeStateChangeOperation.Upsert, "activity execution");
-            RequireId(change.StateId, change.State.Execution.ActivityExecutionId, "activity execution");
-            RequireWorkflow(change.State.Execution.WorkflowExecutionId, commit.WorkflowExecutionId, "activity execution");
-            change.State.EnsureValueFlowCompatible();
-            change.State.EnsureSupersessionCompatible();
-            RequireMatchingProvenance(change.State.ExecutionScopeId, change.State.Provenance.ExecutionScopeId,
-                change.State.Attempt, change.State.Provenance.Attempt, "activity execution");
-        }
-
-        foreach (var change in commit.StateChanges.ActivityExecutionInspections)
-        {
-            if (change.Operation is not (RuntimeStateChangeOperation.Upsert or RuntimeStateChangeOperation.Delete))
-                throw new InvalidOperationException("The EF checkpoint writer supports activity execution inspection upsert and delete only.");
-            RequireId(change.StateId, change.State.ActivityExecutionId, "activity execution inspection");
-            RequireWorkflow(change.State.WorkflowExecutionId, commit.WorkflowExecutionId, "activity execution inspection");
-            RequireMatchingProvenance(change.State.ExecutionScopeId, change.State.Provenance.ExecutionScopeId,
-                change.State.Attempt, change.State.Provenance.Attempt, "activity execution inspection");
-        }
-
-        var seenIncidentIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var change in commit.StateChanges.Incidents)
-        {
-            if (change.Operation is not (RuntimeStateChangeOperation.Append or RuntimeStateChangeOperation.Upsert))
-                throw new InvalidOperationException("The EF checkpoint writer supports incident append and upsert only.");
-            RequireId(change.StateId, change.State.IncidentId, "incident");
-            RequireWorkflow(change.State.WorkflowExecutionId, commit.WorkflowExecutionId, "incident");
-            if (!seenIncidentIds.Add(change.StateId))
-                throw new InvalidOperationException($"Incident '{change.StateId}' occurs more than once in one checkpoint commit.");
-        }
-
-        foreach (var change in commit.StateChanges.PostCommitOutbox)
-        {
-            RequireOperation(change, RuntimeStateChangeOperation.Upsert, "post-commit outbox");
-            RequireId(change.StateId, change.State.OutboxItemId, "post-commit outbox");
-            RequireWorkflow(change.State.Intent.WorkflowExecutionId, commit.WorkflowExecutionId, "post-commit outbox");
-            EfRuntimePostCommitOutboxStore.ValidatePending(change.State);
-        }
-
-        foreach (var change in commit.StateChanges.DurableValues)
-        {
-            if (change.Operation is not (RuntimeStateChangeOperation.Upsert or RuntimeStateChangeOperation.Delete))
-                throw new InvalidOperationException("The EF checkpoint writer supports durable-value upsert and delete only.");
-            RequireId(change.StateId, change.State.DurableValueId, "durable value");
-            RequireWorkflow(change.State.WorkflowExecutionId, commit.WorkflowExecutionId, "durable value");
-        }
-
-        foreach (var change in commit.StateChanges.Bookmarks)
-        {
-            if (change.Operation is not (RuntimeStateChangeOperation.Upsert or RuntimeStateChangeOperation.Delete))
-                throw new InvalidOperationException("The EF checkpoint writer supports bookmark upsert and delete only.");
-            RequireId(change.StateId, change.State.BookmarkId, "bookmark");
-            RequireWorkflow(change.State.WorkflowExecutionId, commit.WorkflowExecutionId, "bookmark");
-        }
-
-        foreach (var change in commit.StateChanges.Operational)
-        {
-            RequireOperation(change, RuntimeStateChangeOperation.Upsert, "operational state");
-            RequireId(change.StateId, change.State.OperationalStateId, "operational state");
-            RequireWorkflow(change.State.WorkflowExecutionId, commit.WorkflowExecutionId, "operational state");
-            if (StringComparer.Ordinal.Equals(change.StateId, $"ownership:{commit.WorkflowExecutionId}"))
-                throw new InvalidOperationException("Checkpoint operational changes cannot overwrite the reserved execution-ownership state.");
-        }
-
         foreach (var cleanup in commit.StateChanges.ActivityScopeCleanups)
         {
-            RequireWorkflow(cleanup.WorkflowExecutionId, commit.WorkflowExecutionId, "activity-scope cleanup");
-            ArgumentException.ThrowIfNullOrWhiteSpace(cleanup.ExecutionScopeId);
-            if (!cleanup.ActivityExecutionIds.Contains(cleanup.ExecutionScopeId, StringComparer.Ordinal))
-                throw new InvalidOperationException("Activity scope cleanup must include its outer execution scope.");
             foreach (var bookmarkId in cleanup.BookmarkIds)
             {
-                ArgumentException.ThrowIfNullOrWhiteSpace(bookmarkId);
                 if (bookmarkId.Length > BookmarkStateEfModule.BookmarkIdentityMaximumLength)
                     throw new ArgumentException("Activity-scope cleanup bookmark ID exceeds the bookmark persistence contract.");
-                if (commit.StateChanges.Bookmarks.Any(change => StringComparer.Ordinal.Equals(change.StateId, bookmarkId)))
-                    throw new NotSupportedException("A bookmark change and cleanup deletion for the same ID require a proven staged-row transition.");
             }
             foreach (var timerId in cleanup.TimerIds)
                 EfRuntimeOperationalStoreSupport.ValidateIdentity(timerId, nameof(cleanup.TimerIds));
             foreach (var workItemId in cleanup.SchedulerWorkItemIds)
-            {
                 EfRuntimeOperationalStoreSupport.ValidateIdentity(workItemId, nameof(cleanup.SchedulerWorkItemIds));
-                if (commit.StateChanges.ConsumedSchedulerWorkItems.Any(item => StringComparer.Ordinal.Equals(item.WorkItemId, workItemId)))
-                    throw new NotSupportedException("A claimed scheduler-work consume and scope cleanup deletion for the same ID require a proven staged-row transition.");
-            }
         }
-
-        var seenDispatches = new Dictionary<string, WorkflowDispatchRecord>(StringComparer.Ordinal);
-        foreach (var change in commit.StateChanges.WorkflowDispatches)
-        {
-            RequireOperation(change, RuntimeStateChangeOperation.Upsert, "workflow dispatch");
-            RequireId(change.StateId, change.State.DispatchId, "workflow dispatch");
-            WorkflowDispatchLifecycle.ValidateCheckpointOwnership(commit.WorkflowExecutionId, change.State);
-            if (seenDispatches.TryGetValue(change.StateId, out var duplicate) &&
-                !WorkflowDispatchLifecycle.RecordsEqual(duplicate, change.State))
-                throw new InvalidOperationException(
-                    $"Workflow dispatch '{change.StateId}' occurs more than once with conflicting state.");
-            seenDispatches[change.StateId] = change.State;
-        }
-
-        foreach (var request in commit.StateChanges.WorkflowDispatchCancellations)
-            RequireWorkflow(request.ParentWorkflowExecutionId, commit.WorkflowExecutionId, "workflow dispatch cancellation");
-
-        foreach (var consumed in commit.StateChanges.ConsumedSchedulerWorkItems)
-        {
-            RequireWorkflow(consumed.WorkflowExecutionId, commit.WorkflowExecutionId, "consumed scheduler work");
-            ArgumentException.ThrowIfNullOrWhiteSpace(consumed.WorkItemId);
-            ArgumentException.ThrowIfNullOrWhiteSpace(consumed.ClaimOwnerId);
-            if (consumed.FencingToken <= 0)
-                throw new InvalidOperationException("Consumed scheduler work requires a positive fencing token.");
-        }
-
-        if (commit.StateChanges.AlterationJobTerminalChange is { } alteration &&
-            !StringComparer.Ordinal.Equals(alteration.CheckpointCommitId, commit.CommitId))
-            throw new InvalidOperationException("Workflow alteration terminal evidence must reference its checkpoint commit ID.");
-    }
-
-    private static void RequireOperation<TState>(
-        RuntimeStateChange<TState> change,
-        RuntimeStateChangeOperation expected,
-        string label)
-    {
-        if (change.Operation != expected)
-            throw new InvalidOperationException($"The EF checkpoint writer can only project {label} '{expected}' changes.");
-    }
-
-    private static void RequireId(string actual, string expected, string label)
-    {
-        if (!StringComparer.Ordinal.Equals(actual, expected))
-            throw new InvalidOperationException($"{label} state change StateId must match its model identity.");
-    }
-
-    private static void RequireWorkflow(string actual, string expected, string label)
-    {
-        if (!StringComparer.Ordinal.Equals(actual, expected))
-            throw new InvalidOperationException($"{label} workflow execution ID must match the checkpoint workflow execution ID.");
-    }
-
-    private static void RequireMatchingProvenance(
-        string? stateScope, string? provenanceScope,
-        ActivityExecutionAttemptLineage? stateAttempt, ActivityExecutionAttemptLineage? provenanceAttempt,
-        string label)
-    {
-        if (stateScope is not null && provenanceScope is not null &&
-            !StringComparer.Ordinal.Equals(stateScope, provenanceScope))
-            throw new InvalidOperationException($"{label} execution scope must match scheduling provenance when both are present.");
-        if (stateAttempt is not null && provenanceAttempt is not null && stateAttempt != provenanceAttempt)
-            throw new InvalidOperationException($"{label} attempt must match scheduling provenance when both are present.");
     }
 
     private async ValueTask<RuntimeCheckpointCommitEntity?> FindMarkerAsync(
@@ -414,31 +268,6 @@ public sealed class EfRuntimeCheckpointCommitStore(
             throw new NotSupportedException("The R19 EF checkpoint slice supports workflow-execution upserts only.");
         if (changes.Scheduler is { Operation: not RuntimeStateChangeOperation.Upsert })
             throw new NotSupportedException("The R19 EF checkpoint slice supports scheduler upserts only.");
-
-        if (commit.PostCommitIntents.Count > 0)
-        {
-            var pendingIds = changes.PostCommitOutbox.Select(change => change.StateId)
-                .ToHashSet(StringComparer.Ordinal);
-            var intents = new Dictionary<string, RuntimePostCommitIntent>(StringComparer.Ordinal);
-            foreach (var intent in commit.PostCommitIntents)
-            {
-                var id = RuntimePostCommitOutboxIdentity.CreateLogicalValue(commit.CommitId, intent.IntentId);
-                if (intents.TryGetValue(id, out var duplicate) &&
-                    !EfRuntimePostCommitOutboxStore.IntentsEquivalent(duplicate, intent))
-                    throw new InvalidOperationException($"Post-commit intent '{id}' occurs more than once with conflicting content.");
-                intents[id] = intent;
-            }
-            if (!pendingIds.SetEquals(intents.Keys))
-                throw new InvalidOperationException(
-                    "A checkpoint with post-commit intents must include their pending outbox state changes in the same atomic unit.");
-
-            foreach (var change in changes.PostCommitOutbox)
-            {
-                if (!EfRuntimePostCommitOutboxStore.IntentsEquivalent(intents[change.StateId], change.State.Intent))
-                    throw new InvalidOperationException(
-                        $"Post-commit outbox item '{change.StateId}' does not match its checkpoint intent.");
-            }
-        }
     }
 
     private static RuntimeCheckpointCommitEntity ToEntity(

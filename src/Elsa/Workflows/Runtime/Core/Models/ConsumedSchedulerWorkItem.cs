@@ -13,6 +13,15 @@ public sealed record ConsumedSchedulerWorkItem(
     string ClaimOwnerId,
     long FencingToken)
 {
+    /// <summary>
+    /// The claim fence: the item may be consumed only while the claim that is recorded on it is still this claim. A
+    /// renewal keeps owner and token, so a renewed claim still matches; a successor reclaim advances the token and does not.
+    /// </summary>
+    public bool IsFencedBy(string? recordedClaimOwnerId, long? recordedClaimToken) =>
+        recordedClaimOwnerId is not null &&
+        StringComparer.Ordinal.Equals(recordedClaimOwnerId, ClaimOwnerId) &&
+        recordedClaimToken == FencingToken;
+
     /// <summary>Projects the consume record from a live scheduler-work claim.</summary>
     public static ConsumedSchedulerWorkItem FromClaim(RuntimeSchedulerWorkClaim claim)
     {

@@ -167,6 +167,50 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.Equal(2, innerStore.ListCommits().Count);
     }
 
+    // The committer validated each commit on its own, but a boundary flush folds the buffered segment into a new commit that
+    // can combine changes no single commit carried. The decorator validates that fold before the durable store sees it.
+    [Fact]
+    public async Task BoundaryFold_ThatCombinesValidCommitsIntoAnInvalidCommit_IsRejectedBeforeTheDurableStore()
+    {
+        const string workflowExecutionId = "wfexec-1";
+        var innerStore = new InMemoryRuntimeCheckpointCommitStore();
+        var session = new RuntimeCoalescingSession(
+            workflowExecutionId,
+            new InMemoryWorkflowSchedulerWorkQueue(),
+            new CoalescingRuntimeCheckpointPersistenceOptions());
+        var store = new CoalescingRuntimeCheckpointCommitStore(
+            new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
+            new FixedCoalescingSessionAccessor(session));
+        var cleanup = NewEmptyCommit(workflowExecutionId, 1, RuntimeCheckpointNames.ActivityCancelled) with
+        {
+            StateChanges = new RuntimeCheckpointStateChangeSet(
+                null, null, [], [], [], [], [],
+                activityScopeCleanups: [new ActivityScopeCleanupRequest(workflowExecutionId, "scope-1", ["scope-1"], ["bookmark-1"], [], [])])
+        };
+        var bookmark = NewEmptyCommit(workflowExecutionId, 2, RuntimeCheckpointNames.BookmarkCreated) with
+        {
+            StateChanges = new RuntimeCheckpointStateChangeSet(
+                null, null, [],
+                [
+                    new RuntimeStateChange<BookmarkState>(
+                        "bookmark-1",
+                        RuntimeStateChangeOperation.Upsert,
+                        new BookmarkState("bookmark-1", workflowExecutionId, "actexec-1", "node-wait", "node-wait", "stimulus", "stimulus-hash", null, new Dictionary<string, string>(), Now, null),
+                        new Dictionary<string, string>())
+                ],
+                [], [], [])
+        };
+        RuntimeCheckpointCommitValidator.Validate(cleanup);
+        RuntimeCheckpointCommitValidator.Validate(bookmark);
+
+        await store.CommitAsync(cleanup, new(RuntimeCheckpointPersistenceMode.Deferred));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.CommitAsync(bookmark, new(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+
+        Assert.Equal("Bookmark 'bookmark-1' cannot be both changed and deleted by activity-scope cleanup in one checkpoint commit.", exception.Message);
+        Assert.Empty(innerStore.ListCommits());
+    }
+
     // ADR 0032 R2 / spec 107: a ReplaySafe attempt-claim arrives as a Deferred decision (the coalescing policy
     // decided so from the checkpoint's profile metadata). Unlike the External/Immediate case above, it must NOT
     // flush before activation — it buffers into the overlay working set and folds forward into the next flushed

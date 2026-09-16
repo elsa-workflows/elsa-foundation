@@ -292,7 +292,7 @@ public sealed class EfWorkflowAlterationStore(
         var row = await _context.WorkflowAlterationJobs.AsNoTracking()
             .SingleOrDefaultAsync(x => x.Id == Id(scopeKey, change.JobId), cancellationToken)
             ?? throw new KeyNotFoundException($"Alteration job '{change.JobId}' was not found.");
-        ValidateTerminalChange(ReadJob(row, scopeKey, change.JobId), change);
+        WorkflowAlterationTerminalEvidence.Validate(ReadJob(row, scopeKey, change.JobId), change);
     }
     public async ValueTask ApplyTerminalJobChangeAsync(WorkflowAlterationJobTerminalChange change, CancellationToken cancellationToken = default)
     {
@@ -303,8 +303,8 @@ public sealed class EfWorkflowAlterationStore(
             .SingleOrDefaultAsync(x => x.Id == Id(scopeKey, change.JobId) && x.ScopeKey == EfRelationalIdentity.Encode(scopeKey) && x.ScopeKeyHash == EfRelationalIdentity.Hash(scopeKey) && x.JobId == EfRelationalIdentity.Encode(change.JobId) && x.JobIdHash == EfRelationalIdentity.Hash(change.JobId), cancellationToken)
             ?? throw new KeyNotFoundException($"Alteration job '{change.JobId}' was not found.");
         var old = ReadJob(row, scopeKey, change.JobId);
-        ValidateTerminalChange(old, change);
-        if (IsTerminal(old.Status))
+        WorkflowAlterationTerminalEvidence.Validate(old, change);
+        if (WorkflowAlterationTerminalEvidence.IsTerminal(old.Status))
             return;
 
         var updated = new WorkflowAlterationJobState(old.JobId, old.PlanId, old.WorkflowExecutionId, old.TenantPartition, old.CaptureOrdinal, change.Status, old.Claim, old.AttemptCount, change.Outcomes.ToArray(), change.CheckpointCommitId, change.SafeFailure, old.CreatedAt, old.StartedAt, change.CompletedAt, checked(old.Revision + 1), old.CapturedConcurrency);
@@ -352,7 +352,6 @@ public sealed class EfWorkflowAlterationStore(
     }
     internal static string Id(string scope, string id) => EfRelationalIdentity.HashLengthFramed(scope, id);
     private static bool IsTerminal(WorkflowAlterationPlanStatus status) => status is WorkflowAlterationPlanStatus.Completed or WorkflowAlterationPlanStatus.CompletedWithFailures or WorkflowAlterationPlanStatus.Failed or WorkflowAlterationPlanStatus.Cancelled;
-    private static bool IsTerminal(WorkflowAlterationJobStatus status) => status is WorkflowAlterationJobStatus.Succeeded or WorkflowAlterationJobStatus.Failed or WorkflowAlterationJobStatus.Cancelled;
     private static string ActiveKey(DateTimeOffset at, string id) =>
         $"{at.UtcTicks:D19}:{ActiveOrderIdentity(id)}";
 
@@ -389,43 +388,6 @@ public sealed class EfWorkflowAlterationStore(
                 throw new InvalidOperationException($"Captured target '{group.Key}' was supplied with conflicting immutable evidence.");
             yield return target;
         }
-    }
-    private static bool EvidenceEquals(WorkflowAlterationJobState job, WorkflowAlterationJobTerminalChange change) => job.CheckpointCommitId == change.CheckpointCommitId && job.Status == change.Status && job.CompletedAt == change.CompletedAt && job.SafeFailure == change.SafeFailure && OutcomesEqual(job.Outcomes, change.Outcomes);
-    private static bool OutcomesEqual(IReadOnlyList<WorkflowAlterationOutcome> left, IReadOnlyCollection<WorkflowAlterationOutcome> right)
-    {
-        var orderedRight = right.OrderBy(x => x.Ordinal).ToArray();
-        if (left.Count != orderedRight.Length)
-            return false;
-        return left.OrderBy(x => x.Ordinal).Zip(orderedRight).All(pair =>
-            pair.First.Ordinal == pair.Second.Ordinal &&
-            StringComparer.Ordinal.Equals(pair.First.Kind, pair.Second.Kind) &&
-            pair.First.SchemaVersion == pair.Second.SchemaVersion &&
-            pair.First.Status == pair.Second.Status &&
-            StringComparer.Ordinal.Equals(pair.First.Code, pair.Second.Code) &&
-            StringComparer.Ordinal.Equals(pair.First.Message, pair.Second.Message) &&
-            pair.First.RecordedAt == pair.Second.RecordedAt &&
-            pair.First.StructuralMetadata.Count == pair.Second.StructuralMetadata.Count &&
-            pair.First.StructuralMetadata.OrderBy(x => x.Key, StringComparer.Ordinal).SequenceEqual(pair.Second.StructuralMetadata.OrderBy(x => x.Key, StringComparer.Ordinal), KeyValuePairComparer.Instance));
-    }
-    private sealed class KeyValuePairComparer : IEqualityComparer<KeyValuePair<string, string>>
-    {
-        public static readonly KeyValuePairComparer Instance = new();
-        public bool Equals(KeyValuePair<string, string> x, KeyValuePair<string, string> y) => StringComparer.Ordinal.Equals(x.Key, y.Key) && StringComparer.Ordinal.Equals(x.Value, y.Value);
-        public int GetHashCode(KeyValuePair<string, string> obj) => HashCode.Combine(StringComparer.Ordinal.GetHashCode(obj.Key), StringComparer.Ordinal.GetHashCode(obj.Value));
-    }
-    internal static void ValidateTerminalChange(WorkflowAlterationJobState job, WorkflowAlterationJobTerminalChange change)
-    {
-        if (IsTerminal(job.Status))
-        {
-            if (!EvidenceEquals(job, change))
-                throw new InvalidOperationException("Terminal alteration evidence conflicts with the stored result.");
-            return;
-        }
-
-        if (job.Status != WorkflowAlterationJobStatus.Running ||
-            job.Claim is null ||
-            !StringComparer.Ordinal.Equals(job.Claim.Token, change.ClaimToken))
-            throw new WorkflowAlterationClaimFenceException(job.JobId);
     }
     private static WorkflowAlterationPlanEntity ToPlan(WorkflowAlterationPlanState p, string scope, string id) => new() { Id = id, ScopeKey = EfRelationalIdentity.Encode(scope), ScopeKeyHash = EfRelationalIdentity.Hash(scope), PlanId = EfRelationalIdentity.Encode(p.PlanId), PlanIdHash = EfRelationalIdentity.Hash(p.PlanId), PlanIdOrderKey = Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(p.PlanId, RuntimeWorkflowAlterationEfModule.IdentityMaximumLength)), TenantIdempotencyKey = EfRelationalIdentity.Encode(p.AuthorityScope.TenantPartition + "\u001f" + p.IdempotencyKeyHash), TenantIdempotencyKeyHash = EfRelationalIdentity.Hash(p.AuthorityScope.TenantPartition + "\u001f" + p.IdempotencyKeyHash), Status = (int)p.Status, ActiveOrderKey = ActiveKey(p.CreatedAt, p.PlanId), CreatedAtUtcTicks = p.CreatedAt.UtcTicks, Revision = p.Revision, CleanupDeletedCount = 0, ContentJson = RuntimeArtifactJson.Serialize(p), SchemaVersion = RuntimeWorkflowAlterationEfModule.SchemaVersion };
     private static WorkflowAlterationPlanState ReadPlan(WorkflowAlterationPlanEntity row, string scope, string? expectedPlanId = null)

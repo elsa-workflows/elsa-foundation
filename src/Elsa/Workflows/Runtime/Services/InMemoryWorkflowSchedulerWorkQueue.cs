@@ -322,9 +322,7 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
             // renewed claim still consumes its item, while a successor reclaim (token advanced) or a completed/absent item
             // is claim-lost.
             if (!_claimsByScopedId.TryGetValue(key, out var state) ||
-                state.OwnerId is null ||
-                !StringComparer.Ordinal.Equals(state.OwnerId, consumed.ClaimOwnerId) ||
-                state.FencingToken != consumed.FencingToken)
+                !consumed.IsFencedBy(state.OwnerId, state.FencingToken))
             {
                 return new ValueTask<RuntimeSchedulerWorkClaimTransitionResult>(RuntimeSchedulerWorkClaimTransitionResult.Stale);
             }

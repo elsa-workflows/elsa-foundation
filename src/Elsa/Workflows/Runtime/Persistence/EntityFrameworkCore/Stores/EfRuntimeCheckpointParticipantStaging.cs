@@ -1,7 +1,7 @@
 using Elsa.Persistence.EntityFramework;
-using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,7 +23,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
         RuntimeStateChange<WorkflowExecutionState> change,
         string scope,
         DateTimeOffset occurredAt,
-        Dictionary<string, WorkflowTestScope> touchedTestScopes,
+        Dictionary<string, WorkflowTestScopeRecord> touchedTestScopes,
         CancellationToken cancellationToken)
     {
         var id = EfWorkflowExecutionStateStore.CreateId(scope, change.StateId);
@@ -37,10 +37,9 @@ internal static class EfRuntimeCheckpointParticipantStaging
 
         if (row is null)
         {
-            if (change.State.TestScope is { } testScope)
+            if (WorkflowTestScopeAdmission.ScopeRequiredToStart(change.State, executionExists: false) is { } testScope)
                 await EfRuntimeCheckpointTestScopeParticipantStaging.AssertOpenAndStageAsync(
-                    context, testScope, change.State.WorkflowExecutionId, occurredAt,
-                    scope, touchedTestScopes, cancellationToken);
+                    context, testScope, occurredAt, scope, touchedTestScopes, cancellationToken);
             context.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntity(
                 change.State,
                 scope,
@@ -100,8 +99,6 @@ internal static class EfRuntimeCheckpointParticipantStaging
         ArgumentNullException.ThrowIfNull(change);
         ArgumentException.ThrowIfNullOrWhiteSpace(scope);
         ArgumentNullException.ThrowIfNull(change.State);
-        if (!StringComparer.Ordinal.Equals(change.StateId, change.State.BookmarkId))
-            throw new InvalidOperationException("Bookmark state change StateId must match its model identity.");
         if (change.Operation is not (RuntimeStateChangeOperation.Upsert or RuntimeStateChangeOperation.Delete))
             throw new InvalidOperationException($"The EF checkpoint writer can only project bookmark '{RuntimeStateChangeOperation.Upsert}' or '{RuntimeStateChangeOperation.Delete}' changes.");
         EfBookmarkStateStore.ValidateState(change.State);
@@ -156,8 +153,6 @@ internal static class EfRuntimeCheckpointParticipantStaging
         ArgumentNullException.ThrowIfNull(change.State);
         EfRuntimeOperationalStoreSupport.ValidateIdentity(change.State.WorkflowExecutionId, nameof(change.State.WorkflowExecutionId));
         EfRuntimeOperationalStoreSupport.ValidateIdentity(change.State.DurableValueId, nameof(change.State.DurableValueId));
-        if (!StringComparer.Ordinal.Equals(change.StateId, change.State.DurableValueId))
-            throw new InvalidOperationException("Durable value state change StateId must match its model identity.");
         if (change.Operation is not (RuntimeStateChangeOperation.Upsert or RuntimeStateChangeOperation.Delete))
             throw new InvalidOperationException($"The EF checkpoint writer can only project durable value '{RuntimeStateChangeOperation.Upsert}' or '{RuntimeStateChangeOperation.Delete}' changes.");
         cancellationToken.ThrowIfCancellationRequested();
@@ -286,15 +281,17 @@ internal static class EfRuntimeCheckpointParticipantStaging
             scope,
             consumed.WorkflowExecutionId,
             consumed.WorkItemId);
-        if (existing.ClaimOwnerId is null ||
-            !StringComparer.Ordinal.Equals(existing.ClaimOwnerId, ownerKey) ||
-            existing.ClaimToken != consumed.FencingToken)
+        if (!consumed.IsFencedBy(
+                existing.ClaimOwnerId is null ? null : EfRuntimeOperationalStoreSupport.Decode(existing.ClaimOwnerId),
+                existing.ClaimToken))
         {
             throw new RuntimeSchedulerWorkConsumeConflictException(consumed.WorkflowExecutionId, consumed.WorkItemId);
         }
 
-        // Do not include Revision: an in-flight renewal is allowed to replay the same owner/token consume. A
-        // successor reclaim changes ClaimToken and is rejected by this atomic predicate.
+        // The conditional delete below is the atomic form of ConsumedSchedulerWorkItem.IsFencedBy: the same owner and
+        // token predicate, evaluated by the provider in the write itself. Do not include Revision: an in-flight renewal
+        // is allowed to replay the same owner/token consume. A successor reclaim changes ClaimToken and is rejected by this
+        // atomic predicate.
         var deleted = await context.SchedulerWorkItems
             .Where(row =>
                 row.Id == id &&
@@ -315,7 +312,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var operationalStateId = $"ownership:{workflowExecutionId}";
+        var operationalStateId = RuntimeExecutionOwnershipStateId.For(workflowExecutionId);
         var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, workflowExecutionId, operationalStateId);
         var row = await context.ExecutionLivenessStates.SingleOrDefaultAsync(candidate =>
             candidate.Id == id &&
@@ -327,49 +324,11 @@ internal static class EfRuntimeCheckpointParticipantStaging
             candidate.OperationalStateId == EfRuntimeOperationalStoreSupport.Encode(operationalStateId),
             cancellationToken);
 
-        if (row is null)
-            throw new RuntimeStaleFencingTokenException(
-                workflowExecutionId,
-                expected.FencingToken,
-                0,
-                RuntimeFencingRejectionReason.NoActiveLease);
-
-        var state = EfExecutionLivenessStateStore.Read(row, scope, workflowExecutionId, operationalStateId);
-        var lease = state.ExecutionLease;
-        var currentToken = lease?.FencingToken ?? ReadHighestIssuedToken(state);
-        if (lease is null)
-            throw new RuntimeStaleFencingTokenException(
-                workflowExecutionId,
-                expected.FencingToken,
-                currentToken,
-                RuntimeFencingRejectionReason.NoActiveLease);
-        if (lease.IsExpired(timeProvider.GetUtcNow()))
-            throw new RuntimeStaleFencingTokenException(
-                workflowExecutionId,
-                expected.FencingToken,
-                currentToken,
-                RuntimeFencingRejectionReason.ExpiredLease);
-        if (!StringComparer.Ordinal.Equals(lease.LeaseId, expected.LeaseId) ||
-            !StringComparer.Ordinal.Equals(lease.OwnerId, expected.OwnerId) ||
-            lease.FencingToken != expected.FencingToken)
-        {
-            throw new RuntimeStaleFencingTokenException(
-                workflowExecutionId,
-                expected.FencingToken,
-                currentToken,
-                RuntimeFencingRejectionReason.StaleToken);
-        }
+        var state = row is null ? null : EfExecutionLivenessStateStore.Read(row, scope, workflowExecutionId, operationalStateId);
+        RuntimeExecutionFenceValidator.EnsureCurrent(workflowExecutionId, expected, state, timeProvider.GetUtcNow());
 
         // Revision is the provider-neutral optimistic fence. Touching it in the same transaction makes a concurrent
         // lease transition fail the whole checkpoint instead of allowing state and marker rows to commit together.
-        row.Revision = checked(row.Revision + 1);
-    }
-
-    private static long ReadHighestIssuedToken(ExecutionLivenessState state)
-    {
-        if (state.Metadata.TryGetValue(RuntimeMetadataKeys.OwnershipFencingToken, out var raw) &&
-            long.TryParse(raw, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var token))
-            return token;
-        return state.ExecutionLease?.FencingToken ?? 0;
+        row!.Revision = checked(row.Revision + 1);
     }
 }

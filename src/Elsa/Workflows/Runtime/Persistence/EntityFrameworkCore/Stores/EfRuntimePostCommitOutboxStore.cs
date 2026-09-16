@@ -38,7 +38,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
         if (existing is not null)
         {
             var current = ReadChecked(existing, scope, item.OutboxItemId);
-            if (PendingItemsEquivalent(current, item))
+            if (current.IsEquivalentPendingItem(item))
                 return;
             throw DifferentPendingItem(item.OutboxItemId);
         }
@@ -58,7 +58,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
                     $"Post-commit outbox item '{item.OutboxItemId}' conflicted during creation but could not be reloaded.",
                     exception);
             var current = ReadChecked(winner, scope, item.OutboxItemId);
-            if (PendingItemsEquivalent(current, item))
+            if (current.IsEquivalentPendingItem(item))
                 return;
             throw DifferentPendingItem(item.OutboxItemId, exception);
         }
@@ -330,7 +330,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
                 else
                 {
                     var existingFollowUp = ReadChecked(followUpRow, scope, followUp.OutboxItemId);
-                    if (!ItemsEquivalent(existingFollowUp, followUp))
+                    if (!existingFollowUp.IsEquivalentTo(followUp))
                         throw DifferentPendingItem(followUp.OutboxItemId);
                 }
             }
@@ -357,7 +357,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
         {
             await RollbackAndDetachAsync(transaction, row, dispatchRow, followUpRow);
             var reconciled = await LoadAsync(scope, completion.Claim.OutboxItemId, tracking: false, cancellationToken);
-            if (reconciled is not null && ItemsEquivalent(ReadChecked(reconciled, scope, completion.Claim.OutboxItemId), completed))
+            if (reconciled is not null && ReadChecked(reconciled, scope, completion.Claim.OutboxItemId).IsEquivalentTo(completed))
             {
                 var dispatchReconciled = true;
                 if (winningDispatch is not null)
@@ -371,7 +371,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
                 }
                 var followUpReconciled = completion.FollowUpOutboxItem is null ||
                     await LoadAsync(scope, completion.FollowUpOutboxItem.OutboxItemId, tracking: false, cancellationToken) is { } followUpEntry &&
-                    ItemsEquivalent(ReadChecked(followUpEntry, scope, completion.FollowUpOutboxItem.OutboxItemId), completion.FollowUpOutboxItem);
+                    ReadChecked(followUpEntry, scope, completion.FollowUpOutboxItem.OutboxItemId).IsEquivalentTo(completion.FollowUpOutboxItem);
                 if (dispatchReconciled && followUpReconciled)
                     return;
             }
@@ -645,51 +645,6 @@ public sealed class EfRuntimePostCommitOutboxStore(
             RuntimePostCommitOutboxEfModule.PhysicalIdentityOrderPrefixMaximumLength)) +
             EfRelationalIdentity.Hash(physical);
     }
-
-    internal static bool PendingItemsEquivalent(
-        RuntimePostCommitOutboxItem left,
-        RuntimePostCommitOutboxItem right) =>
-        left.Status == RuntimePostCommitOutboxStatus.Pending &&
-        right.Status == RuntimePostCommitOutboxStatus.Pending &&
-        ItemsEquivalent(left, right);
-
-    internal static bool ItemsEquivalent(RuntimePostCommitOutboxItem left, RuntimePostCommitOutboxItem right) =>
-        StringComparer.Ordinal.Equals(left.OutboxItemId, right.OutboxItemId) &&
-        IntentsEquivalent(left.Intent, right.Intent) &&
-        left.Status == right.Status &&
-        left.RecordedAt == right.RecordedAt &&
-        left.AvailableAt == right.AvailableAt &&
-        left.RetryPolicy.IsEquivalentTo(right.RetryPolicy) &&
-        left.DeliveryAttemptCount == right.DeliveryAttemptCount &&
-        StringComparer.Ordinal.Equals(left.DeliveringOwnerId, right.DeliveringOwnerId) &&
-        left.DeliveryStartedAt == right.DeliveryStartedAt &&
-        left.DeliveredAt == right.DeliveredAt &&
-        StringComparer.Ordinal.Equals(left.LastFailureMessage, right.LastFailureMessage) &&
-        MetadataEquals(left.Metadata, right.Metadata) &&
-        left.DeliveryFencingToken == right.DeliveryFencingToken &&
-        left.DeliveryVisibleAfter == right.DeliveryVisibleAfter;
-
-    internal static bool IntentsEquivalent(RuntimePostCommitIntent left, RuntimePostCommitIntent right) =>
-        StringComparer.Ordinal.Equals(left.IntentId, right.IntentId) &&
-        StringComparer.Ordinal.Equals(left.WorkflowExecutionId, right.WorkflowExecutionId) &&
-        StringComparer.Ordinal.Equals(left.Kind, right.Kind) &&
-        left.RecordedAt == right.RecordedAt &&
-        StringComparer.Ordinal.Equals(left.ActivityExecutionId, right.ActivityExecutionId) &&
-        StringComparer.Ordinal.Equals(left.IdempotencyKey, right.IdempotencyKey) &&
-        StringComparer.Ordinal.Equals(left.DependsOnWaitRegistrationId, right.DependsOnWaitRegistrationId) &&
-        left.WaitFailurePolicy == right.WaitFailurePolicy &&
-        PayloadEquals(left.Payload, right.Payload) &&
-        MetadataEquals(left.Metadata, right.Metadata);
-
-    private static bool PayloadEquals(JsonElement? left, JsonElement? right) =>
-        left.HasValue == right.HasValue &&
-        (!left.HasValue || StringComparer.Ordinal.Equals(left.Value.GetRawText(), right!.Value.GetRawText()));
-
-    private static bool MetadataEquals(
-        IReadOnlyDictionary<string, string> left,
-        IReadOnlyDictionary<string, string> right) =>
-        left.Count == right.Count &&
-        left.All(entry => right.TryGetValue(entry.Key, out var value) && StringComparer.Ordinal.Equals(entry.Value, value));
 
     private static RuntimePostCommitOutboxItem WithDeliveryState(
         RuntimePostCommitOutboxItem item,

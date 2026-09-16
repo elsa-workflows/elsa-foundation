@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
+using Elsa.Workflows.Runtime.Services.Alterations;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -39,12 +40,8 @@ internal static class EfRuntimeCheckpointAlterationJobParticipantStaging
             ?? throw new KeyNotFoundException($"Alteration job '{change.JobId}' was not found.");
         var existing = EfWorkflowAlterationStore.ReadJob(row, scope, change.JobId);
 
-        if (!StringComparer.Ordinal.Equals(existing.WorkflowExecutionId, expectedWorkflowExecutionId))
-            throw new InvalidOperationException(
-                $"Alteration job '{change.JobId}' belongs to workflow '{existing.WorkflowExecutionId}', not '{expectedWorkflowExecutionId}'.");
-
-        EfWorkflowAlterationStore.ValidateTerminalChange(existing, change);
-        if (existing.Status is WorkflowAlterationJobStatus.Succeeded or WorkflowAlterationJobStatus.Failed or WorkflowAlterationJobStatus.Cancelled)
+        WorkflowAlterationTerminalEvidence.Validate(existing, change, expectedWorkflowExecutionId);
+        if (WorkflowAlterationTerminalEvidence.IsTerminal(existing.Status))
             return;
 
         var terminal = new WorkflowAlterationJobState(

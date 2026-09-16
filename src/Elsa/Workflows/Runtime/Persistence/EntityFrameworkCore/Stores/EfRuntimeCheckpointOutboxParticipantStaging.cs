@@ -22,7 +22,7 @@ internal static class EfRuntimeCheckpointOutboxParticipantStaging
             EfRuntimePostCommitOutboxStore.ValidatePending(candidate);
             if (staged.TryGetValue(change.StateId, out var duplicate))
             {
-                if (!EfRuntimePostCommitOutboxStore.PendingItemsEquivalent(duplicate, candidate))
+                if (!duplicate.IsEquivalentPendingItem(candidate))
                     throw new InvalidOperationException(
                         $"Post-commit outbox item '{change.StateId}' occurs more than once with conflicting intent.");
                 continue;
@@ -41,9 +41,9 @@ internal static class EfRuntimeCheckpointOutboxParticipantStaging
             }
 
             var current = EfRuntimePostCommitOutboxStore.ReadChecked(existing, scope, candidate.OutboxItemId);
-            if (!EfRuntimePostCommitOutboxStore.PendingItemsEquivalent(current, candidate))
+            if (!current.IsEquivalentPendingItem(candidate))
                 throw new InvalidOperationException(
-                    $"Post-commit outbox item '{change.StateId}' already exists with conflicting intent or delivery state.");
+                    $"Post-commit outbox item '{change.StateId}' already exists with a different intent or status.");
         }
     }
 }

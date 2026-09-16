@@ -90,14 +90,14 @@ public sealed class WorkflowDispatchCancellationEnricher : IRuntimeCheckpointCom
                 requests.Add(request);
 
             var intent = WorkflowDispatchCancelIntentFactory.Create(record, commit.Checkpoint.OccurredAt);
-            if (committed is not null && !Equivalent(committed.Intent, intent))
+            if (committed is not null && !committed.Intent.IsEquivalentTo(intent))
             {
                 throw new InvalidOperationException(
                     $"Committed child-cancel intent '{intent.IntentId}' conflicts with dispatch '{record.DispatchId}'.");
             }
             var existingIntent = intents.SingleOrDefault(item =>
                 StringComparer.Ordinal.Equals(item.IntentId, intent.IntentId));
-            if (existingIntent is not null && !Equivalent(existingIntent, intent))
+            if (existingIntent is not null && !existingIntent.IsEquivalentTo(intent))
                 throw new InvalidOperationException($"Child-cancel intent '{intent.IntentId}' conflicts with dispatch '{record.DispatchId}'.");
             if (existingIntent is null)
                 intents.Add(intent);
@@ -159,20 +159,4 @@ public sealed class WorkflowDispatchCancellationEnricher : IRuntimeCheckpointCom
             afterDispatchId = last.DispatchId;
         }
     }
-
-    private static bool Equivalent(RuntimePostCommitIntent left, RuntimePostCommitIntent right) =>
-        StringComparer.Ordinal.Equals(left.IntentId, right.IntentId) &&
-        StringComparer.Ordinal.Equals(left.WorkflowExecutionId, right.WorkflowExecutionId) &&
-        StringComparer.Ordinal.Equals(left.Kind, right.Kind) &&
-        left.RecordedAt == right.RecordedAt &&
-        StringComparer.Ordinal.Equals(left.ActivityExecutionId, right.ActivityExecutionId) &&
-        StringComparer.Ordinal.Equals(left.IdempotencyKey, right.IdempotencyKey) &&
-        StringComparer.Ordinal.Equals(left.DependsOnWaitRegistrationId, right.DependsOnWaitRegistrationId) &&
-        left.WaitFailurePolicy == right.WaitFailurePolicy &&
-        left.Payload is { } leftPayload &&
-        right.Payload is { } rightPayload &&
-        JsonElement.DeepEquals(leftPayload, rightPayload) &&
-        left.Metadata.Count == right.Metadata.Count &&
-        left.Metadata.All(item => right.Metadata.TryGetValue(item.Key, out var value) &&
-                                  StringComparer.Ordinal.Equals(item.Value, value));
 }

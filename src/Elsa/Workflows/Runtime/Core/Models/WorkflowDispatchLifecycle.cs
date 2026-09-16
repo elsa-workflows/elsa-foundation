@@ -82,6 +82,20 @@ public static class WorkflowDispatchLifecycle
         return WithCancellationState(record, WorkflowDispatchStatus.Started, ScopeCancellationRequestedState, requestedAt);
     }
 
+    /// <summary>
+    /// A test-scope cleanup found the dispatch's cancellation item already present. The cleanup converges when that item
+    /// carries the same cancellation responsibility, whatever its delivery progress, and the caller then keeps the existing
+    /// item unchanged. A different responsibility under the same identity is a conflict.
+    /// </summary>
+    public static void EnsureTestScopeCancellationResponsibility(
+        RuntimePostCommitOutboxItem existing,
+        RuntimePostCommitIntent intent)
+    {
+        ArgumentNullException.ThrowIfNull(existing);
+        if (!existing.CarriesResponsibilityFor(intent))
+            throw new InvalidOperationException("The workflow test-scope cancellation outbox item conflicts with committed responsibility.");
+    }
+
     public static void ValidateTestScopeCancellationIntent(
         WorkflowDispatchRecord record,
         RuntimePostCommitIntent intent)
@@ -110,6 +124,41 @@ public static class WorkflowDispatchLifecycle
         if (record.Status != WorkflowDispatchStatus.Pending)
             throw new InvalidOperationException($"Workflow dispatch '{record.DispatchId}' must be Pending before admission can be cancelled.");
         return WithCancellationState(record, WorkflowDispatchStatus.Cancelled, CancelledBeforeAdmissionState, requestedAt);
+    }
+
+    /// <summary>
+    /// Resolves a parent-cancellation request against the dispatch record as it currently stands. A provider calls this
+    /// inside its own atomic boundary on the record it read there, then persists <see cref="WorkflowDispatchCancellationResult.Record"/>
+    /// when it differs. A Pending child is cancelled before admission, a Started child is marked for cancellation once,
+    /// and a terminal child is left unchanged.
+    /// </summary>
+    public static WorkflowDispatchCancellationResult ResolveParentCancellation(
+        WorkflowDispatchRecord? current,
+        WorkflowDispatchCancellationRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (current is null)
+            throw new InvalidOperationException($"Workflow dispatch '{request.DispatchId}' was not found for parent cancellation.");
+        if (!StringComparer.Ordinal.Equals(current.ParentWorkflowExecutionId, request.ParentWorkflowExecutionId) ||
+            !StringComparer.Ordinal.Equals(current.ParentActivityExecutionId, request.ParentActivityExecutionId) ||
+            !StringComparer.Ordinal.Equals(current.ChildWorkflowExecutionId, request.ChildWorkflowExecutionId))
+        {
+            throw new InvalidOperationException(
+                $"Workflow dispatch cancellation request '{request.DispatchId}' conflicts with the persisted dispatch identity.");
+        }
+        if (!IsCancellationPropagationEnabled(current))
+            throw new InvalidOperationException($"Workflow dispatch '{request.DispatchId}' does not permit parent cancellation propagation.");
+
+        return current.Status switch
+        {
+            WorkflowDispatchStatus.Pending => new(
+                WorkflowDispatchCancellationDisposition.AppliedBeforeAdmission,
+                CancelBeforeAdmission(current, request.RequestedAt)),
+            WorkflowDispatchStatus.Started => new(
+                WorkflowDispatchCancellationDisposition.CancellationRequestedAfterAdmission,
+                IsCancellationRequested(current) ? current : MarkCancellationRequested(current, request.RequestedAt)),
+            _ => new(WorkflowDispatchCancellationDisposition.TerminalUnchanged, current)
+        };
     }
 
     public static WorkflowDispatchRecord MarkCancellationRequested(

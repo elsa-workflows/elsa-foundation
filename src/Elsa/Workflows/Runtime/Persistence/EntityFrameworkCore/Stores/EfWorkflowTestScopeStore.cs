@@ -3,6 +3,7 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -149,21 +150,15 @@ public sealed class EfWorkflowTestScopeStore(
         _access.Current.EnsureTenantScope(scope.TenantId);
         var row = await _context.WorkflowTestScopes
             .SingleOrDefaultAsync(x => x.Id == WorkflowTestScopeEfSupport.Id(accessScope, scope.ScopeId) && x.AccessScopeKey == EfRelationalIdentity.Encode(accessScope) && x.AccessScopeKeyHash == EfRelationalIdentity.Hash(accessScope) && x.ScopeId == EfRelationalIdentity.Encode(scope.ScopeId) && x.ScopeIdHash == EfRelationalIdentity.Hash(scope.ScopeId), ct);
-        if (row is null)
-            throw new TestScopeAdmissionException("The workflow test scope is not open in the current persistence context.");
-
-        var record = WorkflowTestScopeEfSupport.Read(row, accessScope, scope.ScopeId);
-        if (record.State != WorkflowTestScopeState.Open ||
-            record.Scope.IsExpired(observedAt) ||
-            !WorkflowTestScope.ContextEquals(record.Scope, scope))
-        {
-            throw new TestScopeAdmissionException("The workflow test scope is not open in the current persistence context.");
-        }
+        WorkflowTestScopeAdmission.EnsureOpen(
+            row is null ? null : WorkflowTestScopeEfSupport.Read(row, accessScope, scope.ScopeId),
+            scope,
+            observedAt);
 
         // A revision-only write is the EF equivalent of a same-value
         // conditional upsert. It linearizes admission against a concurrent close:
-        // whichever writer reaches the row first invalidates the other's revision.
-        row.Revision = checked(row.Revision + 1);
+        // whichever writer reaches the row first invalidates the other's revision. EnsureOpen refused a missing row.
+        row!.Revision = checked(row.Revision + 1);
         try
         {
             await _context.SaveChangesAsync(ct);

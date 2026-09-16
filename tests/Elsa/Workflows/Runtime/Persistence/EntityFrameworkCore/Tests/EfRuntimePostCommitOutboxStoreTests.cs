@@ -39,6 +39,32 @@ public sealed class EfRuntimePostCommitOutboxStoreTests
         Assert.Single(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10)));
     }
 
+    /// <summary>
+    /// Storage re-serializes an intent payload: whitespace is dropped and non-ASCII text is escaped. A replay of the same
+    /// pending item must still be recognised as the same intent, so payloads compare as JSON values, not as text.
+    /// </summary>
+    [Fact]
+    public async Task Pending_replay_is_idempotent_when_storage_reformats_the_payload()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open("tenant-a");
+        var store = new EfRuntimePostCommitOutboxStore(context, new FixedAccessor("tenant-a"));
+        using var payload = System.Text.Json.JsonDocument.Parse("{ \"name\": \"café\", \"count\": 1 }");
+        var pending = new RuntimePostCommitOutboxItem(
+            "reformatted",
+            new RuntimePostCommitIntent("intent-reformatted", "workflow-a", "test.intent", Now, null, null, payload.RootElement),
+            RuntimePostCommitOutboxStatus.Pending,
+            Now,
+            Now);
+
+        await store.SavePendingAsync(pending);
+        var persisted = (await store.FindAsync("reformatted"))!;
+        await store.SavePendingAsync(pending);
+
+        Assert.NotEqual(pending.Intent.Payload!.Value.GetRawText(), persisted.Intent.Payload!.Value.GetRawText());
+        Assert.True(persisted.IsEquivalentPendingItem(pending));
+    }
+
     [Fact]
     public async Task Deterministic_due_queries_are_bounded_and_filter_workflow_and_intent()
     {

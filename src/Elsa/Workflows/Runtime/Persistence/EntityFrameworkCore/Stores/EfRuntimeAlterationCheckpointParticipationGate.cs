@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
+using Elsa.Workflows.Runtime.Services.Alterations;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -86,7 +87,7 @@ internal sealed class EfRuntimeAlterationCheckpointParticipationGate : IDisposab
             .SingleOrDefaultAsync(candidate => candidate.Id == jobId, cancellationToken)
             ?? throw new InvalidOperationException("The alteration checkpoint callback did not terminalize the EF job.");
         var job = EfWorkflowAlterationStore.ReadJob(row, _scope, _change.JobId);
-        EfWorkflowAlterationStore.ValidateTerminalChange(job, _change);
+        WorkflowAlterationTerminalEvidence.Validate(job, _change);
         if (job.Status is not (WorkflowAlterationJobStatus.Succeeded or WorkflowAlterationJobStatus.Failed or WorkflowAlterationJobStatus.Cancelled))
             throw new InvalidOperationException("The alteration checkpoint callback did not persist terminal job evidence.");
         if (!StringComparer.Ordinal.Equals(EfRuntimeOperationalStoreSupport.Decode(marker.WorkflowExecutionId), job.WorkflowExecutionId))

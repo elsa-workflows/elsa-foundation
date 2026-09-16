@@ -51,7 +51,8 @@ internal static class RuntimeWorkflowDispatchProviderSmoke
             var access = new FixedAccessor(scope);
             var store = new EfWorkflowDispatchStore(context, access);
             var first = Pending("parent-a", "activity-a", scope, DateTimeOffset.UtcNow);
-            var second = Pending("parent-a", "activity-b", scope, DateTimeOffset.UtcNow.AddTicks(1));
+            // Cancelled below: parent cancellation propagates only to a waited child.
+            var second = Pending("parent-a", "activity-b", scope, DateTimeOffset.UtcNow.AddTicks(1), WorkflowDispatchMode.WaitForCompletion);
             await store.SaveAsync(first);
             await store.SaveAsync(first);
             await store.SaveAsync(second);
@@ -130,7 +131,12 @@ internal static class RuntimeWorkflowDispatchProviderSmoke
         Assert.Null(await new EfWorkflowDispatchStore(reopened, new FixedAccessor(scope)).FindAsync("missing-dispatch"));
     }
 
-    private static WorkflowDispatchRecord Pending(string parent, string activity, string tenant, DateTimeOffset createdAt)
+    private static WorkflowDispatchRecord Pending(
+        string parent,
+        string activity,
+        string tenant,
+        DateTimeOffset createdAt,
+        WorkflowDispatchMode mode = WorkflowDispatchMode.FireAndForget)
     {
         var identity = new WorkflowDispatchIdentity(parent, activity);
         return new WorkflowDispatchRecord(
@@ -140,7 +146,7 @@ internal static class RuntimeWorkflowDispatchProviderSmoke
             identity.ChildWorkflowExecutionId,
             new WorkflowExecutableIdentity($"artifact-{activity}", "definition-child", "version-child", "1", $"hash-{activity}"),
             new WorkflowExecutableSourceProvenance($"source-{activity}", "WorkflowDefinitionVersion", "version-child", "1", "definition-child", "version-child", "1", "publication-child", "slot-child"),
-            WorkflowDispatchMode.FireAndForget,
+            mode,
             WorkflowDispatchStatus.Pending,
             null,
             tenant,

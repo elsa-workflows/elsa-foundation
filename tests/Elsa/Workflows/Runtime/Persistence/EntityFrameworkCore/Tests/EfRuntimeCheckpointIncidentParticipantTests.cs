@@ -146,7 +146,7 @@ public sealed class EfRuntimeCheckpointIncidentParticipantTests
     }
 
     [Fact]
-    public async Task Staging_requires_a_caller_owned_transaction_and_matching_workflow()
+    public async Task Staging_requires_a_caller_owned_transaction()
     {
         await using var database = await TestDatabase.CreateAsync();
         await using var fixture = database.Open("tenant-a");
@@ -154,11 +154,6 @@ public sealed class EfRuntimeCheckpointIncidentParticipantTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             StageAsync(fixture.Context, Change(RuntimeStateChangeOperation.Append, incident), "tenant-a", "workflow-a"));
-
-        await using var transaction = await fixture.Context.Database.BeginTransactionAsync();
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            StageAsync(fixture.Context, Change(RuntimeStateChangeOperation.Append, incident), "tenant-a", "workflow-other"));
-        await transaction.RollbackAsync();
         Assert.Empty(await fixture.Context.IncidentStates.ToArrayAsync());
     }
 

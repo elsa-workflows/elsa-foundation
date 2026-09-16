@@ -99,48 +99,10 @@ public sealed class InMemoryWorkflowDispatchStore : IWorkflowDispatchStore, IWor
 
         lock (_state.SyncRoot)
         {
-            if (!_state.WorkflowDispatches.TryGetValue(request.DispatchId, out var record))
-                throw new InvalidOperationException($"Workflow dispatch '{request.DispatchId}' was not found for parent cancellation.");
-            ValidateCancellationRequest(record, request);
-            if (!WorkflowDispatchLifecycle.IsCancellationPropagationEnabled(record))
-                throw new InvalidOperationException($"Workflow dispatch '{record.DispatchId}' does not permit parent cancellation propagation.");
-
-            WorkflowDispatchRecord resolved;
-            WorkflowDispatchCancellationDisposition disposition;
-            switch (record.Status)
-            {
-                case WorkflowDispatchStatus.Pending:
-                    resolved = WorkflowDispatchLifecycle.CancelBeforeAdmission(record, request.RequestedAt);
-                    disposition = WorkflowDispatchCancellationDisposition.AppliedBeforeAdmission;
-                    _state.WorkflowDispatches[record.DispatchId] = resolved;
-                    break;
-                case WorkflowDispatchStatus.Started:
-                    resolved = WorkflowDispatchLifecycle.IsCancellationRequested(record)
-                        ? record
-                        : WorkflowDispatchLifecycle.MarkCancellationRequested(record, request.RequestedAt);
-                    disposition = WorkflowDispatchCancellationDisposition.CancellationRequestedAfterAdmission;
-                    _state.WorkflowDispatches[record.DispatchId] = resolved;
-                    break;
-                default:
-                    resolved = record;
-                    disposition = WorkflowDispatchCancellationDisposition.TerminalUnchanged;
-                    break;
-            }
-
-            return ValueTask.FromResult(new WorkflowDispatchCancellationResult(disposition, resolved));
-        }
-    }
-
-    private static void ValidateCancellationRequest(
-        WorkflowDispatchRecord record,
-        WorkflowDispatchCancellationRequest request)
-    {
-        if (!StringComparer.Ordinal.Equals(record.ParentWorkflowExecutionId, request.ParentWorkflowExecutionId) ||
-            !StringComparer.Ordinal.Equals(record.ParentActivityExecutionId, request.ParentActivityExecutionId) ||
-            !StringComparer.Ordinal.Equals(record.ChildWorkflowExecutionId, request.ChildWorkflowExecutionId))
-        {
-            throw new InvalidOperationException(
-                $"Workflow dispatch cancellation request '{request.DispatchId}' conflicts with the persisted dispatch identity.");
+            _state.WorkflowDispatches.TryGetValue(request.DispatchId, out var record);
+            var result = WorkflowDispatchLifecycle.ResolveParentCancellation(record, request);
+            _state.WorkflowDispatches[request.DispatchId] = result.Record;
+            return ValueTask.FromResult(result);
         }
     }
 

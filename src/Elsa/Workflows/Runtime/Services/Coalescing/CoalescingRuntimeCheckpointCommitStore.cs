@@ -81,6 +81,11 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
                 PostCommitIntents = [],
             };
 
+            // Each buffered commit and this trailing one were validated by the committer, but a fold of valid commits is
+            // a new commit and can combine changes no single commit carried. It is the one commit this decorator builds
+            // itself, so it is validated here before the durable store sees it; every other path forwards the
+            // committer's already-validated commit unchanged.
+            RuntimeCheckpointCommitValidator.Validate(foldedCommit);
             await _inner.CommitAsync(foldedCommit, ImmediateDecision, cancellationToken);
             session.InvalidateInspectionBaselines();
             if (capFold)

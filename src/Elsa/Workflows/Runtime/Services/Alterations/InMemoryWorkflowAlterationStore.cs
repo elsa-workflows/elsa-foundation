@@ -405,7 +405,7 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
         ArgumentNullException.ThrowIfNull(change);
         cancellationToken.ThrowIfCancellationRequested();
         lock (_state.SyncRoot)
-            ValidateTerminalChange(change, GetJob(change.JobId));
+            WorkflowAlterationTerminalEvidence.Validate(GetJob(change.JobId), change);
         return ValueTask.CompletedTask;
     }
 
@@ -416,7 +416,7 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
         lock (_state.SyncRoot)
         {
             var job = GetJob(change.JobId);
-            ValidateTerminalChange(change, job);
+            WorkflowAlterationTerminalEvidence.Validate(job, change);
             // Retain the completed claim as immutable checkpoint evidence. It is not an active lease once the job is
             // terminal, but acknowledgement reconciliation must prove the exact claimant that wrote this commit.
             var terminal = CopyJob(job, status: change.Status, claim: job.Claim, outcomes: change.Outcomes.ToArray(), checkpointCommitId: change.CheckpointCommitId, safeFailure: change.SafeFailure, completedAt: change.CompletedAt, revision: job.Revision + 1);
@@ -441,7 +441,7 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
         try
         {
             lock (_state.SyncRoot)
-                ValidateTerminalChange(change, GetJob(change.JobId));
+                WorkflowAlterationTerminalEvidence.Validate(GetJob(change.JobId), change);
 
             await commitWorkflowCheckpointAsync(cancellationToken);
         }
@@ -530,22 +530,6 @@ public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationSt
     {
         if (plan.Revision != expectedRevision)
             throw new WorkflowAlterationConcurrencyException(plan.PlanId);
-    }
-
-    private static void ValidateTerminalChange(WorkflowAlterationJobTerminalChange change, WorkflowAlterationJobState job)
-    {
-        if (job.Status is WorkflowAlterationJobStatus.Succeeded or WorkflowAlterationJobStatus.Failed or WorkflowAlterationJobStatus.Cancelled)
-        {
-            if (StringComparer.Ordinal.Equals(job.CheckpointCommitId, change.CheckpointCommitId) &&
-                job.Status == change.Status &&
-                job.CompletedAt == change.CompletedAt &&
-                job.SafeFailure == change.SafeFailure &&
-                job.Outcomes.SequenceEqual(change.Outcomes))
-                return;
-            throw new InvalidOperationException("A terminal alteration job cannot be terminalized with conflicting checkpoint evidence.");
-        }
-        if (job.Status != WorkflowAlterationJobStatus.Running || job.Claim is null || !StringComparer.Ordinal.Equals(job.Claim.Token, change.ClaimToken))
-            throw new WorkflowAlterationClaimFenceException(change.JobId);
     }
 
     private static bool IsTerminal(WorkflowAlterationPlanStatus status) => status is WorkflowAlterationPlanStatus.Completed or WorkflowAlterationPlanStatus.CompletedWithFailures or WorkflowAlterationPlanStatus.Failed or WorkflowAlterationPlanStatus.Cancelled;
