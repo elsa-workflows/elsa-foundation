@@ -12,6 +12,17 @@ Groundwork-removal PR replaces with its own number.
 The physical names are inventory facts, not a requirement that the EF model preserve Groundwork's
 shape.
 
+## Deletion step
+
+Every unit in this register is deleted by #1764. All 14 first-party Groundwork source projects and
+all 36 Groundwork/MongoDB test projects are removed; the seven `Groundwork.*` package pins,
+`MongoDB.Driver` and `Testcontainers.MongoDb` are gone from `Directory.Packages.props`; and the
+Groundwork feed plus the `MongoDB.*` source mapping are gone from `NuGet.config`. No implementation
+named in a `Current primary implementations` or physical-name cell below exists in the tree any more.
+
+Those names are kept here deliberately. This register is the record of what was replaced, so it has
+to keep naming the thing it replaced.
+
 ## Evidence and dependency keys
 
 | Key | Required timing-independent evidence |
