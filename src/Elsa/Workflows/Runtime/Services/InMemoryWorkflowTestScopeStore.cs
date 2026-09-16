@@ -226,8 +226,9 @@ public sealed class InMemoryWorkflowTestScopeStore :
             RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)));
         if (_state.OutboxItems.TryGetValue(outboxItemId, out var existing))
         {
-            if (!existing.Intent.IsEquivalentTo(intent))
-                throw new InvalidOperationException("The workflow test-scope cancellation outbox item conflicts with committed responsibility.");
+            // Converge on the responsibility already recorded and leave the item exactly as it is: it may already be
+            // claimed, delivered, or retried, and writing it back as pending would regress it.
+            WorkflowDispatchLifecycle.EnsureTestScopeCancellationResponsibility(existing, intent);
             return;
         }
 

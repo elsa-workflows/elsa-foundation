@@ -148,15 +148,14 @@ public sealed class EfWorkflowTestScopeCleanupStore(
                     }
                     else
                     {
+                        // A concurrent cleaner may have committed this responsibility after this cleaner selected the
+                        // dispatch, and delivery may already have claimed or completed the item. Converge on it and leave
+                        // the row untouched: writing it back as pending would regress it (spec 102 FR-014).
                         var existing = EfRuntimePostCommitOutboxStore.ReadChecked(
                             outboxRow,
                             accessScope,
                             outboxItem.OutboxItemId);
-                        if (!existing.IsEquivalentPendingItem(outboxItem))
-                        {
-                            throw new InvalidOperationException(
-                                "The workflow test-scope cancellation outbox item conflicts with committed responsibility.");
-                        }
+                        WorkflowDispatchLifecycle.EnsureTestScopeCancellationResponsibility(existing, outboxItem.Intent);
                     }
 
                     cancellationQueued++;

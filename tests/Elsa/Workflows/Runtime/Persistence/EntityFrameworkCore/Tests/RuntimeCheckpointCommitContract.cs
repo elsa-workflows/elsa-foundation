@@ -269,6 +269,9 @@ internal sealed class RuntimeCheckpointCommitContractBackend : IAsyncDisposable
         IWorkflowTestScopeStore scopes,
         IWorkflowDispatchAdmissionStore admissions,
         IWorkflowExecutionStateStore executions,
+        IWorkflowTestScopeCleanupStore cleanup,
+        IRuntimePostCommitOutboxStore delivery,
+        IRuntimePostCommitOutboxClaimStore claims,
         IAsyncDisposable? resources = null)
     {
         Store = new CallCountingStore(store);
@@ -293,6 +296,9 @@ internal sealed class RuntimeCheckpointCommitContractBackend : IAsyncDisposable
         Scopes = scopes;
         Admissions = admissions;
         Executions = executions;
+        Cleanup = cleanup;
+        Delivery = delivery;
+        Claims = claims;
         _resources = resources;
     }
 
@@ -312,6 +318,9 @@ internal sealed class RuntimeCheckpointCommitContractBackend : IAsyncDisposable
     public IWorkflowTestScopeStore Scopes { get; }
     public IWorkflowDispatchAdmissionStore Admissions { get; }
     public IWorkflowExecutionStateStore Executions { get; }
+    public IWorkflowTestScopeCleanupStore Cleanup { get; }
+    public IRuntimePostCommitOutboxStore Delivery { get; }
+    public IRuntimePostCommitOutboxClaimStore Claims { get; }
 
     public Task<int> CountMarkersAsync() => _countMarkers();
 
@@ -352,6 +361,7 @@ internal sealed class RuntimeCheckpointCommitContractBackend : IAsyncDisposable
         var dispatches = new InMemoryWorkflowDispatchStore(state);
         var alterations = new InMemoryWorkflowAlterationStore();
         var executions = new InMemoryWorkflowExecutionStateStore();
+        var scopes = new InMemoryWorkflowTestScopeStore(state);
         var store = new InMemoryRuntimeCheckpointCommitStore(
             executions,
             new InMemoryActivityExecutionStateStore(),
@@ -378,9 +388,12 @@ internal sealed class RuntimeCheckpointCommitContractBackend : IAsyncDisposable
             alterations,
             liveness,
             queue,
-            new InMemoryWorkflowTestScopeStore(state),
+            scopes,
             dispatches,
-            executions);
+            executions,
+            scopes,
+            store,
+            store);
     }
 
     private static async Task<RuntimeCheckpointCommitContractBackend> CreateEntityFrameworkAsync()
@@ -409,6 +422,9 @@ internal sealed class RuntimeCheckpointCommitContractBackend : IAsyncDisposable
             new EfWorkflowTestScopeStore(context, access, codec),
             dispatches,
             new EfWorkflowExecutionStateStore(context, access, codec),
+            new EfWorkflowTestScopeCleanupStore(context, access, codec),
+            outbox,
+            outbox,
             new SqliteResources(context, connection));
     }
 

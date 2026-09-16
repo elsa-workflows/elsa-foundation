@@ -82,6 +82,20 @@ public static class WorkflowDispatchLifecycle
         return WithCancellationState(record, WorkflowDispatchStatus.Started, ScopeCancellationRequestedState, requestedAt);
     }
 
+    /// <summary>
+    /// A test-scope cleanup found the dispatch's cancellation item already present. The cleanup converges when that item
+    /// carries the same cancellation responsibility, whatever its delivery progress, and the caller then keeps the existing
+    /// item unchanged. A different responsibility under the same identity is a conflict.
+    /// </summary>
+    public static void EnsureTestScopeCancellationResponsibility(
+        RuntimePostCommitOutboxItem existing,
+        RuntimePostCommitIntent intent)
+    {
+        ArgumentNullException.ThrowIfNull(existing);
+        if (!existing.CarriesResponsibilityFor(intent))
+            throw new InvalidOperationException("The workflow test-scope cancellation outbox item conflicts with committed responsibility.");
+    }
+
     public static void ValidateTestScopeCancellationIntent(
         WorkflowDispatchRecord record,
         RuntimePostCommitIntent intent)

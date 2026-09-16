@@ -117,13 +117,34 @@ public sealed class RuntimePostCommitOutboxItem
         DeliveryVisibleAfter == other.DeliveryVisibleAfter;
 
     /// <summary>
-    /// The idempotency rule for saving a pending item whose identity already exists: the save is a replay only when both
+    /// Exact-replay idempotency for saving a pending item whose identity already exists: the save is a replay only when both
     /// items are pending and equivalent in every field. Anything else is a conflict, never a silent overwrite.
     /// </summary>
+    /// <remarks>
+    /// This answers "is this the same pending item again?". It fits a checkpoint outbox, whose item identity includes the
+    /// commit identity, so a legitimate repeat is an exact replay. It is deliberately not the rule for re-asserting a
+    /// responsibility that other writers may already be delivering; use <see cref="CarriesResponsibilityFor"/> for that.
+    /// </remarks>
     public bool IsEquivalentPendingItem(RuntimePostCommitOutboxItem? other) =>
         Status == RuntimePostCommitOutboxStatus.Pending &&
         other is { Status: RuntimePostCommitOutboxStatus.Pending } &&
         IsEquivalentTo(other);
+
+    /// <summary>
+    /// Whether this item already carries the logical responsibility <paramref name="intent"/> describes, whatever its
+    /// delivery progress. A writer re-asserting that responsibility must then keep this item exactly as it is: writing it
+    /// back as pending would regress a claimed or delivered item and could deliver the same work twice.
+    /// </summary>
+    /// <remarks>
+    /// This answers "is this the same responsibility?", not "is this the same pending item?". Test-scope cleanup needs it:
+    /// concurrent and repeated cleanups must converge (spec 102 FR-014), and between two cleaners the cancellation item may
+    /// already have been claimed, delivered, or retried. Do not replace it with <see cref="IsEquivalentPendingItem"/>.
+    /// </remarks>
+    public bool CarriesResponsibilityFor(RuntimePostCommitIntent intent)
+    {
+        ArgumentNullException.ThrowIfNull(intent);
+        return Intent.IsEquivalentTo(intent);
+    }
 
     private static void Validate(
         RuntimePostCommitOutboxStatus status,
