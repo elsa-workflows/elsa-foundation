@@ -3,7 +3,7 @@
 ### Run the host:  dotnet run --project src/Apps/Elsa.Workbench/Elsa.Workbench.csproj
 ### Use with the REST Client (VS Code / Visual Studio / Rider).
 ###
-### On boot, the CLR reconciliation source scans the host output folder. With the Publishing Groundwork
+### On boot, the CLR reconciliation source scans the host output folder. With the Publishing EF Core
 ### bridge composed, each source-owned CLR version is committed with stable provider/consumer identity
 ### and its immutable executable template. The requests below add another provider-neutral CLR activity,
 ### list the catalog, then cross the construction seam.
