@@ -1,6 +1,6 @@
 # EF Core Persistence
 
-Status: active.
+Status: complete (2026-09-16).
 
 Area: Elsa persistence-family consolidation / four-provider EF Core delivery.
 
@@ -26,13 +26,38 @@ boundary. Its entry-level registers cover [storage units and implementations](..
 
 ## Current checkpoint
 
-As of 2026-09-12, governance issue #1666 and PR #1685 are merged. Issue #1671 is the sole assigned
-Project 49 leaf and is expanding the ledger against `main` at
-`7a952efcf8d53472d7d4e7e3fd7b51d7a808c1c8`. The candidate baseline contains 95 storage-unit rows,
-51 test/evidence-project rows, 13 backend e2e journeys, 78 uniquely linked current/legacy issues,
-and explicit dependency, transaction, migration, host, tool, workflow, alert, map and guard
-surfaces. These are inventory facts and future acceptance gates; no module replacement, default
-flip, or deletion is claimed by this checkpoint.
+Complete as of 2026-09-16. Every one of the 95 storage units named in the
+[storage-unit register](../reports/ef-core-persistence/storage-unit-register.md) has a merged EF Core
+implementation across SQLite, SQL Server, PostgreSQL and MySQL; #1763 (`569903c80`) made EF the default
+composition for the Workbench, the Production overlay and the Docker reference host; and #1764
+(`a83c41c1c`) removed every first-party Groundwork and MongoDB surface. #1765 and #1766 closed the
+entry-level registers.
+
+What this checkpoint does **not** claim:
+
+- **Performance is unmeasured**, by the owner decision recorded below. No benchmark was run and no
+  performance claim is made anywhere in this program.
+- **Four-provider CI enforcement is partial.** Of the 15 `ef-container-suites` legs, six arm a
+  required-provider variable and nine self-skip if a container is unavailable. Those nine were
+  executed locally against real PostgreSQL 16, SQL Server 2022 and MySQL 8.4 containers on
+  2026-09-16 with zero skips, so the coverage is proven but not continuously enforced.
+- **Eight backend e2e suites fail**, each verified to fail identically on a Groundwork-composed host
+  built at `16a2f991a`, so they are pre-existing product defects rather than persistence
+  regressions. They are tracked as
+  [#1761](https://github.com/elsa-workflows/elsa-foundation/issues/1761). One of them,
+  `durability/Test-RestartRecovery`, had been misattributed to a stale test harness; re-testing
+  showed durable state rehydrates correctly but a post-restart event stimulus matches nothing
+  (`resumedCount=0`), and that correction is recorded on the issue.
+- **Concurrent migration locking closes by delegation** to EF Core's own
+  `IHistoryRepository.AcquireDatabaseLockAsync`, with no first-party parallel-invocation test.
+- **Two coverage losses** are named in the test register rather than absorbed: the v1.2
+  production-scanner traversal, and an identity concurrency contract suite that went with the
+  deleted Groundwork identity project.
+- **`IWorkflowActivationAuthority` still exposes no lease or expiry fields**, unchanged by this
+  program.
+
+Both constitution files still carry ADR 0042's Groundwork-only direction. Amending a ratified
+constitution is an owner decision, not an implementation edit, so it is left open deliberately.
 
 ## Performance measurement retired (2026-09-15)
 
@@ -49,7 +74,7 @@ change, and no claim is made that performance passed.
 
 ## Removal completed (2026-09-16)
 
-The deletion step under #1670 has landed on `claude/delete-groundwork`. Every first-party Groundwork
+The deletion step under #1670 landed as #1764 (`a83c41c1c`). Every first-party Groundwork
 and MongoDB source project, test project, tool, workflow job, package pin, NuGet feed mapping,
 solution entry and solution filter is gone; 14 source projects and 36 test projects were deleted,
 the seven `Groundwork.*` pins, `MongoDB.Driver` and `Testcontainers.MongoDb` were removed from
