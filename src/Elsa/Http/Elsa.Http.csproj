@@ -1,6 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <!-- Every ASP.NET Core type this project uses comes from the shared framework. Do not add standalone
+         Microsoft.AspNetCore.* packages alongside it: they declare the same type names, and mixing the two
+         sources across a project boundary yields two distinct types of the same name that fail at load time.
+         Packages outside the shared framework (JwtBearer, OpenIdConnect, Identity.EntityFrameworkCore) are
+         unaffected and are still referenced normally. -->
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
@@ -9,11 +14,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Authorization" />
-    <PackageReference Include="Microsoft.AspNetCore.Authorization.Policy" />
-    <PackageReference Include="Microsoft.AspNetCore.Http" />
-    <PackageReference Include="Microsoft.AspNetCore.Routing" />
-    <PackageReference Include="Microsoft.AspNetCore.StaticFiles" />
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
