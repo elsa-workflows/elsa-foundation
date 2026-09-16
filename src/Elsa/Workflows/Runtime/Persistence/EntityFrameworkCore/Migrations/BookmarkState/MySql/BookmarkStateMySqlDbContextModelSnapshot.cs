@@ -2461,8 +2461,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
 
                     b.Property<string>("WorkItemId")
                         .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
+                        .HasMaxLength(1200)
+                        .HasColumnType("varchar(1200)");
 
                     b.Property<string>("WorkItemIdHash")
                         .IsRequired()

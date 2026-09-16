@@ -428,7 +428,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                     WorkflowExecutionId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false),
                     WorkflowExecutionIdHash = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false),
                     WorkflowExecutionIdOrderKey = table.Column<string>(type: "varchar(516)", maxLength: 516, nullable: false),
-                    WorkItemId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false),
+                    WorkItemId = table.Column<string>(type: "varchar(1200)", maxLength: 1200, nullable: false),
                     WorkItemIdHash = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false),
                     WorkItemIdOrderKey = table.Column<string>(type: "varchar(516)", maxLength: 516, nullable: false),
                     FirstFailedAtUtcTicks = table.Column<long>(type: "bigint", nullable: false),

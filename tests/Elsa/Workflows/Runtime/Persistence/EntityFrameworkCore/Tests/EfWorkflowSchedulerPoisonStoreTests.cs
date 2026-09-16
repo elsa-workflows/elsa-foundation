@@ -213,6 +213,28 @@ public sealed class EfWorkflowSchedulerPoisonStoreTests
         Assert.Equal(before, services);
     }
 
+    [Fact]
+    public async Task Work_item_identities_the_runtime_composes_are_recorded_listed_and_paged()
+    {
+        // The runtime composes these from an execution id, a command kind and an activity path, so a dispatched
+        // child's work item runs well past the 128 code units a plain runtime identity allows.
+        var prefix = $"0286120a06a4dbba:invoke:dispatch:v1:{new string('a', 64)}:activity:";
+        var first = prefix + new string('b', 200);
+        var second = prefix + new string('c', 200);
+        await using var database = await TestDatabase.CreateAsync();
+        await using var tenant = database.Open("tenant-a");
+
+        await tenant.Store.RecordAsync(Record(1, workItemId: first));
+        await tenant.Store.RecordAsync(Record(2, workItemId: second));
+
+        var found = await tenant.Store.FindAsync("workflow-1", first);
+        Assert.NotNull(found);
+        Assert.Equal(first, found!.WorkItemId);
+        // Both ids share the first 128 units, so the order key alone cannot separate them; paging stays total
+        // because the identity hash is the tie-break.
+        Assert.Equal([first, second], (await tenant.Store.ListAsync("workflow-1")).Select(item => item.WorkItemId).Order(StringComparer.Ordinal));
+    }
+
     private static RuntimeSchedulerPoisonRecord Record(
         int index,
         string? message = null,
