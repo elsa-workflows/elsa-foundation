@@ -134,21 +134,22 @@ public sealed class RuntimeActivityExecutionInspectionTests
     }
 
     [Theory]
-    [InlineData(RuntimeStateChangeOperation.Delete, "wf-1", "Upsert")]
-    [InlineData(RuntimeStateChangeOperation.Upsert, "wf-2", "WorkflowExecutionId")]
+    [InlineData(RuntimeStateChangeOperation.Delete, "wf-1", "A checkpoint commit can only carry activity execution inspection 'Upsert' changes, not 'Delete'.")]
+    [InlineData(RuntimeStateChangeOperation.Upsert, "wf-2", "Activity execution inspection state change WorkflowExecutionId 'wf-2' must match the checkpoint workflow execution ID 'wf-1'.")]
     public async Task CheckpointWriter_Rejects_Invalid_ActivityExecutionInspection_Before_Writing(
         RuntimeStateChangeOperation operation,
         string projectionWorkflowExecutionId,
-        string expectedMessageFragment)
+        string expectedMessage)
     {
         var store = new InMemoryActivityExecutionInspectionStore();
         var writer = new InMemoryRuntimeCheckpointCommitStore(activityExecutionInspectionWriter: store);
+        var committer = new RuntimeCheckpointCommitter(
+            new ImmediateRuntimeCheckpointPersistencePolicy(), writer, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
         var commit = InspectionCommit(operation, Projection(projectionWorkflowExecutionId, "ae-1", "authored-a", sequence: 1));
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            writer.CommitAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => committer.CommitAsync(commit).AsTask());
 
-        Assert.Contains(expectedMessageFragment, exception.Message);
+        Assert.Equal(expectedMessage, exception.Message);
         Assert.Null(await store.FindAsync(projectionWorkflowExecutionId, "ae-1"));
         Assert.Empty(writer.ListCommits());
     }

@@ -78,14 +78,15 @@ internal static class RuntimeCheckpointInspectionParticipantProviderSmoke
         await using (var context = createContext(fixture.ConnectionString))
         {
             await using var transaction = await context.Database.BeginTransactionAsync();
-            await StageAsync(context, Change(RuntimeStateChangeOperation.Delete, projection), scope, "workflow-a");
+            await StageAsync(context, Change(RuntimeStateChangeOperation.Upsert, projection with { ExecutionSequence = 2 }), scope, "workflow-a");
             await context.SaveChangesAsync();
             await transaction.RollbackAsync();
         }
 
         await using (var verification = createContext(fixture.ConnectionString))
         {
-            Assert.NotNull(await new EfActivityExecutionInspectionStore(verification, new FixedAccessor(scope), RecoveryCodec()).FindAsync("workflow-a", "activity-a"));
+            var committed = await new EfActivityExecutionInspectionStore(verification, new FixedAccessor(scope), RecoveryCodec()).FindAsync("workflow-a", "activity-a");
+            Assert.Equal(1, committed?.ExecutionSequence);
             Assert.NotNull(await new EfActivityExecutionHierarchyStore(verification, new FixedAccessor(scope), HierarchyCodec()).FindBoundaryAsync("workflow-a", "activity-a"));
             Assert.Single(await verification.SchedulerStates.Where(row => row.ScopeKey == EfRelationalIdentity.Encode(scope)).ToArrayAsync());
         }

@@ -212,7 +212,7 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
         };
 
         return new ExecutionLivenessState(
-            operationalStateId: OwnershipStateId(workflowExecutionId),
+            operationalStateId: RuntimeExecutionOwnershipStateId.For(workflowExecutionId),
             workflowExecutionId: workflowExecutionId,
             executionLease: executionLease,
             heartbeat: heartbeat,
@@ -225,7 +225,7 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
     private ValueTask<VersionedExecutionLivenessState?> FindVersionedOwnershipStateAsync(
         string workflowExecutionId,
         CancellationToken cancellationToken) =>
-        _operationalStateStore.FindVersionedAsync(workflowExecutionId, OwnershipStateId(workflowExecutionId), cancellationToken);
+        _operationalStateStore.FindVersionedAsync(workflowExecutionId, RuntimeExecutionOwnershipStateId.For(workflowExecutionId), cancellationToken);
 
     private static long ReadHighestIssuedToken(ExecutionLivenessState? state)
     {
@@ -254,6 +254,4 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
     private static RuntimeExecutionOwnershipTransitionResult Transition(
         RuntimeExecutionOwnershipTransitionStatus status,
         long? currentFencingToken) => new(status, currentFencingToken);
-
-    private static string OwnershipStateId(string workflowExecutionId) => $"ownership:{workflowExecutionId}";
 }

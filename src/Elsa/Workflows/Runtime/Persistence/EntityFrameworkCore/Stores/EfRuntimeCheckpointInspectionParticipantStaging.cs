@@ -31,12 +31,8 @@ internal static class EfRuntimeCheckpointInspectionParticipantStaging
         ActivityExecutionEfSupport.ValidateIdentityLength(expectedWorkflowExecutionId, nameof(expectedWorkflowExecutionId));
         ActivityExecutionEfSupport.Validate(projection);
         ActivityExecutionEfSupport.ValidateIdentityLength(change.StateId, nameof(change.StateId));
-        if (!StringComparer.Ordinal.Equals(change.StateId, projection.ActivityExecutionId))
-            throw new InvalidOperationException("Activity execution inspection StateId must match its model identity.");
-        if (!StringComparer.Ordinal.Equals(projection.WorkflowExecutionId, expectedWorkflowExecutionId))
-            throw new InvalidOperationException("Activity execution inspection workflow execution ID must match the checkpoint workflow execution ID.");
-        if (change.Operation is not (RuntimeStateChangeOperation.Upsert or RuntimeStateChangeOperation.Delete))
-            throw new InvalidOperationException("The EF checkpoint writer can only project activity execution inspection upsert or delete changes.");
+        if (change.Operation != RuntimeStateChangeOperation.Upsert)
+            throw new InvalidOperationException("The EF checkpoint writer can only project activity execution inspection upserts.");
         cancellationToken.ThrowIfCancellationRequested();
 
         if (context.Database.CurrentTransaction is null)
@@ -52,11 +48,8 @@ internal static class EfRuntimeCheckpointInspectionParticipantStaging
             cancellationToken);
         if (inspectionRow is null)
         {
-            if (change.Operation == RuntimeStateChangeOperation.Upsert)
-            {
-                context.ActivityExecutionInspections.Add(
-                    EfActivityExecutionInspectionStore.ToEntity(projection, scope, inspectionId, 1));
-            }
+            context.ActivityExecutionInspections.Add(
+                EfActivityExecutionInspectionStore.ToEntity(projection, scope, inspectionId, 1));
         }
         else
         {
@@ -65,16 +58,13 @@ internal static class EfRuntimeCheckpointInspectionParticipantStaging
                 scope,
                 projection.WorkflowExecutionId,
                 projection.ActivityExecutionId);
-            if (change.Operation == RuntimeStateChangeOperation.Delete)
-                context.ActivityExecutionInspections.Remove(inspectionRow);
-            else
-                EfActivityExecutionInspectionStore.CopyToEntity(
-                    inspectionRow,
-                    projection,
-                    scope,
-                    inspectionId,
-                    checked(inspectionRow.Revision + 1),
-                    current);
+            EfActivityExecutionInspectionStore.CopyToEntity(
+                inspectionRow,
+                projection,
+                scope,
+                inspectionId,
+                checked(inspectionRow.Revision + 1),
+                current);
         }
 
         var effectiveExecutionScope = ActivityExecutionEfSupport.EffectiveExecutionScope(projection);
@@ -87,7 +77,7 @@ internal static class EfRuntimeCheckpointInspectionParticipantStaging
             row => row.Id == hierarchyId,
             cancellationToken);
 
-        if (change.Operation == RuntimeStateChangeOperation.Delete || string.IsNullOrWhiteSpace(effectiveExecutionScope))
+        if (string.IsNullOrWhiteSpace(effectiveExecutionScope))
         {
             if (hierarchyRow is not null)
             {

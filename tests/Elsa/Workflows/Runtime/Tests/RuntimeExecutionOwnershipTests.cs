@@ -12,6 +12,14 @@ public sealed class RuntimeExecutionOwnershipTests
     private const string WorkflowExecutionId = "wfexec-1";
     private readonly DateTimeOffset _now = new(2026, 7, 3, 12, 0, 0, TimeSpan.Zero);
 
+    /// <summary>The reserved ownership state ID is persisted, so its format is pinned.</summary>
+    [Fact]
+    public void OwnershipStateId_KeepsItsPersistedFormat()
+    {
+        Assert.Equal("ownership:wfexec-1", RuntimeExecutionOwnershipStateId.For(WorkflowExecutionId));
+        Assert.Throws<ArgumentException>(() => RuntimeExecutionOwnershipStateId.For(" "));
+    }
+
     [Fact]
     public async Task AcquireAsync_IssuesStrictlyIncreasingFencingTokens()
     {

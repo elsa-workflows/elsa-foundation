@@ -57,23 +57,28 @@ public sealed class WorkflowDispatchDurabilityContractTests
     }
 
     [Fact]
-    public async Task CheckpointStore_RequiresParentForPendingAndChildForLifecycleProjection()
+    public async Task CheckpointCommitter_RequiresParentForPendingAndChildForLifecycleProjection()
     {
         var state = new InMemoryRuntimeCheckpointStoreState();
         var dispatchStore = new InMemoryWorkflowDispatchStore(state);
         var checkpointStore = new InMemoryRuntimeCheckpointCommitStore(state: state, workflowDispatchStore: dispatchStore);
+        var committer = new RuntimeCheckpointCommitter(
+            new ImmediateRuntimeCheckpointPersistencePolicy(), checkpointStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
         var pending = NewRecord("parent-1", "activity-1", Now);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            checkpointStore.CommitAsync(NewDispatchCommit("wrong-pending", pending.ChildWorkflowExecutionId, pending), ImmediateDecision()).AsTask());
-        await checkpointStore.CommitAsync(NewDispatchCommit("pending", pending.ParentWorkflowExecutionId, pending), ImmediateDecision());
+        var wrongPending = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            committer.CommitAsync(NewDispatchCommit("wrong-pending", pending.ChildWorkflowExecutionId, pending)).AsTask());
+        Assert.Equal($"Workflow dispatch '{pending.DispatchId}' status 'Pending' must be committed by its parent workflow execution.", wrongPending.Message);
+        await committer.CommitAsync(NewDispatchCommit("pending", pending.ParentWorkflowExecutionId, pending));
 
         var started = pending.TransitionTo(WorkflowDispatchStatus.Started, Now.AddSeconds(1));
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            checkpointStore.CommitAsync(NewDispatchCommit("wrong-started", pending.ParentWorkflowExecutionId, started), ImmediateDecision()).AsTask());
-        await checkpointStore.CommitAsync(NewDispatchCommit("started", pending.ChildWorkflowExecutionId, started), ImmediateDecision());
+        var wrongStarted = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            committer.CommitAsync(NewDispatchCommit("wrong-started", pending.ParentWorkflowExecutionId, started)).AsTask());
+        Assert.Equal($"Workflow dispatch '{pending.DispatchId}' status 'Started' must be committed by its child workflow execution.", wrongStarted.Message);
+        await committer.CommitAsync(NewDispatchCommit("started", pending.ChildWorkflowExecutionId, started));
 
         Assert.Equal(WorkflowDispatchStatus.Started, (await dispatchStore.FindAsync(pending.DispatchId))!.Status);
+        Assert.Equal(["commit-pending", "commit-started"], checkpointStore.ListCommits().Select(record => record.Commit.CommitId).Order(StringComparer.Ordinal));
     }
 
     [Fact]

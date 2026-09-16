@@ -25,10 +25,6 @@ internal static class EfRuntimeCheckpointActivityExecutionParticipantStaging
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedWorkflowExecutionId);
         ActivityExecutionEfSupport.ValidateIdentityLength(expectedWorkflowExecutionId, nameof(expectedWorkflowExecutionId));
         ActivityExecutionEfSupport.Validate(change.State);
-        if (!StringComparer.Ordinal.Equals(change.StateId, change.State.Execution.ActivityExecutionId))
-            throw new InvalidOperationException("Activity execution state change StateId must match its model identity.");
-        if (!StringComparer.Ordinal.Equals(change.State.Execution.WorkflowExecutionId, expectedWorkflowExecutionId))
-            throw new InvalidOperationException("Activity execution workflow execution ID must match the checkpoint workflow execution ID.");
         if (change.Operation is not (RuntimeStateChangeOperation.Append or RuntimeStateChangeOperation.Upsert or RuntimeStateChangeOperation.Delete))
             throw new InvalidOperationException("The EF checkpoint writer can only project activity execution append, upsert, or delete changes.");
         cancellationToken.ThrowIfCancellationRequested();

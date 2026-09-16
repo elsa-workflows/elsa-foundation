@@ -58,12 +58,6 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
         }
     }
 
-    internal static string GetOwnershipStateId(string workflowExecutionId)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
-        return $"ownership:{workflowExecutionId}";
-    }
-
     private ExecutionLivenessState SaveCore(ExecutionLivenessState state)
     {
         var key = Key(state);
@@ -191,7 +185,7 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
     private static bool IsOwnershipState(ExecutionLivenessState state) =>
         StringComparer.Ordinal.Equals(
             state.OperationalStateId,
-            GetOwnershipStateId(state.WorkflowExecutionId));
+            RuntimeExecutionOwnershipStateId.For(state.WorkflowExecutionId));
 
     private static RuntimeStorePage<ExecutionLivenessState> CreatePage(
         RuntimeStorePageRequest query,

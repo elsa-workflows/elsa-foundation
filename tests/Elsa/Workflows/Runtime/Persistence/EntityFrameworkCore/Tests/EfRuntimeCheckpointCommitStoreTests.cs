@@ -345,7 +345,7 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
-    public async Task Lost_scheduler_claim_rejects_the_entire_checkpoint_and_mismatched_workflow_fails_before_io()
+    public async Task Lost_scheduler_claim_rejects_the_entire_checkpoint()
     {
         await using var database = await TestDatabase.CreateAsync();
         await using var context = database.Open("tenant-a");
@@ -372,17 +372,6 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         Assert.Empty(await context.RuntimePostCommitOutbox.ToArrayAsync());
         Assert.Empty(await context.RuntimeCheckpointCommits.ToArrayAsync());
         Assert.Equal(successor.FencingToken, (await context.SchedulerWorkItems.SingleAsync()).ClaimToken);
-
-        var wrongWorkflow = commit with
-        {
-            StateChanges = commit.StateChanges.WithConsumedSchedulerWorkItems(
-                [ConsumedSchedulerWorkItem.FromClaim(original) with { WorkflowExecutionId = "wrong-workflow" }])
-        };
-        var commands = new CommandCaptureInterceptor();
-        await using var beforeIo = database.Open("tenant-a", commands);
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new EfRuntimeCheckpointCommitStore(beforeIo, access).CommitAsync(wrongWorkflow, Decision()).AsTask());
-        Assert.Empty(commands.Commands);
     }
 
     [Fact]
@@ -583,25 +572,6 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         Assert.Equal(1, (await context.ExecutionLivenessStates.SingleAsync(row => row.OperationalStateId ==
             EfRelationalIdentity.Encode("operational-fenced"))).Revision);
         Assert.Single(await context.RuntimeCheckpointCommits.ToArrayAsync());
-    }
-
-    [Fact]
-    public async Task Operational_append_delete_and_reserved_ownership_fail_before_provider_io()
-    {
-        await using var database = await TestDatabase.CreateAsync();
-        var capture = new CommandCaptureInterceptor();
-        await using var context = database.Open("tenant-a", capture);
-        var store = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"));
-        var state = new ExecutionLivenessState("operational-a", "workflow-a", null, null, null, null);
-        var reserved = new ExecutionLivenessState("ownership:workflow-a", "workflow-a", null, null, null, null);
-        foreach (var unsupported in new[]
-                 {
-                     WithOperational("commit-operational-append", state, RuntimeStateChangeOperation.Append),
-                     WithOperational("commit-operational-delete", state, RuntimeStateChangeOperation.Delete),
-                     WithOperational("commit-reserved-ownership", reserved, RuntimeStateChangeOperation.Upsert)
-                 })
-            await Assert.ThrowsAsync<InvalidOperationException>(() => store.CommitAsync(unsupported, Decision()).AsTask());
-        Assert.Empty(capture.Commands);
     }
 
     [Fact]
@@ -833,23 +803,6 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
-    public async Task Unsupported_activity_append_and_incomplete_scope_cleanup_fail_before_provider_io()
-    {
-        await using var database = await TestDatabase.CreateAsync();
-        var capture = new CommandCaptureInterceptor();
-        await using var context = database.Open("tenant-a", capture);
-        var store = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"));
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            store.CommitAsync(WithActivityExecution("commit-activity-append",
-                CheckpointActivity("activity-append"), operation: RuntimeStateChangeOperation.Append),
-                Decision()).AsTask());
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            store.CommitAsync(WithScopeCleanup("commit-incomplete-cleanup", []), Decision()).AsTask());
-        Assert.Empty(capture.Commands);
-    }
-
-    [Fact]
     public async Task Marker_failure_restores_all_scope_cleanup_resources_and_excludes_a_hidden_second_attempt()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -918,48 +871,6 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
-    public async Task Intent_without_folded_outbox_change_fails_closed_before_provider_io()
-    {
-        await using var database = await TestDatabase.CreateAsync();
-        var interceptor = new CommandCaptureInterceptor();
-        await using var context = database.Open("tenant-a", interceptor);
-        var intent = new RuntimePostCommitIntent("unfolded", "workflow-a", "test.intent", OccurredAt, null, null, null);
-        var commit = Commit("commit-unfolded") with { PostCommitIntents = [intent] };
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"))
-                .CommitAsync(commit, Decision()).AsTask());
-        Assert.Empty(interceptor.Commands);
-        Assert.Empty(await context.RuntimeCheckpointCommits.ToArrayAsync());
-    }
-
-    [Fact]
-    public async Task Folded_outbox_with_a_different_intent_fails_closed_before_provider_io()
-    {
-        await using var database = await TestDatabase.CreateAsync();
-        var interceptor = new CommandCaptureInterceptor();
-        await using var context = database.Open("tenant-a", interceptor);
-        var commit = WithPendingIntent("commit-mismatched-intent", "intent-mismatch");
-        var original = Assert.Single(commit.StateChanges.PostCommitOutbox);
-        var alteredIntent = new RuntimePostCommitIntent(
-            "intent-mismatch", "workflow-a", "other.kind", OccurredAt, null, null, null);
-        var altered = new RuntimePostCommitOutboxItem(
-            original.StateId, alteredIntent, RuntimePostCommitOutboxStatus.Pending, OccurredAt, OccurredAt);
-        commit = commit with
-        {
-            StateChanges = commit.StateChanges.WithPostCommitOutbox([
-                original with { State = altered }])
-        };
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"))
-                .CommitAsync(commit, Decision()).AsTask());
-        Assert.Empty(interceptor.Commands);
-        Assert.Empty(await context.RuntimePostCommitOutbox.ToArrayAsync());
-        Assert.Empty(await context.RuntimeCheckpointCommits.ToArrayAsync());
-    }
-
-    [Fact]
     public async Task Staged_sibling_concurrency_failure_rolls_back_execution_and_marker_and_clears_retryable_state()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -999,56 +910,6 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         Assert.Null(await verification.WorkflowExecutionStates.SingleOrDefaultAsync());
         Assert.Empty(await verification.RuntimeCheckpointCommits.ToArrayAsync());
         Assert.Equal(2, (await verification.SchedulerStates.SingleAsync()).Revision);
-    }
-
-    [Fact]
-    public async Task Workflow_identity_mismatch_is_rejected_before_provider_io()
-    {
-        await using var database = await TestDatabase.CreateAsync();
-        var interceptor = new CommandCaptureInterceptor();
-        await using var context = database.Open("tenant-a", interceptor);
-        var commit = Commit("commit-identity") with
-        {
-            StateChanges = new RuntimeCheckpointStateChangeSet(
-                new RuntimeStateChange<WorkflowExecutionState>(
-                    "workflow-other",
-                    RuntimeStateChangeOperation.Upsert,
-                    Execution("workflow-other", "tenant-a"),
-                    new Dictionary<string, string>()),
-                null,
-                [], [], [], [], [])
-        };
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"))
-                .CommitAsync(commit, Decision()).AsTask());
-        Assert.Empty(interceptor.Commands);
-        Assert.Empty(await context.RuntimeCheckpointCommits.ToArrayAsync());
-    }
-
-    [Fact]
-    public async Task Scheduler_identity_mismatch_is_rejected_before_provider_io()
-    {
-        await using var database = await TestDatabase.CreateAsync();
-        var interceptor = new CommandCaptureInterceptor();
-        await using var context = database.Open("tenant-a", interceptor);
-        var commit = Commit("commit-scheduler-identity") with
-        {
-            StateChanges = new RuntimeCheckpointStateChangeSet(
-                null,
-                new RuntimeStateChange<SchedulerState>(
-                    "workflow-other",
-                    RuntimeStateChangeOperation.Upsert,
-                    new SchedulerState("workflow-other", 1),
-                    new Dictionary<string, string>()),
-                [], [], [], [], [])
-        };
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"))
-                .CommitAsync(commit, Decision()).AsTask());
-        Assert.Empty(interceptor.Commands);
-        Assert.Empty(await context.RuntimeCheckpointCommits.ToArrayAsync());
     }
 
     [Fact]

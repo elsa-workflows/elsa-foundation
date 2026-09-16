@@ -25,10 +25,6 @@ internal static class EfRuntimeCheckpointIncidentParticipantStaging
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedWorkflowExecutionId);
         EfRuntimeOperationalStoreSupport.ValidateIdentity(expectedWorkflowExecutionId, nameof(expectedWorkflowExecutionId));
         EfIncidentStateStore.Validate(change.State);
-        if (!StringComparer.Ordinal.Equals(change.StateId, change.State.IncidentId))
-            throw new InvalidOperationException("Incident state change StateId must match its model identity.");
-        if (!StringComparer.Ordinal.Equals(change.State.WorkflowExecutionId, expectedWorkflowExecutionId))
-            throw new InvalidOperationException("Incident workflow execution ID must match the checkpoint workflow execution ID.");
         if (scope.Length > 256)
             throw new ArgumentException("Runtime persistence scope cannot exceed 256 UTF-16 code units.", nameof(scope));
         if (change.Operation is not (RuntimeStateChangeOperation.Append or RuntimeStateChangeOperation.Upsert or RuntimeStateChangeOperation.Delete))

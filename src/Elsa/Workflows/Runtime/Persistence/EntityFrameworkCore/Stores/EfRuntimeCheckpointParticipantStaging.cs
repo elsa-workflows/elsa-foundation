@@ -2,6 +2,7 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -100,8 +101,6 @@ internal static class EfRuntimeCheckpointParticipantStaging
         ArgumentNullException.ThrowIfNull(change);
         ArgumentException.ThrowIfNullOrWhiteSpace(scope);
         ArgumentNullException.ThrowIfNull(change.State);
-        if (!StringComparer.Ordinal.Equals(change.StateId, change.State.BookmarkId))
-            throw new InvalidOperationException("Bookmark state change StateId must match its model identity.");
         if (change.Operation is not (RuntimeStateChangeOperation.Upsert or RuntimeStateChangeOperation.Delete))
             throw new InvalidOperationException($"The EF checkpoint writer can only project bookmark '{RuntimeStateChangeOperation.Upsert}' or '{RuntimeStateChangeOperation.Delete}' changes.");
         EfBookmarkStateStore.ValidateState(change.State);
@@ -156,8 +155,6 @@ internal static class EfRuntimeCheckpointParticipantStaging
         ArgumentNullException.ThrowIfNull(change.State);
         EfRuntimeOperationalStoreSupport.ValidateIdentity(change.State.WorkflowExecutionId, nameof(change.State.WorkflowExecutionId));
         EfRuntimeOperationalStoreSupport.ValidateIdentity(change.State.DurableValueId, nameof(change.State.DurableValueId));
-        if (!StringComparer.Ordinal.Equals(change.StateId, change.State.DurableValueId))
-            throw new InvalidOperationException("Durable value state change StateId must match its model identity.");
         if (change.Operation is not (RuntimeStateChangeOperation.Upsert or RuntimeStateChangeOperation.Delete))
             throw new InvalidOperationException($"The EF checkpoint writer can only project durable value '{RuntimeStateChangeOperation.Upsert}' or '{RuntimeStateChangeOperation.Delete}' changes.");
         cancellationToken.ThrowIfCancellationRequested();
@@ -315,7 +312,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var operationalStateId = $"ownership:{workflowExecutionId}";
+        var operationalStateId = RuntimeExecutionOwnershipStateId.For(workflowExecutionId);
         var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, workflowExecutionId, operationalStateId);
         var row = await context.ExecutionLivenessStates.SingleOrDefaultAsync(candidate =>
             candidate.Id == id &&

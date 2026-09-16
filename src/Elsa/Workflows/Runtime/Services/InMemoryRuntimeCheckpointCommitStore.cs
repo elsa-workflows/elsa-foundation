@@ -151,11 +151,11 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         var consumedSchedulerWorkItemIds = commit.StateChanges.ConsumedSchedulerWorkItems
             .Select(item => item.WorkItemId)
             .ToArray();
-        ValidatePendingOutboxItems(pendingOutboxItems);
-        ValidateConsumedSchedulerWorkItems(commit);
-        ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
+        // The commit's structural rules were applied by RuntimeCheckpointCommitValidator before it reached this store.
+        // What remains here depends on the state this store currently holds.
+        ValidatePendingOutboxItemsAgainstStore(pendingOutboxItems);
         await ValidateWorkflowTestScopesAsync(commit, cancellationToken);
-        await ValidateProjectedStateChangesAsync(commit, cancellationToken);
+        await ValidateIncidentResolutionOutcomesAsync(commit, cancellationToken);
         await ValidateWorkflowDispatchChangesAsync(commit, cancellationToken);
         await ValidateWorkflowDispatchCancellationsAsync(commit, cancellationToken);
         await ValidateAlterationJobTerminalChangeAsync(commit, cancellationToken);
@@ -241,15 +241,6 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         await _alterationStore!.ApplyTerminalJobChangeAsync(change, cancellationToken);
     }
 
-    private void ValidateConsumedSchedulerWorkItems(RuntimeCheckpointCommit commit)
-    {
-        foreach (var item in commit.StateChanges.ConsumedSchedulerWorkItems)
-        {
-            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, item.WorkflowExecutionId))
-                throw new InvalidOperationException("Consumed scheduler work item WorkflowExecutionId must match the checkpoint workflow execution ID.");
-        }
-    }
-
     private async ValueTask EnsureExpectedFenceAsync(
         RuntimeCheckpointCommit commit,
         CancellationToken cancellationToken)
@@ -264,7 +255,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
         var state = await _operationalStateStore.FindAsync(
             commit.WorkflowExecutionId,
-            InMemoryExecutionLivenessStateStore.GetOwnershipStateId(commit.WorkflowExecutionId),
+            RuntimeExecutionOwnershipStateId.For(commit.WorkflowExecutionId),
             cancellationToken);
         var currentToken = ReadHighestIssuedToken(state);
         var current = state?.ExecutionLease;
@@ -587,32 +578,21 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     }
 
     /// <summary>
-    /// Validates every pending outbox item in the commit — status, conflicts against the store, and
-    /// conflicts <b>within the commit itself</b> — before any state is projected or mutated (#386).
-    /// This runs outside the inconsistent-durability guard so a data-conflict validation failure
-    /// surfaces as a plain <see cref="InvalidOperationException"/> instead of being misclassified as
-    /// a <see cref="RuntimeCheckpointInconsistentDurabilityException"/>: with all validation front-
-    /// loaded here (and commits serialized by the write gate), nothing validation-shaped can throw
-    /// inside the guarded mutation block.
+    /// Checks every pending outbox item in the commit against the items this store already holds before any state is
+    /// projected or mutated (#386). This runs outside the inconsistent-durability guard so a data-conflict failure
+    /// surfaces as a plain <see cref="InvalidOperationException"/> instead of being misclassified as a
+    /// <see cref="RuntimeCheckpointInconsistentDurabilityException"/>. The item's own status and conflicts within the
+    /// commit are structural rules <see cref="RuntimeCheckpointCommitValidator"/> already applied, so with commits
+    /// serialized by the write gate nothing validation-shaped can throw inside the guarded mutation block.
     /// </summary>
-    private void ValidatePendingOutboxItems(IReadOnlyCollection<RuntimePostCommitOutboxItem> items)
+    private void ValidatePendingOutboxItemsAgainstStore(IReadOnlyCollection<RuntimePostCommitOutboxItem> items)
     {
         lock (_state.SyncRoot)
         {
-            var seen = new Dictionary<string, RuntimePostCommitOutboxItem>(StringComparer.Ordinal);
-
             foreach (var item in items)
             {
-                if (item.Status != RuntimePostCommitOutboxStatus.Pending)
-                    throw new InvalidOperationException("Only pending post-commit outbox items can be saved as pending.");
-
                 if (_state.OutboxItems.TryGetValue(item.OutboxItemId, out var existing) && !IsSamePendingIntent(existing, item))
                     throw new InvalidOperationException($"Post-commit outbox item '{item.OutboxItemId}' already exists with a different intent or status.");
-
-                if (seen.TryGetValue(item.OutboxItemId, out var duplicate) && !IsSamePendingIntent(duplicate, item))
-                    throw new InvalidOperationException($"Post-commit outbox item '{item.OutboxItemId}' already exists with a different intent or status.");
-
-                seen[item.OutboxItemId] = item;
             }
         }
     }
@@ -834,18 +814,6 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             await cancellationStore.ApplyCancellationAsync(request, cancellationToken);
     }
 
-    private void ValidateWorkflowExecutionStateChange(RuntimeStateChange<WorkflowExecutionState>? stateChange)
-    {
-        if (_workflowExecutionStateStore is null || stateChange is null)
-            return;
-
-        if (stateChange.Operation != RuntimeStateChangeOperation.Upsert)
-            throw new InvalidOperationException($"The in-memory checkpoint commit store can only project workflow execution state '{RuntimeStateChangeOperation.Upsert}' changes.");
-
-        if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.WorkflowExecutionId))
-            throw new InvalidOperationException("Workflow execution state change StateId must match WorkflowExecutionState.WorkflowExecutionId.");
-    }
-
     private async ValueTask ValidateWorkflowTestScopesAsync(
         RuntimeCheckpointCommit commit,
         CancellationToken cancellationToken)
@@ -884,113 +852,23 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     }
 
     /// <summary>
-    /// Validates the state kinds projected into configured backing stores. A kind whose store is not configured is
-    /// skipped here and ignored by the apply phase.
+    /// A committed incident resolution outcome is write-once. The rule reads the incident this store currently holds, so
+    /// it stays inside the store's atomic write boundary; the commit's structural rules have already been applied.
     /// </summary>
-    private async ValueTask ValidateProjectedStateChangesAsync(
+    private async ValueTask ValidateIncidentResolutionOutcomesAsync(
         RuntimeCheckpointCommit commit,
         CancellationToken cancellationToken)
     {
-        var changes = commit.StateChanges;
-        if (_schedulerStateStore is not null && changes.Scheduler is { } scheduler)
+        if (_incidentStateStore is null)
+            return;
+
+        foreach (var stateChange in commit.StateChanges.Incidents.Where(change => change.Operation == RuntimeStateChangeOperation.Upsert))
         {
-            ValidateStateChanges(
-                commit, [scheduler], "Scheduler", "SchedulerState.WorkflowExecutionId",
-                state => state.WorkflowExecutionId, state => state.WorkflowExecutionId,
-                RuntimeStateChangeOperation.Upsert);
-        }
-
-        if (_activityExecutionStateStore is not null)
-        {
-            ValidateStateChanges(
-                commit, changes.ActivityExecutions, "Activity execution", "ActivityExecution.ActivityExecutionId",
-                state => state.Execution.ActivityExecutionId, state => state.Execution.WorkflowExecutionId,
-                RuntimeStateChangeOperation.Upsert);
-        }
-
-        if (_activityExecutionInspectionWriter is not null)
-        {
-            ValidateStateChanges(
-                commit, changes.ActivityExecutionInspections, "Activity execution inspection", "ActivityExecutionInspectionProjection.ActivityExecutionId",
-                state => state.ActivityExecutionId, state => state.WorkflowExecutionId,
-                RuntimeStateChangeOperation.Upsert);
-        }
-
-        if (_bookmarkStateStore is not null)
-        {
-            ValidateStateChanges(
-                commit, changes.Bookmarks, "Bookmark", "BookmarkState.BookmarkId",
-                state => state.BookmarkId, state => state.WorkflowExecutionId,
-                RuntimeStateChangeOperation.Upsert, RuntimeStateChangeOperation.Delete);
-        }
-
-        if (_durableValueStateStore is not null)
-        {
-            ValidateStateChanges(
-                commit, changes.DurableValues, "Durable value", "DurableValueState.DurableValueId",
-                state => state.DurableValueId, state => state.WorkflowExecutionId,
-                RuntimeStateChangeOperation.Upsert, RuntimeStateChangeOperation.Delete);
-        }
-
-        if (_incidentStateStore is not null)
-        {
-            ValidateStateChanges(
-                commit, changes.Incidents, "Incident", "IncidentState.IncidentId",
-                state => state.IncidentId, state => state.WorkflowExecutionId,
-                RuntimeStateChangeOperation.Append, RuntimeStateChangeOperation.Upsert);
-
-            // Write-once outcomes are checked against the store only after every incident change passed the rules above,
-            // the same order the durable checkpoint writer uses.
-            foreach (var stateChange in changes.Incidents.Where(change => change.Operation == RuntimeStateChangeOperation.Upsert))
-            {
-                var existing = await _incidentStateStore.FindAsync(
-                    stateChange.State.WorkflowExecutionId,
-                    stateChange.State.IncidentId,
-                    cancellationToken);
-                IncidentStateTransitionValidator.EnsureResolutionOutcomeIsWriteOnce(existing, stateChange.State);
-            }
-        }
-
-        if (_operationalStateStore is not null)
-        {
-            ValidateStateChanges(
-                commit, changes.Operational, "Operational", "ExecutionLivenessState.OperationalStateId",
-                state => state.OperationalStateId, state => state.WorkflowExecutionId,
-                RuntimeStateChangeOperation.Upsert);
-            var ownershipStateId = InMemoryExecutionLivenessStateStore.GetOwnershipStateId(commit.WorkflowExecutionId);
-            if (changes.Operational.Any(stateChange => StringComparer.Ordinal.Equals(stateChange.State.OperationalStateId, ownershipStateId)))
-                throw new InvalidOperationException("Checkpoint operational changes cannot overwrite the reserved execution-ownership state.");
-        }
-    }
-
-    /// <summary>
-    /// The projection-boundary rules every state kind shares: an allowed operation, a <c>StateId</c> equal to the state's
-    /// own identity, and membership of the checkpoint's workflow execution. <paramref name="kind"/> is the sentence-case
-    /// label the messages are built from, e.g. <c>"Durable value"</c>.
-    /// </summary>
-    private static void ValidateStateChanges<TState>(
-        RuntimeCheckpointCommit commit,
-        IEnumerable<RuntimeStateChange<TState>> stateChanges,
-        string kind,
-        string stateIdMember,
-        Func<TState, string> stateId,
-        Func<TState, string> workflowExecutionId,
-        params RuntimeStateChangeOperation[] allowedOperations)
-    {
-        foreach (var stateChange in stateChanges)
-        {
-            if (!allowedOperations.Contains(stateChange.Operation))
-            {
-                var allowed = string.Join(" or ", allowedOperations.Select(operation => $"'{operation}'"));
-                throw new InvalidOperationException($"The in-memory checkpoint commit store can only project {kind.ToLowerInvariant()} state {allowed} changes.");
-            }
-
-            // RuntimeCheckpointStateChangeSet also enforces this for its collections; the commit store repeats it to keep the projection boundary self-validating.
-            if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateId(stateChange.State)))
-                throw new InvalidOperationException($"{kind} state change StateId must match {stateIdMember}.");
-
-            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, workflowExecutionId(stateChange.State)))
-                throw new InvalidOperationException($"{kind} state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
+            var existing = await _incidentStateStore.FindAsync(
+                stateChange.State.WorkflowExecutionId,
+                stateChange.State.IncidentId,
+                cancellationToken);
+            IncidentStateTransitionValidator.EnsureResolutionOutcomeIsWriteOnce(existing, stateChange.State);
         }
     }
 
@@ -1003,17 +881,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         if (_workflowDispatchStore is null)
             throw new InvalidOperationException("Workflow dispatch checkpoint changes require an IWorkflowDispatchStore.");
 
-        var seen = new Dictionary<string, WorkflowDispatchRecord>(StringComparer.Ordinal);
         foreach (var stateChange in commit.StateChanges.WorkflowDispatches)
         {
-            if (stateChange.Operation != RuntimeStateChangeOperation.Upsert)
-                throw new InvalidOperationException($"The in-memory checkpoint commit store can only project workflow dispatch '{RuntimeStateChangeOperation.Upsert}' changes.");
-            WorkflowDispatchLifecycle.ValidateCheckpointOwnership(commit.WorkflowExecutionId, stateChange.State);
-
-            if (seen.TryGetValue(stateChange.StateId, out var duplicate) && !WorkflowDispatchLifecycle.RecordsEqual(duplicate, stateChange.State))
-                throw new InvalidOperationException($"Workflow dispatch '{stateChange.StateId}' occurs more than once with conflicting state in the same checkpoint.");
-            seen[stateChange.StateId] = stateChange.State;
-
             var existing = await _workflowDispatchStore.FindAsync(stateChange.StateId, cancellationToken);
             if (existing is not null)
                 WorkflowDispatchLifecycle.ValidateTransition(existing, stateChange.State);
@@ -1036,12 +905,6 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
         foreach (var request in commit.StateChanges.WorkflowDispatchCancellations)
         {
-            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, request.ParentWorkflowExecutionId))
-            {
-                throw new InvalidOperationException(
-                    $"Workflow dispatch cancellation request '{request.DispatchId}' must be committed by its parent workflow execution.");
-            }
-
             var existing = await _workflowDispatchStore.FindAsync(request.DispatchId, cancellationToken);
             if (existing is null)
                 throw new InvalidOperationException($"Workflow dispatch '{request.DispatchId}' was not found for parent cancellation.");

@@ -60,38 +60,6 @@ public sealed class EfRuntimeCheckpointInspectionParticipantTests
     }
 
     [Fact]
-    public async Task Delete_removes_inspection_and_hierarchy_and_missing_delete_is_idempotent()
-    {
-        await using var database = await TestDatabase.CreateAsync();
-        var projection = Projection("workflow-a", "activity-a", 1, "root-a");
-        await using (var seed = database.Open("tenant-a"))
-        {
-            await seed.Inspection.SaveAsync(projection);
-            await seed.Hierarchy.SaveAsync(ActivityExecutionHierarchyProjector.FromInspection(projection));
-        }
-
-        await using (var fixture = database.Open("tenant-a"))
-        {
-            await using var transaction = await fixture.Context.Database.BeginTransactionAsync();
-            await StageAsync(fixture.Context, Change(RuntimeStateChangeOperation.Delete, projection), "tenant-a", "workflow-a");
-            await fixture.Context.SaveChangesAsync();
-            await transaction.CommitAsync();
-        }
-
-        await using (var replay = database.Open("tenant-a"))
-        {
-            await using var transaction = await replay.Context.Database.BeginTransactionAsync();
-            await StageAsync(replay.Context, Change(RuntimeStateChangeOperation.Delete, projection), "tenant-a", "workflow-a");
-            await replay.Context.SaveChangesAsync();
-            await transaction.CommitAsync();
-        }
-
-        await using var verification = database.Open("tenant-a");
-        Assert.Empty(await verification.Context.ActivityExecutionInspections.ToArrayAsync());
-        Assert.Empty(await verification.Context.ActivityExecutionHierarchies.ToArrayAsync());
-    }
-
-    [Fact]
     public async Task Upsert_without_effective_execution_scope_retracts_existing_hierarchy()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -194,7 +162,7 @@ public sealed class EfRuntimeCheckpointInspectionParticipantTests
     }
 
     [Fact]
-    public async Task Staging_requires_a_caller_owned_transaction_and_matching_workflow()
+    public async Task Staging_requires_a_caller_owned_transaction_and_applies_upserts_only()
     {
         await using var database = await TestDatabase.CreateAsync();
         await using var fixture = database.Open("tenant-a");
@@ -204,9 +172,11 @@ public sealed class EfRuntimeCheckpointInspectionParticipantTests
             StageAsync(fixture.Context, Change(RuntimeStateChangeOperation.Upsert, projection), "tenant-a", "workflow-a"));
 
         await using var transaction = await fixture.Context.Database.BeginTransactionAsync();
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            StageAsync(fixture.Context, Change(RuntimeStateChangeOperation.Upsert, projection), "tenant-a", "workflow-other"));
+        var delete = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            StageAsync(fixture.Context, Change(RuntimeStateChangeOperation.Delete, projection), "tenant-a", "workflow-a"));
+        Assert.Equal("The EF checkpoint writer can only project activity execution inspection upserts.", delete.Message);
         await transaction.RollbackAsync();
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
     }
 
     private static RuntimeStateChange<ActivityExecutionInspectionProjection> Change(
