@@ -9,6 +9,7 @@ public sealed class WorkflowDispatchRetentionCollector(
     IWorkflowDispatchQueryStore queryStore,
     IWorkflowDispatchDeleteStore deleteStore,
     IWorkflowExecutionStateStore executionStateStore,
+    IPersistenceAccessContextAccessor accessContextAccessor,
     ILogger<WorkflowDispatchRetentionCollector> logger,
     WorkflowDispatchRetentionCursor? cursor = null) : IWorkflowDispatchRetentionCollector
 {
@@ -25,15 +26,19 @@ public sealed class WorkflowDispatchRetentionCollector(
         CancellationToken cancellationToken = default)
     {
         var candidates = new Dictionary<string, WorkflowDispatchRecord>(StringComparer.Ordinal);
+        // Queries run against the ambient persistence scope, so the cursor position is only meaningful for that scope.
+        // A host sweeps scope after scope; a shared position would apply one scope's continuation to the next and skip
+        // that scope's older records.
+        var partition = WorkflowDispatchRetentionCursor.PartitionOf(accessContextAccessor.Current);
         try
         {
             foreach (var status in TerminalStatuses)
             {
-                var continuation = _cursor.Get(status);
+                var continuation = _cursor.Get(partition, status);
                 var records = await QueryPageAsync(status, continuation, cancellationToken);
                 if (records.Count == 0 && continuation is not null)
                 {
-                    _cursor.Reset(status);
+                    _cursor.Reset(partition, status);
                     records = await QueryPageAsync(status, null, cancellationToken);
                 }
                 foreach (var record in records)
@@ -41,10 +46,10 @@ public sealed class WorkflowDispatchRetentionCollector(
                 if (records.Count == WorkflowDispatchQuery.MaximumTake)
                 {
                     var last = records.Last();
-                    _cursor.Set(status, new WorkflowDispatchRetentionContinuation(last.CreatedAt, last.DispatchId));
+                    _cursor.Set(partition, status, new WorkflowDispatchRetentionContinuation(last.CreatedAt, last.DispatchId));
                 }
                 else
-                    _cursor.Reset(status);
+                    _cursor.Reset(partition, status);
             }
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
@@ -112,27 +117,43 @@ public sealed class WorkflowDispatchRetentionCollector(
 
 public sealed record WorkflowDispatchRetentionContinuation(DateTimeOffset CreatedAt, string DispatchId);
 
-/// <summary>Process-stable continuation state prevents retained prefix records from starving later cleanup pages.</summary>
+/// <summary>
+/// Process-stable continuation state that prevents retained prefix records from starving later cleanup pages. Positions
+/// are kept per persistence partition, because each partition queries a different set of records.
+/// </summary>
 public sealed class WorkflowDispatchRetentionCursor
 {
     private readonly object _gate = new();
-    private readonly Dictionary<WorkflowDispatchStatus, WorkflowDispatchRetentionContinuation> _continuations = new();
+    private readonly Dictionary<(WorkflowDispatchRetentionPartition Partition, WorkflowDispatchStatus Status), WorkflowDispatchRetentionContinuation> _continuations = new();
 
-    public WorkflowDispatchRetentionContinuation? Get(WorkflowDispatchStatus status)
+    /// <summary>
+    /// The partition a sweep reads from. A global sweep and an across-scopes sweep both have no scope but read different
+    /// records, so they are kept apart.
+    /// </summary>
+    public static WorkflowDispatchRetentionPartition PartitionOf(PersistenceAccessContext context)
     {
-        lock (_gate)
-            return _continuations.GetValueOrDefault(status);
+        ArgumentNullException.ThrowIfNull(context);
+        return new(context.Scope, context.AcrossScopes);
     }
 
-    public void Set(WorkflowDispatchStatus status, WorkflowDispatchRetentionContinuation continuation)
+    public WorkflowDispatchRetentionContinuation? Get(WorkflowDispatchRetentionPartition partition, WorkflowDispatchStatus status)
     {
         lock (_gate)
-            _continuations[status] = continuation;
+            return _continuations.GetValueOrDefault((partition, status));
     }
 
-    public void Reset(WorkflowDispatchStatus status)
+    public void Set(WorkflowDispatchRetentionPartition partition, WorkflowDispatchStatus status, WorkflowDispatchRetentionContinuation continuation)
     {
         lock (_gate)
-            _continuations.Remove(status);
+            _continuations[(partition, status)] = continuation;
+    }
+
+    public void Reset(WorkflowDispatchRetentionPartition partition, WorkflowDispatchStatus status)
+    {
+        lock (_gate)
+            _continuations.Remove((partition, status));
     }
 }
+
+/// <summary>The persistence partition a retention sweep reads: one scope, the global partition, or all scopes.</summary>
+public sealed record WorkflowDispatchRetentionPartition(PersistenceScope? Scope, bool AcrossScopes);

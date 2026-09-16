@@ -2,7 +2,7 @@
 
 This optional Runtime feature schedules physical reclamation of workflow executable artifacts. The collector itself is registered by the Runtime composition root and can also be invoked by a host-owned scheduler.
 
-Artifact lifetime is derived from durable roots, not from publication state alone. A sweep retains an artifact while either a live source reference or a retained workflow execution points to it. Every retained execution status is a root; completed, canceled, and faulted executions remain inspectable until the host's execution-retention policy deletes their records.
+Artifact lifetime is derived from durable roots, not from publication state alone. A sweep retains an artifact while either a live source reference or a retained workflow execution points to it. Every retained execution status is a root; completed, canceled, and faulted executions remain inspectable until their records are deleted. Elsa does not yet delete workflow executions, so every execution stays a root and the artifacts it pins are never reclaimed; workflow-execution retention is planned in [#1770](https://github.com/elsa-workflows/elsa-foundation/issues/1770).
 
 The sweep is deliberately conservative:
 

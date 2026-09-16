@@ -42,7 +42,12 @@ durable root sets:
 The workflow-execution record itself is the retention root. Elsa does not create a duplicate execution
 Source Reference. The root applies for every retained execution status, including pending, running,
 suspended, completed, canceled, and faulted. Completion does not release the root; removal under the
-workflow-execution retention policy does. A reachable parent artifact retains every exact child
+workflow-execution retention policy does.
+
+> **Status note (2026-09-16).** The workflow-execution retention policy this decision depends on has not been
+> built. Nothing in Elsa deletes workflow executions today, so every execution remains a root and pinned artifacts
+> are never reclaimed. The decision above is unchanged; the policy it assumes is planned in
+> [#1770](https://github.com/elsa-workflows/elsa-foundation/issues/1770). A reachable parent artifact retains every exact child
 artifact named by its immutable dependency edges, recursively. Shared and diamond-shaped dependencies
 are retained once by full artifact ID/hash identity and remain protected while any root reaches them.
 

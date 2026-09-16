@@ -88,7 +88,7 @@ adapters validate and translate the selected context at their own persistence bo
 
 ### `IWorkflowExecutionStateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one provider owns retained workflow-execution state and its executable-retention projection).
-- **Signature:** in addition to save/find/list, `ListPinnedExecutableArtifactIdsAsync(...)` returns the distinct artifact IDs pinned by every retained execution status, and `DeleteAsync(workflowExecutionId, ...)` removes an execution under the host's retention policy.
+- **Signature:** in addition to save/find/list, `ListPinnedExecutableArtifactIdsAsync(...)` returns the distinct artifact IDs pinned by every retained execution status, and `DeleteAsync(workflowExecutionId, ...)` removes an execution. **No retention policy calls it yet:** Elsa does not currently delete workflow executions, so runtime history is kept indefinitely. Workflow-execution retention is planned in [#1770](https://github.com/elsa-workflows/elsa-foundation/issues/1770).
 - **Usage:** workflow-execution records are durable executable-retention roots. Completion or fault does not release an artifact; only deletion of the retained execution does. Providers must answer the distinct-root query without materializing every full workflow-execution document and must keep the projection consistent with save/delete.
 - **Default implementation:** `InMemoryWorkflowExecutionStateStore`; durable persistence providers such as the opt-in `RuntimeWorkflowExecutionEntityFrameworkCoreFeature` replace it. EF providers retain an authoritative lossless document plus indexed history, alteration-capture, authority and pinned-artifact projections; `IWorkflowRuntimeAttentionQuery` remains a separate cross-store contract.
 
@@ -170,6 +170,13 @@ adapters validate and translate the selected context at their own persistence bo
 - **Signature:** `RedriveAsync(WorkflowDispatchRedriveRequest request, ...)` returns a safe disposition and lifecycle summary.
 - **Usage and safety:** only a fire-and-forget, delivery-caused `DispatchFailed` record linked to its exact `FailedFinal` start item can be reopened. The provider advances generation and fencing while reusing the original dispatch, child, intent, payload, retry policy, and idempotency identities. Wait dispatches and ordinary terminal states remain closed, and ordinary `IWorkflowDispatchStore.SaveAsync` still rejects `DispatchFailed -> Pending`.
 - **Default and replacements:** `InMemoryRuntimeCheckpointCommitStore` supplies the process-local atomic implementation. Durable providers must bind this capability to the same physical dispatch/outbox transaction owner they use for fenced completion.
+
+### `IWorkflowDispatchRetentionCollector` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Host-invoked sweep. Registered by the Runtime composition root; **not scheduled by any pump**.
+- **Signature:** `SweepAsync(...)` returns candidate, deleted, retained and uncertain counts for one bounded pass: at most one page per terminal status.
+- **Usage and safety:** deletes a terminal dispatch record only when both its parent and child workflow executions are absent, checked twice, then removed through a snapshot-fenced `IWorkflowDispatchDeleteStore.TryDeleteAsync` so it cannot race a redrive. Any read failure retains the record. It never cascades. Cursor positions are kept per persistence partition, so a host running one sweep per scope does not carry one scope's position into the next.
+- **Current effect:** **it deletes nothing today.** Elsa does not yet delete workflow executions, so no dispatch record ever has both linked executions absent. It is the dispatch half of the workflow-execution retention planned in [#1770](https://github.com/elsa-workflows/elsa-foundation/issues/1770).
+- **Known gap before scheduling it:** a `DispatchFailed` record has no child execution, so it becomes eligible as soon as its parent is gone, while a redrive, which does not depend on the parent, may still be wanted. #1770 must settle a rule for records awaiting redrive before this is wired to a pump.
 
 ### `IPostCommitOutboxLookupStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement read capability (one provider resolves an exact already-committed post-commit outbox item without widening the base outbox store).
