@@ -137,11 +137,25 @@ internal static class RuntimeCheckpointCommitContract
     public static ExecutionLivenessState Liveness(string id, string workflowExecutionId = WorkflowId) =>
         new(id, workflowExecutionId, null, null, null, null);
 
+    public static WorkflowTestScope TestScope(string scopeId, DateTimeOffset? expiresAt = null) =>
+        new(scopeId, expiresAt ?? OccurredAt.AddHours(1), Tenant, new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue));
+
+    /// <summary>A new test-run execution in <paramref name="scope"/>; a child when <paramref name="parentWorkflowExecutionId"/> is set.</summary>
+    public static WorkflowExecutionState TestRunExecution(string workflowExecutionId, WorkflowTestScope scope, string? parentWorkflowExecutionId = null) =>
+        Execution(workflowExecutionId) with
+        {
+            ParentWorkflowExecutionId = parentWorkflowExecutionId,
+            RunKind = WorkflowRunKind.TestRun,
+            Partition = scope.Partition,
+            TestScope = scope
+        };
+
     public static WorkflowDispatchRecord PendingDispatch(
         string parent,
         string activity,
         DateTimeOffset? updatedAt = null,
-        WorkflowDispatchMode mode = WorkflowDispatchMode.FireAndForget)
+        WorkflowDispatchMode mode = WorkflowDispatchMode.FireAndForget,
+        WorkflowTestScope? testScope = null)
     {
         var identity = new WorkflowDispatchIdentity(parent, activity);
         return new WorkflowDispatchRecord(
@@ -155,13 +169,14 @@ internal static class RuntimeCheckpointCommitContract
             WorkflowDispatchStatus.Pending,
             null,
             Tenant,
-            new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue),
-            WorkflowRunKind.PublishedRun,
+            testScope?.Partition ?? new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue),
+            testScope is null ? WorkflowRunKind.PublishedRun : WorkflowRunKind.TestRun,
             new WorkflowExecutionAuthoritySnapshot(parent, "initiator-1"),
             [new WorkflowDispatchInputDescriptor("orderId", "string")],
             OccurredAt,
             updatedAt ?? OccurredAt,
-            new Dictionary<string, string> { ["safe-code"] = "dispatch" });
+            new Dictionary<string, string> { ["safe-code"] = "dispatch" },
+            testScope: testScope);
     }
 
     public static WorkflowDispatchCancellationRequest CancellationRequest(string parent, string activity) => new(
@@ -251,6 +266,9 @@ internal sealed class RuntimeCheckpointCommitContractBackend : IAsyncDisposable
         IWorkflowAlterationStore alterations,
         IExecutionLivenessStateStore liveness,
         IWorkflowSchedulerWorkQueue queue,
+        IWorkflowTestScopeStore scopes,
+        IWorkflowDispatchAdmissionStore admissions,
+        IWorkflowExecutionStateStore executions,
         IAsyncDisposable? resources = null)
     {
         Store = new CallCountingStore(store);
@@ -272,6 +290,9 @@ internal sealed class RuntimeCheckpointCommitContractBackend : IAsyncDisposable
         Alterations = alterations;
         Liveness = liveness;
         Queue = queue;
+        Scopes = scopes;
+        Admissions = admissions;
+        Executions = executions;
         _resources = resources;
     }
 
@@ -288,6 +309,9 @@ internal sealed class RuntimeCheckpointCommitContractBackend : IAsyncDisposable
     public IWorkflowAlterationStore Alterations { get; }
     public IExecutionLivenessStateStore Liveness { get; }
     public IWorkflowSchedulerWorkQueue Queue { get; }
+    public IWorkflowTestScopeStore Scopes { get; }
+    public IWorkflowDispatchAdmissionStore Admissions { get; }
+    public IWorkflowExecutionStateStore Executions { get; }
 
     public Task<int> CountMarkersAsync() => _countMarkers();
 
@@ -327,8 +351,9 @@ internal sealed class RuntimeCheckpointCommitContractBackend : IAsyncDisposable
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var dispatches = new InMemoryWorkflowDispatchStore(state);
         var alterations = new InMemoryWorkflowAlterationStore();
+        var executions = new InMemoryWorkflowExecutionStateStore();
         var store = new InMemoryRuntimeCheckpointCommitStore(
-            new InMemoryWorkflowExecutionStateStore(),
+            executions,
             new InMemoryActivityExecutionStateStore(),
             bookmarks,
             new InMemoryDurableValueStateStore(),
@@ -352,7 +377,10 @@ internal sealed class RuntimeCheckpointCommitContractBackend : IAsyncDisposable
             dispatches,
             alterations,
             liveness,
-            queue);
+            queue,
+            new InMemoryWorkflowTestScopeStore(state),
+            dispatches,
+            executions);
     }
 
     private static async Task<RuntimeCheckpointCommitContractBackend> CreateEntityFrameworkAsync()
@@ -366,6 +394,7 @@ internal sealed class RuntimeCheckpointCommitContractBackend : IAsyncDisposable
         var codec = new HmacRuntimeRecoveryContinuationCodec(
             Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "runtime-checkpoint-contract-signing-key-32" }));
         var outbox = new EfRuntimePostCommitOutboxStore(context, access);
+        var dispatches = new EfWorkflowDispatchStore(context, access);
         var store = new EfRuntimeCheckpointCommitStore(context, access, Clock, new PassThroughRootWriteLeaseManager());
         return new RuntimeCheckpointCommitContractBackend(
             store,
@@ -373,10 +402,13 @@ internal sealed class RuntimeCheckpointCommitContractBackend : IAsyncDisposable
             item => outbox.SavePendingAsync(item).AsTask(),
             outbox,
             new EfIncidentStateStore(context, access),
-            new EfWorkflowDispatchStore(context, access),
+            dispatches,
             new EfWorkflowAlterationStore(context, access, codec),
             new EfExecutionLivenessStateStore(context, access, codec),
             new EfSchedulerWorkQueueStore(context, access, codec),
+            new EfWorkflowTestScopeStore(context, access, codec),
+            dispatches,
+            new EfWorkflowExecutionStateStore(context, access, codec),
             new SqliteResources(context, connection));
     }
 

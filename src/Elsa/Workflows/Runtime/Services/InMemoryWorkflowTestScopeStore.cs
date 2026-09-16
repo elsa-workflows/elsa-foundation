@@ -1,6 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
-using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
@@ -122,14 +121,7 @@ public sealed class InMemoryWorkflowTestScopeStore :
         cancellationToken.ThrowIfCancellationRequested();
         lock (_state.SyncRoot)
         {
-            if (!_state.WorkflowTestScopes.TryGetValue(scope.ScopeId, out var record) ||
-                record.State != WorkflowTestScopeState.Open ||
-                record.Scope.IsExpired(observedAt) ||
-                !WorkflowTestScope.ContextEquals(record.Scope, scope))
-            {
-                throw new TestScopeAdmissionException("The workflow test scope is not open in the current persistence context.");
-            }
-
+            WorkflowTestScopeAdmission.EnsureOpen(_state.WorkflowTestScopes.GetValueOrDefault(scope.ScopeId), scope, observedAt);
             return ValueTask.CompletedTask;
         }
     }

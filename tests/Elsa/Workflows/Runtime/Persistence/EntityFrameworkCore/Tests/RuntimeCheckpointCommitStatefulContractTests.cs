@@ -63,6 +63,34 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
     }
 
     /// <summary>
+    /// Spec 102 FR-011: a child that won admission before its scope began closing must still start, so cleanup can cancel
+    /// it. Only a root start and a new child dispatch require an open scope; a child's first checkpoint does not.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(StoreData))]
+    public async Task An_admitted_test_child_starts_even_after_its_scope_began_closing(string store)
+    {
+        await using var backend = await RuntimeCheckpointCommitContractBackend.CreateAsync(store);
+        var scope = TestScope("scope-admitted-child");
+        await backend.Scopes.CreateAsync(scope, OccurredAt.AddMinutes(-10));
+        var dispatch = PendingDispatch(WorkflowId, "activity-test-child", testScope: scope);
+        await backend.Dispatches.SaveAsync(dispatch);
+        Assert.Equal(WorkflowDispatchAdmissionDisposition.Admitted,
+            (await backend.Admissions.TryAdmitAsync(dispatch.DispatchId, OccurredAt.AddMinutes(-5))).Disposition);
+        await backend.Scopes.CloseAsync(new WorkflowTestScopeCloseRequest(scope.ScopeId, WorkflowTestScopeCloseReason.ExplicitTeardown, OccurredAt.AddMinutes(-1)));
+        var child = TestRunExecution(dispatch.ChildWorkflowExecutionId, scope, parentWorkflowExecutionId: WorkflowId);
+
+        var result = await backend.Committer.CommitAsync(Commit(
+            child.WorkflowExecutionId,
+            new RuntimeCheckpointStateChangeSet(Change(child.WorkflowExecutionId, child), null, [], [], [], [], [])));
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(1, await backend.CountMarkersAsync());
+        Assert.Equal(WorkflowTestScopeState.Closing, (await backend.Scopes.FindAsync(scope.ScopeId))!.State);
+        Assert.NotNull(await backend.Executions.FindAsync(child.WorkflowExecutionId));
+    }
+
+    /// <summary>
     /// Deliberately bypasses the committer. The reserved ownership record is protected by each store as storage integrity,
     /// not only by the validator: a fenced in-memory commit used to wait forever on its own ownership gate here, and an EF
     /// commit would have overwritten the lease it was fenced against.
@@ -118,6 +146,17 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
     private static string JobId(string workflowExecutionId) =>
         WorkflowAlterationIdentity.CreateJobId(RuntimeCheckpointCommitContractBackend.AlterationPlanId, workflowExecutionId);
 
+    private static ConflictCase ScopeNotOpen(
+        Func<RuntimeCheckpointCommitContractBackend, Task<RuntimeCheckpointCommit>> arrange,
+        Func<RuntimeCheckpointCommitContractBackend, Task> assertUnchanged) =>
+        new(arrange, typeof(TestScopeAdmissionException), _ => "The workflow test scope is not open in the current persistence context.", assertUnchanged);
+
+    private static Task CloseScopeAsync(RuntimeCheckpointCommitContractBackend backend, WorkflowTestScope scope) =>
+        backend.Scopes.CloseAsync(new WorkflowTestScopeCloseRequest(scope.ScopeId, WorkflowTestScopeCloseReason.ExplicitTeardown, OccurredAt.AddMinutes(-1))).AsTask();
+
+    private static readonly WorkflowTestScope ClosedScope = TestScope("scope-closed");
+    private static readonly WorkflowTestScope ExpiredScope = TestScope("scope-expired", OccurredAt.AddMinutes(-1));
+    private static readonly string TestDispatchId = new WorkflowDispatchIdentity(WorkflowId, "activity-test-child").DispatchId;
     private static readonly string DispatchId = new WorkflowDispatchIdentity(WorkflowId, DispatchActivityId).DispatchId;
     private static readonly string OutboxItemId = RuntimePostCommitOutboxIdentity.CreateLogicalValue(StatefulCommitId, "intent-a");
 
@@ -193,6 +232,33 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
             },
             $"Post-commit outbox item '{OutboxItemId}' already exists with a different intent or status.",
             async backend => Assert.Equal(OccurredAt.AddMinutes(1), (await backend.Outbox.FindAsync(OutboxItemId))!.AvailableAt)),
+
+        ["test-scope-root-start-requires-an-open-scope"] = ScopeNotOpen(
+            async backend =>
+            {
+                await backend.Scopes.CreateAsync(ClosedScope, OccurredAt.AddMinutes(-10));
+                await CloseScopeAsync(backend, ClosedScope);
+                return StatefulCommit(new RuntimeCheckpointStateChangeSet(Change(WorkflowId, TestRunExecution(WorkflowId, ClosedScope)), null, [], [], [], [], []));
+            },
+            async backend => Assert.Null(await backend.Executions.FindAsync(WorkflowId))),
+
+        ["test-scope-root-start-requires-an-unexpired-scope"] = ScopeNotOpen(
+            async backend =>
+            {
+                await backend.Scopes.CreateAsync(ExpiredScope, OccurredAt.AddMinutes(-10));
+                return StatefulCommit(new RuntimeCheckpointStateChangeSet(Change(WorkflowId, TestRunExecution(WorkflowId, ExpiredScope)), null, [], [], [], [], []));
+            },
+            async backend => Assert.Null(await backend.Executions.FindAsync(WorkflowId))),
+
+        ["test-scope-child-dispatch-requires-an-open-scope"] = ScopeNotOpen(
+            async backend =>
+            {
+                await backend.Scopes.CreateAsync(ClosedScope, OccurredAt.AddMinutes(-10));
+                await CloseScopeAsync(backend, ClosedScope);
+                return StatefulCommit(new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], [],
+                    [DispatchChange(PendingDispatch(WorkflowId, "activity-test-child", testScope: ClosedScope))]));
+            },
+            async backend => Assert.Null(await backend.Dispatches.FindAsync(TestDispatchId))),
 
         ["execution-fence-must-be-current"] = new(
             async backend =>

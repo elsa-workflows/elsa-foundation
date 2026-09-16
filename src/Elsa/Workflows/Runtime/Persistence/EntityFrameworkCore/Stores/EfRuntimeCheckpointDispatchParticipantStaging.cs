@@ -1,5 +1,6 @@
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,7 +13,7 @@ internal static class EfRuntimeCheckpointDispatchParticipantStaging
         BookmarkStateDbContext context,
         RuntimeCheckpointCommit commit,
         string scope,
-        Dictionary<string, WorkflowTestScope> touchedTestScopes,
+        Dictionary<string, WorkflowTestScopeRecord> touchedTestScopes,
         CancellationToken cancellationToken)
     {
         var staged = new Dictionary<string, WorkflowDispatchRecord>(StringComparer.Ordinal);
@@ -34,10 +35,9 @@ internal static class EfRuntimeCheckpointDispatchParticipantStaging
             if (row is null)
             {
                 WorkflowDispatchLifecycle.ValidateNew(candidate);
-                if (candidate.TestScope is { } testScope)
+                if (WorkflowTestScopeAdmission.ScopeRequiredToAdd(candidate, dispatchExists: false) is { } testScope)
                     await EfRuntimeCheckpointTestScopeParticipantStaging.AssertOpenAndStageAsync(
-                        context, testScope, candidate.ChildWorkflowExecutionId, commit.Checkpoint.OccurredAt,
-                        scope, touchedTestScopes, cancellationToken);
+                        context, testScope, commit.Checkpoint.OccurredAt, scope, touchedTestScopes, cancellationToken);
                 context.WorkflowDispatches.Add(WorkflowDispatchEfSupport.ToEntity(
                     candidate, scope, WorkflowDispatchEfSupport.RowId(scope, candidate.DispatchId), 1));
                 continue;

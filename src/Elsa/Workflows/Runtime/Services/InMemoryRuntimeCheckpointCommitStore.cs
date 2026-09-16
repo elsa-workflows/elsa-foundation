@@ -792,37 +792,26 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         CancellationToken cancellationToken)
     {
         var execution = commit.StateChanges.WorkflowExecution?.State;
-        var existingExecution = execution is { TestScope: not null, ParentWorkflowExecutionId: null } &&
-                                _workflowExecutionStateStore is not null
-            ? await _workflowExecutionStateStore.FindAsync(execution.WorkflowExecutionId, cancellationToken)
-            : null;
+        // Only a root start can require an open scope, so only then is the execution's existence read.
+        var executionExists = execution is { TestScope: not null, ParentWorkflowExecutionId: null } &&
+                              _workflowExecutionStateStore is not null &&
+                              await _workflowExecutionStateStore.FindAsync(execution.WorkflowExecutionId, cancellationToken) is not null;
         lock (_state.SyncRoot)
         {
-            if (execution is { TestScope: { } rootScope, ParentWorkflowExecutionId: null } &&
-                existingExecution is null)
-            {
-                AssertOpenScope(rootScope, commit.Checkpoint.OccurredAt);
-            }
+            if (execution is not null &&
+                WorkflowTestScopeAdmission.ScopeRequiredToStart(execution, executionExists) is { } rootScope)
+                EnsureOpenScope(rootScope, commit.Checkpoint.OccurredAt);
 
             foreach (var change in commit.StateChanges.WorkflowDispatches)
             {
-                var dispatch = change.State;
-                if (dispatch.TestScope is { } scope && !_state.WorkflowDispatches.ContainsKey(dispatch.DispatchId))
-                    AssertOpenScope(scope, commit.Checkpoint.OccurredAt);
+                if (WorkflowTestScopeAdmission.ScopeRequiredToAdd(change.State, _state.WorkflowDispatches.ContainsKey(change.StateId)) is { } scope)
+                    EnsureOpenScope(scope, commit.Checkpoint.OccurredAt);
             }
         }
     }
 
-    private void AssertOpenScope(WorkflowTestScope scope, DateTimeOffset observedAt)
-    {
-        if (!_state.WorkflowTestScopes.TryGetValue(scope.ScopeId, out var record) ||
-            record.State != WorkflowTestScopeState.Open ||
-            record.Scope.IsExpired(observedAt) ||
-            !WorkflowTestScope.ContextEquals(record.Scope, scope))
-        {
-            throw new InvalidOperationException("The workflow test scope is not open in the current persistence context.");
-        }
-    }
+    private void EnsureOpenScope(WorkflowTestScope scope, DateTimeOffset observedAt) =>
+        WorkflowTestScopeAdmission.EnsureOpen(_state.WorkflowTestScopes.GetValueOrDefault(scope.ScopeId), scope, observedAt);
 
     /// <summary>
     /// Incident rules that read the incident this store holds: an Append must create it, and an Upsert must not change a

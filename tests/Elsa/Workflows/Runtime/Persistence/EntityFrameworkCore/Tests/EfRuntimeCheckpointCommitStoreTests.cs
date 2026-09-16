@@ -424,8 +424,9 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         var commit = WithPendingDispatch("commit-closed-scope", "intent-closed-scope",
             PendingDispatch("workflow-a", "activity-closed", "tenant-a", testScope: scope));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<TestScopeAdmissionException>(() =>
             new EfRuntimeCheckpointCommitStore(context, access).CommitAsync(commit, Decision()).AsTask());
+        Assert.Equal("The workflow test scope is not open in the current persistence context.", exception.Message);
         Assert.Empty(await context.WorkflowDispatches.ToArrayAsync());
         Assert.Empty(await context.RuntimePostCommitOutbox.ToArrayAsync());
         Assert.Empty(await context.RuntimeCheckpointCommits.ToArrayAsync());

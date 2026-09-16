@@ -96,7 +96,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
         async ValueTask<RuntimeCheckpointCommitStoreResult> CommitNewAsync(CancellationToken writeCancellationToken)
         {
             var marker = ToEntity(commit, scope, id, fingerprint);
-            var touchedTestScopes = new Dictionary<string, WorkflowTestScope>(StringComparer.Ordinal);
+            var touchedTestScopes = new Dictionary<string, WorkflowTestScopeRecord>(StringComparer.Ordinal);
 
             await using var transaction = await context.Database.BeginTransactionAsync(writeCancellationToken);
             try

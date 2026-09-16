@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// Those stay inside each store's atomic boundary, but each is one shared function every store calls on the state it read
 /// there: <see cref="IncidentStateTransitionValidator"/>, <see cref="WorkflowDispatchLifecycle"/>,
 /// <see cref="RuntimeExecutionFenceValidator"/>, <see cref="ConsumedSchedulerWorkItem.IsFencedBy"/>,
-/// <see cref="RuntimePostCommitOutboxItem.IsEquivalentPendingItem"/>, and
+/// <see cref="RuntimePostCommitOutboxItem.IsEquivalentPendingItem"/>, <see cref="WorkflowTestScopeAdmission"/>, and
 /// <c>WorkflowAlterationTerminalEvidence</c>. Provider storage limits and capability checks stay in the provider.
 /// </para>
 /// </remarks>
