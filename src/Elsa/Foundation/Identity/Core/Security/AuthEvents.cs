@@ -1,4 +1,4 @@
-namespace Elsa.Foundation.Identity.Abstractions.Security;
+namespace Elsa.Foundation.Identity.Core.Security;
 
 public interface IAuthEventSink
 {

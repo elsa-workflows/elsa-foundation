@@ -1,6 +1,6 @@
 using System.Security.Claims;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Core.Iam;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
 

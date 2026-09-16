@@ -2,7 +2,7 @@ using Elsa.Api.AspNetCore;
 using Elsa.Expressions.Api.Authorization;
 using Elsa.Expressions.Api.Models;
 using Elsa.Expressions.Api.Requests;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Mediator.Core.Contracts;
 using NativeEndpoints;
 

@@ -146,7 +146,7 @@ and routing gates are complete. Later module waves receive separate issues rathe
 - [Spike issue #1329](https://github.com/elsa-workflows/elsa-foundation/issues/1329)
 - [Spike report](../reports/endpoint-framework-authorization-spike-2026-08.md)
 - [Remaining migration waves](../reports/first-party-rest-api-migration-waves-2026-08.md)
-- [Foundation authorization contracts](../../src/Elsa/Foundation/Identity/Abstractions/Authorization/AuthorizationContracts.cs)
+- [Foundation authorization contracts](../../src/Elsa/Foundation/Identity/Core/Authorization/AuthorizationContracts.cs)
 - [Current endpoint security guard](../../tests/Elsa/Architecture/EndpointSecurityTests.cs)
 - [Feature Composition Readiness](feature-composition-readiness.md)
 - [Diagnostics Observability Readiness](diagnostics-observability-readiness.md)

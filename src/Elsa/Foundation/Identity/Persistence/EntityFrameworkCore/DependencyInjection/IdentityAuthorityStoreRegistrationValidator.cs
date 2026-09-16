@@ -1,5 +1,5 @@
-using Elsa.Foundation.Identity.Abstractions;
-using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.Core;
+using Elsa.Foundation.Identity.Core.Iam;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 

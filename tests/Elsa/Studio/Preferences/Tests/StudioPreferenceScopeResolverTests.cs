@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using Elsa.Foundation.Identity.Abstractions.Authentication;
+using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Studio.Preferences.Api.Services;
 using Elsa.Studio.Preferences.Core.Exceptions;
 using Xunit;

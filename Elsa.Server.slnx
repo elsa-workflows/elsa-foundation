@@ -127,7 +127,7 @@
   </Folder>
   <Folder Name="/src/Elsa/Foundation/" />
   <Folder Name="/src/Elsa/Foundation/Identity/">
-    <Project Path="src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj" />
+    <Project Path="src/Elsa/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
     <Project Path="src/Elsa/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj" />
     <Project Path="src/Elsa/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj" />
   </Folder>

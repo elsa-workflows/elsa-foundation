@@ -1,7 +1,7 @@
 using Elsa.Api.AspNetCore;
 using NativeEndpoints;
 using Elsa.Expressions.JavaScript.Core.Contracts;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;

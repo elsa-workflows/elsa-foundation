@@ -31,7 +31,7 @@ redirects, JWT minting, bearer validation, scheme selection. This plane turns a 
 session and a session into a validated request. It does not own users or permission semantics — it
 consumes and produces claims.
 
-The seam between them lives in **`Identity/Abstractions`** (the always-on `FoundationIdentityAbstractions`
+The seam between them lives in **`Identity/Core`** (the always-on `FoundationIdentityAbstractions`
 feature), which defines the contracts both planes speak:
 
 | Contract | Plane | Role |
@@ -77,7 +77,7 @@ The stack is a set of composable CShells features. You enable them per shell in 
 
 | Feature (shells.json key) | Assembly | What it is | Plane |
 |---|---|---|---|
-| `FoundationIdentityAbstractions` | `…Identity.Abstractions` | Contracts + default implementations: permission catalog, claims normalizer, provider resolver. **Always on** (every other identity feature registers it). | seam |
+| `FoundationIdentityAbstractions` | `…Identity.Core` | Contracts + default implementations: permission catalog, claims normalizer, provider resolver. **Always on** (every other identity feature registers it). | seam |
 | `FoundationIdentityAspNetCoreIdentity` | `…Identity.AspNetCoreIdentity` | The provider-neutral IAM domain: contracts, user/role managers, the Elsa principal factory, the first-party sign-in service, the local provider module, and antiforgery. | IAM |
 | `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore` | `…AspNetCoreIdentity.EntityFrameworkCore` | The first-party durable EF Core user/role store, ASP.NET Core Identity core (`SignInManager`, token providers), the **cookie sign-in scheme**, the **backend login page**, and configured admin seeding. | IAM / protocol |
 | `FoundationIdentityOpenIddict` | `…Identity.OpenIddict` | **Be your own IdP:** first-party JWT issuance (`ITokenService` over the OpenIddict pipeline) + local bearer validation, plus the composite scheme selector. | protocol |

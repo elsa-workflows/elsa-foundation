@@ -1,6 +1,6 @@
-using Elsa.Foundation.Identity.Abstractions.Ownership;
+using Elsa.Foundation.Identity.Core.Ownership;
 
-namespace Elsa.Foundation.Identity.Abstractions;
+namespace Elsa.Foundation.Identity.Core;
 
 public sealed class FoundationIdentityOptions
 {

@@ -2,7 +2,7 @@ using Elsa.Api.AspNetCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 
-namespace Elsa.Foundation.Identity.Abstractions.Authorization;
+namespace Elsa.Foundation.Identity.Core.Authorization;
 
 public static class PermissionEndpointConventionBuilderExtensions
 {

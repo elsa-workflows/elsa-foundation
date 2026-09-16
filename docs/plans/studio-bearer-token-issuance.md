@@ -20,7 +20,7 @@ with `tokenEndpoint` defaulting to **`/_elsa/identity/token`**.
 
 On the backend, the Elsa Foundation identity layer is ~80% built:
 
-- **`Foundation/Identity/Abstractions`** — full contracts (`ITokenService`, `IAuthSessionService`,
+- **`Foundation/Identity/Core`** — full contracts (`ITokenService`, `IAuthSessionService`,
   `IAuthenticationProviderResolver`, permission/ownership/security seams) with default implementations.
 - **`Foundation/Identity/Api`** — 5 of 6 endpoints implemented: `bootstrap`, `capabilities`, `session`,
   `refresh`, `challenge`, `logout` (all under `/_elsa/identity/*`).

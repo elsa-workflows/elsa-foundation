@@ -1,12 +1,12 @@
 using NativeEndpoints;
 using System.Collections.Frozen;
 using System.Security.Claims;
-using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.Core.Iam;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 
-namespace Elsa.Foundation.Identity.Abstractions.Authorization;
+namespace Elsa.Foundation.Identity.Core.Authorization;
 
 public interface IPermissionCatalog
 {

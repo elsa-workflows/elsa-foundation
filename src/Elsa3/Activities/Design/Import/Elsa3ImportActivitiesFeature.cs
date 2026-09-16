@@ -2,7 +2,7 @@ using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Api.AspNetCore;
 using Elsa.Events.Core.Extensions;
-using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Foundation.Identity.Core.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Primitives.Exceptions;
 using Elsa3.Activities.Design.Import.Authorization;

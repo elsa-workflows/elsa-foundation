@@ -1,5 +1,5 @@
 using Elsa.Activities.Bpmn.Interchange.Endpoints;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
 
 namespace Elsa.Activities.Bpmn.Interchange.Authorization;
 

@@ -63,7 +63,7 @@ public sealed class OpenIddictPersistenceArchitectureTests
     [Fact]
     public void Identity_abstractions_are_free_of_concrete_persistence_dependencies()
     {
-        var root = Path.Combine(RepoRoot, "src", "Elsa", "Foundation", "Identity", "Abstractions");
+        var root = Path.Combine(RepoRoot, "src", "Elsa", "Foundation", "Identity", "Core");
         var violations = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
             .Where(IsSourceOrProject)
             .SelectMany(path => ForbiddenLines(path, "EntityFrameworkCore"))

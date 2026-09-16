@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Elsa.Foundation.Identity.Abstractions.Authorization;
+namespace Elsa.Foundation.Identity.Core.Authorization;
 
 public enum PermissionRequirementMode
 {

@@ -1,5 +1,5 @@
 using Elsa.Agent.Api.Constants;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
 
 namespace Elsa.Agent.Api.Authorization;
 

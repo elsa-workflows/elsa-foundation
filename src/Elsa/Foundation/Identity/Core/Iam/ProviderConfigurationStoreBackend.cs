@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Foundation.Identity.Abstractions.Iam;
+namespace Elsa.Foundation.Identity.Core.Iam;
 
 /// <summary>
 /// Identifies the selected provider-configuration backend. Persistence features share this marker

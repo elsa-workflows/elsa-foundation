@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
-using Elsa.Foundation.Identity.Abstractions;
+using Elsa.Foundation.Identity.Core;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Server;

@@ -1,7 +1,7 @@
-using Elsa.Foundation.Identity.Abstractions;
+using Elsa.Foundation.Identity.Core;
 using Microsoft.Extensions.Options;
 
-namespace Elsa.Foundation.Identity.Abstractions.Iam;
+namespace Elsa.Foundation.Identity.Core.Iam;
 
 /// <summary>Provider-neutral authority policy controlling tenant-scoped email uniqueness.</summary>
 public interface IIdentityEmailUniquenessPolicy

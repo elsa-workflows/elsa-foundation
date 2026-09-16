@@ -1,7 +1,7 @@
-using Elsa.Foundation.Identity.Abstractions;
+using Elsa.Foundation.Identity.Core;
 using Microsoft.Extensions.Options;
 
-namespace Elsa.Foundation.Identity.Abstractions.Ownership;
+namespace Elsa.Foundation.Identity.Core.Ownership;
 
 public enum OwnershipMode
 {

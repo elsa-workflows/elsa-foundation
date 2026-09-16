@@ -1,7 +1,7 @@
-using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Foundation.Identity.Abstractions.Ownership;
+using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Core.Ownership;
 
-namespace Elsa.Foundation.Identity.Abstractions.Iam;
+namespace Elsa.Foundation.Identity.Core.Iam;
 
 [ReplacementContract]
 public interface IUserStore

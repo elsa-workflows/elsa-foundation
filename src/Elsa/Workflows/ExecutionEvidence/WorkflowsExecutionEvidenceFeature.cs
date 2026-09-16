@@ -1,7 +1,7 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Api.AspNetCore;
-using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Foundation.Identity.Core.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.ExecutionEvidence.Authorization;
 using Elsa.Workflows.ExecutionEvidence.Endpoints;

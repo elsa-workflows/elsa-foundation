@@ -1,7 +1,7 @@
 using Elsa.Api.AspNetCore;
 using Microsoft.AspNetCore.Builder;
 
-namespace Elsa.Foundation.Identity.Abstractions.Authorization;
+namespace Elsa.Foundation.Identity.Core.Authorization;
 
 /// <summary>
 /// The single owner of Elsa's endpoint permission composition: every endpoint accepts the wildcard

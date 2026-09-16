@@ -1,7 +1,7 @@
 using CShells.Features;
 using CShells.Lifecycle;
-using Elsa.Foundation.Identity.Abstractions.Extensions;
-using Elsa.Foundation.Identity.Abstractions.Security;
+using Elsa.Foundation.Identity.Core.Extensions;
+using Elsa.Foundation.Identity.Core.Security;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 

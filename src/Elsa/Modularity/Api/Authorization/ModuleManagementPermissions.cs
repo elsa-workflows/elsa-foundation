@@ -1,4 +1,4 @@
-using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
 
 namespace Elsa.Modularity.Api.Authorization;
 

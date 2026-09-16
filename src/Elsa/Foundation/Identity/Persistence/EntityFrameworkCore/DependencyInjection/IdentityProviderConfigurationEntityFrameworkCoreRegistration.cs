@@ -1,5 +1,5 @@
-using Elsa.Foundation.Identity.Abstractions.Extensions;
-using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.Core.Extensions;
+using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Extensions;

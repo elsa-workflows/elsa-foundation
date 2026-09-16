@@ -74,7 +74,7 @@
         "tests/Elsa/Foundation/Identity/"
       ],
       "requiredRootPaths": [
-        "src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj",
+        "src/Elsa/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj",
         "tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj"
       ],
       "excludeWhenPackageReferencePrefixes": [

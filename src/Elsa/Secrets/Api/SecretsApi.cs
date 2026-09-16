@@ -4,7 +4,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using NativeEndpoints;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Secrets.Api.Requests;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;

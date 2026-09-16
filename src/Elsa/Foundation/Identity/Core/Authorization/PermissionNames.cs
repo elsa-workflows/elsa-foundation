@@ -1,4 +1,4 @@
-namespace Elsa.Foundation.Identity.Abstractions.Authorization;
+namespace Elsa.Foundation.Identity.Core.Authorization;
 
 /// <summary>
 /// The one permission name that is not owned by any domain.
