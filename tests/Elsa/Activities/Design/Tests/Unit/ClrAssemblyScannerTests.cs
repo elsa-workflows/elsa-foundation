@@ -670,12 +670,28 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
-    public void DuplicateAssemblyName_AcrossResolverSources_IsWarned()
+    public void DuplicateAssemblyName_WithDivergentIdentity_AcrossResolverSources_IsWarned()
     {
         // The folder DLL is added to the resolver map first (author-wins precedence), then the same
         // simple-name is re-encountered while enumerating the AppDomain — Elsa.Primitives is already
-        // loaded into the test host's AppDomain, so copying it into the scan folder guarantees a
-        // simple-name collision. The scanner keeps the first (folder) path but must surface the drop.
+        // loaded into the test host's AppDomain. The folder copy carries another version, so the kept
+        // path can mask the one the author shipped: the scanner keeps the first (folder) path but must
+        // surface the drop (issue #417 item 4).
+        var simpleName = typeof(ClrActivityDescriptor).Assembly.GetName().Name!;
+        using var folder = TempAssemblyFolder.Empty();
+        WriteEmptyAssembly(System.IO.Path.Combine(folder.Path, simpleName + ".dll"), simpleName, new Version(99, 0, 0, 0));
+        var logger = new RecordingLogger<ClrAssemblyScanner>();
+
+        _ = CreateScanner(logger).Scan(folder.Path);
+
+        Assert.Contains(logger.Warnings, w => IsDuplicateWarningFor(w, simpleName));
+    }
+
+    [Fact]
+    public void DuplicateAssemblyName_WithIdenticalIdentity_AcrossResolverSources_IsNotWarned()
+    {
+        // The normal layout of one package: a second file with the same name, version, culture and public key
+        // token (a bin-root copy beside its runtimes/<rid>/lib asset). Keeping the first copy hides nothing.
         var primitives = typeof(ClrActivityDescriptor).Assembly;
         var simpleName = primitives.GetName().Name!;
         using var folder = TempAssemblyFolder.WithCopyOf(primitives);
@@ -683,7 +699,24 @@ public sealed class ClrAssemblyScannerTests
 
         _ = CreateScanner(logger).Scan(folder.Path);
 
-        Assert.Contains(logger.Warnings, w => w.Message.Contains(simpleName, StringComparison.Ordinal));
+        Assert.DoesNotContain(logger.Warnings, w => IsDuplicateWarningFor(w, simpleName));
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Debug && entry.Message.Contains(simpleName, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void DuplicateAssemblyName_WhoseIdentityCannotBeRead_IsWarned()
+    {
+        // A same-named file that is not a readable managed assembly cannot be proven identical, so the drop is
+        // reported rather than assumed harmless.
+        var simpleName = typeof(ClrActivityDescriptor).Assembly.GetName().Name!;
+        using var folder = TempAssemblyFolder.Empty();
+        var unreadable = System.IO.Path.Combine(folder.Path, simpleName + ".dll");
+        File.WriteAllText(unreadable, "this is not a portable executable");
+        var logger = new RecordingLogger<ClrAssemblyScanner>();
+
+        _ = InvokeBuildResolverPaths(CreateScanner(logger), [unreadable]);
+
+        Assert.Contains(logger.Warnings, w => IsDuplicateWarningFor(w, simpleName));
     }
 
     [Fact]
@@ -758,6 +791,18 @@ public sealed class ClrAssemblyScannerTests
         var missing = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
         Assert.Empty(CreateScanner().Scan(missing));
+    }
+
+    private static bool IsDuplicateWarningFor(LogEntry warning, string simpleName) =>
+        warning.Message.StartsWith("Duplicate assembly name", StringComparison.Ordinal) &&
+        warning.Message.Contains($"'{simpleName}'", StringComparison.Ordinal);
+
+    /// <summary>Writes a type-less assembly with the given identity, so a test can lay a divergent copy of a real one.</summary>
+    private static void WriteEmptyAssembly(string path, string name, Version version)
+    {
+        var builder = new System.Reflection.Emit.PersistedAssemblyBuilder(new AssemblyName(name) { Version = version }, typeof(object).Assembly);
+        builder.DefineDynamicModule(name);
+        builder.Save(path);
     }
 
     private static IReadOnlyCollection<string> InvokeBuildResolverPaths(ClrAssemblyScanner scanner, IEnumerable<string> folderDlls)

@@ -8,6 +8,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
@@ -458,7 +459,33 @@ public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbCo
         where TEntity : class
         => entity.Property<TValue>(name).HasConversion(
             value => SerializeJson(value, options, name),
-            value => DeserializeJson<TValue>(value, options, name));
+            value => DeserializeJson<TValue>(value, options, name),
+            JsonValueComparer<TValue>(options));
+
+    /// <summary>
+    /// Compares a JSON-converted value by its serialized form and snapshots it through a JSON round-trip, using the
+    /// converter's own options so equal values are exactly the values that would be written identically. Without it
+    /// EF compares these values by reference, and an in-place change to a converted collection or object is never
+    /// saved. It calls <see cref="JsonSerializer"/> directly because <see cref="SerializeJson{TValue}"/> and
+    /// <see cref="DeserializeJson{TValue}"/> are the strict persistence path: they reject null and raise
+    /// <see cref="DesignPersistenceException"/>, while change tracking must snapshot and compare in-memory nulls and
+    /// is not a persistence operation.
+    /// </summary>
+    private static ValueComparer<TValue> JsonValueComparer<TValue>(JsonSerializerOptions options) => new(
+        (left, right) => JsonEquals(left, right, options),
+        value => JsonHashCode(value, options),
+        value => JsonSnapshot(value, options));
+
+    private static bool JsonEquals<TValue>(TValue? left, TValue? right, JsonSerializerOptions options) =>
+        left is null || right is null
+            ? left is null && right is null
+            : string.Equals(JsonSerializer.Serialize(left, options), JsonSerializer.Serialize(right, options), StringComparison.Ordinal);
+
+    private static int JsonHashCode<TValue>(TValue value, JsonSerializerOptions options) =>
+        value is null ? 0 : StringComparer.Ordinal.GetHashCode(JsonSerializer.Serialize(value, options));
+
+    private static TValue JsonSnapshot<TValue>(TValue value, JsonSerializerOptions options) =>
+        value is null ? value : JsonSerializer.Deserialize<TValue>(JsonSerializer.Serialize(value, options), options)!;
 
     private static string SerializeJson<TValue>(TValue value, JsonSerializerOptions options, string name)
     {

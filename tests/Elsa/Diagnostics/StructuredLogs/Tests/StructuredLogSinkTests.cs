@@ -1,7 +1,10 @@
 using System.Collections.Concurrent;
+using Elsa.Diagnostics.StructuredLogs.Capture;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
+using Elsa.Diagnostics.StructuredLogs.Sources;
 using Elsa.Diagnostics.StructuredLogs.Storage;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Elsa.Diagnostics.StructuredLogs.Tests;
@@ -50,6 +53,51 @@ public sealed class StructuredLogSinkTests
         public void Publish(StructuredLogEntry entry) => Published.Add(entry);
     }
 
+    /// <summary>
+    /// A durable store while its shell activates: migrations have not created the schema yet, so every read and
+    /// append fails the way SQLite does, until <see cref="CompleteMigration"/> runs.
+    /// </summary>
+    private sealed class MigratingStore : IStructuredLogStore
+    {
+        private int _ready;
+        private int _highWaterMarkReads;
+
+        public ConcurrentQueue<StructuredLogEntry> Persisted { get; } = [];
+        public int HighWaterMarkReads => _highWaterMarkReads;
+
+        public void CompleteMigration() => Volatile.Write(ref _ready, 1);
+
+        public ValueTask<StructuredLogEntry> AppendAsync(StructuredLogEntry entry, CancellationToken cancellationToken = default)
+        {
+            if (Volatile.Read(ref _ready) == 0)
+                return ValueTask.FromException<StructuredLogEntry>(NoSuchTable("elsa_structured_log_records"));
+
+            Persisted.Enqueue(entry);
+            return ValueTask.FromResult(entry with { ReplayCursor = new StructuredLogReplayCursor($"slrc1.test.{Persisted.Count}") });
+        }
+
+        public Task<long> GetHighWaterMarkAsync(CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _highWaterMarkReads);
+            return Volatile.Read(ref _ready) == 0
+                ? Task.FromException<long>(NoSuchTable("elsa_structured_log_stream_states"))
+                : Task.FromResult((long)Persisted.Count);
+        }
+
+        public Task<IReadOnlyList<StructuredLogEntry>> GetRecentAsync(StructuredLogFilter filter, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<StructuredLogEntry>>(Persisted.ToArray());
+
+        public Task<StructuredLogReplayCursor?> GetTailCursorAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<StructuredLogReplayCursor?>(null);
+
+        public Task<StructuredLogReadPage> ReadAfterAsync(StructuredLogReplayCursor? afterCursor, StructuredLogFilter filter, int maxCount, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new StructuredLogReadPage([], afterCursor, false));
+
+        public Task TrimAsync(int keepNewest, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        private static InvalidOperationException NoSuchTable(string table) => new($"SQLite Error 1: 'no such table: {table}'.");
+    }
+
     private sealed class DelayedCompletionStore : IStructuredLogStore
     {
         private readonly List<TaskCompletionSource<StructuredLogEntry>> _commits = [];
@@ -84,7 +132,7 @@ public sealed class StructuredLogSinkTests
     }
 
     [Fact]
-    public void EmitSeedsSequenceFromStoreHighWaterMarkAndIncrementsMonotonically()
+    public void EmitStampsMonotonicDisplaySequencesWithoutReadingTheStore()
     {
         var store = new FakeStore(highWaterMark: 10);
         var sink = new StructuredLogSink(store, new FakePublisher());
@@ -92,7 +140,8 @@ public sealed class StructuredLogSinkTests
         sink.Emit(TestEntries.Create());
         sink.Emit(TestEntries.Create());
 
-        Assert.Equal(new[] { 11L, 12L }, store.Appended.Select(e => e.Sequence));
+        Assert.Equal(new[] { 1L, 2L }, store.Appended.Select(e => e.Sequence));
+        Assert.Equal(0, store.HighWaterMarkReads);
     }
 
     [Fact]
@@ -112,26 +161,10 @@ public sealed class StructuredLogSinkTests
     }
 
     [Fact]
-    public void ConstructionDoesNotTouchTheStore()
+    public async Task ConcurrentEmitsStampDistinctDisplaySequencesWithoutReadingTheStore()
     {
-        var store = new FakeStore(highWaterMark: 10);
-
-        _ = new StructuredLogSink(store, new FakePublisher());
-
-        Assert.Equal(0, store.HighWaterMarkReads);
-    }
-
-    /// <summary>
-    /// Issue #411 follow-up requirement: seeding is lazy (off the constructor), but it must complete
-    /// before the first emitted sequence is assigned — even when the first emits race — and must run
-    /// exactly once. No emitted sequence may ever be at or below the store's high-water mark.
-    /// </summary>
-    [Fact]
-    public async Task ConcurrentFirstEmitsSeedExactlyOnceAndNeverStampAtOrBelowHighWaterMark()
-    {
-        const long highWaterMark = 100;
         const int emitters = 16;
-        var store = new FakeStore(highWaterMark);
+        var store = new FakeStore(highWaterMark: 100);
         var sink = new StructuredLogSink(store, new FakePublisher());
 
         using var startGate = new ManualResetEventSlim(false);
@@ -143,9 +176,36 @@ public sealed class StructuredLogSinkTests
         startGate.Set();
         await Task.WhenAll(tasks);
 
-        Assert.Equal(1, store.HighWaterMarkReads);
+        Assert.Equal(0, store.HighWaterMarkReads);
         var sequences = store.Appended.Select(e => e.Sequence).OrderBy(s => s).ToArray();
-        Assert.Equal(Enumerable.Range(1, emitters).Select(i => highWaterMark + i), sequences);
+        Assert.Equal(Enumerable.Range(1, emitters).Select(i => (long)i), sequences);
+    }
+
+    /// <summary>
+    /// A shell logs while it activates, before its migrations create the structured-log tables, so the store fails
+    /// every read and append at first. Capture must come back once the store is ready: a failure at the first log
+    /// line used to be cached for the life of the process, and every later entry was silently discarded. The entries
+    /// logged before readiness are dropped, never replayed, and do not hold back the ones after.
+    /// </summary>
+    [Fact]
+    public async Task Captures_logged_after_the_store_becomes_ready_are_persisted_when_earlier_captures_failed()
+    {
+        var store = new MigratingStore();
+        var publisher = new FakePublisher();
+        var logger = new StructuredLogCaptureProvider(new StructuredLogSink(store, publisher), new LocalStructuredLogSourceProvider(), TestOptions.Create())
+            .CreateLogger("Shell.Activation");
+
+        logger.LogInformation("before-migration-1");
+        logger.LogInformation("before-migration-2");
+        store.CompleteMigration();
+        logger.LogInformation("after-migration-1");
+        logger.LogInformation("after-migration-2");
+
+        Assert.Equal(["after-migration-1", "after-migration-2"], store.Persisted.Select(entry => entry.Message));
+        // The capture path never reads the store, so a store that is not ready has nothing to log back into it.
+        Assert.Equal(0, store.HighWaterMarkReads);
+        await WaitUntilAsync(() => publisher.Published.Count == 2);
+        Assert.Equal(["after-migration-1", "after-migration-2"], publisher.Published.Select(entry => entry.Message));
     }
 
     [Fact]

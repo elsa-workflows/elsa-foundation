@@ -157,9 +157,6 @@ server outside Docker; the compose file adds the Studio container origin.
   Studio's timing view is populated. Without the persistence lane above, the traces live in the
   in-memory store and reset on restart.
 
-- The `SampleNuplaneActivities` and `WeatherForecastSample` sample features are dropped because they
-  require Nuplane feed packages that are not present in the image.
-
 `WorkflowsRuntimeEntityFrameworkCore` declares `DependsOn "WorkflowsRuntimeResumption"`, and the distributed
 persistence feature declares `DependsOn "WorkflowsRuntimeDistributed"`; CShells auto-enables those dependencies. Their
 assemblies are referenced by the host so the features are discoverable in a clean deployment (see the note in

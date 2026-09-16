@@ -33,7 +33,7 @@ All contracts live in `Elsa.Diagnostics.StructuredLogs.Core`. The feature regist
 
 ### `IStructuredLogSink` *(Core — `Elsa.Diagnostics.StructuredLogs.Core`)*
 - **Signature:** `void Emit(StructuredLogEntry entry)`.
-- **Default impl:** `StructuredLogSink` — assigns a process-local `Sequence` seeded from the store's lifetime logical high-water, starts `AppendAsync` without blocking the logging hot path, and publishes a wake hint only for the committed result. Append failures never publish and never escape into host logging.
+- **Default impl:** `StructuredLogSink` — assigns a process-local display `Sequence` without reading the store, starts `AppendAsync` without blocking the logging hot path, and publishes a wake hint only for the committed result. A store that owns a lifetime high-water assigns the committed sequence itself, as `EfStructuredLogStore` does. Append failures never publish, never escape into host logging, and never disable later captures.
 - **Override:** replace to tee captured entries elsewhere (e.g. forward to an external collector) while keeping the in-memory store for the UI.
 
 ### `IStructuredLogSourceProvider` *(Core — `Elsa.Diagnostics.StructuredLogs.Core`)*

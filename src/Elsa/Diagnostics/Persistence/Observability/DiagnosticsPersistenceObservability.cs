@@ -23,7 +23,9 @@ public enum DiagnosticsPersistenceLossReason
     ShutdownTimeout,
     WriteAfterClosure,
     DurableRetentionDeletion,
-    SubscriberDelivery
+    SubscriberDelivery,
+    /// <summary>A capture offered to a durable adapter before the host started its drain, so it was rejected unstored.</summary>
+    WriteBeforeStart
 }
 
 /// <summary>

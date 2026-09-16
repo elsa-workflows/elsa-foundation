@@ -76,7 +76,7 @@ Live SSE fan-out is not a persistence concern. Its per-subscriber queues and in-
 | Operation | Caller-visible semantics |
 |---|---|
 | `AppendAsync(entry)` | Non-blocking acceptance through a bounded adapter queue; the returned committed entry carries its authoritative opaque cursor and completes only after durable acknowledgement. |
-| `GetHighWaterMarkAsync()` | Lifetime maximum committed logical `Sequence`, or zero only for a never-written stream. Retention and restart do not rewind it. `StructuredLogSink` uses it to seed display sequencing after restart. |
+| `GetHighWaterMarkAsync()` | Lifetime maximum committed logical `Sequence`, or zero only for a never-written stream. Retention and restart do not rewind it. Durable adapters assign committed sequences above it; `StructuredLogSink` no longer reads it on the capture path. |
 | `GetRecentAsync(filter)` | Filter by minimum level, category, and source; clamp `MaxCount` to `MaxRecentQuerySize`; select the newest window; return it oldest-to-newest. Category and source equality are ordinal and case-sensitive. |
 | `GetTailCursorAsync()` / `ReadAfterAsync(cursor, filter, maxCount)` | Capture a durable tail boundary, validate an optional source/scope/stream-bound opaque anchor, and return one bounded oldest-first snapshot page plus the next scanned cursor. Filtered-out records still advance the next cursor. Malformed, stale, trimmed, or wrong-binding anchors share one non-disclosing unavailable error. |
 | `TrimAsync(keepNewest)` | Retain exactly the newest committed records while lifetime cursor and logical high-water state survive, including `keepNewest = 0`. |
