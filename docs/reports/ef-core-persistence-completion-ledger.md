@@ -1,7 +1,9 @@
 # EF Core persistence completion ledger
 
-Status: active auditable ledger index; #1671 completed the entry-level baseline expansion, but no
-replacement, default flip, or removal disposition is complete merely because it is inventoried.
+Status: closed (2026-09-16). Every replacement, default-flip and deletion disposition names a
+merged PR in the entry-level registers, which were closed by #1765 (storage units) and #1766
+(repository surfaces, tests and backend e2e). The carry-forwards this program does not claim are
+listed under "Closure" below; read them before treating any row as a guarantee.
 
 Inventory snapshot: `main` at `7a952efcf8d53472d7d4e7e3fd7b51d7a808c1c8` (2026-09-12), the
 squash merge of governance PR #1685. Later implementation PRs must update the affected rows and the
@@ -19,12 +21,11 @@ correctness requirements must first move to an EF-neutral or EF-owned row.
 
 ## Deletion step — 2026-09-16
 
-The removal step of #1670 landed on `claude/delete-groundwork` (replace with the merged PR number
-when the control room opens it). After it, no first-party Groundwork or MongoDB production code,
+The removal step of #1670 landed as #1764, squashed to `a83c41c1c`. After it, no first-party Groundwork or MongoDB production code,
 package, transitive runtime dependency, shell feature, host wiring, tool, workflow, configuration,
 test project or guard remains under `src/`, `tests/`, `tools/`, `docker/`, `e2e-tests/`, `.github/`
 or the repository package configuration. The entry-level registers record the per-row disposition:
-the [storage-unit register](ef-core-persistence/storage-unit-register.md) marks every unit deleted,
+the [storage-unit register](ef-core-persistence/storage-unit-register.md) marks every unit deleted and names its replacement and default-flip PRs,
 the [repository-surface register](ef-core-persistence/repository-surface-register.md) marks the
 package, feed, solution, workflow and guard surfaces, and the
 [test and e2e register](ef-core-persistence/test-and-e2e-register.md) names which coverage was
@@ -215,3 +216,24 @@ At every issue transition or merge, update the affected rows with the owning iss
 current evidence, and final disposition. Before Program #1665 closes, regenerate a current inventory
 from the final tree and reconcile it row by row with this ledger; do not use a broad `Groundwork`
 search as the sole completion proof.
+
+## Closure
+
+The program is complete: EF Core implementations for all 95 storage units on four providers, the
+default flip (#1763, `569903c80`), and the removal of both retired families (#1764, `a83c41c1c`).
+
+These are the things the ledger deliberately does **not** assert, recorded here so a future reader
+does not mistake a closed row for a stronger guarantee than the evidence supports.
+
+| Carry-forward | Why it is not closed |
+|---|---|
+| Performance | Measurement retired by owner decision under ADR 0073 (#1668, merged as #1756). No benchmark was run; no row records or may record a performance result. |
+| Four-provider CI enforcement | Nine of the 15 `ef-container-suites` legs arm no required-provider variable and self-skip when a container is unavailable. All nine were executed locally against real PostgreSQL 16, SQL Server 2022 and MySQL 8.4 containers on 2026-09-16 with zero skips. Proven, not enforced. |
+| Backend e2e | Eight suites fail, each reproduced identically on a Groundwork host built at `16a2f991a`, so they are pre-existing product defects (#1761). `durability/Test-RestartRecovery` had been wrongly attributed to a stale harness; state rehydrates correctly but a post-restart stimulus matches nothing. |
+| A17 concurrent migration locking | Closes by delegation to EF Core's `IHistoryRepository.AcquireDatabaseLockAsync`. There is no first-party parallel-invocation test. |
+| Two coverage losses | The v1.2 production-scanner traversal, and `AspNetCoreIdentityConcurrencyContractTests`, both lost with deleted Groundwork projects. Named in the test register rather than absorbed. |
+| R28 activation authority | `IWorkflowActivationAuthority` exposes no lease or expiry fields. Unchanged by this program. |
+| E13 | Deleted with no e2e rewrite; the no-retired-family half is now a static guard, not a host-boundary proof. |
+| Constitutions | `.specify/memory/constitution.md` and `constitution-framework.md` still carry ADR 0042's Groundwork-only direction. Amending a ratified constitution is an owner decision. |
+
+A closed ledger is not a claim that nothing is left; it is a claim that what is left is written down.
