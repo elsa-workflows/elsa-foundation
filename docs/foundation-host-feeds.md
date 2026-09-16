@@ -83,18 +83,10 @@ warn: Shell 'default' requested 6 feature(s) that are not available in the runti
 `IsDegraded=False` with `PackageCount=0` and a shell missing its features is the signature of this
 mistake. It looks identical to a healthy host that was asked for nothing, because that is what it is.
 
-## Dependencies resolve across feeds
+## Declare the full pinned closure, not just roots
 
-List roots, not the closure. Transitive dependencies are resolved automatically, and a feed with no
-`IncludePatterns` at all still serves as a resolution source. Pinning one root against two feeds:
-
-```json
-{ "Name": "elsa-4", "ServiceIndex": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/index.json",
-  "IncludePatterns": [ "Elsa.Tasks.Schedules [4.0.0-preview.793]" ] },
-{ "Name": "nuget", "ServiceIndex": "https://api.nuget.org/v3/index.json" }
-```
-
-produces:
+Transitive dependencies are mostly resolved for you, and a feed with no `IncludePatterns` still serves
+as a resolution source. Pinning one root against two feeds pulls its closure across both:
 
 ```
 Elsa.Tasks.Schedules  4.0.0-preview.793  feed=elsa-4  feed-rule:elsa-4
@@ -103,10 +95,47 @@ Elsa.Tasks.Core       4.0.0-preview.793  feed=elsa-4  dependency-of:Elsa.Tasks.S
 Cronos                0.13.0             feed=nuget   dependency-of:Elsa.Tasks.Schedules
 ```
 
-Third-party dependencies are fetched from whichever feed has them. Dependencies the runtime already
-provides are skipped rather than downloaded: the same root's `Microsoft.Extensions.*` dependencies
-and `CShells.Abstractions` do not appear, because the shared framework and
-`Nuplane:Loading:SharedAssemblies` already satisfy them.
+**But do not rely on it.** Some declared dependencies are silently never acquired, and the cycle still
+reports `IsDegraded=False, FailedCount=0`. List every package you need, each as an explicit root with
+an exact single-point range. Generate that list from a `dotnet restore` of your roots.
+
+### Why a declared dependency can go missing
+
+The dependency walk skips anything `IsHostProvidedDependency` believes the host already supplies:
+
+1. A **hard-coded contract allowlist** — the CShells and Nuplane `*.Abstractions` packages, plus these
+   Elsa ids: `Elsa.Api.Common`, `Elsa.Caching`, `Elsa.Common`, `Elsa.Expressions`, `Elsa.Features`,
+   `Elsa.KeyValues`, `Elsa.Mediator`, `Elsa.Resilience`, `Elsa.Resilience.Core`, `Elsa.Tenants`,
+   `Elsa.Workflows.Core`, `Elsa.Workflows.Management`, `Elsa.Workflows.Runtime`.
+2. Anything whose id starts with `Microsoft.Extensions.`.
+3. Anything present in the host's own `*.deps.json` at a version satisfying the range.
+
+Rule 1 is the trap for this host. That list assumes a host that compiles Elsa in — and
+`Elsa.Foundation.Host` deliberately compiles in **no Elsa feature at all**, so it supplies none of
+them. Pinning `Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore` acquires 15 packages,
+`IsDegraded=False`, and `Elsa.Workflows.Runtime` is not among them — while its sibling
+`Elsa.Workflows.Runtime.Core`, which is not on the list, is. The shell then fails at load:
+
+```
+Failed to load types from assembly Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.
+System.IO.FileNotFoundException: Could not load file or assembly 'Elsa.Workflows.Runtime'
+Shell 'default' requested 1 feature(s) that are not available: WorkflowsRuntimeEntityFrameworkCore
+```
+
+Rule 3 has a subtler edge: a package genuinely in the host's `deps.json` is correctly not downloaded,
+but it is loaded in the host's default context. A feed package only sees it if it is also listed in
+`Nuplane:Loading:SharedAssemblies` — acquisition-skipping and assembly-sharing are two separate lists
+that are not kept in step. `NativeEndpoints` behaves this way, and a feature depending on it fails
+with `FeatureNotFoundException` rather than a missing-file error.
+
+Neither case is caught by the version range or the lock file, because nothing was resolved to check.
+
+The checks above apply only to **dependencies**, never to roots — which is why naming a package
+explicitly always acquires it, and why the full-closure list is the reliable shape. It also makes a
+deployment reproducible.
+
+Note that `Microsoft.EntityFrameworkCore.*` and `Npgsql.*` are *not* covered by rule 2 (which is
+`Microsoft.Extensions.` only), so EF and its provider do arrive through the feed normally.
 
 ## Pinning and integrity
 
