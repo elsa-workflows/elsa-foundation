@@ -115,6 +115,11 @@
 		<ProjectReference Include="..\..\Elsa\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
 		<ProjectReference Include="..\..\Elsa\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
 		<ProjectReference Include="..\..\Elsa\Expressions\Elsa.Expressions.csproj" />
+		<!--
+			The default shell enables the Events feature, so its assembly has to be in the host's CShells
+			catalog. It used to arrive transitively through a deleted persistence project; reference it here.
+		-->
+		<ProjectReference Include="..\..\Elsa\Events\Elsa.Events.csproj" />
 		<ProjectReference Include="..\..\Elsa\Locking\FileSystem\Elsa.Locking.FileSystem.csproj" />
 		<ProjectReference Include="..\..\Elsa\Mediator\Elsa.Mediator.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Api\Elsa.Modularity.Api.csproj" />

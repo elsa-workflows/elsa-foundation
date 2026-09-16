@@ -5,7 +5,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Activities.Http.IntegrationTests;
 
 /// <summary>
-/// A synchronous HTTP endpoint workflow over an isolated Groundwork SQLite database returns the same live response,
+/// A synchronous HTTP endpoint workflow over an isolated EF Core SQLite database returns the same live response,
 /// completes, and records the same durable <c>HttpResponseInstruction</c> artifact under every checkpoint persistence
 /// policy. Split from the spec 090 write-amplification acceptance when performance measurement was retired by owner
 /// decision (#1668, ADR 0073): physical checkpoint-commit counts and their comparison are no longer asserted. The
@@ -32,7 +32,7 @@ public sealed class HttpEndpointCheckpointPolicyEquivalenceTests
     public async Task Sync_endpoint_returns_completes_and_persists_the_same_result_under_each_checkpoint_policy(
         CheckpointPersistenceMode mode)
     {
-        await using var fixture = await HttpEndpointHostFixture.StartGroundworkSqliteAsync(
+        await using var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(
             checkpointPersistenceMode: mode,
             maxSegmentCheckpoints: 50);
         var policy = mode.ToString().ToLowerInvariant();
