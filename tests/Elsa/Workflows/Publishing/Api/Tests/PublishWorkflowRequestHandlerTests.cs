@@ -31,6 +31,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 using WorkflowArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
@@ -175,9 +176,7 @@ public sealed class PublishWorkflowRequestHandlerTests
             handler.Handle(new PublishWorkflow(workflowVersion.Id), CancellationToken.None));
 
         Assert.Equal(ExpressionDraftValidationState.Unavailable, exception.State);
-        Assert.StartsWith("expression-validation-unavailable:", exception.Code, StringComparison.Ordinal);
-        Assert.Contains(nameof(IExpressionDraftSemanticValidator), exception.Code, StringComparison.Ordinal);
-        Assert.DoesNotContain(nameof(IWorkflowDefinitionVersionStore), exception.Code, StringComparison.Ordinal);
+        Assert.Equal("expression-validation-unavailable", exception.Code);
         Assert.Empty(exception.Diagnostics);
         Assert.Empty(await _store.ListAllAsync());
     }
@@ -201,10 +200,60 @@ public sealed class PublishWorkflowRequestHandlerTests
             handler.Handle(new PublishWorkflow(workflowVersion.Id), CancellationToken.None));
 
         Assert.Equal(ExpressionDraftValidationState.Unavailable, exception.State);
-        Assert.StartsWith("expression-validation-unavailable:", exception.Code, StringComparison.Ordinal);
-        Assert.Contains(nameof(InvalidOperationException), exception.Code, StringComparison.Ordinal);
-        Assert.Contains("Validation provider failed.", exception.Code, StringComparison.Ordinal);
+        Assert.Equal("expression-validation-unavailable", exception.Code);
         Assert.Empty(await _store.ListAllAsync());
+    }
+
+    [Fact]
+    public async Task PublicationLogsWhichDependencyIsMissingWhenExpressionValidationIsNotComposed()
+    {
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
+        var versionStore = new FakeVersionStore(workflowVersion);
+        var logger = new RecordingLogger<PublishWorkflowRequestHandler>();
+        var handler = Handler(
+            layout: null,
+            TestCompiler.Create(
+                versionStore,
+                new FakeActivityVersionStore([_writeLineActivity]),
+                _activityStructureService,
+                TestWellKnownTypeRegistry.Create()),
+            versionStore,
+            configureExpressionValidator: false,
+            logger: logger);
+
+        await Assert.ThrowsAsync<ExpressionPublicationValidationException>(() =>
+            handler.Handle(new PublishWorkflow(workflowVersion.Id), CancellationToken.None));
+
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Error, entry.Level);
+        Assert.Contains(nameof(IExpressionDraftSemanticValidator), entry.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(nameof(IWorkflowDefinitionVersionStore), entry.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PublicationLogsTheValidatorFaultItReportsAsUnavailable()
+    {
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
+        var versionStore = new FakeVersionStore(workflowVersion);
+        var logger = new RecordingLogger<PublishWorkflowRequestHandler>();
+        var handler = Handler(
+            layout: null,
+            TestCompiler.Create(
+                versionStore,
+                new FakeActivityVersionStore([_writeLineActivity]),
+                _activityStructureService,
+                TestWellKnownTypeRegistry.Create()),
+            versionStore,
+            new ThrowingExpressionValidator(),
+            logger: logger);
+
+        await Assert.ThrowsAsync<ExpressionPublicationValidationException>(() =>
+            handler.Handle(new PublishWorkflow(workflowVersion.Id), CancellationToken.None));
+
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Error, entry.Level);
+        var logged = Assert.IsType<InvalidOperationException>(entry.Exception);
+        Assert.Equal("Validation provider failed.", logged.Message);
     }
 
     [Fact]
@@ -1040,7 +1089,8 @@ public sealed class PublishWorkflowRequestHandlerTests
         IWorkflowExecutableCompiler compiler,
         IWorkflowDefinitionVersionStore versionStore,
         IExpressionDraftSemanticValidator? expressionValidator = null,
-        bool configureExpressionValidator = true)
+        bool configureExpressionValidator = true,
+        ILogger<PublishWorkflowRequestHandler>? logger = null)
     {
         var extractor = new WorkflowTriggerBindingExtractor([]);
         return new(
@@ -1060,6 +1110,7 @@ public sealed class PublishWorkflowRequestHandlerTests
             workflowVersionStore: versionStore,
             snapshotReviews: _snapshotReviews,
             authoredInputsSidecar: new WorkflowExecutableAuthoredInputsSidecar(new ActivityTreeProjector(_activityStructureService)),
+            logger: logger,
             expressionValidator: configureExpressionValidator
                 ? expressionValidator ?? StubExpressionValidator.Valid
                 : null);
@@ -1128,6 +1179,24 @@ public sealed class PublishWorkflowRequestHandlerTests
             string documentScope,
             CancellationToken cancellationToken) =>
             ValueTask.FromResult(result);
+    }
+
+    /// <summary>Captures formatted log entries so the diagnostics-only logging can be asserted directly.</summary>
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message, Exception? Exception)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, formatter(state, exception), exception));
     }
 
     private sealed class ThrowingExpressionValidator : IExpressionDraftSemanticValidator
