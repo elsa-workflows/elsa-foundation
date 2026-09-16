@@ -881,9 +881,9 @@ public sealed class EfCoreIdentityFrameworkContractTests
     }
 
     [Theory]
-    [InlineData("admin", null)]
-    [InlineData(null, "Correct Horse1!")]
-    public void Feature_rejects_half_configured_seed(string? userName, string? password)
+    [InlineData("admin", null, "SeedAdminUserName is configured but SeedAdminPassword is not")]
+    [InlineData(null, "Correct Horse1!", "SeedAdminPassword is configured but SeedAdminUserName is not")]
+    public void Feature_rejects_half_configured_seed(string? userName, string? password, string expectedMessage)
     {
         var services = new ServiceCollection();
         var feature = new AspNetCoreIdentityEntityFrameworkCoreFeature
@@ -898,7 +898,7 @@ public sealed class EfCoreIdentityFrameworkContractTests
             feature.ConfigureServices(services));
 
         Assert.Contains("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("both SeedAdminUserName and SeedAdminPassword", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(expectedMessage, exception.Message, StringComparison.Ordinal);
         Assert.Empty(services);
     }
 
