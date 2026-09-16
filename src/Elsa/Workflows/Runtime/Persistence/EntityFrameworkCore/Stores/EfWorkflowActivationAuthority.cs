@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// <summary>Concrete opt-in EF Core authority for the definition-keyed workflow activation slots.</summary>
 /// <remarks>
 /// The slot row is the authority: its revision is the compare-and-swap token and its unique active-activation
-/// projection prevents one activation from being admitted to two lanes in the same persistence scope. Groundwork
+/// projection prevents one activation from being admitted to two lanes in the same persistence scope. A document store
 /// remains available as the default until the surrounding composition is explicitly switched.
 /// </remarks>
 public sealed class EfWorkflowActivationAuthority(

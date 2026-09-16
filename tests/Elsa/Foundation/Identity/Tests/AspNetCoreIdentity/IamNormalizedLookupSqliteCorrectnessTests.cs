@@ -1,14 +1,16 @@
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Stores;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Stores;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
+using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
 
 /// <summary>
-/// The timing-free IAM normalized-lookup scenario over the Groundwork SQLite-backed ASP.NET Core Identity stores. It
+/// The timing-free IAM normalized-lookup scenario over the EF Core SQLite-backed ASP.NET Core Identity stores. It
 /// used to run the retired store-performance workload and compare a ratified result digest; performance measurement
 /// was retired by owner decision (#1668, ADR 0073), so the scenario's observable results are asserted directly and the
 /// native-plan acceptance test that shared this file is retired with it.
@@ -24,18 +26,28 @@ public sealed class IamNormalizedLookupSqliteCorrectnessTests : IDisposable
     private const string RoleName = "Administrators";
     private const string NormalizedRoleName = "ADMINISTRATORS";
 
-    private readonly IdentityV2TestPersistence _persistence = new();
-    private readonly GroundworkIdentityUserStore _users;
-    private readonly GroundworkIdentityRoleStore _roles;
+    private readonly string _databasePath = Path.Combine(Path.GetTempPath(), $"elsa-identity-lookup-{Guid.NewGuid():N}.db");
+    private readonly IdentityIamDbContext _db;
+    private readonly EfCoreIdentityUserStore _users;
+    private readonly EfCoreIdentityRoleStore _roles;
 
     public IamNormalizedLookupSqliteCorrectnessTests()
     {
         var access = new FixedAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope(TenantId)));
-        _users = new GroundworkIdentityUserStore(_persistence.Rows(access), access);
-        _roles = new GroundworkIdentityRoleStore(_persistence.Rows(access), access);
+        _db = new IdentityIamSqliteDbContext(new DbContextOptionsBuilder<IdentityIamSqliteDbContext>()
+            .UseSqlite($"Data Source={_databasePath};Pooling=False").Options);
+        _db.Database.EnsureCreated();
+        _users = new EfCoreIdentityUserStore(_db, access);
+        _roles = new EfCoreIdentityRoleStore(_db, access);
     }
 
-    public void Dispose() => _persistence.Dispose();
+    public void Dispose()
+    {
+        _db.Dispose();
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        foreach (var file in new[] { _databasePath, $"{_databasePath}-wal", $"{_databasePath}-shm" })
+            File.Delete(file);
+    }
 
     [Fact]
     public async Task Normalized_name_email_and_role_lookups_return_the_canonical_rows_among_noise()

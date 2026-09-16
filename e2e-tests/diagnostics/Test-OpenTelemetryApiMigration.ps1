@@ -51,7 +51,7 @@ foreach ($case in $queryCases) {
     }
     $response = Invoke-Step "production route $($case.Method) $($case.Path)" { Invoke-WebRequest @params }
     if ([int]$response.StatusCode -notin $case.Status) { throw "Expected $($case.Method) $($case.Path) to return one of $($case.Status -join ', '), got $($response.StatusCode)." }
-    if ([int]$response.StatusCode -eq 500) { Write-Host "[query]       $($case.Path) reached the real provider but returned 500 (existing Groundwork grouped-query capability); route composition is present." -ForegroundColor Yellow }
+    if ([int]$response.StatusCode -eq 500) { Write-Host "[query]       $($case.Path) reached the real provider but returned 500 (existing grouped-query capability); route composition is present." -ForegroundColor Yellow }
 }
 Write-Host "[composition] 7 query routes returned their expected authenticated statuses; the SSE and 3 OTLP routes follow below." -ForegroundColor Green
 

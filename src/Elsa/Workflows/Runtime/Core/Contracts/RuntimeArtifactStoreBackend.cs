@@ -20,7 +20,6 @@ public sealed class RuntimeArtifactStoreBackend
         typeof(IWorkflowExecutableSourceReferenceWriter)
     ];
     public const string InMemory = "in-memory";
-    public const string Groundwork = "groundwork";
     public const string EntityFramework = "entity-framework";
 
     private readonly IReadOnlyList<ServiceDescriptor> descriptors;
@@ -32,7 +31,7 @@ public sealed class RuntimeArtifactStoreBackend
         Action<IServiceCollection>? removeOwnedArtifacts = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        if (name is not InMemory and not Groundwork and not EntityFramework)
+        if (name is not InMemory and not EntityFramework)
             throw new ArgumentException($"Unknown runtime artifact store backend '{name}'.", nameof(name));
         ArgumentNullException.ThrowIfNull(descriptors);
         this.descriptors = descriptors.ToArray();

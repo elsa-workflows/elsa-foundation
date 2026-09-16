@@ -198,7 +198,7 @@ public sealed class EfWorkflowExecutionStateStoreTests
     }
 
     [Fact]
-    public async Task Tenant_and_scope_values_support_the_groundwork_256_character_contract()
+    public async Task Tenant_and_scope_values_support_the_256_character_contract()
     {
         var tenant = new string('t', RuntimeWorkflowExecutionEfModule.TenantMaximumLength);
         await using var database = await Database.CreateAsync();
@@ -212,7 +212,7 @@ public sealed class EfWorkflowExecutionStateStoreTests
     }
 
     [Fact]
-    public async Task Tenant_and_scope_values_above_the_groundwork_contract_are_rejected()
+    public async Task Tenant_and_scope_values_above_the_contract_are_rejected()
     {
         await using var database = await Database.CreateAsync();
         await using var fixture = database.Open("tenant-a");

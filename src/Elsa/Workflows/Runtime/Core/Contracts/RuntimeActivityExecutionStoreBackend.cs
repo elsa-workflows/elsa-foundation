@@ -23,13 +23,12 @@ public sealed class RuntimeActivityExecutionStoreBackend
     private readonly Action<IServiceCollection>? removeOwnedArtifacts;
 
     public const string InMemory = "in-memory";
-    public const string Groundwork = "groundwork";
     public const string EntityFramework = "entity-framework";
 
     public RuntimeActivityExecutionStoreBackend(string name, IEnumerable<ServiceDescriptor> descriptors, Action<IServiceCollection>? removeOwnedArtifacts = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        if (name is not InMemory and not Groundwork and not EntityFramework)
+        if (name is not InMemory and not EntityFramework)
             throw new ArgumentException($"Unknown activity execution store backend '{name}'.", nameof(name));
         ArgumentNullException.ThrowIfNull(descriptors);
         this.descriptors = descriptors.Distinct().ToArray();
@@ -55,19 +54,6 @@ public sealed class RuntimeActivityExecutionStoreBackend
     }
 
     public static bool HasRegisteredContract(IServiceCollection services) => services.Any(IsSurfaceRegistration);
-
-    /// <summary>
-    /// Prevents switching between the Groundwork and EF activity-execution families while the current
-    /// checkpoint writer still commits the R07-R09 units as one Groundwork transaction.
-    /// </summary>
-    public static void EnsureCheckpointCompositionCompatible(RuntimeActivityExecutionStoreBackend? existingBackend, string requestedBackend)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(requestedBackend);
-        if (existingBackend is not null && !StringComparer.Ordinal.Equals(existingBackend.Name, requestedBackend) &&
-            existingBackend.Name is Groundwork or EntityFramework && requestedBackend is Groundwork or EntityFramework)
-            throw new InvalidOperationException(
-                "Activity execution Groundwork/EF switching is unavailable while the runtime checkpoint writer still commits R07-R09 through Groundwork; complete checkpoint ownership before switching this backend.");
-    }
 
     public static IReadOnlyCollection<ServiceDescriptor> CaptureSurfaceRegistrations(IServiceCollection services) => services.Where(IsSurfaceRegistration).ToArray();
 
@@ -96,9 +82,9 @@ public sealed class RuntimeActivityExecutionStoreBackend
         {
             // EF keeps its auxiliary descriptors in the collection until the replacement
             // has been validated; its cleanup callback owns those descriptors. The
-            // in-memory and Groundwork backends have no auxiliary service cleanup, so
-            // withdraw every descriptor they own before the next registration adds its
-            // concrete implementation.
+            // in-memory backend has no auxiliary service cleanup, so withdraw every
+            // descriptor it owns before the next registration adds its concrete
+            // implementation.
             var providerOwnedDescriptors = Name == EntityFramework
                 ? descriptors.Where(descriptor => ContractTypes.Contains(descriptor.ServiceType))
                 : descriptors;

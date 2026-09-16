@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Design.Persistence.Core.Stores;
 /// <summary>
 /// Provider-neutral read port for <see cref="WorkflowDefinition"/>. Replaces the
 /// <c>IQueryable</c>/LINQ-bound <c>IQueries&lt;WorkflowDefinition&gt;</c> surface with a small set of
-/// intent-revealing operations, so any host-selected provider (EF Core, Groundwork, ...) can back it.
+/// intent-revealing operations, so any host-selected persistence provider can back it.
 /// Writes continue to flow through the dedicated command contracts.
 /// </summary>
 public interface IWorkflowDefinitionStore

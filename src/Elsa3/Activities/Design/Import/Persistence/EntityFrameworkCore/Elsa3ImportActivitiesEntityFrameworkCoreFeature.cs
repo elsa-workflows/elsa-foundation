@@ -12,7 +12,7 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore;
 [ShellFeature(
     name: "Elsa3ImportActivitiesEntityFrameworkCore",
     DisplayName = "Elsa 3 Activity Import EF Core Persistence",
-    Description = "Opt-in EF Core persistence for Elsa 3 reusable-activity imports. The receipt, provenance bindings, and Activity and Workflow Design rows commit in one transaction, so the Activities and Workflows Design EF Core lanes must use the same database. Groundwork remains the default.",
+    Description = "Opt-in EF Core persistence for Elsa 3 reusable-activity imports. The receipt, provenance bindings, and Activity and Workflow Design rows commit in one transaction, so the Activities and Workflows Design EF Core lanes must use the same database.",
     // The command enlists the Activities and Workflows Design EF contexts in its transaction, and this
     // feature registers neither; naming both lanes is what makes selecting it alone compose correctly.
     DependsOn = new object[] { "ActivitiesDesignEntityFrameworkCore", "WorkflowsDesignEntityFrameworkCore" })]

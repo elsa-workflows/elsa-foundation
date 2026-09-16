@@ -6,7 +6,7 @@ This module is the opt-in ASP.NET Core Identity adapter over the shared Foundati
 
 Select `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore`, or call `AddFoundationAspNetCoreIdentityEntityFrameworkCore(...)`, to bind the framework surface to `EfCoreIdentityUserStore` and `EfCoreIdentityRoleStore`. The registration composes `IdentityIamEntityFrameworkCore` with the same provider and connection and rejects a competing ASP.NET Identity or IAM authority before leaving descriptors behind. Equivalent repeated registrations are idempotent.
 
-Groundwork remains the default until the later program-wide default flip. OpenIddict remains in its separate vendor-owned EF context.
+OpenIddict remains in its separate vendor-owned EF context.
 
 ## Adapted framework contracts
 

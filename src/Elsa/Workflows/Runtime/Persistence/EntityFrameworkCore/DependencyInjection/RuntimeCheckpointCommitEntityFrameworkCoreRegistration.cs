@@ -15,7 +15,6 @@ public static class RuntimeCheckpointCommitEntityFrameworkCoreRegistration
         var snapshot = services.ToArray();
         try
         {
-            RuntimeEfCheckpointCompositionTransition.EnsureGroundworkCheckpointTransitionAllowed(services, "checkpoint commit");
             RequireEfParticipants(services);
             RuntimeEfContractBackendRegistration.EnsureSharedContext(services, "Runtime checkpoint EF persistence");
 

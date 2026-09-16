@@ -42,9 +42,9 @@ Prove persistence actually hits Postgres:
 
 ```bash
 docker compose exec postgres psql -U elsa -d elsa -c '\dt'
-# -> per-unit v2 tables such as elsa_workflow_definitions_v2, plus __groundwork_schema_history
+# -> the EF module tables, plus one __EFMigrationsHistory_* table per module
 docker compose exec postgres psql -U elsa -d elsa \
-  -c 'SELECT count(*) AS applied_units FROM "__groundwork_schema_history";'
+  -c "SELECT tablename FROM pg_tables WHERE tablename LIKE '__EFMigrationsHistory%';"
 ```
 
 Tear down (including volumes):
@@ -63,8 +63,8 @@ tree and the build needs repo-root `Directory.Packages.props`, the `.slnx`, and 
 ```bash
 docker build -f src/Apps/Elsa.Workbench/Dockerfile -t elsa-workbench:local .
 docker run --rm -p 13000:8080 \
-  -e CShells__Shells__default__Features__GroundworkWorkflowRuntime__RecoveryContinuationSigningKey=elsa-docker-demo-recovery-continuation-key \
-  -e 'CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityGroundwork__SeedAdminPassword=Password123!' \
+  -e CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey=elsa-docker-demo-recovery-continuation-key \
+  -e 'CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword=Password123!' \
   -e "CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -topk8 -nocrypt -outform DER | base64)" \
   elsa-workbench:local
 ```
@@ -88,7 +88,7 @@ solution uses — including third-party transitives such as FastEndpoints,
 JetBrains.Annotations, Polly, `NuGet.*`, and `SQLitePCLRaw.*` — to an explicit
 source, so restore is fully self-contained and needs no user-level
 `~/.nuget/NuGet/NuGet.Config` fallback. Preview packages (CShells, Nuplane,
-Groundwork, Elsa.Platform) map narrowly to their feedz.io feeds; everything else
+Elsa.Platform) map narrowly to their feedz.io feeds; everything else
 maps to nuget.org. All feeds are public (no auth).
 
 ---
@@ -109,10 +109,10 @@ can override it. Standard .NET double-underscore (`__`) env keys override any co
 | `Elsa__ModuleManagement__ApiKey` | The Elsa host management key the server accepts on its `/_elsa/module-management` API (header `X-Elsa-Module-Management-Key`). Server-side only — the browser never sees or sends it. **Must match** Studio's `Studio__BackendModuleManagementApiKey`. | `elsa-docker-demo-key` |
 | `Cors__AllowedOrigins__0`, `__1`, … | Browser origins allowed by the `ElsaStudio` CORS policy. The Studio container's **published host origin** must be listed. | `http://localhost:14000` |
 | `CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentity__AllowedReturnUrlOrigins__0`, `__1`, … | Origins the development login provider may redirect back to after sign-in. Add the Studio origin when Studio is hosted separately from the backend. | `http://localhost:14000` |
-| `CShells__Shells__default__Features__GroundworkWorkflowRuntime__RecoveryContinuationSigningKey` | HMAC key for durable recovery continuations: at least 32 UTF-8 bytes, identical on every node. Required whenever durable runtime persistence is composed; without it the default shell fails activation. | `elsa-docker-demo-recovery-continuation-key` |
-| `CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityGroundwork__SeedAdminPassword` | Password for the `admin` account that `shells.Production.json` seeds. The overlay blanks it, and a seed username without a password fails default shell activation (`/health/ready` returns `503 shell_activation_failed`). | `Password123!` |
+| `CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey` | HMAC key for durable recovery continuations: at least 32 UTF-8 bytes, identical on every node. Required whenever durable runtime persistence is composed; without it the default shell fails activation. | `elsa-docker-demo-recovery-continuation-key` |
+| `CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword` | Password for the `admin` account that `shells.Production.json` seeds. The overlay blanks it, and a seed username without a password fails default shell activation (`/health/ready` returns `503 shell_activation_failed`). | `Password123!` |
 | `CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey` | Base64 PKCS#8 RSA private key that signs access tokens; whitespace in the value is ignored. The overlay turns off OpenIddict development mode, so without a usable key the default shell fails activation (`/health/ready` returns `503 shell_activation_failed`). See [identity configuration](reference/identity-configuration.md#foundationidentityopeniddict). | a demo key committed in the compose files |
-| `CShells__Shells__default__Features__GroundworkProviderPostgreSql__ConnectionString` | Optional: override the Postgres connection string without editing the mounted `shells.json`. | *(commented out)* |
+| `ConnectionStrings__Elsa` | The one relational connection every EF module falls back to. Overrides the mounted `shells.json` without editing it. | *(commented out)* |
 
 `Cors:AllowedOrigins` defaults (in `appsettings.json`) are localhost dev values for running the
 server outside Docker; the compose file adds the Studio container origin.
@@ -129,34 +129,27 @@ server outside Docker; the compose file adds the Studio container origin.
 
 ## Demo persistence composition
 
-`docker/compose/elsa-workbench.shells.json` swaps the repo default (SQLite) for an explicit Groundwork
-PostgreSQL provider and persistence-lane composition:
+`docker/compose/elsa-workbench.shells.json` swaps the repo default (SQLite) for PostgreSQL:
 
-- **`GroundworkProviderPostgreSql`** supplies the one host-selected Groundwork connection. Its connection string
-  binds from a **top-level `ConnectionString` property** on the feature section (not an `Options` wrapper):
+- Each EF module sets `"Provider": "PostgreSql"` and falls back to the one `ConnectionStrings:Elsa`
+  connection, which `docker-compose.yml` supplies as `ConnectionStrings__Elsa`. A module can override
+  its own connection with a top-level `ConnectionString` property on its feature section.
 
-  ```json
-  "GroundworkProviderPostgreSql": {
-    "ConnectionString": "Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa"
-  }
-  ```
+- The explicit `WorkflowsRuntimeEntityFrameworkCore`, `WorkflowsDesignEntityFrameworkCore`,
+  `ActivitiesDesignEntityFrameworkCore`, `WorkflowsPublishingEntityFrameworkCore`, and
+  `WorkflowsRuntimeDistributedEntityFrameworkCorePersistence` features bind the runtime,
+  workflows-design, activities-design, publishing, and distributed lanes.
 
-- The explicit `GroundworkWorkflowRuntime`, `WorkflowsDesignGroundworkPersistence`,
-  `ActivitiesDesignGroundworkPersistence`, `WorkflowsPublishingGroundwork`, and
-  `WorkflowsRuntimeDistributedGroundworkPersistence` features bind the runtime, workflows-design,
-  activities-design, publishing, and distributed lanes to the provider's default target.
-
-- **`GroundworkWorkflowRuntime.RecoveryContinuationSigningKey` is required.** Durable recovery pages carry an
+- **`WorkflowsRuntimeEntityFrameworkCore.RecoveryContinuationSigningKey` is required.** Durable recovery pages carry an
   HMAC-signed continuation token, so a shell that composes durable runtime persistence without a stable key of at
   least 32 UTF-8 bytes fails activation (`/health/ready` reports `shell_activation_failed`). The image's
   `shells.Production.json` blanks the development value committed in `shells.json`, so a Production container
   must supply the key as the environment variable in the table above. The compose files set a demo-only value;
   change it per deployment and use the same value on every node that consumes recovery pages.
 
-- `DiagnosticsGroundworkPersistence` persists OpenTelemetry and structured logs through the same provider,
-  while `SecretsGroundworkPersistence` keeps the secrets lane on Groundwork (the Secrets EF
-  feature is catalogued on Workbench but is opt-in — replace this key with `SecretsEntityFrameworkCore`,
-  never enable both). The dashboard projection feature
+- `DiagnosticsOpenTelemetryEntityFrameworkCore` and `DiagnosticsStructuredLogsEntityFrameworkCore`
+  persist OpenTelemetry and structured logs on the same database, and `SecretsEntityFrameworkCore`
+  holds the secrets lane. The dashboard projection feature
   is enabled explicitly so run-health and portfolio queries do not fall back to unavailable/in-memory sources.
 
 - Engine self-instrumentation is enabled: `WorkflowsRuntimeTracing` emits engine spans and
@@ -167,8 +160,8 @@ PostgreSQL provider and persistence-lane composition:
 - The `SampleNuplaneActivities` and `WeatherForecastSample` sample features are dropped because they
   require Nuplane feed packages that are not present in the image.
 
-`GroundworkWorkflowRuntime` declares `DependsOn "WorkflowsRuntimeResumption"`, and the distributed Groundwork
-feature declares `DependsOn "WorkflowsRuntimeDistributed"`; CShells auto-enables those dependencies. Their
+`WorkflowsRuntimeEntityFrameworkCore` declares `DependsOn "WorkflowsRuntimeResumption"`, and the distributed
+persistence feature declares `DependsOn "WorkflowsRuntimeDistributed"`; CShells auto-enables those dependencies. Their
 assemblies are referenced by the host so the features are discoverable in a clean deployment (see the note in
 `Elsa.Workbench.csproj`).
 
@@ -206,14 +199,14 @@ Studio wiring (see `docker-compose.yml`):
 
 - **`/health/ready` returns `503 shell_activation_failed`, and the log shows "SeedAdminUserName is configured
   but SeedAdminPassword is not"** — the container runs in `Production` without the seed password. Set
-  `CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityGroundwork__SeedAdminPassword`.
+  `CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword`.
   Setting it in a mounted `shells.json` has no effect, because `shells.Production.json` blanks it.
 - **`/health/ready` returns `503 shell_activation_failed`, and the log shows "No signing key is configured for
   the OpenIddict identity module"** (or "must be a base64-encoded PKCS#8 RSA private key") — set
   `CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey` to a valid key (see
   [Environment variables](#environment-variables)).
 - **`/` returns 500 with `FeatureNotFoundException: WorkflowsRuntimeResumption`** — the host is
-  missing the `Elsa.Workflows.Runtime.Resumption` project reference that every Groundwork
+  missing the `Elsa.Workflows.Runtime.Resumption` project reference that every durable
   persistence provider depends on. It is wired in `Elsa.Workbench.csproj` / `Program.cs`; rebuild the
   image if you see this.
 - **`Npgsql … Failed to connect to 127.0.0.1:5432`** — the feature fell back to its default

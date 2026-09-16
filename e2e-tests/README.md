@@ -14,23 +14,20 @@ dotnet build src/Apps/Elsa.Workbench/Elsa.Workbench.csproj
 dotnet run --project src/Apps/Elsa.Workbench/Elsa.Workbench.csproj --launch-profile http
 ```
 
-**There is no separate schema-deployment step any more.** Under Groundwork v2 the storage session source
-admits every composed lane's units at startup, so the server creates and validates its own schema when it
-boots. `.config/dotnet-tools.json` is empty and the old `dotnet tool run groundwork -- apply` command --
-along with the `GroundworkAllFeaturesWithDiagnosticsDeploymentSchema` it deployed -- went with the v1
-substrate.
+**There is no separate schema-deployment step.** Each EF Core module applies or validates its own
+migrations when the shell activates, so the server creates and validates its own schema when it boots.
 
 It listens on `http://localhost:5095`. The default `appsettings.json` + `shells.json` already enable
-everything the core flow needs (design + publishing + runtime APIs, identity, the explicit Groundwork SQLite provider and
-its runtime/design/publishing lanes).
+everything the core flow needs (design + publishing + runtime APIs, identity, and the EF Core runtime,
+design and publishing modules on SQLite).
 
 ## Running these tests — READ THIS (agents included)
 
 - **Windows runner:** use `powershell -NoProfile -ExecutionPolicy Bypass -File <script>`. This machine has **no
   `pwsh`**; the `.EXAMPLE` lines show `pwsh` only as cross-platform shorthand.
 - **Rebuild gotcha:** after rebuilding the server from newer source, **delete the SQLite DBs first**
-  (`elsa-groundwork.db*`, `elsa.sqlite.db*`, `*.schema.lock` under `src/Apps/Elsa.Workbench/`; stop the server /
-  free port 5095 first), then start the server, which re-admits the schema from empty. Old rows carry an older
+  (`elsa.db*`, `elsa-diagnostics.db*` under `src/Apps/Elsa.Workbench/`; stop the server /
+  free port 5095 first), then start the server, which migrates the schema from empty. Old rows carry an older
   schema version a newer build refuses to read, which surfaces as spurious `500`s on publish.
 - **Opt-in features:** `scheduling/` requires `ActivitiesScheduling` + `WorkflowsRuntimeScheduling` +
   `WorkflowsRuntimeRecurringTriggers` in `shells.json` (enabled by default since #1053); `DispatchWorkflow`/`bpmn`
@@ -62,7 +59,6 @@ A candidate is retired from here only once its in-process replacement exists.
 | `bpmn`, `composition` | true e2e | waited `DispatchWorkflow` + BPMN error boundary |
 | `logging` | mixed | `Test-ValueCapture` is runtime e2e; `Test-DiagnosticsSettings` is a read-only contract check |
 | `workflow-version-override` | true e2e | exact-version preflight and promotion through live HTTP + persistence |
-| `groundwork` | true e2e | Groundwork release adoption through author/save/reload/publish/execute/resume |
 | `file-deployment` | true e2e | server restart with a mounted definitions folder; startup reconcile + publish-on-reconcile, readiness gate, restart idempotency (spec 147) |
 
 The former `get-endpoints` and `write-endpoints` suites (GET / CRUD status-and-shape checks) were retired on
@@ -102,7 +98,6 @@ The former `get-endpoints` and `write-endpoints` suites (GET / CRUD status-and-s
 | `_ElsaCommon.ps1`           | shared helpers (dot-sourced): login, activity lookup, submit/publish/execute, structures, observability |
 | `_WriteCommon.ps1`          | shared mutation harness (dot-sourced): `Invoke-Write` / `Assert-Write` / `Complete-WriteSuite` for status-and-shape assertions on writes |
 | `workflow-version-override/Test-WorkflowVersionOverride.ps1` | automatic/exact promotion preflight, exact SemVer promotion, immutable version read |
-| `groundwork/Test-GroundworkReleaseLifecycle.ps1` | live Groundwork release path: author/save/reload, publish, suspend at a persisted Event bookmark, resume, complete |
 | `file-deployment/Test-FileBasedDeployment.ps1` | file-based deployment at startup (spec 147): definitions folder composed via env vars (`JsonWorkflowReconciliation` + `PublishOnReconcile`), `/health/ready` gate, imported + published + executable, idempotent restart |
 
 **Events note:** Foundation has no classic `PublishEvent` activity. An `Event` activity is a start trigger;
@@ -251,7 +246,7 @@ covered end-to-end by `bpmn/Test-BpmnCallActivity.ps1` (a BPMN `callActivity` is
 by convention). `Test-ChildWorkflow.ps1` still covers the fire-and-forget path.
 
 **Known defect (issue #1031):** a dispatched child that faults can be surfaced through a scheduler-poison path — its
-fault-recording checkpoint commit fails (`GroundworkRuntimeCheckpointWriterException`), so the child surfaces a
+fault-recording checkpoint commit fails, so the child surfaces a
 `Critical`/`SchedulerWorkPoisoned` incident instead of the normal `ActivityReturnedFault` one and the faulted
 activity's state stays uncommitted (`Running`). Dispatched executions only; a directly-executed `Fault`
 workflow records its incident cleanly. Parent-side outcome delivery is unaffected (the waited parent still

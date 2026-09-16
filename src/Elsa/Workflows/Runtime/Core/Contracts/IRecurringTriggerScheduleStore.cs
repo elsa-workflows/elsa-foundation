@@ -5,7 +5,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <summary>
 /// Durable store for <see cref="RecurringTriggerSchedule"/> documents — the recurring-start counterpart to
 /// <see cref="IDurableTimerStore"/>. The default in-memory implementation keeps schedules only for the
-/// process lifetime; a durable persistence provider (the Groundwork bridge) swaps in a restart-surviving
+/// process lifetime; a durable persistence provider (the Runtime EF Core module) swaps in a restart-surviving
 /// implementation so a Timer/Cron start trigger keeps firing across process restarts.
 /// </summary>
 /// <remarks>

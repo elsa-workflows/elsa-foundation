@@ -6,7 +6,6 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 public sealed class SchedulerWorkQueueStoreBackend
 {
     public const string EntityFramework = "entity-framework";
-    public const string Groundwork = "groundwork";
     public const string InMemory = "in-memory";
 
     private readonly IReadOnlyList<ServiceDescriptor> descriptors;
@@ -18,7 +17,7 @@ public sealed class SchedulerWorkQueueStoreBackend
         Action<IServiceCollection>? removeOwnedArtifacts = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        if (name is not (EntityFramework or Groundwork or InMemory))
+        if (name is not (EntityFramework or InMemory))
             throw new ArgumentException($"Unknown scheduler-work queue backend '{name}'.", nameof(name));
         ArgumentNullException.ThrowIfNull(descriptors);
         this.descriptors = descriptors.Distinct().ToArray();

@@ -9,7 +9,7 @@ Steward(s): Sipke plus the EF Core persistence control room.
 ## Purpose
 
 Deliver [Program #1665](https://github.com/elsa-workflows/elsa-foundation/issues/1665): replace every
-Elsa-authored Groundwork persistence implementation with EF Core for SQLite, SQL Server, PostgreSQL,
+Elsa-authored legacy persistence implementation with EF Core for SQLite, SQL Server, PostgreSQL,
 and MySQL, remove MongoDB, and close only after a requirement-by-requirement audit proves the final
 repository and supported compositions.
 
@@ -38,8 +38,8 @@ flip, or deletion is claimed by this checkpoint.
 
 By owner decision under ADR 0073, [#1668](https://github.com/elsa-workflows/elsa-foundation/issues/1668)
 removes the performance-measurement infrastructure: the five `benchmarks/` projects, `tools/performance/`,
-`tools/ledger/` (the store-performance harness tests and the spec 094 Groundwork coverage-ledger
-validator), the `HTTP workflow performance` and `Groundwork ledger` workflows, the IAM native-plan CI
+`tools/ledger/` (the store-performance harness tests and the spec 094 coverage-ledger
+validator), the `HTTP workflow performance` and coverage-ledger workflows, the IAM native-plan CI
 upload, and the `BenchmarkDotNet` package pin and source mapping. Timing-independent correctness found
 in those surfaces was moved into ordinary test projects or mapped to suites that already express it;
 the [test register](../reports/ef-core-persistence/test-and-e2e-register.md) records each disposition.
@@ -47,13 +47,26 @@ Historical evidence under `docs/reports/evidence/` and in archived reports is re
 the run ADR 0045 cites archived there as well. No benchmark or performance workflow was run for this
 change, and no claim is made that performance passed.
 
+## Removal completed (2026-09-16)
+
+The deletion step under #1670 has landed on `claude/delete-groundwork`. Every first-party Groundwork
+and MongoDB source project, test project, tool, workflow job, package pin, NuGet feed mapping,
+solution entry and solution filter is gone; 14 source projects and 36 test projects were deleted,
+the seven `Groundwork.*` pins, `MongoDB.Driver` and `Testcontainers.MongoDb` were removed from
+`Directory.Packages.props`, and the Groundwork feed and `MongoDB.*` source mapping were removed from
+`NuGet.config`. The Groundwork-specific architecture guards were replaced by one fail-closed guard,
+`RetiredPersistenceFamilyGuardTests`, which refuses any project, package, feed, source file,
+directory, solution filter or CI job naming either retired family under `src/`, `tests/`, `tools/`,
+`docker/`, `e2e-tests/` or `.github/`. The registers below record what was deleted and what coverage
+moved or was dropped.
+
 ## Settled boundaries
 
 - EF Core is the only first-party persistence family; OpenIddict remains vendor-owned EF.
 - Runtime and distributed Runtime are in scope, but are not presumed to be Secrets-shaped.
 - SQLite, SQL Server, PostgreSQL, and MySQL are supported; MongoDB is removed.
-- This is a pre-GA clean break with no Groundwork-to-EF production-data conversion.
-- Domain contracts expose no EF, Groundwork, provider SQL, persistence entities, or `IQueryable`.
+- This is a pre-GA clean break with no legacy-to-EF production-data conversion.
+- Domain contracts expose no EF, provider SQL, persistence entities, or `IQueryable`.
 - Performance measurement is retired by owner policy. Timing-independent correctness remains.
 - Delivery uses coherent PRs to `main`, one authoritative Project queue, and one merge lane.
 
@@ -88,7 +101,7 @@ architecture, dependencies, semantics, acceptance criteria, and focused validati
   duplicates the backlog.
 - Exactly one leaf issue represents the control room's current objective. Independent workers may
   own explicitly assigned, non-overlapping ready children.
-- Every durable unit is a GitHub issue. Existing Groundwork issues are mapped before they close.
+- Every durable unit is a GitHub issue. Existing persistence issues are mapped before they close.
 - Every replacement preserves contract, transaction, concurrency, recovery, migration, composition,
   and end-to-end obligations from the ledger.
 - A PR is delivered only when its acceptance criteria, current-head review, focused local evidence,
@@ -99,7 +112,7 @@ architecture, dependencies, semantics, acceptance criteria, and focused validati
 
 Close this goal only when the ledger proves all intended first-party contracts have four-provider EF
 coverage; migration artifacts and histories are isolated; Runtime correctness and recovery semantics
-are proven; supported compositions use EF by default; active Groundwork/MongoDB code, packages,
+are proven; supported compositions use EF by default; active retired-family code, packages,
 features, host wiring, tools, workflows, and configuration are absent; relevant rebuilt-host e2e
 journeys pass; guards, maps, filters, and documentation describe the final tree; and every residual is
 completed, retired by policy, or linked to an owned open issue.

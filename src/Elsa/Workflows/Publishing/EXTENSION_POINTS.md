@@ -33,7 +33,7 @@ Register replacements before the feature's `TryAdd` defaults, or use `services.R
 packages that replace a related store family should remove and register the whole family explicitly so a host
 cannot accidentally split one authority model between process-local and durable state.
 
-The Groundwork composition (`Elsa.Workflows.Publishing.Persistence.Groundwork`) replaces the four authority
+The EF Core composition (`Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore`) replaces the four authority
 stores and `IActivityPublicationReceiptStore`. It must preserve one immutable request fingerprint per
 tenant-owned idempotency key; receipt lookup must use the request authorization context's tenant scope and must
 not depend on the continued existence of the source draft. An Applied receipt is written by
@@ -60,8 +60,8 @@ accepting the receipt.
 - `IPublicationProjectionIntentStore` durably transitions idempotent prepare/activate/remove intents. Providers
   must preserve deterministic intent IDs, attempt state, retry timing, and failure details across restart.
 
-The supplied Groundwork provider implements these four contracts. Compose
-`services.AddGroundworkPublishingStores()`; its document kinds, indexes, CAS behavior, and serializers are
+The supplied EF Core provider implements these four contracts. Compose
+`services.AddPublishingEntityFrameworkCore(...)`; its tables, indexes, CAS behavior, and serializers are
 provider-neutral with respect to this engine feature.
 
 ### Policy and preflight
@@ -90,7 +90,7 @@ A Publishing persistence package that backs the engine's authority state should:
 1. Implement the three Publishing-owned authority stores (`IPublicationRecordStore`,
    `IPublicationPolicyStore`, `IPublicationProjectionIntentStore`) plus `IActivityPublicationReceiptStore` and
    register them as one composition unit. Activation is not among them: it is `IWorkflowActivationAuthority`,
-   backed by the Runtime Groundwork store family, and a Publishing persistence package must neither implement
+   backed by the Runtime EF Core store family, and a Publishing persistence package must neither implement
    nor register it.
 2. Compose Runtime persistence that enforces unique activation-slot identity and compare-and-swap revisions
    in storage, not only in process memory; do not recreate that authority inside Publishing.
@@ -104,7 +104,7 @@ A Publishing persistence package that backs the engine's authority state should:
    different-request rejection, stale-review no-write, and receipt rollback with every other publication
    document.
 
-The supplied Groundwork provider (`AddGroundworkPublishingStores()`) composes these together with the API
+The supplied EF Core provider (`AddPublishingEntityFrameworkCore(...)`) composes these together with the API
 feature's `IActivityDraftTestRunStore`.
 
 ## Executable compilation fan-in

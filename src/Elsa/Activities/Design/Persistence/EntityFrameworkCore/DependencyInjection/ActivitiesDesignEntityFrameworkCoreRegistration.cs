@@ -31,7 +31,7 @@ public static class ActivitiesDesignEntityFrameworkCoreRegistration
             throw new ArgumentException($"Unknown Activities Design EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.", nameof(options));
         var configuration = ActivitiesDesignPersistenceBackend.Fingerprint(provider, options.ConnectionString, options.ConnectionName);
         var snapshot = services.ToArray();
-        // A replaced backend may keep declarations outside the service collection, such as Groundwork's
+        // A replaced backend may keep declarations outside the service collection, such as a shared
         // storage catalog. Snapshotting them through the neutral seam keeps a failed switch all-or-nothing.
         var registrationSnapshots = services
             .Select(descriptor => descriptor.ImplementationInstance)
@@ -45,7 +45,7 @@ public static class ActivitiesDesignEntityFrameworkCoreRegistration
             if (existingBackend is not null)
             {
                 existingBackend.EnsureOwnsRegisteredDescriptors(services);
-                EnsureAtomicWriterComposition(services, existingBackend.Name);
+                EnsureAtomicWriterComposition(services);
 
                 if (existingBackend.Name == ActivitiesDesignPersistenceBackend.EntityFramework)
                 {
@@ -158,32 +158,25 @@ public static class ActivitiesDesignEntityFrameworkCoreRegistration
         if (ActivitiesDesignPersistenceBackend.HasUnownedReplacementContract(services))
             throw new InvalidOperationException("Activities Design already has a persistence contract registered; remove it explicitly before selecting Entity Framework.");
 
-        EnsureAtomicWriterComposition(services, ActivitiesDesignPersistenceBackend.EntityFramework);
+        EnsureAtomicWriterComposition(services);
         if (services.Any(IsEfArtifactDescriptor))
             throw new InvalidOperationException("Activities Design already has an Entity Framework persistence artifact registered; select it through its backend registration.");
     }
 
-    private static void EnsureAtomicWriterComposition(IServiceCollection services, string backendName)
+    private static void EnsureAtomicWriterComposition(IServiceCollection services)
     {
         var marked = services
             .Where(descriptor => descriptor.ServiceType.IsDefined(typeof(ActivityDesignPersistenceReplacementContractAttribute), inherit: false))
             .ToArray();
-        if (marked.Any(descriptor => !IsAtomicWriterServiceType(descriptor.ServiceType, backendName)))
+        if (marked.Any(descriptor => !IsAtomicWriterServiceType(descriptor.ServiceType)))
             throw new InvalidOperationException("Activities Design already has a conflicting persistence replacement contract registered; select exactly one backend.");
         if (marked.Length > 1)
             throw new InvalidOperationException("Activities Design EF atomic persistence has conflicting replacement-contract registrations; select exactly one implementation.");
     }
 
-    private static bool IsAtomicWriterServiceType(Type serviceType, string backendName)
-    {
-        if (serviceType.Name != "IDesignAtomicWriter")
-            return false;
-
-        var namespaceName = serviceType.Namespace ?? string.Empty;
-        return backendName == ActivitiesDesignPersistenceBackend.EntityFramework
-            ? namespaceName.EndsWith(".EntityFrameworkCore", StringComparison.Ordinal)
-            : namespaceName.EndsWith(".Groundwork", StringComparison.Ordinal);
-    }
+    private static bool IsAtomicWriterServiceType(Type serviceType) =>
+        serviceType.Name == "IDesignAtomicWriter" &&
+        (serviceType.Namespace ?? string.Empty).EndsWith(".EntityFrameworkCore", StringComparison.Ordinal);
 
     private static void EnsureEfArtifactsAreOwned(ActivitiesDesignPersistenceBackend backend, IServiceCollection services)
     {

@@ -1,6 +1,6 @@
 # Elsa.Diagnostics.StructuredLogs
 
-Captures host log events (`Microsoft.Extensions.Logging`) into a store and exposes them to Elsa Studio over HTTP (recent history, known sources) and Server-Sent Events (live tail). It is a **server** shell feature. Without a persistence feature, `InMemoryStructuredLogStore` remains the default. The store role is isolated behind `IStructuredLogStore` so durable storage can replace that default without changing capture, transport, or the UI. The current first-party durable composition is Groundwork (see _Persistence_).
+Captures host log events (`Microsoft.Extensions.Logging`) into a store and exposes them to Elsa Studio over HTTP (recent history, known sources) and Server-Sent Events (live tail). It is a **server** shell feature. Without a persistence feature, `InMemoryStructuredLogStore` remains the default. The store role is isolated behind `IStructuredLogStore` so durable storage can replace that default without changing capture, transport, or the UI. The current first-party durable composition is EF Core (see _Persistence_).
 
 Feature name (manifest / appsettings key): **`DiagnosticsStructuredLogs`**.
 
@@ -24,7 +24,7 @@ value, so replay, ordering, and replay/live de-duplication use `StructuredLogRep
 Malformed, expired, trimmed, wrong-scope, and wrong-stream cursors all return the same non-disclosing
 `409 Conflict` response.
 
-`GroundworkStructuredLogStore` is the first-party durable adapter. It consumes Groundwork's specialized
+`EfStructuredLogStore` is the first-party durable adapter. It consumes the module's own
 diagnostic-record contract, returns the committed entry only after durable append acknowledgement, serves
 bounded read-after pages in committed order, and preserves lifetime logical high-water independently of
 retention. `StructuredLogSink` publishes the process-local wake hint from that committed result.
@@ -70,13 +70,13 @@ replay cursors, and its first durable page before starting the SSE response.
 
 ## Persistence
 
-`DiagnosticsGroundworkPersistence` is the catalog-discoverable, first-party durable diagnostics feature. It is the reference `Elsa.Workbench` composition and atomically installs the domain-owned Groundwork Structured Logs and OpenTelemetry features. `GroundworkStructuredLogsPersistenceFeature` replaces `IStructuredLogStore` with `GroundworkStructuredLogStore` and contributes the immutable diagnostic-record stream to the combined Groundwork deployment manifest. Capture, the in-process live wake feed, and the UI remain unchanged.
+`DiagnosticsStructuredLogsEntityFrameworkCore` and `DiagnosticsOpenTelemetryEntityFrameworkCore` is the catalog-discoverable, first-party durable diagnostics feature. They are the reference `Elsa.Workbench` composition and install the domain-owned Structured Logs and OpenTelemetry EF features. `StructuredLogsEntityFrameworkCoreFeature` replaces `IStructuredLogStore` with `EfStructuredLogStore` and owns the immutable diagnostic-record table. Capture, the in-process live wake feed, and the UI remain unchanged.
 
-`GroundworkStructuredLogStore` uses Groundwork diagnostic records for durable committed cursors, bounded read-after pages, and lifetime logical high-water independent of retention. Its bounded drain completes accepted appends only after durable acknowledgement.
+`EfStructuredLogStore` uses its diagnostic-record table for durable committed cursors, bounded read-after pages, and lifetime logical high-water independent of retention. Its bounded drain completes accepted appends only after durable acknowledgement.
 
 ## Replacing the defaults
 
-All store/source contracts are overridable — see [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md). The shipped durable replacement is Groundwork; custom hosts can replace `IStructuredLogStore` while leaving capture and transport unchanged.
+All store/source contracts are overridable — see [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md). The shipped durable replacement is EF Core; custom hosts can replace `IStructuredLogStore` while leaving capture and transport unchanged.
 
 ## Owned exception surface
 

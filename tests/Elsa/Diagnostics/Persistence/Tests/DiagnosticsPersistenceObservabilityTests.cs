@@ -23,12 +23,11 @@ public sealed class DiagnosticsPersistenceObservabilityTests
     }
 
     [Fact]
-    public void Pull_counters_do_not_reference_recursive_logging_tracing_or_Groundwork_infrastructure()
+    public void Pull_counters_do_not_reference_recursive_logging_tracing_or_persistence_infrastructure()
     {
         var references = typeof(DiagnosticsPersistenceCounters).Assembly.GetReferencedAssemblies();
         Assert.DoesNotContain(references, x => x.Name == "Microsoft.Extensions.Logging.Abstractions");
         Assert.DoesNotContain(references, x => x.Name == "System.Diagnostics.DiagnosticSource");
-        Assert.DoesNotContain(references, x => x.Name?.StartsWith("Groundwork", StringComparison.Ordinal) == true);
     }
 
     [Fact]

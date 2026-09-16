@@ -1153,7 +1153,7 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
-    public async Task Registered_checkpoint_contract_commits_a_real_sqlite_marker_without_groundwork()
+    public async Task Registered_checkpoint_contract_commits_a_real_sqlite_marker()
     {
         var connection = $"Data Source=file:ef-checkpoint-di-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
         await using var keeper = new SqliteConnection(connection);

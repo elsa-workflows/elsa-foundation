@@ -293,7 +293,7 @@ public sealed class EfActivityManagementProjectionWriter(ActivitiesDesignDbConte
 
     /// <summary>
     /// A head names an immutable version, and a version can be the head before it has a publication: an
-    /// imported Elsa 3 version is. Such a head projects no head reference, as it does in Groundwork. A head
+    /// imported Elsa 3 version is. Such a head projects no head reference. A head
     /// that names no version of this definition in this tenant is still corrupt and fails closed.
     /// </summary>
     private async Task<ActivityDefinitionVersionPublication?> FindHeadPublicationAsync(string? versionId, string definitionId, string? tenantId, CancellationToken token)

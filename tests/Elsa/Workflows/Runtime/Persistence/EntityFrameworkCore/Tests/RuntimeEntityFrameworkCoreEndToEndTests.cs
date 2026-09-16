@@ -16,7 +16,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// Drives a real workflow through the runtime on the EF Runtime aggregate alone: no Groundwork anywhere, one SQLite
+/// Drives a real workflow through the runtime on the EF Runtime aggregate alone: one SQLite
 /// file, schema installed by the registered module migrator. Every generation is a new service provider over that
 /// file, so a generation can only observe what an earlier one committed to the database.
 /// </summary>

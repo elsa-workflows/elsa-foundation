@@ -21,11 +21,11 @@ see [the engine README](../README.md). The engine's in-memory stores are useful 
 development, but publication authority, policies, records, and reconciliation intents must be durable in a
 production host.
 
-For Groundwork-backed authority state, reference
-`Elsa.Workflows.Publishing.Persistence.Groundwork` and compose:
+For EF Core-backed authority state, reference
+`Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore` and compose:
 
 ```csharp
-services.AddGroundworkPublishingStores();
+services.AddPublishingEntityFrameworkCore(new() { Provider = "Sqlite" });
 ```
 
 The registration replaces (or, when composed first, prevents) the API feature's in-memory defaults for
@@ -36,8 +36,8 @@ family and consumed by Publishing through `IWorkflowActivationCoordinator`.
 The host must also compose the Runtime persistence used for executable artifacts, source references, trigger
 bindings, and recurring schedules.
 
-Groundwork also replaces the process-local activity publication receipt store. Activity publication
-requires this durable store and the cross-domain Groundwork commit command to share one transaction:
+The EF module also replaces the process-local activity publication receipt store. Activity publication
+requires this durable store and the cross-domain commit command to share one transaction:
 an Applied receipt, immutable activity version, definition head, executable template, Source
 Reference, layout, and dependency edges become visible together or not at all.
 

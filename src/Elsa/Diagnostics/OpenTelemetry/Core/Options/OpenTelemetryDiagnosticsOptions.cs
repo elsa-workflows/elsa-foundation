@@ -66,7 +66,7 @@ public class OpenTelemetryDiagnosticsOptions
     /// The most telemetry records (traces, spans, metric points and log records together) the durable
     /// capture commits in one provider transaction on a provider that does not serialize its writers.
     /// Queued batches are grouped up to this many records per commit; a single batch larger than this
-    /// still commits on its own. On a provider that advertises Groundwork's serialized-writer capability
+    /// still commits on its own. On a provider that advertises a serialized-writer capability
     /// (SQLite) every queued batch commits on its own regardless of this value, because a grouped
     /// transaction would hold every foreground commit for its whole duration (#1598).
     /// </summary>

@@ -25,8 +25,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Services;
 
 /// <summary>
 /// EF Core bridge for authoritative upgrade discovery and one atomic activity/workflow draft mutation.
-/// It is the counterpart of the Groundwork bridge the Publishing Groundwork feature registers, and keeps
-/// the same semantics: bounded deterministic discovery, compare-and-swap on every snapshot the plan
+/// It has bounded deterministic discovery, compare-and-swap on every snapshot the plan
 /// asserts, an idempotent apply whose result is written with the plan and its receipt, and a derived
 /// dependency projection that can never be left behind by a committed source mutation.
 /// </summary>
@@ -34,12 +33,11 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Services;
 /// <para>
 /// Atomicity across the two Design catalogs is owned by <see cref="EfSharedTransaction"/>: one physical
 /// connection, one transaction, both contexts enlisted, one commit or one rollback. A host that splits
-/// Activities Design and Workflows Design across databases is refused when the transaction opens, which
-/// is the same refusal Groundwork makes when its lanes name different targets.
+/// Activities Design and Workflows Design across databases is refused when the transaction opens.
 /// </para>
 /// <para>
 /// Opaque activity manifests are never interpreted here; they are handed to their provider-owned
-/// reference rewriter, exactly as in Groundwork.
+/// reference rewriter.
 /// </para>
 /// </remarks>
 public sealed class EfActivityUpgradePlanStore(

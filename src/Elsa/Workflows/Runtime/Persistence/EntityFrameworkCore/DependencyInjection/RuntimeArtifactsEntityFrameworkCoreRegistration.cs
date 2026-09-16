@@ -76,7 +76,6 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             }
 
             var existingBackend = RuntimeArtifactStoreBackend.Find(services);
-            RuntimeEfCheckpointCompositionTransition.EnsureGroundworkCheckpointTransitionAllowed(services, "executable artifacts");
             if (existingBackend is not null)
                 existingBackend.EnsureOwnsRegisteredContracts(services);
             else
@@ -197,7 +196,7 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
     public static IServiceCollection AddRuntimeExecutableArtifactsEntityFrameworkCore(this IServiceCollection services, RuntimeArtifactsEntityFrameworkCoreOptions options) => services.AddRuntimeArtifactsEntityFrameworkCore(options);
 
     /// <summary>
-    /// Selects the executable-store surface. Enabled caching mirrors the Groundwork composition: ordinary scoped
+    /// Selects the executable-store surface. Enabled caching keeps the provider-neutral composition: ordinary scoped
     /// reads go through one bounded cache partitioned by persistence scope, and every other access policy reads the
     /// database directly while still invalidating cached entries it changes. The returned infrastructure is owned by
     /// the artifact backend together with the captured store surface.
@@ -281,7 +280,7 @@ public sealed class RuntimeArtifactsEntityFrameworkCoreOptions
     /// <summary>
     /// Bounded shell-local cache of immutable workflow executables, isolated by persistence scope. Null (this
     /// participant's default) registers no cache infrastructure and reads executables straight from the database;
-    /// the Runtime EF aggregate always supplies it, as the Groundwork runtime composition does.
+    /// the Runtime EF aggregate always supplies it.
     /// </summary>
     public WorkflowExecutableCacheOptions? WorkflowExecutableCache { get; set; }
 }

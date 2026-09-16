@@ -12,7 +12,7 @@ namespace Elsa.Studio.Preferences.Persistence.EntityFrameworkCore;
 [ShellFeature(
     name: "StudioPreferencesEntityFrameworkCore",
     DisplayName = "Studio Preferences Entity Framework Core Persistence",
-    Description = "Opt-in EF Core repository binding for Studio Preferences. It applies or validates its own migrations when the shell activates. It has no Groundwork fallback and rejects a conflicting preference backend registration.",
+    Description = "Opt-in EF Core repository binding for Studio Preferences. It applies or validates its own migrations when the shell activates. It rejects a conflicting preference backend registration.",
     DependsOn = new object[] { "StudioPreferences" })]
 public sealed class StudioPreferencesEntityFrameworkCoreFeature : IShellFeature
 {

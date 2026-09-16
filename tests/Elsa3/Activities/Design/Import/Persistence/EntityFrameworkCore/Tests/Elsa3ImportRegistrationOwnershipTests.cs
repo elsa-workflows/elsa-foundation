@@ -1,5 +1,4 @@
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore.DependencyInjection;
-using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa3.Activities.Design.Import.Composition;
@@ -8,9 +7,6 @@ using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Stores;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.Support;
-using Elsa3.Activities.Design.Import.Persistence.Groundwork;
-using Elsa3.Activities.Design.Import.Persistence.Groundwork.DependencyInjection;
-using Elsa3.Activities.Design.Import.Persistence.Groundwork.Services;
 using Elsa3.Activities.Design.Import.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -48,55 +44,10 @@ public sealed class Elsa3ImportRegistrationOwnershipTests
         AssertUnchanged(before);
     }
 
-    [Fact]
-    public void Groundwork_repeat_is_a_no_op_and_declares_each_unit_once()
-    {
-        services.AddElsa3ImportGroundworkPersistence();
-        var before = services.ToArray();
-        var registrations = Registry().Registrations.ToArray();
-
-        services.AddElsa3ImportGroundworkPersistence();
-
-        AssertUnchanged(before);
-        Assert.Equal(registrations, Registry().Registrations);
-        Assert.Equal(3, registrations.Length);
-    }
-
-    [Fact]
-    public void Groundwork_to_ef_switch_withdraws_the_groundwork_units_and_selects_the_ef_adapter()
-    {
-        services.AddElsa3ImportGroundworkPersistence();
-
-        services.AddElsa3ImportEntityFrameworkCore(SqliteOptions);
-
-        Assert.Equal(Elsa3ImportPersistenceBackend.EntityFramework, Elsa3ImportPersistenceBackend.Find(services)!.Name);
-        Assert.Empty(Registry().Registrations);
-        Assert.Equal(typeof(EfReusableActivityImportCommand), Assert.Single(services, x => x.ServiceType == typeof(IReusableActivityImportCommand)).ImplementationType);
-        Assert.Equal(typeof(EfReusableActivityImportOperationStore), Assert.Single(services, x => x.ServiceType == typeof(IReusableActivityImportOperationStore)).ImplementationType);
-        Assert.Single(services, x => x.ServiceType == typeof(Elsa3ImportDbContext));
-    }
-
-    [Fact]
-    public void Ef_to_groundwork_switch_removes_every_ef_artifact_and_declares_the_units()
-    {
-        services.AddElsa3ImportEntityFrameworkCore(SqliteOptions);
-
-        services.AddElsa3ImportGroundworkPersistence();
-
-        Assert.Equal(Elsa3ImportPersistenceBackend.Groundwork, Elsa3ImportPersistenceBackend.Find(services)!.Name);
-        Assert.DoesNotContain(services, x => x.ServiceType == typeof(Elsa3ImportEntityFrameworkCoreOptions));
-        Assert.DoesNotContain(services, x => typeof(Elsa3ImportDbContext).IsAssignableFrom(x.ServiceType));
-        Assert.DoesNotContain(services, x => x.ServiceType == typeof(DbContextOptions<Elsa3ImportSqliteDbContext>));
-        Assert.Equal(typeof(GroundworkReusableActivityImportCommand), Assert.Single(services, x => x.ServiceType == typeof(IReusableActivityImportCommand)).ImplementationType);
-        Assert.Equal(Elsa3ImportStorageManifest.CreateUnits().Count, Registry().Registrations.Count);
-    }
-
     [Theory]
-    [InlineData(true, true)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    [InlineData(false, false)]
-    public void Custom_import_command_or_store_fails_closed_for_both_backends_without_mutation(bool customCommand, bool entityFramework)
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Custom_import_command_or_store_fails_closed_without_mutation(bool customCommand)
     {
         if (customCommand)
             services.AddScoped<IReusableActivityImportCommand, CustomCommand>();
@@ -104,46 +55,10 @@ public sealed class Elsa3ImportRegistrationOwnershipTests
             services.AddScoped<IReusableActivityImportOperationStore, CustomStore>();
         var before = services.ToArray();
 
-        Assert.Throws<InvalidOperationException>(() =>
-        {
-            if (entityFramework)
-                services.AddElsa3ImportEntityFrameworkCore(SqliteOptions);
-            else
-                services.AddElsa3ImportGroundworkPersistence();
-        });
+        Assert.Throws<InvalidOperationException>(() => services.AddElsa3ImportEntityFrameworkCore(SqliteOptions));
 
         AssertUnchanged(before);
         Assert.Null(Elsa3ImportPersistenceBackend.Find(services));
-    }
-
-    [Fact]
-    public void Custom_registration_added_after_a_backend_fails_the_next_switch_without_mutation()
-    {
-        services.AddElsa3ImportGroundworkPersistence();
-        services.AddScoped<IReusableActivityImportCommand, CustomCommand>();
-        var before = services.ToArray();
-        var registrations = Registry().Registrations.ToArray();
-
-        Assert.Throws<InvalidOperationException>(() => services.AddElsa3ImportEntityFrameworkCore(SqliteOptions));
-
-        AssertUnchanged(before);
-        Assert.Equal(registrations, Registry().Registrations);
-    }
-
-    [Fact]
-    public void Failed_groundwork_to_ef_switch_restores_the_withdrawn_units_and_the_groundwork_backend()
-    {
-        services.AddElsa3ImportGroundworkPersistence();
-        var registrations = Registry().Registrations.ToArray();
-        // A stray EF artifact is only detected after the Groundwork backend has been withdrawn.
-        services.AddSingleton(new Elsa3ImportEntityFrameworkCoreOptions());
-        var before = services.ToArray();
-
-        Assert.Throws<InvalidOperationException>(() => services.AddElsa3ImportEntityFrameworkCore(SqliteOptions));
-
-        AssertUnchanged(before);
-        Assert.Equal(registrations, Registry().Registrations);
-        Assert.Equal(Elsa3ImportPersistenceBackend.Groundwork, Elsa3ImportPersistenceBackend.Find(services)!.Name);
     }
 
     [Fact]
@@ -155,7 +70,6 @@ public sealed class Elsa3ImportRegistrationOwnershipTests
         var corrupt = services.ToArray();
 
         Assert.Throws<InvalidOperationException>(() => services.AddElsa3ImportEntityFrameworkCore(SqliteOptions));
-        Assert.Throws<InvalidOperationException>(() => services.AddElsa3ImportGroundworkPersistence());
 
         AssertUnchanged(corrupt);
     }
@@ -216,9 +130,6 @@ public sealed class Elsa3ImportRegistrationOwnershipTests
             File.Delete(path);
         }
     }
-
-    private GroundworkStorageUnitRegistry Registry() =>
-        (GroundworkStorageUnitRegistry)Assert.Single(services, x => x.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance!;
 
     private void AssertUnchanged(IReadOnlyList<ServiceDescriptor> before)
     {

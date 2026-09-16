@@ -185,7 +185,7 @@ public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
             }));
 
     private static string WithSeedAdminPassword(string password) =>
-        $$$"""{"FoundationIdentityAspNetCoreIdentityGroundwork":{"SeedAdminPassword":"{{{password}}}"},"ModularityApi":{}}""";
+        $$$"""{"FoundationIdentityAspNetCoreIdentityEntityFrameworkCore":{"SeedAdminPassword":"{{{password}}}"},"ModularityApi":{}}""";
 
     private Task WriteDefaultFeaturesAsync(string features) =>
         File.WriteAllTextAsync(_shellsPath, """{"CShells":{"Shells":{"default":{"Features":""" + features + "}}}}");

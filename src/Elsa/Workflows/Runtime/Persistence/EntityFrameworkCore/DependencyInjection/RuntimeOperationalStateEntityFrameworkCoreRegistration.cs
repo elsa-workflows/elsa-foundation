@@ -31,7 +31,6 @@ public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
                 return services;
             }
 
-            RuntimeEfCheckpointCompositionTransition.EnsureGroundworkCheckpointTransitionAllowed(services, "operational state");
 
             if (existing is not null)
                 existing.EnsureOwnsRegisteredContracts(services);
@@ -90,7 +89,7 @@ public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
             var attentionContract = ServiceDescriptor.Scoped<IWorkflowRuntimeAttentionQuery>(provider =>
             {
                 // Attention is complete only when both halves of the composition are EF-owned. A mixed
-                // Groundwork/in-memory workflow backend must fail closed rather than silently reporting an
+                // in-memory workflow backend must fail closed rather than silently reporting an
                 // empty EF incident projection as all-clear.
                 return provider.GetService<IWorkflowExecutionStateStore>() is EfWorkflowExecutionStateStore
                     ? provider.GetRequiredService<EfWorkflowRuntimeAttentionQuery>()

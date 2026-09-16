@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// <summary>Stages inspection evidence and its derived hierarchy relation in a caller-owned checkpoint transaction.</summary>
 /// <remarks>
 /// The checkpoint writer owns the transaction, <c>SaveChanges</c>, commit, rollback, and replay marker. This seam
-/// only changes tracked EF state and deliberately does not clear the change tracker or delegate to Groundwork.
+/// only changes tracked EF state and deliberately does not clear the change tracker.
 /// </remarks>
 internal static class EfRuntimeCheckpointInspectionParticipantStaging
 {
@@ -102,7 +102,7 @@ internal static class EfRuntimeCheckpointInspectionParticipantStaging
             return;
         }
 
-        // Groundwork derives the hierarchy record from an effective scope. Preserve that fallback when the
+        // The hierarchy record is derived from an effective scope. Preserve that fallback when the
         // projection carries its scope only in scheduling provenance.
         var hierarchyProjection = string.IsNullOrWhiteSpace(projection.ExecutionScopeId)
             ? projection with { ExecutionScopeId = effectiveExecutionScope }

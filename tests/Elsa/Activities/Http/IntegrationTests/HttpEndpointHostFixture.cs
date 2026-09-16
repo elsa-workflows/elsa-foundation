@@ -10,11 +10,8 @@ using Elsa.Activities.Testing;
 using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Http.Core;
-using Elsa.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Persistence.Groundwork.Runtime;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Primitives.Models;
-using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Tasks.Core;
@@ -33,8 +30,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using Groundwork.Sqlite;
-using Groundwork.Store;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using CShells.Lifecycle;
 
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 
@@ -89,32 +87,34 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
     public IServiceProvider Services => _host.Services;
 
-    public static Task<HttpEndpointHostFixture> StartAsync() => StartAsync(null, null, null);
+    public static Task<HttpEndpointHostFixture> StartAsync() => StartAsync(null, null);
 
     /// <summary>
-    /// Starts the production HTTP runtime against an isolated Groundwork SQLite database and applies the requested
+    /// Starts the production HTTP runtime against an isolated EF Core SQLite database and applies the requested
     /// checkpoint persistence policy after the provider has replaced the in-memory runtime stores.
     /// </summary>
-    public static Task<HttpEndpointHostFixture> StartGroundworkSqliteAsync(
+    public static Task<HttpEndpointHostFixture> StartDurableSqliteAsync(
         CheckpointPersistenceMode checkpointPersistenceMode,
         int maxSegmentCheckpoints)
     {
-        var databaseDirectory = Path.Join(Path.GetTempPath(), $"elsa-http-runtime-groundwork-{Guid.NewGuid():N}");
+        var databaseDirectory = Path.Join(Path.GetTempPath(), $"elsa-http-runtime-ef-{Guid.NewGuid():N}");
         Directory.CreateDirectory(databaseDirectory);
         var databasePath = Path.Join(databaseDirectory, "runtime.db");
-        var connectionString = $"Data Source={databasePath}";
+        var connectionString = $"Data Source={databasePath};Pooling=False";
 
         return StartAsync(
             services =>
             {
-                services.AddGroundworkStorageProviderConnection(
-                    _ => new SqliteProviderFactory().Create(connectionString));
                 // Durable composition refuses the ephemeral development signer, so the fixture supplies the
                 // stable recovery-continuation key a real durable host configures.
-                new GroundworkWorkflowRuntimeFeature
+                services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
                 {
-                    RecoveryContinuationSigningKey = "http-endpoint-fixture-recovery-signing-key-32-bytes"
-                }.ConfigureServices(services);
+                    Provider = "Sqlite",
+                    ConnectionString = connectionString,
+                    RecoveryContinuationSigningKey = "http-endpoint-fixture-recovery-signing-key-32-bytes",
+                    HierarchyCursorSigningKey = "http-endpoint-fixture-hierarchy-signing-key-32-bytes"
+                });
+                services.AddEfModuleMigrations<BookmarkStateDbContext>("Sqlite");
 
                 new WorkflowsRuntimeCheckpointPersistenceFeature
                 {
@@ -122,14 +122,12 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     MaxSegmentCheckpoints = maxSegmentCheckpoints
                 }.PostConfigureServices(services);
             },
-            databaseDirectory,
-            connectionString);
+            databaseDirectory);
     }
 
     private static async Task<HttpEndpointHostFixture> StartAsync(
         Action<IServiceCollection>? configurePersistence,
-        string? databaseDirectory,
-        string? groundworkSqliteConnectionString)
+        string? databaseDirectory)
     {
         var host = new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -228,9 +226,12 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             })
             .Build();
 
-        // v2 admits every declared unit through the storage session source when the host starts, so there
-        // is no separate schema-application step here any more.
         await host.StartAsync();
+
+        // Shell activation installs or validates each EF module's schema before anything reads a store; a plain
+        // HostBuilder has no Prepare phase, so the fixture runs the registered initializers itself.
+        foreach (var initializer in host.Services.GetServices<IShellInitializer>())
+            await initializer.InitializeAsync();
 
         RunStartupTasks(host.Services);
 

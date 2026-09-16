@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
 /// Direct coverage for the shared <see cref="SubmittedActivityTreeValidator"/> extracted from the
-/// EF Core and Groundwork submit commands (issue #417 item 5). Exercises every throw branch,
+/// EF Core submit commands (issue #417 item 5). Exercises every throw branch,
 /// including the nested-child empty-node-id case that the command-level tests do not reach, plus
 /// the happy path through a multi-level tree.
 /// </summary>

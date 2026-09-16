@@ -11,7 +11,7 @@ public static class RuntimeSchedulerPoisonEfModule
 
     /// <summary>
     /// Scheduler work-item ids are composed by the runtime from an execution id, a command kind and an
-    /// activity path, so they run past <see cref="IdentityMaximumLength"/>. Groundwork keys them by document
+    /// activity path, so they run past <see cref="IdentityMaximumLength"/>. A document store keys them by document
     /// id, which allows 450.
     /// </summary>
     public const int WorkItemIdentityMaximumLength = 450;

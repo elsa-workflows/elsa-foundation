@@ -6,7 +6,7 @@ namespace Elsa.Activities.Design.Persistence.Core.Exceptions;
 /// <c>(DefinitionId, sortKey)</c> is a hash-mismatch conflict or a tolerated duplicate); the
 /// author-supplied API path carries no hash comparison to make, so any existing
 /// <c>(DefinitionId, sortKey)</c> is a collision regardless of content. On EF Core a unique index on
-/// (DefinitionId, Version) would surface this as a provider exception; on Groundwork, documents are
+/// (DefinitionId, Version) would surface this as a provider exception; on a document store, records are
 /// keyed only by their own id, so without this check the duplicate would persist silently.
 /// </summary>
 public sealed class ActivityDefinitionVersionConflictException(string definitionId, string version)

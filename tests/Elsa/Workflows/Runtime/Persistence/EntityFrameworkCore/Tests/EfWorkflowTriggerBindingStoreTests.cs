@@ -67,7 +67,7 @@ public sealed class EfWorkflowTriggerBindingStoreTests
             provider.GetRequiredService<InMemoryWorkflowTriggerBindingStore>());
         ((IServiceCollection)services).Add(contract);
         WorkflowTriggerBindingStoreBackend.Register(services, new(
-            WorkflowTriggerBindingStoreBackend.Groundwork, contract, concrete,
+            WorkflowTriggerBindingStoreBackend.InMemory, contract, concrete,
             _ => { state.Version++; throw new InvalidOperationException("Late backend withdrawal failed."); }));
         var before = services.ToArray();
 

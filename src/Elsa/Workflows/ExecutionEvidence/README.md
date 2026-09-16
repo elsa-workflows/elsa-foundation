@@ -24,7 +24,7 @@ definitive-negative claim:
   workflow's evidence on the host, including raw variable values and full exception messages.
 
 For the end-state design — sessions, checkpoint-atomic durable intent, completeness/integrity barriers,
-governed kind catalogs, capture profiles, Groundwork durability — see
+governed kind catalogs, capture profiles, durable persistence — see
 [the Runtime Execution Evidence PRD](../../../../docs/plans/runtime-execution-evidence-prd.md) and epic
 [#1132](https://github.com/elsa-workflows/elsa-foundation/issues/1132). This module is a reduced,
 process-local demonstration and does not close [#1133](https://github.com/elsa-workflows/elsa-foundation/issues/1133).

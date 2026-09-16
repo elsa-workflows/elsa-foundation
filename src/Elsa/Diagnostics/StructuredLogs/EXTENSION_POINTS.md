@@ -45,17 +45,17 @@ All contracts live in `Elsa.Diagnostics.StructuredLogs.Core`. The feature regist
 
 ## Persistence
 
-### Groundwork diagnostic records
+### Durable diagnostic records
 
-`Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork` ships **`GroundworkStructuredLogStore`**, the
-conformance adapter over Groundwork's specialized `IDiagnosticRecordStore`. It uses provider-issued opaque
+`Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore` ships **`EfStructuredLogStore`**, the
+conformance adapter over its own diagnostic-record table. It uses provider-issued opaque
 cursors, idempotent batch operation ids, bounded declared predicates, snapshot continuation, exact trim, and
-provider inspection state for lifetime high-water. The Elsa Core contract has no Groundwork dependency; hosts
-construct and register the adapter with their selected Groundwork provider and a
+provider inspection state for lifetime high-water. The Elsa Core contract has no persistence dependency; hosts
+construct and register the adapter with their selected relational provider and a
 `StructuredLogStoreBinding` (tenant, host storage scope, and logical stream). The aggregate
-`DiagnosticsGroundworkPersistence` feature is the current first-party durable and reference-host composition:
+`DiagnosticsStructuredLogsEntityFrameworkCore` and `DiagnosticsOpenTelemetryEntityFrameworkCore` feature is the current first-party durable and reference-host composition:
 it installs this concrete feature, replaces the in-memory store, and contributes its diagnostic-record stream
-to the combined Groundwork deployment manifest.
+to the combined diagnostics EF model.
 
 ### EF Core Structured Logs (opt-in, issue #1695)
 
@@ -68,7 +68,7 @@ suite, while SQL Server, PostgreSQL, and MySQL are exercised by focused live-pro
 The adapter owns its structured-log records, scope/binding identity, opaque cursor encoding, lifetime
 high-water state, and append-operation ledger. It reuses `DiagnosticsDrain` and the shared
 `ReplaceDiagnosticsStore` registration semantics, so it does not introduce a second queue/retry
-pipeline or a competing store marker. The default remains Groundwork until later migration,
+pipeline or a competing store marker. Remaining migration,
 default-flip, and deletion gates supply the required evidence; migration
 artifacts and host-wide composition changes are explicitly deferred from #1695.
 

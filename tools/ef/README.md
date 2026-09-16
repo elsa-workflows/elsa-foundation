@@ -130,10 +130,7 @@ Use an explicit provider selector (`apply --sqlite`, `apply --sqlserver`, or
 Omitting `ELSA_SECRETS_EF_SQLITE` intentionally targets only the disposable fallback. Before
 applying to a deployment database, take a backup, quiesce writes, and run `pending`. Use a short-lived least-privilege deployment identity
 with the DDL rights needed for that provider; after the schema is verified, run the application
-with its least-privilege runtime identity. Do not enable `SecretsEntityFrameworkCore` together
-with `SecretsGroundworkPersistence` in the same shell. Groundwork Secrets provider-matrix
-and ledger-growth obligations apply to the Groundwork-selected composition only (#1631);
-this out-of-process EF path is proven independently of that matrix.
+with its least-privilege runtime identity.
 
 After `apply` succeeds, verify the selected database's
 `__EFMigrationsHistory_ElsaSecrets` contains the expected migration IDs and that the expected

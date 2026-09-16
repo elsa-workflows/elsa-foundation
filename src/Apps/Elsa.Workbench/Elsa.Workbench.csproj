@@ -8,10 +8,6 @@
 	<ItemGroup>
 		<PackageReference Include="CShells.Management.Api" />
 		<PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
-		<PackageReference Include="Groundwork.MongoDb" />
-		<PackageReference Include="Groundwork.PostgreSql" />
-		<PackageReference Include="Groundwork.Sqlite" />
-		<PackageReference Include="Groundwork.SqlServer" />
 		<PackageReference Include="Microsoft.AspNetCore.OpenApi" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
@@ -53,7 +49,6 @@
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
-		<ProjectReference Include="..\..\Elsa\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />
 		<!--
@@ -84,15 +79,8 @@
 		<ProjectReference Include="..\..\Elsa\Http\JavaScript\Elsa.Http.JavaScript.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
-		<ProjectReference Include="..\..\Elsa\Foundation\Identity\AspNetCoreIdentity\Groundwork\Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj" />
-		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Persistence\Groundwork\Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
-		<ProjectReference Include="..\..\Elsa\Secrets\Persistence\Groundwork\Elsa.Secrets.Persistence.Groundwork.csproj" />
-		<!--
-			Opt-in Secrets EF catalog (pilot #1630). WithHostAssemblies() makes SecretsEntityFrameworkCore
-			enablable via shells.json. Default shells keep SecretsGroundworkPersistence; do not enable both.
-		-->
 		<ProjectReference Include="..\..\Elsa\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="..\..\Elsa\Diagnostics\OpenTelemetry\Persistence\EntityFrameworkCore\Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj" />
@@ -113,7 +101,6 @@
 		-->
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\Validations\Elsa.Workflows.Design.Validations.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
-		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Persistence\Groundwork\Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
 		<!--
 			Hosts the WorkflowsRuntimeAttention and WorkflowsRuntimeTracing features. Tracing swaps the no-op
@@ -126,22 +113,24 @@
 		<ProjectReference Include="..\..\Elsa\Caching\Memory\Elsa.Caching.Memory.csproj" />
 		<ProjectReference Include="..\..\Elsa\Diagnostics\ConsoleLogStreaming\Elsa.Diagnostics.ConsoleLogStreaming.csproj" />
 		<ProjectReference Include="..\..\Elsa\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
-		<ProjectReference Include="..\..\Elsa\Diagnostics\Persistence\Groundwork\Elsa.Diagnostics.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
 		<ProjectReference Include="..\..\Elsa\Expressions\Elsa.Expressions.csproj" />
+		<!--
+			The default shell enables the Events feature, so its assembly has to be in the host's CShells
+			catalog. It used to arrive transitively through a deleted persistence project; reference it here.
+		-->
+		<ProjectReference Include="..\..\Elsa\Events\Elsa.Events.csproj" />
 		<ProjectReference Include="..\..\Elsa\Locking\FileSystem\Elsa.Locking.FileSystem.csproj" />
 		<ProjectReference Include="..\..\Elsa\Mediator\Elsa.Mediator.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Api\Elsa.Modularity.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Core\Elsa.Modularity.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
-		<ProjectReference Include="..\..\Elsa\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
 		<ProjectReference Include="..\..\Elsa\Primitives\Primitives\Elsa.Primitives.csproj" />
 		<ProjectReference Include="..\..\Elsa\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
 		<ProjectReference Include="..\..\Elsa\Serialization\Newtonsoft\Elsa.Serialization.Newtonsoft.csproj" />
 		<ProjectReference Include="..\..\Elsa\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
 		<ProjectReference Include="..\..\Elsa\Studio\Preferences\Core\Elsa.Studio.Preferences.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Studio\Preferences\Api\Elsa.Studio.Preferences.Api.csproj" />
-		<ProjectReference Include="..\..\Elsa\Studio\Preferences\Persistence\Groundwork\Elsa.Studio.Preferences.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Secrets\Api\Elsa.Secrets.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Secrets\Core\Elsa.Secrets.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Secrets\Elsa.Secrets.csproj" />
@@ -149,14 +138,11 @@
 		<ProjectReference Include="..\..\Elsa\Tasks\Schedules\Elsa.Tasks.Schedules.csproj" />
 		<ProjectReference Include="..\..\Elsa\Tasks\Elsa.Tasks.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
-		<ProjectReference Include="..\..\Elsa\Workflows\Design\Persistence\Groundwork\Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
-		<ProjectReference Include="..\..\Elsa\Workflows\Dashboard\Persistence\Groundwork\V2\Elsa.Workflows.Dashboard.Persistence.Groundwork.V2.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Http\Elsa.Workflows.Runtime.Http.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Distributed\Elsa.Workflows.Runtime.Distributed.csproj" />
-		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Distributed\Persistence\Groundwork\Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj" />
 		<!--
-			The Groundwork persistence providers and durable lane features each declare
+			The EF Core persistence providers and durable lane features each declare
 			DependsOn "WorkflowsRuntimeResumption": a durable store keeps checkpoints/outbox/scheduler backlog,
 			and this feature supplies the background pump that re-drives that work after a restart. The host must
 			therefore reference the feature's assembly so it is present in the runtime feature catalog; CShells

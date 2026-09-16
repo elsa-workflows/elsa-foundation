@@ -5,13 +5,14 @@ using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.Api.Extensions;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.DependencyInjection;
+using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
+using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict.Extensions;
 using Elsa.Foundation.Identity.OpenIddict;
 using Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
 using Elsa.Workflows.Runtime.Core.Extensions;
-using Groundwork.Store;
 using FastEndpoints;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -61,11 +62,14 @@ public sealed class EnabledShellCompositionTests : IAsyncLifetime
                     services.AddRouting();
                     services.AddAuthorization();
 
-                    var persistence = new IdentityV2TestPersistence();
-                    services.AddSingleton(persistence);
-                    services.AddSingleton<IStorageProviderConnection>(p => p.GetRequiredService<IdentityV2TestPersistence>().Connection);
-                    services.AddPersistenceCore();
-                    services.AddFoundationAspNetCoreIdentityGroundwork(TestAdmin.SeedOptions(), isDevelopmentOrDemo: true);
+                    services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(
+                        new IdentityIamEntityFrameworkCoreOptions
+                        {
+                            Provider = "Sqlite",
+                            ConnectionString = $"Data Source={Path.Join(Path.GetTempPath(), $"elsa-identity-{databaseSuffix}.db")};Pooling=False"
+                        },
+                        TestAdmin.SeedOptions(),
+                        isDevelopmentOrDemo: true);
 
                     services.AddOpenIddictVendorForTests(
                         builder => builder.UseInMemoryDatabase($"openiddict-{databaseSuffix}"));
@@ -105,6 +109,7 @@ public sealed class EnabledShellCompositionTests : IAsyncLifetime
         await using (var scope = _host.Services.CreateAsyncScope())
         {
             await scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>().Database.EnsureCreatedAsync();
+            await scope.ServiceProvider.GetRequiredService<IdentityIamDbContext>().Database.EnsureCreatedAsync();
         }
 
         await _host.StartAsync();

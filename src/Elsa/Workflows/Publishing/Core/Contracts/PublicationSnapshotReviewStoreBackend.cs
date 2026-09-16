@@ -6,7 +6,6 @@ namespace Elsa.Workflows.Publishing.Core.Contracts;
 public sealed class PublicationSnapshotReviewStoreBackend
 {
     public const string InMemory = "in-memory";
-    public const string Groundwork = "groundwork";
     public const string EntityFramework = "entity-framework";
 
     private readonly IReadOnlyCollection<ServiceDescriptor> descriptors;
@@ -18,7 +17,7 @@ public sealed class PublicationSnapshotReviewStoreBackend
 
     public PublicationSnapshotReviewStoreBackend(string name, IEnumerable<ServiceDescriptor> descriptors)
     {
-        if (name is not (InMemory or Groundwork or EntityFramework))
+        if (name is not (InMemory or EntityFramework))
             throw new ArgumentException($"Unknown publication snapshot-review store backend '{name}'.", nameof(name));
         ArgumentNullException.ThrowIfNull(descriptors);
         this.descriptors = descriptors.Distinct().ToArray();

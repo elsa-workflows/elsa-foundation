@@ -16,7 +16,6 @@ namespace Elsa.Workflows.Publishing.Core.Contracts;
 public sealed class PublishingPersistenceFamilyBackend
 {
     public const string InMemory = "in-memory";
-    public const string Groundwork = "groundwork";
     public const string EntityFramework = "entity-framework";
 
     /// <summary>P01: publication records.</summary>
@@ -50,7 +49,7 @@ public sealed class PublishingPersistenceFamilyBackend
         IEnumerable<ServiceDescriptor> descriptors)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(family);
-        if (name is not (InMemory or Groundwork or EntityFramework))
+        if (name is not (InMemory or EntityFramework))
             throw new ArgumentException($"Unknown Publishing persistence backend '{name}'.", nameof(name));
         ArgumentNullException.ThrowIfNull(contracts);
         ArgumentNullException.ThrowIfNull(descriptors);

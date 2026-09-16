@@ -38,7 +38,7 @@ made safe — not merely deduplicated — by the fencing token described above.
 
 The placement store and command transport in this unit are in-memory implementations, shared by every node container in
 a single process (that is the two-node test harness shape). They are the default when the host does not select a durable
-provider. The opt-in `WorkflowsRuntimeDistributedGroundworkPersistence` feature replaces both with scoped Groundwork
+provider. The opt-in `WorkflowsRuntimeDistributedEntityFrameworkCorePersistence` feature replaces both with scoped EF Core
 stores. The independent `WorkflowsRuntimeDistributedEntityFrameworkCorePersistence` and
 `WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence` features replace placement and transport,
 respectively, with scoped EF Core stores. Each durable implementation preserves the same frozen wire semantics and

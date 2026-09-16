@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// Complete EF-owned runtime attention query over R10 workflow-execution and R18 incident rows.
 /// </summary>
 /// <remarks>
-/// The adapter reads both projections from the same EF context. It never delegates to Groundwork or
+/// The adapter reads both projections from the same EF context. It never delegates to another store or
 /// another runtime store, uses bounded keyset pages, and keeps only the requested urgency frontier in memory.
 /// </remarks>
 public sealed class EfWorkflowRuntimeAttentionQuery(

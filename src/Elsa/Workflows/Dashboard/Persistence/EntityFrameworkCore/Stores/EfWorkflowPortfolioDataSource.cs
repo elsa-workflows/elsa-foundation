@@ -26,7 +26,7 @@ namespace Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Stores;
 /// Dashboard does not own a persistence context or duplicate either module's entities. Design definitions
 /// and drafts are read through <see cref="WorkflowsDesignDbContext"/>; published executable source references
 /// are read through the shared Runtime artifact context. The two lanes are intentionally correlated in memory,
-/// just as the Groundwork v2 source does, because they can be separate physical stores.
+/// because they can be separate physical stores.
 /// </remarks>
 public sealed class EfWorkflowPortfolioDataSource(
     WorkflowsDesignDbContext designContext,

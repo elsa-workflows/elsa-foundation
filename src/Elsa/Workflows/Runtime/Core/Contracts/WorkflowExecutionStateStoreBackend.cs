@@ -5,7 +5,6 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <summary>Tracks the selected owner of workflow execution state persistence.</summary>
 public sealed class WorkflowExecutionStateStoreBackend
 {
-    public const string Groundwork = "groundwork";
     public const string EntityFramework = "entity-framework";
     public const string InMemory = "in-memory";
     private readonly IReadOnlyList<ServiceDescriptor> descriptors;
@@ -13,7 +12,7 @@ public sealed class WorkflowExecutionStateStoreBackend
 
     public WorkflowExecutionStateStoreBackend(string name, IEnumerable<ServiceDescriptor> descriptors, Action<IServiceCollection>? removeOwnedArtifacts = null)
     {
-        if (name is not Groundwork and not EntityFramework and not InMemory) throw new ArgumentException($"Unknown workflow execution state store backend '{name}'.", nameof(name));
+        if (name is not EntityFramework and not InMemory) throw new ArgumentException($"Unknown workflow execution state store backend '{name}'.", nameof(name));
         this.descriptors = descriptors?.Distinct().ToArray() ?? throw new ArgumentNullException(nameof(descriptors));
         if (this.descriptors.Count == 0) throw new ArgumentException("At least one owned workflow execution state descriptor is required.", nameof(descriptors));
         this.removeOwnedArtifacts = removeOwnedArtifacts;

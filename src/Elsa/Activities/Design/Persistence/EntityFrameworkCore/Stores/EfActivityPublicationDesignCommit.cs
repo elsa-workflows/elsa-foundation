@@ -359,7 +359,7 @@ public sealed class EfActivityPublicationDesignCommit
 
     /// <summary>
     /// Replaces the source draft's derived dependency facts with the published version's, mirroring what the
-    /// Groundwork projection staged in the same commit. The EF projection is one global row holding every
+    /// projection staged in the same commit. The EF projection is one global row holding every
     /// tenant's facts, so an owner is matched on its tenant as well as its kind and identity.
     /// </summary>
     private async Task StageDependencyProjectionAsync(ActivityPublicationDesignMutation mutation, CancellationToken cancellationToken)

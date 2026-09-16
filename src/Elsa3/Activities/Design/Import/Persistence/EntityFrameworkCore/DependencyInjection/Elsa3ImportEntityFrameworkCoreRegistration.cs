@@ -24,7 +24,7 @@ public static class Elsa3ImportEntityFrameworkCoreRegistration
             throw new ArgumentException($"Unknown Elsa 3 import EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.", nameof(options));
         var configuration = Elsa3ImportPersistenceBackend.Fingerprint(provider, options.ConnectionString, options.ConnectionName);
         var snapshot = services.ToArray();
-        // A replaced Groundwork backend keeps its storage units in a shared catalog outside the service
+        // A replaced backend may keep declarations in a shared catalog outside the service
         // collection; snapshotting it through the neutral seam keeps a failed switch all-or-nothing.
         var registrationSnapshots = services
             .Select(descriptor => descriptor.ImplementationInstance)

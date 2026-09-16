@@ -32,17 +32,13 @@ public static class RuntimeWorkflowTriggerBindingEntityFrameworkCoreRegistration
             if (existing is not null)
             {
                 existing.EnsureOwnsRegisteredContract(services);
-                if (existing.Name != WorkflowTriggerBindingStoreBackend.Groundwork)
-                    throw new InvalidOperationException("Runtime trigger-binding EF persistence refuses to replace a selected non-EF backend.");
+                throw new InvalidOperationException("Runtime trigger-binding EF persistence refuses to replace a selected non-EF backend.");
             }
             else if (contractRegistrations.Length > 0 &&
                      (defaultRegistrations.Length != 1 || defaultRegistrations.Length != contractRegistrations.Length))
             {
                 throw new InvalidOperationException("An explicit workflow trigger-binding store registration is already present; EF persistence refuses to replace it implicitly.");
             }
-            var removeGroundwork = existing?.Name == WorkflowTriggerBindingStoreBackend.Groundwork
-                ? existing.PrepareRemoveOwnedArtifacts(services)
-                : null;
             foreach (var descriptor in defaultRegistrations)
                 services.Remove(descriptor);
 
@@ -51,7 +47,6 @@ public static class RuntimeWorkflowTriggerBindingEntityFrameworkCoreRegistration
             var contract = ServiceDescriptor.Scoped<IWorkflowTriggerBindingStore>(p => p.GetRequiredService<EfWorkflowTriggerBindingStore>());
             services.Add(contract);
             WorkflowTriggerBindingStoreBackend.Register(services, new(WorkflowTriggerBindingStoreBackend.EntityFramework, contract, concrete));
-            removeGroundwork?.Invoke(services);
             RuntimeSharedProjectionStateTransition.Find(services)?.WithdrawIfBothEfSelected(services);
             return services;
         }

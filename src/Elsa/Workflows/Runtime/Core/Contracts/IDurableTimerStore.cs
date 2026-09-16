@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
 /// Durable store for <see cref="DurableTimer"/> documents. The default in-memory implementation keeps
-/// timers only for the process lifetime; a durable persistence provider (e.g. the Groundwork bridge)
+/// timers only for the process lifetime; a durable persistence provider (e.g. the Runtime EF Core module)
 /// swaps in a restart-surviving implementation so a <c>Delay</c> survives a process restart.
 /// </summary>
 /// <remarks>

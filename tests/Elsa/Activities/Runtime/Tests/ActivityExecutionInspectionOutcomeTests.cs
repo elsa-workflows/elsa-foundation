@@ -26,7 +26,7 @@ namespace Elsa.Activities.Runtime.Tests;
 /// implicated — root vs nested, completed inline vs resumed from a bookmark — and all four are <b>correct</b> on
 /// the in-process runtime over the in-memory stores. That is the point of keeping them: they pin the behaviour
 /// that already holds here, and they narrow #1127 to the parts of a real composition they do not cover
-/// (Groundwork-backed projection storage, the coalescing persistence decorator, the REST read path).
+/// (durable projection storage, the coalescing persistence decorator, the REST read path).
 /// </remarks>
 // Runs WriteLine activities, which write to the real Console.Out that ConsoleCapture redirects
 // process-wide. Without this collection those writes land inside a capturing class's output.

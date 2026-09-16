@@ -10,7 +10,7 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>
 /// EF-backed tenant/global provider configuration store. It owns only I06/I07 and never delegates
-/// to Groundwork or requires a provider engine in this assembly.
+/// to another store or requires a provider engine in this assembly.
 /// </summary>
 public sealed class EfProviderConfigurationStore(
     IdentityProviderConfigurationDbContext context,

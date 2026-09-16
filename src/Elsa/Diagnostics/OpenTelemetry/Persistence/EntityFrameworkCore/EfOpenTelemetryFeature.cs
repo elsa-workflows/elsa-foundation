@@ -12,7 +12,7 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
 [ShellFeature(
     name: "DiagnosticsOpenTelemetryEntityFrameworkCore",
     DisplayName = "Diagnostics OpenTelemetry Entity Framework Core Persistence",
-    Description = "Opt-in EF Core persistence for OpenTelemetry. It applies or validates its own migrations on shell activation; Groundwork remains the default.",
+    Description = "Opt-in EF Core persistence for OpenTelemetry. It applies or validates its own migrations on shell activation;",
     DependsOn = new object[] { "DiagnosticsOpenTelemetry" })]
 public class EfOpenTelemetryFeature : IShellFeature
 {

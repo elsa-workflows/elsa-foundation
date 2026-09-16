@@ -349,8 +349,6 @@ internal static class PermissionAuthorizationBoundaryScanner
             "src/Elsa/Foundation/Identity/Api/Services/ClaimsAuthSessionService.cs",
             "src/Elsa/Foundation/Identity/AspNetCoreIdentity/Services/DefaultAuthSessionService.cs",
             "src/Elsa/Foundation/Identity/AspNetCoreIdentity/Services/IdentityClaimsProjector.cs",
-            "src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Authentication/GroundworkIdentityCookieEvents.cs",
-            "src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Authentication/GroundworkIdentitySessionInvalidator.cs",
             "src/Elsa/Foundation/Identity/OpenIddict/Behavior/OpenIddictTokenService.cs");
 
     private static readonly ImmutableHashSet<string> AuthorizationContextPaths =

@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 [ShellFeature(
     name: "WorkflowsRuntimeActivityExecutionEntityFrameworkCorePersistence",
     DisplayName = "Workflows Runtime EF Core Activity Execution Persistence",
-    Description = "Opt-in EF Core persistence for activity execution state, inspection and hierarchy. Groundwork remains the default.",
+    Description = "Opt-in EF Core persistence for activity execution state, inspection and hierarchy.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
 public class RuntimeActivityExecutionEntityFrameworkCoreFeature : IShellFeature
 {

@@ -5,7 +5,7 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 
 /// <summary>
 /// Single-node in-memory default <see cref="IWorkflowSchedulerPoisonStore"/>. Durable poison stores (e.g. a
-/// Groundwork-backed implementation) are a follow-up, not part of this slice.
+/// durable implementation) are a follow-up, not part of this slice.
 /// </summary>
 public sealed class InMemoryWorkflowSchedulerPoisonStore : IWorkflowSchedulerPoisonStore
 {

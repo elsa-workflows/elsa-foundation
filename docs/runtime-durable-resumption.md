@@ -24,8 +24,8 @@ A workflow makes progress through a repeating cycle:
 3. The scheduler **drains** the queued work — running activities, scheduling children, and producing
    the next checkpoint — and the cycle repeats.
 
-Before W2, every store that backs step 1 could be Groundwork-backed and survive a crash, yet the
-runtime still lost work: `AddGroundworkRuntimeStores` swapped eleven state contracts but **not**
+Before W2, every store that backs step 1 could be durable and survive a crash, yet the
+runtime still lost work: the durable registration swapped eleven state contracts but **not**
 `IWorkflowSchedulerWorkQueue`, so delivered work landed in a process-local in-memory queue that died
 with the process (**PS-2**). And nothing ever *ran* a recovery pass: the system-wide outbox sweep and
 `IRuntimeRecoveryScanner` were registered but never invoked, so an item stranded between commit and
@@ -37,14 +37,14 @@ unrelated command to arrive (**RT-3**).
 
 ## What W2 adds
 
-- **A durable scheduler work queue** — `GroundworkWorkflowSchedulerWorkQueue`, an `IDocumentStore`-backed
-  bridge (document kind `schedulerWorkItem`) swapped in by `AddGroundworkRuntimeStores`. Enqueue is
+- **A durable scheduler work queue** — `EfSchedulerWorkQueueStore`, an `IDocumentStore`-backed
+  bridge (document kind `schedulerWorkItem`) swapped in by `AddRuntimeEntityFrameworkCore`. Enqueue is
   idempotent by `(WorkflowExecutionId, WorkItemId)`; listing/dequeue are FIFO by
   `(RecordedAt, Sequence, WorkItemId)`; dequeue is load-first-then-delete.
 - **Backlog discovery** — an additive contract method
   `IWorkflowSchedulerWorkQueue.ListPendingWorkflowExecutionIdsAsync(int limit)` returns the distinct
   execution ids that still have queued work. After a restart, nothing else knows which executions were
-  interrupted; this is how the sweep finds them. Both the in-memory and Groundwork queues implement it.
+  interrupted; this is how the sweep finds them. Both the in-memory and EF Core queues implement it.
 - **A resumption sweep service** — `IRuntimeResumptionService` (`RuntimeResumptionService`). One
   `SweepAsync` pass:
   1. **Re-delivers** stranded post-commit outbox items **system-wide**
@@ -59,7 +59,7 @@ unrelated command to arrive (**RT-3**).
      single-writer discipline (RT-2): the agent remains the only writer for its execution.
 - **A feature-gated pump** — `Elsa.Workflows.Runtime.Resumption` is a separate package whose
   `WorkflowsRuntimeResumptionFeature` registers the service and a `RuntimeResumptionPumpTask`
-  (`IRecurringTask`, scheduled by the Tasks domain). The Groundwork persistence features declare
+  (`IRecurringTask`, scheduled by the Tasks domain). The durable persistence features declare
   `DependsOn = ["WorkflowsRuntimeResumption"]`, so **selecting durable stores pulls the pump into the
   shell** — the "durable stores ⇒ pump available" invariant is machine-visible in the feature catalog.
   The runtime API feature is deliberately untouched (the pump is opt-in with durable storage).
@@ -84,7 +84,7 @@ is what made the dequeue side match the enqueue side:
   it and the handler re-runs idempotently (activity-execution status guards + deterministic follow-up
   work-item ids the idempotent queue absorbs). The underlying `IWorkflowSchedulerWorkQueue.DequeueAsync`
   contract is unchanged (still load-first-then-delete); the ack is simply moved to *after* the durable
-  effect. (`GroundworkWorkflowSchedulerWorkQueue`'s own dequeue is likewise still crash-safe by
+  effect. (`EfSchedulerWorkQueueStore`'s own dequeue is likewise still crash-safe by
   redelivery.)
 
 With both sides at-least-once and every consumer idempotent, re-running the sweep is always safe and
@@ -92,7 +92,7 @@ no crash window strands an activity.
 
 ## Crash windows
 
-Three recoverable windows, all covered by `GroundworkDurableResumptionCrashTests`, which runs two
+Three recoverable windows, all covered by `DurableResumptionCrashTests`, which runs two
 provider generations over a shared `IDocumentStore` and asserts the crashed execution converges to the
 same terminal state as a crash-free control run.
 
@@ -124,7 +124,7 @@ finds the execution and re-drives it, and the handler re-runs **idempotently** �
 status guards (`existing.Status == Scheduled` / `state.Status == Running`) recognise the already-applied
 first write, and the deterministic follow-up work-item ids (`…:start:…`, `…:invoke:…`) are absorbed by the
 idempotent queue, so redelivery never double-applies. This is covered by
-`GroundworkDurableResumptionCrashTests.WindowC_CrashAfterDequeueBeforeCheckpoint_ResumptionConvergesToControlState`
+`DurableResumptionCrashTests.WindowC_CrashAfterDequeueBeforeCheckpoint_ResumptionConvergesToControlState`
 (shared-`IDocumentStore` two-generation convergence) and, at the unit level, by
 `RuntimeSchedulerDrainTests.DrainAsync_RedriveSafe_CrashBetweenFallbackWrites_…` (crash-between-writes
 injection over the real Schedule handler) and the poison-path bounding in
@@ -232,7 +232,7 @@ the Immediate path already gives on the enqueue side (§The idempotency / durabi
 widens the replay window from one checkpoint to one segment. External-facing outbox intents are still delivered
 **only post-flush**, so an activity's external effect is never delivered before its durable commit. Convergence
 and the absence of duplicate *terminal* effects are proven by
-`GroundworkCoalescingCrashConvergenceTests.Coalescing_CrashMidSegment_QueueRetainsSegmentEntry_ThenHonestSweepConvergesWithoutDuplicateEffects`
+`CoalescingCrashConvergenceTests.Coalescing_CrashMidSegment_QueueRetainsSegmentEntry_ThenHonestSweepConvergesWithoutDuplicateEffects`
 (two generations over a shared store: gen-1 crashes mid-segment with the queue still holding the segment entry;
 gen-2's honest sweep converges to the crash-free control snapshot) and the queue-retention half by
 `RuntimeCheckpointCoalescingTests.CrashMidSegment_DurableQueueStillHoldsSegmentEntry_AndNoPartialCheckpointPersisted`.
@@ -311,7 +311,7 @@ behavior-preserving.
   checkpoint commits — the remaining increment for item-level window-C replay, layered on W5's
   lease/heartbeat ownership primitive over W2's durable queue.
 - Drainer/handler refactors — **W1**. Runtime-spine decomposition — specs/083. Serializer-policy
-  remediation (PS-3) — **W3**. Multi-node outbox delivery-ownership fencing — the Groundwork outbox
+  remediation (PS-3) — **W3**. Multi-node outbox delivery-ownership fencing — the durable outbox
   store rejects `OwnerId` filters today, and the sweep passes none.
 
 ## Cross-references

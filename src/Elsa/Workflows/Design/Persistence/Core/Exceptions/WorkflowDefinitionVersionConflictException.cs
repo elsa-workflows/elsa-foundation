@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Design.Persistence.Core.Exceptions;
 /// Thrown when publishing a workflow definition version whose computed version string already exists
 /// for the definition (issue #404) — the signature of a concurrent publish that computed the same next
 /// version. On EF Core the unique index on (DefinitionId, Version) would surface this as a provider
-/// exception; on Groundwork, documents are keyed only by their own id, so without this check the
+/// exception; on a document store, records are keyed only by their own id, so without this check the
 /// duplicate would persist silently.
 /// </summary>
 public sealed class WorkflowDefinitionVersionConflictException(string definitionId, string version)

@@ -41,7 +41,7 @@ public static class IdentityProviderConfigurationEntityFrameworkCoreRegistration
             existingBackend.EnsureOwnsRegisteredContracts(services);
             return services;
         }
-        if (existingBackend is not null && !string.Equals(existingBackend.Name, "groundwork", StringComparison.Ordinal))
+        if (existingBackend is not null)
             ProviderConfigurationStoreBackend.EnsureCompatible(existingBackend.Name, StoreBackendName);
         if (existingBackend is not null)
             existingBackend.EnsureOwnsRegisteredContracts(services);

@@ -20,7 +20,7 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// suspended workflows at their due time through the existing bookmark-resume dispatcher.
 /// </summary>
 /// <remarks>
-/// Compose this together with a durable runtime persistence provider (e.g. the Groundwork SQLite or Workbench
+/// Compose this together with a durable runtime persistence provider (e.g. the Runtime EF Core or Workbench
 /// feature) to make a <c>Delay</c> survive a restart; without a durable store the pump still runs but timers
 /// live only in memory. The pump is delivered as an <see cref="IRecurringTask"/>, so it depends on the Tasks
 /// feature for its execution lifecycle. The runtime API feature must also be composed — the pump resolves
@@ -33,7 +33,7 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 [ShellFeature(
     name: "WorkflowsRuntimeScheduling",
     DisplayName = "Workflows Runtime Scheduling",
-    Description = "Background pump that fires durable timers, resuming suspended workflows (e.g. Delay) at their due time through the bookmark-resume dispatcher. Compose alongside a durable runtime persistence provider (e.g. Groundwork SQLite) and the Tasks feature to make timers restart-durable.",
+    Description = "Background pump that fires durable timers, resuming suspended workflows (e.g. Delay) at their due time through the bookmark-resume dispatcher. Compose alongside a durable runtime persistence provider (e.g. the Runtime EF Core module on SQLite) and the Tasks feature to make timers restart-durable.",
     DependsOn = new object[] { "Tasks" })]
 public sealed class WorkflowsRuntimeSchedulingFeature : IShellFeature
 {

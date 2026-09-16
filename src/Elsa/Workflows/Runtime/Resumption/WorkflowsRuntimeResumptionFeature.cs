@@ -20,7 +20,7 @@ namespace Elsa.Workflows.Runtime.Resumption;
 /// re-drives executions whose durable backlog would otherwise never be drained.
 /// </summary>
 /// <remarks>
-/// Compose this together with a durable runtime persistence provider (e.g. the Groundwork SQLite or
+/// Compose this together with a durable runtime persistence provider (e.g. the Runtime EF Core or
 /// Unified feature). Without a durable store the pump still runs, but there is nothing durable to
 /// recover; without this feature a durable store keeps the work but nothing re-drives it after a
 /// restart. The pump is delivered as an <see cref="IRecurringTask"/>, so it depends on the Tasks
@@ -33,7 +33,7 @@ namespace Elsa.Workflows.Runtime.Resumption;
 [ShellFeature(
     name: "WorkflowsRuntimeResumption",
     DisplayName = "Workflows Runtime Resumption",
-    Description = "Background pump that periodically re-delivers stranded post-commit outbox items and re-drives workflow executions with durable scheduler-work backlog after a restart or crash. Compose alongside a durable runtime persistence provider (e.g. Groundwork SQLite) and the Tasks feature.",
+    Description = "Background pump that periodically re-delivers stranded post-commit outbox items and re-drives workflow executions with durable scheduler-work backlog after a restart or crash. Compose alongside a durable runtime persistence provider (e.g. the Runtime EF Core module on SQLite) and the Tasks feature.",
     DependsOn = new object[] { "Tasks" })]
 public sealed class WorkflowsRuntimeResumptionFeature : IShellFeature
 {

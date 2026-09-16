@@ -158,7 +158,7 @@ public static class PublishingEntityFrameworkCoreRegistration
 
             foreach (var family in LedgerFamilies)
             {
-                // Idempotent for an EF owner; replaces the in-memory or Groundwork owner; refuses a foreign one.
+                // Idempotent for an EF owner; replaces the in-memory owner; refuses a foreign one.
                 if (!PublishingPersistenceFamilyBackend.PrepareSelection(services, family.Name, family.Contracts, PublishingPersistenceFamilyBackend.EntityFramework))
                     continue;
                 var firstAdded = services.Count;

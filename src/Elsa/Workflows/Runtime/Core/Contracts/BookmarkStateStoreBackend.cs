@@ -10,7 +10,6 @@ public sealed class BookmarkStateStoreBackend
     private readonly IReadOnlyCollection<ServiceDescriptor> auxiliaryDescriptors;
     private readonly Action<IServiceCollection>? removeOwnedArtifacts;
 
-    public const string Groundwork = "groundwork";
     public const string EntityFramework = "entity-framework";
 
     public BookmarkStateStoreBackend(
@@ -141,7 +140,7 @@ public sealed class BookmarkStateStoreBackend
     public static void EnsureKnown(string name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        if (name is not Groundwork and not EntityFramework)
+        if (name is not EntityFramework)
             throw new ArgumentException($"Unknown bookmark state store backend '{name}'.", nameof(name));
     }
 

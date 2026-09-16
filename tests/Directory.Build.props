@@ -15,9 +15,9 @@
     here - all 93 projects set it today.
 
     IsTestProject is deliberately NOT defaulted: the tree also holds support
-    libraries and an out-of-process probe (Elsa.Activities.Testing,
-    Elsa.Persistence.Groundwork.Testing, Elsa.Persistence.Groundwork.ProcessProbe)
-    that are not test projects. Defaulting it true would make `dotnet test` treat
+    libraries and out-of-process probes (Elsa.Activities.Testing, Elsa.Testing,
+    Elsa.Api.Compatibility.Testing) that are not test projects. Defaulting it true
+    would make `dotnet test` treat
     them as suites. Each real test project keeps its own IsTestProject.
   -->
   <PropertyGroup>

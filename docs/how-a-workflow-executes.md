@@ -25,8 +25,8 @@ marked `[ShellFeature(name: "...")]` that implements `IShellFeature` (from the `
 registers services in `ConfigureServices(IServiceCollection)`. A feature that is not in `shells.json` registers
 nothing. The three features on the execution path are `WorkflowsRuntimeApi`
 (`src/Elsa/Workflows/Runtime/Api/WorkflowsRuntimeApiFeature.cs`), `ActivitiesRuntime`
-(`src/Elsa/Activities/Runtime/ActivitiesRuntimeFeature.cs`) and `GroundworkWorkflowRuntime`
-(`src/Elsa/Persistence/Groundwork/V2/Runtime/GroundworkWorkflowRuntimeFeature.cs`).
+(`src/Elsa/Activities/Runtime/ActivitiesRuntimeFeature.cs`) and `WorkflowsRuntimeEntityFrameworkCore`
+(`src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeEntityFrameworkCoreFeature.cs`).
 
 ## The path we trace
 
@@ -61,10 +61,10 @@ the root `ExecutableNode`, the resume targets and the incident strategy. Publish
 `IWorkflowExecutableStore.SaveAsync`.
 
 `IWorkflowExecutableStore` (`src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowExecutableStore.cs`) is the store
-Runtime reads from. The default is `InMemoryWorkflowExecutableStore`. With `GroundworkWorkflowRuntime` enabled,
-`GroundworkV2RuntimeRegistration.RegisterExecutableStore` replaces it with `CachingWorkflowExecutableStore`
-(`src/Elsa/Workflows/Runtime/Core/Services`) over `GroundworkV2WorkflowExecutableStore`
-(`src/Elsa/Persistence/Groundwork/V2/Runtime`).
+Runtime reads from. The default is `InMemoryWorkflowExecutableStore`. With `WorkflowsRuntimeEntityFrameworkCore` enabled,
+`RuntimeArtifactsEntityFrameworkCoreRegistration` replaces it with `CachingWorkflowExecutableStore`
+(`src/Elsa/Workflows/Runtime/Core/Services`) over `EfWorkflowExecutableStore`
+(`src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores`).
 
 `src/Elsa/Workflows/Runtime/Services/WorkflowStartDispatcher.cs` does the resolution. It finds the artifact,
 checks that a live `Published` source reference points at it (`IWorkflowExecutableSourceReferenceStore`,
@@ -88,8 +88,8 @@ resolves `WorkflowSchedulerCommandRouter` from it.
 `src/Elsa/Workflows/Runtime/Services/WorkflowSchedulerCommandRouter.cs` turns the command into a
 `RuntimeSchedulerWorkItem` and calls `IWorkflowSchedulerWorkQueue.EnqueueAsync`. The queue contract is
 `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowSchedulerWorkQueue.cs`; enqueue is idempotent by
-`(WorkflowExecutionId, WorkItemId)`. The default queue is `InMemoryWorkflowSchedulerWorkQueue`; Groundwork
-replaces it with `GroundworkV2WorkflowSchedulerWorkQueue`.
+`(WorkflowExecutionId, WorkItemId)`. The default queue is `InMemoryWorkflowSchedulerWorkQueue`; the EF Core module
+replaces it with `EfSchedulerWorkQueueStore`.
 
 The router then asks `IWorkflowSchedulerDrainPolicy` for a drain request (the default,
 `ImmediateWorkflowSchedulerDrainPolicy`, always drains now), pushes a `WorkflowBurstScope` for the drain, and
@@ -157,14 +157,13 @@ has two implementations in this repository:
 
 - `InMemoryRuntimeCheckpointCommitStore` (`src/Elsa/Workflows/Runtime/Services`): the default from
   `AddWorkflowRuntime`. It applies the change set to the in-memory state stores. Nothing survives a restart.
-- `GroundworkV2RuntimeCheckpointWriter` (`src/Elsa/Persistence/Groundwork/V2/Runtime`): registered by
-  `GroundworkWorkflowRuntimeFeature` through `GroundworkV2RuntimeRegistration.AddGroundworkV2RuntimeStores`. It
-  writes every row of the change set, the outbox items and a create-only checkpoint marker in one Groundwork
+- `EfRuntimeCheckpointCommitStore` (`src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores`): registered by
+  `RuntimeEntityFrameworkCoreFeature` through `AddRuntimeEntityFrameworkCore`. It
+  writes every row of the change set, the outbox items and a create-only checkpoint marker in one relational
   unit of work. The marker is what makes a replayed commit a no-op.
 
-In the Workbench the Groundwork provider is SQLite (`GroundworkProviderSqlite` in `shells.json`, implemented in
-`src/Apps/Elsa.Workbench/Groundwork/GroundworkSqliteProviderFeature.cs`); the file is
-`src/Apps/Elsa.Workbench/elsa-groundwork.db`.
+In the Workbench the provider is SQLite (each EF module's `Provider` in `shells.json`, falling back to
+`ConnectionStrings:Elsa`); the file is `src/Apps/Elsa.Workbench/elsa.db`.
 
 ### 7. Suspending on a bookmark and resuming
 
@@ -188,7 +187,7 @@ stimulus payload as input. From there the chain continues as in section 5.
 Durable stores keep checkpoints, outbox items and queued work across a crash, but nothing acts on them until a
 sweep runs. `WorkflowsRuntimeResumptionFeature` (`src/Elsa/Workflows/Runtime/Resumption/WorkflowsRuntimeResumptionFeature.cs`)
 registers `RuntimeResumptionPumpTask` as an `IRecurringTask` (it depends on the `Tasks` feature). Every
-`GroundworkWorkflowRuntime` shell depends on it, so a durable store is never composed without the pump.
+`WorkflowsRuntimeEntityFrameworkCore` shell depends on it, so a durable store is never composed without the pump.
 
 Each tick calls `IRuntimeResumptionService.SweepAsync`, implemented by
 `src/Elsa/Workflows/Runtime/Services/RuntimeResumptionService.cs`. One sweep does three things: deliver pending
@@ -198,8 +197,8 @@ post-commit outbox items, list executions that still have queued work
 its mailbox. Re-driving never bypasses the mailbox, so the single-writer rule holds during recovery too.
 
 `IRuntimeRecoveryScanner` (`src/Elsa/Workflows/Runtime/Core/Contracts/IRuntimeRecoveryScanner.cs`) defaults to
-`InMemoryRuntimeRecoveryScanner`, which reads `IExecutionLivenessStateStore`; Groundwork replaces it with
-`GroundworkV2RuntimeRecoveryScanner`. The crash windows this covers are worked through in
+`InMemoryRuntimeRecoveryScanner`, which reads `IExecutionLivenessStateStore`; the EF Core module replaces it with
+`EfRuntimeRecoveryScanner`. The crash windows this covers are worked through in
 [durable resumption](runtime-durable-resumption.md).
 
 ## Where the defaults are registered
@@ -212,8 +211,8 @@ and the kill switches (`RuntimeBurstCacheOptions`, `RuntimeInProcessHopFastPathO
 
 `WorkflowsRuntimeApiFeature.ConfigureServices` calls `AddWorkflowRuntime()`; a non-HTTP host can call it directly.
 `ActivitiesRuntimeFeature` adds the four activity-side handlers (`InvokeActivity`, `CompleteActivity` parent
-evaluation, `NotifyParentActivity`, `ResumeBookmark`). `GroundworkWorkflowRuntimeFeature` replaces the whole
-persistence family through `AddGroundworkV2RuntimeStores`. Which of these run is decided by the feature list in
+evaluation, `NotifyParentActivity`, `ResumeBookmark`). `RuntimeEntityFrameworkCoreFeature` replaces the whole
+persistence family through `AddRuntimeEntityFrameworkCore`. Which of these run is decided by the feature list in
 `src/Apps/Elsa.Workbench/shells.json`.
 
 ## Glossary of the ten words you need

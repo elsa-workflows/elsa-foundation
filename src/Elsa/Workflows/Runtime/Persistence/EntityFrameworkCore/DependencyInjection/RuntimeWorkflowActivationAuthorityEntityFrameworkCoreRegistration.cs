@@ -30,8 +30,7 @@ public static class RuntimeWorkflowActivationAuthorityEntityFrameworkCoreRegistr
             if (existing is not null)
             {
                 existing.EnsureOwnsRegisteredContract(services);
-                if (existing.Name != WorkflowActivationAuthorityBackend.Groundwork)
-                    throw new InvalidOperationException("Runtime activation-authority EF persistence refuses to replace a selected non-EF backend.");
+                throw new InvalidOperationException("Runtime activation-authority EF persistence refuses to replace a selected non-EF backend.");
             }
 
             var contracts = services.Where(x => x.ServiceType == typeof(IWorkflowActivationAuthority)).ToArray();
@@ -40,9 +39,6 @@ public static class RuntimeWorkflowActivationAuthorityEntityFrameworkCoreRegistr
             if (contracts.Length > 1)
                 throw new InvalidOperationException("Runtime activation-authority EF persistence requires one selected authority contract.");
 
-            var removeGroundwork = existing?.Name == WorkflowActivationAuthorityBackend.Groundwork
-                ? existing.PrepareRemoveOwnedArtifacts(services)
-                : null;
             foreach (var descriptor in contracts)
                 services.Remove(descriptor);
 
@@ -55,7 +51,6 @@ public static class RuntimeWorkflowActivationAuthorityEntityFrameworkCoreRegistr
                 WorkflowActivationAuthorityBackend.EntityFramework,
                 contract,
                 concrete));
-            removeGroundwork?.Invoke(services);
             return services;
         }
         catch

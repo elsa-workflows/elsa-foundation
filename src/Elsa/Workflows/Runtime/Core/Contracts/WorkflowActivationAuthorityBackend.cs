@@ -6,7 +6,6 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 public sealed class WorkflowActivationAuthorityBackend
 {
     public const string EntityFramework = "entity-framework";
-    public const string Groundwork = "groundwork";
     public const string InMemory = "in-memory";
 
     private readonly ServiceDescriptor contract;
@@ -19,7 +18,7 @@ public sealed class WorkflowActivationAuthorityBackend
         ServiceDescriptor concrete,
         Action<IServiceCollection>? removeOwnedArtifacts = null)
     {
-        if (name is not (EntityFramework or Groundwork or InMemory))
+        if (name is not (EntityFramework or InMemory))
             throw new ArgumentException($"Unknown workflow activation-authority backend '{name}'.", nameof(name));
         ArgumentNullException.ThrowIfNull(contract);
         ArgumentNullException.ThrowIfNull(concrete);

@@ -74,7 +74,7 @@ public sealed class EfWorkflowTestScopeCleanupStore(
                 EnsureClosing(scopeRecord, scope);
                 touched.Add(scopeRow);
 
-                // The revision-only write is the EF equivalent of Groundwork's same-value conditional upsert.
+                // The revision-only write is the EF equivalent of a same-value conditional upsert.
                 // It fences cleanup against a concurrent admission or closure without clearing caller-owned state.
                 WorkflowTestScopeEfSupport.StageAdmission(scopeRow);
 

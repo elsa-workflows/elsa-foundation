@@ -17,7 +17,7 @@ namespace Elsa.Architecture.Tests;
 public sealed class HostShellFeatureVisibilityTests
 {
     // A class declaration whose base list names IShellFeature/IWebShellFeature, or a feature base class
-    // (FastEndpointsFeatureBase, EFCore*FeatureBase, Groundwork*ShellFeatureBase, ...) — derived features
+    // (FastEndpointsFeatureBase, EFCore*FeatureBase, ...) — derived features
     // implement the interface only through the base, so matching the interface alone lets them silently
     // fall out of this guard. Base lists are single-line today; if a multi-line base list is ever
     // introduced this scan misses it, which fails safe only via review — keep feature declarations on one

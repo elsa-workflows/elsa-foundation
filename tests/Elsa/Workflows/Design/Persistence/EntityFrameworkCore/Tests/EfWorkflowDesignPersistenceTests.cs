@@ -62,7 +62,7 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
-    public async Task Definition_ids_follow_groundwork_identity_folding_and_tenants_remain_ordinal()
+    public async Task Definition_ids_follow_portable_identity_folding_and_tenants_remain_ordinal()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
         await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
@@ -468,7 +468,7 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
-    public void Sqlite_model_uses_portable_unbounded_text_and_groundwork_operation_bounds()
+    public void Sqlite_model_uses_portable_unbounded_text_and_portable_operation_bounds()
     {
         using var connection = new SqliteConnection("Data Source=:memory:"); connection.Open();
         using var db = Create(connection);
@@ -675,7 +675,7 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
-    public void Ef_model_table_names_distinguish_the_groundwork_v2_register_from_ef_tables()
+    public void Ef_model_table_names_are_the_module_table_names()
     {
         using var connection = new SqliteConnection("Data Source=:memory:");
         connection.Open();
@@ -780,7 +780,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         var services = new ServiceCollection();
         services.AddSingleton<object>(new object());
         var owned = Assert.Single(services, x => x.ServiceType == typeof(object));
-        services.AddSingleton(new DesignPersistenceBackend(DesignPersistenceBackend.Groundwork, [owned]));
+        services.AddSingleton(new DesignPersistenceBackend("custom", [owned]));
 
         var exception = Assert.Throws<InvalidOperationException>(() => services.AddWorkflowsDesignEntityFrameworkCore(new WorkflowsDesignEntityFrameworkCoreOptions()));
 
@@ -1251,7 +1251,7 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
-    public async Task State_request_material_uses_the_configured_payload_serializer_and_groundwork_framing()
+    public async Task State_request_material_uses_the_configured_payload_serializer_and_portable_framing()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync(); await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
         var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))); var state = State();
@@ -1261,7 +1261,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         var marker = await db.Operations.SingleAsync(x => x.OperationKey == "serializer-request");
         var stateJson = serializer.Serialize(state);
         var materialJson = JsonSerializer.Serialize(new { definitionId = "definition", stateJson });
-        Assert.Equal(GroundworkFingerprint("workflow.version.add.v1", materialJson), marker.RequestFingerprint);
+        Assert.Equal(PortableFingerprint("workflow.version.add.v1", materialJson), marker.RequestFingerprint);
     }
 
     [Fact]
@@ -1800,7 +1800,7 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
-    public async Task Operation_request_material_matches_groundwork_for_layout_and_promotion()
+    public async Task Operation_request_material_is_portable_for_layout_and_promotion()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -1854,7 +1854,7 @@ public sealed class EfWorkflowDesignPersistenceTests
             activityPresentation = new[] { new { nodeId = "root", displayName = "Root", description = "Description" } }
         }, json);
         var createMarker = await db.Operations.SingleAsync(x => x.OperationKey == "parity-create");
-        Assert.Equal(GroundworkFingerprint("workflow.definition.create.v1", expectedCreateJson), createMarker.RequestFingerprint);
+        Assert.Equal(PortableFingerprint("workflow.definition.create.v1", expectedCreateJson), createMarker.RequestFingerprint);
 
         var versionStore = new EfWorkflowDefinitionVersionStore(db, serializer, new EfWorkflowDefinitionStore(db, accessor), accessor);
         await new EfPromoteDraftToVersionCommand(db, accessor, writer, serializer, identities, versionStore, new TestLockProvider())
@@ -1866,7 +1866,7 @@ public sealed class EfWorkflowDesignPersistenceTests
             requestedVersion = "1.0.0"
         }, json);
         var promotionMarker = await db.Operations.SingleAsync(x => x.OperationKey == "parity-promote");
-        Assert.Equal(GroundworkFingerprint("workflow.draft.promote.v1", expectedPromotionJson), promotionMarker.RequestFingerprint);
+        Assert.Equal(PortableFingerprint("workflow.draft.promote.v1", expectedPromotionJson), promotionMarker.RequestFingerprint);
     }
 
     [Fact]
@@ -1993,7 +1993,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         options.Converters.Add(new JsonStringEnumConverter());
         var value = new CustomResult(CustomResultStatus.Ready);
         var json = JsonSerializer.Serialize(value, options);
-        var fingerprint = GroundworkFingerprint("test.op.result", json);
+        var fingerprint = PortableFingerprint("test.op.result", json);
         var codec = new CustomResultCodec(options);
 
         var committed = await writer.ExecuteAsync(
@@ -2754,7 +2754,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         public bool Equivalent(CustomResult left, CustomResult right) => left == right;
     }
 
-    private static string GroundworkFingerprint(string operationKind, string json)
+    private static string PortableFingerprint(string operationKind, string json)
     {
         using var document = JsonDocument.Parse(json);
         using var stream = new MemoryStream();

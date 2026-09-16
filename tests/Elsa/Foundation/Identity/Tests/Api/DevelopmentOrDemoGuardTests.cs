@@ -1,9 +1,9 @@
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.DependencyInjection;
+using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
+using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict.Extensions;
 using Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
-using Elsa.Workflows.Runtime.Core.Extensions;
-using Groundwork.Store;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -34,7 +34,7 @@ public sealed class DevelopmentOrDemoGuardTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
 
         // The message must name the setting and how to fix it.
-        Assert.Contains("GroundworkIdentitySeeder", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("EfCoreIdentitySeeder", exception.Message, StringComparison.Ordinal);
         Assert.Contains("Development", exception.Message, StringComparison.Ordinal);
 
         await host.StopAsync();
@@ -73,11 +73,7 @@ public sealed class DevelopmentOrDemoGuardTests
                 webHost.ConfigureServices(services =>
                 {
                     services.AddLogging();
-                    var persistence = new IdentityV2TestPersistence();
-                    services.AddSingleton(persistence);
-                    services.AddSingleton<IStorageProviderConnection>(p => p.GetRequiredService<IdentityV2TestPersistence>().Connection);
-                    services.AddPersistenceCore();
-                    services.AddFoundationAspNetCoreIdentityGroundwork();
+                    services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(IdentityDatabase(suffix));
                     services.AddOpenIddictVendorForTests(
                         builder => builder.UseInMemoryDatabase($"openiddict-{suffix}"));
                     services.AddFoundationIdentityOpenIddict(
@@ -107,11 +103,8 @@ public sealed class DevelopmentOrDemoGuardTests
                 webHost.ConfigureServices(services =>
                 {
                     services.AddLogging();
-                    var persistence = new IdentityV2TestPersistence();
-                    services.AddSingleton(persistence);
-                    services.AddSingleton<IStorageProviderConnection>(p => p.GetRequiredService<IdentityV2TestPersistence>().Connection);
-                    services.AddPersistenceCore();
-                    services.AddFoundationAspNetCoreIdentityGroundwork(
+                    services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(
+                        IdentityDatabase(suffix),
                         isDevelopmentOrDemo ? TestAdmin.SeedOptions() : null,
                         isDevelopmentOrDemo);
                     services.AddOpenIddictVendorForTests(
@@ -123,10 +116,17 @@ public sealed class DevelopmentOrDemoGuardTests
             })
             .Build();
 
+    private static IdentityIamEntityFrameworkCoreOptions IdentityDatabase(string suffix) => new()
+    {
+        Provider = "Sqlite",
+        ConnectionString = $"Data Source={Path.Join(Path.GetTempPath(), $"elsa-identity-guard-{suffix}.db")};Pooling=False"
+    };
+
     private static async Task EnsureSchemaAsync(IHost host)
     {
         await using var scope = host.Services.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>().Database.EnsureCreatedAsync();
+        await scope.ServiceProvider.GetRequiredService<IdentityIamDbContext>().Database.EnsureCreatedAsync();
     }
 
     // A throwaway base64 PKCS#8 RSA-2048 private key, generated for this test only. Never a production secret.

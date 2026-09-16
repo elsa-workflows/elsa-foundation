@@ -28,7 +28,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// <c>WorkflowsRuntimeEntityFrameworkCore</c> is the shell-level counterpart of the Groundwork workflow runtime
+/// <c>WorkflowsRuntimeEntityFrameworkCore</c> is the shell-level durable workflow runtime
 /// feature, selected by name from shell configuration.
 /// </summary>
 public sealed class RuntimeEntityFrameworkCoreFeatureTests : IDisposable

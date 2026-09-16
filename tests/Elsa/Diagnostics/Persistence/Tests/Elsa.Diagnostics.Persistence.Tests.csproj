@@ -5,18 +5,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Groundwork.MongoDb" VersionOverride="0.4.0-preview.30" />
-    <PackageReference Include="Groundwork.PostgreSql" VersionOverride="0.4.0-preview.30" />
-    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.4.0-preview.30" />
-    <PackageReference Include="Groundwork.SqlServer" VersionOverride="0.4.0-preview.30" />
-    <PackageReference Include="Microsoft.Data.SqlClient" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <PackageReference Include="MongoDB.Driver" />
-    <PackageReference Include="Npgsql" />
-    <PackageReference Include="Testcontainers.MongoDb" />
-    <PackageReference Include="Testcontainers.MsSql" />
-    <PackageReference Include="Testcontainers.PostgreSql" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
@@ -25,14 +15,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\Persistence\Elsa.Diagnostics.Persistence.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\Persistence\Groundwork\Elsa.Diagnostics.Persistence.Groundwork.csproj" Aliases="DiagnosticsGroundwork" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\OpenTelemetry\Core\Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\OpenTelemetry\Persistence\Groundwork\Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\StructuredLogs\Core\Elsa.Diagnostics.StructuredLogs.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\StructuredLogs\Persistence\Groundwork\Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
   </ItemGroup>
 
 </Project>

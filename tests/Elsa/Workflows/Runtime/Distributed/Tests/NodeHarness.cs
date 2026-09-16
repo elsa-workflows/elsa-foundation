@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Tests;
 /// One in-process "node" over shared cluster state (placement store + transport + clock). A test constructs two of
 /// these with distinct node IDs to exercise routing, ownership hand-off, and failover deterministically. The store
 /// and transport are interface-typed so the same harness drives both the in-memory cluster state and the durable
-/// (Groundwork-backed) stores over one shared document store.
+/// (durable) stores over one shared database.
 /// </summary>
 internal sealed class NodeHarness
 {

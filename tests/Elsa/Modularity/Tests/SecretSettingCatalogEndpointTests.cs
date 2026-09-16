@@ -6,13 +6,13 @@ using CShells.Features;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Modularity.Api.Authorization;
 using Elsa.Modularity.Api.Endpoints;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Nuplane.Extensions;
 using Elsa.Modularity.Nuplane.Services;
-using Elsa.Persistence.Groundwork.Runtime;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workbench;
 using Elsa.Workflows.Runtime.Api;
 using Microsoft.AspNetCore.Authentication;
@@ -45,9 +45,9 @@ public sealed class SecretSettingCatalogEndpointTests : IAsyncDisposable
 
     private static readonly (string FeatureId, string Setting)[] SecretSettings =
     [
-        ("GroundworkWorkflowRuntime", "RecoveryContinuationSigningKey"),
+        ("WorkflowsRuntimeEntityFrameworkCore", "RecoveryContinuationSigningKey"),
         ("WorkflowsRuntimeApi", "WorkflowAlterationPayloadProtectionKeys"),
-        ("FoundationIdentityAspNetCoreIdentityGroundwork", "SeedAdminPassword"),
+        ("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore", "SeedAdminPassword"),
         (PackagedFeatureId, "ApiToken")
     ];
 
@@ -58,9 +58,9 @@ public sealed class SecretSettingCatalogEndpointTests : IAsyncDisposable
 
     public SecretSettingCatalogEndpointTests()
     {
-        _store.Features["GroundworkWorkflowRuntime"] = Json($$"""{"RecoveryContinuationSigningKey":"{{RecoveryKey}}"}""");
+        _store.Features["WorkflowsRuntimeEntityFrameworkCore"] = Json($$"""{"RecoveryContinuationSigningKey":"{{RecoveryKey}}"}""");
         _store.Features["WorkflowsRuntimeApi"] = Json($$$"""{"WorkflowAlterationPayloadProtectionActiveKeyId":"active","WorkflowAlterationPayloadProtectionKeys":{"active":"{{{PayloadProtectionKey}}}"}}""");
-        _store.Features["FoundationIdentityAspNetCoreIdentityGroundwork"] = Json($$"""{"SeedAdminPassword":"{{SeedAdminPassword}}"}""");
+        _store.Features["FoundationIdentityAspNetCoreIdentityEntityFrameworkCore"] = Json($$"""{"SeedAdminPassword":"{{SeedAdminPassword}}"}""");
         _store.Features[PackagedFeatureId] = Json($$"""{"ApiToken":"{{PackageToken}}"}""");
         _nuplane.Packages.Add(CreatePackage());
     }
@@ -137,9 +137,9 @@ public sealed class SecretSettingCatalogEndpointTests : IAsyncDisposable
         // The production catalog composition, fed by the real runtime and package contributors.
         builder.Services.AddNuplaneFeatureCatalog();
         builder.Services.AddSingleton<IRuntimeFeatureCatalog>(new FakeRuntimeFeatureCatalog(
-            Descriptor<GroundworkWorkflowRuntimeFeature>("GroundworkWorkflowRuntime"),
+            Descriptor<RuntimeEntityFrameworkCoreFeature>("WorkflowsRuntimeEntityFrameworkCore"),
             Descriptor<WorkflowsRuntimeApiFeature>("WorkflowsRuntimeApi"),
-            Descriptor<AspNetCoreIdentityGroundworkFeature>("FoundationIdentityAspNetCoreIdentityGroundwork")));
+            Descriptor<AspNetCoreIdentityEntityFrameworkCoreFeature>("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore")));
         builder.Services.AddSingleton<INuplaneAdminOperations>(_nuplane);
         builder.Services.AddSingleton<IShellFeatureConfigurationStore>(_store);
         builder.Services.AddSingleton<IShellReloader, FakeShellReloader>();

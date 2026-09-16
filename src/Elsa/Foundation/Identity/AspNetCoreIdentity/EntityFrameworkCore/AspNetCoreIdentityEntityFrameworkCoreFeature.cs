@@ -60,7 +60,7 @@ public class AspNetCoreIdentityEntityFrameworkCoreFeature : IShellFeature
         if (!hasUserName && !hasPassword)
             return null;
         // Say which half is missing: this is the error an operator meets when a production overlay blanks the
-        // seed password, and the Groundwork feature it replaces named the missing setting too.
+        // seed password, so the failure names the missing setting.
         if (!hasPassword)
             throw new InvalidOperationException(
                 "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminUserName is configured but SeedAdminPassword is not. " +

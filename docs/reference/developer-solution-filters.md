@@ -13,8 +13,7 @@ by the affected work unit.
 | `Elsa.Server.Workflows.Runtime.slnf` | Workflow and activity runtime, scheduling, resumption, tracing, and their normal tests. |
 | `Elsa.Server.Workflows.Design.slnf` | Workflow and activity authoring/design and their normal tests. |
 | `Elsa.Server.Foundation.Identity.slnf` | Identity, authorization, authentication providers, and their normal tests. |
-| `Elsa.Server.Persistence.Groundwork.slnf` | Groundwork adapters across foundation and workflow domains, plus their container-free tests. |
-| `Elsa.Server.Persistence.Groundwork.Integration.slnf` | All Testcontainers-backed tests, currently the Groundwork provider integration surface. |
+| `Elsa.Server.Persistence.Integration.slnf` | All Testcontainers-backed tests, currently the EF Core provider integration surface. |
 | `Elsa.Server.Workbench.slnf` | Debugging the reference host without loading unrelated tests or samples as roots. |
 
 The Workbench profile is intentionally broad: the reference host directly composes much of the
@@ -34,8 +33,7 @@ dotnet sln Elsa.Server.Workflows.Runtime.slnf list
 The generated files contain the complete in-solution `ProjectReference` closure in ordinal path
 order. A test-support project can therefore appear as a dependency even though it was not selected
 as a profile root. Project references outside `Elsa.Server.slnx` remain buildable by
-MSBuild but cannot be listed in a solution filter; the existing Groundwork provider-evidence importer
-is one such tool dependency.
+MSBuild but cannot be listed in a solution filter.
 
 Microsoft documents that filtered MSBuild builds follow project dependencies automatically:
 <https://learn.microsoft.com/visualstudio/msbuild/solution-filters>. Visual Studio's project-loading

@@ -89,7 +89,6 @@ not automatic constitution violations.
 |---|---|
 | Agent core (sessions, policy, context, proposals, provider facade, audit) | [`src/Elsa/Agent/Core/EXTENSION_POINTS.md`](src/Elsa/Agent/Core/EXTENSION_POINTS.md) |
 | Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities) | [`src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md) |
-| Foundation Identity ASP.NET Core Identity Groundwork provider (concrete Groundwork authority, schema CLI, topology) | [`src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/README.md`](src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/README.md) |
 | Foundation Identity ASP.NET Core Identity EF adapter (opt-in framework stores, authentication, session invalidation, and seeding over the shared EF authority) | [`src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Foundation Identity EF persistence (opt-in complete IAM authority and provider-configuration backend; OpenIddict boundary) | [`src/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/README.md`](src/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/README.md) |
 | Workflow Agent (workflow explain/troubleshoot/change-proposal contribution) | [`src/Elsa/Agent/Workflows/EXTENSION_POINTS.md`](src/Elsa/Agent/Workflows/EXTENSION_POINTS.md) |
@@ -99,17 +98,15 @@ not automatic constitution violations.
 | Domain | Catalog |
 |---|---|
 | Secrets core (contracts — manager, resolver, repository, store, type provider, audit sink) | [`src/Elsa/Secrets/Core/EXTENSION_POINTS.md`](src/Elsa/Secrets/Core/EXTENSION_POINTS.md) |
-| Secrets (default services + shell feature registration; Groundwork vs EF gate ownership is per selected composition) | [`src/Elsa/Secrets/EXTENSION_POINTS.md`](src/Elsa/Secrets/EXTENSION_POINTS.md) |
-| Secrets Entity Framework Core persistence (existing opt-in implementation and first ADR 0073 migration slice; Workbench catalogs it while the default flip remains pending) | [`src/Elsa/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](src/Elsa/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
+| Secrets (default services + shell feature registration) | [`src/Elsa/Secrets/EXTENSION_POINTS.md`](src/Elsa/Secrets/EXTENSION_POINTS.md) |
+| Secrets Entity Framework Core persistence (the Secrets persistence family under ADR 0073) | [`src/Elsa/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](src/Elsa/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 
 ### Persistence
 
 | Domain | Catalog |
 |---|---|
 | Provider-neutral persistence access and scope selection | [`src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md) |
-| Groundwork runtime persistence (document serializer + schema-version upcasters) | [`src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md) |
 | Entity Framework persistence policy (history table, provider guard, migrate vs validate; shared policy under ADR 0073) | [`src/Elsa/Persistence/EntityFramework/EXTENSION_POINTS.md`](src/Elsa/Persistence/EntityFramework/EXTENSION_POINTS.md) |
-| Foundation Identity persistence (Groundwork authority plus independently selectable EF provider-configuration and application/credential backends) | [`src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md) |
 
 ### Activities
 
@@ -131,7 +128,6 @@ not automatic constitution violations.
 | Activities design — reconciliation sources | [`src/Elsa/Activities/Design/Reconciliation/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/EXTENSION_POINTS.md) |
 | Activities design — CLR reconciliation source contribution | [`src/Elsa/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md) |
 | Activities design — JSON reconciliation source contribution | [`src/Elsa/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md) |
-| Activities design — persistence commands + lookup (Groundwork) | [`src/Elsa/Activities/Design/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Persistence/Groundwork/EXTENSION_POINTS.md) |
 | Activities design — persistence replacement (Entity Framework Core) | [`src/Elsa/Activities/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Activities design API — catalog and availability services | [`src/Elsa/Activities/Design/Api/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Api/EXTENSION_POINTS.md) |
 | Activities graph design — authoring provider, compiler, dependency discovery, and reference rewriting | [`src/Elsa/Activities/Graph/Design/EXTENSION_POINTS.md`](src/Elsa/Activities/Graph/Design/EXTENSION_POINTS.md) |
@@ -144,13 +140,11 @@ not automatic constitution violations.
 | Workflows design — draft validators | [`src/Elsa/Workflows/Design/Validations/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Validations/EXTENSION_POINTS.md) |
 | Workflows design — reconciliation sources | [`src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md) |
 | Workflows design — persistence commands and stores (opt-in EF Core) | [`src/Elsa/Workflows/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
-| Workflows design — persistence commands + diff engine (Groundwork) | [`src/Elsa/Workflows/Design/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/Groundwork/EXTENSION_POINTS.md) |
 | Workflows publishing engine — compiler, slot authority/policy/preflight, projection reconciliation, compilation fan-in, and activity-template registries | [`src/Elsa/Workflows/Publishing/EXTENSION_POINTS.md`](src/Elsa/Workflows/Publishing/EXTENSION_POINTS.md) |
 | Workflows publishing API — HTTP endpoints, transport authorization, and activity-draft publish/test-run | [`src/Elsa/Workflows/Publishing/Api/EXTENSION_POINTS.md`](src/Elsa/Workflows/Publishing/Api/EXTENSION_POINTS.md) |
 | Workflows publishing core — authority and projection contracts | [`src/Elsa/Workflows/Publishing/Core/EXTENSION_POINTS.md`](src/Elsa/Workflows/Publishing/Core/EXTENSION_POINTS.md) |
 | Workflows runtime (canonical domain catalog: Core contracts, composition root, engine implementations, trigger publication, recurring schedules) | [`src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md) |
 | Workflows runtime API — executable inspection and diagnostics services | [`src/Elsa/Workflows/Runtime/Api/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Api/EXTENSION_POINTS.md) |
-| Workflows runtime distributed Groundwork persistence | [`src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/EXTENSION_POINTS.md) |
 | Workflows runtime distributed EF Core placement persistence | [`src/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Workflows runtime — HTTP endpoint behaviour | [`src/Elsa/Workflows/Runtime/Http/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Http/EXTENSION_POINTS.md) |
 | Workflows runtime — durable resumption (sweep service, recurring pump, feature gating) | [`src/Elsa/Workflows/Runtime/Resumption/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Resumption/EXTENSION_POINTS.md) |

@@ -1,12 +1,12 @@
 namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Services;
 
 /// <summary>
-/// The Workflows Design EF equivalent of the Groundwork workflow-draft document row version: the
+/// The Workflows Design EF workflow-draft row version: the
 /// draft's persisted <c>LastModifiedAt</c>, projected to whole microseconds.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Groundwork derives upgrade discovery order, the plan's expected-snapshot revision and the apply-time
+/// A document store derives upgrade discovery order, the plan's expected-snapshot revision and the apply-time
 /// compare-and-swap from one monotonically increasing document version. The Workflows Design EF model
 /// persists no such counter for a draft: <c>WorkflowDefinitionDraft</c> has no revision column, and its
 /// EF configuration deliberately leaves it without a concurrency token because ordinary draft updates

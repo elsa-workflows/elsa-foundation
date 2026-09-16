@@ -640,7 +640,7 @@ public sealed class EfSchedulerWorkQueueStore(
             (item.Sequence ?? long.MaxValue).ToString("D20", CultureInfo.InvariantCulture), ".",
             StableOrderHash(item.WorkItemId));
 
-    // Groundwork's queue ordering is part of the provider-neutral contract. Keep this separate from
+    // The queue ordering is part of the provider-neutral contract. Keep this separate from
     // EfRelationalIdentity.Hash, whose UTF-16/uppercase representation is the physical identity format.
     private static string StableOrderHash(string value) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));

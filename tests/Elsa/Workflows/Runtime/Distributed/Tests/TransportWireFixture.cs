@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Tests;
 /// <summary>
 /// Builds the single canonical <see cref="ExecutionCommandTransportItem"/> whose serialized shape is frozen as the v1
 /// wire format. The golden fixture drift test compares this against the committed <c>Fixtures/v1</c> file, and the
-/// durable (Groundwork) transport follow-up must persist exactly this shape.
+/// durable transport follow-up must persist exactly this shape.
 /// </summary>
 internal static class TransportWireFixture
 {

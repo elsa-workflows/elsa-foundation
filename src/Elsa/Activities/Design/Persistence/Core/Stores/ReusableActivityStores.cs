@@ -3,7 +3,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 
 namespace Elsa.Activities.Design.Persistence.Core.Stores;
 
-/// <summary>Reads Groundwork-targeted authoring facts associated with catalog definitions.</summary>
+/// <summary>Reads reusable-authoring facts associated with catalog definitions.</summary>
 public interface IActivityDefinitionAuthoringStore
 {
     Task<ActivityDefinitionAuthoringState?> FindAsync(

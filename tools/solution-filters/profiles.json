@@ -4,9 +4,6 @@
     "samples/",
     "tools/"
   ],
-  "allowedExternalProjectReferences": [
-    "tools/groundwork/Elsa.Groundwork.ProviderEvidenceImporter/Elsa.Groundwork.ProviderEvidenceImporter.csproj"
-  ],
   "profiles": [
     {
       "outputPath": "Elsa.Server.Workflows.Publishing.slnf",
@@ -85,35 +82,16 @@
       ]
     },
     {
-      "outputPath": "Elsa.Server.Persistence.Groundwork.slnf",
-      "includeProjectPathPrefixes": [
-        "tests/Elsa/Workflows/Publishing/Api/GroundworkTests/"
-      ],
-      "includeProjectPathContains": [
-        "/Groundwork/"
-      ],
-      "requiredRootPaths": [
-        "src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj",
-        "tests/Elsa/Persistence/Groundwork/V2/Tests/Elsa.Persistence.Groundwork.V2.Tests.csproj",
-        "tests/Elsa/Workflows/Publishing/Api/GroundworkTests/Elsa.Workflows.Publishing.Api.GroundworkTests.csproj"
-      ],
-      "excludeRootPathContains": [
-        "/ProviderEvidenceImporter/"
-      ],
-      "excludeWhenPackageReferencePrefixes": [
-        "Testcontainers."
-      ]
-    },
-    {
-      "outputPath": "Elsa.Server.Persistence.Groundwork.Integration.slnf",
+      "outputPath": "Elsa.Server.Persistence.Integration.slnf",
       "includeProjectPathPrefixes": [
         "tests/"
       ],
       "requiredRootPaths": [
-        "tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj",
-        "tests/Elsa/Persistence/Groundwork/DesignConformance/MongoDb/Tests/Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests.csproj",
-        "tests/Elsa/Persistence/Groundwork/DesignConformance/PostgreSql/Tests/Elsa.Persistence.Groundwork.DesignConformance.PostgreSql.Tests.csproj",
-        "tests/Elsa/Persistence/Groundwork/DesignConformance/SqlServer/Tests/Elsa.Persistence.Groundwork.DesignConformance.SqlServer.Tests.csproj"
+        "tests/Elsa/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj",
+        "tests/Elsa/Persistence/EntityFrameworkCore/TransactionTopology/Tests/Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests.csproj",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj",
+        "tests/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj"
       ],
       "requirePackageReferencePrefixes": [
         "Testcontainers."

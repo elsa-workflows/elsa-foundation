@@ -8,8 +8,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjec
 /// <summary>Atomically composes the complete EF Runtime persistence family (R01-R29).</summary>
 /// <remarks>
 /// <para>
-/// This is the EF counterpart of the Groundwork runtime composition. It composes on a service collection with no
-/// runtime persistence selected, over the in-memory Runtime defaults, or as the only supported Groundwork-to-EF
+/// This is the aggregate EF runtime composition. It composes on a service collection with no
+/// runtime persistence selected, over the in-memory Runtime defaults, or as the only supported
 /// switch for the transactionally coupled Runtime family; repeating it with the same options changes nothing.
 /// </para>
 /// <para>
@@ -34,7 +34,7 @@ public static class RuntimeEntityFrameworkCoreRegistration
             Capacity = options.WorkflowExecutableCacheCapacity
         };
         executableCache.Validate();
-        // A selected checkpoint writer is either replaced (Groundwork) or repeated (EF); either way it must still
+        // A selected checkpoint writer is either replaced (in-memory) or repeated (EF); either way it must still
         // own its contract. With none selected the composition starts from the Runtime defaults or from nothing.
         RuntimeCheckpointCommitStoreBackend.Find(services)?.EnsureOwnsRegisteredContract(services);
 
@@ -124,7 +124,7 @@ public static class RuntimeEntityFrameworkCoreRegistration
             services.AddRuntimePostCommitOutboxEntityFrameworkCore();
             services.AddRuntimeCheckpointCommitEntityFrameworkCore();
             // The trigger-binding and recurring-schedule tables carry their own projection state (R29); selecting both
-            // withdraws the Groundwork publication projection-state unit they replace.
+            // withdraws the publication projection-state unit they replace.
             services.AddRuntimeWorkflowTriggerBindingEntityFrameworkCore();
             services.AddRuntimeRecurringTriggerScheduleEntityFrameworkCore();
             services.AddRuntimeWorkflowActivationAuthorityEntityFrameworkCore();
@@ -147,14 +147,6 @@ internal static class RuntimeEfCheckpointCompositionTransition
 {
     internal static bool IsActive(IServiceCollection services) =>
         services.Any(descriptor => descriptor.ImplementationInstance is Marker);
-
-    internal static void EnsureGroundworkCheckpointTransitionAllowed(IServiceCollection services, string participant)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-        ArgumentException.ThrowIfNullOrWhiteSpace(participant);
-        if (!IsActive(services) && RuntimeCheckpointCommitStoreBackend.Find(services)?.Name == RuntimeCheckpointCommitStoreBackend.Groundwork)
-            throw new InvalidOperationException($"Runtime {participant} EF persistence requires the aggregate EF Runtime transition while the Groundwork checkpoint writer is selected.");
-    }
 
     internal static IDisposable Begin(IServiceCollection services)
     {

@@ -347,7 +347,7 @@ public sealed class EfReusableActivityImportCommand(
 
     /// <summary>
     /// Authoring rows and the management projection checkpoint, as one Activities Design atomic operation.
-    /// The projection covers newly created definitions and definitions whose head advanced, as in Groundwork.
+    /// The projection covers newly created definitions and definitions whose head advanced.
     /// </summary>
     private async Task WriteAuthoringAndProjectionAsync(
         ActivitiesDesignDbContext activities,

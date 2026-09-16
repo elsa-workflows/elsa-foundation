@@ -22,9 +22,9 @@ due-time-indexed record plus a hosted pump that fires due timers through the **e
 
 1. **Durable timer store** (`IDurableTimerStore`, document kind `durableTimer`). Persists a
    `DurableTimer { TimerId, WorkflowExecutionId, StimulusType, StimulusHash, DueTime, CreatedAt, … }`
-   keyed by `(WorkflowExecutionId, TimerId)`. `GroundworkDurableTimerStore` is the durable bridge
-   (`AddGroundworkRuntimeStores`); `InMemoryDurableTimerStore` is the non-durable default. Routes
-   through `IGroundworkRuntimeDocumentSerializer` + `ElsaRuntimeDocumentVersions` with a v1 golden
+   keyed by `(WorkflowExecutionId, TimerId)`. `EfDurableTimerStore` is the durable bridge
+   (`AddRuntimeEntityFrameworkCore`); `InMemoryDurableTimerStore` is the non-durable default. Routes
+   through the runtime document serializer + `ElsaRuntimeDocumentVersions` with a v1 golden
    fixture, following the `schedulerWorkItem` pattern (W3).
 
 2. **Hosted timer pump** (`DurableTimerPumpTask : IRecurringTask`, `Elsa.Workflows.Runtime.Scheduling`).
@@ -59,7 +59,7 @@ suspend
 The pump deletes a timer as soon as the dispatcher returns `Dispatched`. That is only safe because the
 resume is **durably enqueued before the dispatcher returns**:
 `WorkflowSchedulerCommandRouter.ProcessAsync` calls `_schedulerWorkQueue.EnqueueAsync(workItem)`
-(durable when Groundwork-backed) **before** the drain and before the agent returns `Accepted`. So if the
+(durable when EF Core-backed) **before** the drain and before the agent returns `Accepted`. So if the
 process crashes after the timer delete but before the resume commits, W2's resumption sweep
 (`IRuntimeResumptionService.SweepAsync`) discovers the durable backlog
 (`ListPendingWorkflowExecutionIdsAsync`) and re-drives the workflow to completion. The timer being gone
@@ -84,7 +84,7 @@ retried. So a duplicate fire can never double-resume.
 
 ## Durability caveat
 
-`Delay` is restart-durable **only** in a shell with a durable timer store (Groundwork). With the
+`Delay` is restart-durable **only** in a shell with a durable timer store (EF Core). With the
 in-memory default store it still suspends and resumes within the process but does not survive a restart.
 
 ## Follow-ups (not in this wave)
@@ -92,7 +92,7 @@ in-memory default store it still suspends and resumes within the process but doe
 - **Timer/Cron start triggers** (schedules that *start* a workflow) depend on W7's trigger/stimulus
   index. The `durableTimer` kind is shaped so a `start-trigger` variant plugs in later without a schema
   change.
-- **Native due-time range index.** Groundwork is equality-index only, so `ListDueAsync` loads the whole
+- **Native due-time range index.** Without a range index on `DueTime`, `ListDueAsync` loads the whole
   timer partition each tick and filters `DueTime` in memory. `MaxTimersPerTick` bounds the dispatch
   burst, not the load. A native range index is the scale follow-up.
 - **Atomic timer registration (Option B).** Registering the timer via a post-commit

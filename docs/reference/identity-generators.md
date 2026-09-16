@@ -18,7 +18,7 @@ Ids are stored as strings and used as primary keys, so two properties matter for
 - **Sortability** — a time-ordered id keeps inserts at the "end" of the index B-tree, avoiding page splits and fragmentation. Random ids (plain GUIDs) scatter inserts across the index and fragment it.
 - **Length** — shorter ids mean smaller indexes, smaller rows, and friendlier URLs.
 
-**Default:** the Groundwork-backed design persistence features default to `Short` — a short (~11 char), time-ordered, Base62 id requiring no coordination. This replaced the previous provider-specific defaults (ULID and a random non-sortable GUID). The generators below let you opt into different guarantees (for example `UuidV7` for collision-free 128-bit ids, or `Snowflake` for high-throughput / multi-node uniqueness).
+**Default:** the design persistence features default to `Short` — a short (~11 char), time-ordered, Base62 id requiring no coordination. This replaced the previous provider-specific defaults (ULID and a random non-sortable GUID). The generators below let you opt into different guarantees (for example `UuidV7` for collision-free 128-bit ids, or `Snowflake` for high-throughput / multi-node uniqueness).
 
 ## Built-in generators
 
@@ -76,6 +76,6 @@ services.AddScoped<IIdentityGenerator, MyIdentityGenerator>();
 
 If your id is time-ordered, encode it so that ordinal string comparison matches numeric order. `Base62` (fixed 11-char width, ascending alphabet) in the `Identity` namespace is the helper the built-in 64-bit generators use for exactly this.
 
-## Format compatibility with Groundwork
+## Format compatibility
 
-This catalog deliberately mirrors the [Groundwork](https://github.com/valence-works/Groundwork) library's `Groundwork.Core.Identity` catalog — same Base62 alphabet/width, same epoch (`2020-01-01Z`), and the same Snowflake bit layout — so ids produced by either codebase are format-compatible. Because the two are independent copies, that compatibility is a convention, not an automatic invariant; it is pinned by golden-value tests (`IdentityFormatCompatibilityTests`) that exist with **identical literals** in both repos. If you change an epoch, bit split, or alphabet here, update Groundwork's copy and its golden test to match.
+This catalog deliberately mirrors the identity catalog it grew from — same Base62 alphabet/width, same epoch (`2020-01-01Z`), and the same Snowflake bit layout — so ids produced by either codebase are format-compatible. Because the two are independent copies, that compatibility is a convention, not an automatic invariant; it is pinned by golden-value tests (`IdentityFormatCompatibilityTests`) that exist with **identical literals**. If you change an epoch, bit split, or alphabet here, update the golden test to match.

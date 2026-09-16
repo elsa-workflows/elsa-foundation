@@ -1,7 +1,7 @@
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Entities;
 
 /// <summary>
-/// Secrets row matching Groundwork projections: tenant + normalized name key, list/search
+/// Secrets row: tenant + normalized name key, list/search
 /// facets, JSON payload, and an explicit concurrency token (not cross-provider IsRowVersion).
 /// </summary>
 public sealed class SecretRecord

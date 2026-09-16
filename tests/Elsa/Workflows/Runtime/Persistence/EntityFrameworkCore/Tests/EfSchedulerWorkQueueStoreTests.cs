@@ -62,7 +62,7 @@ public sealed class EfSchedulerWorkQueueStoreTests
         await fixture.Store.EnqueueAsync(Work("wf-tie", "work-2", 7));
 
         // These IDs intentionally sort in opposite orders under the old UTF-16 hash and the
-        // queue's UTF-8 stable hash. The latter is the Groundwork-compatible tie-break contract.
+        // queue's UTF-8 stable hash. The latter is the provider-neutral tie-break contract.
         var items = (await fixture.Store.ListAsync(new RuntimeSchedulerWorkQuery("wf-tie"))).Items;
         Assert.Equal(new[] { "work-2", "work-0" }, items.Select(item => item.WorkItemId));
     }

@@ -4,8 +4,9 @@ using Elsa.Events;
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
 using Elsa.Workflows.Design.Persistence.Core.Models;
-using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.EntityFramework;
+using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Hosting.Services;
 using Elsa.Serialization.Core;
@@ -16,8 +17,6 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations;
-using Groundwork.Sqlite;
-using Groundwork.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -25,7 +24,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Elsa.Workflows.Design.Tests.Infrastructure;
 
 /// <summary>
-/// SQLite Groundwork test host for the workflows-design commands and stores. Composes the provider
+/// SQLite EF Core test host for the workflows-design commands and stores. Composes the provider
 /// connection and workflows-design lane directly (schema applied in-process to a temp file database,
 /// then production store/command registrations),
 /// wired to an <see cref="InMemoryDistributedLockProvider"/> and a single
@@ -35,7 +34,7 @@ namespace Elsa.Workflows.Design.Tests.Infrastructure;
 /// </summary>
 /// <remarks>
 /// Spec 093 T072 rehost: this host previously composed the workflows-design Entity Framework context
-/// over an in-memory SQLite connection. It now composes the real Groundwork document store so the
+/// over an in-memory SQLite connection. It now composes the real EF Core store so the
 /// surviving provider-neutral behavioural tests exercise the shipping persistence path. Raw context
 /// reads are replaced by <see cref="GetDraftAsync"/>/<see cref="GetVersionAsync"/> over the public read
 /// stores, which hydrate the authored <c>State</c> exactly as an application consumer sees it.
@@ -64,9 +63,9 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
 
     public static async Task<WorkflowsDesignTestHost> CreateAsync(CancellationToken cancellationToken = default)
     {
-        var directory = Path.Join(Path.GetTempPath(), $"elsa-workflows-design-groundwork-{Guid.NewGuid():N}");
+        var directory = Path.Join(Path.GetTempPath(), $"elsa-workflows-design-ef-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
-        var connectionString = $"Data Source={Path.Join(directory, "design.db")}";
+        var connectionString = $"Data Source={Path.Join(directory, "design.db")};Pooling=False";
 
         var lockProvider = new InMemoryDistributedLockProvider();
         var eventPublisher = new CapturingEventPublisher();
@@ -79,7 +78,7 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         // Real activity structure projection (flattening) — the command-driven tests depend on it.
         services.AddSingleton<IActivityStructureHandler, TestActivityStructureHandler>();
 
-        // Serializer used by the Groundwork stores to (de)serialize the authored WorkflowDefinitionState.
+        // Serializer used by the design stores to (de)serialize the authored WorkflowDefinitionState.
         services.AddSingleton<JsonPayloadConverterRegistry>();
         services.AddSingleton<IPayloadSerializer, JsonPayloadSerializer>();
 
@@ -90,8 +89,8 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         // Host-owned composition: register the provider connection and workflows-design lane explicitly.
         // The storage session source applies the pending schema in-process during IShellInitializer, so
         // no external CLI is needed.
-        services.AddGroundworkStorageProviderConnection(_ => new SqliteProviderFactory().Create(connectionString));
-        services.AddGroundworkWorkflowsDesignStores();
+        services.AddWorkflowsDesignEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = connectionString });
+        services.AddEfModuleMigrations<WorkflowsDesignDbContext>("Sqlite");
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         new ActivitiesDesignReconciliationFeature().ConfigureServices(services);
 
@@ -146,7 +145,7 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
 
     public void Dispose()
     {
-        // The Groundwork store session source is IAsyncDisposable-only, so drain the provider through
+        // The provider holds async-disposable resources, so drain it through
         // the async path (tests keep a synchronous `using var host`).
         _services.DisposeAsync().AsTask().GetAwaiter().GetResult();
         try

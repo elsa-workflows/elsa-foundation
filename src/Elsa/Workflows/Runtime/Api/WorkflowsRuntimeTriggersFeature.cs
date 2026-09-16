@@ -25,7 +25,7 @@ namespace Elsa.Workflows.Runtime.Api;
 /// <para>
 /// The <see cref="IBookmarkStimulusIndex"/> is bridged to the same scoped <see cref="IBookmarkStateStore"/>
 /// the runtime already owns, so no separate index document is maintained: whichever store implementation is
-/// active (in-memory here, Groundwork when a durable persistence feature is composed) also answers the
+/// active (in-memory here, EF Core when a durable persistence feature is composed) also answers the
 /// cross-execution stimulus query. The concrete <see cref="IActivityTriggerStimulusProvider"/> set that lets the
 /// publish-time extractor recognize trigger activities is contributed by the activity features that own those
 /// activities (e.g. the Event trigger by <c>ActivitiesPrimitives</c>), not here.
@@ -45,7 +45,7 @@ public sealed class WorkflowsRuntimeTriggersFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         // Durable trigger index over PUBLISHED artifacts. In-memory default; a durable persistence feature
-        // (Groundwork) swaps the store via its own registration, so this stays a TryAdd.
+        // (EF Core) swaps the store via its own registration, so this stays a TryAdd.
         services.TryAddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
         services.TryAddSingleton<IWorkflowTriggerBindingExtractor, WorkflowTriggerBindingExtractor>();
         services.TryAddScoped<IWorkflowTriggerIndexer, WorkflowTriggerIndexer>();

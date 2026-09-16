@@ -12,7 +12,7 @@ service and a recurring pump that re-drives interrupted executions. See the work
 ### `WorkflowsRuntimeResumptionFeature : IShellFeature` *(`Elsa.Workflows.Runtime.Resumption`)*
 - **Feature id:** `WorkflowsRuntimeResumption` (`DependsOn` the `Tasks` feature — the pump is an `IRecurringTask`).
 - **Registers:** `IRuntimeResumptionService` → `RuntimeResumptionService` (`TryAddSingleton`), `RuntimeResumptionOptions` (mapped from `[ManifestSetting]`s), and the recurring pump `RuntimeResumptionPumpTask` as `IRecurringTask`.
-- **Composition gate:** the Groundwork runtime feature (`GroundworkWorkflowRuntime`) declares `DependsOn = ["WorkflowsRuntimeResumption"]`, so selecting durable runtime stores pulls the pump into the shell — "durable stores ⇒ pump available" is machine-visible in the feature catalog.
+- **Composition gate:** the EF Core runtime feature (`WorkflowsRuntimeEntityFrameworkCore`) declares `DependsOn = ["WorkflowsRuntimeResumption"]`, so selecting durable runtime stores pulls the pump into the shell — "durable stores ⇒ pump available" is machine-visible in the feature catalog.
 
 ## Contributor implementations
 
@@ -34,7 +34,7 @@ Post-commit intent kinds can contribute their own retry policy. Parent-resume de
 ## Cross-references
 
 - Swept contracts: `IRuntimeResumptionService`, `IWorkflowSchedulerWorkQueue.ListPendingWorkflowExecutionIdsAsync`, `IRuntimeRecoveryScanner`, `IRuntimePostCommitOutboxProcessor`, `IPostCommitOutboxLookupStore`, and `IWorkflowOutputSource` — see [`../EXTENSION_POINTS.md`](../EXTENSION_POINTS.md).
-- Durable queue bridge: `GroundworkWorkflowSchedulerWorkQueue` (`Elsa.Persistence.Groundwork`).
+- Durable queue bridge: `EfSchedulerWorkQueueStore` (`Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore`).
 - Worked reference: [docs/runtime-durable-resumption.md](../../../../../docs/runtime-durable-resumption.md).
 - Repo-wide index: [`../../../EXTENSION_POINTS.md`](../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.2 + §2.22.1.

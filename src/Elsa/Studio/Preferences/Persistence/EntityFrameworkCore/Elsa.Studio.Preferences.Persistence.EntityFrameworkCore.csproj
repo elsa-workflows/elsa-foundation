@@ -3,7 +3,7 @@
   <PropertyGroup>
     <Description>
       Opt-in EF Core persistence for Studio Preferences. Provider-neutral module: EF Core + Relational
-      only. Hosts bring exactly one provider package; Groundwork remains a separate composition.
+      only. Hosts bring exactly one provider package.
     </Description>
   </PropertyGroup>
 

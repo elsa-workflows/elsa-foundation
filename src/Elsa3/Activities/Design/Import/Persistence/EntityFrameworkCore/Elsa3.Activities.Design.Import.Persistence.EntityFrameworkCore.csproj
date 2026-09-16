@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Description>Opt-in EF Core persistence for the Elsa 3 reusable-activity import ledger. Groundwork remains the default.</Description>
+    <Description>EF Core persistence for the Elsa 3 reusable-activity import ledger.</Description>
   </PropertyGroup>
 
   <ItemGroup>

@@ -18,7 +18,7 @@ public sealed class ExecutionPlacementStoreReplacementContractAttribute : Attrib
 /// </summary>
 /// <remarks>
 /// Placement is routing, not correctness — see <see cref="ExecutionPlacementLease"/>. A default in-memory
-/// implementation ships for single-process composition and the two-node test harness. The opt-in Groundwork or
+/// implementation ships for single-process composition and the two-node test harness. The opt-in
 /// EF Core placement persistence features supply durable implementations behind this contract without touching Runtime.Core.
 /// </remarks>
 [ExecutionPlacementStoreReplacementContract]

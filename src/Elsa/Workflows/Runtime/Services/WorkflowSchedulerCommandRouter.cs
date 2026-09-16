@@ -45,11 +45,10 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
         this.admissionController = admissionController;
         // Read once per router, which is once per dispatched command (the router is scoped). This is a host-wide
         // constant, so the obvious place for it is a singleton — but a singleton injecting this enumerable would be a
-        // captive dependency: Groundwork contributes five of these as Scoped (four runtime-store boundaries plus the
-        // distributed one), and containers built with ValidateScopes refuse that outright. The per-command cost is
-        // enumerating a handful of marker objects and no I/O: only .Component is read here, and the one contribution
-        // with a dependency at all (GroundworkCheckpointDurabilityEvidence) takes the singleton
-        // GroundworkStoreSessionSource.
+        // captive dependency: a durable persistence family contributes several of these as Scoped (the
+        // runtime-store boundaries plus the distributed one), and containers built with ValidateScopes refuse
+        // that outright. The per-command cost is enumerating a handful of marker objects and no I/O: only
+        // .Component is read here.
         hasResumptionRedriver = durabilityEvidence?.Any(evidence =>
             string.Equals(evidence.Component, WorkflowDispatchDurabilityComponents.Resumption, StringComparison.Ordinal)) ?? false;
     }

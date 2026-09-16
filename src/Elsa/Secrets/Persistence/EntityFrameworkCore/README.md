@@ -1,16 +1,11 @@
 # Elsa.Secrets.Persistence.EntityFrameworkCore
 
-Opt-in EF Core persistence for Secrets and the first existing implementation in the accepted
-[ADR 0073](../../../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
-migration program. **Groundwork remains the temporary default** until the Secrets four-provider
-gate and explicit flip complete. Workbench catalogs this feature so a host can enable it; default
-`shells.json` files still keep `SecretsGroundworkPersistence` and do not enable this feature.
+EF Core persistence for Secrets, per accepted
+[ADR 0073](../../../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md).
+Workbench catalogs this feature and the default `shells.json` files enable it.
 
-Phase 4 (#1631) makes Groundwork Secrets provider-matrix and ledger-growth obligations
-conditional on selecting Groundwork. Enabling this feature is an EF-selected composition:
-it must not have to grow `secrets-repository` Groundwork four-provider evidence, and CI
-proves it on the independent `Secrets EF composition` job. Groundwork-default Workbench
-shells stay on Groundwork and keep that path's tests.
+CI proves it on the independent `Secrets EF composition` job (native PostgreSQL) plus the SQL
+Server and MySQL legs of the EF container-suite matrix.
 
 ## Governing decision
 
@@ -40,9 +35,8 @@ The MySQL context and provider selection are production-owned, but MySQL migrati
 full lifecycle proof remain deferred to the migration work unit. The focused MySQL model and
 repository proof is under `tests/Elsa/Secrets/Persistence/EntityFrameworkCore/MySql/Tests`.
 
-**Current default remains Groundwork pending the governed flip.** In `shells.json` (or the docker compose overlay), replace
-`SecretsGroundworkPersistence` with `SecretsEntityFrameworkCore`. Do not leave both keys
-in the same shell — registration throws an `InvalidOperationException` naming both backends.
+Enable `SecretsEntityFrameworkCore` in `shells.json` (or the docker compose overlay). Registering a
+second Secrets persistence backend throws an `InvalidOperationException` naming both backends.
 
 ```json
 {
@@ -65,7 +59,7 @@ in the same shell — registration throws an `InvalidOperationException` naming 
 ```
 
 Package-feed shells make the same swap: load this package, enable the feature, and omit
-`SecretsGroundworkPersistence`. The package-root `nuplane.json` declares `HostIntegrated`
+`SecretsEntityFrameworkCore`. The package-root `nuplane.json` declares `HostIntegrated`
 loading for its dependency closure because the feature contributes shell DI,
 hosted/initializer lifecycle services, EF contexts, and migrations. A host override must not
 downgrade this package to collectible loading. The current Nuplane-backed Foundation Host route
@@ -81,7 +75,7 @@ A plain host uses the same instance as `IHostedService`.
 ## Schema
 
 Table `elsa_secrets`. Key: `TenantId` + `NormalizedName`. Projected list/search columns
-match Groundwork `SecretsGroundworkStorageSchema`. Full `Secret` document in `Payload`.
+carry the searchable and filterable values. Full `Secret` document in `Payload`.
 OCC is an explicit `ConcurrencyToken` stamped on save — **not** cross-provider
 `IsRowVersion()` (Sqlite inserts NULL). On Sqlite, `MaxActiveVersionExpiresAt` is
 stored as UTC ticks (`INTEGER`) so active-only expiry comparisons translate.
@@ -110,13 +104,10 @@ pinned table otherwise remain unreadable through canonical lookups. Host startup
 in bounded, read-only keyset pages over `(TenantId, NormalizedName)` and fails closed with the repair
 command instead of silently serving a partially readable store.
 
-The casing projection matches Groundwork's Unicode-16 mapping for every scalar except the exact,
-exhaustively tested boundary `U+017F` and `U+16EBB` through `U+16ED3`. Groundwork also persists a
-six-hex-digit-per-scalar comparison key and a SHA-256 identity lookup key, while this EF pilot
-persists projected text; their physical fields are intentionally not interchangeable. Ordinary
-long/non-ASCII Type/Store/Scope behavior is exercised through both selected shell backends. Any
-future projection change requires a new algorithm id, an explicit data migration/backfill, and
-compatibility tests; editing v1 in place is forbidden.
+The mapping deviates from plain Unicode 16 only at the exact, exhaustively tested boundary `U+017F`
+and `U+16EBB` through `U+16ED3`. This module persists projected text rather than a separate
+comparison key. Any future projection change requires a new algorithm id, an explicit data
+migration/backfill, and compatibility tests; editing v1 in place is forbidden.
 
 ## Generate and apply migrations
 
@@ -148,7 +139,7 @@ verification, then application startup with `MigratePolicy=Validate`.
 
 For deployment boundaries, use an explicit provider selector and matching connection, a
 short-lived least-privilege migration identity, and a least-privilege runtime identity after
-verification. Keep `SecretsGroundworkPersistence` disabled in the shell while this backend is
+verification. Keep `SecretsEntityFrameworkCore` disabled in the shell while this backend is
 enabled. Verify the `__EFMigrationsHistory_ElsaSecrets` history table and the `elsa_secrets` table
 shape before rollout; stop on any failure and inspect the database before retrying. Keep schema changes additive where
 possible and roll back application code only after compatibility is checked. Never blindly

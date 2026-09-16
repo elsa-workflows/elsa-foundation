@@ -1,7 +1,7 @@
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Seeding;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Seeding;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
@@ -12,7 +12,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
 
 /// <summary>
-/// Password sign-in and seeding behaviour over the Groundwork-backed substrate. Shared fixture builds the container;
+/// Password sign-in and seeding behaviour over the EF Core-backed substrate. Shared fixture builds the container;
 /// <see cref="CreateUserAsync"/> removes repeated user-creation arrange blocks.
 /// </summary>
 public sealed class AspNetCoreIdentitySignInTests : IAsyncDisposable
@@ -92,7 +92,7 @@ public sealed class AspNetCoreIdentitySignInTests : IAsyncDisposable
         // runs with dev/demo off and registers none of its own).
         var seedOptions = TestAdmin.SeedOptions();
         seedOptions.IsDevelopmentSeed = false;
-        var seeder = ActivatorUtilities.CreateInstance<GroundworkIdentitySeeder>(_fixture.Services, Options.Create(seedOptions));
+        var seeder = ActivatorUtilities.CreateInstance<EfCoreIdentitySeeder>(_fixture.Services, Options.Create(seedOptions));
         await seeder.StartAsync(CancellationToken.None);
 
         await using var scope = _fixture.CreateScope();

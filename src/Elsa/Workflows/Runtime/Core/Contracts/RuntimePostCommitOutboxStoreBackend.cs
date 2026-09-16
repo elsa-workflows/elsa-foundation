@@ -17,7 +17,6 @@ public sealed class RuntimePostCommitOutboxStoreBackend
     private readonly IReadOnlyList<ServiceDescriptor> descriptors;
 
     public const string EntityFramework = "entity-framework";
-    public const string Groundwork = "groundwork";
     public const string InMemory = "in-memory";
 
     public RuntimePostCommitOutboxStoreBackend(
@@ -26,7 +25,7 @@ public sealed class RuntimePostCommitOutboxStoreBackend
         Action<IServiceCollection>? removeOwnedArtifacts = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        if (name is not (EntityFramework or Groundwork or InMemory))
+        if (name is not (EntityFramework or InMemory))
             throw new ArgumentException($"Unknown post-commit outbox backend '{name}'.", nameof(name));
         ArgumentNullException.ThrowIfNull(descriptors);
         this.descriptors = descriptors.Distinct().ToArray();

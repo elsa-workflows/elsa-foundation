@@ -612,7 +612,7 @@ public sealed class EfRecurringTriggerScheduleStore(
                                       !state.ScheduleFingerprints.TryGetValue(schedule.ScheduleId, out var fp) || fp != ImmutableFingerprint(schedule)))
             throw new InvalidDataException($"Recurring-schedule active projection '{activation}' does not match its active rows.");
 
-        // Pump exhaustion may delete a live schedule. As in the Groundwork contract, a missing
+        // Pump exhaustion may delete a live schedule. Per the provider-neutral contract, a missing
         // row is allowed, but a present row under an expected identity must retain its fence.
         var observed = schedules.Select(x => x.ScheduleId).ToHashSet(StringComparer.Ordinal);
         foreach (var scheduleId in state.ScheduleIds.Where(id => !observed.Contains(id)))

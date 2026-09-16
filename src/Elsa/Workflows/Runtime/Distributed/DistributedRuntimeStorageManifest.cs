@@ -2,7 +2,7 @@ namespace Elsa.Workflows.Runtime.Distributed;
 
 /// <summary>
 /// Wire-safe persisted-kind identifiers owned by the distributed runtime leaf. These string values are the frozen v1
-/// document-kind discriminators for cross-node command transport and placement documents. The opt-in Groundwork
+/// document-kind discriminators for cross-node command transport and placement documents. The opt-in
 /// persistence feature consumes these identifiers and MUST preserve the committed <c>Fixtures/v1</c> golden fixture
 /// wire shapes unchanged.
 /// </summary>
@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Distributed;
 public static class DistributedRuntimeStorageManifest
 {
     /// <summary>
-    /// Durable per-execution command stream coordination document. The Groundwork transport uses this head with
+    /// Durable per-execution command stream coordination document. A durable transport uses this head with
     /// provider-level compare-and-swap to allocate strictly increasing per-execution command sequences without
     /// scanning the command backlog.
     /// </summary>

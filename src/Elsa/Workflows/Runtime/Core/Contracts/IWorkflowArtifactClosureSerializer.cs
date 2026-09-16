@@ -13,7 +13,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <see cref="WorkflowExecutable.NodesById"/> from its root in its constructor. Serialized naively those
 /// projections ride along, duplicating the entire activity graph in the file and — worse — making an exported
 /// artifact's bytes differ from the same artifact's bytes in the durable store, which drops the projections
-/// through the Groundwork runtime document serializer. Both sides encoding through one codec is what makes
+/// through the runtime document serializer. Both sides encoding through one codec is what makes
 /// "store-round-tripped and exported artifacts are byte-consistent" true rather than aspirational.
 /// </para>
 /// <para>

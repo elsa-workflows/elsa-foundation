@@ -2,7 +2,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
 /// The kind of recurrence a <see cref="RecurringTriggerSchedule"/> follows. Persisted as its integer ordinal
-/// (matching every other Groundwork runtime enum), so the member <b>order</b> is the wire contract: append new
+/// (matching every other durable runtime enum), so the member <b>order</b> is the wire contract: append new
 /// members at the end and never reorder or remove one without a schema migration. The golden fixture pins the
 /// current mapping.
 /// </summary>

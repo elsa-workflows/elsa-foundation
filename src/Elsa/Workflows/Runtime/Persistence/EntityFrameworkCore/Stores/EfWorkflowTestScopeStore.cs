@@ -160,7 +160,7 @@ public sealed class EfWorkflowTestScopeStore(
             throw new TestScopeAdmissionException("The workflow test scope is not open in the current persistence context.");
         }
 
-        // A revision-only write is the EF equivalent of Groundwork's same-value
+        // A revision-only write is the EF equivalent of a same-value
         // conditional upsert. It linearizes admission against a concurrent close:
         // whichever writer reaches the row first invalidates the other's revision.
         row.Revision = checked(row.Revision + 1);

@@ -13,7 +13,7 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 /// <see cref="WorkflowStrategyOptions.CheckpointCadence"/> on the authored <see cref="WorkflowDefinitionState"/>, so it
 /// must round-trip faithfully through the full-state draft replace (serialize → persist → deserialize) and be
 /// carried wholesale onto the immutable version at promotion — the compile source the executable compiler reads.
-/// The Groundwork stores hydrate the authored <c>State</c> on read exactly as an application consumer sees it.
+/// The design stores hydrate the authored <c>State</c> on read exactly as an application consumer sees it.
 /// </summary>
 public sealed class CheckpointCadenceDraftRoundTripTests
 {

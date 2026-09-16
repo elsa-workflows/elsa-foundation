@@ -10,7 +10,7 @@ using Elsa.Workflows.Design.Api.Endpoints.Definitions.Add;
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
 /// <summary>
-/// Root-cause regression coverage for elsa-foundation#951: commit "Harden Groundwork design persistence
+/// Root-cause regression coverage for elsa-foundation#951: commit "Harden design persistence
 /// commands" made <c>OperationKey</c> a required non-empty positional parameter, so a create request that
 /// does not carry one (every request from the Studio create dialog) threw
 /// <see cref="ArgumentException"/> ("Value cannot be null. (Parameter 'value')") when the handler built a

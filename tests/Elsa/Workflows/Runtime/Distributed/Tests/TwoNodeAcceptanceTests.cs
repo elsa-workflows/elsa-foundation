@@ -24,8 +24,8 @@ namespace Elsa.Workflows.Runtime.Distributed.Tests;
 /// </summary>
 /// <remarks>
 /// The suite is abstract over the shared placement store and command transport so the SAME scenarios prove both the
-/// in-memory harness stores (W20) and the durable Groundwork-backed stores (W27) — see the concrete fixtures in
-/// <c>InMemoryTwoNodeAcceptanceTests</c> and <c>GroundworkTwoNodeAcceptanceTests</c>.
+/// in-memory harness stores (W20) and, where composed, durable stores — see the concrete fixture in
+/// <c>InMemoryTwoNodeAcceptanceTests</c>.
 /// </remarks>
 public abstract class TwoNodeAcceptanceTests
 {

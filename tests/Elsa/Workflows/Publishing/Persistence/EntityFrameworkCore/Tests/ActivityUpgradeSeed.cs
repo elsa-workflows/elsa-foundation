@@ -160,7 +160,7 @@ internal static class ActivityUpgradeSeed
     };
 
     /// <summary>
-    /// The two-step plan the Groundwork suite pins: one activity draft and one workflow draft in one stage,
+    /// The two-step plan: one activity draft and one workflow draft in one stage,
     /// bound to the workflow-draft root whose closure discovery reproduces exactly. The workflow step's
     /// expected revision can be moved on its own so the apply reaches the compare-and-swap with drift, after
     /// the activity lane has already written.

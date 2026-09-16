@@ -3,9 +3,8 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Scheduling.Activities;
 using Elsa.Activities.Testing;
-using Elsa.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Persistence.Groundwork.Runtime;
+using CShells.Lifecycle;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.SystemText;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -14,8 +13,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Scheduling;
 using Elsa.Workflows.Runtime.Scheduling.Options;
-using Groundwork.Sqlite;
-using Groundwork.Store;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -39,6 +38,7 @@ public sealed class DurableTimerRestartCrashTests
 {
     private const string TimerId = DelayTestExecutable.TimerId;
     private const string RecoveryContinuationSigningKey = "durable-timer-restart-signing-key-32-bytes";
+    private const string HierarchyCursorSigningKey = "durable-timer-restart-hierarchy-key-32-bytes";
     private static readonly DateTimeOffset T0 = new(2026, 7, 1, 12, 0, 0, TimeSpan.Zero);
     private static readonly TimeSpan Delay5s = TimeSpan.FromSeconds(5);
 
@@ -161,9 +161,8 @@ public sealed class DurableTimerRestartCrashTests
             Path.GetTempPath(),
             $"elsa-durable-timer-{Guid.NewGuid():N}.db");
 
-        /// <summary>Opens a connection for one generation. The caller's container owns and closes it.</summary>
-        public IStorageProviderConnection Connect() =>
-            new SqliteProviderFactory().Create($"Data Source={path}");
+        /// <summary>The connection string for one generation. The caller's container owns and closes the connection.</summary>
+        public string ConnectionString => $"Data Source={path};Pooling=False";
 
         public void Dispose()
         {
@@ -187,10 +186,14 @@ public sealed class DurableTimerRestartCrashTests
             {
                 // Each generation owns its own connection to the shared file, so disposing a generation
                 // closes only that connection and the durable rows outlive it.
-                services.AddGroundworkStorageProviderConnection(_ => store.Connect());
-                services.Configure<RuntimeRecoveryContinuationOptions>(options =>
-                    options.SigningKey = RecoveryContinuationSigningKey);
-                services.AddGroundworkV2RuntimeStores();
+                services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
+                {
+                    Provider = "Sqlite",
+                    ConnectionString = store.ConnectionString,
+                    RecoveryContinuationSigningKey = RecoveryContinuationSigningKey,
+                    HierarchyCursorSigningKey = HierarchyCursorSigningKey
+                });
+                services.AddEfModuleMigrations<BookmarkStateDbContext>("Sqlite");
                 // Override the runtime clock so due-time computation and the pump sweep share one
                 // controllable timeline.
                 services.RemoveAll<TimeProvider>();
@@ -198,6 +201,9 @@ public sealed class DurableTimerRestartCrashTests
                 customize?.Invoke(services);
             })
             .Build(DelayTestExecutable.ActivityExecutionId);
+        // A plain harness has no CShells Prepare phase, so install or validate the module schema here.
+        foreach (var initializer in harness.Services.GetServices<IShellInitializer>())
+            initializer.InitializeAsync().GetAwaiter().GetResult();
         harness.InitializeActivityTypes();
         return harness;
     }

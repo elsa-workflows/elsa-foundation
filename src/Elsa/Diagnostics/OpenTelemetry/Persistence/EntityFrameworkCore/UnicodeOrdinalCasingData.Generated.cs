@@ -9,7 +9,7 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
 //
 // This is the complete canonical mapping table (BMP and supplementary scalars). It is
 // intentionally data-only: runtime casing APIs must not participate in this contract. It shares
-// Groundwork 0.4.0-preview.30's Unicode-16 mappings except for U+017F and the 25 scalars
+// the .NET Unicode-16 mappings except for U+017F and the 25 scalars
 // U+16EBB..U+16ED3 observed in the Phase 1 development environment. Tests pin this compatibility
 // boundary exhaustively; the current host runtime is deliberately not a compatibility oracle.
 internal static class UnicodeOrdinalCasingData

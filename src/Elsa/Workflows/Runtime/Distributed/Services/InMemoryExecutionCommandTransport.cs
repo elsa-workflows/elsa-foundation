@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Services;
 /// In-memory <see cref="IExecutionCommandTransport"/> for single-process composition and the two-node test harness.
 /// Scoped, partition-bound adapters coordinate through singleton shared inbox state; lease and acknowledgement are
 /// serialized under a lock so a command leased by one node is invisible to another until acked or expired. An opt-in
-/// persistence leaf replaces this adapter with a durable scoped Groundwork or EF Core implementation while preserving
+/// persistence leaf replaces this adapter with a durable scoped EF Core implementation while preserving
 /// the committed transport-item wire shape.
 /// </summary>
 public sealed class InMemoryExecutionCommandTransport : IExecutionCommandTransport

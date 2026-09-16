@@ -40,7 +40,7 @@ public sealed class ActivityDefinitionVersion(string version, string definitionI
     /// <summary>
     /// Compile-only compatibility property for the retired EF schema. It is deliberately absent from
     /// every domain/read contract and is never populated by current reconciliation or publishing.
-    /// Groundwork is the supported persistence path for stable provider/consumer identities.
+    /// The durable catalog is the supported persistence path for stable provider/consumer identities.
     /// </summary>
     [Obsolete("Legacy EF column only. Do not use for Runtime dispatch.")]
     public string DescriptorType { get; set; } = string.Empty;

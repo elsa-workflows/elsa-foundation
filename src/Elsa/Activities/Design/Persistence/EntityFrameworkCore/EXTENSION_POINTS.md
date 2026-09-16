@@ -2,7 +2,7 @@
 
 This opt-in provider replaces the Activities Design persistence contracts with one provider-neutral
 EF Core relational model. It is selected through the same replacement-contract guard as the
-Groundwork implementation; applications must select exactly one Activities Design persistence family.
+implementation; applications must select exactly one Activities Design persistence family.
 
 ## Replacement contracts
 
@@ -36,7 +36,7 @@ provider failures retain cancellation, concurrency, and domain-conflict contract
 accepts a transaction factory and `EfActivityManagementProjectionWriter.WriteInCurrentTransactionAsync`
 writes into the caller's transaction, so a cross-module owner such as `EfSharedTransaction` can include
 Activities Design writes in its unit. A management projection whose head names an existing but not yet
-published version carries the head id without a head reference, as Groundwork does; a head naming no version
+published version carries the head id without a head reference; a head naming no version
 of that definition in that tenant still fails closed.
 
 ## Registration

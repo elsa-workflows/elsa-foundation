@@ -25,7 +25,7 @@ using Xunit;
 namespace Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// <c>WorkflowsDashboardEntityFrameworkCore</c> is the counterpart of the Groundwork workflow dashboard feature: without
+/// <c>WorkflowsDashboardEntityFrameworkCore</c> is the durable workflow dashboard feature: without
 /// it the dashboard answers from its unavailable sources even though the EF projections exist.
 /// </summary>
 public sealed class WorkflowsDashboardEntityFrameworkCoreFeatureTests : IDisposable
