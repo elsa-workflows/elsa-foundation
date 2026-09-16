@@ -175,7 +175,9 @@ public sealed class PublishWorkflowRequestHandlerTests
             handler.Handle(new PublishWorkflow(workflowVersion.Id), CancellationToken.None));
 
         Assert.Equal(ExpressionDraftValidationState.Unavailable, exception.State);
-        Assert.Equal("expression-validation-unavailable", exception.Code);
+        Assert.StartsWith("expression-validation-unavailable:", exception.Code, StringComparison.Ordinal);
+        Assert.Contains(nameof(IExpressionDraftSemanticValidator), exception.Code, StringComparison.Ordinal);
+        Assert.DoesNotContain(nameof(IWorkflowDefinitionVersionStore), exception.Code, StringComparison.Ordinal);
         Assert.Empty(exception.Diagnostics);
         Assert.Empty(await _store.ListAllAsync());
     }
@@ -199,7 +201,9 @@ public sealed class PublishWorkflowRequestHandlerTests
             handler.Handle(new PublishWorkflow(workflowVersion.Id), CancellationToken.None));
 
         Assert.Equal(ExpressionDraftValidationState.Unavailable, exception.State);
-        Assert.Equal("expression-validation-unavailable", exception.Code);
+        Assert.StartsWith("expression-validation-unavailable:", exception.Code, StringComparison.Ordinal);
+        Assert.Contains(nameof(InvalidOperationException), exception.Code, StringComparison.Ordinal);
+        Assert.Contains("Validation provider failed.", exception.Code, StringComparison.Ordinal);
         Assert.Empty(await _store.ListAllAsync());
     }
 
