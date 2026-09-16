@@ -107,7 +107,9 @@ The dependency walk skips anything `IsHostProvidedDependency` believes the host 
    Elsa ids: `Elsa.Api.Common`, `Elsa.Caching`, `Elsa.Common`, `Elsa.Expressions`, `Elsa.Features`,
    `Elsa.KeyValues`, `Elsa.Mediator`, `Elsa.Resilience`, `Elsa.Resilience.Core`, `Elsa.Tenants`,
    `Elsa.Workflows.Core`, `Elsa.Workflows.Management`, `Elsa.Workflows.Runtime`.
-2. Anything whose id starts with `Microsoft.Extensions.`.
+2. Anything whose id starts with `Microsoft.Extensions.` — the whole family, by prefix. Only a handful
+   of those ids appear in the host's `deps.json`; the rest come from the shared framework, so do not
+   try to reconcile the two lists.
 3. Anything present in the host's own `*.deps.json` at a version satisfying the range.
 
 Rule 1 is the trap for this host. That list assumes a host that compiles Elsa in — and
@@ -163,6 +165,30 @@ tens of entries.
    For the host as it ships today that means the `Microsoft.Extensions.*`, `CShells.*`, `Nuplane*` and
    `NuGet.*` families plus `FastEndpoints`, `Newtonsoft.Json` and `JetBrains.Annotations` — but check,
    do not assume.
+
+   **Then put every `Elsa.*` id back.** `Elsa.Api.AspNetCore` is in the host's `deps.json`, so a drop-list
+   derived mechanically would prune the one Elsa package that is in there — the rule 3 shape again, and it
+   surfaces as a `FeatureNotFoundException` naming a *feature* rather than the missing package.
+
+### Finding the root package for a feature
+
+Roots do not need a hand-maintained feature-to-package table. Every package carries an
+`elsa-package.json` manifest at its root, with `package: { id, version }` and a `features` array whose
+entries carry settings, dependencies and required capabilities. A feature id is
+`<PackageId>.<FeatureName>`, so the name you write in `shells.json` is the id with the package prefix
+removed. `Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore` declares eight, including the umbrella
+`WorkflowsRuntimeEntityFrameworkCore`:
+
+```
+Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.WorkflowsRuntimeEntityFrameworkCore
+Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence
+…
+```
+
+So "which package provides feature X" is answerable from the feed itself, and a generator can keep
+`shells.json` as the only hand-edited file: feature names resolve to root packages through the
+manifests, and the closure follows from the roots. The same manifests back the module-management
+surface (`Elsa.Modularity.Nuplane`).
 
 **Keep the exclusions honest.** A declared dependency must be resolvable even when it does nothing at
 runtime. Pruning `Microsoft.EntityFrameworkCore.Analyzers` from a *directory* feed — on the reasoning that
