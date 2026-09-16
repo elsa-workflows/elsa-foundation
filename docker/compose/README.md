@@ -58,8 +58,8 @@ docker run -d --name elsa-workbench \
   -e ASPNETCORE_ENVIRONMENT=Production \
   -e Elsa__ModuleManagement__ApiKey=elsa-docker-demo-key \
   -e Cors__AllowedOrigins__0=http://localhost:14000 \
-  -e CShells__Shells__default__Features__GroundworkWorkflowRuntime__RecoveryContinuationSigningKey=elsa-docker-demo-recovery-continuation-key \
-  -e 'CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityGroundwork__SeedAdminPassword=Password123!' \
+  -e CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey=elsa-docker-demo-recovery-continuation-key \
+  -e 'CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword=Password123!' \
   -e "CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -topk8 -nocrypt -outform DER | base64)" \
   -v elsa-workbench-packages:/app/packages \
   elsaworkflows/elsa-workbench:latest
@@ -219,7 +219,7 @@ compose files supply two identity secrets as env vars:
 
 | Variable (prefix `CShells__Shells__default__Features__`) | Without it |
 |---|---|
-| `FoundationIdentityAspNetCoreIdentityGroundwork__SeedAdminPassword` | The default shell fails activation: `/health/ready` returns `503 shell_activation_failed`. |
+| `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword` | The default shell fails activation: `/health/ready` returns `503 shell_activation_failed`. |
 | `FoundationIdentityOpenIddict__SigningKey` | The default shell fails activation: `/health/ready` returns `503 shell_activation_failed`, and the log shows "No signing key is configured". |
 
 For the rest of the identity settings, see
@@ -229,19 +229,18 @@ For the rest of the identity settings, see
 
 ## 5. Verify Postgres persistence
 
-The stack composes Elsa.Workbench with an explicit Groundwork Postgres provider and persistence lanes (via the
-mounted `elsa-workbench.shells.json`), so workflow/activity data lives in the `postgres` service. Confirm it:
+The stack composes Elsa.Workbench with the EF Core persistence features on Postgres (via the mounted
+`elsa-workbench.shells.json`), so workflow/activity data lives in the `postgres` service. Confirm it:
 
 ```bash
 docker compose exec postgres psql -U elsa -d elsa -c '\dt'
 ```
 
-Groundwork gives every storage unit its own table, named after the unit, so `\dt` lists one per
-unit across the composed lanes: the design lanes contribute `elsa_workflow_definitions_v2`,
-`elsa_workflow_definition_drafts`, `elsa_workflow_definition_versions` and their siblings, and the
-runtime lane contributes the `runtime_*` family (`runtime_workflow_execution_state`,
-`runtime_checkpoint_commit`, and so on). Groundwork keeps its own bookkeeping in
-`__groundwork_schema_history` and `__groundwork_search_key_algorithms`.
+Each module owns its own tables, so `\dt` lists one per entity across the composed modules: the design
+modules contribute `elsa_workflow_definitions_v2`, `elsa_workflow_definition_drafts`,
+`elsa_workflow_definition_versions` and their siblings, and the runtime module contributes the
+`runtime_*` family (`runtime_workflow_execution_state`, `runtime_checkpoint_commit`, and so on). Each
+module also keeps its own EF migrations history table, named `__EFMigrationsHistory_<module>`.
 
 To confirm a workflow you designed actually landed:
 
@@ -280,7 +279,7 @@ docker compose logs -f elsa-workbench        # or: postgres, elsa-studio
 var on the `elsa-workbench` service (there is a commented-out example in `docker-compose.yml`):
 
 ```
-CShells__Shells__default__Features__GroundworkProviderPostgreSql__ConnectionString=Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa
+ConnectionStrings__Elsa=Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa
 ```
 
 **Override the Elsa host management key** — change it on **both** services so they still match:
@@ -296,7 +295,7 @@ Studio__BackendModuleManagementApiKey=<your-key>
 server node:
 
 ```
-CShells__Shells__default__Features__GroundworkWorkflowRuntime__RecoveryContinuationSigningKey=<your-key>
+CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey=<your-key>
 ```
 
 **Replace the demo identity secrets** on the `elsa-workbench` service. The signing key is a base64 PKCS#8
@@ -307,7 +306,7 @@ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -to
 ```
 
 ```
-CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityGroundwork__SeedAdminPassword=<your-password>
+CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword=<your-password>
 CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey=<base64-key>
 ```
 

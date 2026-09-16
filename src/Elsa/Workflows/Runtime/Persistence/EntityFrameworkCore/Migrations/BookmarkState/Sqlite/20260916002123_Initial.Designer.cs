@@ -7,105 +7,100 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.BookmarkState.PostgreSql
+namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.BookmarkState.Sqlite
 {
-    [DbContext(typeof(BookmarkStatePostgreSqlDbContext))]
-    [Migration("20260915205121_Initial")]
+    [DbContext(typeof(BookmarkStateSqliteDbContext))]
+    [Migration("20260916002123_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.10")
-                .HasAnnotation("Relational:MaxIdentifierLength", 63);
-
-            // NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns omitted: the module stays provider-free.
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
 
             modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.ActivityExecutionHierarchyEntity", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivityExecutionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivityExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivityExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(655)
-                        .HasColumnType("character varying(655)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ExecutionScopeId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ExecutionScopeIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("ExecutionSequence")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<bool>("IsScopeRoot")
-                        .HasColumnType("boolean");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ParentActivityExecutionId")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ParentActivityExecutionIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "ExecutionSequence");
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "ExecutionScopeIdHash", "IsScopeRoot", "ExecutionSequence")
-                        .HasDatabaseName("IX_elsa_runtime_activity_execution_hierarchy_ScopeKeyHash_Wor~1");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "ExecutionScopeIdHash", "IsScopeRoot", "ExecutionSequence");
 
                     b.ToTable("elsa_runtime_activity_execution_hierarchy", (string)null);
                 });
@@ -114,76 +109,76 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivityExecutionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivityExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivityExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(655)
-                        .HasColumnType("character varying(655)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ExecutionScopeId")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ExecutionScopeIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("SummaryExecutionSequence")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("SummaryScheduledAtOffsetMinutes")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("SummaryScheduledAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -196,91 +191,90 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivityExecutionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivityExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivityExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(655)
-                        .HasColumnType("character varying(655)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ExecutionScopeId")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ExecutionScopeIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("ExecutionSequence")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ParentActivityExecutionId")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ParentActivityExecutionIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("ScheduledAtOffsetMinutes")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("ScheduledAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash");
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "ParentActivityExecutionIdHash")
-                        .HasDatabaseName("IX_elsa_runtime_activity_execution_state_ScopeKeyHash_Workflo~1");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "ParentActivityExecutionIdHash");
 
                     b.ToTable("elsa_runtime_activity_execution_state", (string)null);
                 });
@@ -289,113 +283,113 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivityExecutionId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("BookmarkId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("BookmarkIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("BookmarkIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(645)
-                        .HasColumnType("character varying(645)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("CreatedAtOffsetMinutes")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("CreatedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ExecutableNodeId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                        .HasColumnType("TEXT");
 
                     b.Property<int?>("ExpiresAtOffsetMinutes")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long?>("ExpiresAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("MetadataJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("PayloadJson")
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ResumeTargetId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("StimulusHash")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("StimulusLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("StimulusType")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("StimulusTypeLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(645)
-                        .HasColumnType("character varying(645)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -412,109 +406,109 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ClaimOrderKey")
                         .IsRequired()
                         .HasMaxLength(84)
-                        .HasColumnType("character varying(84)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ClaimOwnerId")
                         .HasMaxLength(344)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("ClaimToken")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<int?>("ClaimedAtOffsetMinutes")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long?>("ClaimedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("CreatedAtOffsetMinutes")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("CreatedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("DueTimeOffsetMinutes")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("DueTimeUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("FailureCount")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("StimulusHash")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("StimulusType")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TimerId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TimerIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TimerIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.Property<int?>("VisibleAfterOffsetMinutes")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long?>("VisibleAfterUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -525,8 +519,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "TimerIdHash")
                         .IsUnique();
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "TimerIdOrderKey")
-                        .HasDatabaseName("IX_elsa_runtime_durable_timer_ScopeKeyHash_WorkflowExecutionI~1");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "TimerIdOrderKey");
 
                     b.ToTable("elsa_runtime_durable_timer", (string)null);
                 });
@@ -535,60 +528,60 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(264)
-                        .HasColumnType("character varying(264)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DurableValueId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DurableValueIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DurableValueIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -604,68 +597,67 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IncarnationId")
                         .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TemplateHash")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TemplateHashHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TemplateId")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TemplateIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TemplateIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(655)
-                        .HasColumnType("character varying(655)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ScopeKeyHash", "TemplateHashHash", "TemplateHash");
 
                     b.HasIndex("ScopeKeyHash", "TemplateIdHash", "TemplateId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_elsa_runtime_executable_activity_template_ScopeKeyHash_Tem~1");
+                        .IsUnique();
 
                     b.ToTable("elsa_runtime_executable_activity_template", (string)null);
                 });
@@ -674,50 +666,50 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IncarnationId")
                         .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TemplateHash")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TemplateHashHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TemplateId")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -731,94 +723,93 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<bool>("HasOperationalOwner")
-                        .HasColumnType("boolean");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("HeartbeatOwnerId")
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long?>("HeartbeatRecordedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long?>("InterruptedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<int?>("InterruptedStatus")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long?>("LeaseAcquiredAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long?>("LeaseExpiresAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("LeaseOwnerId")
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("OperationalStateId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("OperationalStateIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("OperationalStateIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "OperationalStateIdHash")
                         .IsUnique();
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdOrderKey", "OperationalStateIdHash")
-                        .HasDatabaseName("IX_elsa_runtime_execution_liveness_state_ScopeKeyHash_Workflo~1");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdOrderKey", "OperationalStateIdHash");
 
                     b.HasIndex("ScopeKeyHash", "HeartbeatRecordedAtUtcTicks", "WorkflowExecutionIdOrderKey", "OperationalStateIdHash");
 
@@ -835,80 +826,79 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("CreatedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("IncidentId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IncidentIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IncidentIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long?>("ResolvedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("Severity")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "IncidentIdHash")
                         .IsUnique();
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdOrderKey", "IncidentIdHash")
-                        .HasDatabaseName("IX_elsa_runtime_incident_state_ScopeKeyHash_WorkflowExecution~1");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdOrderKey", "IncidentIdHash");
 
                     b.HasIndex("ScopeKeyHash", "Status", "CreatedAtUtcTicks", "WorkflowExecutionIdOrderKey", "IncidentIdHash");
 
@@ -919,109 +909,109 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(264)
-                        .HasColumnType("character varying(264)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivationId")
                         .HasMaxLength(344)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivationIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivationIdOrderKey")
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("CreatedAtOffsetMinutes")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("CreatedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ExecutableNodeId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Expression")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("Kind")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("NextOccurrenceOffsetMinutes")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("NextOccurrenceUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ScheduleId")
                         .IsRequired()
                         .HasMaxLength(4104)
-                        .HasColumnType("character varying(4104)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScheduleIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScheduleIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(6160)
-                        .HasColumnType("character varying(6160)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SlotId")
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("StimulusHash")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("StimulusType")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -1041,84 +1031,83 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(264)
-                        .HasColumnType("character varying(264)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivationId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivationIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivationIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactId")
                         .HasMaxLength(344)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactIdOrderKey")
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ProjectionFingerprint")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("ScheduleCount")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ScheduleFingerprintsJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScheduleIdsJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ScopeKeyHash", "ActivationIdHash", "ActivationId")
                         .IsUnique();
 
-                    b.HasIndex("ScopeKeyHash", "ArtifactIdHash", "ActivationIdHash")
-                        .HasDatabaseName("IX_elsa_runtime_recurring_schedule_projection_state_ScopeKeyH~1");
+                    b.HasIndex("ScopeKeyHash", "ArtifactIdHash", "ActivationIdHash");
 
                     b.ToTable("elsa_runtime_recurring_schedule_projection_state", (string)null);
                 });
@@ -1127,83 +1116,78 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(264)
-                        .HasColumnType("character varying(264)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("CommitId")
                         .IsRequired()
-                        .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("CommitIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("CommitIdOrderKey")
-                        .IsRequired()
-                        .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ConsumedSchedulerWorkItemIdsJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Fingerprint")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("OccurredAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("PendingPostCommitWorkIdsJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("character varying(684)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ScopeKeyHash", "CommitIdHash", "CommitId")
+                    b.HasIndex("ScopeKeyHash", "CommitIdHash")
                         .IsUnique();
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "CommitIdOrderKey");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash");
 
                     b.ToTable("elsa_runtime_checkpoint_commit", (string)null);
                 });
@@ -1212,82 +1196,82 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(320)
-                        .HasColumnType("character varying(320)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("ClaimableAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<bool>("ClaimableIsEligible")
-                        .HasColumnType("boolean");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<long?>("DeliverableAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("IntentKind")
                         .IsRequired()
                         .HasMaxLength(230)
-                        .HasColumnType("character varying(230)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IntentKindHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("OutboxItemId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("OutboxItemIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("OutboxItemIdOrderKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("RecordedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(196)
-                        .HasColumnType("character varying(196)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -1308,58 +1292,57 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Collection")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdOrderKey");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "WorkflowExecutionId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_elsa_runtime_scheduler_state_ScopeKeyHash_WorkflowExecutio~1");
+                        .IsUnique();
 
                     b.ToTable("elsa_runtime_scheduler_state", (string)null);
                 });
@@ -1368,103 +1351,100 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ClaimOwnerId")
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("ClaimToken")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<int?>("ClaimedAtOffsetMinutes")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long?>("ClaimedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("EnqueuedAtOffsetMinutes")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("EnqueuedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("RecordedAtOffsetMinutes")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("RecordedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<int?>("VisibleAfterOffsetMinutes")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long?>("VisibleAfterUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("WorkItemId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkItemIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkOrderKey")
                         .IsRequired()
                         .HasMaxLength(170)
-                        .HasColumnType("character varying(170)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "WorkItemIdHash")
                         .IsUnique();
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "WorkOrderKey")
-                        .HasDatabaseName("IX_elsa_runtime_scheduler_work_item_ScopeKeyHash_WorkflowExec~1");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "WorkOrderKey");
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdOrderKey", "WorkflowExecutionIdHash")
-                        .HasDatabaseName("IX_elsa_runtime_scheduler_work_item_ScopeKeyHash_WorkflowExec~2");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdOrderKey", "WorkflowExecutionIdHash");
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "VisibleAfterUtcTicks", "WorkOrderKey")
-                        .HasDatabaseName("IX_elsa_runtime_scheduler_work_item_ScopeKeyHash_WorkflowExec~3");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "VisibleAfterUtcTicks", "WorkOrderKey");
 
                     b.ToTable("elsa_runtime_scheduler_work_item", (string)null);
                 });
@@ -1473,106 +1453,106 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(264)
-                        .HasColumnType("character varying(264)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActiveActivationId")
                         .HasMaxLength(344)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActiveActivationIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActiveActivationIdOrderKey")
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActiveActivationUniquenessKey")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SlotId")
                         .IsRequired()
                         .HasMaxLength(752)
-                        .HasColumnType("character varying(752)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SlotIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SlotIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(1128)
-                        .HasColumnType("character varying(1128)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SlotName")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SlotNameHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SlotNameOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SourceId")
                         .HasMaxLength(344)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SourceKind")
                         .HasMaxLength(344)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("UpdatedAtOffsetMinutes")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("UpdatedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("WorkflowDefinitionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowDefinitionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowDefinitionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -1591,97 +1571,97 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("CaptureOrdinal")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("CheckpointCommitId")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("CheckpointCommitIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long?>("ClaimableAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("JobId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("JobIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("JobIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(536)
-                        .HasColumnType("character varying(536)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("PlanId")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("character varying(684)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("PlanIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("character varying(684)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("TenantPartition")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("character varying(684)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantPartitionHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("character varying(684)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(536)
-                        .HasColumnType("character varying(536)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -1692,8 +1672,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
 
                     b.HasIndex("ScopeKeyHash", "PlanIdHash", "CaptureOrdinal", "JobIdOrderKey");
 
-                    b.HasIndex("ScopeKeyHash", "PlanIdHash", "Status", "ClaimableAtUtcTicks", "JobIdOrderKey")
-                        .HasDatabaseName("IX_elsa_runtime_workflow_alteration_job_ScopeKeyHash_PlanIdHa~1");
+                    b.HasIndex("ScopeKeyHash", "PlanIdHash", "Status", "ClaimableAtUtcTicks", "JobIdOrderKey");
 
                     b.ToTable("elsa_runtime_workflow_alteration_job", (string)null);
                 });
@@ -1702,79 +1681,79 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActiveOrderKey")
                         .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(536)
-                        .HasColumnType("character varying(536)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long?>("CleanupCompletedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("CleanupDeletedCount")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("CleanupSafeFailureJson")
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<int?>("CleanupTerminalStatus")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("CreatedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("PlanId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("PlanIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("PlanIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(536)
-                        .HasColumnType("character varying(536)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("character varying(684)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("TenantIdempotencyKey")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantIdempotencyKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -1793,130 +1772,130 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ChildArtifactId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ChildArtifactIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ChildArtifactIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(196)
-                        .HasColumnType("character varying(196)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ChildWorkflowExecutionId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ChildWorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ChildWorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(196)
-                        .HasColumnType("character varying(196)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("CreatedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("DispatchId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DispatchIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DispatchIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(1800)
-                        .HasColumnType("character varying(1800)");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("Mode")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ParentActivityExecutionId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ParentActivityExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ParentActivityExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(196)
-                        .HasColumnType("character varying(196)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ParentWorkflowExecutionId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ParentWorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ParentWorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(196)
-                        .HasColumnType("character varying(196)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TestScopeId")
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TestScopeIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TestScopeIdOrderKey")
                         .HasMaxLength(196)
-                        .HasColumnType("character varying(196)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("UpdatedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
@@ -1938,45 +1917,45 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactId")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IncarnationId")
                         .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -1990,51 +1969,51 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactHash")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactId")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(655)
-                        .HasColumnType("character varying(655)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IncarnationId")
                         .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -2048,112 +2027,108 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactId")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DefinitionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DefinitionVersionId")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DefinitionVersionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long?>("ExpiresAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("IncarnationId")
                         .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<bool>("IsRetired")
-                        .HasColumnType("boolean");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Scope")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyOrderKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SourceReferenceId")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SourceReferenceIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SourceReferenceIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(655)
-                        .HasColumnType("character varying(655)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ScopeKeyHash", "ArtifactIdHash", "ArtifactId");
 
-                    b.HasIndex("ScopeKeyHash", "DefinitionIdHash", "DefinitionId")
-                        .HasDatabaseName("IX_elsa_runtime_workflow_executable_source_reference_ScopeKey~1");
+                    b.HasIndex("ScopeKeyHash", "DefinitionIdHash", "DefinitionId");
 
-                    b.HasIndex("ScopeKeyHash", "DefinitionVersionIdHash", "DefinitionVersionId")
-                        .HasDatabaseName("IX_elsa_runtime_workflow_executable_source_reference_ScopeKey~2");
+                    b.HasIndex("ScopeKeyHash", "DefinitionVersionIdHash", "DefinitionVersionId");
 
-                    b.HasIndex("ScopeKeyHash", "IsRetired", "ExpiresAtUtcTicks")
-                        .HasDatabaseName("IX_elsa_runtime_workflow_executable_source_reference_ScopeKey~3");
+                    b.HasIndex("ScopeKeyHash", "IsRetired", "ExpiresAtUtcTicks");
 
                     b.HasIndex("ScopeKeyHash", "SourceReferenceIdHash", "SourceReferenceId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_elsa_runtime_workflow_executable_source_reference_ScopeKey~4");
+                        .IsUnique();
 
                     b.ToTable("elsa_runtime_workflow_executable_source_reference", (string)null);
                 });
@@ -2162,99 +2137,99 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("AuthorityPartitionKey")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("CorrelationId")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("CorrelationIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DefinitionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("RunKind")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("character varying(684)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("SortTimestampUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(684)
-                        .HasColumnType("character varying(684)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -2276,65 +2251,64 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ControlPlaneStateId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ControlPlaneStateIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ControlPlaneStateIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionId")
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ScopeKeyHash", "ControlPlaneStateIdHash")
                         .IsUnique();
 
-                    b.HasIndex("ScopeKeyHash", "ControlPlaneStateIdOrderKey")
-                        .HasDatabaseName("IX_elsa_runtime_workflow_hold_state_ScopeKeyHash_ControlPlane~1");
+                    b.HasIndex("ScopeKeyHash", "ControlPlaneStateIdOrderKey");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "WorkflowExecutionIdOrderKey");
 
@@ -2345,78 +2319,78 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(264)
-                        .HasColumnType("character varying(264)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DefinitionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DefinitionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("IncidentBearingCount")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("IncidentCount")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("RunKind")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<int?>("StartedAtOffsetMinutes")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long?>("StartedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -2438,74 +2412,73 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("FirstFailedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("LastFailedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkItemId")
                         .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkItemIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkItemIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowExecutionIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "WorkItemIdHash")
                         .IsUnique();
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "FirstFailedAtUtcTicks", "LastFailedAtUtcTicks", "WorkItemIdOrderKey", "WorkItemIdHash")
-                        .HasDatabaseName("IX_elsa_runtime_scheduler_poison_ScopeKeyHash_WorkflowExecuti~1");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "FirstFailedAtUtcTicks", "LastFailedAtUtcTicks", "WorkItemIdOrderKey", "WorkItemIdHash");
 
                     b.ToTable("elsa_runtime_scheduler_poison", (string)null);
                 });
@@ -2514,74 +2487,74 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("AccessScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("character varying(684)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("AccessScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("ExpiresAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Partition")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("character varying(684)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("PartitionHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("PartitionOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("State")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(684)
-                        .HasColumnType("character varying(684)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -2597,132 +2570,132 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(264)
-                        .HasColumnType("character varying(264)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivationId")
                         .HasMaxLength(344)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivationIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivationIdOrderKey")
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactHash")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ArtifactVersion")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("Cardinality")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("CorrelationScope")
                         .HasMaxLength(344)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("CreatedAtOffsetMinutes")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("CreatedAtUtcTicks")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ExecutableNodeId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SlotId")
                         .HasMaxLength(344)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("StimulusHash")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("StimulusLookupKey")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("StimulusType")
                         .IsRequired()
                         .HasMaxLength(640)
-                        .HasColumnType("character varying(640)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("StimulusTypeLookupKey")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TriggerBindingId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TriggerBindingIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TriggerBindingIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -2735,8 +2708,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
 
                     b.HasIndex("ScopeKeyHash", "StimulusLookupKey", "IsActive", "TriggerBindingIdHash");
 
-                    b.HasIndex("ScopeKeyHash", "StimulusTypeLookupKey", "IsActive", "TriggerBindingIdHash")
-                        .HasDatabaseName("IX_elsa_runtime_workflow_trigger_binding_ScopeKeyHash_Stimulu~1");
+                    b.HasIndex("ScopeKeyHash", "StimulusTypeLookupKey", "IsActive", "TriggerBindingIdHash");
 
                     b.ToTable("elsa_runtime_workflow_trigger_binding", (string)null);
                 });
@@ -2745,56 +2717,56 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(264)
-                        .HasColumnType("character varying(264)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivationId")
                         .IsRequired()
                         .HasMaxLength(344)
-                        .HasColumnType("character varying(344)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivationIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivationIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(516)
-                        .HasColumnType("character varying(516)");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("BindingCount")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ProjectionFingerprint")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(684)
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ScopeKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 

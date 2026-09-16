@@ -135,9 +135,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                     Id = table.Column<string>(type: "TEXT", maxLength: 264, nullable: false),
                     ScopeKey = table.Column<string>(type: "TEXT", maxLength: 684, nullable: false),
                     ScopeKeyHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    CommitId = table.Column<string>(type: "TEXT", maxLength: 344, nullable: false),
+                    CommitId = table.Column<string>(type: "TEXT", maxLength: 1200, nullable: false),
                     CommitIdHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    CommitIdOrderKey = table.Column<string>(type: "TEXT", maxLength: 516, nullable: false),
                     WorkflowExecutionId = table.Column<string>(type: "TEXT", maxLength: 344, nullable: false),
                     WorkflowExecutionIdHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     WorkflowExecutionIdOrderKey = table.Column<string>(type: "TEXT", maxLength: 516, nullable: false),
@@ -412,7 +411,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                     WorkflowExecutionId = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
                     WorkflowExecutionIdHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     WorkflowExecutionIdOrderKey = table.Column<string>(type: "TEXT", maxLength: 516, nullable: false),
-                    WorkItemId = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
+                    WorkItemId = table.Column<string>(type: "TEXT", maxLength: 1200, nullable: false),
                     WorkItemIdHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     WorkItemIdOrderKey = table.Column<string>(type: "TEXT", maxLength: 516, nullable: false),
                     FirstFailedAtUtcTicks = table.Column<long>(type: "INTEGER", nullable: false),
@@ -889,15 +888,15 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
                 columns: new[] { "ScopeKeyHash", "WorkflowExecutionIdHash" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_elsa_runtime_checkpoint_commit_ScopeKeyHash_CommitIdHash_CommitId",
+                name: "IX_elsa_runtime_checkpoint_commit_ScopeKeyHash_CommitIdHash",
                 table: "elsa_runtime_checkpoint_commit",
-                columns: new[] { "ScopeKeyHash", "CommitIdHash", "CommitId" },
+                columns: new[] { "ScopeKeyHash", "CommitIdHash" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_elsa_runtime_checkpoint_commit_ScopeKeyHash_WorkflowExecutionIdHash_CommitIdOrderKey",
+                name: "IX_elsa_runtime_checkpoint_commit_ScopeKeyHash_WorkflowExecutionIdHash",
                 table: "elsa_runtime_checkpoint_commit",
-                columns: new[] { "ScopeKeyHash", "WorkflowExecutionIdHash", "CommitIdOrderKey" });
+                columns: new[] { "ScopeKeyHash", "WorkflowExecutionIdHash" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_elsa_runtime_durable_timer_ScopeKeyHash_ClaimOrderKey",

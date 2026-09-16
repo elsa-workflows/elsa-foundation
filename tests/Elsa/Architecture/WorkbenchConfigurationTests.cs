@@ -24,8 +24,9 @@ public sealed class WorkbenchConfigurationTests
     }
 
     [Theory]
-    [InlineData("FoundationIdentityAspNetCoreIdentityGroundwork:SeedAdminPassword")]
-    [InlineData("GroundworkWorkflowRuntime:RecoveryContinuationSigningKey")]
+    [InlineData("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminPassword")]
+    [InlineData("WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey")]
+    [InlineData("WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey")]
     public void Production_shell_overlay_clears_a_committed_development_secret(string featureSetting)
     {
         var path = $"CShells:Shells:default:Features:{featureSetting}";
@@ -66,8 +67,8 @@ public sealed class WorkbenchConfigurationTests
             .Build()
             .GetSection("CShells:Shells:default:Features");
 
-        Assert.False(string.IsNullOrWhiteSpace(features["FoundationIdentityAspNetCoreIdentityGroundwork:SeedAdminUserName"]));
-        Assert.False(string.IsNullOrWhiteSpace(features["FoundationIdentityAspNetCoreIdentityGroundwork:SeedAdminPassword"]));
+        Assert.False(string.IsNullOrWhiteSpace(features["FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminUserName"]));
+        Assert.False(string.IsNullOrWhiteSpace(features["FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminPassword"]));
 
         var signingKey = features["FoundationIdentityOpenIddict:SigningKey"];
         Assert.False(string.IsNullOrWhiteSpace(signingKey));
@@ -75,7 +76,7 @@ public sealed class WorkbenchConfigurationTests
         rsa.ImportPkcs8PrivateKey(Convert.FromBase64String(signingKey), out _);
         Assert.True(rsa.KeySize >= 2048, $"The OpenIddict signing key is {rsa.KeySize} bits; shell activation requires at least 2048.");
 
-        var recoveryKey = features["GroundworkWorkflowRuntime:RecoveryContinuationSigningKey"] ?? "";
+        var recoveryKey = features["WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey"] ?? "";
         Assert.True(Encoding.UTF8.GetByteCount(recoveryKey) >= 32, "The recovery continuation signing key needs at least 32 UTF-8 bytes.");
     }
 

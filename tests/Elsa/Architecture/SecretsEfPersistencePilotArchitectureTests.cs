@@ -49,6 +49,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
 
     private static readonly string[] PilotSources =
     [
+        "src/Elsa/Persistence/EntityFramework/EfConnectionDefaults.cs",
         "src/Elsa/Persistence/EntityFramework/EfDatabaseMigrator.cs",
         "src/Elsa/Persistence/EntityFramework/EfMigrateOptions.cs",
         "src/Elsa/Persistence/EntityFramework/EfMigratePolicy.cs",
@@ -258,7 +259,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     }
 
     [Fact]
-    public void Workbench_catalogs_the_secrets_ef_module_without_enabling_it_by_default()
+    public void Workbench_enables_the_secrets_ef_module_by_default()
     {
         var workbench = XDocument.Load(RepoPath("src", "Apps", "Elsa.Workbench", "Elsa.Workbench.csproj"));
         var references = workbench.Descendants("ProjectReference")
@@ -270,6 +271,18 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
             reference => reference.Contains("Secrets.Persistence.EntityFrameworkCore", StringComparison.OrdinalIgnoreCase)
                          && !reference.Contains("Tooling", StringComparison.OrdinalIgnoreCase));
 
+        // The supported compositions run on EF; Groundwork is no longer selected anywhere.
+        foreach (var relative in new[]
+                 {
+                     "src/Apps/Elsa.Workbench/shells.json",
+                     "docker/compose/elsa-workbench.shells.json"
+                 })
+        {
+            Assert.True(
+                DefaultShellFeatures(relative).Contains("SecretsEntityFrameworkCore"),
+                $"{relative} must enable SecretsEntityFrameworkCore as the default Secrets store.");
+        }
+
         foreach (var relative in new[]
                  {
                      "src/Apps/Elsa.Workbench/shells.json",
@@ -279,19 +292,8 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
                  })
         {
             Assert.False(
-                DefaultShellFeatures(relative).Contains("SecretsEntityFrameworkCore"),
-                $"{relative} must not enable SecretsEntityFrameworkCore; Groundwork remains the default.");
-        }
-
-        foreach (var relative in new[]
-                 {
-                     "src/Apps/Elsa.Workbench/shells.json",
-                     "docker/compose/elsa-workbench.shells.json"
-                 })
-        {
-            Assert.True(
                 DefaultShellFeatures(relative).Contains("SecretsGroundworkPersistence"),
-                $"{relative} must keep SecretsGroundworkPersistence as the default Secrets store.");
+                $"{relative} must not enable SecretsGroundworkPersistence; EF is the default.");
         }
     }
 

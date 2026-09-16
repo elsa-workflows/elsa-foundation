@@ -27,8 +27,9 @@ public sealed record WorkbenchShell(
     /// </summary>
     public static readonly WorkbenchShell Production = new("Production", "shells.json", "shells.Production.json", new Dictionary<string, string>
     {
-        [$"{FeaturesPath}:GroundworkWorkflowRuntime:RecoveryContinuationSigningKey"] = "smoke-test-recovery-continuation-signing-key",
-        [$"{FeaturesPath}:FoundationIdentityAspNetCoreIdentityGroundwork:SeedAdminPassword"] = $"Smoke-{Guid.NewGuid():n}!",
+        [$"{FeaturesPath}:WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey"] = "smoke-test-recovery-continuation-signing-key",
+        [$"{FeaturesPath}:WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey"] = "smoke-test-hierarchy-cursor-signing-key",
+        [$"{FeaturesPath}:FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminPassword"] = $"Smoke-{Guid.NewGuid():n}!",
         [$"{FeaturesPath}:FoundationIdentityOpenIddict:SigningKey"] = Convert.ToBase64String(RSA.Create(2048).ExportPkcs8PrivateKey())
     });
 

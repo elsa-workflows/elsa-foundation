@@ -238,30 +238,34 @@ public sealed class ArchitectureGuardTests
     }
 
     [Fact]
-    public void Docker_reference_shell_inlines_the_Groundwork_lanes()
+    public void Docker_reference_shell_inlines_the_entity_framework_modules()
     {
         var path = Path.Combine(RepoRoot, "docker", "compose", "elsa-workbench.shells.json");
         var features = ReadDefaultShellFeatures(path);
 
         foreach (var feature in new[]
                  {
-                     "GroundworkProviderPostgreSql",
-                     "GroundworkWorkflowRuntime",
-                     "ActivitiesDesignGroundworkPersistence",
-                     "WorkflowsDesignGroundworkPersistence",
-                     "WorkflowsRuntimeDistributedGroundworkPersistence",
-                     "WorkflowsPublishingGroundwork",
-                     "DiagnosticsGroundworkPersistence",
-                     "GroundworkWorkflowDashboard"
+                     "WorkflowsRuntimeEntityFrameworkCore",
+                     "ActivitiesDesignEntityFrameworkCore",
+                     "WorkflowsDesignEntityFrameworkCore",
+                     "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence",
+                     "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence",
+                     "WorkflowsPublishingEntityFrameworkCore",
+                     "DiagnosticsOpenTelemetryEntityFrameworkCore",
+                     "DiagnosticsStructuredLogsEntityFrameworkCore",
+                     "SecretsEntityFrameworkCore",
+                     "WorkflowsDashboardEntityFrameworkCore"
                  })
         {
             Assert.True(features.ContainsKey(feature), $"Docker shell must explicitly enable {feature}.");
         }
 
-        Assert.False(features.ContainsKey("GroundworkUnifiedPersistencePostgreSql"));
+        // No Groundwork provider feature supplies the connection any more: each module selects its provider
+        // and resolves ConnectionStrings:Elsa, which docker-compose.yml supplies.
+        Assert.DoesNotContain(features.Select(feature => feature.Key), name => name.Contains("Groundwork", StringComparison.Ordinal));
         Assert.Equal(
-            "Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa",
-            Assert.IsType<JsonObject>(features["GroundworkProviderPostgreSql"])["ConnectionString"]?.GetValue<string>());
+            "PostgreSql",
+            Assert.IsType<JsonObject>(features["WorkflowsRuntimeEntityFrameworkCore"])["Provider"]?.GetValue<string>());
     }
 
     [Fact]

@@ -18,7 +18,10 @@ public sealed class OpenIddictPersistenceArchitectureTests
     [
         "Microsoft.EntityFrameworkCore.Design",
         "Microsoft.EntityFrameworkCore.InMemory",
+        "Microsoft.EntityFrameworkCore.SqlServer",
         "Microsoft.EntityFrameworkCore.Sqlite",
+        "MySql.EntityFrameworkCore",
+        "Npgsql.EntityFrameworkCore.PostgreSQL",
         "OpenIddict.EntityFrameworkCore"
     ];
 

@@ -37,7 +37,7 @@
           },
           "WorkflowsPublishing": {},
           "WorkflowsPublishingApi": {},
-          "WorkflowsPublishingGroundwork": {},
+          "WorkflowsPublishingEntityFrameworkCore": {},
           "WorkflowsRuntimeApi": {
             "WorkflowAlterationPayloadProtectionActiveKeyId": "development-demo-only",
             "WorkflowAlterationPayloadProtectionKeys": {
@@ -50,17 +50,18 @@
             "MaxSegmentCheckpoints": 50
           },
           "WorkflowsRuntimeTriggers": {},
-          "GroundworkProviderSqlite": {},
-          "GroundworkWorkflowRuntime": {
+          "WorkflowsRuntimeEntityFrameworkCore": {
             "CacheWorkflowExecutables": true,
             "WorkflowExecutableCacheCapacity": 256,
-            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key"
+            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key",
+            "HierarchyCursorSigningKey": "development-demo-only-hierarchy-cursor-signing-key"
           },
-          "ActivitiesDesignGroundworkPersistence": {},
-          "WorkflowsDesignGroundworkPersistence": {},
+          "ActivitiesDesignEntityFrameworkCore": {},
+          "WorkflowsDesignEntityFrameworkCore": {},
           "WorkflowsRuntimeDistributed": {},
-          "WorkflowsRuntimeDistributedGroundworkPersistence": {},
-          "GroundworkWorkflowDashboard": {},
+          "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence": {},
+          "WorkflowsDashboardEntityFrameworkCore": {},
           "FoundationAgentAbstractions": {},
           "FoundationAgentApi": {},
           "FoundationWorkflowsAgent": {},

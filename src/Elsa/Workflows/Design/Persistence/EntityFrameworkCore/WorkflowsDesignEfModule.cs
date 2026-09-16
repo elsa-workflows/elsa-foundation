@@ -5,8 +5,8 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 public static class WorkflowsDesignEfModule
 {
     public const string HistoryModuleName = "ElsaWorkflowsDesign";
-    public const string DefaultConnectionName = "ElsaWorkflowsDesign";
-    public const string DefaultSqliteConnectionString = "Data Source=elsa-workflows-design.db";
+    public const string DefaultConnectionName = EfConnectionDefaults.ConnectionName;
+    public const string DefaultSqliteConnectionString = EfConnectionDefaults.SqliteConnectionString;
     public const string DefinitionTable = "elsa_workflow_definitions_v2";
     public const string VersionTable = "elsa_workflow_definition_versions";
     public const string DraftTable = "elsa_workflow_definition_drafts";

@@ -30,6 +30,20 @@ internal static class EfRuntimeOperationalStoreSupport
     public static string Decode(string value) => EfRelationalIdentity.Decode(value);
     public static string Hash(string value) => EfRelationalIdentity.Hash(value);
     public static string Order(string value) => Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(value, RuntimeOperationalStateEfModule.IdentityMaximumLength));
+
+    /// <summary>
+    /// An order key over the first <see cref="RuntimeOperationalStateEfModule.IdentityMaximumLength"/> code
+    /// units of a composed identity. The runtime composes work-item and commit identities well past that, and
+    /// a full-width key would exceed the index-key budget of SQL Server and MySQL. Every query that orders by
+    /// such a key carries the identity hash as its tie-break, so paging stays total and stable.
+    /// </summary>
+    public static string OrderPrefix(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return Order(value.Length <= RuntimeOperationalStateEfModule.IdentityMaximumLength
+            ? value
+            : value[..RuntimeOperationalStateEfModule.IdentityMaximumLength]);
+    }
     public static string CompositeId(string scope, params string[] values)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(scope);

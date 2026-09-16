@@ -1,10 +1,10 @@
 {
   "//": "Curated DEMO shell composition for the docker-compose reference stack.",
-  "//_purpose": "Mounted into the Elsa.Workbench container at /app/shells.json. It replaces the repo default (SQLite) composition with an explicit Groundwork PostgreSQL provider and lane features. The repo default src/Apps/Elsa.Workbench/shells.json remains the local SQLite composition.",
-  "//_persistence": "GroundworkProviderPostgreSql supplies one host-selected Groundwork connection; the explicit runtime, design, distributed, publishing, diagnostics and dashboard features bind their units to its default target. The provider and lane features are separate so a host can name different targets later without consuming a composite preset.",
-  "//_recoverykey": "GroundworkWorkflowRuntime.RecoveryContinuationSigningKey is deliberately absent here. The compose stack runs in Production, where the image's shells.Production.json blanks any value in this file, so docker-compose.yml supplies it as env var CShells__Shells__default__Features__GroundworkWorkflowRuntime__RecoveryContinuationSigningKey. The default shell refuses to activate without it.",
-  "//_identity": "First-party sign-in mirrors the repo default composition: the identity API and the ASP.NET Core Identity login provider are composed here, while shells.Production.json adds the Groundwork identity stores, the admin seed and OpenIddict token issuance. The seed password and the token signing key are secrets that overlay blanks or requires, so docker-compose.yml supplies them as environment variables.",
-  "//_connectionstring": "GroundworkProviderPostgreSql binds its ConnectionString property directly from this feature section (the provider exposes a top-level ConnectionString property, not an Options wrapper). Points at the compose 'postgres' service. Demo-only credentials. Override without editing this file via env var CShells__Shells__default__Features__GroundworkProviderPostgreSql__ConnectionString.",
+  "//_purpose": "Mounted into the Elsa.Workbench container at /app/shells.json. It replaces the repo default (SQLite) composition with the EF Core persistence features bound to PostgreSQL. The repo default src/Apps/Elsa.Workbench/shells.json remains the local SQLite composition.",
+  "//_persistence": "Every EF module feature selects Provider=PostgreSql and resolves its connection from ConnectionStrings:Elsa, which docker-compose.yml supplies as ConnectionStrings__Elsa. Each module owns its own migrations and history table and applies them when the shell activates. A host that wants a module on its own database sets ConnectionString on that feature.",
+  "//_recoverykey": "WorkflowsRuntimeEntityFrameworkCore.RecoveryContinuationSigningKey and HierarchyCursorSigningKey are deliberately absent here. The compose stack runs in Production, where the image's shells.Production.json blanks any value in this file, so docker-compose.yml supplies them as env vars CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey and __HierarchyCursorSigningKey. The default shell refuses to activate without them.",
+  "//_identity": "First-party sign-in mirrors the repo default composition: the identity API and the ASP.NET Core Identity login provider are composed here, while shells.Production.json adds the EF identity stores, the admin seed and OpenIddict token issuance. The seed password and the token signing key are secrets that overlay blanks or requires, so docker-compose.yml supplies them as environment variables.",
+  "//_connectionstring": "docker-compose.yml points ConnectionStrings__Elsa at the compose 'postgres' service with demo-only credentials. Override it there rather than editing this file.",
   "CShells": {
     "Shells": {
       "default": {
@@ -26,7 +26,12 @@
           "DiagnosticsConsoleLogStreaming": {},
           "DiagnosticsOpenTelemetry": {},
           "DiagnosticsOpenTelemetryEngineBridge": {},
-          "DiagnosticsGroundworkPersistence": {},
+          "DiagnosticsOpenTelemetryEntityFrameworkCore": {
+            "Provider": "PostgreSql"
+          },
+          "DiagnosticsStructuredLogsEntityFrameworkCore": {
+            "Provider": "PostgreSql"
+          },
           "DiagnosticsStructuredLogs": {},
           "Events": {},
           "Expressions": {},
@@ -51,19 +56,28 @@
             "Model": "auto",
             "BaseDirectory": ".elsa/copilot"
           },
-          "GroundworkProviderPostgreSql": {
-            "ConnectionString": "Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa"
-          },
-          "GroundworkWorkflowRuntime": {
+                    "WorkflowsRuntimeEntityFrameworkCore": {
+            "Provider": "PostgreSql",
             "CacheWorkflowExecutables": true,
             "WorkflowExecutableCacheCapacity": 256
           },
-          "ActivitiesDesignGroundworkPersistence": {},
-          "WorkflowsDesignGroundworkPersistence": {},
-          "WorkflowsPublishingGroundwork": {},
+          "ActivitiesDesignEntityFrameworkCore": {
+            "Provider": "PostgreSql"
+          },
+          "WorkflowsDesignEntityFrameworkCore": {
+            "Provider": "PostgreSql"
+          },
+          "WorkflowsPublishingEntityFrameworkCore": {
+            "Provider": "PostgreSql"
+          },
           "WorkflowsRuntimeDistributed": {},
-          "WorkflowsRuntimeDistributedGroundworkPersistence": {},
-          "GroundworkWorkflowDashboard": {},
+          "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence": {
+            "Provider": "PostgreSql"
+          },
+          "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence": {
+            "Provider": "PostgreSql"
+          },
+          "WorkflowsDashboardEntityFrameworkCore": {},
           "HttpJavaScript": {},
           "JavaScriptActivities": {},
           "JavaScriptEndpoints": {},
@@ -99,7 +113,9 @@
           "Primitives": {},
           "Secrets": {},
           "SecretsApi": {},
-          "SecretsGroundworkPersistence": {},
+          "SecretsEntityFrameworkCore": {
+            "Provider": "PostgreSql"
+          },
           "Serialization": {},
           "Tasks": {},
           "WorkflowsDesignApi": {},

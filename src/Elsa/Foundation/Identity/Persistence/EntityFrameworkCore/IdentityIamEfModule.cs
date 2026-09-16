@@ -21,8 +21,8 @@ public static class IdentityIamEfModule
     public const string EmailReservationTableName = "identity_email_reservations";
     public const string RoleNameReservationTableName = "identity_role_name_reservations";
     public const string MutationReceiptTableName = "identity_mutation_receipts";
-    public const string DefaultConnectionName = "ElsaIdentity";
-    public const string DefaultSqliteConnectionString = "Data Source=elsa-identity.db";
+    public const string DefaultConnectionName = EfConnectionDefaults.ConnectionName;
+    public const string DefaultSqliteConnectionString = EfConnectionDefaults.SqliteConnectionString;
 
     public static string HistoryTableName => EfMigrationsHistory.TableName(HistoryModuleName);
 }

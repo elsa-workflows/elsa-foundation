@@ -59,8 +59,16 @@ public class AspNetCoreIdentityEntityFrameworkCoreFeature : IShellFeature
         var hasPassword = !string.IsNullOrWhiteSpace(SeedAdminPassword);
         if (!hasUserName && !hasPassword)
             return null;
-        if (!hasUserName || !hasPassword)
-            throw new InvalidOperationException("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore requires both SeedAdminUserName and SeedAdminPassword, or neither.");
+        // Say which half is missing: this is the error an operator meets when a production overlay blanks the
+        // seed password, and the Groundwork feature it replaces named the missing setting too.
+        if (!hasPassword)
+            throw new InvalidOperationException(
+                "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminUserName is configured but SeedAdminPassword is not. " +
+                "Supply the password (via committed config for development/demo, or a secret otherwise), or clear SeedAdminUserName to seed no admin.");
+        if (!hasUserName)
+            throw new InvalidOperationException(
+                "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminPassword is configured but SeedAdminUserName is not. " +
+                "Supply the user name, or clear SeedAdminPassword to seed no admin.");
         return new IdentitySeedOptions
         {
             UserName = SeedAdminUserName!,

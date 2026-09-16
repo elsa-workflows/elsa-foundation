@@ -163,7 +163,7 @@ internal static class RuntimeCheckpointDurableValueParticipantProviderSmoke
     private static RuntimeCheckpointCommitEntity Marker(string scope, string commitId, string workflowExecutionId) => new()
     {
         Id = EfRelationalIdentity.Hash($"{scope.Length}:{scope}{commitId.Length}:{commitId}"), ScopeKey = EfRelationalIdentity.Encode(scope), ScopeKeyHash = EfRelationalIdentity.Hash(scope),
-        CommitId = EfRelationalIdentity.Encode(commitId), CommitIdHash = EfRelationalIdentity.Hash(commitId), CommitIdOrderKey = Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(commitId, RuntimeOperationalStateEfModule.IdentityMaximumLength)),
+        CommitId = EfRelationalIdentity.Encode(commitId), CommitIdHash = EfRelationalIdentity.Hash(commitId),
         WorkflowExecutionId = EfRelationalIdentity.Encode(workflowExecutionId), WorkflowExecutionIdHash = EfRelationalIdentity.Hash(workflowExecutionId), WorkflowExecutionIdOrderKey = Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(workflowExecutionId, RuntimeOperationalStateEfModule.IdentityMaximumLength)),
         OccurredAtUtcTicks = CapturedAt.UtcTicks, Fingerprint = new string('a', 64), ContentJson = "{}", PendingPostCommitWorkIdsJson = "[]", ConsumedSchedulerWorkItemIdsJson = "[]",
         SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion, Revision = 1

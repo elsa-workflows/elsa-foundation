@@ -1117,17 +1117,12 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
 
                     b.Property<string>("CommitId")
                         .IsRequired()
-                        .HasMaxLength(344)
+                        .HasMaxLength(1200)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("CommitIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("CommitIdOrderKey")
-                        .IsRequired()
-                        .HasMaxLength(516)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ConsumedSchedulerWorkItemIdsJson")
@@ -1186,10 +1181,10 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ScopeKeyHash", "CommitIdHash", "CommitId")
+                    b.HasIndex("ScopeKeyHash", "CommitIdHash")
                         .IsUnique();
 
-                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "CommitIdOrderKey");
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash");
 
                     b.ToTable("elsa_runtime_checkpoint_commit", (string)null);
                 });
@@ -2447,7 +2442,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Book
 
                     b.Property<string>("WorkItemId")
                         .IsRequired()
-                        .HasMaxLength(128)
+                        .HasMaxLength(1200)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("WorkItemIdHash")

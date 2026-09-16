@@ -105,7 +105,7 @@ public sealed class EfWorkflowSchedulerPoisonStore(
         CancellationToken cancellationToken = default)
     {
         ValidateIdentity(workflowExecutionId, nameof(workflowExecutionId));
-        ValidateIdentity(workItemId, nameof(workItemId));
+        ValidateWorkItemIdentity(workItemId, nameof(workItemId));
         cancellationToken.ThrowIfCancellationRequested();
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
         var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, workflowExecutionId, workItemId);
@@ -203,7 +203,7 @@ public sealed class EfWorkflowSchedulerPoisonStore(
                 row.WorkflowExecutionIdOrderKey != EfRuntimeOperationalStoreSupport.Order(record.WorkflowExecutionId) ||
                 row.WorkItemId != EfRuntimeOperationalStoreSupport.Encode(record.WorkItemId) ||
                 row.WorkItemIdHash != EfRuntimeOperationalStoreSupport.Hash(record.WorkItemId) ||
-                row.WorkItemIdOrderKey != EfRuntimeOperationalStoreSupport.Order(record.WorkItemId) ||
+                row.WorkItemIdOrderKey != EfRuntimeOperationalStoreSupport.OrderPrefix(record.WorkItemId) ||
                 row.FirstFailedAtUtcTicks != record.FirstFailedAt.UtcTicks ||
                 row.LastFailedAtUtcTicks != record.LastFailedAt.UtcTicks)
                 throw new InvalidDataException("The scheduler-poison row identity or projection does not match its current content.");
@@ -234,7 +234,7 @@ public sealed class EfWorkflowSchedulerPoisonStore(
         WorkflowExecutionIdOrderKey = EfRuntimeOperationalStoreSupport.Order(record.WorkflowExecutionId),
         WorkItemId = EfRuntimeOperationalStoreSupport.Encode(record.WorkItemId),
         WorkItemIdHash = EfRuntimeOperationalStoreSupport.Hash(record.WorkItemId),
-        WorkItemIdOrderKey = EfRuntimeOperationalStoreSupport.Order(record.WorkItemId),
+        WorkItemIdOrderKey = EfRuntimeOperationalStoreSupport.OrderPrefix(record.WorkItemId),
         FirstFailedAtUtcTicks = record.FirstFailedAt.UtcTicks,
         LastFailedAtUtcTicks = record.LastFailedAt.UtcTicks,
         ContentJson = RuntimeArtifactJson.Serialize(record),
@@ -263,7 +263,7 @@ public sealed class EfWorkflowSchedulerPoisonStore(
     {
         ArgumentNullException.ThrowIfNull(record);
         ValidateIdentity(record.WorkflowExecutionId, nameof(record.WorkflowExecutionId));
-        ValidateIdentity(record.WorkItemId, nameof(record.WorkItemId));
+        ValidateWorkItemIdentity(record.WorkItemId, nameof(record.WorkItemId));
         if (!Enum.IsDefined(record.CommandKind))
             throw new InvalidDataException("The scheduler-poison record contains an undefined command kind.");
         if (!Enum.IsDefined(record.Disposition))
@@ -275,5 +275,12 @@ public sealed class EfWorkflowSchedulerPoisonStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
         if (value.Length > RuntimeSchedulerPoisonEfModule.IdentityMaximumLength)
             throw new ArgumentException($"Runtime identity cannot exceed {RuntimeSchedulerPoisonEfModule.IdentityMaximumLength} UTF-16 code units.", parameterName);
+    }
+
+    private static void ValidateWorkItemIdentity(string value, string parameterName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
+        if (value.Length > RuntimeSchedulerPoisonEfModule.WorkItemIdentityMaximumLength)
+            throw new ArgumentException($"Runtime work-item identity cannot exceed {RuntimeSchedulerPoisonEfModule.WorkItemIdentityMaximumLength} UTF-16 code units.", parameterName);
     }
 }

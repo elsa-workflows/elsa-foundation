@@ -215,7 +215,6 @@ public sealed class EfRuntimeCheckpointBookmarkParticipantTests
         ScopeKeyHash = EfRelationalIdentity.Hash(scope),
         CommitId = EfRelationalIdentity.Encode(commitId),
         CommitIdHash = EfRelationalIdentity.Hash(commitId),
-        CommitIdOrderKey = Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(commitId, RuntimeOperationalStateEfModule.IdentityMaximumLength)),
         WorkflowExecutionId = EfRelationalIdentity.Encode(workflowExecutionId),
         WorkflowExecutionIdHash = EfRelationalIdentity.Hash(workflowExecutionId),
         WorkflowExecutionIdOrderKey = Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(workflowExecutionId, RuntimeOperationalStateEfModule.IdentityMaximumLength)),

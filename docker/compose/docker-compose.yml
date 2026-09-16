@@ -11,9 +11,9 @@
 #   Elsa.Workbench : http://localhost:13000   (root returns Healthy JSON)
 #   Elsa Studio : http://localhost:14000
 #
-# Persistence: elsa-workbench is composed with an explicit Groundwork PostgreSQL
-# provider and lane features via the mounted ./elsa-workbench.shells.json, so
-# runtime + workflows-design + activities-design all live in the Postgres target.
+# Persistence: elsa-workbench is composed with the EF Core persistence features on
+# PostgreSQL via the mounted ./elsa-workbench.shells.json, so runtime +
+# workflows-design + activities-design all live in the Postgres database.
 #
 # Verify Postgres is actually used:
 #   docker compose exec postgres psql -U elsa -d elsa -c '\dt'
@@ -60,13 +60,15 @@ services:
       # HMAC key for durable recovery continuations (at least 32 UTF-8 bytes, identical on every node). The
       # default shell refuses to activate without it. It must be an env var: the image's shells.Production.json
       # blanks any value in the mounted shells.json. Demo-only; change it for anything beyond local use.
-      CShells__Shells__default__Features__GroundworkWorkflowRuntime__RecoveryContinuationSigningKey: elsa-docker-demo-recovery-continuation-key
+      CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey: elsa-docker-demo-recovery-continuation-key
+      # HMAC key for activity-execution hierarchy cursors, supplied the same way and for the same reason.
+      CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__HierarchyCursorSigningKey: elsa-docker-demo-hierarchy-cursor-key
       # Identity secrets. The image's shells.Production.json turns off development mode for both identity
       # features and blanks the seed password, and it sits above the mounted shells.json, so the password must be
       # an env var; the signing key is supplied the same way to keep secrets out of that file. Without either one
       # the default shell fails activation. Demo-only values; change both for anything beyond local use.
       # Password for the seeded "admin" account (the overlay supplies the username) you sign in to Studio with.
-      CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityGroundwork__SeedAdminPassword: "Password123!"
+      CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword: "Password123!"
       # Base64 PKCS#8 RSA private key that signs access tokens; line breaks are ignored. Generate your own with:
       #   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -topk8 -nocrypt -outform DER | base64
       CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey: >-
@@ -92,9 +94,9 @@ services:
         ZPeFAoGAI8ueMwrQDfJ6Q0fBj2ah0wdU84XZ9xdHajBIVrGuIsYBH0lSoq1wTPk1FvKwyZnnXESl
         u+O+NLeJuPF2qjgTc2UX6Gt9cI1CVa++5IQIXqx45dKD1pIDskJGly6MD7Ez1Ps1iykBhYYDnsxS
         rP6K4lXoYB89C+dKJAPF+CCPCH8=
-      # The connection string is supplied by the mounted shells.json below. To override
-      # it without editing that file, uncomment the next line:
-      # CShells__Shells__default__Features__GroundworkProviderPostgreSql__ConnectionString: "Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa"
+      # One connection for every EF module. Each module owns its own tables, migrations and history
+      # table inside this database; set ConnectionString on a single feature to split one out.
+      ConnectionStrings__Elsa: "Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa"
     ports:
       - "13000:8080"
     volumes:

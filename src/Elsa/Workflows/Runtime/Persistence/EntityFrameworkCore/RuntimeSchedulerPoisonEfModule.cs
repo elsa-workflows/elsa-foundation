@@ -8,4 +8,12 @@ public static class RuntimeSchedulerPoisonEfModule
     public const int IdentityMaximumLength = RuntimeOperationalStateEfModule.IdentityMaximumLength;
     public const int ScopeProjectionMaximumLength = RuntimeOperationalStateEfModule.ScopeProjectionMaximumLength;
     public const int OrderKeyMaximumLength = RuntimeOperationalStateEfModule.OrderKeyMaximumLength;
+
+    /// <summary>
+    /// Scheduler work-item ids are composed by the runtime from an execution id, a command kind and an
+    /// activity path, so they run past <see cref="IdentityMaximumLength"/>. Groundwork keys them by document
+    /// id, which allows 450.
+    /// </summary>
+    public const int WorkItemIdentityMaximumLength = 450;
+    public const int WorkItemIdentityProjectionMaximumLength = ((WorkItemIdentityMaximumLength * sizeof(char) + 2) / 3) * 4;
 }
