@@ -29,7 +29,7 @@ No repo file is edited; cleanup restarts the server without the feature.
 
 - Manages the server process on port 5095 (stop/start, like `durability/`) — don't run it while
   another suite is mid-flight.
-- Requires the standard from-source setup (build + Groundwork schema deploy) per
+- Requires the standard from-source setup (build; the EF modules migrate on shell activation) per
   [`../README.md`](../README.md).
 - Definition ids/names are timestamped per run; the imported definitions remain in the dev SQLite
   catalog afterwards (reconciliation never deletes version rows).

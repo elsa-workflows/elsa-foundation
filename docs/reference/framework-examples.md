@@ -25,7 +25,7 @@ Representative examples:
 
 - `src/Elsa/Workflows/Design/Api/EXTENSION_POINTS.md` - draft mutation events, lookup/command/diff-engine override seams, and the `WorkflowsDesignApiFeature` composition root.
 - `src/Elsa/Workflows/Design/Validations/EXTENSION_POINTS.md` - `DraftValidating`, `DraftValidated`, and the `IDraftValidator` contributor with intra-domain defaults.
-- `src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md` - provider-neutral storage ports, target selection, schema admission, and override contracts.
+- `src/Elsa/Persistence/EntityFramework/EXTENSION_POINTS.md` - provider-neutral storage ports, migration policy, and override contracts.
 
 The repo-root `EXTENSION_POINTS.md` links every source catalog grouped by domain family. The root index is pure links; authoritative extension-point detail remains in each local catalog.
 

@@ -97,7 +97,7 @@ A Postgres-flavored curated example lives in the repo at
 [`docker/compose/elsa-workbench.shells.json`](../docker/compose/elsa-workbench.shells.json).
 
 > Keep the identity features (`FoundationIdentity*`) and `FastEndpoints` if you want to log in from
-> Studio; the seeded admin comes from `FoundationIdentityAspNetCoreIdentityGroundwork`.
+> Studio; the seeded admin comes from `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore`.
 
 ### Mount it — two modes
 
@@ -182,7 +182,7 @@ Any feature setting can therefore be overridden without touching the file, using
 section separator:
 
 ```bash
--e CShells__Shells__default__Features__GroundworkProviderPostgreSql__ConnectionString="Host=postgres;..."
+-e ConnectionStrings__Elsa="Host=postgres;..."
 ```
 
 > **Warning:** because env vars sit *above* the file, a `CShells__...` variable silently masks both

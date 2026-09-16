@@ -50,120 +50,40 @@ boundary or the use needs options the payload serializer can't provide:
 - **Expression / scripting** — JavaScript/Liquid helpers serialize within an expression's execution
   scope.
 - **Custom `JsonConverter`s** — they participate in the `System.Text.Json` pipeline by definition.
-- **The Groundwork runtime persistence bridge**
-  ([`IGroundworkRuntimeDocumentSerializer`](../src/Elsa/Persistence/Groundwork/Serialization/IGroundworkRuntimeDocumentSerializer.cs))
-  — the bridge both writes and reads its runtime state documents entirely within the persistence
-  layer; no other component parses their `ContentJson`. It owns a frozen `JsonSerializerOptions`
-  deliberately independent of `IPayloadSerializer`: this is the *durability* format of suspended
-  workflow state, frozen by a golden-fixture suite and evolved only through explicit per-kind version
-  policy (see **Schema evolution** below). Adopting the mutable, startup-contributed
-  converter registry of `IPayloadSerializer` would itself be an unstamped format change — the exact
-  hazard this bridge's versioning exists to eliminate. All bridge serialization goes through the one
-  sealed serializer service, never raw `JsonSerializer`.
+- **The Runtime EF Core persistence module**
+  — it writes and reads its own runtime state rows entirely within the persistence layer; no other
+  component parses their payload JSON. It owns a frozen `JsonSerializerOptions` deliberately
+  independent of `IPayloadSerializer`: this is the *durability* format of suspended workflow state,
+  frozen by a golden-fixture suite and evolved only through EF Core migrations. Adopting the mutable,
+  startup-contributed converter registry of `IPayloadSerializer` would itself be an unstamped format
+  change — the exact class of drift the module exists to eliminate.
 - **The reconciliation content hasher**
   ([`DefaultActivityDefinitionHasher`](../src/Elsa/Activities/Design/Persistence/Core/Services/DefaultActivityDefinitionHasher.cs))
   — it needs a canonical, sorted-key serialization that `IPayloadSerializer` does not produce, and only
   the SHA-256 of that JSON is ever persisted (the JSON itself is never read back).
 
-## Schema evolution (Groundwork runtime bridge)
+## Schema evolution (Runtime EF Core module)
 
-By default, runtime state persisted by the Groundwork bridge (bookmarks, executables, execution/scheduler/
-operational/control-plane/incident/durable-value state, checkpoint commits, the post-commit outbox,
-the durable scheduler work queue, workflow trigger bindings)
-must be able to evolve without silently breaking already-suspended workflows. The contract:
+Runtime state (bookmarks, executables, execution/scheduler/operational/control-plane/incident/durable-value
+state, checkpoint commits, the post-commit outbox, the durable scheduler work queue, workflow trigger
+bindings) must be able to evolve without silently breaking already-suspended workflows. The contract:
 
-- **Per-kind integer versions, hosted in the envelope.** Each runtime document kind has a current integer
-  version declared in
-  [`ElsaRuntimeDocumentVersions`](../src/Elsa/Persistence/Groundwork/Serialization/ElsaRuntimeDocumentVersions.cs).
-  The version is stamped into the Groundwork **envelope** `SchemaVersion` field on
-  every write — never inside the content JSON and never on the domain state records, keeping
-  persistence concerns out of `WorkflowExecutionState` et al. Only positive-integer document stamps are
-  accepted. The storage manifest's `"1.0.0"` version is a separate Groundwork manifest/index contract and
-  is not a persisted-document alias.
-- **Loud enforcement on read.** The serializer parses the stamp: the current version deserializes
-  directly; a version below the kind's minimum-readable boundary, an unrecognized/non-positive version, or a future version throws
-  Groundwork's structured `DocumentSchemaVersionException`, naming the kind, stamp, parsed version, and
-  supported range — never a silent default-valued hydrate.
-- **Clean baseline, with one explicit rolling window.** `ElsaRuntimeDocumentVersions` sets
-  minimum-readable equal to current for every Runtime kind except `executableActivityTemplate`.
-  Workflow executable v7 is a clean baseline that adds the compiled workflow-scope variable declarations
-  (`workflowVariables`, #972) on top of v6's explicit input nullability. Executable activity
-  template v2 retains v1 and upcasts the legacy nested runtime descriptor into the split consumer/schema/payload
-  fields used by `ExecutableNode`. There is no Elsa upcaster interface, registry, or generic historical
-  compatibility chain.
-- **Groundwork owns migration capability.** A compatible in-place or rolling upgrade may deliberately retain
-  an older minimum-readable version, contribute explicit Groundwork `IDocumentJsonUpcaster` steps, and keep
-  every supported fixture. Groundwork's codec validates such a chain eagerly at construction. Each supported
-  window must be composed explicitly rather than reintroducing an Elsa-specific codec or registry.
-- **A CI fixture gate freezes the format.** Committed golden fixtures
-  (`tests/Elsa/Persistence/Groundwork/Tests/Fixtures/v<n>/<kind>.json`) capture the exact content JSON
-  each store writes for a canonical instance. A drift test re-serializes the canonical instance and
-  compares it **semantically** (parsed and normalized, so incidental formatting differences are
-  ignored) to the committed current-version fixture. Each clean-baseline kind keeps only that current
-  fixture; executable activity templates retain their supported v1 and v2 fixtures. Any state-record field
-  add/rename/remove/retype without a
-  version bump fails the drift test.
+- **EF Core migrations are the mechanism.** Each module owns its own migrations set and its own
+  `__EFMigrationsHistory_*` table, applied or validated on shell activation according to the module's
+  `EfMigratePolicy`. See [`src/Elsa/Persistence/EntityFramework/README.md`](../src/Elsa/Persistence/EntityFramework/README.md)
+  for the shared policy.
+- **Loud enforcement on read.** A pending model change, a missing migration, or a provider mismatch fails
+  shell activation rather than serving a partially readable store.
+- **A CI fixture gate freezes the payload format.** The Runtime EF suites re-serialize a canonical instance
+  of each persisted payload and compare it semantically against the committed expectation, so a state-record
+  field add/rename/remove/retype cannot land without an explicit decision.
 
 ### How to change a persisted runtime state record
 
-For a clean-break pre-GA change, in the same change:
-
-1. Bump that kind's current version in `ElsaRuntimeDocumentVersions`; keep its minimum-readable version at
-   current.
-2. Replace the kind's golden fixture with `Fixtures/v<new>/<kind>.json`; do not retain historical fixtures or
-   add an Elsa compatibility shim.
-3. Treat installations carrying the older generation as reset-and-republish upgrades.
-
-For an explicitly supported compatible in-place or rolling upgrade, keep the older minimum-readable
-boundary, add Groundwork `IDocumentJsonUpcaster` contributions for every required step, and retain every
-supported historical fixture. An intentionally incompatible change advances the minimum-readable boundary
-and documents the required persistence reset. Executable activity template v1-to-v2 is the supported rolling
-window under this rule.
-
-### Pre-GA clean-baseline reset
-
-Every Runtime document kind except `executableActivityTemplate` currently admits only its current fixture.
-`workflowExecutable` is current and minimum-readable version 6; input nullability is explicit and required.
-`executableActivityTemplate` is current version 2 and minimum-readable version 1; its identity v1-to-v2
-upcaster normalizes nested runtime descriptors without changing their consumer identity or payload.
-`workflowExecutableSourceReference` and `workflowExecutionState` are current and minimum-readable version 4;
-activity-execution state is version 4; activity-execution inspection, scheduler work items, workflow trigger
-bindings, recurring schedules, and durable timers are version 2; unchanged kinds remain at version 1.
-Source-reference v4 includes tenant scope; workflow-execution v4 includes dispatch nesting depth.
-
-If an installation carries any older Runtime generation, reset the complete Runtime and Publishing Groundwork
-persistence sets atomically while preserving Design and Activities data, then republish workflows before
-serving traffic. Removing only selected documents is unsafe because execution state, continuations,
-publication authority, and serving projections form a dependent persistence set around the same artifacts.
-
-### Workflow-design Groundwork clean-schema boundary
-
-The workflow-definition projection is a pre-GA clean baseline. Its portable ID lookup changed from the wide
-search key to a required SHA-256 lookup projection, while the former name/description indexes were removed.
-The definition unit therefore uses the versioned physical table `elsa_workflow_definitions_v2` and storage schema
-version `2`; this deliberately prevents Groundwork from attempting an in-place required-column backfill or
-leaving the removed indexes attached to the active table. The workflow-design envelope `SchemaVersion` remains
-`"1.0.0"` because that value versions the document envelope, not this physical clean-schema boundary.
-
-This change has no in-place migration. Before enabling a build containing this projection, discard and reprovision
-the complete workflow-design Groundwork persistence set (definitions, versions, drafts, layouts, and design-operation
-markers) from the current manifest, then recreate or import the workflow designs. Do not retain old definition,
-version, or draft rows alongside the new definition table: they can otherwise form orphaned lifecycle records.
-The reset is intentional for the unreleased pre-GA line and must be replaced by an explicit data migration before
-the design schema is treated as production-compatible.
-
-### Activity-design Groundwork clean-schema boundary
-
-The activity-definition-version projection is also a pre-GA clean baseline. `definitionId` and
-`semVerSortKey` became required, and two non-unique legacy indexes were replaced by the unique domain tuple
-`(definitionId, semVerSortKey)`. The unit therefore uses the versioned physical table
-`elsa_activity_definition_versions_v2` and storage schema version `2`; the activity-design envelope
-`SchemaVersion` remains `"1.0.0"`.
-
-This change has no in-place migration. Before enabling the build, discard and reprovision the complete
-activity-design Groundwork persistence set from the current manifest, then recreate or import the activity
-designs. Do not retain old version rows beside the new table because authoring, publication, layout, and
-dependency records can otherwise reference a generation the active store no longer reads.
+For a clean-break pre-GA change, in the same change: alter the entity and its model configuration, add the
+migration for every provider the module ships, update the payload expectation, and treat installations
+carrying the older generation as reset-and-republish upgrades. An intentionally incompatible change
+documents the required persistence reset.
 
 ## Cross-execution stimulus routing (W7, E3-1 / E3-5)
 
@@ -176,10 +96,9 @@ serializer, versioning, and fixture gate as every other runtime kind.
   inside a *pinned, published* executable — the piece Elsa 4 was missing that made "start a workflow from
   an external event" impossible. It is indexed over the published artifact, never the mutable authored
   definition. The binding also carries its publication, slot, provider-cardinality, and prepared/active authority.
-  Its sole golden fixture is `Fixtures/v2/workflowTriggerBinding.json`; v1 is rejected. Two Groundwork indexes back it:
-  `by-stimulus` (keyword over `stimulusHash`, the cross-artifact fan-out used by the router to start every
-  workflow waiting on a stimulus) and `by-artifact` (keyword over `artifactId`, used to replace an
-  artifact's bindings on republish). Writing an unroutable published trigger (a trigger node whose stimulus
+  Two indexes back it: one over `stimulusHash`, the cross-artifact fan-out used by the router to start every
+  workflow waiting on a stimulus, and one over `artifactId`, used to replace an artifact's bindings on
+  republish. Writing an unroutable published trigger (a trigger node whose stimulus
   cannot be derived) **fails the publish** rather than persisting a trigger that can never fire.
 - **New `by-stimulus` index on the existing `bookmarkState` kind.** Added additively so a single stimulus
   can resume *waiting instances across executions* (E3-5 fan-in), not only within one `workflowExecutionId`.
@@ -189,37 +108,11 @@ serializer, versioning, and fixture gate as every other runtime kind.
   *directly parented by it* via `IActivityExecutionStateStore.ListByParentAsync`, instead of loading every
   activity-execution state in the workflow and filtering in memory — the join fires once per branch completion,
   so the whole-workflow read made it O(branches × workflow states). The index is a keyword over the **already
-  persisted** nested field `state.parentActivityExecutionId` (Groundwork index fields are dot-paths resolved by
-  walking nested JSON). No version bump or upcaster is needed: the state record shape is unchanged; only a new
-  index was declared — the existing `GroundworkRuntimeDocumentFixtureTests` drift test stays green, which is the
-  wire-safety proof. The manifest `SchemaVersion` stays `"1.0.0"` (it versions the storage manifest, not persisted
-  document content); the Condition 7 backfill below triggers on
-  the physicalized index-set change, so activity-execution states written before the index existed become visible
-  through it without a re-save. The store queries the single-field parent index and then applies a defensive
+  persisted** parent identity. No payload change is needed: the state record shape is unchanged; only a new
+  index was declared, so the existing payload drift tests stay green, which is the wire-safety proof.
+  The store queries the parent index and then applies a defensive
   in-memory `workflowExecutionId` filter, so the full `(workflowExecutionId, parentActivityExecutionId)` semantics
   hold identically across providers without relying on parent activity-execution ids being globally unique.
-
-### Condition 7 — added indexes backfill pre-existing documents (fixed in Groundwork preview.16)
-
-**Previously** (Groundwork ≤ preview.10, guarded empirically by the probe test): the Groundwork SQLite
-provider populated an index's physicalized projection only when a document was **written**. A document
-written *before* a new index was declared was **not** retroactively backfilled into that index — not even
-across a manifest version bump — so only documents saved after the index existed were visible through it,
-and re-saving a document was required to make it visible.
-
-**Fixed in Groundwork preview.16** (Groundwork PR #21): when a manifest
-adds a portable index, `RelationalMaterializerBase` now backfills `groundwork_document_indexes` for
-pre-existing documents (delete-then-insert inside the materialization transaction, sharing single-field
-index semantics with save-time via `RelationalIndexValues.TryGetIndexValue`). A document written before the
-index was declared becomes visible to the new index on the next manifest version bump — no re-save required.
-The regression test `GroundworkAddedIndexBackfillRegressionTests` guards this behavior.
-
-Consequence for the additive `bookmarkState` `by-stimulus` index: a bookmark that already existed in a
-database at the moment this feature is deployed is now backfilled into the index on the manifest version
-bump, so it is routable for cross-execution stimulus routing without waiting for a re-save. (Even before the
-fix the impact was bounded because bookmarks are short-lived — created and consumed within a single
-workflow's wait window and rewritten on the next checkpoint.) New databases are unaffected, and the
-brand-new `workflowTriggerBinding` kind has no pre-existing documents.
 
 ### Stimulus START idempotency is at-least-once
 
@@ -234,20 +127,17 @@ scope for this wave — a heavy durable dedup store was explicitly out of scope.
 
 ### Published executables are durable (DS-2, W17)
 
-A published workflow compiles to a `WorkflowExecutable` artifact that persists through the same Groundwork
-bridge as every other runtime kind — the **`workflowExecutable`** document kind (current and
-minimum-readable version 7 in
-[`ElsaRuntimeDocumentVersions`](../src/Elsa/Persistence/Groundwork/Serialization/ElsaRuntimeDocumentVersions.cs)),
-written by
-[`GroundworkWorkflowExecutableStore`](../src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowExecutableStore.cs)
-over the `IWorkflowExecutableStore` seam, with one clean v7 golden fixture. Version 7 adds the compiled
-workflow-scope variable declarations (`workflowVariables`, #972) to v6's pinned activity contract and
-explicit input-nullability data required by typed value flow. The
+A published workflow compiles to a `WorkflowExecutable` artifact that persists through the same Runtime
+EF Core module as every other runtime state, written by
+[`EfWorkflowExecutableStore`](../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs)
+over the `IWorkflowExecutableStore` seam. Its payload carries the compiled workflow-scope variable
+declarations (`workflowVariables`, #972), the pinned activity contract, and the explicit input-nullability
+data required by typed value flow. The
 `InMemory` executable store registered by `WorkflowsPublishingFeature` is a `TryAdd` default that the
-Groundwork runtime-persistence feature overrides; when durable persistence is composed, publishing is durable
+Runtime EF Core persistence feature overrides; when durable persistence is composed, publishing is durable
 by construction. The `PublishWorkflowRequestHandler` saves the compiled artifact and then builds its trigger
 index in the same publish flow, so a published artifact **and** its start-triggers survive a host restart.
-`GroundworkWorkflowExecutableStoreTests.Published_Executable_Survives_Restart` proves this against a
-file-backed SQLite database reopened with a fresh bridge instance. There is intentionally **no**
+`RuntimeEntityFrameworkCoreEndToEndTests` proves this against a file-backed SQLite database reopened with a
+fresh service provider. There is intentionally **no**
 Publishing-owned executable store or manifest — a second store writing the same kind under different options
-would be a wire-level format divergence, exactly the hazard the per-kind versioning above exists to prevent.
+would be a wire-level format divergence, exactly the hazard the single owning module exists to prevent.
