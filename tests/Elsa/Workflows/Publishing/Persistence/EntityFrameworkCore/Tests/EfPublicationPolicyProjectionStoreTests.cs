@@ -4,8 +4,6 @@ using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Stores;
-using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
-using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Publishing;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -265,44 +263,6 @@ public sealed class EfPublicationPolicyProjectionStoreTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             database.Intents(context, "tenant-a").FindAsync("intent").AsTask());
-    }
-
-    [Fact]
-    public void Registration_preserves_both_EF_and_Groundwork_orders_and_rejects_foreign_policy_ownership()
-    {
-        foreach (var order in new[] { "ef-gw-ef", "gw-ef-gw" })
-        {
-            var services = new ServiceCollection();
-            new WorkflowsPublishingFeature().ConfigureServices(services);
-            var options = new PublishingEntityFrameworkCoreOptions { ConnectionString = "Data Source=:memory:" };
-            if (order == "ef-gw-ef")
-            {
-                services.AddPublishingEntityFrameworkCore(options);
-                services.AddGroundworkPublishingStores();
-                services.AddPublishingEntityFrameworkCore(options);
-            }
-            else
-            {
-                services.AddGroundworkPublishingStores();
-                services.AddPublishingEntityFrameworkCore(options);
-                services.AddGroundworkPublishingStores();
-            }
-
-            Assert.Equal(PublicationSnapshotReviewStoreBackend.EntityFramework, PublicationSnapshotReviewStoreBackend.Find(services)!.Name);
-            Assert.Equal(PublicationPolicyProjectionStoreBackend.EntityFramework, PublicationPolicyProjectionStoreBackend.Find(services)!.Name);
-            Assert.Single(services, service => service.ServiceType == typeof(IPublicationPolicyStore));
-            Assert.Single(services, service => service.ServiceType == typeof(IPublicationProjectionIntentStore));
-            Assert.Equal(typeof(EfPublicationPolicyStore), services.Single(service => service.ServiceType == typeof(EfPublicationPolicyStore)).ImplementationType);
-            Assert.Equal(typeof(EfPublicationProjectionIntentStore), services.Single(service => service.ServiceType == typeof(EfPublicationProjectionIntentStore)).ImplementationType);
-            Assert.Single(services, service => service.ServiceType == typeof(PublishingSnapshotReviewDbContext));
-        }
-
-        var foreign = new ServiceCollection();
-        foreign.AddScoped<IPublicationPolicyStore, ForeignPolicyStore>();
-        new WorkflowsPublishingFeature().ConfigureServices(foreign);
-        var before = foreign.ToArray();
-        Assert.Throws<InvalidOperationException>(() => foreign.AddPublishingEntityFrameworkCore(new PublishingEntityFrameworkCoreOptions()));
-        Assert.Equal(before, foreign);
     }
 
     [Fact]

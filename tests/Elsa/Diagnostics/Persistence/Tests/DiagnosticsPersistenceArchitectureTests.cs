@@ -13,132 +13,9 @@ namespace Elsa.Diagnostics.Persistence.Tests;
 
 public sealed partial class DiagnosticsPersistenceArchitectureTests
 {
-    private const string CurrentGroundworkVersion = "0.4.0-preview.30";
-    private const string EfLedgerGroundworkVersion = "0.4.0-preview.3";
     private static string RepoRoot { get; } = FindRepoRoot();
     private static readonly string DiagnosticsSourceRoot = Path.Combine(RepoRoot, "src", "Elsa", "Diagnostics");
     private static readonly string DiagnosticsTestRoot = Path.Combine(RepoRoot, "tests", "Elsa", "Diagnostics");
-
-    [Fact]
-    public void Provider_neutral_diagnostics_projects_are_Groundwork_free_in_the_project_graph_and_source_tree()
-    {
-        var violations = FindDiagnosticsSourceProjects()
-            .Where(project => !IsGroundworkAdapterProject(project))
-            .SelectMany(project => FindGroundworkProjectGraphViolations(project).Select(violation =>
-                $"{RelativePath(project)} -> {violation}"))
-            .Concat(FindGroundworkSourceViolations())
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-
-        Assert.True(
-            violations.Length == 0,
-            "Groundwork is permitted only in concrete diagnostics persistence adapters. Provider-neutral diagnostics projects and source must remain infrastructure-free:" +
-            Environment.NewLine + string.Join(Environment.NewLine, violations));
-    }
-
-    [Fact]
-    public void Diagnostics_core_and_shared_lifecycle_have_no_Groundwork_references()
-    {
-        var assemblies = new[]
-        {
-            typeof(IStructuredLogStore).Assembly,
-            typeof(IOpenTelemetryStore).Assembly,
-            typeof(DiagnosticsPersistenceRegistration).Assembly
-        };
-
-        foreach (var assembly in assemblies)
-        {
-            Assert.DoesNotContain(assembly.GetReferencedAssemblies(), reference => reference.Name?.StartsWith("Groundwork", StringComparison.Ordinal) == true);
-
-            var publicSurfaceViolations = PublicSurfaceTypes(assembly)
-                .Where(reference => IsGroundworkType(reference.Type))
-                .Select(reference => $"{assembly.GetName().Name}: {reference.Owner.FullName}.{reference.Member} -> {reference.Type}")
-                .ToArray();
-            Assert.True(
-                publicSurfaceViolations.Length == 0,
-                "Diagnostics core and shared lifecycle public contracts must not expose Groundwork types:" +
-                Environment.NewLine + string.Join(Environment.NewLine, publicSurfaceViolations));
-        }
-    }
-
-    [Fact]
-    public void Current_groundwork_family_and_ef_oracle_ledger_are_closeout_ready()
-    {
-        var packageVersions = XDocument.Load(Path.Combine(RepoRoot, "Directory.Packages.props"))
-            .Descendants("PackageVersion")
-            .Where(element => element.Attribute("Include")?.Value.StartsWith("Groundwork", StringComparison.Ordinal) == true)
-            .ToDictionary(
-                element => element.Attribute("Include")!.Value,
-                element => element.Attribute("Version")?.Value,
-                StringComparer.Ordinal);
-
-        Assert.NotEmpty(packageVersions);
-        Assert.All(packageVersions, package => Assert.Equal(CurrentGroundworkVersion, package.Value));
-
-        var explicitProjectVersions = FindDiagnosticsProjects()
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .SelectMany(project =>
-            {
-                var document = XDocument.Load(project);
-                var localVersion = document.Descendants("GroundworkVersion")
-                    .Select(element => element.Value)
-                    .FirstOrDefault();
-                return document.Descendants("PackageReference")
-                    .Where(element => element.Attribute("Include")?.Value.StartsWith("Groundwork", StringComparison.Ordinal) == true)
-                    .Select(element =>
-                    {
-                        var version = element.Attribute("Version")?.Value ?? element.Attribute("VersionOverride")?.Value;
-                        return (Path: RelativePath(project), Package: element.Attribute("Include")!.Value,
-                            Version: version == "$(GroundworkVersion)" ? localVersion : version);
-                    });
-            })
-            .Where(reference => reference.Version is not null)
-            .ToArray();
-
-        Assert.NotEmpty(explicitProjectVersions);
-        Assert.All(explicitProjectVersions, reference =>
-            Assert.Equal(CurrentGroundworkVersion, reference.Version));
-
-        var ledger = File.ReadAllLines(Path.Combine(
-            RepoRoot, "specs", "139-groundwork-diagnostics-persistence", "ef-test-removal-ledger.md"));
-        var factRows = ledger
-            .Where(line => line.StartsWith("| `", StringComparison.Ordinal) || line.StartsWith("| .", StringComparison.Ordinal))
-            .ToArray();
-
-        Assert.Equal(46, factRows.Length);
-        Assert.Equal(39, factRows.Count(line => line.Contains("covered", StringComparison.OrdinalIgnoreCase)));
-        Assert.Equal(4, factRows.Count(line => line.Contains("Superseded contract:", StringComparison.Ordinal)));
-        Assert.Equal(3, factRows.Count(line => line.Contains(
-            "Retired at the Groundwork boundary", StringComparison.Ordinal)));
-        Assert.All(factRows, line => Assert.True(
-            new[]
-            {
-                line.Contains("covered", StringComparison.OrdinalIgnoreCase),
-                line.Contains("Superseded contract:", StringComparison.Ordinal),
-                line.Contains("Retired at the Groundwork boundary", StringComparison.Ordinal)
-            }.Count(disposition => disposition) == 1,
-            $"Ledger row must have exactly one closeout disposition: {line}"));
-        var currentTestSources = Directory.EnumerateFiles(DiagnosticsTestRoot, "*.cs", SearchOption.AllDirectories)
-            .Select(File.ReadAllText)
-            .ToArray();
-        foreach (var row in factRows.Where(line =>
-                     line.Contains("covered", StringComparison.OrdinalIgnoreCase) ||
-                     line.Contains("Superseded contract:", StringComparison.Ordinal)))
-        {
-            var evidenceColumn = row.Split('|')[3];
-            var evidence = LedgerEvidencePattern().Matches(evidenceColumn)
-                .Select(match => (Class: match.Groups["class"].Value, Method: match.Groups["method"].Value))
-                .ToArray();
-            Assert.NotEmpty(evidence);
-            Assert.All(evidence, reference => Assert.Contains(currentTestSources, source =>
-                Regex.IsMatch(source, $@"\bclass\s+{Regex.Escape(reference.Class)}\b", RegexOptions.CultureInvariant) &&
-                Regex.IsMatch(source, $@"\b{Regex.Escape(reference.Method)}\s*\(", RegexOptions.CultureInvariant)));
-        }
-        var ledgerText = string.Join(Environment.NewLine, ledger);
-        Assert.Contains($"**Groundwork baseline:** exact `{EfLedgerGroundworkVersion}`", ledgerText, StringComparison.Ordinal);
-        Assert.Contains("Disposition: 39 covered; 4 superseded contracts; 3 EF-mechanism-only facts retired at the Groundwork boundary", ledgerText, StringComparison.Ordinal);
-        Assert.DoesNotContain("one remaining OpenTelemetry test", ledgerText, StringComparison.OrdinalIgnoreCase);
-    }
 
     [Fact]
     public void Replacement_helper_leaves_exactly_one_store_and_one_shared_instance()
@@ -469,47 +346,6 @@ public sealed partial class DiagnosticsPersistenceArchitectureTests
             .Where(hit => hit.Match.Success)
             .Select(hit => $"{hit.Path}: {hit.Match.Value}");
 
-    private static IEnumerable<string> FindGroundworkProjectGraphViolations(string project)
-    {
-        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        return Traverse(project, visited);
-
-        static IEnumerable<string> Traverse(string current, ISet<string> visited)
-        {
-            if (!visited.Add(current))
-                yield break;
-
-            var document = XDocument.Load(current);
-            foreach (var package in document.Descendants("PackageReference")
-                         .Select(element => element.Attribute("Include")?.Value)
-                         .OfType<string>()
-                         .Where(package => package.StartsWith("Groundwork", StringComparison.Ordinal)))
-                yield return $"{RelativePath(current)} -> PackageReference {package}";
-
-            foreach (var include in document.Descendants("ProjectReference")
-                         .Select(element => element.Attribute("Include")?.Value)
-                         .OfType<string>())
-            {
-                var referencedProject = Path.GetFullPath(Path.Combine(
-                    Path.GetDirectoryName(current)!,
-                    include.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar)));
-                if (RelativePath(referencedProject).Contains("Groundwork", StringComparison.OrdinalIgnoreCase))
-                    yield return $"{RelativePath(current)} -> ProjectReference {include}";
-
-                if (File.Exists(referencedProject))
-                    foreach (var violation in Traverse(referencedProject, visited))
-                        yield return violation;
-            }
-        }
-    }
-
-    private static IEnumerable<string> FindGroundworkSourceViolations() =>
-        Directory.EnumerateFiles(DiagnosticsSourceRoot, "*.cs", SearchOption.AllDirectories)
-            .Where(file => !IsGroundworkAdapterSource(file))
-            .Select(file => (Path: RelativePath(file), Match: GroundworkSourcePattern().Match(File.ReadAllText(file))))
-            .Where(hit => hit.Match.Success)
-            .Select(hit => $"{hit.Path}: {hit.Match.Value}");
-
     private static IEnumerable<(Type Owner, string Member, Type Type)> PublicSurfaceTypes(Assembly assembly)
     {
         foreach (var type in assembly.GetExportedTypes())
@@ -533,26 +369,6 @@ public sealed partial class DiagnosticsPersistenceArchitectureTests
                     yield return (type, $"{method.Name}({parameter.Name})", parameter.ParameterType);
             }
         }
-    }
-
-    private static bool IsGroundworkType(Type type) =>
-        type.Assembly.GetName().Name?.StartsWith("Groundwork", StringComparison.Ordinal) == true ||
-        (type.HasElementType && type.GetElementType() is { } element && IsGroundworkType(element)) ||
-        type.IsGenericType && type.GetGenericArguments().Any(IsGroundworkType);
-
-    private static bool IsGroundworkAdapterProject(string project) =>
-        IsGroundworkAdapterSource(Path.GetDirectoryName(project)!);
-
-    private static bool IsGroundworkAdapterSource(string path)
-    {
-        var relativePath = RelativePath(path);
-        return IsWithin("src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork") ||
-               IsWithin("src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork") ||
-               IsWithin("src/Elsa/Diagnostics/Persistence/Groundwork");
-
-        bool IsWithin(string root) =>
-            string.Equals(relativePath, root, StringComparison.Ordinal) ||
-            relativePath.StartsWith(root + "/", StringComparison.Ordinal);
     }
 
     private static bool IsApprovedEfAdapterPath(string path)
@@ -600,9 +416,6 @@ public sealed partial class DiagnosticsPersistenceArchitectureTests
 
     [GeneratedRegex(@"\b(?:Microsoft\.EntityFrameworkCore|Persistence\.EFCore|IDbContextFactory|DbContext|IEntityTypeConfiguration|MigrationBuilder|MigrationAttribute|ModelBuilder|AddDbContext|UseSqlite|UseSqlServer|UseNpgsql|UseInMemoryDatabase)\b|:\s*Migration\b", RegexOptions.CultureInvariant)]
     private static partial Regex EfSourcePattern();
-
-    [GeneratedRegex(@"\b(?:using\s+Groundwork(?:\.|\s*;)|Groundwork\.)", RegexOptions.CultureInvariant)]
-    private static partial Regex GroundworkSourcePattern();
 
     [GeneratedRegex(@"`(?<class>[A-Za-z0-9_]+Tests)\.(?<method>[A-Za-z0-9_]+)`", RegexOptions.CultureInvariant)]
     private static partial Regex LedgerEvidencePattern();

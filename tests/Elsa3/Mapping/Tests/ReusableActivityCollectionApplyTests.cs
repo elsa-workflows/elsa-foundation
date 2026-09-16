@@ -1,16 +1,9 @@
-using Elsa.Activities.Design.Persistence.Groundwork;
-using Elsa.Activities.Design.Persistence.Groundwork.Services;
-using Elsa.Locking.Core;
-using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
-using Elsa3.Activities.Design.Import.Persistence.Groundwork.Services;
 using Elsa3.Activities.Design.Import.Services;
-using Elsa3.Activities.Design.Import.Persistence.Groundwork;
 using Xunit;
 
 namespace Elsa3.Mapping.Tests;
@@ -117,64 +110,6 @@ public sealed class ReusableActivityCollectionApplyTests
     }
 
     [Fact]
-    public async Task Groundwork_reapply_is_idempotent_and_collision_preflight_writes_nothing_else()
-    {
-        var collection = ValidCollection();
-        var analyzer = new ReusableActivityCollectionAnalyzer();
-        var plan = await analyzer.AnalyzeAsync(collection);
-        var selection = plan.Items.Where(x => x.SourceVersionId is "a-v1" or "b-v1").ToArray();
-        var mutation = await ReusableActivityImportFixtures.Materializer().MaterializeAsync(collection, plan, selection);
-        using var harness = ReusableActivityImportV2TestHarness.Create();
-        var command = Command(harness);
-
-        var first = await command.CommitAsync(mutation);
-        var second = await command.CommitAsync(mutation);
-
-        Assert.False(first.NoOp);
-        Assert.True(second.NoOp);
-        Assert.Equal(2, harness.Snapshot("activityDefinition").Count);
-        Assert.Equal(2, harness.Snapshot("activityDefinitionVersion").Count);
-        Assert.Equal(2, harness.Snapshot("workflowDefinition").Count);
-        Assert.Equal(2, harness.Snapshot("workflowDefinitionVersion").Count);
-
-        using var conflictingHarness = ReusableActivityImportV2TestHarness.Create();
-        var conflicting = mutation.Activities[0].Definition.Id;
-        await conflictingHarness.Store.SaveAsync(new(
-            "activityDefinition",
-            conflicting,
-            ActivitiesDesignStorageManifest.SchemaVersion,
-            "{\"different\":true}",
-            ExpectedVersion: 0));
-        var conflictingCommand = Command(conflictingHarness);
-
-        await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () => await conflictingCommand.CommitAsync(mutation));
-        Assert.Empty(conflictingHarness.Snapshot("activityDefinitionVersion"));
-        Assert.Empty(conflictingHarness.Snapshot("workflowDefinition"));
-        Assert.Empty(conflictingHarness.Snapshot("workflowDefinitionVersion"));
-    }
-
-    [Fact]
-    public async Task Groundwork_coalesces_shared_definition_and_authoring_documents_across_selected_lineage_versions()
-    {
-        var first = ReusableActivityImportFixtures.Workflow("lineage", "lineage-v1", 1, true, ReusableActivityImportFixtures.Leaf("root-v1"));
-        var second = ReusableActivityImportFixtures.Workflow("lineage", "lineage-v2", 2, true, ReusableActivityImportFixtures.Leaf("root-v2"));
-        var collection = ReusableActivityImportFixtures.Collection(first, second);
-        var analyzer = new ReusableActivityCollectionAnalyzer();
-        var plan = await analyzer.AnalyzeAsync(collection);
-        var mutation = await ReusableActivityImportFixtures.Materializer().MaterializeAsync(collection, plan, plan.Items);
-        using var harness = ReusableActivityImportV2TestHarness.Create();
-        var command = Command(harness);
-
-        await command.CommitAsync(mutation);
-
-        Assert.Single(harness.Snapshot("activityDefinition"));
-        Assert.Equal(2, harness.Snapshot("activityDefinitionVersion").Count);
-        Assert.Single(harness.Snapshot("activityDefinitionAuthoringState"));
-        Assert.Single(harness.Snapshot("workflowDefinition"));
-        Assert.Equal(2, harness.Snapshot("workflowDefinitionVersion").Count);
-    }
-
-    [Fact]
     public async Task Changed_collection_cannot_apply_an_observed_plan_id()
     {
         var collection = ValidCollection();
@@ -199,43 +134,6 @@ public sealed class ReusableActivityCollectionApplyTests
     }
 
     private static IPayloadSerializer Serializer() => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
-
-    private static GroundworkReusableActivityImportCommand Command(
-        ReusableActivityImportV2TestHarness harness) =>
-        new(
-            harness.Store,
-            harness.WorkflowStorage,
-            harness.Sessions,
-            Serializer(),
-            new GroundworkActivityManagementProjectionWriter(harness.Store, new ImmediateLockProvider(), harness.Store),
-            harness.Access);
-
-    private sealed class ImmediateLockProvider : IDistributedLockProvider
-    {
-        public IDistributedSynchronizationHandle? TryAcquireLock(
-            string name,
-            TimeSpan? timeout = null,
-            CancellationToken cancellationToken = default) => new Handle();
-
-        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(
-            string name,
-            TimeSpan? timeout = null,
-            CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());
-
-        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(
-            string name,
-            TimeSpan? timeout = null,
-            CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IDistributedSynchronizationHandle>(new Handle());
-
-        private sealed class Handle : IDistributedSynchronizationHandle
-        {
-            public CancellationToken HandleLostToken => CancellationToken.None;
-            public void Dispose() { }
-            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-        }
-    }
 
     private sealed class CapturingCommand : IReusableActivityImportCommand
     {

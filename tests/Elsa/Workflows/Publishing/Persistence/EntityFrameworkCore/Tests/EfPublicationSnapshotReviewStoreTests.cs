@@ -4,13 +4,8 @@ using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Stores;
-using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
-using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Groundwork.Kernel;
-using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Persistence.Groundwork.Targets;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -158,60 +153,6 @@ public sealed class EfPublicationSnapshotReviewStoreTests
         var foreign = new ServiceCollection();
         foreign.AddScoped<IPublicationSnapshotReviewStore, ForeignStore>();
         Assert.Throws<InvalidOperationException>(() => foreign.AddPublishingEntityFrameworkCore(options));
-    }
-
-    [Fact]
-    public void Explicit_EF_selection_wins_when_Groundwork_is_composed_before_or_after_it()
-    {
-        foreach (var compose in new[] { "ef-gw-ef", "gw-ef-gw" })
-        {
-            var services = new ServiceCollection();
-            new WorkflowsPublishingFeature().ConfigureServices(services);
-            if (compose == "ef-gw-ef")
-            {
-                services.AddPublishingEntityFrameworkCore(new PublishingEntityFrameworkCoreOptions { ConnectionString = "Data Source=registration.db" });
-                services.AddGroundworkPublishingStores();
-                services.AddPublishingEntityFrameworkCore(new PublishingEntityFrameworkCoreOptions { ConnectionString = "Data Source=registration.db" });
-            }
-            else
-            {
-                services.AddGroundworkPublishingStores();
-                services.AddPublishingEntityFrameworkCore(new PublishingEntityFrameworkCoreOptions { ConnectionString = "Data Source=registration.db" });
-                services.AddGroundworkPublishingStores();
-            }
-
-            Assert.Equal(PublicationSnapshotReviewStoreBackend.EntityFramework, PublicationSnapshotReviewStoreBackend.Find(services)!.Name);
-            Assert.Single(services, service => service.ServiceType == typeof(IPublicationSnapshotReviewStore));
-            Assert.Single(services, service => service.ServiceType == typeof(PublishingEntityFrameworkCoreOptions));
-            Assert.Single(services, service => service.ServiceType == typeof(EfPublicationSnapshotReviewStore));
-            Assert.Single(services, service => service.ServiceType == typeof(PublishingSnapshotReviewDbContext));
-            // P01 is now part of the same explicit EF selection, so it too survives Groundwork in either order.
-            Assert.Single(services, service => service.ServiceType == typeof(IPublicationRecordStore));
-            Assert.Single(services, service => service.ServiceType == typeof(EfPublicationRecordStore));
-        }
-    }
-
-    [Fact]
-    public void Groundwork_registration_rolls_back_when_late_target_validation_fails()
-    {
-        var services = new ServiceCollection();
-        new WorkflowsPublishingFeature().ConfigureServices(services);
-        var registry = new GroundworkStorageUnitRegistry();
-        registry.Declare(StorageUnit.Declare(PublishingGroundworkStorageManifest.SnapshotReviewDocumentKind, "conflicting")
-            .String("id", 32, column => column.Required()).Key("id").Build(), "conflicting");
-        var bindings = new GroundworkManifestBindings();
-        bindings.Bind(typeof(PublishingGroundworkStorageManifestSource), null);
-        services.AddSingleton(bindings);
-        services.AddSingleton(registry);
-        var before = services.ToArray();
-
-        Assert.Throws<InvalidOperationException>(() => services.AddGroundworkPublishingStores("conflicting"));
-
-        Assert.Equal(before.Length, services.Count);
-        Assert.Equal(before, services);
-        Assert.Single(registry.Registrations);
-        Assert.Equal(GroundworkTargetNames.Default, bindings.TargetFor(typeof(PublishingGroundworkStorageManifestSource)));
-        Assert.Equal(PublicationSnapshotReviewStoreBackend.InMemory, PublicationSnapshotReviewStoreBackend.Find(services)!.Name);
     }
 
     private static PublicationSnapshotReview Review(string token, string? tenantId, DateTimeOffset expiresAt) => new(

@@ -6,37 +6,6 @@ namespace Elsa.Diagnostics.Persistence.Tests;
 
 public sealed class DiagnosticsFoundationFixtureTests
 {
-    public static TheoryData<DiagnosticsProviderKind, DiagnosticsProviderCapability> Providers => new()
-    {
-        { DiagnosticsProviderKind.Sqlite, DiagnosticsProviderCapability.Relational },
-        { DiagnosticsProviderKind.SqlServer, DiagnosticsProviderCapability.Relational },
-        { DiagnosticsProviderKind.PostgreSql, DiagnosticsProviderCapability.Relational },
-        { DiagnosticsProviderKind.MongoDb, DiagnosticsProviderCapability.Document }
-    };
-
-    [Theory]
-    [MemberData(nameof(Providers))]
-    public void Provider_assertions_apply_the_same_readiness_contract(
-        DiagnosticsProviderKind provider,
-        DiagnosticsProviderCapability storageCapability)
-    {
-        var capabilities = new HashSet<DiagnosticsProviderCapability>
-        {
-            storageCapability,
-            DiagnosticsProviderCapability.Transactions,
-            DiagnosticsProviderCapability.BoundedQueries,
-            DiagnosticsProviderCapability.ExecutionPlans
-        };
-        var lease = new DiagnosticsProviderLease(provider, "provider-connection", "isolated-database", capabilities);
-
-        DiagnosticsProviderAssertions.IsReady(
-            lease,
-            storageCapability,
-            DiagnosticsProviderCapability.Transactions,
-            DiagnosticsProviderCapability.BoundedQueries,
-            DiagnosticsProviderCapability.ExecutionPlans);
-    }
-
     [Fact]
     public async Task Restart_double_replays_a_committed_batch_without_duplicate_mutation()
     {
