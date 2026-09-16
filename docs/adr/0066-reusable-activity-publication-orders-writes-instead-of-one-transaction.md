@@ -7,7 +7,39 @@ mechanism, and the retention limit is not, because the redrive delivers the rece
 stranded source reference. Neither is closed in a default host until something schedules the sweep.
 
 Tracking: [issue #1156](https://github.com/elsa-workflows/elsa-foundation/issues/1156).
-Constrained by [ADR 0065](0065-groundwork-persistence-targets-are-named-and-lanes-bind-to-them.md).
+Constrained by [ADR 0065](0065-groundwork-persistence-targets-are-named-and-lanes-bind-to-them.md)
+(superseded before acceptance; its named-target model is carried forward by the EF target binding).
+
+## Reconciled to EF Core — 2026-09-16
+
+**The decision holds; only its reasoning and class names change family.** This ADR was written
+against Groundwork, whose unit of work is bounded to a single `IDocumentStore`.
+[ADR 0073](0073-ef-core-is-the-only-first-party-persistence-family.md) made EF Core the only
+first-party persistence family and #1764 removed Groundwork, so the Context below describes a
+substrate that no longer exists. The ordered-write decision survives unchanged, for the same
+structural reason restated in EF terms: an EF transaction is bounded to one physical connection and
+target, so lanes placed in different databases still cannot share a commit.
+
+The cross-module transaction spike ([#1674](https://github.com/elsa-workflows/elsa-foundation/issues/1674),
+findings in [transaction-topology-spike.md](../reports/ef-core-persistence/transaction-topology-spike.md))
+tested this directly and concluded:
+
+- An operation-scoped transaction **owner** may bind one physical target and tenant and enlist the
+  Runtime, Design and Publishing contexts as borrowers.
+- That owner **must refuse split targets before any write**, rather than silently placing a lane in
+  the wrong database. Split-target refusal was proved in SQLite by target and physical-connection
+  mismatch ahead of the first row.
+- **It does not replace this ADR for split targets.** When lanes resolve to different targets, the
+  runtime-first, design-linearization, publishing-receipt-last order and the recovery/redrive
+  semantics below remain in force.
+- **Future path, not yet decided:** when all three lanes resolve to one target, a co-located path
+  may fold the operation back into a single atomic commit. That would narrow this ADR rather than
+  supersede it, and needs its own decision with its own evidence.
+
+Current implementations of the named commands are `EfActivityPublicationCommand` and
+`EfSourceActivityPublicationCommand` in
+`src/Elsa/Workflows/Publishing/Persistence/EntityFrameworkCore/Services/`. Groundwork class names
+below are retained as the historical record of what the decision was written against.
 
 ## Context
 
