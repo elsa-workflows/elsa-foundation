@@ -793,7 +793,7 @@ public sealed class ActivityDraftTestRunService(
     /// request created it, an earlier run created it, or a simultaneous first run won the create.
     ///
     /// The id is derived from the template hash, so every test run of an unchanged draft asks for the same
-    /// reference, and Groundwork source references are create-only. Writing unconditionally therefore failed
+    /// reference, and source references are create-only. Writing unconditionally therefore failed
     /// every rerun, and testing-then-writing fails whichever of two simultaneous first runs loses the race.
     /// Both outcomes reject a request that is perfectly valid, so neither is treated as an error here: the row
     /// the winner wrote describes the same template this request compiled.

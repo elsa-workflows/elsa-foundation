@@ -2,7 +2,7 @@
   <PropertyGroup>
     <Description>
       Opt-in EF Core persistence for distributed runtime execution placement. Provider-neutral
-      production adapter: hosts reference exactly one EF provider package; Groundwork remains a
+      production adapter: hosts reference exactly one EF provider package; the in-memory adapter remains a
       separate composition and owns command transport.
     </Description>
   </PropertyGroup>

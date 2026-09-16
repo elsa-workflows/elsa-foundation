@@ -273,13 +273,13 @@ public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbCo
     {
         var entity = modelBuilder.Entity<TEntity>();
         entity.ToTable(table);
-        // Groundwork keys are scoped, and IDs are legal up to 450 characters. Keep the full ID
+        // Keys are scoped, and IDs are legal up to 450 characters. Keep the full ID
         // for exact residual comparisons while indexing a fixed-width digest that fits every
         // provider's key budget. Availability settings use their explicit logical Scope instead.
         entity.Property<string>("Id").HasMaxLength(MaximumIdLength).ValueGeneratedNever();
         if (typeof(TEntity) == typeof(ActivityAvailabilitySettingsRecord))
         {
-            // Settings carry no tenant of their own; like Groundwork, they are partitioned by the
+            // Settings carry no tenant of their own; they are partitioned by the
             // persistence scope that saved them, which the store assigns explicitly.
             entity.Property<string>("TenantScopeKey").HasMaxLength(66).IsRequired();
             entity.Property<string>("ScopeIdentityHash").HasMaxLength(IdentityHashLength).IsRequired().ValueGeneratedOnAdd()

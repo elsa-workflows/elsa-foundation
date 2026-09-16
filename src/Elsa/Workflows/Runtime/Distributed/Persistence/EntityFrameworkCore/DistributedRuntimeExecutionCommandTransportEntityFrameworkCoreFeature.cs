@@ -13,7 +13,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
 [ShellFeature(
     name: "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence",
     DisplayName = "Workflows Runtime Distributed EF Core Command Transport Persistence",
-    Description = "Opt-in EF Core persistence for distributed command stream heads and execution command transport. It replaces IExecutionCommandTransport only, leaves execution placement independently selectable, applies or validates its own migrations on shell activation, and keeps Groundwork as the default for all other distributed stores.",
+    Description = "Opt-in EF Core persistence for distributed command stream heads and execution command transport. It replaces IExecutionCommandTransport only, leaves execution placement independently selectable, applies or validates its own migrations on shell activation, and leaves all other distributed stores independently selectable.",
     DependsOn = new object[] { "WorkflowsRuntimeDistributed" })]
 public class DistributedRuntimeExecutionCommandTransportEntityFrameworkCoreFeature : IShellFeature
 {

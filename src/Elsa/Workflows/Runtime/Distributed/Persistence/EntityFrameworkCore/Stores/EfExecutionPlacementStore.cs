@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Sto
 
 /// <summary>
 /// EF Core placement authority. The row's digest is the provider-neutral scoped key and the
-/// explicit revision is the compare-and-swap token; no provider SQL or Groundwork API is used.
+/// explicit revision is the compare-and-swap token; no provider SQL is used.
 /// </summary>
 public sealed class EfExecutionPlacementStore(
     ExecutionPlacementDbContext context,

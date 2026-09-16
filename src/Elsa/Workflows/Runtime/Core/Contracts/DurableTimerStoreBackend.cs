@@ -5,13 +5,12 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <summary>Records the selected owner of the durable-timer contract and its EF context registrations.</summary>
 /// <remarks>
 /// The timer contract predates the provider ownership markers used by the other runtime stores. This marker keeps
-/// opt-in replacement explicit while still allowing the Runtime in-memory default and the Groundwork bridge to be
+/// opt-in replacement explicit while still allowing the Runtime in-memory default and the EF Core bridge to be
 /// replaced by an EF provider. Descriptors are tracked by identity so an unrelated host registration is never removed.
 /// </remarks>
 public sealed class DurableTimerStoreBackend
 {
     public const string EntityFramework = "entity-framework";
-    public const string Groundwork = "groundwork";
     public const string InMemory = "in-memory";
 
     private readonly IReadOnlyList<ServiceDescriptor> descriptors;
@@ -23,7 +22,7 @@ public sealed class DurableTimerStoreBackend
         Action<IServiceCollection>? removeOwnedArtifacts = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        if (name is not (EntityFramework or Groundwork or InMemory))
+        if (name is not (EntityFramework or InMemory))
             throw new ArgumentException($"Unknown durable-timer store backend '{name}'.", nameof(name));
         ArgumentNullException.ThrowIfNull(descriptors);
         this.descriptors = descriptors.Distinct().ToArray();

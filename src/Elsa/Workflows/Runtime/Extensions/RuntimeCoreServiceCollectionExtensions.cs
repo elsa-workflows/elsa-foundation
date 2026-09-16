@@ -114,7 +114,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         // Burst-scoped reconstructible cache (ADR 0031 item b, spec 111). The accessor is a singleton AsyncLocal (like
         // the live-drain/coalescing accessors); the router pushes a scope per drain gated by the kill switch. The reader
         // is the first consumer — scoped so it composes with whichever IWorkflowExecutableStore the provider registers
-        // (Groundwork RemoveAll+AddScoped the default), reading through the ambient burst scope when one is active.
+        // (a durable provider RemoveAll+AddScoped the default), reading through the ambient burst scope when one is active.
         services.TryAddSingleton<RuntimeBurstCacheOptions>();
         services.TryAddSingleton<IWorkflowBurstScopeAccessor, AsyncLocalWorkflowBurstScopeAccessor>();
         services.TryAddScoped<IWorkflowExecutableReader, BurstCachedWorkflowExecutableReader>();

@@ -5,7 +5,7 @@ namespace Elsa.Workflows.Design.Persistence.Core.Services;
 
 /// <summary>
 /// Validates the activity tree of a workflow definition being submitted: every node must carry a
-/// non-empty node id and an activity version id. Shared by the EF Core and Groundwork
+/// non-empty node id and an activity version id. Shared by every
 /// <c>ISubmitWorkflowDefinitionCommand</c> implementations, which previously carried this walk
 /// verbatim (issue #417 item 5).
 /// </summary>

@@ -18,7 +18,6 @@ public sealed class ExecutionPlacementStoreBackend
     private readonly Action<IServiceCollection>? _removeOwnedArtifacts;
 
     public const string InMemory = "in-memory";
-    public const string Groundwork = "groundwork";
     public const string EntityFramework = "entity-framework";
 
     public ExecutionPlacementStoreBackend(
@@ -76,7 +75,7 @@ public sealed class ExecutionPlacementStoreBackend
     public static void EnsureKnown(string name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        if (name is not InMemory and not Groundwork and not EntityFramework)
+        if (name is not InMemory and not EntityFramework)
             throw new ArgumentException($"Unknown execution placement store backend '{name}'.", nameof(name));
     }
 

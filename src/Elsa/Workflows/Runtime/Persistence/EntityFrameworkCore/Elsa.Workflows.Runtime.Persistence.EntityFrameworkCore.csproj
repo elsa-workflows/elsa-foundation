@@ -3,7 +3,7 @@
     <Description>
       Opt-in EF Core persistence for Runtime bookmark state, stimulus lookup, executable artifacts, executable
       coordination, activity templates and hash claims, and workflow executable source references. Provider-neutral
-      production adapter: hosts reference exactly one EF provider package; Groundwork remains the default composition.
+      production adapter: hosts reference exactly one EF provider package.
     </Description>
   </PropertyGroup>
   <ItemGroup>

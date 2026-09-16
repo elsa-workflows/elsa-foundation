@@ -18,7 +18,6 @@ public sealed class RuntimeWorkflowDispatchStoreBackend
     private readonly IReadOnlyList<ServiceDescriptor> descriptors;
 
     public const string EntityFramework = "entity-framework";
-    public const string Groundwork = "groundwork";
     public const string InMemory = "in-memory";
 
     public RuntimeWorkflowDispatchStoreBackend(
@@ -27,7 +26,7 @@ public sealed class RuntimeWorkflowDispatchStoreBackend
         Action<IServiceCollection>? removeOwnedArtifacts = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        if (name is not (EntityFramework or Groundwork or InMemory))
+        if (name is not (EntityFramework or InMemory))
             throw new ArgumentException($"Unknown workflow-dispatch backend '{name}'.", nameof(name));
         ArgumentNullException.ThrowIfNull(descriptors);
         this.descriptors = descriptors.Distinct().ToArray();

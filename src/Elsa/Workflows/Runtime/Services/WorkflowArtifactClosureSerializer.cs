@@ -14,14 +14,14 @@ namespace Elsa.Workflows.Runtime.Services;
 /// <remarks>
 /// <para>
 /// The added modifier is deliberately the same rule
-/// <c>GroundworkRuntimeDocumentSerializer.ConfigureDurableDocumentShape</c> applies: drop
+/// the durable document shape applies: drop
 /// <see cref="WorkflowExecutable.Nodes"/> and <see cref="WorkflowExecutable.NodesById"/>, which the constructor
 /// rebuilds by flattening <see cref="WorkflowExecutable.RootActivity"/>. Persisting or shipping them would
 /// duplicate the whole graph and would make an exported artifact and a store-round-tripped one differ in bytes
 /// for no semantic reason.
 /// </para>
 /// <para>
-/// <b>What is deliberately NOT copied from the Groundwork serializer.</b> That serializer also <em>adds</em>
+/// <b>What the durable document shape deliberately does NOT do here.</b> That shape also <em>adds</em>
 /// synthetic stimulus lookup-key properties to <c>BookmarkState</c> and <c>WorkflowTriggerBinding</c>. Those are
 /// index fields the document providers query on — storage machinery, not artifact content — and an envelope that
 /// carried them would be asserting one engine's index layout on another's. The envelope's carried bindings are

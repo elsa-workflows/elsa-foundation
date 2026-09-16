@@ -43,7 +43,6 @@ public static class RuntimeWorkflowTestScopeEntityFrameworkCoreRegistration
                 return services;
             }
 
-            RuntimeEfCheckpointCompositionTransition.EnsureGroundworkCheckpointTransitionAllowed(services, "workflow test scopes");
 
             if (existing is not null) existing.EnsureOwnsRegisteredContracts(services);
             else EnsureOnlyCoreScopeRegistrations(services);

@@ -940,7 +940,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                 RuntimeStateChangeOperation.Append, RuntimeStateChangeOperation.Upsert);
 
             // Write-once outcomes are checked against the store only after every incident change passed the rules above,
-            // the same order the Groundwork checkpoint writer uses.
+            // the same order the durable checkpoint writer uses.
             foreach (var stateChange in changes.Incidents.Where(change => change.Operation == RuntimeStateChangeOperation.Upsert))
             {
                 var existing = await _incidentStateStore.FindAsync(

@@ -138,9 +138,8 @@ public sealed class EfActivityPublicationCommand : ICommitActivityPublicationCom
     }
 
     /// <summary>
-    /// The same authoritative-material checks as the Groundwork command: the receipt must describe exactly the
-    /// publication, template and source reference being committed. The Groundwork adapter is a migration
-    /// source (ADR 0073), so the rule is kept here verbatim rather than shared through it.
+    /// Authoritative-material checks: the receipt must describe exactly the publication, template and
+    /// source reference being committed.
     /// </summary>
     private static void ValidateCommit(ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt> commit)
     {

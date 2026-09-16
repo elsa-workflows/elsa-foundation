@@ -6,11 +6,10 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 public sealed class WorkflowTestScopeStoreBackend
 {
     public const string EntityFramework = "entity-framework";
-    public const string Groundwork = "groundwork";
     public const string InMemory = "in-memory";
     private readonly IReadOnlyList<ServiceDescriptor> _descriptors;
     private readonly Action<IServiceCollection>? _remove;
-    public WorkflowTestScopeStoreBackend(string name, IEnumerable<ServiceDescriptor> descriptors, Action<IServiceCollection>? remove = null) { if (name is not (EntityFramework or Groundwork or InMemory)) throw new ArgumentException($"Unknown test-scope backend '{name}'.", nameof(name)); _descriptors = descriptors?.Distinct().ToArray() ?? throw new ArgumentNullException(nameof(descriptors)); if (_descriptors.Count == 0) throw new ArgumentException("At least one test-scope descriptor is required.", nameof(descriptors)); _remove = remove; Name = name; }
+    public WorkflowTestScopeStoreBackend(string name, IEnumerable<ServiceDescriptor> descriptors, Action<IServiceCollection>? remove = null) { if (name is not (EntityFramework or InMemory)) throw new ArgumentException($"Unknown test-scope backend '{name}'.", nameof(name)); _descriptors = descriptors?.Distinct().ToArray() ?? throw new ArgumentNullException(nameof(descriptors)); if (_descriptors.Count == 0) throw new ArgumentException("At least one test-scope descriptor is required.", nameof(descriptors)); _remove = remove; Name = name; }
     public string Name { get; }
     public bool Owns(ServiceDescriptor descriptor) => _descriptors.Contains(descriptor);
     public static WorkflowTestScopeStoreBackend? Find(IServiceCollection services) => services.Select(x => x.ImplementationInstance).OfType<WorkflowTestScopeStoreBackend>().SingleOrDefault();

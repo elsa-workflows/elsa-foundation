@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// <summary>
 /// Process-local <see cref="IDurableTimerStore"/>. Timers are held in memory only, so a <c>Delay</c> backed
 /// by this store is <b>not</b> restart-durable — a process restart forgets every pending timer. Compose a
-/// durable persistence provider (e.g. the Groundwork bridge) to make timers survive restarts.
+/// durable persistence provider (e.g. the Runtime EF Core module) to make timers survive restarts.
 /// </summary>
 public sealed class InMemoryDurableTimerStore : IDurableTimerStore
 {

@@ -263,7 +263,7 @@ internal static class Elsa3ImportRecordCodec
         }
     }
 
-    // The document wrappers keep the canonical JSON shape identical to the Groundwork documents.
+    // The document wrappers keep the canonical JSON shape frozen across storage changes.
     private sealed record CollectionDocument(ReusableActivityImportCollectionHandle Collection);
     private sealed record ReceiptDocument(ReusableActivityImportReceipt Receipt);
 }

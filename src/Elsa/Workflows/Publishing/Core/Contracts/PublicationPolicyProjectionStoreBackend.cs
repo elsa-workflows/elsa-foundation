@@ -5,13 +5,12 @@ namespace Elsa.Workflows.Publishing.Core.Contracts;
 /// <summary>Tracks the exact registrations owned by the selected policy/projection-intent backend.</summary>
 /// <remarks>
 /// Policy and projection-intent stores are one persistence composition. Keeping their ownership marker
-/// separate from the P04 snapshot-review marker lets Groundwork preserve an EF snapshot-review store while
+/// separate from the P04 snapshot-review marker lets a backend preserve a snapshot-review store while
 /// replacing (or preserving) the P02/P03 stores, without inferring ownership from implementation types.
 /// </remarks>
 public sealed class PublicationPolicyProjectionStoreBackend
 {
     public const string InMemory = "in-memory";
-    public const string Groundwork = "groundwork";
     public const string EntityFramework = "entity-framework";
 
     private static readonly Type[] ContractTypes =
@@ -24,7 +23,7 @@ public sealed class PublicationPolicyProjectionStoreBackend
 
     public PublicationPolicyProjectionStoreBackend(string name, IEnumerable<ServiceDescriptor> descriptors)
     {
-        if (name is not (InMemory or Groundwork or EntityFramework))
+        if (name is not (InMemory or EntityFramework))
             throw new ArgumentException($"Unknown publication policy/projection-intent store backend '{name}'.", nameof(name));
         ArgumentNullException.ThrowIfNull(descriptors);
         this.descriptors = descriptors.Distinct().ToArray();

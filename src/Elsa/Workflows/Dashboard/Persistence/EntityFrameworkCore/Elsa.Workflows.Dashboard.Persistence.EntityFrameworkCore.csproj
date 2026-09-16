@@ -2,7 +2,7 @@
   <PropertyGroup>
     <Description>
       Opt-in EF Core persistence for the workflow portfolio and run-health Dashboard readers. The
-      readers consume Design and Runtime projections; Groundwork remains the default composition.
+      readers consume Design and Runtime projections.
     </Description>
   </PropertyGroup>
   <ItemGroup>

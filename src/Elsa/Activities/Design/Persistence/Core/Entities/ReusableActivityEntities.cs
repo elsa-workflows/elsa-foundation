@@ -4,7 +4,7 @@ using Elsa.Primitives.Entities;
 namespace Elsa.Activities.Design.Persistence.Core.Entities;
 
 /// <summary>
-/// Groundwork-targeted sibling carrying reusable-authoring facts for the existing catalog definition.
+/// Sibling record carrying reusable-authoring facts for the existing catalog definition.
 /// Keeping these facts separate prevents the feature from silently expanding the legacy EF schema.
 /// </summary>
 public sealed class ActivityDefinitionAuthoringState : TenantEntity

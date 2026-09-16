@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <remarks>
 /// Scheduler poison is deliberately kept outside <see cref="RuntimeOperationalStateStoreBackend"/>. It is a
 /// separate contract with its own opt-in transition so adding the EF adapter cannot accidentally replace the
-/// Groundwork operational-state family or change checkpoint ownership.
+/// durable operational-state family or change checkpoint ownership.
 /// </remarks>
 public sealed class WorkflowSchedulerPoisonStoreBackend
 {
@@ -15,7 +15,6 @@ public sealed class WorkflowSchedulerPoisonStoreBackend
     private readonly Action<IServiceCollection>? removeOwnedArtifacts;
 
     public const string EntityFramework = "entity-framework";
-    public const string Groundwork = "groundwork";
     public const string InMemory = "in-memory";
 
     public WorkflowSchedulerPoisonStoreBackend(
@@ -24,7 +23,7 @@ public sealed class WorkflowSchedulerPoisonStoreBackend
         Action<IServiceCollection>? removeOwnedArtifacts = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        if (name is not (EntityFramework or Groundwork or InMemory))
+        if (name is not (EntityFramework or InMemory))
             throw new ArgumentException($"Unknown scheduler-poison store backend '{name}'.", nameof(name));
         ArgumentNullException.ThrowIfNull(descriptors);
         this.descriptors = descriptors.Distinct().ToArray();
@@ -108,14 +107,11 @@ public sealed class WorkflowSchedulerPoisonStoreBackend
         var implementationType = descriptor.ImplementationType ??
                                  descriptor.ImplementationInstance?.GetType() ??
                                  descriptor.ImplementationFactory?.Method.ReturnType;
-        if (implementationType is not null &&
-            (implementationType.Name is "InMemoryWorkflowSchedulerPoisonStore" or "GroundworkV2WorkflowSchedulerPoisonStore"))
+        if (implementationType is not null && implementationType.Name is "InMemoryWorkflowSchedulerPoisonStore")
             return true;
 
         return descriptor.ImplementationFactory?.Method.DeclaringType?.FullName?.Contains(
-                   "RuntimeCoreServiceCollectionExtensions", StringComparison.Ordinal) == true ||
-               descriptor.ImplementationFactory?.Method.DeclaringType?.FullName?.Contains(
-                   "GroundworkV2RuntimeRegistration", StringComparison.Ordinal) == true;
+            "RuntimeCoreServiceCollectionExtensions", StringComparison.Ordinal) == true;
     }
 
     private static bool IsOwnedBySibling(IServiceCollection services, ServiceDescriptor descriptor) =>

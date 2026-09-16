@@ -14,7 +14,6 @@ namespace Elsa.Activities.Design.Persistence.Core.Composition;
 /// </summary>
 public sealed class ActivitiesDesignPersistenceBackend
 {
-    public const string Groundwork = "groundwork";
     public const string EntityFramework = "entity-framework";
 
     /// <summary>
@@ -77,7 +76,7 @@ public sealed class ActivitiesDesignPersistenceBackend
         IEnumerable<ServiceDescriptor> descriptors,
         Action<IServiceCollection>? withdrawExternalDeclarations = null)
     {
-        if (name is not (Groundwork or EntityFramework))
+        if (name is not EntityFramework)
             throw new ArgumentException($"Unknown Activities Design persistence backend '{name}'.", nameof(name));
         ArgumentException.ThrowIfNullOrWhiteSpace(configurationFingerprint);
         ArgumentNullException.ThrowIfNull(descriptors);

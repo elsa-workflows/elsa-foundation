@@ -23,7 +23,7 @@ namespace Elsa.Workflows.Runtime.Distributed;
 /// </summary>
 /// <remarks>
 /// This unit ships in-memory defaults for the two-node harness shape. Persistence features can replace either contract;
-/// the Groundwork and EF Core leaves supply scoped durable implementations using the frozen
+/// the EF Core leaves supply scoped durable implementations using the frozen
 /// <c>executionCommandTransport</c> wire format. The pump is an <see cref="IRecurringTask"/>, so this feature depends
 /// on the Tasks feature for its execution lifecycle and opens a fresh operation scope per sweep.
 /// </remarks>

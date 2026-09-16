@@ -25,7 +25,7 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// <remarks>
 /// Depends on <c>WorkflowsRuntimeTriggers</c> for the trigger indexer it decorates and the
 /// <see cref="IStimulusRouter"/> the pump starts instances through, and on the Tasks feature for the pump's
-/// recurring-task lifecycle. Compose alongside a durable runtime persistence provider (e.g. the Groundwork
+/// recurring-task lifecycle. Compose alongside a durable runtime persistence provider (e.g. the EF Core
 /// feature) to make recurring schedules survive a restart; without one the pump still runs but schedules live
 /// only in memory until the workflow is republished.
 /// </remarks>

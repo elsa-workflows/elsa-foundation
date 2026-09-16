@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>Opt-in EF Core persistence for the Publishing ledger (P01-P06) and the ordered reusable-activity publication commands. Groundwork remains the default.</Description>
+    <Description>EF Core persistence for the Publishing ledger (P01-P06) and the ordered reusable-activity publication commands.</Description>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />

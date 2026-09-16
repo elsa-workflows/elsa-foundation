@@ -6,7 +6,6 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 public sealed class WorkflowTriggerBindingStoreBackend
 {
     public const string EntityFramework = "entity-framework";
-    public const string Groundwork = "groundwork";
     public const string InMemory = "in-memory";
     private readonly ServiceDescriptor _contract;
     private readonly ServiceDescriptor _concrete;
@@ -14,7 +13,7 @@ public sealed class WorkflowTriggerBindingStoreBackend
 
     public WorkflowTriggerBindingStoreBackend(string name, ServiceDescriptor contract, ServiceDescriptor concrete, Action<IServiceCollection>? removeOwnedArtifacts = null)
     {
-        if (name is not (EntityFramework or Groundwork or InMemory)) throw new ArgumentException($"Unknown trigger-binding backend '{name}'.", nameof(name));
+        if (name is not (EntityFramework or InMemory)) throw new ArgumentException($"Unknown trigger-binding backend '{name}'.", nameof(name));
         if (contract.ServiceType != typeof(IWorkflowTriggerBindingStore)) throw new ArgumentException("The trigger-binding contract descriptor is invalid.", nameof(contract));
         _contract = contract;
         _concrete = concrete;

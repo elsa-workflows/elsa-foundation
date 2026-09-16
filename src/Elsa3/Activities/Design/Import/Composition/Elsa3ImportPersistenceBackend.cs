@@ -5,12 +5,11 @@ namespace Elsa3.Activities.Design.Import.Composition;
 
 /// <summary>
 /// Records the exact service descriptors owned by the selected Elsa 3 import persistence backend, so a
-/// host can repeat a registration idempotently, switch Groundwork and EF Core in either order, and never
+/// host can repeat a registration idempotently and never
 /// silently replace a custom import store or command.
 /// </summary>
 public sealed class Elsa3ImportPersistenceBackend
 {
-    public const string Groundwork = "groundwork";
     public const string EntityFramework = "entity-framework";
 
     /// <summary>
@@ -36,7 +35,7 @@ public sealed class Elsa3ImportPersistenceBackend
         IEnumerable<ServiceDescriptor> descriptors,
         Action<IServiceCollection>? withdrawExternalDeclarations = null)
     {
-        if (name is not (Groundwork or EntityFramework))
+        if (name is not EntityFramework)
             throw new ArgumentException($"Unknown Elsa 3 import persistence backend '{name}'.", nameof(name));
         ArgumentException.ThrowIfNullOrWhiteSpace(configurationFingerprint);
         ArgumentNullException.ThrowIfNull(descriptors);

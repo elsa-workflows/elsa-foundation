@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// <remarks>
 /// A control-plane state is keyed by its control-plane state ID. Workflow visibility is a separate projection and
 /// the workflow query also inspects global rows for embedded workflow-scoped holds, matching the in-memory and
-/// Groundwork semantics without moving administrative state into workflow continuation documents.
+/// the provider-neutral semantics without moving administrative state into workflow continuation documents.
 /// </remarks>
 public sealed class EfWorkflowHoldStateStore(
     BookmarkStateDbContext context,

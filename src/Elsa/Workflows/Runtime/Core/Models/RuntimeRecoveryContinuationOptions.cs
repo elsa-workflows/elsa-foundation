@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 public sealed class RuntimeRecoveryContinuationOptions
 {
     /// <summary>
-    /// UTF-8 signing key shared by every node that must accept recovery continuations. Durable Groundwork
+    /// UTF-8 signing key shared by every node that must accept recovery continuations. Durable
     /// composition rejects the development fallback when this value is not configured.
     /// </summary>
     public string? SigningKey { get; set; }

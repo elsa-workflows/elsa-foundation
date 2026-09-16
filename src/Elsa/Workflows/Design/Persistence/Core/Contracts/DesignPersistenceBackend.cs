@@ -5,7 +5,6 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 /// <summary>Tracks the exact service descriptors owned by the selected design persistence backend.</summary>
 public sealed class DesignPersistenceBackend
 {
-    public const string Groundwork = "groundwork";
     public const string EntityFramework = "entity-framework";
 
     /// <summary>Provider-neutral design persistence contracts that select exactly one implementation.</summary>

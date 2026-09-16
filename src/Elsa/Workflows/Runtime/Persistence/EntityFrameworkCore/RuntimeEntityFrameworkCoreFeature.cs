@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
 /// <summary>
-/// Backs the complete workflow-runtime persistence family with EF Core: the counterpart of the Groundwork workflow
+/// Backs the complete workflow-runtime persistence family with EF Core: the workflow
 /// runtime feature. It applies or validates the shared Runtime migrations on shell activation.
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]

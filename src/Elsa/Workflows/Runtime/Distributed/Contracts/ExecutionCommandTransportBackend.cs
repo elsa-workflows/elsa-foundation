@@ -10,7 +10,6 @@ public sealed class ExecutionCommandTransportBackend
     private readonly Action<IServiceCollection>? _removeOwnedArtifacts;
 
     public const string InMemory = "in-memory";
-    public const string Groundwork = "groundwork";
     public const string EntityFramework = "entity-framework";
 
     public ExecutionCommandTransportBackend(
@@ -54,7 +53,7 @@ public sealed class ExecutionCommandTransportBackend
     public static void EnsureKnown(string name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        if (name is not InMemory and not Groundwork and not EntityFramework)
+        if (name is not InMemory and not EntityFramework)
             throw new ArgumentException($"Unknown execution command transport backend '{name}'.", nameof(name));
     }
 

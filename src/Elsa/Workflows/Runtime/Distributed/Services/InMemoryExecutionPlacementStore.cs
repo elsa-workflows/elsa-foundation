@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Services;
 /// <summary>
 /// In-memory <see cref="IExecutionPlacementStore"/> for single-process composition and the two-node test harness.
 /// Scoped, partition-bound adapters coordinate through singleton shared state; <see cref="TryClaimAsync"/> is serialized
-/// under a lock so the compare-and-swap that grants or denies placement is atomic across nodes. The opt-in Groundwork
+/// under a lock so the compare-and-swap that grants or denies placement is atomic across nodes. The opt-in
 /// persistence feature replaces this adapter with its durable scoped implementation.
 /// </summary>
 public sealed class InMemoryExecutionPlacementStore : IExecutionPlacementStore

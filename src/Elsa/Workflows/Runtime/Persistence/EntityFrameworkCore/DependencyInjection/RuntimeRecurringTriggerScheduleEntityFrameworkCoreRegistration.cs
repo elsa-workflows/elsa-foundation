@@ -29,7 +29,7 @@ public static class RuntimeRecurringTriggerScheduleEntityFrameworkCoreRegistrati
             if (existing is not null)
             {
                 existing.EnsureOwnsRegisteredContract(services);
-                if (existing.Name != RecurringTriggerScheduleStoreBackend.Groundwork && existing.Name != RecurringTriggerScheduleStoreBackend.InMemory)
+                if (existing.Name != RecurringTriggerScheduleStoreBackend.InMemory)
                     throw new InvalidOperationException("Runtime recurring-trigger schedule EF persistence refuses to replace a selected non-EF backend.");
             }
             else

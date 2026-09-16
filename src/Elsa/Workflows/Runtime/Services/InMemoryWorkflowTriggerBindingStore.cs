@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// <summary>
 /// In-memory <see cref="IWorkflowTriggerBindingStore"/>, the default before a durable provider is
 /// composed in. Suitable for tests and single-process hosts; a restart loses the trigger index, which
-/// is why production hosts swap in the Groundwork-backed store.
+/// is why production hosts swap in the durable store.
 /// </summary>
 public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindingStore
 {

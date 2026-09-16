@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// <remarks>
 /// Pending persistence, delivery lookup, claims, delivery completion, and the R21 dispatch projection are implemented
 /// against the shared relational context. The adapter remains opt-in until the complete runtime checkpoint writer
-/// can compose every participant, but completion never hides a partial dispatch write behind Groundwork.
+/// can compose every participant, but completion never hides a partial dispatch write.
 /// </remarks>
 public sealed class EfRuntimePostCommitOutboxStore(
     BookmarkStateDbContext context,

@@ -120,7 +120,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
             if (change.Operation == RuntimeStateChangeOperation.Upsert)
                 context.Bookmarks.Add(EfBookmarkStateStore.ToEntity(state, scope, id, EfBookmarkStateStore.NewRevision()));
 
-            // Groundwork's conditional delete is idempotent for a missing row.
+            // A conditional delete is idempotent for a missing row.
             return;
         }
 
@@ -175,7 +175,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
             if (change.Operation == RuntimeStateChangeOperation.Upsert)
                 context.DurableValueStates.Add(EfDurableValueStateStore.ToEntity(state, scope, id, 1));
 
-            // Groundwork's conditional delete is idempotent for a missing row.
+            // A conditional delete is idempotent for a missing row.
             return;
         }
 

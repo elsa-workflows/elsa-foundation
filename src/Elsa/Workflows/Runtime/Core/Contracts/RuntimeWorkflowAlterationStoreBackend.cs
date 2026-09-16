@@ -7,13 +7,12 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 public sealed class RuntimeWorkflowAlterationStoreBackend
 {
     public const string EntityFramework = "entity-framework";
-    public const string Groundwork = "groundwork";
     public const string InMemory = "in-memory";
     private readonly IReadOnlyList<ServiceDescriptor> _descriptors;
     private readonly Action<IServiceCollection>? _remove;
     public RuntimeWorkflowAlterationStoreBackend(string name, IEnumerable<ServiceDescriptor> descriptors, Action<IServiceCollection>? remove = null)
     {
-        if (name is not (EntityFramework or Groundwork or InMemory)) throw new ArgumentException($"Unknown alteration backend '{name}'.", nameof(name));
+        if (name is not (EntityFramework or InMemory)) throw new ArgumentException($"Unknown alteration backend '{name}'.", nameof(name));
         _descriptors = descriptors?.Distinct().ToArray() ?? throw new ArgumentNullException(nameof(descriptors));
         if (_descriptors.Count == 0) throw new ArgumentException("At least one alteration descriptor is required.", nameof(descriptors));
         _remove = remove; Name = name;

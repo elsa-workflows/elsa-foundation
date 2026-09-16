@@ -118,7 +118,7 @@ public sealed class IdentitySeedCoordinator(
                 return converged;
         }
 
-        throw new InvalidOperationException("Groundwork Identity seeding could not converge the administrator role after repeated conditional-write conflicts.");
+        throw new InvalidOperationException("Identity seeding could not converge the administrator role after repeated conditional-write conflicts.");
     }
 
     private async Task<SeedResult> EnsureAdminUserAsync(
@@ -186,7 +186,7 @@ public sealed class IdentitySeedCoordinator(
                 return;
         }
 
-        throw new InvalidOperationException("Groundwork Identity seeding could not converge the administrator user role after repeated conditional-write conflicts.");
+        throw new InvalidOperationException("Identity seeding could not converge the administrator user role after repeated conditional-write conflicts.");
     }
 
     private async Task EnsureMembershipAsync(
@@ -230,7 +230,7 @@ public sealed class IdentitySeedCoordinator(
                 return;
         }
 
-        throw new InvalidOperationException("Groundwork Identity seeding could not converge the administrator tenant membership after repeated conditional-write conflicts.");
+        throw new InvalidOperationException("Identity seeding could not converge the administrator tenant membership after repeated conditional-write conflicts.");
     }
 
     private static string SeedDocumentId(string kind, string tenantId, string logicalName)
@@ -252,13 +252,13 @@ public sealed class IdentitySeedCoordinator(
     };
 
     private IRevisionAwareUserStore RevisionUserStore => userStore as IRevisionAwareUserStore
-        ?? throw new InvalidOperationException("Groundwork Identity seeding requires a revision-aware user store.");
+        ?? throw new InvalidOperationException("Identity seeding requires a revision-aware user store.");
 
     private IRevisionAwareRoleStore RevisionRoleStore => roleStore as IRevisionAwareRoleStore
-        ?? throw new InvalidOperationException("Groundwork Identity seeding requires a revision-aware role store.");
+        ?? throw new InvalidOperationException("Identity seeding requires a revision-aware role store.");
 
     private IRevisionAwareTenantMembershipStore RevisionMembershipStore => membershipStore as IRevisionAwareTenantMembershipStore
-        ?? throw new InvalidOperationException("Groundwork Identity seeding requires a revision-aware tenant membership store.");
+        ?? throw new InvalidOperationException("Identity seeding requires a revision-aware tenant membership store.");
 
     public abstract record SeedResult;
 

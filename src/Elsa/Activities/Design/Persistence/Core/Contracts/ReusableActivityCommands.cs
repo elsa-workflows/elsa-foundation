@@ -210,7 +210,7 @@ public sealed record ActivityPublicationDesignMutation(
 
 /// <summary>
 /// Complete atomic publication input. Generic artifact and receipt types keep this Design
-/// persistence contract independent of Runtime and Publishing while allowing their Groundwork
+/// persistence contract independent of Runtime and Publishing while allowing their
 /// bridge to commit every authoritative document and the durable outcome in one transaction.
 /// </summary>
 public sealed record ActivityPublicationCommit<TExecutableTemplate, TSourceReference, TReceipt>(

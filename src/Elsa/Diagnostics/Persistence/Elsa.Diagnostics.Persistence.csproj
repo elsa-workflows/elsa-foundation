@@ -16,11 +16,4 @@
     <ProjectReference Include="..\StructuredLogs\Core\Elsa.Diagnostics.StructuredLogs.Core.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- The Groundwork deployment leaf is a separate project beneath this shared, provider-neutral root. -->
-    <Compile Remove="Groundwork/**/*" />
-    <EmbeddedResource Remove="Groundwork/**/*" />
-    <None Remove="Groundwork/**/*" />
-  </ItemGroup>
-
 </Project>

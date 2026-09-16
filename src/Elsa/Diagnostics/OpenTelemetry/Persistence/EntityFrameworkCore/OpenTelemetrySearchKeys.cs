@@ -12,7 +12,7 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
 internal static class OpenTelemetrySearchKeys
 {
     private const int ExpansionFactor = 7;
-    // Search keys for ordinary signal fields are deliberately unbounded.  The Groundwork
+    // Search keys for ordinary signal fields are deliberately unbounded.  The
     // contract only bounds fields that participate in a bounded projection; names, bodies and
     // severities remain valid storage strings.
     public const int MaximumTraceIdCodeUnits = 256;

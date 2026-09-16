@@ -97,7 +97,7 @@ public sealed class EfActivityDesignStores(
     }
 
     /// <summary>
-    /// Substring search cannot use an index, so like Groundwork it is refused once the visible catalog
+    /// Substring search cannot use an index, so it is refused once the visible catalog
     /// exceeds this many rows rather than scanning an unbounded table.
     /// </summary>
     public const int MaximumSearchCatalogRows = 10_000;

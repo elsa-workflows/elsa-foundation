@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// <summary>
 /// Process-local <see cref="IRecurringTriggerScheduleStore"/>. Schedules are held in memory only, so a
 /// Timer/Cron start trigger backed by this store is <b>not</b> restart-durable — a process restart forgets every
-/// schedule until the workflow is republished. Compose a durable persistence provider (the Groundwork bridge)
+/// schedule until the workflow is republished. Compose a durable persistence provider (the Runtime EF Core module)
 /// to make recurring schedules survive restarts.
 /// </summary>
 public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerScheduleStore

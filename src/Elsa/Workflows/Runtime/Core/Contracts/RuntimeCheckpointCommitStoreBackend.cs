@@ -6,7 +6,6 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 public sealed class RuntimeCheckpointCommitStoreBackend
 {
     public const string EntityFramework = "entity-framework";
-    public const string Groundwork = "groundwork";
     public const string InMemory = "in-memory";
 
     private readonly ServiceDescriptor _contract;
@@ -21,7 +20,7 @@ public sealed class RuntimeCheckpointCommitStoreBackend
         ServiceDescriptor? durabilityEvidence = null,
         Action<IServiceCollection>? removeOwnedArtifacts = null)
     {
-        if (name is not (EntityFramework or Groundwork or InMemory))
+        if (name is not (EntityFramework or InMemory))
             throw new ArgumentException($"Unknown Runtime checkpoint backend '{name}'.", nameof(name));
         if (contract.ServiceType != typeof(IRuntimeCheckpointCommitStore))
             throw new ArgumentException("The selected checkpoint descriptor must own its public contract.", nameof(contract));
