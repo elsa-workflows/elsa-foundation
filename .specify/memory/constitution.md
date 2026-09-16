@@ -3,6 +3,27 @@ Draft history moved to ../../docs/reports/archive/constitution-draft-history.md.
 This constitution file is the Elsa-specific quality-gate layer: gates, allowed exceptions,
 ratification state, and governance. Canonical term lookup lives in ../../docs/glossary/.
 
+Sync Impact Report (4.0.1 -> 4.0.2, 2026-09-16)
+- Bump rationale: PATCH. Editorial propagation from accepted ADR 0073, which made EF Core the only
+  first-party persistence family. No gate is added, removed, or redefined, and no architectural text
+  changes, so this is a factual sync with the tree rather than an amendment. Recorded on Sipke
+  Schoorstra's decision of 2026-09-16.
+- Modified: §E2 domain-package examples. `Elsa.Persistence.EFCore{,.Sqlite}` and
+  `Elsa.Persistence.Groundwork.*` -> `Elsa.Persistence.EntityFramework` plus the per-domain
+  `<Domain>.Persistence.EntityFrameworkCore` shape; `Elsa.Secrets.Persistence.Groundwork` ->
+  `Elsa.Secrets.Persistence.EntityFrameworkCore`. All three named packages were deleted from the
+  tree, the first two well before the Groundwork removal.
+- Modified: §E2.2.1 Design persistence. The `.EFCore` and `.EFCore.Sqlite` project pair is replaced by
+  the single `Elsa.Workflows.Design.Persistence.EntityFrameworkCore` project, which carries all four
+  supported providers with per-provider migrations rather than a project per provider.
+- Modified: §E5 minimum-project-size worked examples. Dropped `Elsa.Persistence.EFCore.Sqlite`, which
+  no longer exists.
+- Modified: §E6 R7 provider prefixes. `EFCore…`/`Groundwork…`/`Sqlite…` -> `Ef…`, which is the
+  convention actually in use (141 types; `EFCore…` appears zero times and `EfCore…` on seven older
+  types). R5's jargon list and R3's wire-identifier example no longer name Groundwork.
+- Unchanged deliberately: §E2.5's `ElsaDbContextBase` opt-in text, which ADR 0042 predicted would
+  become obsolete. The prediction inverted; that text reads correctly again.
+
 Sync Impact Report (4.0.0 -> 4.0.1, 2026-09-11)
 - Bump rationale: PATCH. Factual sync with the tree; no gate added, removed, or redefined.
 - Modified: Pinned tree, the `Elsa.Workflows.Primitives` domain row removed. Its one live type,
@@ -52,7 +73,7 @@ Ratification: RATIFIED 2026-08-08 by Sipke Schoorstra, on his authority alone; J
 -->
 # Elsa Workflow Engine Constitution
 
-**Version:** 4.0.1
+**Version:** 4.0.2
 **Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance > Amendment process calls for consensus among Joey Barten, Sipke Schoorstra, and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Section-level gates still marked draft, provisional, or pending architecture-review ratification — whether via their own `Status:` line (§E5) or inline wording (§E2.8 Model X, §E2.9, §E2.9.7) — remain so and are **not** covered by this ratification.
 **Layer:** Elsa-specific specialization of the [Modular Software Design Framework Constitution](constitution-framework.md).
 **Derives from:** framework constitution **v4.0.0**.
@@ -147,10 +168,10 @@ owns always-fresh enumeration and project counts)*:
 | `Elsa.Locking` | Provides distributed locking. | `Elsa.Locking.Core`, `Elsa.Locking.FileSystem`, `Elsa.Locking.<Provider>` |
 | `Elsa.Mediator` | Routes commands and requests in-process. | `Elsa.Mediator.Core`, `Elsa.Mediator` |
 | `Elsa.Modularity` | Discovers, describes, enables, validates, and composes modules and features. | `Elsa.Modularity.Core`, `Elsa.Modularity.Api`, `Elsa.Modularity.Nuplane` |
-| `Elsa.Persistence` | Persists application state through domain-specific ports and provider adapters. | `Elsa.Persistence.EFCore{,.Sqlite}`, `Elsa.Persistence.Groundwork.*` |
+| `Elsa.Persistence` | Persists application state through domain-specific ports and provider adapters. | `Elsa.Persistence.EntityFramework`, `<Domain>.Persistence.EntityFrameworkCore` |
 | `Elsa.Pipelines` | Defines pipeline contracts for composable middleware. | `Elsa.Pipelines.Core` |
 | `Elsa.Primitives` | Provides dependency-free base primitives and hosting seams (charter in §E2.3). | `Elsa.Primitives`, `Elsa.Primitives.Hosting` |
-| `Elsa.Secrets` | Stores and resolves secrets. | `Elsa.Secrets.Core`, `Elsa.Secrets`, `Elsa.Secrets.Api`, `Elsa.Secrets.Persistence.Groundwork` |
+| `Elsa.Secrets` | Stores and resolves secrets. | `Elsa.Secrets.Core`, `Elsa.Secrets`, `Elsa.Secrets.Api`, `Elsa.Secrets.Persistence.EntityFrameworkCore` |
 | `Elsa.Serialization` | Serialises payloads and workflow models. | `Elsa.Serialization.Core`, `Elsa.Serialization.Newtonsoft`, `Elsa.Serialization.SystemText` |
 | `Elsa.Tasks` | Schedules background work inside the host. | `Elsa.Tasks.Core`, `Elsa.Tasks`, `Elsa.Tasks.Schedules` (helper) |
 | `Elsa.Workflows.Design` | Designs workflow definitions: contracts, models, validations, reconciliation, and design-time persistence. | `Elsa.Workflows.Design.Core`, `Elsa.Workflows.Design.{Api,JavaScript}`, `Elsa.Workflows.Design.{Reconciliation,Validations}.*`, `Elsa.Workflows.Design.Persistence.*` |
@@ -184,8 +205,9 @@ Packages:
 
 - `Elsa.Workflows.Design.Core` — contracts: `IWorkflowDefinition`, `IInputDefinition`, `IOutputDefinition`, etc.
 - `Elsa.Workflows.Design.Persistence.Core` — design-time persistence contracts.
-- `Elsa.Workflows.Design.Persistence.EFCore` — EF Core implementation.
-- `Elsa.Workflows.Design.Persistence.EFCore.Sqlite` — SQLite provider for the EF Core implementation.
+- `Elsa.Workflows.Design.Persistence.EntityFrameworkCore` — EF Core implementation. One project carries all four
+  supported providers (SQLite, SQL Server, PostgreSQL, MySQL) with per-provider migrations, rather than a
+  project per provider.
 
 #### §E2.2.2 Runtime sub-domain — the runtime representation
 
@@ -450,7 +472,7 @@ Rationale, rejected alternatives and the supporting measurements are recorded in
 
 **Reversibility.** If, e.g., `Elsa.Serialization.Newtonsoft` and `Elsa.Serialization.SystemText` become demanded by applications outside Elsa, they could graduate into separately published features that Elsa's other features pull in via NuGet. The packaging is reversible per framework §2.16 (refactor-cost test) — preserving NuGet identity insulates consumers from the restructuring.
 
-**Minimum project size (framework §2.16.1 — Elsa interpretive note).** Elsa's tree intentionally contains many sub-100-LoC projects; the 2026-07-04 audit ([MD-5 amendment report](../../docs/reports/elsa-4-w21-md5-minimum-project-size-amendment.md)) found all 13 of them exempt under the §2.16.1 exemption test, so the guidance ratifies the current shape rather than triggering a merge campaign. An exemption permits a small project; it does not require one: the 2026-09 maintainability pass merged eight of them into their parents where no dependency-direction or packaging reason held them apart. Worked examples per exception class: contracts-only `.Core` seams (`Elsa.Locking.Core`, `Elsa.Caching.Core`), primitives projects (`Elsa.Primitives.Hosting`), provider leaves (`Elsa.Locking.FileSystem`, `Elsa.Persistence.EFCore.Sqlite`), the §E2.7 migration boundary (`Elsa3.Activities.Design.Import`), Layer-2 helpers (`Elsa.Serialization.Newtonsoft`), and independently-composable `[ShellFeature]` units / cross-domain contribution seams (`Elsa.Expressions.JavaScript.Libraries`, `Elsa.Http.JavaScript`). New sub-100-LoC projects that fit none of the six classes need the one-sentence justification of §2.16.1.
+**Minimum project size (framework §2.16.1 — Elsa interpretive note).** Elsa's tree intentionally contains many sub-100-LoC projects; the 2026-07-04 audit ([MD-5 amendment report](../../docs/reports/elsa-4-w21-md5-minimum-project-size-amendment.md)) found all 13 of them exempt under the §2.16.1 exemption test, so the guidance ratifies the current shape rather than triggering a merge campaign. An exemption permits a small project; it does not require one: the 2026-09 maintainability pass merged eight of them into their parents where no dependency-direction or packaging reason held them apart. Worked examples per exception class: contracts-only `.Core` seams (`Elsa.Locking.Core`, `Elsa.Caching.Core`), primitives projects (`Elsa.Primitives.Hosting`), provider leaves (`Elsa.Locking.FileSystem`), the §E2.7 migration boundary (`Elsa3.Activities.Design.Import`), Layer-2 helpers (`Elsa.Serialization.Newtonsoft`), and independently-composable `[ShellFeature]` units / cross-domain contribution seams (`Elsa.Expressions.JavaScript.Libraries`, `Elsa.Http.JavaScript`). New sub-100-LoC projects that fit none of the six classes need the one-sentence justification of §2.16.1.
 
 **Nuplane strategy.** Elsa adopts **Strategy B** per framework §3: the host pins the Line A baseline contracts; Nuplane dynamically loads Layer-3 implementations, helper libraries, and optional features. A domain's `.Core` is not host-pinned, because a clean host carries no domains; Nuplane promotes it to a shared assembly within that domain's subtree when the domain is installed, for first-party and third-party domains alike. Strategy A is not adopted as Elsa's default, but is not hard-excluded for specific deployment contexts.
 
@@ -460,7 +482,7 @@ Rationale, rejected alternatives and the supporting measurements are recorded in
 
 **framework §2.2 — Elsa specialization.** Framework §2.2 fixes the *namespace/domain* naming convention (domain-only namespaces, no layer-marker buckets). This section specializes it into a **mechanical type-name style guide** for Elsa-owned types. It is a gate: plans, specs, and code that introduce or rename Elsa-owned types are checked against R1–R8 below. The rules and their supporting analysis originate in the Elsa 4 architecture review (`docs/reports/elsa-4-architecture-review-2026-07/review-naming.md`, findings NM-1..NM-14); this section is the ratified, enforceable extract.
 
-**Scope.** R1–R8 govern **Elsa-owned** type names. Names that mirror an external framework contract are explicitly exempt (see R3). Persisted/wire identifiers (JSON type discriminators, Groundwork document-kind strings, `nameof()`-derived handler names, checkpoint-name constants, serialized member keys) are **not** renamed to satisfy these rules — the literal wire value is preserved and the divergence is commented at the site. Behavior preservation outranks naming.
+**Scope.** R1–R8 govern **Elsa-owned** type names. Names that mirror an external framework contract are explicitly exempt (see R3). Persisted/wire identifiers (JSON type discriminators, persisted document-kind strings, `nameof()`-derived handler names, checkpoint-name constants, serialized member keys) are **not** renamed to satisfy these rules — the literal wire value is preserved and the divergence is commented at the site. Behavior preservation outranks naming.
 
 - **R1 — Component budget.** A type name carries at most **4** CamelCase components; **5** is a hard cap. Beyond that, a component is almost always redundant with the namespace — drop it.
 - **R2 — Don't repeat the namespace in the type name.** Inside e.g. `Elsa.Workflows.Runtime.Core`, a type does not need both `Runtime` and `WorkflowExecution` prefixes. Leading `Workflow`/`Runtime`/`Activity` qualifiers are allowed only when they *disambiguate* from a sibling type without them.
@@ -472,9 +494,9 @@ Rationale, rejected alternatives and the supporting measurements are recorded in
   - `…Executor`/`…Runner` = *does* the work (terminal); `…Router`/`…Dispatcher` = *selects a target and forwards*; `…Orchestrator`/`…Coordinator` = *sequences a multi-step operation*.
   - Reserve `…Handler` for (a) mediator handlers and (b) sanctioned entity-lifecycle handlers. The scheduler `…WorkHandler` family is grandfathered.
   - **Event types carry no `On` prefix** (framework §2.6.6). `On` belongs to the handling side; the event is named for the fact — `DraftValidating` / `DraftValidated`, not `OnDraftValidating` / `OnDraftValidated`. Word order is subject-first. Note this also keeps the longest Draft-mutation names inside R1: `OnActivityOutputRemovedFromDraft` was 6 components, over the hard cap.
-- **R5 — Prefer concrete domain nouns over borrowed infra metaphors** unless the metaphor is glossary-documented. Favor `HoldState`/`LivenessState` over `ControlPlaneState`/`OperationalState`. Terms kept as jargon (`Quiesce`, `Passivation`, `ControlPlane`, `Groundwork`, `Nuplane`) MUST have a `docs/glossary/elsa.md` entry.
+- **R5 — Prefer concrete domain nouns over borrowed infra metaphors** unless the metaphor is glossary-documented. Favor `HoldState`/`LivenessState` over `ControlPlaneState`/`OperationalState`. Terms kept as jargon (`Quiesce`, `Passivation`, `ControlPlane`, `Nuplane`) MUST have a `docs/glossary/elsa.md` entry.
 - **R6 — One concept, one head-noun.** If several types share a `…State` (or similar) head, the *head* must make the distinction obvious (`Hold`, `Liveness`, `Scheduler…`) rather than leaning on a vague adjective.
-- **R7 — Default-impl prefixes are fixed and good:** `Default…`, `InMemory…`, `Noop…`, plus provider prefixes `EFCore…`/`Groundwork…`/`Sqlite…`. Keep using them.
+- **R7 — Default-impl prefixes are fixed and good:** `Default…`, `InMemory…`, `Noop…`, plus the provider prefix `Ef…` (the convention in use across the EF implementations; `EfCore…` appears on a handful of older types and is not the pattern to copy). Keep using them.
 - **R8 — Reserve `Agent` for the AI-assistant domain.** Workflow-execution "agents" use `Actor`/`Worker`/`Host` to avoid the cross-domain homonym.
 
 **Protected names (NM-14, do not "fix").** `Bookmark`, `Trigger`, `Incident`, `Outbox`, `Checkpoint`, `WorkItem`, `Hold`, `PauseGate`, `Envelope`, `Slot` are concrete, evocative domain nouns — they are exempt from any shortening pressure. The extension-point grammar (R4 first bullet), `.Core`/Feature layering, `…Store`, Command/Request/Result, and the R7 prefixes are strengths to protect, not simplify (NM-13).
@@ -518,4 +540,4 @@ Same rules as framework §4.2 applied to constitutional content:
 
 ---
 
-**Version:** 4.0.1 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-09-11 | **Derives from framework constitution:** v4.0.0
+**Version:** 4.0.2 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-09-16 | **Derives from framework constitution:** v4.0.0
