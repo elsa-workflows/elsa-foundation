@@ -1,4 +1,5 @@
 using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.Api.Models;

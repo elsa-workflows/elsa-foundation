@@ -1,6 +1,6 @@
 using Elsa.Api.AspNetCore;
 using Elsa.Events.Core.Contracts;
-using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Models;

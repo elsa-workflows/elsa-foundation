@@ -4,6 +4,7 @@ using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.Capabilities.Models;
 using Elsa.Api.Capabilities.Authorization;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;

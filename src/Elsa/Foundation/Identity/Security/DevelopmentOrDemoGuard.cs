@@ -2,7 +2,7 @@ using CShells.Lifecycle;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-namespace Elsa.Foundation.Identity.Core.Security;
+namespace Elsa.Foundation.Identity.Security;
 
 /// <summary>
 /// Startup guard that makes the identity features' <c>IsDevelopmentOrDemo</c> flag safe by construction.

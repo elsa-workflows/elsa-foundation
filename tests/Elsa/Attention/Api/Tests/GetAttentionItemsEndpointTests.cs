@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Elsa.Api.AspNetCore;
 using Elsa.Attention.Core;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;

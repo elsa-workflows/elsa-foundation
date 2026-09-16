@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Core\Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="..\..\Elsa.Foundation.Identity.csproj" />
   </ItemGroup>
 
 </Project>

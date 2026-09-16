@@ -7,6 +7,7 @@ using Elsa.Api.Compatibility.Testing.Serialization;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Tests.Support;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Testing;
 using Microsoft.AspNetCore.Builder;

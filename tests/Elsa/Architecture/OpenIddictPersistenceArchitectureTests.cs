@@ -61,10 +61,19 @@ public sealed class OpenIddictPersistenceArchitectureTests
     }
 
     [Fact]
-    public void Identity_abstractions_are_free_of_concrete_persistence_dependencies()
+    public void Identity_core_and_implementation_projects_are_free_of_concrete_persistence_dependencies()
     {
-        var root = Path.Combine(RepoRoot, "src", "Elsa", "Foundation", "Identity", "Core");
-        var violations = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+        var identityRoot = Path.Combine(RepoRoot, "src", "Elsa", "Foundation", "Identity");
+        var coreFiles = Directory.EnumerateFiles(Path.Combine(identityRoot, "Core"), "*", SearchOption.AllDirectories);
+        var implementationFiles = OwnProjectFiles(identityRoot).ToArray();
+
+        // The implementation project sits at the domain root above its sibling sub-projects. Prove the
+        // ownership filter still reaches its own project file and sources, so it cannot pass by scanning nothing.
+        Assert.Contains(Path.Combine(identityRoot, "Elsa.Foundation.Identity.csproj"), implementationFiles);
+        Assert.Contains(Path.Combine(identityRoot, "Extensions", "FoundationIdentityServiceCollectionExtensions.cs"), implementationFiles);
+
+        var violations = coreFiles
+            .Concat(implementationFiles)
             .Where(IsSourceOrProject)
             .SelectMany(path => ForbiddenLines(path, "EntityFrameworkCore"))
             .ToArray();
@@ -229,6 +238,28 @@ public sealed class OpenIddictPersistenceArchitectureTests
         Assert.Equal(
             ["Microsoft.EntityFrameworkCore.InMemory", "Microsoft.EntityFrameworkCore.Sqlite", "OpenIddict.EntityFrameworkCore"],
             testVendorPackages);
+    }
+
+    /// <summary>
+    /// Files owned by the project rooted at <paramref name="projectDirectory"/>: every file whose nearest
+    /// enclosing directory with a project file is that root. The walk stops at any directory holding its own
+    /// project, so a nested sub-project is excluded because it is a project, not because it is named in a
+    /// list that could drift from the tree.
+    /// </summary>
+    private static IEnumerable<string> OwnProjectFiles(string projectDirectory)
+    {
+        var pending = new Stack<string>([projectDirectory]);
+        while (pending.TryPop(out var directory))
+        {
+            foreach (var file in Directory.EnumerateFiles(directory))
+                yield return file;
+
+            foreach (var child in Directory.EnumerateDirectories(directory))
+            {
+                if (!Directory.EnumerateFiles(child, "*.csproj").Any())
+                    pending.Push(child);
+            }
+        }
     }
 
     private static bool IsSourceOrProject(string path) =>

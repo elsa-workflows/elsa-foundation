@@ -3,6 +3,7 @@ using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.Capabilities.Models;
 using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Publishing.Api.Capabilities;

@@ -1,6 +1,6 @@
 using Elsa.Foundation.Identity.Core.Ownership;
 
-namespace Elsa.Foundation.Identity.Core;
+namespace Elsa.Foundation.Identity;
 
 public sealed class FoundationIdentityOptions
 {

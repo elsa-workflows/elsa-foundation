@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Http;
 
-namespace Elsa.Foundation.Identity.Core.Authorization;
+namespace Elsa.Foundation.Identity.Authorization;
 
 internal sealed record AuthorizationMiddlewareResultHandlerFallback(IAuthorizationMiddlewareResultHandler Handler);
 

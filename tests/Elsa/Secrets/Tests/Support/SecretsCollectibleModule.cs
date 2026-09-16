@@ -4,7 +4,7 @@ using System.Text.Json;
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Compatibility.Testing.Collectibility;
 using Elsa.Foundation.Identity.Core.Authorization;
-using Elsa.Foundation.Identity.Core.Extensions;
+using Elsa.Foundation.Identity.Extensions;
 using Elsa.Secrets.Api.Features;
 using Elsa.Secrets.Extensions;
 using Microsoft.AspNetCore.Authorization;

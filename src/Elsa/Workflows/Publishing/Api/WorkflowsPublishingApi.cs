@@ -1,5 +1,5 @@
 using Elsa.Api.AspNetCore;
-using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Workflows.Publishing.Api.Constants;
 using Elsa.Workflows.Publishing.Api.Services;

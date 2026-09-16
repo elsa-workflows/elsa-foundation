@@ -1,6 +1,6 @@
 using Elsa.Activities.Design.Api;
 using Elsa.Foundation.Identity.Core.Authentication;
-using Elsa.Foundation.Identity.Core.Extensions;
+using Elsa.Foundation.Identity.Extensions;
 using Elsa.Mediator.Core.Contracts;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;

@@ -1,6 +1,7 @@
 using Elsa.Api.AspNetCore;
 using NativeEndpoints;
 using Elsa.Foundation.Identity.Core.Authentication;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Core.Ownership;
 using Elsa.Foundation.Identity.Api.Constants;

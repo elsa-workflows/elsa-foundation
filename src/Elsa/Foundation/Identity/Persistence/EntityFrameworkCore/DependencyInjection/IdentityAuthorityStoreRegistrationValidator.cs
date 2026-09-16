@@ -1,4 +1,3 @@
-using Elsa.Foundation.Identity.Core;
 using Elsa.Foundation.Identity.Core.Iam;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;

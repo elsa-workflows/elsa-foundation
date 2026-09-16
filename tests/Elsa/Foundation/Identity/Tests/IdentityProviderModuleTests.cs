@@ -1,6 +1,6 @@
 using System.Security.Claims;
-using Elsa.Foundation.Identity.Core;
 using Elsa.Foundation.Identity.Core.Authentication;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Api;

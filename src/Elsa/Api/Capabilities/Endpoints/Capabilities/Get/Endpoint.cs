@@ -2,7 +2,7 @@ using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities.Authorization;
 using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Models;
-using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Authorization;
 using NativeEndpoints;
 
 namespace Elsa.Api.Capabilities.Endpoints.Capabilities.Get;

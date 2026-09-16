@@ -1,7 +1,7 @@
 using Elsa.Activities.Bpmn.Interchange.Contracts;
 using Elsa.Activities.Bpmn.Interchange.Models;
 using Elsa.Api.AspNetCore;
-using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Authorization;
 using NativeEndpoints;
 
 namespace Elsa.Activities.Bpmn.Interchange.Endpoints.Documents.Analyze;

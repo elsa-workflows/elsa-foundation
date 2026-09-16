@@ -1,5 +1,5 @@
 using Elsa.Foundation.Identity.Core.Authentication;
-using Elsa.Foundation.Identity.Core.Extensions;
+using Elsa.Foundation.Identity.Extensions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;

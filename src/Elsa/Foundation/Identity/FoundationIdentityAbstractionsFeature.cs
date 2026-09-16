@@ -1,9 +1,9 @@
 using CShells.Features;
-using Elsa.Foundation.Identity.Core.Extensions;
+using Elsa.Foundation.Identity.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Foundation.Identity.Core;
+namespace Elsa.Foundation.Identity;
 
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Identity")]

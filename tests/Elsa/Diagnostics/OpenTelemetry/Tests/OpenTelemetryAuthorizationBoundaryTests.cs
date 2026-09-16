@@ -2,7 +2,7 @@ using Elsa.Api.AspNetCore;
 using Elsa.Api.Compatibility.Testing.Endpoints;
 using Elsa.Diagnostics.OpenTelemetry.Permissions;
 using Elsa.Foundation.Identity.Core.Authorization;
-using Elsa.Foundation.Identity.Core.Extensions;
+using Elsa.Foundation.Identity.Extensions;
 using FastEndpoints;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;

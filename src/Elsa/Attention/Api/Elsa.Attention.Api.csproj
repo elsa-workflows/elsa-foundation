@@ -14,6 +14,7 @@
     <ProjectReference Include="..\Core\Elsa.Attention.Core.csproj" />
     <ProjectReference Include="..\..\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
     <ProjectReference Include="..\..\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="..\..\Foundation\Identity\Elsa.Foundation.Identity.csproj" />
   </ItemGroup>
 
   <ItemGroup>

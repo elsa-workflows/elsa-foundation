@@ -4,7 +4,7 @@ using CShells.AspNetCore.Features;
 using Elsa.Api.Compatibility.Testing.Endpoints;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
-using Elsa.Foundation.Identity.Core.Extensions;
+using Elsa.Foundation.Identity.Extensions;
 using Elsa.Studio.Preferences.Api;
 using Elsa.Studio.Preferences.Api.Services;
 using Elsa.Studio.Preferences.Core;

@@ -4,7 +4,6 @@ using Elsa.Activities.Design.Api.Models;
 using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
-using Elsa.Foundation.Identity.Core.Extensions;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Exceptions;
 using Microsoft.AspNetCore.Authentication;

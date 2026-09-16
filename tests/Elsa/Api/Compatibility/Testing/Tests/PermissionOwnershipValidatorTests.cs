@@ -1,6 +1,7 @@
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Api.Compatibility.Testing.Security;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Xunit;
 

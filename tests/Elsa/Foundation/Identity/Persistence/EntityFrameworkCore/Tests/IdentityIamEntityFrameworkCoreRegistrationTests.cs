@@ -1,4 +1,3 @@
-using Elsa.Foundation.Identity.Core;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Extensions;

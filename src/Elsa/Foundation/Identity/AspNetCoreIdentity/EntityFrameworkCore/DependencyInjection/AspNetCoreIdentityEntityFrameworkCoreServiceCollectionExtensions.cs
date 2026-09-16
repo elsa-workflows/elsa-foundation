@@ -1,6 +1,6 @@
 using CShells.Lifecycle;
 using Elsa.Foundation.Identity.Core.Authentication;
-using Elsa.Foundation.Identity.Core.Extensions;
+using Elsa.Foundation.Identity.Extensions;
 using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Composition;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Authentication;

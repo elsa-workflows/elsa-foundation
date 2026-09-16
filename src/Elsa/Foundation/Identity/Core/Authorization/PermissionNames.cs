@@ -6,7 +6,7 @@ namespace Elsa.Foundation.Identity.Core.Authorization;
 /// <remarks>
 /// <see cref="All"/> is the wildcard every endpoint accepts in addition to its own permission, so it
 /// is the only name that genuinely belongs to the shared endpoint security convention rather than to
-/// a domain. <see cref="EndpointPermissionPolicy"/> composes it.
+/// a domain. <c>EndpointPermissionPolicy</c> (<c>Elsa.Foundation.Identity</c>) composes it.
 /// <para>
 /// This type previously also carried the action-scoped names for Workflow Design, Activity Design,
 /// Expressions, Workflow Publishing, Workflow Runtime, API Capabilities, Elsa 3 import, and BPMN

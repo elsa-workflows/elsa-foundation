@@ -1,17 +1,20 @@
 using CShells.Lifecycle;
-using Elsa.Foundation.Identity.Core;
+using Elsa.Foundation.Identity.Authentication;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Core.Ownership;
-using Elsa.Foundation.Identity.Core.Security;
+using Elsa.Foundation.Identity.Iam;
+using Elsa.Foundation.Identity.Ownership;
+using Elsa.Foundation.Identity.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
-namespace Elsa.Foundation.Identity.Core.Extensions;
+namespace Elsa.Foundation.Identity.Extensions;
 
 public static class FoundationIdentityServiceCollectionExtensions
 {

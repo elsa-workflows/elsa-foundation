@@ -1,6 +1,7 @@
 using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Diagnostics.StructuredLogs;
 using Elsa.Diagnostics.StructuredLogs.Tests.Support;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Xunit;
 

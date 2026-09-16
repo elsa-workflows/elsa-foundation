@@ -14,6 +14,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../../../../../../src/Elsa/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Foundation/Identity/Elsa.Foundation.Identity.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>

@@ -37,6 +37,7 @@
       "src/Elsa/Expressions/JavaScript/Rendering/Core/Elsa.Expressions.JavaScript.Rendering.Core.csproj",
       "src/Elsa/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering.csproj",
       "src/Elsa/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj",
+      "src/Elsa/Foundation/Identity/Elsa.Foundation.Identity.csproj",
       "src/Elsa/Git/Elsa.Git.csproj",
       "src/Elsa/Http/Core/Elsa.Http.Core.csproj",
       "src/Elsa/Http/Elsa.Http.csproj",

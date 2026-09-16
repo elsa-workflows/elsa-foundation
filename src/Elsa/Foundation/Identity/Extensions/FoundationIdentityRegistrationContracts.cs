@@ -1,10 +1,11 @@
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-namespace Elsa.Foundation.Identity.Core.Extensions;
+namespace Elsa.Foundation.Identity.Extensions;
 
 internal sealed record FoundationIdentityReplacementRegistration(
     Type ContractType,

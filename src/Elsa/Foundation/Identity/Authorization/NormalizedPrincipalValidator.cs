@@ -1,8 +1,9 @@
 using System.Security.Claims;
+using Elsa.Foundation.Identity.Core.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 
-namespace Elsa.Foundation.Identity.Core.Authorization;
+namespace Elsa.Foundation.Identity.Authorization;
 
 public sealed class NormalizedPrincipalValidator(IOptions<FoundationIdentityOptions> options)
 {

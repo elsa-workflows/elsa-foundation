@@ -1,4 +1,4 @@
-using Elsa.Foundation.Identity.Core.Extensions;
+using Elsa.Foundation.Identity.Extensions;
 using Elsa.Modularity.Api.Authorization;
 using Elsa.Modularity.Api.Options;
 using Elsa.Modularity.Api.Services;

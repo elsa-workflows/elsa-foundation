@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Api.Authorization;
 using Elsa.Activities.Design.Tests.Api.Support;
 using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Testing;
 using Microsoft.AspNetCore.Authorization;

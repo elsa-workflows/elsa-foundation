@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;

@@ -1,5 +1,6 @@
-using Elsa.Foundation.Identity.Core;
+using Elsa.Foundation.Identity.Authentication;
 using Elsa.Foundation.Identity.Core.Authentication;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Core.Ownership;
 using Microsoft.AspNetCore.Authorization;

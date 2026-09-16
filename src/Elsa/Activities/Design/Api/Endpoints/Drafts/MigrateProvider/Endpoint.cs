@@ -4,7 +4,7 @@ using Elsa.Activities.Design.Api.Constants;
 using Elsa.Activities.Design.Api.Handlers;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Api.AspNetCore;
-using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Authorization;
 using Microsoft.AspNetCore.Http;
 using NativeEndpoints;
 

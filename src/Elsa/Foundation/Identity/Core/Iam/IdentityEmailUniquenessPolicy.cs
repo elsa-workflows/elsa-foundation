@@ -1,6 +1,3 @@
-using Elsa.Foundation.Identity.Core;
-using Microsoft.Extensions.Options;
-
 namespace Elsa.Foundation.Identity.Core.Iam;
 
 /// <summary>Provider-neutral authority policy controlling tenant-scoped email uniqueness.</summary>
@@ -13,10 +10,4 @@ public sealed record IdentityEmailUniquenessPolicy(bool RequireUniqueEmail) : II
 {
     public static IdentityEmailUniquenessPolicy NonUnique { get; } = new(false);
     public static IdentityEmailUniquenessPolicy Unique { get; } = new(true);
-}
-
-public sealed class OptionsIdentityEmailUniquenessPolicy(IOptions<FoundationIdentityOptions> options)
-    : IIdentityEmailUniquenessPolicy
-{
-    public bool RequireUniqueEmail => options.Value.RequireUniqueEmail;
 }

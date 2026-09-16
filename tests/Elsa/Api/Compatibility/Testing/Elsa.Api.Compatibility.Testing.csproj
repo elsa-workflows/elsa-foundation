@@ -18,6 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\Elsa.Foundation.Identity.csproj" />
   </ItemGroup>
 
 </Project>

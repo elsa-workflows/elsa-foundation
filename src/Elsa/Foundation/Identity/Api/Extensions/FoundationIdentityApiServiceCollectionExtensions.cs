@@ -1,5 +1,5 @@
 using Elsa.Foundation.Identity.Core.Authentication;
-using Elsa.Foundation.Identity.Core.Extensions;
+using Elsa.Foundation.Identity.Extensions;
 using Elsa.Foundation.Identity.Api.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;

@@ -5,7 +5,7 @@ using System.Text.Json;
 using CShells.Features;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Core.Authorization;
-using Elsa.Foundation.Identity.Core.Extensions;
+using Elsa.Foundation.Identity.Extensions;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Modularity.Api.Authorization;
 using Elsa.Modularity.Api.Endpoints;

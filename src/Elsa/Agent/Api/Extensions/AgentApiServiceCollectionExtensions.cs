@@ -1,6 +1,6 @@
 using Elsa.Agent.Api.Authorization;
 using Elsa.Agent.Core.Extensions;
-using Elsa.Foundation.Identity.Core.Extensions;
+using Elsa.Foundation.Identity.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Agent.Api.Extensions;

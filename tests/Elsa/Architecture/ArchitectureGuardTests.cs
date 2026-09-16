@@ -1102,6 +1102,7 @@ internal static class PersistenceProviderNeutralityBoundary
     [
         "Elsa.Workflows.Runtime.Core",
         "Elsa.Foundation.Identity.Core",
+        "Elsa.Foundation.Identity",
         "Elsa.Secrets.Core",
         "Elsa.Workflows.Runtime.Distributed"
     ];
