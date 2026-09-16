@@ -3,12 +3,16 @@ Draft history moved to ../../docs/reports/archive/constitution-draft-history.md.
 This constitution file is the Elsa-specific quality-gate layer: gates, allowed exceptions,
 ratification state, and governance. Canonical term lookup lives in ../../docs/glossary/.
 
-Sync Impact Report (4.0.1 -> 4.0.2, 2026-09-16)
-- Bump rationale: PATCH. Factual sync with the tree, in two parts: propagation from accepted ADR 0073,
-  which made EF Core the only first-party persistence family, and a reconciliation of every package
-  name in this document against the shipped projects. No gate is added, removed, or redefined, and no
-  naming rule gains new guidance, so this is a clarification rather than an amendment. Recorded on
-  Sipke Schoorstra's decision of 2026-09-16.
+Sync Impact Report (4.0.1 -> 4.1.0, 2026-09-16)
+- Bump rationale: MINOR. Most of this change is factual sync with the tree: propagation from accepted
+  ADR 0073, which made EF Core the only first-party persistence family, and a reconciliation of every
+  package name in this document against the shipped projects. It is MINOR rather than PATCH because it
+  also writes down two naming conventions the code already follows but R4 never stated, which the
+  SemVer policy below counts as materially expanded guidance. No gate is added, removed, or redefined.
+- Ratification: taken on Sipke Schoorstra's authority on 2026-09-16. Governance calls for consensus
+  among Joey Barten, Sipke Schoorstra, and Frans van Ek; like the 2026-08-08 ratification, this is open
+  to revision if the other architects dissent. The two new R4 conventions are the part that most
+  warrants their review.
 - Modified: §E2.1 domain tree. Removed the "Surface package(s)" column; the table now records purpose
   only and defers package enumeration to the generated domain map. By this date roughly a quarter of
   the column named packages that no longer existed (`Elsa.Api.FastEndpoints`,
@@ -37,8 +41,16 @@ Sync Impact Report (4.0.1 -> 4.0.2, 2026-09-16)
   `Elsa.Common` leakage, the removed `Elsa.Scheduling`/`Elsa.Messaging`/`Elsa.Notifications` drafts),
   as intent (`Elsa.Foundation.Core` is held back), or as a reservation (`Elsa.Server` is reserved for a
   future product host).
-- Open, not decided here: §E2.7 names import adapters `Elsa3.<Domain>.Import`, but `Elsa3.Mapping`
-  does not follow that pattern. Whether to rename the project or widen the rule is an owner decision.
+- Added: §E6 R4 conventions. `…View` names a wire-shaped endpoint projection and `…Response` the
+  envelope that wraps views; `…State` names a data structure and `…Status` a lifecycle enum. Both
+  describe what the code already does rather than prescribing a change: `…Status` is an enum in all but
+  one case, and nearly every `…View` sits in an API project. The two API projects that predate the
+  first rule, and the few `…State` enums that predate the second, are named as exceptions and are not
+  renamed where serialized.
+- Modified: §E2.7 import naming rule, widened. `Elsa3.<Domain>.Import` still names the adapters; the
+  shared `Elsa3.Models` and `Elsa3.Mapping` support projects are stated not to be adapters, which is
+  why they do not take the suffix. Chosen over renaming `Elsa3.Mapping`, since the code's organization
+  was right and the rule was incomplete.
 
 Sync Impact Report (4.0.0 -> 4.0.1, 2026-09-11)
 - Bump rationale: PATCH. Factual sync with the tree; no gate added, removed, or redefined.
@@ -89,7 +101,7 @@ Ratification: RATIFIED 2026-08-08 by Sipke Schoorstra, on his authority alone; J
 -->
 # Elsa Workflow Engine Constitution
 
-**Version:** 4.0.2
+**Version:** 4.1.0
 **Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance > Amendment process calls for consensus among Joey Barten, Sipke Schoorstra, and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Section-level gates still marked draft, provisional, or pending architecture-review ratification — whether via their own `Status:` line (§E5) or inline wording (§E2.8 Model X, §E2.9, §E2.9.7) — remain so and are **not** covered by this ratification.
 **Layer:** Elsa-specific specialization of the [Modular Software Design Framework Constitution](constitution-framework.md).
 **Derives from:** framework constitution **v4.0.0**.
@@ -330,7 +342,7 @@ Elsa 4's compatibility with Elsa 3 is bounded to **import**. Dedicated adapter m
 **In scope:**
 
 - One-way one-time mapping: read Elsa 3 source, produce Elsa 4 entities, persist.
-- Adapter modules named `Elsa3.<Domain>.Import` per the Elsa-3-side concern they map.
+- Adapter modules named `Elsa3.<Domain>.Import` per the Elsa-3-side concern they map. Shared support that every adapter uses is not an adapter and does not take the suffix: `Elsa3.Models` holds the Elsa 3 source shapes and `Elsa3.Mapping` holds the converters.
 
 **Out of scope:**
 
@@ -515,6 +527,8 @@ Rationale, rejected alternatives and the supporting measurements are recorded in
 - **R4 — One suffix, one meaning.** Codified role suffixes, pick exactly one per layer and never use two synonyms for adjacent steps:
   - `…Source` = pull/returns; `…Contributor` = push/mutates context; `…PreProcessor`/`…PostProcessor` = phased contributor; `…Validator` = returns findings.
   - `…Store` = persistence over one aggregate.
+  - `…View` = a wire-shaped projection an endpoint returns; `…Response` = the envelope that wraps views, for a collection or an operation result. A view and its envelope sit in one file (`IncidentStrategyViews.cs` declares the `…View` items and `IncidentStrategiesResponse`). `Elsa.Agent.Api` and `Elsa.Foundation.Identity.Api` predate the rule and use `…Response` for single payloads; those are serialized shapes and are not renamed.
+  - `…State` = a structure that holds data, as a record or class; `…Status` = an enum naming one lifecycle position. When a type has both, they share a file (`WorkflowExecutionState.cs` declares `WorkflowExecutionState` and its `WorkflowExecutionStatus`). A few older enums still end in `…State`; rename one only where its values are not serialized.
   - `…Provider` = yields impls/descriptors; `…Factory` = constructs; `…Resolver` = maps key→value; `…Registry` = holds registrations.
   - `…Executor`/`…Runner` = *does* the work (terminal); `…Router`/`…Dispatcher` = *selects a target and forwards*; `…Orchestrator`/`…Coordinator` = *sequences a multi-step operation*.
   - Reserve `…Handler` for (a) mediator handlers and (b) sanctioned entity-lifecycle handlers. The scheduler `…WorkHandler` family is grandfathered.
@@ -565,4 +579,4 @@ Same rules as framework §4.2 applied to constitutional content:
 
 ---
 
-**Version:** 4.0.2 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-09-16 | **Derives from framework constitution:** v4.0.0
+**Version:** 4.1.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-09-16 | **Derives from framework constitution:** v4.0.0
