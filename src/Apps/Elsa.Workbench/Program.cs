@@ -7,7 +7,7 @@ using CShells.Lifecycle;
 using CShells.Management.Api;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Core.Options;
-using Elsa.Activities.Design.Persistence.Groundwork;
+using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Clr;
 using Elsa.Activities.Flowchart;
@@ -27,7 +27,8 @@ using Elsa.Attention.Api;
 using Elsa.Caching.Memory;
 using Elsa.Diagnostics.ConsoleLogStreaming;
 using Elsa.Diagnostics.OpenTelemetry;
-using Elsa.Diagnostics.Persistence.Groundwork;
+using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
+using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore;
 using Elsa.Diagnostics.StructuredLogs;
 using Elsa.Events;
 using Elsa.Expressions;
@@ -35,10 +36,10 @@ using Elsa.Expressions.Api;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Oidc;
 using Elsa.Foundation.Identity.OpenIddict;
-using Elsa.Foundation.Identity.Persistence.Groundwork;
+using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Locking.FileSystem;
 using Elsa.Mediator;
 using Elsa.Modularity.Api;
@@ -46,31 +47,33 @@ using Elsa.Modularity.Api.Attention;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Nuplane.Extensions;
 using Elsa.Modularity.Nuplane.Services;
-using Elsa.Persistence.Groundwork.Runtime;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Primitives.Hosting;
 using Elsa.Secrets.Attention;
+using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Serialization.Newtonsoft;
 using Elsa.Serialization.SystemText;
 using Elsa.Studio.Preferences.Api;
 using Elsa.Studio.Preferences.Core;
-using Elsa.Studio.Preferences.Persistence.Groundwork;
+using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore;
 using Elsa.Tasks;
 using Elsa.Workbench;
 using Elsa.Workbench.Boot;
 using Elsa.Workbench.Readiness;
 using Elsa.Workflows.Dashboard;
+using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Design.Api;
-using Elsa.Workflows.Design.Persistence.Groundwork;
+using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Design.Reconciliation;
 using Elsa.Workflows.Design.Reconciliation.Json;
 using Elsa.Workflows.ExecutionEvidence;
 using Elsa.Workflows.Publishing.Api;
-using Elsa.Workflows.Publishing.Persistence.Groundwork;
+using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed;
-using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
+using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
@@ -220,13 +223,12 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(Elsa.Workflows.Design.JavaScript.JavaScriptWorkflowsDesignFeature).Assembly,
             typeof(Elsa.Workflows.Runtime.JavaScript.JavaScriptActivitiesFeature).Assembly,
 
-            typeof(GroundworkSqliteProviderFeature).Assembly,
-            typeof(GroundworkWorkflowRuntimeFeature).Assembly,
-            typeof(ActivitiesDesignGroundworkPersistenceFeature).Assembly,
-            typeof(WorkflowsDesignGroundworkPersistenceFeature).Assembly,
+            typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
+            typeof(ActivitiesDesignEntityFrameworkCoreFeature).Assembly,
+            typeof(WorkflowsDesignEntityFrameworkCoreFeature).Assembly,
             typeof(WorkflowsRuntimeDistributedFeature).Assembly,
-            typeof(WorkflowsRuntimeDistributedGroundworkPersistenceFeature).Assembly,
-            typeof(WorkbenchGroundworkDashboardFeature).Assembly,
+            typeof(DistributedRuntimeExecutionPlacementEntityFrameworkCoreFeature).Assembly,
+            typeof(WorkflowsDashboardEntityFrameworkCoreFeature).Assembly,
             typeof(WorkflowsDesignApiFeature).Assembly,
             typeof(ActivitiesDesignApiFeature).Assembly,
 
@@ -257,12 +259,12 @@ builder.Services.AddCShellsAspNetCore(shells =>
 
             // The bridge: publishing endpoints that construct a live activity from a catalog row.
             typeof(WorkflowsPublishingApiFeature).Assembly,
-            typeof(PublishingGroundworkFeature).Assembly,
+            typeof(PublishingEntityFrameworkCoreFeature).Assembly,
 
             // Runtime vertical slice: execute published WorkflowExecutable artifacts.
             typeof(WorkflowsRuntimeApiFeature).Assembly,
 
-            // Durable-resumption pump. Every Groundwork persistence provider DependsOn this feature, so
+            // Durable-resumption pump. Every EF Core persistence provider DependsOn this feature, so
             // its assembly must be in the catalog for CShells to auto-enable it when a durable store is
             // composed; without it the shell fails to activate with a FeatureNotFoundException.
             typeof(WorkflowsRuntimeResumptionFeature).Assembly,
@@ -281,7 +283,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             // (provider-agnostic auth/IAM contracts) plus the OIDC authentication provider module, which
             // registers the external JWT bearer scheme, and — now that Workstream D is landed — the
             // first-party token stack: the identity API endpoints (login/session/token exchange), the
-            // ASP.NET Core Identity substrate (cookie sign-in, Groundwork stores, dev seeding), and the OpenIddict
+            // ASP.NET Core Identity substrate (cookie sign-in, EF Core stores, dev seeding), and the OpenIddict
             // token service (JWT issuance + local bearer validation). Together their composite scheme
             // selector becomes the default authenticate/challenge scheme, so an unauthenticated call is
             // rejected with 401. All of these are enabled in the default shell (see shells.json) with
@@ -295,16 +297,16 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(OidcAuthenticationFeature).Assembly,
             typeof(AspNetCoreIdentityFeature).Assembly,
 
-            // The Groundwork-backed ASP.NET Core Identity substrate (durable stores, SignInManager cookie
+            // The EF Core-backed ASP.NET Core Identity substrate (durable stores, SignInManager cookie
             // sign-in, login endpoints/page, dev seeding), enabled in the default shell via shells.json.
-            typeof(IdentityGroundworkPersistenceFeature).Assembly,
-            typeof(AspNetCoreIdentityGroundworkFeature).Assembly,
+            typeof(IdentityIamEntityFrameworkCoreFeature).Assembly,
+            typeof(AspNetCoreIdentityEntityFrameworkCoreFeature).Assembly,
 
             typeof(OpenIddictIdentityFeature).Assembly,
             typeof(AttentionApiFeature).Assembly,
             typeof(StudioPreferencesFeature).Assembly,
             typeof(StudioPreferencesApiFeature).Assembly,
-            typeof(StudioPreferencesGroundworkPersistenceFeature).Assembly,
+            typeof(StudioPreferencesEntityFrameworkCoreFeature).Assembly,
             typeof(WorkflowsDashboardFeature).Assembly,
             // WorkflowsDashboard DependsOn WorkflowDesignValidations — its assembly must be in the catalog or the
             // dependency resolver fails shell activation with FeatureNotFoundException.
@@ -313,9 +315,11 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(ModularityApiFeature).Assembly,
             typeof(ModularityAttentionFeature).Assembly,
             typeof(SecretsAttentionFeature).Assembly,
+            typeof(SecretsEntityFrameworkCoreFeature).Assembly,
             typeof(WorkflowsRuntimeAttentionFeature).Assembly,
             typeof(StructuredLogsFeature).Assembly,
-            typeof(DiagnosticsGroundworkPersistenceFeature).Assembly,
+            typeof(StructuredLogsEntityFrameworkCoreFeature).Assembly,
+            typeof(EfOpenTelemetryFeature).Assembly,
             typeof(OpenTelemetryFeature).Assembly,
 
             // Engine self-instrumentation: puts the WorkflowsRuntimeTracing feature in the catalog so it can be

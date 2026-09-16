@@ -22,19 +22,6 @@
     <PackageVersion Include="Elsa.Platform.PackageManifest.Generator" Version="0.0.1-preview.79" />
     <PackageVersion Include="Elsa.Platform.PackageManifests" Version="0.0.1-preview.58" />
     <PackageVersion Include="Fluid.Core" Version="2.31.0" />
-    <PackageVersion Include="Groundwork.Kernel" Version="0.4.0-preview.30" />
-    <PackageVersion Include="Groundwork.Query.Model" Version="0.4.0-preview.30" />
-    <PackageVersion Include="Groundwork.Store" Version="0.4.0-preview.30" />
-    <!--
-      The provider drivers share their package ids with the retired Groundwork v1 line, and transitive
-      pinning (above) allows a package id only one version across the whole graph. Pulling any of these
-      back to a 0.0.1-preview.* version would put two incompatible drivers in one graph, so the whole
-      repository moves between driver generations together or not at all.
-    -->
-    <PackageVersion Include="Groundwork.MongoDb" Version="0.4.0-preview.30" />
-    <PackageVersion Include="Groundwork.PostgreSql" Version="0.4.0-preview.30" />
-    <PackageVersion Include="Groundwork.Sqlite" Version="0.4.0-preview.30" />
-    <PackageVersion Include="Groundwork.SqlServer" Version="0.4.0-preview.30" />
     <PackageVersion Include="GitHub.Copilot.SDK" Version="1.0.4" />
     <PackageVersion Include="Anthropic" Version="12.32.0" />
     <PackageVersion Include="JsonSchema.Net" Version="9.2.0" />
@@ -102,7 +89,6 @@
     -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
     <PackageVersion Include="YamlDotNet" Version="16.3.0" />
-    <PackageVersion Include="MongoDB.Driver" Version="3.10.0" />
     <PackageVersion Include="MySql.Data" Version="26.7.0" />
     <PackageVersion Include="MySql.EntityFrameworkCore" Version="10.0.9" />
     <!--
@@ -134,7 +120,6 @@
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
     <PackageVersion Include="System.CommandLine" Version="2.0.8" />
     <PackageVersion Include="System.Reflection.MetadataLoadContext" Version="10.0.8" />
-    <PackageVersion Include="Testcontainers.MongoDb" Version="4.15.0" />
     <PackageVersion Include="Testcontainers.MsSql" Version="4.15.0" />
     <PackageVersion Include="Testcontainers.MySql" Version="4.15.0" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
