@@ -11,7 +11,7 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Provide
 /// <summary>
 /// A native provider for the import smoke. A connection-string environment variable selects an existing
 /// server; otherwise a Testcontainers instance is started. With
-/// <c>GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX=1</c> an unavailable provider fails instead of skipping.
+/// <c>ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX=1</c> an unavailable provider fails instead of skipping.
 /// </summary>
 public abstract class Elsa3ImportProviderFixture : IAsyncLifetime
 {
@@ -22,7 +22,7 @@ public abstract class Elsa3ImportProviderFixture : IAsyncLifetime
     public string ConnectionString => ConnectionStringValue ?? throw new InvalidOperationException("The provider is unavailable.");
 
     public static bool RequireNativeProviderMatrix =>
-        Environment.GetEnvironmentVariable("GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX") is "1" or "true";
+        Environment.GetEnvironmentVariable("ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX") is "1" or "true";
 
     protected abstract string ProviderName { get; }
     protected abstract string EnvironmentVariable { get; }

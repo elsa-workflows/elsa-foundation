@@ -5,13 +5,8 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Extensions;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
-using Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
-using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
-using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Groundwork.Kernel;
-using Groundwork.Store;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
@@ -152,70 +147,6 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
     }
 
     [Fact]
-    public async Task Groundwork_only_exposes_both_revision_aware_aliases_to_one_concrete_store_each()
-    {
-        var services = GroundworkServices();
-        services.AddGroundworkIdentityStores();
-
-        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-        provider.GetRequiredService<IStartupValidator>().Validate();
-        await using var scope = provider.CreateAsyncScope();
-
-        var application = scope.ServiceProvider.GetRequiredService<IApplicationStore>();
-        var revisionAwareApplication = scope.ServiceProvider.GetRequiredService<IRevisionAwareApplicationStore>();
-        var credential = scope.ServiceProvider.GetRequiredService<ICredentialStore>();
-        var revisionAwareCredential = scope.ServiceProvider.GetRequiredService<IRevisionAwareCredentialStore>();
-
-        Assert.IsType<GroundworkApplicationStore>(application);
-        Assert.Same(application, revisionAwareApplication);
-        Assert.IsType<GroundworkCredentialStore>(credential);
-        Assert.Same(credential, revisionAwareCredential);
-        AssertGroundworkAuthorityStores(services);
-    }
-
-    [Fact]
-    public void Registration_replaces_all_Groundwork_IAM_authority_stores_and_preserves_provider_configuration()
-    {
-        var services = GroundworkServices();
-        services.AddGroundworkIdentityStores();
-
-        var groundworkProvider = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IProviderConfigurationStore));
-        var groundworkRevisionProvider = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IRevisionAwareProviderConfigurationStore));
-
-        services.AddIdentityIamEntityFrameworkCore(SqliteOptions());
-
-        Assert.Same(groundworkProvider, Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IProviderConfigurationStore)));
-        Assert.Same(groundworkRevisionProvider, Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IRevisionAwareProviderConfigurationStore)));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(GroundworkProviderConfigurationStore));
-        AssertIamAuthorityBackend(services);
-        AssertIamApplicationCredentialBackend(services);
-    }
-
-    [Fact]
-    public void Registration_is_stable_when_EF_or_Groundwork_is_registered_first()
-    {
-        var groundworkFirst = GroundworkServices();
-        groundworkFirst.AddGroundworkIdentityStores();
-        groundworkFirst.AddIdentityIamEntityFrameworkCore(SqliteOptions());
-
-        var efFirst = GroundworkServices();
-        efFirst.AddIdentityIamEntityFrameworkCore(SqliteOptions());
-        efFirst.AddGroundworkIdentityStores();
-
-        AssertIamBackend(groundworkFirst, typeof(EfApplicationStore), typeof(EfCredentialStore));
-        AssertIamBackend(efFirst, typeof(EfApplicationStore), typeof(EfCredentialStore));
-        AssertIamAuthorityBackend(groundworkFirst);
-        AssertIamAuthorityBackend(efFirst);
-        AssertProviderConfigurationIsGroundwork(groundworkFirst);
-        AssertProviderConfigurationIsGroundwork(efFirst);
-
-        using (var groundworkFirstProvider = groundworkFirst.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true }))
-            groundworkFirstProvider.GetRequiredService<IStartupValidator>().Validate();
-        using var efFirstProvider = efFirst.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-        efFirstProvider.GetRequiredService<IStartupValidator>().Validate();
-    }
-
-    [Fact]
     public void Registration_accepts_the_known_in_memory_authority_factory_shape()
     {
         var services = new ServiceCollection();
@@ -289,21 +220,6 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
     }
 
     [Fact]
-    public void Unowned_application_and_credential_registrations_after_Groundwork_are_rejected_without_mutation()
-    {
-        var services = GroundworkServices();
-        services.AddGroundworkIdentityStores();
-        AddUnownedApplicationAndCredentialStores(services);
-        var before = services.ToArray();
-
-        var exception = Assert.Throws<InvalidOperationException>(() =>
-            services.AddIdentityIamEntityFrameworkCore(SqliteOptions()));
-
-        Assert.Contains("no longer exclusively owns", exception.Message, StringComparison.Ordinal);
-        Assert.Equal(before, services.ToArray());
-    }
-
-    [Fact]
     public void Unowned_application_and_credential_registrations_after_EF_fail_startup_validation()
     {
         var services = new ServiceCollection();
@@ -353,21 +269,6 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
             services.AddIdentityIamEntityFrameworkCore(SqliteOptions()));
 
         Assert.Contains("already bound to 'custom'", exception.Message, StringComparison.Ordinal);
-        Assert.Equal(before, services.ToArray());
-    }
-
-    [Fact]
-    public void Unowned_authority_registration_after_Groundwork_is_rejected_without_mutation()
-    {
-        var services = GroundworkServices();
-        services.AddGroundworkIdentityStores();
-        services.AddScoped<IUserStore, UnownedAuthorityStore>();
-        var before = services.ToArray();
-
-        var exception = Assert.Throws<InvalidOperationException>(() =>
-            services.AddIdentityIamEntityFrameworkCore(SqliteOptions()));
-
-        Assert.Contains("no longer exclusively owns", exception.Message, StringComparison.Ordinal);
         Assert.Equal(before, services.ToArray());
     }
 
@@ -543,13 +444,6 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         ConnectionString = "Data Source=:memory:"
     };
 
-    private static IServiceCollection GroundworkServices()
-    {
-        var services = new ServiceCollection();
-        services.AddSingleton<IGroundworkStorageSessionSource, UnusedGroundworkStorageSessionSource>();
-        return services;
-    }
-
     private static void AssertIamBackend(
         IServiceCollection services,
         Type expectedApplicationStore,
@@ -608,38 +502,6 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
             Assert.Single(services
                 .Where(descriptor => descriptor.ServiceType == typeof(IdentityAuthorityStoreBackend))
                 .Select(descriptor => Assert.IsType<IdentityAuthorityStoreBackend>(descriptor.ImplementationInstance)))
-                .Name);
-    }
-
-    private static void AssertGroundworkUnrelatedStores(IServiceCollection services)
-    {
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IUserStore) && descriptor.ImplementationType == typeof(GroundworkUserStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRoleStore) && descriptor.ImplementationType == typeof(GroundworkRoleStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IClaimMappingStore) && descriptor.ImplementationType == typeof(GroundworkClaimMappingStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IExternalIdentityStore) && descriptor.ImplementationType == typeof(GroundworkExternalIdentityStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(ITenantMembershipStore) && descriptor.ImplementationType == typeof(GroundworkTenantMembershipStore));
-    }
-
-    private static void AssertGroundworkAuthorityStores(IServiceCollection services)
-    {
-        AssertGroundworkUnrelatedStores(services);
-        foreach (var contract in AuthorityContracts)
-        {
-            var descriptor = Assert.Single(services, candidate => candidate.ServiceType == contract);
-            Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
-        }
-    }
-
-    private static void AssertProviderConfigurationIsGroundwork(IServiceCollection services)
-    {
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IProviderConfigurationStore) && descriptor.ImplementationFactory is not null);
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRevisionAwareProviderConfigurationStore) && descriptor.ImplementationFactory is not null);
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(GroundworkProviderConfigurationStore));
-        Assert.Equal(
-            "groundwork",
-            Assert.Single(services
-                .Where(descriptor => descriptor.ServiceType == typeof(ProviderConfigurationStoreBackend))
-                .Select(descriptor => Assert.IsType<ProviderConfigurationStoreBackend>(descriptor.ImplementationInstance)))
                 .Name);
     }
 
@@ -714,19 +576,4 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
             throw new NotSupportedException();
     }
 
-    private sealed class UnusedGroundworkStorageSessionSource : IGroundworkStorageSessionSource
-    {
-        public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) =>
-            throw new NotSupportedException();
-
-        public IUnitOfWork BeginUnitOfWork(
-            StorageAccess access,
-            BatchWriteOptions options,
-            IReadOnlyList<string> unitIds,
-            string? targetName = null) =>
-            throw new NotSupportedException();
-
-        public StorageUnit Unit(string unitId, string? targetName = null) =>
-            throw new NotSupportedException();
-    }
 }

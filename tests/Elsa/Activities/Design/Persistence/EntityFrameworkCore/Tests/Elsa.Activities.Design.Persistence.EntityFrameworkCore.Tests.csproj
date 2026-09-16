@@ -9,6 +9,5 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../../../../../../src/Elsa/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="../../../../../../../src/Elsa/Activities/Design/Persistence/Groundwork/Elsa.Activities.Design.Persistence.Groundwork.csproj" />
   </ItemGroup>
 </Project>

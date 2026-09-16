@@ -3,13 +3,8 @@ using Elsa.Foundation.Identity.Abstractions.Ownership;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
-using Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
-using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
-using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Groundwork.Kernel;
-using Groundwork.Store;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -232,25 +227,6 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
     }
 
     [Fact]
-    public async Task Groundwork_registration_resolves_both_contracts_to_one_scoped_store()
-    {
-        var services = new ServiceCollection();
-        services.AddSingleton<IGroundworkStorageSessionSource, UnusedGroundworkStorageSessionSource>();
-        services.AddSingleton<IPersistenceAccessContextAccessor>(new FakeAccessAccessor(
-            PersistenceAccessContext.Scoped(new PersistenceScope("acme"))));
-        services.AddGroundworkIdentityStores();
-
-        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-        await using var scope = provider.CreateAsyncScope();
-        provider.GetRequiredService<IStartupValidator>().Validate();
-        var primary = scope.ServiceProvider.GetRequiredService<IProviderConfigurationStore>();
-        var revisionAware = scope.ServiceProvider.GetRequiredService<IRevisionAwareProviderConfigurationStore>();
-
-        Assert.IsType<GroundworkProviderConfigurationStore>(primary);
-        Assert.Same(primary, revisionAware);
-    }
-
-    [Fact]
     public async Task Public_feature_binds_the_module_history_options_without_merging_OpenIddict()
     {
         var services = new ServiceCollection();
@@ -293,41 +269,6 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
     }
 
     [Fact]
-    public void Registration_is_order_independent_and_preserves_groundwork_unrelated_stores()
-    {
-        var groundworkFirst = new ServiceCollection();
-        groundworkFirst.AddGroundworkIdentityStores();
-        var unrelatedContractTypes = new[]
-        {
-            typeof(IUserStore),
-            typeof(IRoleStore),
-            typeof(IApplicationStore),
-            typeof(ICredentialStore),
-            typeof(IClaimMappingStore),
-            typeof(IExternalIdentityStore),
-            typeof(ITenantMembershipStore)
-        };
-        var unrelated = groundworkFirst.Where(descriptor => unrelatedContractTypes.Contains(descriptor.ServiceType)).ToArray();
-        groundworkFirst.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = "Data Source=:memory:" });
-        Assert.All(unrelated, descriptor => Assert.Contains(descriptor, groundworkFirst));
-        Assert.Single(groundworkFirst, descriptor => descriptor.ServiceType == typeof(IProviderConfigurationStore) && descriptor.ImplementationType is null);
-        Assert.DoesNotContain(groundworkFirst, descriptor => descriptor.ServiceType == typeof(IProviderConfigurationStore) && descriptor.ImplementationType?.Name.Contains("Groundwork", StringComparison.Ordinal) == true);
-        AssertGroundworkUnrelatedStoresPresent(groundworkFirst);
-        using (var groundworkFirstProvider = groundworkFirst.BuildServiceProvider())
-            groundworkFirstProvider.GetRequiredService<IStartupValidator>().Validate();
-
-        var efFirst = new ServiceCollection();
-        efFirst.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = "Data Source=:memory:" });
-        efFirst.AddGroundworkIdentityStores();
-        Assert.Single(efFirst, descriptor => descriptor.ServiceType == typeof(IProviderConfigurationStore) && descriptor.ImplementationType is null);
-        Assert.Single(efFirst, descriptor => descriptor.ServiceType == typeof(IRevisionAwareProviderConfigurationStore) && descriptor.ImplementationType is null);
-        Assert.DoesNotContain(efFirst, descriptor => descriptor.ServiceType == typeof(IProviderConfigurationStore) && descriptor.ImplementationType?.Name.Contains("Groundwork", StringComparison.Ordinal) == true);
-        AssertGroundworkUnrelatedStoresPresent(efFirst);
-        using var efFirstProvider = efFirst.BuildServiceProvider();
-        efFirstProvider.GetRequiredService<IStartupValidator>().Validate();
-    }
-
-    [Fact]
     public void Invalid_or_conflicting_registration_does_not_partially_mutate_services()
     {
         var invalid = new ServiceCollection();
@@ -363,26 +304,6 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
     }
 
     [Fact]
-    public void Custom_provider_configuration_registrations_after_Groundwork_are_rejected_without_mutation()
-    {
-        var services = new ServiceCollection();
-        services.AddGroundworkIdentityStores();
-        services.AddScoped<IProviderConfigurationStore, CustomProviderConfigurationStore>();
-        services.AddScoped<IRevisionAwareProviderConfigurationStore, CustomProviderConfigurationStore>();
-        var before = services.ToArray();
-
-        var exception = Assert.Throws<InvalidOperationException>(() =>
-            services.AddIdentityProviderConfigurationEntityFrameworkCore(new()
-            {
-                Provider = "Sqlite",
-                ConnectionString = "Data Source=:memory:"
-            }));
-
-        Assert.Contains("no longer exclusively owns", exception.Message, StringComparison.Ordinal);
-        Assert.Equal(before, services);
-    }
-
-    [Fact]
     public void Custom_provider_configuration_registrations_after_EF_fail_startup_validation()
     {
         var services = new ServiceCollection();
@@ -391,22 +312,6 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
             Provider = "Sqlite",
             ConnectionString = "Data Source=:memory:"
         });
-        services.AddScoped<IProviderConfigurationStore, CustomProviderConfigurationStore>();
-        services.AddScoped<IRevisionAwareProviderConfigurationStore, CustomProviderConfigurationStore>();
-
-        using var provider = services.BuildServiceProvider();
-        var exception = Assert.Throws<OptionsValidationException>(
-            provider.GetRequiredService<IStartupValidator>().Validate);
-
-        Assert.Contains(typeof(IProviderConfigurationStore).FullName!, exception.Message, StringComparison.Ordinal);
-        Assert.Contains(typeof(IRevisionAwareProviderConfigurationStore).FullName!, exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Custom_provider_configuration_registrations_after_Groundwork_fail_startup_validation()
-    {
-        var services = new ServiceCollection();
-        services.AddGroundworkIdentityStores();
         services.AddScoped<IProviderConfigurationStore, CustomProviderConfigurationStore>();
         services.AddScoped<IRevisionAwareProviderConfigurationStore, CustomProviderConfigurationStore>();
 
@@ -518,21 +423,6 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
         return Assert.IsType<string>(context.Database.GetConnectionString());
     }
 
-    private static void AssertGroundworkUnrelatedStoresPresent(IServiceCollection services)
-    {
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IUserStore) && descriptor.ImplementationType == typeof(GroundworkUserStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRoleStore) && descriptor.ImplementationType == typeof(GroundworkRoleStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(GroundworkApplicationStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IApplicationStore) && descriptor.ImplementationFactory is not null);
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRevisionAwareApplicationStore) && descriptor.ImplementationFactory is not null);
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(GroundworkCredentialStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(ICredentialStore) && descriptor.ImplementationFactory is not null);
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRevisionAwareCredentialStore) && descriptor.ImplementationFactory is not null);
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IClaimMappingStore) && descriptor.ImplementationType == typeof(GroundworkClaimMappingStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IExternalIdentityStore) && descriptor.ImplementationType == typeof(GroundworkExternalIdentityStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(ITenantMembershipStore) && descriptor.ImplementationType == typeof(GroundworkTenantMembershipStore));
-    }
-
     private static ProviderConfigurationRecord Configuration(string? tenantId, string provider, string kind) => new(
         provider, tenantId, kind, true, false,
         new ProviderCapabilities(true, false, false, true, true, true, false),
@@ -607,17 +497,4 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
-    private sealed class UnusedGroundworkStorageSessionSource : IGroundworkStorageSessionSource
-    {
-        public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) =>
-            throw new NotSupportedException();
-
-        public IUnitOfWork BeginUnitOfWork(
-            StorageAccess access,
-            BatchWriteOptions options,
-            IReadOnlyList<string> unitIds,
-            string? targetName = null) => throw new NotSupportedException();
-
-        public StorageUnit Unit(string unitId, string? targetName = null) => throw new NotSupportedException();
-    }
 }

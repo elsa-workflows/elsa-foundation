@@ -2,10 +2,10 @@ using Elsa.Activities.Design.Api;
 using Elsa.Agent.Anthropic;
 using Elsa.Agent.GitHubCopilot;
 using Elsa.Diagnostics.OpenTelemetry;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict;
 using Elsa.Modularity.Nuplane.Services;
-using Elsa.Persistence.Groundwork.Runtime;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Workbench;
 using Elsa.Workflows.Design.Reconciliation.Git;
@@ -22,11 +22,13 @@ public sealed class SecretFeatureSettingTests
 {
     public static TheoryData<Type, string> SecretSettings => new()
     {
-        { typeof(GroundworkWorkflowRuntimeFeature), nameof(GroundworkWorkflowRuntimeFeature.RecoveryContinuationSigningKey) },
+        { typeof(RuntimeEntityFrameworkCoreFeature), nameof(RuntimeEntityFrameworkCoreFeature.RecoveryContinuationSigningKey) },
+        { typeof(RuntimeEntityFrameworkCoreFeature), nameof(RuntimeEntityFrameworkCoreFeature.HierarchyCursorSigningKey) },
+        { typeof(RuntimeEntityFrameworkCoreFeature), nameof(RuntimeEntityFrameworkCoreFeature.ConnectionString) },
         { typeof(WorkflowsRuntimeApiFeature), nameof(WorkflowsRuntimeApiFeature.WorkflowAlterationPayloadProtectionKeys) },
         { typeof(WorkflowsRuntimeApiFeature), nameof(WorkflowsRuntimeApiFeature.ActivityExecutionHierarchyCursorSigningKey) },
         { typeof(ActivitiesDesignApiFeature), nameof(ActivitiesDesignApiFeature.DependencyCursorSigningKey) },
-        { typeof(AspNetCoreIdentityGroundworkFeature), nameof(AspNetCoreIdentityGroundworkFeature.SeedAdminPassword) },
+        { typeof(AspNetCoreIdentityEntityFrameworkCoreFeature), nameof(AspNetCoreIdentityEntityFrameworkCoreFeature.SeedAdminPassword) },
         { typeof(OpenIddictIdentityFeature), nameof(OpenIddictIdentityFeature.SigningKey) },
         { typeof(OpenIddictIdentityFeature), nameof(OpenIddictIdentityFeature.EncryptionKey) },
         { typeof(OpenIddictIdentityFeature), nameof(OpenIddictIdentityFeature.ConnectionString) },
@@ -35,8 +37,7 @@ public sealed class SecretFeatureSettingTests
         { typeof(GitHubCopilotAgentFeature), nameof(GitHubCopilotAgentFeature.RuntimeConnectionToken) },
         { typeof(OpenTelemetryFeature), nameof(OpenTelemetryFeature.ApiKey) },
         { typeof(WorkflowsDesignGitReconciliationFeature), nameof(WorkflowsDesignGitReconciliationFeature.Token) },
-        { typeof(SecretsEntityFrameworkCoreFeature), nameof(SecretsEntityFrameworkCoreFeature.ConnectionString) },
-        { typeof(GroundworkSqliteProviderFeature), nameof(GroundworkSqliteProviderFeature.ConnectionString) }
+        { typeof(SecretsEntityFrameworkCoreFeature), nameof(SecretsEntityFrameworkCoreFeature.ConnectionString) }
     };
 
     [Theory]

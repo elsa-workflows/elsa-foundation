@@ -1,8 +1,6 @@
 using System.Data.Common;
 using CShells.Lifecycle;
 using Elsa.Persistence.EntityFramework;
-using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -28,7 +26,7 @@ public sealed class RuntimeEntityFrameworkCoreAggregatePostgreSqlSmokeTests(Runt
             BookmarkStatePostgreSqlDbContext.ExpectedProviderName);
 
     [SkippableFact]
-    public Task PostgreSql_fresh_runtime_aggregate_migrates_and_commits_without_Groundwork() =>
+    public Task PostgreSql_fresh_runtime_aggregate_migrates_and_commits_on_an_empty_database() =>
         RuntimeEntityFrameworkCoreAggregateProviderSmoke.RunFreshAsync(
             fixture,
             "PostgreSql",
@@ -48,7 +46,7 @@ public sealed class RuntimeEntityFrameworkCoreAggregateSqlServerSmokeTests(Runti
             BookmarkStateSqlServerDbContext.ExpectedProviderName);
 
     [SkippableFact]
-    public Task SqlServer_fresh_runtime_aggregate_migrates_and_commits_without_Groundwork() =>
+    public Task SqlServer_fresh_runtime_aggregate_migrates_and_commits_on_an_empty_database() =>
         RuntimeEntityFrameworkCoreAggregateProviderSmoke.RunFreshAsync(
             fixture,
             "SqlServer",
@@ -68,7 +66,7 @@ public sealed class RuntimeEntityFrameworkCoreAggregateMySqlSmokeTests(RuntimeBo
             BookmarkStateMySqlDbContext.ExpectedProviderName);
 
     [SkippableFact]
-    public Task MySql_fresh_runtime_aggregate_migrates_and_commits_without_Groundwork() =>
+    public Task MySql_fresh_runtime_aggregate_migrates_and_commits_on_an_empty_database() =>
         RuntimeEntityFrameworkCoreAggregateProviderSmoke.RunFreshAsync(
             fixture,
             "MySql",
@@ -90,8 +88,6 @@ internal static class RuntimeEntityFrameworkCoreAggregateProviderSmoke
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? $"Docker/{providerName} is unavailable.");
         var scope = $"native-r19-aggregate-{Guid.NewGuid():N}";
         var services = new ServiceCollection().AddWorkflowRuntime();
-        services.AddGroundworkV2RuntimeStores();
-
         services.AddRuntimeEntityFrameworkCore(new()
         {
             Provider = providerName,
@@ -135,13 +131,10 @@ internal static class RuntimeEntityFrameworkCoreAggregateProviderSmoke
         Assert.Single(await context.RuntimeCheckpointCommits.AsNoTracking().Where(row =>
             row.CommitId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(commit.CommitId)).ToArrayAsync());
 
+        // A foreign dispatch store the EF aggregate does not own is refused before anything is mutated.
         var invalidServices = new ServiceCollection().AddWorkflowRuntime();
-        invalidServices.AddGroundworkV2RuntimeStores();
         invalidServices.AddScoped<IWorkflowDispatchStore>(_ => throw new InvalidOperationException("foreign dispatch store"));
         var beforeServices = invalidServices.ToArray();
-        var invalidRegistry = Assert.IsType<GroundworkStorageUnitRegistry>(invalidServices.Single(descriptor =>
-            descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance);
-        var beforeUnits = invalidRegistry.Registrations;
 
         Assert.Throws<InvalidOperationException>(() => invalidServices.AddRuntimeEntityFrameworkCore(new()
         {
@@ -151,13 +144,12 @@ internal static class RuntimeEntityFrameworkCoreAggregateProviderSmoke
             RecoveryContinuationSigningKey = RecoverySigningKey
         }));
         Assert.Equal(beforeServices, invalidServices);
-        Assert.Equal(beforeUnits, invalidRegistry.Registrations);
-        Assert.Equal(RuntimeCheckpointCommitStoreBackend.Groundwork, RuntimeCheckpointCommitStoreBackend.Find(invalidServices)!.Name);
+        Assert.Null(RuntimeCheckpointCommitStoreBackend.Find(invalidServices));
         Assert.DoesNotContain(invalidServices, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
     }
 
     /// <summary>
-    /// The aggregate on a fresh collection with no Groundwork: its registered module migrator installs the Runtime
+    /// The aggregate on a fresh collection: its registered module migrator installs the Runtime
     /// schema into an empty database of its own, then checkpoints commit through the resolved EF writer, including
     /// one execution committing from two scopes in turn.
     /// </summary>
@@ -186,7 +178,6 @@ internal static class RuntimeEntityFrameworkCoreAggregateProviderSmoke
         services.AddEfModuleMigrations<BookmarkStateDbContext>(providerName);
         services.AddSingleton<IWorkflowDispatchDurabilityEvidence>(
             new WorkflowDispatchDurabilityEvidence(WorkflowDispatchDurabilityComponents.Resumption, WorkflowDispatchDurabilityLevel.Durable));
-        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType.FullName?.Contains("Groundwork", StringComparison.Ordinal) == true);
         Assert.Equal(RuntimeCheckpointCommitStoreBackend.EntityFramework, RuntimeCheckpointCommitStoreBackend.Find(services)!.Name);
         Assert.Equal(WorkflowActivationAuthorityBackend.EntityFramework, WorkflowActivationAuthorityBackend.Find(services)!.Name);
 

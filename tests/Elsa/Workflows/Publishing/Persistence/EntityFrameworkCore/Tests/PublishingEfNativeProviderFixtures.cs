@@ -136,7 +136,7 @@ public sealed class PublishingMySqlContainerFixture : IAsyncLifetime
 internal static class PublishingProviderContainerSupport
 {
     public static bool RequireNativeProviderMatrix =>
-        Environment.GetEnvironmentVariable("GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX") is "1" or "true";
+        Environment.GetEnvironmentVariable("ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX") is "1" or "true";
 
     /// <summary>
     /// The provider's connection string. An unavailable provider skips the test, or fails it when the native

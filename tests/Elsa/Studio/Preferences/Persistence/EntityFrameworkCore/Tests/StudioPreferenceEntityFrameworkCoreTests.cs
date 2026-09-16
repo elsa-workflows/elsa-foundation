@@ -7,7 +7,6 @@ using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Stores;
-using Elsa.Studio.Preferences.Persistence.Groundwork;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
@@ -388,13 +387,8 @@ public sealed class StudioPreferenceEntityFrameworkCoreTests
     }
 
     [Fact]
-    public void EF_module_registers_a_store_and_never_carries_the_Groundwork_dependency()
+    public void EF_module_registers_a_store_and_carries_no_foreign_persistence_dependency()
     {
-        var assembly = typeof(StudioPreferencesEntityFrameworkCoreFeature).Assembly;
-        Assert.DoesNotContain(
-            assembly.GetReferencedAssemblies(),
-            reference => reference.Name is not null && reference.Name.StartsWith("Groundwork", StringComparison.OrdinalIgnoreCase));
-
         var services = ConfigureEf(new ServiceCollection(), "Sqlite", "Data Source=:memory:");
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IStudioPreferenceStore));
         Assert.DoesNotContain(
@@ -430,27 +424,6 @@ public sealed class StudioPreferenceEntityFrameworkCoreTests
             "TEXT",
             entity.FindProperty(nameof(StudioPreferenceRecord.ValueJson))!.GetColumnType(),
             ignoreCase: true);
-    }
-
-    [Fact]
-    public void Groundwork_then_EF_is_rejected_by_the_backend_marker()
-    {
-        var services = new ServiceCollection();
-        services.AddGroundworkStudioPreferences();
-
-        var error = Assert.Throws<InvalidOperationException>(() => ConfigureEf(services, "Sqlite", "Data Source=:memory:"));
-        Assert.Contains("groundwork", error.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("entity-framework", error.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void EF_then_Groundwork_is_rejected_by_the_backend_marker()
-    {
-        var services = ConfigureEf(new ServiceCollection(), "Sqlite", "Data Source=:memory:");
-
-        var error = Assert.Throws<InvalidOperationException>(() => services.AddGroundworkStudioPreferences());
-        Assert.Contains("entity-framework", error.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("groundwork", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

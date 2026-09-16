@@ -3,24 +3,21 @@ using CShells.AspNetCore.Configuration;
 using CShells.DependencyInjection;
 using CShells.Lifecycle;
 using Elsa.Secrets.Core.Contracts;
-using Groundwork.Store;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
-using Elsa.Secrets.Persistence.Groundwork.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// Phase 3 selected-backend journeys: configuration-driven catalog, management create/update,
+/// Selected-backend journeys: configuration-driven catalog, management create/update,
 /// runtime resolve, host restart, persist. Does not boot <c>Elsa.Workbench</c> Program (full
 /// product composition / OpenIddict). Does not flip committed Workbench defaults.
 /// </summary>
 public sealed class SecretsPersistenceHostJourneyTests
 {
     private const string EntityFrameworkBackend = "entity-framework";
-    private const string GroundworkBackend = "groundwork";
     private const string SecretName = "payments.journey";
     private const string SecretValue = "phase-3-secret";
     private const string IdentitySecretName = "identity.projection";
@@ -39,8 +36,6 @@ public sealed class SecretsPersistenceHostJourneyTests
 
         Assert.Contains("Secrets", names);
         Assert.Contains("SecretsEntityFrameworkCore", names);
-        Assert.Contains("SecretsGroundworkPersistence", names);
-        Assert.Contains("GroundworkProviderSqlite", names);
     }
 
     [Fact]
@@ -54,25 +49,6 @@ public sealed class SecretsPersistenceHostJourneyTests
                 restart: EntityFrameworkShells(path, "Validate"),
                 expectedRepository: typeof(EfSecretRepository),
                 expectedBackend: EntityFrameworkBackend);
-        }
-        finally
-        {
-            DeleteSqliteFiles(path);
-        }
-    }
-
-    [Fact]
-    public async Task Configuration_groundwork_create_resolve_restart_persists()
-    {
-        var path = NewDbPath("gw");
-        try
-        {
-            var shells = GroundworkShells(path);
-            await RunJourneyAsync(
-                firstStart: shells,
-                restart: shells,
-                expectedRepository: typeof(GroundworkSecretRepository),
-                expectedBackend: GroundworkBackend);
         }
         finally
         {
@@ -123,12 +99,6 @@ public sealed class SecretsPersistenceHostJourneyTests
                 await SaveAndQueryLongNonAsciiIdentityAsync(scope.ServiceProvider);
             }
 
-            // Groundwork SQLite holds a process schema lock per file. Release the shell connection
-            // before the restarted host opens the same store.
-            if (shell.ServiceProvider.GetService<IStorageProviderConnection>() is IAsyncDisposable asyncConnection)
-                await asyncConnection.DisposeAsync();
-            else
-                (shell.ServiceProvider.GetService<IStorageProviderConnection>() as IDisposable)?.Dispose();
             await host.StopAsync();
         }
 
@@ -248,29 +218,6 @@ public sealed class SecretsPersistenceHostJourneyTests
                     "ConnectionString": "Data Source={{path.Replace("\\", "/")}};Cache=Shared;Pooling=False",
                     "MigratePolicy": "{{migratePolicy}}"
                   }
-                }
-              }
-            }
-          }
-        }
-        """;
-
-    private static string GroundworkShells(string path) =>
-        $$"""
-        {
-          "CShells": {
-            "Shells": {
-              "secrets-persistence": {
-                "Name": "secrets-persistence",
-                "Features": {
-                  "Secrets": {},
-                  "SecretsJourneyEncryption": {
-                    "EncryptionKey": "{{SecretsHostCatalog.EncryptionKey}}"
-                  },
-                  "GroundworkProviderSqlite": {
-                    "ConnectionString": "Data Source={{path.Replace("\\", "/")}}"
-                  },
-                  "SecretsGroundworkPersistence": {}
                 }
               }
             }

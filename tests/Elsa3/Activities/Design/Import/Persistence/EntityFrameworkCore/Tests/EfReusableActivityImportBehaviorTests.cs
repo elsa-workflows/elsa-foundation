@@ -23,7 +23,7 @@ using static Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Test
 namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// The Groundwork import behavioral harness, run against the EF Core ledger and both EF Core Design lanes
+/// The import behavioral harness, run against the EF Core ledger and both EF Core Design lanes
 /// on one SQLite database, plus the EF-specific transaction, reconciliation, and topology guarantees.
 /// </summary>
 public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime

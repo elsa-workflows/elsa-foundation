@@ -4,7 +4,6 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Groundwork.Sqlite" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
@@ -14,6 +13,5 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../../../../../../../src/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="../../../../../../../../src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj" />
   </ItemGroup>
 </Project>

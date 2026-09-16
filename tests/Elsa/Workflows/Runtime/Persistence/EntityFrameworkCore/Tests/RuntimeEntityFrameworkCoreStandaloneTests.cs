@@ -16,7 +16,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// The EF Runtime aggregate as a first-class composition: nothing Groundwork is registered, every Runtime participant
+/// The EF Runtime aggregate as a first-class composition: every Runtime participant
 /// is selected at once, and a refusal from any participant leaves the service collection exactly as it was.
 /// </summary>
 public sealed class RuntimeEntityFrameworkCoreStandaloneTests
@@ -83,7 +83,7 @@ public sealed class RuntimeEntityFrameworkCoreStandaloneTests
 
     [Theory]
     [MemberData(nameof(Compositions))]
-    public void Every_runtime_contract_resolves_to_its_EF_implementation_without_Groundwork(string composition)
+    public void Every_runtime_contract_resolves_to_its_EF_implementation(string composition)
     {
         var services = Compose(composition);
 
@@ -99,7 +99,6 @@ public sealed class RuntimeEntityFrameworkCoreStandaloneTests
 
         Assert.True(mismatches.Length == 0, string.Join(Environment.NewLine, mismatches));
         Assert.True(Assert.IsType<InMemoryRuntimeRecoveryScanner>(scope.ServiceProvider.GetRequiredService<IRuntimeRecoveryScanner>()).SupportsPaging);
-        Assert.DoesNotContain(services, MentionsGroundwork);
     }
 
     [Fact]
@@ -362,16 +361,6 @@ public sealed class RuntimeEntityFrameworkCoreStandaloneTests
         using var scope = provider.CreateScope();
         return scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>().Database.GetConnectionString();
     }
-
-    private static bool MentionsGroundwork(ServiceDescriptor descriptor) =>
-        new[]
-            {
-                descriptor.ServiceType,
-                descriptor.IsKeyedService ? descriptor.KeyedImplementationType : descriptor.ImplementationType,
-                (descriptor.IsKeyedService ? descriptor.KeyedImplementationInstance : descriptor.ImplementationInstance)?.GetType(),
-                (descriptor.IsKeyedService ? descriptor.KeyedImplementationFactory?.Method : descriptor.ImplementationFactory?.Method)?.DeclaringType
-            }
-            .Any(type => type?.FullName?.Contains("Groundwork", StringComparison.Ordinal) == true);
 
     private static WorkflowExecutable Executable(string artifactId) => new(
         new WorkflowExecutableIdentity(artifactId, "definition", "version", "1", $"hash-{artifactId}"),

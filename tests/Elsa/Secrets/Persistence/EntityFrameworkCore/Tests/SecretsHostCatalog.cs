@@ -3,9 +3,7 @@ using System.Reflection;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using CShells.Features;
-using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Secrets.Options;
-using Groundwork.Sqlite;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -81,30 +79,6 @@ internal static class SecretsHostCatalog
             File.Delete(path);
         }
     }
-}
-
-/// <summary>
-/// Same feature name and connection settings as Workbench's <c>GroundworkProviderSqlite</c>.
-/// The Workbench type lives in the host app; architecture tests keep that app's test surface
-/// on <c>Elsa.Modularity.Tests</c>, so this catalog equivalent uses the public provider factory.
-/// </summary>
-[ShellFeature(
-    name: "GroundworkProviderSqlite",
-    DisplayName = "Groundwork SQLite Provider",
-    Description = "Test-host catalog equivalent of Workbench GroundworkProviderSqlite.")]
-public sealed class HostCatalogGroundworkSqliteProviderFeature : IShellFeature
-{
-    public string? ConnectionString { get; set; }
-
-    public string? Target { get; set; }
-
-    public void ConfigureServices(IServiceCollection services) =>
-        services.AddGroundworkStorageProviderConnection(
-            _ => new SqliteProviderFactory().Create(
-                string.IsNullOrWhiteSpace(ConnectionString)
-                    ? "Data Source=elsa-groundwork.db"
-                    : ConnectionString),
-            Target);
 }
 
 /// <summary>

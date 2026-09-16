@@ -12,12 +12,12 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests;
 
 /// <summary>
 /// Installs every first-party EF module into one fresh database per provider, then validates each module's
-/// history. Unavailable Docker skips unless GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX demands the matrix.
+/// history. Unavailable Docker skips unless ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX demands the matrix.
 /// </summary>
 public sealed class NativeModuleMigrationTests
 {
     private static readonly bool RequireNative =
-        Environment.GetEnvironmentVariable("GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX") is "1" or "true";
+        Environment.GetEnvironmentVariable("ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX") is "1" or "true";
 
     [SkippableFact]
     public Task Every_module_installs_on_postgresql() => RunAsync("PostgreSql", async () =>

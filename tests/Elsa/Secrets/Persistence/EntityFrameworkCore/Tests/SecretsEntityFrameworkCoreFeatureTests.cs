@@ -77,17 +77,17 @@ public sealed class SecretsEntityFrameworkCoreFeatureTests
     }
 
     [Fact]
-    public void Registration_refuses_a_prior_groundwork_backend()
+    public void Registration_refuses_a_prior_foreign_backend()
     {
         var services = new ServiceCollection();
-        services.AddSingleton(new SecretRepositoryBackend("groundwork"));
+        services.AddSingleton(new SecretRepositoryBackend("custom"));
         var exception = Assert.Throws<InvalidOperationException>(() =>
             services.AddSecretsEntityFrameworkCore(new SecretsEntityFrameworkCoreOptions
             {
                 Provider = "Sqlite",
                 ConnectionString = "Data Source=:memory:"
             }));
-        Assert.Contains("groundwork", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("custom", exception.Message, StringComparison.Ordinal);
         Assert.Contains("entity-framework", exception.Message, StringComparison.Ordinal);
     }
 
