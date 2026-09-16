@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Tests;
 /// <summary>
 /// Builds the single canonical <see cref="ExecutionPlacementLease"/> whose serialized shape is frozen as the v1
 /// wire format of the <c>executionPlacement</c> document kind (W27). The golden fixture drift test compares this
-/// against the committed <c>Fixtures/v1</c> file, and the durable (Groundwork) placement store must persist exactly
+/// against the committed <c>Fixtures/v1</c> file, and the durable placement store must persist exactly
 /// this lease shape.
 /// </summary>
 internal static class PlacementWireFixture

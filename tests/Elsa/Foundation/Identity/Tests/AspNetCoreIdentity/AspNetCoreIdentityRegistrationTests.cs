@@ -4,15 +4,15 @@ using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Seeding;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Stores;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.DependencyInjection;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Stores;
+using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
+using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Seeding;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
-using Elsa.Workflows.Runtime.Core.Extensions;
-using Groundwork.Store;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -23,10 +23,10 @@ public sealed class AspNetCoreIdentityRegistrationTests : IAsyncDisposable
     private readonly AspNetCoreIdentityFixture _fixture = new();
 
     [Fact]
-    public void GroundworkFeature_Registers_Full_SignIn_Stack()
+    public void EntityFrameworkCoreFeature_Registers_Full_SignIn_Stack()
     {
         var services = CreateServices();
-        new AspNetCoreIdentityGroundworkFeature { IsDevelopmentOrDemo = true }.ConfigureServices(services);
+        NewFeature(isDevelopmentOrDemo: true).ConfigureServices(services);
 
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
@@ -36,7 +36,7 @@ public sealed class AspNetCoreIdentityRegistrationTests : IAsyncDisposable
         Assert.NotNull(sp.GetRequiredService<UserManager<AspNetCoreIdentityUser>>());
         Assert.NotNull(sp.GetRequiredService<IUserClaimsPrincipalFactory<AspNetCoreIdentityUser>>());
         Assert.NotNull(sp.GetRequiredService<IIdentitySignInService>());
-        Assert.IsType<GroundworkIdentityUserStore>(sp.GetRequiredService<IUserStore<AspNetCoreIdentityUser>>());
+        Assert.IsType<EfCoreIdentityUserStore>(sp.GetRequiredService<IUserStore<AspNetCoreIdentityUser>>());
         Assert.Contains(sp.GetServices<IAuthenticationProviderModule>(), x => x.ProviderId == AspNetCoreIdentityDefaults.ProviderId);
     }
 
@@ -44,54 +44,51 @@ public sealed class AspNetCoreIdentityRegistrationTests : IAsyncDisposable
     public void Dev_Seeder_Runs_Under_Both_Lifecycle_Hooks()
     {
         var services = CreateServices();
-        new AspNetCoreIdentityGroundworkFeature
-        {
-            IsDevelopmentOrDemo = true,
-            SeedAdminUserName = TestAdmin.UserName,
-            SeedAdminPassword = TestAdmin.Password
-        }.ConfigureServices(services);
+        var feature = NewFeature(isDevelopmentOrDemo: true);
+        feature.SeedAdminUserName = TestAdmin.UserName;
+        feature.SeedAdminPassword = TestAdmin.Password;
+        feature.ConfigureServices(services);
 
         using var provider = services.BuildServiceProvider();
 
         Assert.Contains(provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>(),
-            x => x is GroundworkIdentitySeeder);
+            x => x is EfCoreIdentitySeeder);
         Assert.Contains(provider.GetServices<IShellInitializer>(),
-            x => x is GroundworkIdentitySeeder);
+            x => x is EfCoreIdentitySeeder);
     }
 
     [Fact]
     public void Non_Dev_Does_Not_Register_The_Seeder()
     {
         var services = CreateServices();
-        new AspNetCoreIdentityGroundworkFeature { IsDevelopmentOrDemo = false }.ConfigureServices(services);
+        NewFeature(isDevelopmentOrDemo: false).ConfigureServices(services);
 
         using var provider = services.BuildServiceProvider();
 
-        Assert.DoesNotContain(provider.GetServices<IShellInitializer>(), x => x is GroundworkIdentitySeeder);
+        Assert.DoesNotContain(provider.GetServices<IShellInitializer>(), x => x is EfCoreIdentitySeeder);
     }
 
     [Fact]
     public void Configured_Initial_Admin_Registers_Seeder_When_Not_Dev()
     {
         var services = CreateServices();
-        new AspNetCoreIdentityGroundworkFeature
-        {
-            IsDevelopmentOrDemo = false,
-            SeedAdminUserName = "root",
-            SeedAdminPassword = "S3cret-Passw0rd!"
-        }.ConfigureServices(services);
+        var feature = NewFeature(isDevelopmentOrDemo: false);
+        feature.SeedAdminUserName = "root";
+        feature.SeedAdminPassword = "S3cret-Passw0rd!";
+        feature.ConfigureServices(services);
 
         using var provider = services.BuildServiceProvider();
 
-        Assert.Contains(provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>(), x => x is GroundworkIdentitySeeder);
-        Assert.Contains(provider.GetServices<IShellInitializer>(), x => x is GroundworkIdentitySeeder);
+        Assert.Contains(provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>(), x => x is EfCoreIdentitySeeder);
+        Assert.Contains(provider.GetServices<IShellInitializer>(), x => x is EfCoreIdentitySeeder);
     }
 
     [Fact]
     public async Task Configured_Admin_Is_Seeded_And_Idempotent()
     {
         var services = CreateServices();
-        services.AddFoundationAspNetCoreIdentityGroundwork(
+        services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(
+            NewPersistenceOptions(),
             new IdentitySeedOptions
             {
                 UserName = "root",
@@ -102,7 +99,9 @@ public sealed class AspNetCoreIdentityRegistrationTests : IAsyncDisposable
             isDevelopmentOrDemo: false);
 
         await using var provider = services.BuildServiceProvider();
-        var seeder = provider.GetRequiredService<GroundworkIdentitySeeder>();
+        using (var schemaScope = provider.CreateScope())
+            await schemaScope.ServiceProvider.GetRequiredService<IdentityIamDbContext>().Database.EnsureCreatedAsync();
+        var seeder = provider.GetRequiredService<EfCoreIdentitySeeder>();
 
         await seeder.StartAsync(CancellationToken.None);
         await seeder.StartAsync(CancellationToken.None);
@@ -165,14 +164,23 @@ public sealed class AspNetCoreIdentityRegistrationTests : IAsyncDisposable
 
     private static ServiceCollection CreateServices()
     {
-        var persistence = new IdentityV2TestPersistence();
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddSingleton(persistence);
-        services.AddSingleton<IStorageProviderConnection>(p => p.GetRequiredService<IdentityV2TestPersistence>().Connection);
-        services.AddPersistenceCore();
         return services;
     }
+
+    private static IdentityIamEntityFrameworkCoreOptions NewPersistenceOptions() => new()
+    {
+        Provider = "Sqlite",
+        ConnectionString = $"Data Source={Path.Join(Path.GetTempPath(), $"elsa-identity-registration-{Guid.NewGuid():N}.db")};Pooling=False"
+    };
+
+    private static AspNetCoreIdentityEntityFrameworkCoreFeature NewFeature(bool isDevelopmentOrDemo) => new()
+    {
+        Provider = "Sqlite",
+        ConnectionString = NewPersistenceOptions().ConnectionString,
+        IsDevelopmentOrDemo = isDevelopmentOrDemo
+    };
 
     public async ValueTask DisposeAsync() => await _fixture.DisposeAsync();
 }

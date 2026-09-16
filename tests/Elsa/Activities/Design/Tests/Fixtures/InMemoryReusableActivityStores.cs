@@ -19,7 +19,7 @@ public sealed class InMemoryReusableActivityStores : InMemoryReusableActivitySto
 /// <summary>
 /// One lock-guarded in-memory implementation of the Design read/write ports. It intentionally models
 /// the transaction boundary, optimistic revisions/heads, and immutable publication behavior expected
-/// from the eventual Groundwork adapters rather than acting as independent per-port dictionaries.
+/// from the durable adapters rather than acting as independent per-port dictionaries.
 /// </summary>
 public class InMemoryReusableActivityStores<TExecutableTemplate, TSourceReference, TReceipt> :
     IActivityDefinitionStore,

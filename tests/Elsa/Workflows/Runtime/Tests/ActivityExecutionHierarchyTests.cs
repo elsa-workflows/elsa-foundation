@@ -176,7 +176,7 @@ public class ActivityExecutionHierarchyTests
         var codec = new HmacActivityExecutionHierarchyCursorCodec(Options.Create(
             new ActivityExecutionHierarchyCursorOptions
             {
-                SigningKey = "groundwork-v2-hierarchy-cursor-key-32-bytes"
+                SigningKey = "runtime-v2-hierarchy-cursor-key-32-bytes"
             }));
         var state = new ActivityExecutionHierarchyCursorState(
             "tenant:tenant-a",

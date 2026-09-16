@@ -34,29 +34,11 @@ public sealed class ReusableActivityArchitectureTests
             "Elsa.Workflows.Publishing.Core",
             "Elsa.Workflows.Runtime.Core");
 
-    [Fact]
-    public void Publishing_groundwork_bridge_is_the_only_activity_publication_cross_domain_adapter() =>
-        AssertProjectReferences(
-            "src/Elsa/Workflows/Publishing/Persistence/Groundwork/Elsa.Workflows.Publishing.Persistence.Groundwork.csproj",
-            "Elsa.Activities.Design.Core",
-            "Elsa.Activities.Design.Persistence.Core",
-            "Elsa.Activities.Design.Persistence.Groundwork",
-            // The lane took the public v2 closure with the clean break: no document store, no v1 composition,
-            // no v1 query layer.
-            "Elsa.Persistence.Groundwork.V2",
-            "Elsa.Serialization.Core",
-            "Elsa.Workflows.Design.Core",
-            "Elsa.Workflows.Design.Persistence.Core",
-            "Elsa.Workflows.Design.Persistence.Groundwork",
-            "Elsa.Workflows.Publishing.Core",
-            "Elsa.Workflows.Runtime.Core");
-
     /// <summary>
     /// The EF counterpart commits the publication in ADR 0066 order through the Activities Design and Runtime
     /// EF modules' own staging seams, each in its own context. It also owns the A12/A13 activity-upgrade
     /// bridge, whose apply commits both Design catalogs as one act, so it reaches the Workflows Design EF lane
-    /// as well — exactly the three EF modules the Groundwork bridge reaches in its own lane, and never a
-    /// Groundwork lane.
+    /// as well — exactly three EF modules, and never another persistence family.
     /// </summary>
     [Fact]
     public void Publishing_entity_framework_bridge_commits_through_the_design_and_runtime_EF_seams_only() =>
@@ -70,22 +52,9 @@ public sealed class ReusableActivityArchitectureTests
             "Elsa.Workflows.Runtime.Core",
             "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore");
 
-    [Fact]
-    public void Elsa3_import_groundwork_bridge_references_design_and_runtime_core_contracts_only() =>
-        AssertProjectReferences(
-            "src/Elsa3/Activities/Design/Import/Persistence/Groundwork/Elsa3.Activities.Design.Import.Persistence.Groundwork.csproj",
-            "Elsa.Activities.Design.Persistence.Core",
-            "Elsa.Activities.Design.Persistence.Groundwork",
-            "Elsa.Persistence.Groundwork.V2",
-            "Elsa.Serialization.Core",
-            "Elsa.Workflows.Design.Persistence.Core",
-            "Elsa.Workflows.Design.Persistence.Groundwork",
-            "Elsa.Workflows.Runtime.Core",
-            "Elsa3.Activities.Design.Import");
-
-    // The EF bridge commits one import across both Design lanes and its own ledger; like the Groundwork
-    // bridge it reaches Runtime only for the persistence access-context contract, so it cannot write
-    // Runtime templates or source references.
+    // The EF bridge commits one import across both Design lanes and its own ledger, and reaches Runtime
+    // only for the persistence access-context contract, so it cannot write Runtime templates or source
+    // references.
     [Fact]
     public void Elsa3_import_ef_bridge_references_design_ef_lanes_and_runtime_core_contracts_only() =>
         AssertProjectReferences(
@@ -103,8 +72,8 @@ public sealed class ReusableActivityArchitectureTests
         string[] roots =
         [
             "src/Elsa/Activities/Graph",
-            "src/Elsa/Workflows/Publishing/Persistence/Groundwork",
-            "src/Elsa3/Activities/Design/Import/Persistence/Groundwork"
+            "src/Elsa/Workflows/Publishing/Persistence/EntityFrameworkCore",
+            "src/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore"
         ];
         string[] forbiddenTokens =
         [

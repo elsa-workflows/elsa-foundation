@@ -6,7 +6,7 @@ namespace Elsa.Primitives.Hosting.Tests;
 
 /// <summary>
 /// Golden-value tests that pin the on-the-wire id formats. These literals MUST stay identical to the
-/// equivalent test in the Groundwork repo (tests/Groundwork/Groundwork.Tests/IdentityFormatCompatibilityTests.cs)
+/// equivalent test that used to live in the storage-library repository
 /// so ids produced by either codebase remain format-compatible. Do not change a literal here without
 /// changing it there.
 /// </summary>

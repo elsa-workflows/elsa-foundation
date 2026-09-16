@@ -23,7 +23,7 @@ namespace Elsa.Workflows.Design.Tests.Infrastructure;
 /// </summary>
 internal static class UpdateDraftTestKit
 {
-    // Each lifecycle operation gets a fresh operation key. On the Groundwork target the operation key is
+    // Each lifecycle operation gets a fresh operation key. The operation key is
     // a caller-supplied idempotency/replay token: reusing one constant across distinct operations makes
     // the second call replay (or conflict on different material). Distinct authoring actions in a test
     // are distinct operations, so they carry distinct keys.

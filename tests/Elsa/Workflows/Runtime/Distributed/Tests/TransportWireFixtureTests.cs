@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Tests;
 /// Golden-fixture drift and round-trip tests that freeze the v1 wire shape of the cross-node command transport item.
 /// </summary>
 /// <remarks>
-/// This unit ships the in-memory transport only; the durable (Groundwork) transport is a named follow-up. The committed
+/// This unit ships the in-memory transport only; a durable transport is a named follow-up. The committed
 /// <c>Fixtures/v1/executionCommandTransport.json</c> file IS the frozen v1 wire format, so the follow-up cannot reshape
 /// it: the drift test fails if the serialized shape changes without a version bump, and the round-trip test proves the
 /// committed fixture still deserializes into an equivalent item.

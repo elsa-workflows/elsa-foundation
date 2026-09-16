@@ -56,8 +56,7 @@ public sealed class Elsa3MigrationBoundaryTests
             .Order(StringComparer.Ordinal)
             .ToArray();
         var forbidden = references
-            .Where(reference => reference.Contains(".Runtime", StringComparison.Ordinal) ||
-                                reference.Contains("Groundwork", StringComparison.Ordinal))
+            .Where(reference => reference.Contains(".Runtime", StringComparison.Ordinal))
             .ToArray();
 
         Assert.Contains("Elsa.Activities.Design.Persistence.Core", references);

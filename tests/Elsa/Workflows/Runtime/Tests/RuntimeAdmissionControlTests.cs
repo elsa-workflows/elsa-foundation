@@ -410,7 +410,7 @@ public sealed class RuntimeAdmissionControlTests
         // #1320, resolution 1. Parking is a promise that someone re-drives the item, and only
         // WorkflowsRuntimeResumptionFeature makes that true — AddWorkflowRuntime composes the gate but not the sweep.
         // The reachable host is therefore a hand-composed or in-memory one, which is catalog-legal and is the shape
-        // most fixtures use; not a shell composing Groundwork runtime-store or unified persistence, since all nine of
+        // most fixtures use; not a shell composing durable runtime-store persistence, since all nine of
         // those features declare DependsOn "WorkflowsRuntimeResumption" and so auto-enable the sweep. On a host
         // without it the parked item
         // would have no owner at all, so the refusal degrades to the start shape: nothing durable written, nothing
@@ -744,7 +744,7 @@ public sealed class RuntimeAdmissionControlTests
             admissionController: admissionController,
             durabilityEvidence: DurabilityEvidence(hasRedriver));
 
-    // Both compositions carry the evidence a durable persistence provider (Groundwork) contributes on any host; only
+    // Both compositions carry the evidence a durable persistence provider contributes on any host; only
     // the resumption entry comes from WorkflowsRuntimeResumptionFeature. The no-re-driver side is therefore NOT an
     // empty collection, so a router that asked "is there any evidence at all" rather than "is the resumption component
     // named" would promise a delivery nobody owns and fail here rather than pass.

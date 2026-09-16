@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Design.Tests.Unit.UpdateDraftCommand;
 /// EF-referencing <c>ActivityDiffTests</c> and <c>MultiDimensionDiffTests</c>. The diff half drives the
 /// Core <see cref="Elsa.Workflows.Design.Persistence.Core.Services.DraftStateDiffEngine"/> directly and
 /// never touches a persistence provider — the persistence (state round-trip) half of those files is
-/// already covered by the shared Groundwork lifecycle contract suite. Match key is <c>NodeId</c>; the
+/// already covered by the shared lifecycle contract suite. Match key is <c>NodeId</c>; the
 /// engine emits diff events in its deterministic dimension order.
 /// </summary>
 public sealed class DraftStateDiffContractTests

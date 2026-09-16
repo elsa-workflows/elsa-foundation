@@ -90,7 +90,7 @@ jobs:
           container_roots_file=$(mktemp)
           trap 'rm -f "$container_roots_file"' EXIT
           dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -v:q -- \
-            solution-filter-roots Elsa.Server.Persistence.Groundwork.Integration.slnf \
+            solution-filter-roots Elsa.Server.Persistence.Integration.slnf \
             > "$container_roots_file"
 
           declare -A container_tests=()
@@ -135,8 +135,8 @@ jobs:
       - name: Test (fast unit tests, no containers)
         run: dotnet test Elsa.Server.test.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603
 
-  groundwork-v2-native-provider-matrix:
-    name: Groundwork v2 native provider matrix
+  ef-native-provider-matrix:
+    name: EF native provider matrix
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -155,157 +155,46 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      - name: Start transactional native databases
+      # These suites start their own Testcontainers databases. Required mode turns an unavailable
+      # PostgreSQL, SQL Server or MySQL container into a failure, so the matrix cannot silently
+      # degrade into a lane of skips that still reports green.
+      - name: Restore the EF native provider proofs
         run: |
-          docker run --detach --name groundwork-v2-postgresql --publish 5432:5432 \
-            --env POSTGRES_HOST_AUTH_METHOD=trust postgres:17.6-alpine3.22
-          for attempt in {1..60}; do
-            if docker exec groundwork-v2-postgresql pg_isready -U postgres > /dev/null; then
-              break
-            fi
-            if [ "$attempt" -eq 60 ]; then
-              docker logs groundwork-v2-postgresql
-              exit 1
-            fi
-            sleep 1
-          done
+          dotnet restore tests/Elsa/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj -p:WarningsNotAsErrors=NU1603
+          dotnet restore tests/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj -p:WarningsNotAsErrors=NU1603
+          dotnet restore tests/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj -p:WarningsNotAsErrors=NU1603
 
-          sqlserver_ephemeral="$(openssl rand -hex 20)A1!"
-          echo "::add-mask::$sqlserver_ephemeral"
-          docker run --detach --name groundwork-v2-sqlserver --publish 1433:1433 \
-            --env ACCEPT_EULA=Y --env MSSQL_SA_PASSWORD="$sqlserver_ephemeral" \
-            mcr.microsoft.com/mssql/server:2022-CU21-ubuntu-22.04
-          for attempt in {1..60}; do
-            if docker exec groundwork-v2-sqlserver /opt/mssql-tools18/bin/sqlcmd \
-                -S localhost -U sa -P "$sqlserver_ephemeral" -C -Q 'select 1' > /dev/null; then
-              break
-            fi
-            if [ "$attempt" -eq 60 ]; then
-              docker logs groundwork-v2-sqlserver
-              exit 1
-            fi
-            sleep 1
-          done
-          echo "GROUNDWORK_V2_SQLSERVER_CONNECTION_STRING=Server=127.0.0.1,1433;User Id=sa;Password=$sqlserver_ephemeral;TrustServerCertificate=True;Encrypt=False;Initial Catalog=master" >> "$GITHUB_ENV"
-
-          docker run --detach --name groundwork-v2-mongodb --publish 27017:27017 mongo:7.0.24 \
-            mongod --replSet groundworkv2 --bind_ip_all
-          for attempt in {1..60}; do
-            if docker exec groundwork-v2-mongodb mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' | grep -q 1; then
-              break
-            fi
-            if [ "$attempt" -eq 60 ]; then
-              docker logs groundwork-v2-mongodb
-              exit 1
-            fi
-            sleep 1
-          done
-          docker exec groundwork-v2-mongodb mongosh --quiet --eval \
-            "rs.initiate({_id:'groundworkv2',members:[{_id:0,host:'127.0.0.1:27017'}]})"
-          for attempt in {1..60}; do
-            if docker exec groundwork-v2-mongodb mongosh --quiet --eval 'rs.status().myState' | grep -q 1; then
-              exit 0
-            fi
-            if [ "$attempt" -eq 60 ]; then
-              docker logs groundwork-v2-mongodb
-              exit 1
-            fi
-            sleep 1
-          done
-
-      - name: Restore Groundwork v2 runtime native proofs
-        run: dotnet restore tests/Elsa/Persistence/Groundwork/V2/Runtime/Tests/Elsa.Persistence.Groundwork.V2.Runtime.Tests.csproj -p:WarningsNotAsErrors=NU1603
-
-      - name: Restore the Groundwork Secrets native provider matrix
-        run: dotnet restore tests/Elsa/Secrets/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Secrets.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj -p:WarningsNotAsErrors=NU1603
-
-      - name: Test current Groundwork v2 runtime families on every native provider
+      # Schema install/validate on a fresh database and an isolated migration history per module:
+      # this replaces the retired schema-plan and scaffold lanes.
+      - name: Prove module migrations on every native provider
         env:
-          GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX: 1
-          GROUNDWORK_V2_POSTGRESQL_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
-          GROUNDWORK_V2_MONGODB_CONNECTION_STRING: mongodb://127.0.0.1:27017/elsa_v2_runtime?replicaSet=groundworkv2&directConnection=true
+          ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX: 1
         run: >-
           dotnet test
-          tests/Elsa/Persistence/Groundwork/V2/Runtime/Tests/Elsa.Persistence.Groundwork.V2.Runtime.Tests.csproj
+          tests/Elsa/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj
           -c Release --no-restore
-          --filter 'FullyQualifiedName~GroundworkV2RuntimeRegistrationTests|FullyQualifiedName~GroundworkV2WorkflowTestScopeStoreTests|FullyQualifiedName~GroundworkV2WorkflowExecutableStoreTests|FullyQualifiedName~GroundworkV2ExecutableActivityTemplateStoreTests|FullyQualifiedName~GroundworkV2WorkflowExecutableSourceReferenceStoreTests|FullyQualifiedName~GroundworkV2WorkflowRuntimeAttentionQueryTests|FullyQualifiedName~GroundworkV2WorkflowAlterationStoreTests|FullyQualifiedName~GroundworkV2BookmarkStateStoreTests|FullyQualifiedName~GroundworkV2WorkflowSchedulerWorkQueueTests'
           -p:WarningsNotAsErrors=NU1603
 
-      # Secrets Groundwork four-provider coverage is owned by the Groundwork-selected composition
-      # (#1631). It must not live in the Secrets EF job: an EF-selected shell does not register
-      # the Groundwork secrets source. Reuse this job's databases so SQLite is not the only
-      # executed provider.
-      - name: Prove Groundwork Secrets on every native provider
+      # Fresh-database migrate, checkpoint commit, replay and rollback for the complete Runtime
+      # aggregate: this replaces the retired runtime failure/restart lane.
+      - name: Prove the Runtime EF aggregate on every native provider
         env:
-          GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX: 1
-          GROUNDWORK_V2_POSTGRESQL_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
-          GROUNDWORK_V2_MONGODB_CONNECTION_STRING: mongodb://127.0.0.1:27017/elsa_v2_secrets?replicaSet=groundworkv2&directConnection=true
+          ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX: 1
         run: >-
           dotnet test
-          tests/Elsa/Secrets/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Secrets.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj
+          tests/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj
           -c Release --no-restore
-          --filter 'FullyQualifiedName~GroundworkV2SecretsProviderMatrixTests'
           -p:WarningsNotAsErrors=NU1603
 
-      - name: Restore diagnostics v2 native proofs
-        run: |
-          dotnet restore tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests.csproj -p:WarningsNotAsErrors=NU1603
-          dotnet restore tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests.csproj -p:WarningsNotAsErrors=NU1603
-
-      # The container-free lane executes SQLite and skips the three server providers. Reuse this job's
-      # already-running transactional databases so diagnostics certification cannot silently report a
-      # four-provider matrix made of one execution and three skips.
-      - name: Prove diagnostics v2 stores on every native provider
+      - name: Prove the Elsa 3 import ledger on every native provider
         env:
-          GROUNDWORK_V2_POSTGRESQL_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
-          GROUNDWORK_V2_MONGODB_CONNECTION_STRING: mongodb://127.0.0.1:27017/elsa_v2_diagnostics?replicaSet=groundworkv2&directConnection=true
-        run: |
-          dotnet test tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests.csproj -c Release --no-restore --filter 'FullyQualifiedName~GroundworkV2ProviderMatrixTests' -p:WarningsNotAsErrors=NU1603
-          dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests.csproj -c Release --no-restore --filter 'FullyQualifiedName~GroundworkV2OpenTelemetryProviderMatrixTests' -p:WarningsNotAsErrors=NU1603
-
-      - name: Restore the publishing v2 provider proof
-        run: dotnet restore tests/Elsa/Workflows/Publishing/Persistence/Groundwork/Tests/Elsa.Workflows.Publishing.Persistence.Groundwork.Tests.csproj -p:WarningsNotAsErrors=NU1603
-
-      # This project starts no containers, so the container-free lane also runs it -- and there its three
-      # non-SQLite cases skip, because that lane has no connection strings to give them. Running it here
-      # too is what makes the postgresql, sqlserver and mongodb cases actual evidence instead of a
-      # permanent skip; GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX turns a missing string into a
-      # failure, so this step cannot quietly degrade back into skipping.
-      - name: Prove the publishing v2 catalog on every native provider
-        env:
-          GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX: 1
-          GROUNDWORK_V2_POSTGRESQL_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
-          GROUNDWORK_V2_MONGODB_CONNECTION_STRING: mongodb://127.0.0.1:27017/elsa_v2_publishing?replicaSet=groundworkv2&directConnection=true
+          ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX: 1
         run: >-
           dotnet test
-          tests/Elsa/Workflows/Publishing/Persistence/Groundwork/Tests/Elsa.Workflows.Publishing.Persistence.Groundwork.Tests.csproj
+          tests/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj
           -c Release --no-restore
-          --filter 'FullyQualifiedName~PublishingGroundworkProviderMatrixTests'
           -p:WarningsNotAsErrors=NU1603
 
-      - name: Restore the publishing API Groundwork proof
-        run: dotnet restore tests/Elsa/Workflows/Publishing/Api/GroundworkTests/Elsa.Workflows.Publishing.Api.GroundworkTests.csproj -p:WarningsNotAsErrors=NU1603
-
-      # The suite that owns the draft-test-run receipt store runs on the in-memory and SQLite providers in
-      # the container-free lane, which pins behaviour but is not evidence about the other three. This step
-      # is what makes its postgresql, sqlserver and mongodb cases real: create-only receipt writes and the
-      # idempotency-key lookup are provider behaviour, not API shape.
-      - name: Prove the draft-test-run receipt store on every native provider
-        env:
-          GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX: 1
-          GROUNDWORK_V2_POSTGRESQL_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
-          GROUNDWORK_V2_MONGODB_CONNECTION_STRING: mongodb://127.0.0.1:27017/elsa_v2_draft_runs?replicaSet=groundworkv2&directConnection=true
-        run: >-
-          dotnet test
-          tests/Elsa/Workflows/Publishing/Api/GroundworkTests/Elsa.Workflows.Publishing.Api.GroundworkTests.csproj
-          -c Release --no-restore
-          --filter 'FullyQualifiedName~ActivityDraftTestRunProviderMatrixTests'
-          -p:WarningsNotAsErrors=NU1603
-
-      # This job is the required hosted native-provider lane. The Runtime EF project normally
-      # remains developer-friendly when Docker is absent; required mode turns any unavailable
-      # PostgreSQL, SQL Server, or MySQL container into a test failure so this evidence cannot
-      # silently degrade into three skips.
       - name: Restore the Runtime execution-placement EF provider proof
         run: dotnet restore tests/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj -p:WarningsNotAsErrors=NU1603
 
@@ -318,9 +207,9 @@ jobs:
           -c Release --no-restore
           -p:WarningsNotAsErrors=NU1603
 
-  # Phase 4 (#1631): Secrets EF composition is independent of Groundwork Secrets matrix
-  # obligations. This job owns the EF-selected path only. Groundwork-default Workbench
-  # remains proven by build-and-test plus the Groundwork v2 native provider matrix job.
+  # Secrets EF composition on a native PostgreSQL: configuration-driven CShells composition,
+  # migration/validation, CRUD/OCC, runtime resolution, restart persistence and the packed-module
+  # child-host proof. Kept separate from the provider matrix because it boots a real shell.
   secrets-ef-composition:
     name: Secrets EF composition
     runs-on: ubuntu-latest
@@ -372,11 +261,12 @@ jobs:
           -p:WarningsNotAsErrors=NU1603
 
   # Container-free architecture guards (dependency direction, endpoint security, feature
-  # composition, the EF dependency allowlist). The whole project runs so a renamed or newly
-  # added guard cannot silently fall out of a brittle test filter. The spec 094 coverage-ledger
-  # and benchmark-evidence suites that once ran beside it were retired with performance
+  # composition, the EF dependency allowlist, and the fail-closed guard that keeps the retired
+  # persistence family out of the tree). The whole project runs so a renamed or newly added guard
+  # cannot silently fall out of a brittle test filter. The spec 094 coverage-ledger and
+  # benchmark-evidence suites that once ran beside it were retired with performance
   # measurement (#1668).
-  groundwork-fast:
+  architecture-guards:
     name: Architecture guards
     needs: build-and-test
     runs-on: ubuntu-latest
@@ -413,9 +303,9 @@ jobs:
     name: Alert on a red main
     needs:
       - build-and-test
-      - groundwork-v2-native-provider-matrix
+      - ef-native-provider-matrix
       - secrets-ef-composition
-      - groundwork-fast
+      - architecture-guards
     if: ${{ failure() && github.event_name == 'push' }}
     permissions:
       contents: read

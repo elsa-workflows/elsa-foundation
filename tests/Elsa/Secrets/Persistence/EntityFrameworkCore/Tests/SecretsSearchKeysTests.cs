@@ -14,9 +14,9 @@ public sealed class SecretsSearchKeysTests
             SecretsSearchKeys.UnicodeOrdinalIgnoreCaseAlgorithmId);
     }
 
-    // Golden projections captured from the pinned Unicode data. They replace the former
-    // equality check against the deleted Groundwork comparison-key implementation, which
-    // was the only available oracle for these representative values.
+    // Golden projections captured from the pinned Unicode data. They replace an equality
+    // check against a deleted reference implementation, which was the only available
+    // oracle for these representative values.
     [Theory]
     [InlineData("payments", "PAYMENTS")]
     [InlineData("M\u00FCnchen", "M\u00DCNCHEN")]

@@ -66,7 +66,7 @@ public sealed class OpenIddictPersistenceArchitectureTests
         var root = Path.Combine(RepoRoot, "src", "Elsa", "Foundation", "Identity", "Abstractions");
         var violations = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
             .Where(IsSourceOrProject)
-            .SelectMany(path => ForbiddenLines(path, "Groundwork", "EntityFrameworkCore"))
+            .SelectMany(path => ForbiddenLines(path, "EntityFrameworkCore"))
             .ToArray();
 
         Assert.True(violations.Length == 0, string.Join(Environment.NewLine, violations));
@@ -85,7 +85,7 @@ public sealed class OpenIddictPersistenceArchitectureTests
             "Behavior");
         var violations = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
             .Where(IsSourceOrProject)
-            .SelectMany(path => ForbiddenLines(path, "Groundwork", "EntityFrameworkCore"))
+            .SelectMany(path => ForbiddenLines(path, "EntityFrameworkCore"))
             .ToArray();
 
         Assert.True(violations.Length == 0, string.Join(Environment.NewLine, violations));

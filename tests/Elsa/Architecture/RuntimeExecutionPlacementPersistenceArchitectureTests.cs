@@ -11,7 +11,7 @@ public sealed class RuntimeExecutionPlacementPersistenceArchitectureTests
         RepoRoot, "src", "Elsa", "Workflows", "Runtime", "Distributed", "Persistence", "EntityFrameworkCore");
 
     [Fact]
-    public void Production_adapter_is_provider_neutral_and_has_no_groundwork_or_migrations()
+    public void Production_adapter_is_provider_neutral_and_has_no_migrations()
     {
         var project = XDocument.Load(Path.Join(ProductionRoot, "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj"));
         var packages = project.Descendants("PackageReference")
@@ -22,13 +22,11 @@ public sealed class RuntimeExecutionPlacementPersistenceArchitectureTests
         Assert.DoesNotContain(packages, package => package.Contains("SqlServer", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(packages, package => package.Contains("Postgre", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(packages, package => package.Contains("MySql", StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(packages, package => package.StartsWith("Groundwork.", StringComparison.Ordinal));
         Assert.Empty(Directory.EnumerateFiles(ProductionRoot, "*Migration*", SearchOption.AllDirectories));
 
         var source = Directory.EnumerateFiles(ProductionRoot, "*.cs", SearchOption.AllDirectories)
             .Select(File.ReadAllText)
             .ToArray();
-        Assert.DoesNotContain(source, text => text.Contains("using Groundwork.", StringComparison.Ordinal));
         Assert.DoesNotContain(source, text => text.Contains("IQueryable", StringComparison.Ordinal));
         Assert.DoesNotContain(source, text => text.Contains("FromSql", StringComparison.Ordinal));
     }

@@ -4,7 +4,9 @@ using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.Api.Extensions;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.DependencyInjection;
+using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
+using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Foundation.Identity.OpenIddict;
 using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict.Extensions;
@@ -24,7 +26,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Groundwork.Store;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 
@@ -32,7 +33,7 @@ namespace Elsa.Foundation.Identity.Tests.Api;
 
 /// <summary>
 /// Shared HTTP host for the <c>GET /_elsa/identity/token</c> tests (plan C2). Composes the three landed
-/// workstreams end to end over a private Groundwork SQLite store and an in-memory OpenIddict vendor database: the ASP.NET Core Identity substrate + cookie
+/// workstreams end to end over a private EF Core SQLite store and an in-memory OpenIddict vendor database: the ASP.NET Core Identity substrate + cookie
 /// sign-in + <c>POST /_elsa/identity/login</c> (A), the OpenIddict issuance + bearer validation scheme (B),
 /// and the explicit Foundation Identity Minimal API mapping (C). A single self-contained <c>/protected</c>
 /// endpoint (default scheme = the OpenIddict selector) proves an issued bearer authenticates onward.
@@ -71,14 +72,17 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
 
                     // Workstream A: identity substrate + cookie sign-in + login endpoint (in dev/demo mode with
                     // an explicitly configured admin so we can log in through the real POST /login flow).
-                    var persistence = new IdentityV2TestPersistence();
-                    services.AddSingleton(persistence);
-                    services.AddSingleton<IStorageProviderConnection>(p => p.GetRequiredService<IdentityV2TestPersistence>().Connection);
-                    services.AddPersistenceCore();
-                    services.AddFoundationAspNetCoreIdentityGroundwork(TestAdmin.SeedOptions(), isDevelopmentOrDemo: true);
+                    services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(
+                        new IdentityIamEntityFrameworkCoreOptions
+                        {
+                            Provider = "Sqlite",
+                            ConnectionString = $"Data Source={Path.Join(Path.GetTempPath(), $"elsa-identity-{databaseSuffix}.db")};Pooling=False"
+                        },
+                        TestAdmin.SeedOptions(),
+                        isDevelopmentOrDemo: true);
 
                     // Workstream B: OpenIddict issuance + bearer validation + selector default scheme. Explicitly
-                    // select the bearer/cookie router because the Groundwork-only default is registered first.
+                    // select the bearer/cookie router because the identity-only default is registered first.
                     services.AddOpenIddictVendorForTests(
                         builder => builder.UseInMemoryDatabase($"openiddict-{databaseSuffix}"));
                     services.AddFoundationIdentityOpenIddict(options => options.IsDevelopmentOrDemo = true);
@@ -135,6 +139,7 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
         await using (var scope = host.Services.CreateAsyncScope())
         {
             await scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>().Database.EnsureCreatedAsync();
+            await scope.ServiceProvider.GetRequiredService<IdentityIamDbContext>().Database.EnsureCreatedAsync();
         }
 
         // Starting runs the registered hosted services (identity admin seeder + OpenIddict store init).

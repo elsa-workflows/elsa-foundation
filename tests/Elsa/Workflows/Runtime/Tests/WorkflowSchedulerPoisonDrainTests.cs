@@ -77,7 +77,7 @@ public sealed class WorkflowSchedulerPoisonDrainTests
     [Fact]
     public async Task DrainAsync_HandlerCrashWithWrappedException_RecordsInnerFaultOnPoisonRecord()
     {
-        // #1031: handler crashes are routinely wrapped (e.g. GroundworkRuntimeCheckpointWriterException around the
+        // #1031: handler crashes are routinely wrapped (e.g. a checkpoint-writer exception around the
         // physical storage fault). The poison record must carry the first inner fault, captured under the same
         // policy as the outer one, or the root cause is undiagnosable without temporary logging.
         var queue = new InMemoryWorkflowSchedulerWorkQueue();

@@ -271,7 +271,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
             reference => reference.Contains("Secrets.Persistence.EntityFrameworkCore", StringComparison.OrdinalIgnoreCase)
                          && !reference.Contains("Tooling", StringComparison.OrdinalIgnoreCase));
 
-        // The supported compositions run on EF; Groundwork is no longer selected anywhere.
+        // EF is the only Secrets persistence family.
         foreach (var relative in new[]
                  {
                      "src/Apps/Elsa.Workbench/shells.json",
@@ -281,19 +281,6 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
             Assert.True(
                 DefaultShellFeatures(relative).Contains("SecretsEntityFrameworkCore"),
                 $"{relative} must enable SecretsEntityFrameworkCore as the default Secrets store.");
-        }
-
-        foreach (var relative in new[]
-                 {
-                     "src/Apps/Elsa.Workbench/shells.json",
-                     "src/Apps/Elsa.Workbench/shells.baseline.json",
-                     "src/Apps/Elsa.Workbench/shells.Production.json",
-                     "docker/compose/elsa-workbench.shells.json"
-                 })
-        {
-            Assert.False(
-                DefaultShellFeatures(relative).Contains("SecretsGroundworkPersistence"),
-                $"{relative} must not enable SecretsGroundworkPersistence; EF is the default.");
         }
     }
 

@@ -76,87 +76,18 @@ jobs:
         run: dotnet restore Elsa.Server.slnx -p:WarningsNotAsErrors=NU1603
 
       - name: Restore repository-local .NET tools
-        # Without this the `groundwork` tool from .config/dotnet-tools.json is never installed, and
-        # every test that shells out to it fails with 'Run "dotnet tool restore" to make the
-        # "groundwork" command available.' -- which reads as a product regression rather than a
-        # missing setup step. That is what kept this gate red every night from 2026-08-06 to
-        # 2026-08-13 (#1323): the diagnostics schema-deployment, Groundwork schema-CLI, and identity
-        # provider-evidence suites all drive that CLI. ci.yml has always had this step; this job was
-        # the one that did not.
+        # A test that shells out to a repository-local tool fails with 'Run "dotnet tool restore" to
+        # make the "<name>" command available.' when this step is missing, which reads as a product
+        # regression rather than a missing setup step. That is what kept this gate red every night
+        # from 2026-08-06 to 2026-08-13 (#1323). ci.yml has always had this step; this job was the
+        # one that did not.
         run: dotnet tool restore
 
       - name: Build (full solution, including test projects)
         run: dotnet build Elsa.Server.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 
       - name: Test (Testcontainers integration tests)
-        run: dotnet test Elsa.Server.Persistence.Groundwork.Integration.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603
-
-  # Feature 094 activation shells. Each lane is deliberately skipped and contains
-  # a failing sentinel so removing the condition before its owning tasks land cannot
-  # produce a false-green readiness signal.
-  groundwork-provider-matrix:
-    name: Groundwork provider matrix (scaffold)
-    if: ${{ false }}
-    needs: integration-tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - name: Activation sentinel
-        run: |
-          echo "::error::Provider-matrix scaffolding only; replace this sentinel when T086-T089 and T092 activate the lane."
-          exit 1
-
-  groundwork-failure-restart:
-    name: Groundwork failure & restart (scaffold)
-    if: ${{ false }}
-    needs: integration-tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - name: Activation sentinel
-        run: |
-          echo "::error::Failure/restart scaffolding only; replace this sentinel when T090 activates the lane."
-          exit 1
-
-  groundwork-schema-plan:
-    name: Groundwork schema plan (scaffold)
-    if: ${{ false }}
-    needs: integration-tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - name: Activation sentinel
-        run: |
-          echo "::error::Schema-plan scaffolding only; replace this sentinel when T020 and T030 activate the lane."
-          exit 1
-
-  groundwork-temporary-oracle:
-    name: Groundwork temporary EF oracle (scaffold)
-    if: ${{ false }}
-    needs: integration-tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - name: Activation sentinel
-        run: |
-          echo "::error::Temporary-oracle scaffolding only; replace this sentinel when T091 activates the lane."
-          exit 1
-
-  groundwork-readiness:
-    name: Groundwork readiness (scaffold)
-    if: ${{ false }}
-    needs:
-      - groundwork-provider-matrix
-      - groundwork-failure-restart
-      - groundwork-schema-plan
-      - groundwork-temporary-oracle
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Activation sentinel
-        run: |
-          echo "::error::Readiness scaffolding only; replace this sentinel after T100 and activate it in T105."
-          exit 1
+        run: dotnet test Elsa.Server.Persistence.Integration.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603
 
   # Scheduled runs only. A workflow_dispatch failure needs no issue: someone is already looking
   # at the run they just started.

@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Runtime.Tests;
 
 // Contract coverage for the burst-scoped reconstructible cache (ADR 0031 item b, spec 111) and its first consumer,
 // the burst-cached executable reader. These are the unit-level guarantees; the end-to-end guardrail (byte-identical
-// committed durable state cache-on vs cache-off) and the read-count collapse live in the Groundwork test project.
+// committed durable state cache-on vs cache-off) and the read-count collapse live in the EF Runtime test project.
 public sealed class BurstScopeCacheTests
 {
     // ---- WorkflowBurstScope contract (FR-001) ----------------------------------------------------------------

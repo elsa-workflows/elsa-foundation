@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Runtime.Tests;
 /// <summary>
 /// Parent-scoped read coverage for <see cref="InMemoryActivityExecutionStateStore"/> (#514/#413 item 3): the
 /// in-memory default store must return exactly the (workflow, parent) subset of the workflow page, matching the
-/// Groundwork bridge so the Parallel join counts the same branches regardless of the selected provider.
+/// durable bridge so the Parallel join counts the same branches regardless of the selected provider.
 /// </summary>
 public sealed class InMemoryActivityExecutionStateStoreTests
 {

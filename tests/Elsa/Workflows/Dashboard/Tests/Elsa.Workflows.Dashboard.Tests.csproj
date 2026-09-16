@@ -6,7 +6,7 @@
   <ItemGroup><ProjectReference Include="../../../../../src/Elsa/Workflows/Dashboard/Elsa.Workflows.Dashboard.csproj" /></ItemGroup>
   <ItemGroup>
     <!--
-      The MongoDB dashboard wiring is asserted here rather than in Elsa.Workflows.Dashboard.MongoDb.Tests
+      The dashboard wiring is asserted here rather than in a provider-specific test project
       because that project references Testcontainers, which excludes it from the PR-time fast gate. The
       defect these guard against (#1173) is a registration mistake, not a query one, so it needs no server
       and belongs where CI actually runs it.

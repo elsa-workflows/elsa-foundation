@@ -56,7 +56,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         // and was invisible on the projected incident. The inner fault carried on the poison record must surface in
         // both the incident message and the FaultInner* metadata keys (mirroring ActivityFaultIncidentRecorder).
         var innerFault = new RuntimeFaultInfo(
-            "Groundwork.Documents.Store.GroundworkPhysicalStoreException",
+            "Elsa.Persistence.PhysicalStoreException",
             "GW-PHYSICAL-037: Projected string column 'by-incident-id' exceeds its declared maximum length of 128.");
         await _harness.RecordPoison(RuntimeSchedulerPoisonDisposition.Poisoned, innerFault: innerFault);
 

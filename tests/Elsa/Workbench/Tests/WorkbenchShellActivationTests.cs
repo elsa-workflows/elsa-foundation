@@ -8,7 +8,7 @@ namespace Elsa.Workbench.Tests;
 /// <summary>
 /// Starts every stock Workbench composition as a real process and checks that it activates and serves requests.
 /// Activation is a whole-composition property: a feature registration, a startup task, an appsettings edit, or a
-/// Groundwork schema rule can each break it from outside any one domain. On 2026-08-12 main could not activate for nine
+/// schema rule can each break it from outside any one domain. On 2026-08-12 main could not activate for nine
 /// hours because nothing in the pull-request gate started the host.
 /// </summary>
 public sealed class WorkbenchShellActivationTests
@@ -37,7 +37,7 @@ public sealed class WorkbenchShellActivationTests
         // The dashboard's dependencies.
         "WorkflowDesignValidations",
         "WorkflowsRuntimeResumption",
-        // One Groundwork provider connection, with every persistence lane enabled by its own feature.
+        // One relational connection, with every persistence lane enabled by its own feature.
         "WorkflowsRuntimeEntityFrameworkCore",
         "ActivitiesDesignEntityFrameworkCore",
         "WorkflowsDesignEntityFrameworkCore",
