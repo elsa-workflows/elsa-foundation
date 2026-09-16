@@ -25,6 +25,10 @@ public sealed class PublishingPostgreSqlSmokeTests(PublishingPostgreSqlContainer
     [SkippableFact]
     public Task Native_provider_ordered_activity_publication() =>
         PublishingLedgerNativeProviderSmoke.RunOrderedPublicationAsync(ConnectionString, PublishingNativeProvider.PostgreSql);
+
+    [SkippableFact]
+    public Task Native_provider_activity_upgrade_apply_and_rollback() =>
+        PublishingLedgerNativeProviderSmoke.RunActivityUpgradeAsync(ConnectionString, PublishingNativeProvider.PostgreSql);
 }
 
 [Collection(PublishingSqlServerContainerFixture.CollectionName)]
@@ -43,6 +47,10 @@ public sealed class PublishingSqlServerSmokeTests(PublishingSqlServerContainerFi
     [SkippableFact]
     public Task Native_provider_ordered_activity_publication() =>
         PublishingLedgerNativeProviderSmoke.RunOrderedPublicationAsync(ConnectionString, PublishingNativeProvider.SqlServer);
+
+    [SkippableFact]
+    public Task Native_provider_activity_upgrade_apply_and_rollback() =>
+        PublishingLedgerNativeProviderSmoke.RunActivityUpgradeAsync(ConnectionString, PublishingNativeProvider.SqlServer);
 }
 
 [Collection(PublishingMySqlContainerFixture.CollectionName)]
@@ -61,6 +69,10 @@ public sealed class PublishingMySqlSmokeTests(PublishingMySqlContainerFixture fi
     [SkippableFact]
     public Task Native_provider_ordered_activity_publication() =>
         PublishingLedgerNativeProviderSmoke.RunOrderedPublicationAsync(ConnectionString, PublishingNativeProvider.MySql);
+
+    [SkippableFact]
+    public Task Native_provider_activity_upgrade_apply_and_rollback() =>
+        PublishingLedgerNativeProviderSmoke.RunActivityUpgradeAsync(ConnectionString, PublishingNativeProvider.MySql);
 }
 
 internal static class PublishingEfNativeProviderSmoke

@@ -2,6 +2,7 @@ using System.Data.Common;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Services;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Stores;
@@ -25,12 +26,14 @@ internal sealed record PublishingNativeProvider(
     Func<string, IInterceptor[], PublishingSnapshotReviewDbContext> Publishing,
     Func<string, IInterceptor[], ActivitiesDesignDbContext> Design,
     Func<string, IInterceptor[], BookmarkStateDbContext> Runtime,
+    Func<string, IInterceptor[], WorkflowsDesignDbContext> WorkflowDesign,
     Func<string, string, Task>? CreateDesignDatabase = null)
 {
     public static PublishingNativeProvider PostgreSql { get; } = new(
         (connection, interceptors) => new PublishingSnapshotReviewPostgreSqlDbContext(Options<PublishingSnapshotReviewPostgreSqlDbContext>(builder => builder.UseNpgsql(connection), interceptors)),
         (connection, interceptors) => new ActivitiesDesignPostgreSqlDbContext(Options<ActivitiesDesignPostgreSqlDbContext>(builder => builder.UseNpgsql(connection), interceptors)),
         (connection, interceptors) => new BookmarkStatePostgreSqlDbContext(Options<BookmarkStatePostgreSqlDbContext>(builder => builder.UseNpgsql(connection), interceptors)),
+        (connection, interceptors) => new WorkflowsDesignPostgreSqlDbContext(Options<WorkflowsDesignPostgreSqlDbContext>(builder => builder.UseNpgsql(connection), interceptors)),
         async (serverConnection, database) =>
         {
             await using var connection = new NpgsqlConnection(serverConnection);
@@ -43,12 +46,14 @@ internal sealed record PublishingNativeProvider(
     public static PublishingNativeProvider SqlServer { get; } = new(
         (connection, interceptors) => new PublishingSnapshotReviewSqlServerDbContext(Options<PublishingSnapshotReviewSqlServerDbContext>(builder => builder.UseSqlServer(connection), interceptors)),
         (connection, interceptors) => new ActivitiesDesignSqlServerDbContext(Options<ActivitiesDesignSqlServerDbContext>(builder => builder.UseSqlServer(connection), interceptors)),
-        (connection, interceptors) => new BookmarkStateSqlServerDbContext(Options<BookmarkStateSqlServerDbContext>(builder => builder.UseSqlServer(connection), interceptors)));
+        (connection, interceptors) => new BookmarkStateSqlServerDbContext(Options<BookmarkStateSqlServerDbContext>(builder => builder.UseSqlServer(connection), interceptors)),
+        (connection, interceptors) => new WorkflowsDesignSqlServerDbContext(Options<WorkflowsDesignSqlServerDbContext>(builder => builder.UseSqlServer(connection), interceptors)));
 
     public static PublishingNativeProvider MySql { get; } = new(
         (connection, interceptors) => new PublishingSnapshotReviewMySqlDbContext(Options<PublishingSnapshotReviewMySqlDbContext>(builder => builder.UseMySQL(connection), interceptors)),
         (connection, interceptors) => new ActivitiesDesignMySqlDbContext(Options<ActivitiesDesignMySqlDbContext>(builder => builder.UseMySQL(connection), interceptors)),
-        (connection, interceptors) => new BookmarkStateMySqlDbContext(Options<BookmarkStateMySqlDbContext>(builder => builder.UseMySQL(connection), interceptors)));
+        (connection, interceptors) => new BookmarkStateMySqlDbContext(Options<BookmarkStateMySqlDbContext>(builder => builder.UseMySQL(connection), interceptors)),
+        (connection, interceptors) => new WorkflowsDesignMySqlDbContext(Options<WorkflowsDesignMySqlDbContext>(builder => builder.UseMySQL(connection), interceptors)));
 
     private static DbContextOptions<TContext> Options<TContext>(Action<DbContextOptionsBuilder<TContext>> use, IInterceptor[] interceptors)
         where TContext : DbContext
@@ -279,6 +284,79 @@ internal static class PublishingLedgerNativeProviderSmoke
                 await context.DisposeAsync();
         }
     }
+
+    /// <summary>
+    /// One apply and one rollback of the cross-catalog activity upgrade on a native provider. Both Design
+    /// catalogs share the one database the shared transaction requires, so the commit and the rollback are
+    /// the provider's, not the in-memory bookkeeping of a fake.
+    /// </summary>
+    public static async Task RunActivityUpgradeAsync(string connectionString, PublishingNativeProvider provider)
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..12];
+        var database = $"elsa_upgrade_{suffix}";
+        var design = WithDatabase(connectionString, database);
+        if (provider.CreateDesignDatabase is not null)
+            await provider.CreateDesignDatabase(connectionString, database);
+        var contexts = new ActivityUpgradeContexts(
+            interceptors => provider.Design(design, interceptors),
+            interceptors => provider.WorkflowDesign(design, interceptors));
+        await contexts.CreateSchemaAsync();
+        var payloads = ActivityUpgradeFixtures.Serializer();
+        await ActivityUpgradeSeed.BaseGraphAsync(contexts, payloads);
+
+        var seeded = ActivityUpgradeSeed.WorkflowRevision;
+        ActivityUpgradeScope Open() => new(
+            contexts.Activities([]),
+            contexts.Workflows([]),
+            TestAccess.Scoped(ActivityUpgradeFixtures.Tenant),
+            new SequentialIdentities(suffix),
+            TimeProvider.System);
+
+        // A rollback first: the workflow compare-and-swap finds drift after the activity rows are written.
+        var stale = ActivityUpgradeSeed.TwoStepPlan(seeded, workflowStepRevision: seeded + 99, planId: $"plan-stale-{suffix}");
+        var staleReceipt = ActivityUpgradeSeed.Receipt(stale, $"receipt-stale-{suffix}");
+        await ActivityUpgradeSeed.PersistAsync(contexts, stale, staleReceipt);
+        await using (var scope = Open())
+        {
+            var failure = await Assert.ThrowsAsync<ActivityUpgradeApplyException>(() =>
+                scope.Store.ApplyAsync(stale, stale.Steps, staleReceipt, ActivityUpgradeFixtures.Now.AddMinutes(1)).AsTask());
+            Assert.Equal("activity.upgrade.stale-plan", failure.ErrorCode);
+        }
+
+        await using (var verify = Open())
+        {
+            Assert.Equal(2, (await ((IActivityDefinitionDraftStore)verify.Design).FindAsync(ActivityUpgradeFixtures.ActivityDraftId))!.Revision);
+            Assert.Equal(1, (await verify.Activities.ActivityDependencyProjections.AsNoTracking().SingleAsync()).Sequence);
+            Assert.Equal(seeded, await ReadWorkflowRevisionAsync(verify));
+        }
+
+        var plan = ActivityUpgradeSeed.TwoStepPlan(seeded, planId: $"plan-{suffix}");
+        var receipt = ActivityUpgradeSeed.Receipt(plan, $"receipt-{suffix}");
+        await ActivityUpgradeSeed.PersistAsync(contexts, plan, receipt);
+        ActivityUpgradeApplyResult result;
+        await using (var scope = Open())
+            result = await scope.Store.ApplyAsync(plan, plan.Steps, receipt, ActivityUpgradeFixtures.Now.AddMinutes(2));
+
+        Assert.Equal(ActivityUpgradePlanStatus.Applied, result.Status);
+        await using (var reopened = Open())
+        {
+            Assert.Equal(3, (await ((IActivityDefinitionDraftStore)reopened.Design).FindAsync(ActivityUpgradeFixtures.ActivityDraftId))!.Revision);
+            var projection = await reopened.Activities.ActivityDependencyProjections.AsNoTracking().SingleAsync();
+            Assert.Equal(2, projection.Sequence);
+            Assert.All(projection.Items, item => Assert.Equal(ActivityUpgradeFixtures.NewVersionId, item.Dependency.VersionId));
+            var draft = await reopened.Workflows.Drafts.AsNoTracking().SingleAsync(x => x.Id == ActivityUpgradeFixtures.WorkflowDraftId);
+            Assert.Equal(
+                ActivityUpgradeFixtures.NewVersionId,
+                payloads.Deserialize<Elsa.Workflows.Design.Core.Models.WorkflowDefinitionState>(draft.StateSource!).RootActivity!.ActivityVersionId);
+            // The stamped instant survives the provider's own timestamp resolution, so the revision the
+            // caller was given is the one the next reader observes.
+            Assert.Equal(result.Drafts.Single(x => x.Kind == "WorkflowDraft").Revision, EfWorkflowDraftRevision.Of(draft.LastModifiedAt));
+        }
+    }
+
+    private static async Task<long> ReadWorkflowRevisionAsync(ActivityUpgradeScope scope) =>
+        EfWorkflowDraftRevision.Of((await scope.Workflows.Drafts.AsNoTracking()
+            .SingleAsync(x => x.Id == ActivityUpgradeFixtures.WorkflowDraftId)).LastModifiedAt);
 
     private static string WithDatabase(string connectionString, string database)
     {

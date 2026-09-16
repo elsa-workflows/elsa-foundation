@@ -2,6 +2,7 @@
   "solution": {
     "path": "Elsa.Server.slnx",
     "projects": [
+      "src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj",
       "src/Elsa/Activities/Design/Core/Elsa.Activities.Design.Core.csproj",
       "src/Elsa/Activities/Design/Persistence/Core/Elsa.Activities.Design.Persistence.Core.csproj",
       "src/Elsa/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj",
@@ -9,6 +10,7 @@
       "src/Elsa/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation.csproj",
       "src/Elsa/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj",
       "src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj",
+      "src/Elsa/Api/Capabilities/Elsa.Api.Capabilities.csproj",
       "src/Elsa/Attention/Core/Elsa.Attention.Core.csproj",
       "src/Elsa/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj",
       "src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj",
@@ -55,6 +57,7 @@
       "src/Elsa/Workflows/Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj",
       "src/Elsa/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj",
       "src/Elsa/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj",
+      "src/Elsa/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj",
       "src/Elsa/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj",
       "src/Elsa/Workflows/Publishing/Elsa.Workflows.Publishing.csproj",
       "src/Elsa/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj",

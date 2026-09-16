@@ -40,6 +40,7 @@
       "src/Elsa/Workflows/Design/CodeGeneration/Elsa.Workflows.Design.CodeGeneration.csproj",
       "src/Elsa/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj",
       "src/Elsa/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj",
+      "src/Elsa/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj",
       "src/Elsa/Workflows/Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj",
       "src/Elsa/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj",
       "src/Elsa/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj",

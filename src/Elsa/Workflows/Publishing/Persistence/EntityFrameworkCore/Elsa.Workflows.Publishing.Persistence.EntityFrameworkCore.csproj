@@ -19,5 +19,8 @@
     <ProjectReference Include="..\..\..\..\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <!-- Applying an activity upgrade commits Activities Design and Workflows Design rows together, so the
+         A12/A13 bridge reaches the workflow-design EF lane's own context and stores. -->
+    <ProjectReference Include="..\..\..\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
 </Project>

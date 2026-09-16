@@ -34,6 +34,13 @@ public sealed class PublishingPersistenceFamilyBackend
     /// </summary>
     public const string ActivityPublicationCommands = "activity-publication-commands";
 
+    /// <summary>
+    /// A12/A13: the cross-catalog activity-upgrade bridge — discovery, the atomic plan mutation, the
+    /// published-draft resolver and the dependency-projection rebuild coordinator. They read and write both
+    /// Design catalogs as one act, so one backend owns all four or none of them.
+    /// </summary>
+    public const string ActivityUpgradeMutation = "activity-upgrade-mutation";
+
     private readonly IReadOnlyCollection<ServiceDescriptor> descriptors;
 
     public PublishingPersistenceFamilyBackend(
@@ -68,6 +75,14 @@ public sealed class PublishingPersistenceFamilyBackend
     public static IReadOnlyCollection<Type> ActivityPublicationReceiptContracts { get; } = [typeof(IActivityPublicationReceiptStore)];
 
     public static IReadOnlyCollection<Type> ActivityDraftTestRunContracts { get; } = [typeof(IActivityDraftTestRunStore)];
+
+    public static IReadOnlyCollection<Type> ActivityUpgradeMutationContracts { get; } =
+    [
+        typeof(Elsa.Activities.Design.Core.Contracts.IActivityUpgradeDiscoverySource),
+        typeof(IActivityUpgradePlanMutationStore),
+        typeof(Elsa.Activities.Design.Core.Contracts.IActivityUpgradePublishedDraftResolver),
+        typeof(IActivityDependencyProjectionRebuildCoordinator)
+    ];
 
     public bool Owns(ServiceDescriptor candidate) => descriptors.Contains(candidate);
 

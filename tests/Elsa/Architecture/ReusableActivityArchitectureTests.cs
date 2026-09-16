@@ -53,8 +53,10 @@ public sealed class ReusableActivityArchitectureTests
 
     /// <summary>
     /// The EF counterpart commits the publication in ADR 0066 order through the Activities Design and Runtime
-    /// EF modules' own staging seams, each in its own context, so it may reach exactly those two EF modules and
-    /// never a Groundwork lane.
+    /// EF modules' own staging seams, each in its own context. It also owns the A12/A13 activity-upgrade
+    /// bridge, whose apply commits both Design catalogs as one act, so it reaches the Workflows Design EF lane
+    /// as well — exactly the three EF modules the Groundwork bridge reaches in its own lane, and never a
+    /// Groundwork lane.
     /// </summary>
     [Fact]
     public void Publishing_entity_framework_bridge_commits_through_the_design_and_runtime_EF_seams_only() =>
@@ -63,6 +65,7 @@ public sealed class ReusableActivityArchitectureTests
             "Elsa.Activities.Design.Persistence.Core",
             "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
             "Elsa.Persistence.EntityFramework",
+            "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
             "Elsa.Workflows.Publishing.Core",
             "Elsa.Workflows.Runtime.Core",
             "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore");
