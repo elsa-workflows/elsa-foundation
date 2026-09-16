@@ -137,6 +137,40 @@ deployment reproducible.
 Note that `Microsoft.EntityFrameworkCore.*` and `Npgsql.*` are *not* covered by rule 2 (which is
 `Microsoft.Extensions.` only), so EF and its provider do arrive through the feed normally.
 
+### Generating the closure
+
+Maintain the **roots** by hand — they map one-to-one onto the shell features in `shells.json`. Generate
+the closure, and regenerate it on every pin bump rather than hand-editing it; a real composition runs to
+tens of entries.
+
+1. Write a throwaway project with one `PackageReference` per root at the pinned version. Include the EF
+   provider (`Npgsql.EntityFrameworkCore.PostgreSQL` or equivalent) if you use EF persistence: no Elsa
+   package depends on it, because `EfRelationalProviderBinding` binds it reflectively by
+   assembly-qualified type name, so nothing declares it and it must be named by hand.
+
+2. Give it a `NuGet.config` naming the same feeds the host will use, then let NuGet resolve the real
+   closure — including the conditional and framework-specific edges a nuspec walk gets wrong:
+
+   ```bash
+   dotnet restore restore.csproj --packages ./pkgs
+   ```
+
+3. Turn each `./pkgs/<id>/<version>/` into one `"<Id> [<Version>]"` pattern, dropping the ids the host
+   genuinely provides, then split the rest across your feeds by origin.
+
+   Derive that drop-list from the host image's own `*.deps.json` rather than copying one from elsewhere —
+   it is exactly the set rule 3 above already skips, and it changes as the host's own references change.
+   For the host as it ships today that means the `Microsoft.Extensions.*`, `CShells.*`, `Nuplane*` and
+   `NuGet.*` families plus `FastEndpoints`, `Newtonsoft.Json` and `JetBrains.Annotations` — but check,
+   do not assume.
+
+**Keep the exclusions honest.** A declared dependency must be resolvable even when it does nothing at
+runtime. Pruning `Microsoft.EntityFrameworkCore.Analyzers` from a *directory* feed — on the reasoning that
+its types cannot load without `Microsoft.CodeAnalysis` and it contributes no features — failed startup
+reconciliation for all 36 packages with `NoEligibleFeedException` and exited 139. Its type-load warning is
+noise to be left alone. This bites on directory feeds, where the package must physically be present; a
+remote feed resolves an unlisted dependency by itself.
+
 ## Pinning and integrity
 
 A single-point range (`[4.0.0-preview.793]`) pins exactly. For integrity, turn on the lock file
