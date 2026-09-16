@@ -23,6 +23,21 @@ public static class IncidentStateTransitionValidator
         }
     }
 
+    /// <summary>
+    /// Ensures an Append creates the incident. Append is create-only: an existing incident with the same identity is a
+    /// conflict, even when its content is identical, because a replayed checkpoint is resolved by its commit marker first.
+    /// </summary>
+    public static void EnsureAppendTargetIsAbsent(IncidentState? existing, IncidentState candidate)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        if (existing is not null)
+            throw AppendConflict(candidate);
+    }
+
+    /// <summary>The Append conflict, for a store whose atomic create-only insert reports the conflict itself.</summary>
+    public static InvalidOperationException AppendConflict(IncidentState candidate) =>
+        new($"Incident '{candidate.IncidentId}' already exists for workflow execution '{candidate.WorkflowExecutionId}' and cannot be appended again.");
+
     private static bool OutcomesAreIdentical(
         IncidentResolutionOutcome existing,
         IncidentResolutionOutcome? candidate)

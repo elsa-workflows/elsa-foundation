@@ -98,6 +98,33 @@ public sealed class RuntimePostCommitOutboxItem
         or RuntimePostCommitOutboxStatus.FailedFinal
         or RuntimePostCommitOutboxStatus.Cancelled;
 
+    /// <summary>Whether <paramref name="other"/> is the same item in the same delivery state, field for field.</summary>
+    public bool IsEquivalentTo(RuntimePostCommitOutboxItem? other) =>
+        other is not null &&
+        StringComparer.Ordinal.Equals(OutboxItemId, other.OutboxItemId) &&
+        Intent.IsEquivalentTo(other.Intent) &&
+        Status == other.Status &&
+        RecordedAt == other.RecordedAt &&
+        AvailableAt == other.AvailableAt &&
+        RetryPolicy.IsEquivalentTo(other.RetryPolicy) &&
+        DeliveryAttemptCount == other.DeliveryAttemptCount &&
+        StringComparer.Ordinal.Equals(DeliveringOwnerId, other.DeliveringOwnerId) &&
+        DeliveryStartedAt == other.DeliveryStartedAt &&
+        DeliveredAt == other.DeliveredAt &&
+        StringComparer.Ordinal.Equals(LastFailureMessage, other.LastFailureMessage) &&
+        RuntimeModelMetadata.AreEqual(Metadata, other.Metadata) &&
+        DeliveryFencingToken == other.DeliveryFencingToken &&
+        DeliveryVisibleAfter == other.DeliveryVisibleAfter;
+
+    /// <summary>
+    /// The idempotency rule for saving a pending item whose identity already exists: the save is a replay only when both
+    /// items are pending and equivalent in every field. Anything else is a conflict, never a silent overwrite.
+    /// </summary>
+    public bool IsEquivalentPendingItem(RuntimePostCommitOutboxItem? other) =>
+        Status == RuntimePostCommitOutboxStatus.Pending &&
+        other is { Status: RuntimePostCommitOutboxStatus.Pending } &&
+        IsEquivalentTo(other);
+
     private static void Validate(
         RuntimePostCommitOutboxStatus status,
         string? deliveringOwnerId,

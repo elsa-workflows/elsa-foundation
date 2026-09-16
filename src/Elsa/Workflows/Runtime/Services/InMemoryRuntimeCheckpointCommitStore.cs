@@ -1,10 +1,8 @@
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
-using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Alterations;
-using System.Globalization;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
@@ -85,6 +83,10 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ArgumentNullException.ThrowIfNull(decision);
         cancellationToken.ThrowIfCancellationRequested();
 
+        // Reserved-key integrity comes before any gate: a fenced commit holds the ownership gate while it applies, and a
+        // write to the ownership record would wait on that same gate forever instead of failing.
+        RuntimeExecutionOwnershipStateId.EnsureNotWritten(commit.StateChanges.Operational);
+
         if (commit.StateChanges.AlterationJobTerminalChange is { } terminal &&
             _alterationStore is InMemoryWorkflowAlterationStore inMemoryAlterations)
         {
@@ -155,7 +157,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         // What remains here depends on the state this store currently holds.
         ValidatePendingOutboxItemsAgainstStore(pendingOutboxItems);
         await ValidateWorkflowTestScopesAsync(commit, cancellationToken);
-        await ValidateIncidentResolutionOutcomesAsync(commit, cancellationToken);
+        await ValidateIncidentChangesAgainstStoreAsync(commit, cancellationToken);
         await ValidateWorkflowDispatchChangesAsync(commit, cancellationToken);
         await ValidateWorkflowDispatchCancellationsAsync(commit, cancellationToken);
         await ValidateAlterationJobTerminalChangeAsync(commit, cancellationToken);
@@ -180,7 +182,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
             try
             {
-                // #386: all outbox validation is front-loaded in ValidatePendingOutboxItems (and commits
+                // #386: all outbox validation is front-loaded in ValidatePendingOutboxItemsAgainstStore (and commits
                 // are serialized by the write gate), so an exception here is a genuine partial-persistence
                 // risk — the projections above have been applied but the commit record/outbox may not be
                 // durably recorded. Only that condition warrants the inconsistent-durability wrapper.
@@ -231,7 +233,9 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             return;
         if (_alterationStore is null)
             throw new InvalidOperationException("A checkpoint carrying alteration-job terminal evidence requires an alteration store.");
-        await _alterationStore.ValidateTerminalJobChangeAsync(change, cancellationToken);
+        var job = await _alterationStore.FindJobAsync(change.JobId, cancellationToken)
+                  ?? throw new KeyNotFoundException($"Alteration job '{change.JobId}' was not found.");
+        WorkflowAlterationTerminalEvidence.Validate(job, change, commit.WorkflowExecutionId);
     }
 
     private async ValueTask ApplyAlterationJobTerminalChangeAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
@@ -257,38 +261,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             commit.WorkflowExecutionId,
             RuntimeExecutionOwnershipStateId.For(commit.WorkflowExecutionId),
             cancellationToken);
-        var currentToken = ReadHighestIssuedToken(state);
-        var current = state?.ExecutionLease;
-        var reason = current is null
-            ? RuntimeFencingRejectionReason.NoActiveLease
-            : current.IsExpired(_timeProvider.GetUtcNow())
-                ? RuntimeFencingRejectionReason.ExpiredLease
-                : RuntimeFencingRejectionReason.StaleToken;
-        if (current is null ||
-            current.IsExpired(_timeProvider.GetUtcNow()) ||
-            !StringComparer.Ordinal.Equals(current.LeaseId, expectedFence.LeaseId) ||
-            !StringComparer.Ordinal.Equals(current.OwnerId, expectedFence.OwnerId) ||
-            current.FencingToken != expectedFence.FencingToken)
-        {
-            throw new RuntimeStaleFencingTokenException(
-                commit.WorkflowExecutionId,
-                expectedFence.FencingToken,
-                currentToken,
-                reason);
-        }
-    }
-
-    private static long ReadHighestIssuedToken(ExecutionLivenessState? state)
-    {
-        if (state is null)
-            return 0;
-        if (state.Metadata.TryGetValue(RuntimeMetadataKeys.OwnershipFencingToken, out var raw) &&
-            long.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var token))
-        {
-            return token;
-        }
-
-        return state.ExecutionLease?.FencingToken ?? 0;
+        RuntimeExecutionFenceValidator.EnsureCurrent(commit.WorkflowExecutionId, expectedFence, state, _timeProvider.GetUtcNow());
     }
 
     private async ValueTask ExecuteWithWorkflowExecutionRootWriteLeaseAsync(
@@ -520,7 +493,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                     if (StringComparer.Ordinal.Equals(followUp.OutboxItemId, completion.Claim.OutboxItemId))
                         throw new InvalidOperationException("A post-commit follow-up cannot replace the claimed outbox item.");
                     if (_state.OutboxItems.TryGetValue(followUp.OutboxItemId, out var existingFollowUp) &&
-                        !PendingOutboxItemsEquivalent(existingFollowUp, followUp))
+                        !existingFollowUp.IsEquivalentPendingItem(followUp))
                     {
                         throw new InvalidOperationException($"Post-commit follow-up item '{followUp.OutboxItemId}' already exists with conflicting state.");
                     }
@@ -591,7 +564,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         {
             foreach (var item in items)
             {
-                if (_state.OutboxItems.TryGetValue(item.OutboxItemId, out var existing) && !IsSamePendingIntent(existing, item))
+                if (_state.OutboxItems.TryGetValue(item.OutboxItemId, out var existing) && !existing.IsEquivalentPendingItem(item))
                     throw new InvalidOperationException($"Post-commit outbox item '{item.OutboxItemId}' already exists with a different intent or status.");
             }
         }
@@ -604,7 +577,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
         if (_state.OutboxItems.TryGetValue(item.OutboxItemId, out var existing))
         {
-            if (IsSamePendingIntent(existing, item))
+            if (existing.IsEquivalentPendingItem(item))
                 return;
 
             throw new InvalidOperationException($"Post-commit outbox item '{item.OutboxItemId}' already exists with a different intent or status.");
@@ -734,9 +707,9 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         {
             if (stateChange.Operation == RuntimeStateChangeOperation.Append)
             {
-                var added = await _incidentStateStore.TryAddAsync(stateChange.State, cancellationToken);
-                if (!added)
-                    throw new InvalidOperationException($"Incident state '{stateChange.State.IncidentId}' already exists for workflow execution '{stateChange.State.WorkflowExecutionId}'.");
+                // The create-only insert is the atomic enforcement; the validation phase already refused a known conflict.
+                if (!await _incidentStateStore.TryAddAsync(stateChange.State, cancellationToken))
+                    throw IncidentStateTransitionValidator.AppendConflict(stateChange.State);
 
                 continue;
             }
@@ -852,23 +825,26 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     }
 
     /// <summary>
-    /// A committed incident resolution outcome is write-once. The rule reads the incident this store currently holds, so
-    /// it stays inside the store's atomic write boundary; the commit's structural rules have already been applied.
+    /// Incident rules that read the incident this store holds: an Append must create it, and an Upsert must not change a
+    /// committed resolution outcome. Checked before any write, inside this store's write gate.
     /// </summary>
-    private async ValueTask ValidateIncidentResolutionOutcomesAsync(
+    private async ValueTask ValidateIncidentChangesAgainstStoreAsync(
         RuntimeCheckpointCommit commit,
         CancellationToken cancellationToken)
     {
         if (_incidentStateStore is null)
             return;
 
-        foreach (var stateChange in commit.StateChanges.Incidents.Where(change => change.Operation == RuntimeStateChangeOperation.Upsert))
+        foreach (var stateChange in commit.StateChanges.Incidents)
         {
             var existing = await _incidentStateStore.FindAsync(
                 stateChange.State.WorkflowExecutionId,
                 stateChange.State.IncidentId,
                 cancellationToken);
-            IncidentStateTransitionValidator.EnsureResolutionOutcomeIsWriteOnce(existing, stateChange.State);
+            if (stateChange.Operation == RuntimeStateChangeOperation.Append)
+                IncidentStateTransitionValidator.EnsureAppendTargetIsAbsent(existing, stateChange.State);
+            else
+                IncidentStateTransitionValidator.EnsureResolutionOutcomeIsWriteOnce(existing, stateChange.State);
         }
     }
 
@@ -903,60 +879,12 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                 "Workflow dispatch cancellation requests require an IWorkflowDispatchCancellationStore.");
         }
 
+        // Resolved here only to refuse an unresolvable request before any write; the cancellation store applies the same
+        // resolution atomically.
         foreach (var request in commit.StateChanges.WorkflowDispatchCancellations)
-        {
-            var existing = await _workflowDispatchStore.FindAsync(request.DispatchId, cancellationToken);
-            if (existing is null)
-                throw new InvalidOperationException($"Workflow dispatch '{request.DispatchId}' was not found for parent cancellation.");
-            if (!StringComparer.Ordinal.Equals(existing.ParentActivityExecutionId, request.ParentActivityExecutionId) ||
-                !StringComparer.Ordinal.Equals(existing.ChildWorkflowExecutionId, request.ChildWorkflowExecutionId))
-            {
-                throw new InvalidOperationException(
-                    $"Workflow dispatch cancellation request '{request.DispatchId}' conflicts with the persisted dispatch identity.");
-            }
-            if (!WorkflowDispatchLifecycle.IsCancellationPropagationEnabled(existing))
-            {
-                throw new InvalidOperationException(
-                    $"Workflow dispatch '{request.DispatchId}' does not permit parent cancellation propagation.");
-            }
-        }
-    }
-
-    private static bool IsSamePendingIntent(RuntimePostCommitOutboxItem existing, RuntimePostCommitOutboxItem item) =>
-        existing.Status == RuntimePostCommitOutboxStatus.Pending
-        && StringComparer.Ordinal.Equals(existing.Intent.IntentId, item.Intent.IntentId)
-        && StringComparer.Ordinal.Equals(existing.Intent.WorkflowExecutionId, item.Intent.WorkflowExecutionId)
-        && StringComparer.Ordinal.Equals(existing.Intent.Kind, item.Intent.Kind)
-        && StringComparer.Ordinal.Equals(existing.Intent.ActivityExecutionId, item.Intent.ActivityExecutionId)
-        && StringComparer.Ordinal.Equals(existing.Intent.IdempotencyKey, item.Intent.IdempotencyKey)
-        && StringComparer.Ordinal.Equals(existing.Intent.DependsOnWaitRegistrationId, item.Intent.DependsOnWaitRegistrationId)
-        && existing.Intent.WaitFailurePolicy == item.Intent.WaitFailurePolicy
-        && PayloadEquals(existing.Intent.Payload, item.Intent.Payload)
-        && MetadataEquals(existing.Intent.Metadata, item.Intent.Metadata);
-
-    private static bool PendingOutboxItemsEquivalent(RuntimePostCommitOutboxItem existing, RuntimePostCommitOutboxItem item) =>
-        IsSamePendingIntent(existing, item) &&
-        existing.RecordedAt == item.RecordedAt &&
-        existing.AvailableAt == item.AvailableAt &&
-        existing.DeliveryAttemptCount == item.DeliveryAttemptCount &&
-        existing.DeliveryFencingToken == item.DeliveryFencingToken &&
-        existing.RetryPolicy.IsEquivalentTo(item.RetryPolicy) &&
-        MetadataEquals(existing.Metadata, item.Metadata);
-
-    private static bool PayloadEquals(System.Text.Json.JsonElement? left, System.Text.Json.JsonElement? right)
-    {
-        if (left.HasValue != right.HasValue)
-            return false;
-
-        return !left.HasValue || StringComparer.Ordinal.Equals(left.Value.GetRawText(), right!.Value.GetRawText());
-    }
-
-    private static bool MetadataEquals(IReadOnlyDictionary<string, string> left, IReadOnlyDictionary<string, string> right)
-    {
-        if (left.Count != right.Count)
-            return false;
-
-        return left.All(entry => right.TryGetValue(entry.Key, out var value) && StringComparer.Ordinal.Equals(entry.Value, value));
+            WorkflowDispatchLifecycle.ResolveParentCancellation(
+                await _workflowDispatchStore.FindAsync(request.DispatchId, cancellationToken),
+                request);
     }
 
     private static bool IsDeliverable(RuntimePostCommitOutboxItem item, RuntimePostCommitOutboxQuery query)

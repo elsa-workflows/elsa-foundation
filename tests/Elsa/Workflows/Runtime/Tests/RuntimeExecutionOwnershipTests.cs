@@ -20,6 +20,28 @@ public sealed class RuntimeExecutionOwnershipTests
         Assert.Throws<ArgumentException>(() => RuntimeExecutionOwnershipStateId.For(" "));
     }
 
+    /// <summary>
+    /// The in-memory ownership gate is shared by every execution, so a checkpoint must not write any execution's ownership
+    /// record, not only its own.
+    /// </summary>
+    [Theory]
+    [InlineData(WorkflowExecutionId)]
+    [InlineData("wfexec-other")]
+    public void OwnershipStateId_RefusesACheckpointWriteToAnyOwnershipRecord(string ownerExecutionId)
+    {
+        var ownership = new ExecutionLivenessState(RuntimeExecutionOwnershipStateId.For(ownerExecutionId), ownerExecutionId, null, null, null, null);
+        var ordinary = new ExecutionLivenessState("operational-1", ownerExecutionId, null, null, null, null);
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            RuntimeExecutionOwnershipStateId.EnsureNotWritten([Change(ordinary), Change(ownership)]));
+
+        Assert.Equal("Checkpoint operational changes cannot overwrite the reserved execution-ownership state.", exception.Message);
+        RuntimeExecutionOwnershipStateId.EnsureNotWritten([Change(ordinary)]);
+    }
+
+    private static RuntimeStateChange<ExecutionLivenessState> Change(ExecutionLivenessState state) =>
+        new(state.OperationalStateId, RuntimeStateChangeOperation.Upsert, state, new Dictionary<string, string>());
+
     [Fact]
     public async Task AcquireAsync_IssuesStrictlyIncreasingFencingTokens()
     {

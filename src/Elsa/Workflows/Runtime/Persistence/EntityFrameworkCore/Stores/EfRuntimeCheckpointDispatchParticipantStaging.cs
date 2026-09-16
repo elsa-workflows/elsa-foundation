@@ -56,28 +56,11 @@ internal static class EfRuntimeCheckpointDispatchParticipantStaging
                 throw new NotSupportedException(
                     "The bounded EF checkpoint slice does not combine a dispatch upsert and cancellation for the same ID.");
 
-            var row = await LoadAsync(context, scope, request.DispatchId, cancellationToken)
-                      ?? throw new InvalidOperationException(
-                          $"Workflow dispatch '{request.DispatchId}' was not found for parent cancellation.");
-            var current = WorkflowDispatchEfSupport.ReadChecked(row, scope, request.DispatchId);
-            if (!StringComparer.Ordinal.Equals(current.ParentActivityExecutionId, request.ParentActivityExecutionId) ||
-                !StringComparer.Ordinal.Equals(current.ChildWorkflowExecutionId, request.ChildWorkflowExecutionId))
-                throw new InvalidOperationException(
-                    $"Workflow dispatch cancellation request '{request.DispatchId}' conflicts with the persisted dispatch identity.");
-            if (!WorkflowDispatchLifecycle.IsCancellationPropagationEnabled(current))
-                throw new InvalidOperationException(
-                    $"Workflow dispatch '{request.DispatchId}' does not permit parent cancellation propagation.");
-
-            WorkflowDispatchRecord? replacement = null;
-            if (current.Status == WorkflowDispatchStatus.Pending &&
-                !WorkflowDispatchLifecycle.WasCancelledBeforeAdmission(current))
-                replacement = WorkflowDispatchLifecycle.CancelBeforeAdmission(current, request.RequestedAt);
-            else if (current.Status == WorkflowDispatchStatus.Started &&
-                     !WorkflowDispatchLifecycle.IsCancellationRequested(current))
-                replacement = WorkflowDispatchLifecycle.MarkCancellationRequested(current, request.RequestedAt);
-
-            if (replacement is not null)
-                WorkflowDispatchEfSupport.Copy(row, replacement, scope, checked(row.Revision + 1));
+            var row = await LoadAsync(context, scope, request.DispatchId, cancellationToken);
+            var current = row is null ? null : WorkflowDispatchEfSupport.ReadChecked(row, scope, request.DispatchId);
+            var resolved = WorkflowDispatchLifecycle.ResolveParentCancellation(current, request).Record;
+            if (!WorkflowDispatchLifecycle.RecordsEqual(current!, resolved))
+                WorkflowDispatchEfSupport.Copy(row!, resolved, scope, checked(row!.Revision + 1));
         }
     }
 

@@ -69,7 +69,7 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
             var outboxItemId = identity.ParentResumeOutboxItemId(commit.CommitId);
             var committed = await _outboxLookupStore.FindAsync(outboxItemId, cancellationToken);
             var existing = intents.SingleOrDefault(intent => StringComparer.Ordinal.Equals(intent.IntentId, identity.ParentResumeIntentId));
-            if (committed is not null && existing is not null && !IntentsEquivalent(committed.Intent, existing))
+            if (committed is not null && existing is not null && !committed.Intent.IsEquivalentTo(existing))
                 throw new InvalidOperationException($"Parent-resume intent '{identity.ParentResumeIntentId}' conflicts with its committed outbox item.");
 
             RuntimePostCommitIntent intent;
@@ -102,7 +102,7 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
                     safeOutputs ?? [],
                     incidentIds ?? [],
                     commit.Checkpoint.OccurredAt);
-                if (existing is not null && !IntentsEquivalent(canonical, existing))
+                if (existing is not null && !canonical.IsEquivalentTo(existing))
                     throw new InvalidOperationException($"Parent-resume intent '{identity.ParentResumeIntentId}' conflicts with the policy-safe terminal result.");
 
                 intent = existing ?? canonical;
@@ -247,27 +247,4 @@ public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommi
         };
         return workflowStatus is WorkflowExecutionStatus.Completed or WorkflowExecutionStatus.Faulted or WorkflowExecutionStatus.Cancelled;
     }
-
-    private static bool IntentsEquivalent(RuntimePostCommitIntent left, RuntimePostCommitIntent right) =>
-        StringComparer.Ordinal.Equals(left.IntentId, right.IntentId) &&
-        StringComparer.Ordinal.Equals(left.WorkflowExecutionId, right.WorkflowExecutionId) &&
-        StringComparer.Ordinal.Equals(left.Kind, right.Kind) &&
-        left.RecordedAt == right.RecordedAt &&
-        StringComparer.Ordinal.Equals(left.ActivityExecutionId, right.ActivityExecutionId) &&
-        StringComparer.Ordinal.Equals(left.IdempotencyKey, right.IdempotencyKey) &&
-        StringComparer.Ordinal.Equals(left.DependsOnWaitRegistrationId, right.DependsOnWaitRegistrationId) &&
-        left.WaitFailurePolicy == right.WaitFailurePolicy &&
-        PayloadsEqual(left.Payload, right.Payload) &&
-        DictionariesEqual(left.Metadata, right.Metadata);
-
-    private static bool PayloadsEqual(JsonElement? left, JsonElement? right) =>
-        left is null
-            ? right is null
-            : right is not null && JsonElement.DeepEquals(left.Value, right.Value);
-
-    private static bool DictionariesEqual(
-        IReadOnlyDictionary<string, string> left,
-        IReadOnlyDictionary<string, string> right) =>
-        left.Count == right.Count &&
-        left.All(pair => right.TryGetValue(pair.Key, out var value) && StringComparer.Ordinal.Equals(pair.Value, value));
 }

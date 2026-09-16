@@ -234,22 +234,11 @@ public sealed class InMemoryWorkflowTestScopeStore :
             RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)));
         if (_state.OutboxItems.TryGetValue(outboxItemId, out var existing))
         {
-            if (!Equivalent(existing.Intent, intent))
+            if (!existing.Intent.IsEquivalentTo(intent))
                 throw new InvalidOperationException("The workflow test-scope cancellation outbox item conflicts with committed responsibility.");
             return;
         }
 
         _state.OutboxItems.Add(outboxItemId, item);
     }
-
-    private static bool Equivalent(RuntimePostCommitIntent left, RuntimePostCommitIntent right) =>
-        StringComparer.Ordinal.Equals(left.IntentId, right.IntentId) &&
-        StringComparer.Ordinal.Equals(left.WorkflowExecutionId, right.WorkflowExecutionId) &&
-        StringComparer.Ordinal.Equals(left.Kind, right.Kind) &&
-        left.RecordedAt == right.RecordedAt &&
-        StringComparer.Ordinal.Equals(left.ActivityExecutionId, right.ActivityExecutionId) &&
-        StringComparer.Ordinal.Equals(left.IdempotencyKey, right.IdempotencyKey) &&
-        Nullable.Equals(left.Payload, right.Payload) &&
-        left.Metadata.Count == right.Metadata.Count &&
-        left.Metadata.All(item => right.Metadata.TryGetValue(item.Key, out var value) && StringComparer.Ordinal.Equals(item.Value, value));
 }

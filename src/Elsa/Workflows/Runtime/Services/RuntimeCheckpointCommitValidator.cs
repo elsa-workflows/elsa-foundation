@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services.Coalescing;
@@ -19,9 +18,12 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// </para>
 /// <para>
 /// What deliberately does not live here: <c>StateId</c> identity for the change-set collections, which
-/// <see cref="RuntimeCheckpointStateChangeSet"/> enforces on construction; rules that read current persisted state
-/// (write-once incident outcomes, dispatch transitions, cancellation resolution, test-scope admission, alteration claim
-/// fences), which a store enforces inside its own atomic boundary; and provider storage limits or capability checks.
+/// <see cref="RuntimeCheckpointStateChangeSet"/> enforces on construction; and rules that read current persisted state.
+/// Those stay inside each store's atomic boundary, but each is one shared function every store calls on the state it read
+/// there: <see cref="IncidentStateTransitionValidator"/>, <see cref="WorkflowDispatchLifecycle"/>,
+/// <see cref="RuntimeExecutionFenceValidator"/>, <see cref="ConsumedSchedulerWorkItem.IsFencedBy"/>,
+/// <see cref="RuntimePostCommitOutboxItem.IsEquivalentPendingItem"/>, and
+/// <c>WorkflowAlterationTerminalEvidence</c>. Provider storage limits and capability checks stay in the provider.
 /// </para>
 /// </remarks>
 public static class RuntimeCheckpointCommitValidator
@@ -70,9 +72,7 @@ public static class RuntimeCheckpointCommitValidator
         ValidateChanges(commit, changes.Bookmarks, "Bookmark", state => state.WorkflowExecutionId, UpsertOrDelete);
 
         ValidateChanges(commit, changes.Operational, "Operational", state => state.WorkflowExecutionId, UpsertOnly);
-        var ownershipStateId = RuntimeExecutionOwnershipStateId.For(commit.WorkflowExecutionId);
-        if (changes.Operational.Any(change => StringComparer.Ordinal.Equals(change.StateId, ownershipStateId)))
-            throw new InvalidOperationException("Checkpoint operational changes cannot overwrite the reserved execution-ownership state.");
+        RuntimeExecutionOwnershipStateId.EnsureNotWritten(changes.Operational);
 
         ValidatePostCommitOutbox(commit);
         ValidateActivityScopeCleanups(commit);
@@ -99,10 +99,6 @@ public static class RuntimeCheckpointCommitValidator
     private static void ValidatePostCommitOutbox(RuntimeCheckpointCommit commit)
     {
         var outbox = commit.StateChanges.PostCommitOutbox;
-
-        // Unlike state, an outbox item is not required to belong to the checkpoint's workflow execution: its intent names
-        // the execution the work is delivered to. A waited child's terminal checkpoint carries the parent-resume intent
-        // for its parent (WorkflowDispatchCompletionEnricher), so membership cannot be a structural rule here.
         ValidateOperations(outbox, "Post-commit outbox", UpsertOnly);
 
         var seen = new Dictionary<string, RuntimePostCommitOutboxItem>(StringComparer.Ordinal);
@@ -110,8 +106,9 @@ public static class RuntimeCheckpointCommitValidator
         {
             if (change.State.Status != RuntimePostCommitOutboxStatus.Pending)
                 throw new InvalidOperationException("Only pending post-commit outbox items can be saved as pending.");
-            if (seen.TryGetValue(change.StateId, out var duplicate) && !PendingItemsEquivalent(duplicate, change.State))
+            if (seen.TryGetValue(change.StateId, out var duplicate) && !duplicate.IsEquivalentPendingItem(change.State))
                 throw new InvalidOperationException($"Post-commit outbox item '{change.StateId}' occurs more than once with conflicting content.");
+            RequireDeliverableFromThisCheckpoint(commit, change.State);
             seen[change.StateId] = change.State;
         }
 
@@ -125,7 +122,7 @@ public static class RuntimeCheckpointCommitValidator
         foreach (var intent in commit.PostCommitIntents)
         {
             var id = RuntimePostCommitOutboxIdentity.CreateLogicalValue(commit.CommitId, intent.IntentId);
-            if (intents.TryGetValue(id, out var duplicate) && !IntentsEquivalent(duplicate, intent))
+            if (intents.TryGetValue(id, out var duplicate) && !duplicate.IsEquivalentTo(intent))
                 throw new InvalidOperationException($"Post-commit intent '{id}' occurs more than once with conflicting content.");
             intents[id] = intent;
         }
@@ -135,9 +132,30 @@ public static class RuntimeCheckpointCommitValidator
 
         foreach (var change in outbox)
         {
-            if (!IntentsEquivalent(intents[change.StateId], change.State.Intent))
+            if (!intents[change.StateId].IsEquivalentTo(change.State.Intent))
                 throw new InvalidOperationException($"Post-commit outbox item '{change.StateId}' does not match its checkpoint intent.");
         }
+    }
+
+    /// <summary>
+    /// An outbox item's intent names the execution its work is delivered to. That is the checkpoint's own execution, with
+    /// one exception: a child's terminal checkpoint may carry work for its parent, but only when the same commit carries
+    /// the terminal dispatch record that links that parent to this child. The rule keys on that linkage, not on an intent
+    /// kind, so the runtime stays independent of the activities that emit such intents.
+    /// </summary>
+    private static void RequireDeliverableFromThisCheckpoint(RuntimeCheckpointCommit commit, RuntimePostCommitOutboxItem item)
+    {
+        var target = item.Intent.WorkflowExecutionId;
+        if (StringComparer.Ordinal.Equals(target, commit.WorkflowExecutionId))
+            return;
+
+        var linked = commit.StateChanges.WorkflowDispatches.Any(change =>
+            WorkflowDispatchLifecycle.IsTerminal(change.State.Status) &&
+            StringComparer.Ordinal.Equals(change.State.ParentWorkflowExecutionId, target) &&
+            StringComparer.Ordinal.Equals(change.State.ChildWorkflowExecutionId, commit.WorkflowExecutionId));
+        if (!linked)
+            throw new InvalidOperationException(
+                $"Post-commit outbox item '{item.OutboxItemId}' targets workflow execution '{target}', which is neither the checkpoint workflow execution '{commit.WorkflowExecutionId}' nor the parent of a terminal workflow dispatch for it in this commit.");
     }
 
     private static void ValidateActivityScopeCleanups(RuntimeCheckpointCommit commit)
@@ -249,40 +267,4 @@ public static class RuntimeCheckpointCommitValidator
         if (attempt is not null && provenance.Attempt is not null && attempt != provenance.Attempt)
             throw new InvalidOperationException($"{kind} Attempt must match its scheduling provenance when both are present.");
     }
-
-    private static bool PendingItemsEquivalent(RuntimePostCommitOutboxItem left, RuntimePostCommitOutboxItem right) =>
-        StringComparer.Ordinal.Equals(left.OutboxItemId, right.OutboxItemId) &&
-        IntentsEquivalent(left.Intent, right.Intent) &&
-        left.Status == right.Status &&
-        left.RecordedAt == right.RecordedAt &&
-        left.AvailableAt == right.AvailableAt &&
-        left.RetryPolicy.IsEquivalentTo(right.RetryPolicy) &&
-        left.DeliveryAttemptCount == right.DeliveryAttemptCount &&
-        StringComparer.Ordinal.Equals(left.DeliveringOwnerId, right.DeliveringOwnerId) &&
-        left.DeliveryStartedAt == right.DeliveryStartedAt &&
-        left.DeliveredAt == right.DeliveredAt &&
-        StringComparer.Ordinal.Equals(left.LastFailureMessage, right.LastFailureMessage) &&
-        MetadataEquals(left.Metadata, right.Metadata) &&
-        left.DeliveryFencingToken == right.DeliveryFencingToken &&
-        left.DeliveryVisibleAfter == right.DeliveryVisibleAfter;
-
-    private static bool IntentsEquivalent(RuntimePostCommitIntent left, RuntimePostCommitIntent right) =>
-        StringComparer.Ordinal.Equals(left.IntentId, right.IntentId) &&
-        StringComparer.Ordinal.Equals(left.WorkflowExecutionId, right.WorkflowExecutionId) &&
-        StringComparer.Ordinal.Equals(left.Kind, right.Kind) &&
-        left.RecordedAt == right.RecordedAt &&
-        StringComparer.Ordinal.Equals(left.ActivityExecutionId, right.ActivityExecutionId) &&
-        StringComparer.Ordinal.Equals(left.IdempotencyKey, right.IdempotencyKey) &&
-        StringComparer.Ordinal.Equals(left.DependsOnWaitRegistrationId, right.DependsOnWaitRegistrationId) &&
-        left.WaitFailurePolicy == right.WaitFailurePolicy &&
-        PayloadEquals(left.Payload, right.Payload) &&
-        MetadataEquals(left.Metadata, right.Metadata);
-
-    private static bool PayloadEquals(JsonElement? left, JsonElement? right) =>
-        left.HasValue == right.HasValue &&
-        (!left.HasValue || StringComparer.Ordinal.Equals(left.Value.GetRawText(), right!.Value.GetRawText()));
-
-    private static bool MetadataEquals(IReadOnlyDictionary<string, string> left, IReadOnlyDictionary<string, string> right) =>
-        left.Count == right.Count &&
-        left.All(entry => right.TryGetValue(entry.Key, out var value) && StringComparer.Ordinal.Equals(entry.Value, value));
 }

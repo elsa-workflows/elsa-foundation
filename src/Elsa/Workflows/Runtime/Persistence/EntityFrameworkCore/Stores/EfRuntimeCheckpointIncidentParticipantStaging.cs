@@ -57,7 +57,7 @@ internal static class EfRuntimeCheckpointIncidentParticipantStaging
         }
 
         if (change.Operation == RuntimeStateChangeOperation.Append)
-            throw new InvalidOperationException($"Incident '{state.IncidentId}' already exists and cannot be appended again.");
+            IncidentStateTransitionValidator.EnsureAppendTargetIsAbsent(existing, state);
 
         IncidentStateTransitionValidator.EnsureResolutionOutcomeIsWriteOnce(existing, state);
         EfIncidentStateStore.Copy(row, state, scope, checked(row.Revision + 1));

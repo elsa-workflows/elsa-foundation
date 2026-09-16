@@ -1,5 +1,4 @@
 using Elsa.Persistence.EntityFramework;
-using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -283,15 +282,17 @@ internal static class EfRuntimeCheckpointParticipantStaging
             scope,
             consumed.WorkflowExecutionId,
             consumed.WorkItemId);
-        if (existing.ClaimOwnerId is null ||
-            !StringComparer.Ordinal.Equals(existing.ClaimOwnerId, ownerKey) ||
-            existing.ClaimToken != consumed.FencingToken)
+        if (!consumed.IsFencedBy(
+                existing.ClaimOwnerId is null ? null : EfRuntimeOperationalStoreSupport.Decode(existing.ClaimOwnerId),
+                existing.ClaimToken))
         {
             throw new RuntimeSchedulerWorkConsumeConflictException(consumed.WorkflowExecutionId, consumed.WorkItemId);
         }
 
-        // Do not include Revision: an in-flight renewal is allowed to replay the same owner/token consume. A
-        // successor reclaim changes ClaimToken and is rejected by this atomic predicate.
+        // The conditional delete below is the atomic form of ConsumedSchedulerWorkItem.IsFencedBy: the same owner and
+        // token predicate, evaluated by the provider in the write itself. Do not include Revision: an in-flight renewal
+        // is allowed to replay the same owner/token consume. A successor reclaim changes ClaimToken and is rejected by this
+        // atomic predicate.
         var deleted = await context.SchedulerWorkItems
             .Where(row =>
                 row.Id == id &&
@@ -324,49 +325,11 @@ internal static class EfRuntimeCheckpointParticipantStaging
             candidate.OperationalStateId == EfRuntimeOperationalStoreSupport.Encode(operationalStateId),
             cancellationToken);
 
-        if (row is null)
-            throw new RuntimeStaleFencingTokenException(
-                workflowExecutionId,
-                expected.FencingToken,
-                0,
-                RuntimeFencingRejectionReason.NoActiveLease);
-
-        var state = EfExecutionLivenessStateStore.Read(row, scope, workflowExecutionId, operationalStateId);
-        var lease = state.ExecutionLease;
-        var currentToken = lease?.FencingToken ?? ReadHighestIssuedToken(state);
-        if (lease is null)
-            throw new RuntimeStaleFencingTokenException(
-                workflowExecutionId,
-                expected.FencingToken,
-                currentToken,
-                RuntimeFencingRejectionReason.NoActiveLease);
-        if (lease.IsExpired(timeProvider.GetUtcNow()))
-            throw new RuntimeStaleFencingTokenException(
-                workflowExecutionId,
-                expected.FencingToken,
-                currentToken,
-                RuntimeFencingRejectionReason.ExpiredLease);
-        if (!StringComparer.Ordinal.Equals(lease.LeaseId, expected.LeaseId) ||
-            !StringComparer.Ordinal.Equals(lease.OwnerId, expected.OwnerId) ||
-            lease.FencingToken != expected.FencingToken)
-        {
-            throw new RuntimeStaleFencingTokenException(
-                workflowExecutionId,
-                expected.FencingToken,
-                currentToken,
-                RuntimeFencingRejectionReason.StaleToken);
-        }
+        var state = row is null ? null : EfExecutionLivenessStateStore.Read(row, scope, workflowExecutionId, operationalStateId);
+        RuntimeExecutionFenceValidator.EnsureCurrent(workflowExecutionId, expected, state, timeProvider.GetUtcNow());
 
         // Revision is the provider-neutral optimistic fence. Touching it in the same transaction makes a concurrent
         // lease transition fail the whole checkpoint instead of allowing state and marker rows to commit together.
-        row.Revision = checked(row.Revision + 1);
-    }
-
-    private static long ReadHighestIssuedToken(ExecutionLivenessState state)
-    {
-        if (state.Metadata.TryGetValue(RuntimeMetadataKeys.OwnershipFencingToken, out var raw) &&
-            long.TryParse(raw, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var token))
-            return token;
-        return state.ExecutionLease?.FencingToken ?? 0;
+        row!.Revision = checked(row.Revision + 1);
     }
 }

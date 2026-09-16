@@ -383,6 +383,24 @@ public sealed class RuntimePostCommitIntent
     public bool IsWaitDependent => !string.IsNullOrWhiteSpace(DependsOnWaitRegistrationId);
 
     /// <summary>
+    /// Whether <paramref name="other"/> is the same logical intent. Payloads compare as JSON values, not text: an intent
+    /// read back from durable storage carries a re-serialized payload whose whitespace and string escaping can differ
+    /// from the original, and a text comparison would report that replay as a conflict.
+    /// </summary>
+    public bool IsEquivalentTo(RuntimePostCommitIntent? other) =>
+        other is not null &&
+        StringComparer.Ordinal.Equals(IntentId, other.IntentId) &&
+        StringComparer.Ordinal.Equals(WorkflowExecutionId, other.WorkflowExecutionId) &&
+        StringComparer.Ordinal.Equals(Kind, other.Kind) &&
+        RecordedAt == other.RecordedAt &&
+        StringComparer.Ordinal.Equals(ActivityExecutionId, other.ActivityExecutionId) &&
+        StringComparer.Ordinal.Equals(IdempotencyKey, other.IdempotencyKey) &&
+        StringComparer.Ordinal.Equals(DependsOnWaitRegistrationId, other.DependsOnWaitRegistrationId) &&
+        WaitFailurePolicy == other.WaitFailurePolicy &&
+        (Payload is { } payload ? other.Payload is { } otherPayload && JsonElement.DeepEquals(payload, otherPayload) : other.Payload is null) &&
+        RuntimeModelMetadata.AreEqual(Metadata, other.Metadata);
+
+    /// <summary>
     /// In-process-only conduit (spec 109): the already-materialized <see cref="RuntimeSchedulerWorkItem"/> this
     /// <c>EnqueueSchedulerWork</c> intent's <see cref="Payload"/> was serialized from. Set by
     /// <c>SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent</c> so the checkpoint committer can hand it to the

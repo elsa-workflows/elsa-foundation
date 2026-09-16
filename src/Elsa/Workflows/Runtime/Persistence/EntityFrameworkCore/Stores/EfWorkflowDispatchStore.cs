@@ -299,26 +299,16 @@ public sealed class EfWorkflowDispatchStore(
         var scope = RequireScope();
         for (var attempt = 0; attempt < MaxTransitionAttempts; attempt++)
         {
-            var row = await LoadAsync(scope, request.DispatchId, tracking: true, cancellationToken)
-                      ?? throw new InvalidOperationException($"Workflow dispatch '{request.DispatchId}' was not found for parent cancellation.");
-            var current = Read(row, scope, request.DispatchId);
-            ValidateCancellationIdentity(current, request);
-            if (WorkflowDispatchLifecycle.IsTerminal(current.Status))
-                return new(WorkflowDispatchCancellationDisposition.TerminalUnchanged, current);
-
-            var candidate = current.Status == WorkflowDispatchStatus.Pending
-                ? WorkflowDispatchLifecycle.CancelBeforeAdmission(current, request.RequestedAt)
-                : WorkflowDispatchLifecycle.MarkCancellationRequested(current, request.RequestedAt);
-            var disposition = current.Status == WorkflowDispatchStatus.Pending
-                ? WorkflowDispatchCancellationDisposition.AppliedBeforeAdmission
-                : WorkflowDispatchCancellationDisposition.CancellationRequestedAfterAdmission;
-            if (WorkflowDispatchLifecycle.RecordsEqual(current, candidate))
-                return new(disposition, current);
-            WorkflowDispatchEfSupport.Copy(row, candidate, scope, checked(row.Revision + 1));
+            var row = await LoadAsync(scope, request.DispatchId, tracking: true, cancellationToken);
+            var current = row is null ? null : Read(row, scope, request.DispatchId);
+            var result = WorkflowDispatchLifecycle.ResolveParentCancellation(current, request);
+            if (WorkflowDispatchLifecycle.RecordsEqual(current!, result.Record))
+                return result;
+            WorkflowDispatchEfSupport.Copy(row!, result.Record, scope, checked(row!.Revision + 1));
             try
             {
                 await _context.SaveChangesAsync(cancellationToken);
-                return new(disposition, candidate);
+                return result;
             }
             catch (DbUpdateConcurrencyException)
             {
@@ -431,14 +421,6 @@ public sealed class EfWorkflowDispatchStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(dispatchId);
         if (dispatchId.Length > RuntimeWorkflowDispatchEfModule.IdentityMaximumLength)
             throw new ArgumentException($"A workflow dispatch ID cannot exceed {RuntimeWorkflowDispatchEfModule.IdentityMaximumLength} UTF-16 code units.", nameof(dispatchId));
-    }
-
-    private static void ValidateCancellationIdentity(WorkflowDispatchRecord record, WorkflowDispatchCancellationRequest request)
-    {
-        if (!StringComparer.Ordinal.Equals(record.ParentWorkflowExecutionId, request.ParentWorkflowExecutionId) ||
-            !StringComparer.Ordinal.Equals(record.ParentActivityExecutionId, request.ParentActivityExecutionId) ||
-            !StringComparer.Ordinal.Equals(record.ChildWorkflowExecutionId, request.ChildWorkflowExecutionId))
-            throw new InvalidOperationException($"Workflow dispatch cancellation identity does not match '{request.DispatchId}'.");
     }
 
     private async ValueTask RollbackAndDetachAsync(

@@ -152,7 +152,7 @@ public sealed class EfWorkflowTestScopeCleanupStore(
                             outboxRow,
                             accessScope,
                             outboxItem.OutboxItemId);
-                        if (!EfRuntimePostCommitOutboxStore.PendingItemsEquivalent(existing, outboxItem))
+                        if (!existing.IsEquivalentPendingItem(outboxItem))
                         {
                             throw new InvalidOperationException(
                                 "The workflow test-scope cancellation outbox item conflicts with committed responsibility.");

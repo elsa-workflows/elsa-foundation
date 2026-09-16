@@ -109,7 +109,8 @@ public sealed class EfWorkflowDispatchStoreTests
         await using var database = await TestDatabase.CreateAsync();
         await using var context = database.Open();
         var store = new EfWorkflowDispatchStore(context, new FixedAccessor("tenant-a"));
-        var pending = Pending("parent-a", "activity-a");
+        // Parent cancellation propagates only to a waited child.
+        var pending = Pending("parent-a", "activity-a", mode: WorkflowDispatchMode.WaitForCompletion);
         await store.SaveAsync(pending);
         var request = new WorkflowDispatchCancellationRequest(pending.DispatchId, pending.ParentWorkflowExecutionId, pending.ParentActivityExecutionId, pending.ChildWorkflowExecutionId, Now.AddMinutes(1));
         var cancelled = await store.ApplyCancellationAsync(request);
@@ -252,8 +253,9 @@ public sealed class EfWorkflowDispatchStoreTests
         await using var context = database.Open(interceptors: interceptor);
         var access = new FixedAccessor("tenant-a");
         var store = new EfWorkflowDispatchStore(context, access);
-        var first = Pending("parent-delete-first", "activity-delete-first");
-        var second = Pending("parent-delete-second", "activity-delete-second");
+        // Parent cancellation propagates only to a waited child.
+        var first = Pending("parent-delete-first", "activity-delete-first", mode: WorkflowDispatchMode.WaitForCompletion);
+        var second = Pending("parent-delete-second", "activity-delete-second", mode: WorkflowDispatchMode.WaitForCompletion);
         await store.SaveAsync(first);
         await store.SaveAsync(second);
         var firstCancelled = await store.ApplyCancellationAsync(new WorkflowDispatchCancellationRequest(

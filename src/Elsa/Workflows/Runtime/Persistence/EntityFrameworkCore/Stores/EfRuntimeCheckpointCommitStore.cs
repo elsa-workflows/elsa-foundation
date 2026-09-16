@@ -3,6 +3,7 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -41,8 +42,9 @@ public sealed class EfRuntimeCheckpointCommitStore(
         var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, commit.CommitId);
 
         // The commit's structural rules were applied by RuntimeCheckpointCommitValidator in the application layer before
-        // the commit reached this store. What is checked here is only this provider's storage limits and capability,
-        // still before marker reads, transaction creation, or any other provider I/O.
+        // the commit reached this store. What is checked here is only reserved-key integrity and this provider's storage
+        // limits and capability, still before marker reads, transaction creation, or any other provider I/O.
+        RuntimeExecutionOwnershipStateId.EnsureNotWritten(commit.StateChanges.Operational);
         ValidateStorageLimits(commit);
         ValidateThinSlice(commit);
         if (commit.StateChanges.WorkflowExecution is { } workflowExecution)
