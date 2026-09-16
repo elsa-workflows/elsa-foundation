@@ -17,6 +17,7 @@ This docs library is the knowledge lookup layer for `elsa-foundation`. Prefer th
 
 - [Docker & compose](docker.md) - production image for Elsa.Workbench plus the PostgreSQL + Elsa.Workbench + Elsa Studio reference stack.
 - [Docker Hub quickstart](docker-hub-quickstart.md) - run the prebuilt Docker Hub images with plain `docker run`, supply a custom `shells.json`, and understand how Studio feature toggles persist.
+- [Foundation host package feeds](foundation-host-feeds.md) - pointing `Elsa.Foundation.Host` at a directory feed or a remote NuGet feed, and why a wildcard include pattern yields nothing on a remote one.
 - [Seams and bridges](seams.md) - worked activities/workflows boundary example.
 - [Serialization rule](serialization.md) - canonical payload-serialization rule and exceptions.
 - [Durable resumption](runtime-durable-resumption.md) - durable storage vs durable resumption, crash windows A/B/C, and the at-least-once/at-most-once asymmetry.

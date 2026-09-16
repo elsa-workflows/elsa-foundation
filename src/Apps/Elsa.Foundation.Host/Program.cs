@@ -22,8 +22,12 @@ var nuplaneConfiguration = configuration.GetSection("Nuplane");
 // ---------------------------------------------------------------------------------------------------------
 // Nuplane — the package feed and runtime assembly loader that supplies feature assemblies to CShells.
 // ---------------------------------------------------------------------------------------------------------
-// * AddDirectoryFeedsFromConfiguration reads Nuplane:Setup:Feeds. A feed with Directory:Watch=true installs
-//   the folder listener that reconciles the package set whenever the drop-folder changes.
+// * AddNuplane itself reads Nuplane:Setup:Feeds and registers every entry carrying a ServiceIndex as a remote
+//   NuGet feed. Remote feeds need no call here; see docs/foundation-host-feeds.md. Note that a remote feed's
+//   IncludePatterns must name package ids literally — a wildcard contributes nothing and does so silently.
+// * AddDirectoryFeedsFromConfiguration translates the entries carrying a DirectoryPath instead. It is a separate
+//   call only because the directory source ships in its own package, which AddNuplane cannot reach. A feed with
+//   Directory:Watch=true installs the folder listener that reconciles the package set when the drop-folder changes.
 // * AutoloadPackages installs the assembly-loading subsystem (IPackageAssemblyCatalog) that
 //   NuplaneAssemblyProvider hands to CShells for feature discovery.
 builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
