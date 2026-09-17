@@ -28,4 +28,8 @@
     <ProjectReference Include="../../../../../../../src/Elsa/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->
+    <Compile Include="../../../../../Persistence/EntityFramework/Tests/UnorderedRowLimitGuard.cs" Link="UnorderedRowLimitGuard.cs" />
+  </ItemGroup>
 </Project>

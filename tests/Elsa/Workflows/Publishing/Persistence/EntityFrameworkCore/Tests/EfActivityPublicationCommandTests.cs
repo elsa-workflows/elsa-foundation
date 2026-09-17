@@ -35,11 +35,7 @@ public sealed class EfActivityPublicationCommandTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         publishing = await SqliteTestDatabase.CreateAsync<PublishingSnapshotReviewSqliteDbContext>(options => new(options));
-        // Publication runs the design module's duplicate probes. EF reports a Skip or Take without an OrderBy only as
-        // query-time warning 10102 when a query first compiles, so the design database raises it as an error.
-        design = await SqliteTestDatabase.CreateAsync<ActivitiesDesignSqliteDbContext>(
-            options => new(options),
-            options => options.ConfigureWarnings(warnings => warnings.Throw(CoreEventId.RowLimitingOperationWithoutOrderByWarning)));
+        design = await SqliteTestDatabase.CreateAsync<ActivitiesDesignSqliteDbContext>(options => new(options));
         runtime = await SqliteTestDatabase.CreateAsync<BookmarkStateSqliteDbContext>(options => new(options));
         await SeedAsync("definition-1", "draft-1");
     }

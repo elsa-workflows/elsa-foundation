@@ -93,6 +93,7 @@ public sealed class EfPublicationPolicyStore(
         var candidates = await context.Policies.AsNoTracking()
             .Where(candidate => candidate.TenantIdHash == EfPublishingStoreSupport.TenantHash(tenantId) &&
                                 candidate.PolicyKeyHash == EfPublishingStoreSupport.Hash(key))
+            .OrderBy(candidate => candidate.Id)
             .Take(2)
             .ToArrayAsync(cancellationToken);
         if (candidates.Length == 0)

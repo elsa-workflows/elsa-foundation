@@ -18,4 +18,10 @@
     <ProjectReference Include="../../../../../../../src/Elsa/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->
+    <Compile Include="../../../../../Persistence/EntityFramework/Tests/UnorderedRowLimitGuard.cs" Link="UnorderedRowLimitGuard.cs" />
+  </ItemGroup>
+
 </Project>

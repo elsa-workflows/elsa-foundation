@@ -20,8 +20,10 @@ public sealed class EfExecutionPlacementStore(
 {
     // Pinned: EfExecutionPlacementStoreTests asserts that claim and release contention give up after 8 attempts.
     private const int MaxCasAttempts = 8;
-    private static readonly EfWriteRetry ClaimRetry = new(MaxCasAttempts, exception => IsProviderConflict(exception, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey | EfWriteConflict.Transient));
-    private static readonly EfWriteRetry ReleaseRetry = new(MaxCasAttempts, exception => IsProviderConflict(exception, EfWriteConflict.Concurrency | EfWriteConflict.Transient));
+    // The shared classifier finds a transient conflict anywhere in the exception chain, as the command transport's does.
+    // SQL Server's default execution strategy raises a deadlock as an InvalidOperationException wrapping the provider error.
+    private static readonly EfWriteRetry ClaimRetry = new(MaxCasAttempts, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey | EfWriteConflict.Transient);
+    private static readonly EfWriteRetry ReleaseRetry = new(MaxCasAttempts, EfWriteConflict.Concurrency | EfWriteConflict.Transient);
 
     /// <inheritdoc/>
     /// <exception cref="ExecutionPlacementEntityFrameworkPersistenceException">The EF provider cannot complete the lookup.</exception>
@@ -215,10 +217,6 @@ public sealed class EfExecutionPlacementStore(
             exception => IsPersistenceBoundaryFailure(exception) ? NormalizeProviderFailure(operation, workflowExecutionId, exception) : null,
             lastContention => ContentionFailure(operation, workflowExecutionId, lastContention!),
             cancellationToken);
-
-    // Placement retries only conflicts raised as provider or update exceptions, never ones wrapped in another exception type.
-    private static bool IsProviderConflict(Exception exception, EfWriteConflict conflicts) =>
-        exception is DbUpdateException or DbException && EfRelationalExceptionClassifier.IsWriteConflict(exception, conflicts);
 
     private string RequireScope() => accessContextAccessor.Current.RequireScope().Value;
 

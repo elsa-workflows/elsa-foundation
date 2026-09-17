@@ -131,6 +131,7 @@ public sealed class EfPublicationProjectionIntentStore(
         var candidates = await context.ProjectionIntents.AsNoTracking()
             .Where(row => row.TenantIdHash == EfPublishingStoreSupport.TenantHash(tenantId) &&
                           row.IntentIdHash == EfPublishingStoreSupport.Hash(intentId))
+            .OrderBy(row => row.Id)
             .Take(2)
             .ToArrayAsync(cancellationToken);
         if (candidates.Length == 0)

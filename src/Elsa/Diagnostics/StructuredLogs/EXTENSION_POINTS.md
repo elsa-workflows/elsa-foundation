@@ -1,6 +1,6 @@
 # Extension points — Diagnostics: Structured Logs domain
 
-The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Diagnostics.StructuredLogs` — the server feature that captures host log events into an in-memory store by default and exposes them over HTTP + Server-Sent Events. All seams are **overridable `.Core` contracts**; there are no contributor interfaces or published events in v1.
+The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Diagnostics.StructuredLogs` — the server feature that captures the log events of the shell that enables it, not the root host's loggers (see the [README's capture scope](README.md#capture-scope-the-shells-loggers-not-the-hosts)), into an in-memory store by default and exposes them over HTTP + Server-Sent Events. All seams are **overridable `.Core` contracts**; there are no contributor interfaces or published events in v1.
 
 The capture/serve pipeline is decomposed into three single-responsibility roles so a durable backend can replace just one of them:
 

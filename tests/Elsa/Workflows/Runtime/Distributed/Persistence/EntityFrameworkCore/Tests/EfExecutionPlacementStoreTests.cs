@@ -16,6 +16,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tes
 public sealed class EfExecutionPlacementStoreTests
 {
     private static readonly DateTimeOffset Now = new(2026, 9, 13, 10, 0, 0, TimeSpan.Zero);
+    private const int Deadlock = 1205;
 
     [Fact]
     public async Task Round_trip_scope_isolation_claim_renew_takeover_release_and_restart()
@@ -386,7 +387,7 @@ public sealed class EfExecutionPlacementStoreTests
     [Fact]
     public async Task Claim_contention_exhaustion_is_typed_bounded_and_leaves_the_context_reusable()
     {
-        var interceptor = new AlwaysFailConcurrencyInterceptor();
+        var interceptor = new FailingSaveInterceptor(Contention);
         await using var fixture = await Fixture.CreateAsync("scope-a", interceptor);
 
         var failure = await Assert.ThrowsAsync<ExecutionPlacementEntityFrameworkPersistenceException>(() =>
@@ -405,7 +406,7 @@ public sealed class EfExecutionPlacementStoreTests
     {
         await using var fixture = await Fixture.CreateAsync("scope-a");
         var lease = (await fixture.Store.TryClaimAsync(Claim("node-a", "wf-release-contention"), Now)).Lease;
-        var interceptor = new AlwaysFailConcurrencyInterceptor();
+        var interceptor = new FailingSaveInterceptor(Contention);
         await using var contender = await fixture.ReopenAsync("scope-a", interceptor);
 
         var failure = await Assert.ThrowsAsync<ExecutionPlacementEntityFrameworkPersistenceException>(() =>
@@ -418,6 +419,70 @@ public sealed class EfExecutionPlacementStoreTests
         Assert.Empty(contender.Context.ChangeTracker.Entries());
         AssertLeaseEqual(lease, await fixture.Store.FindAsync(lease.WorkflowExecutionId));
     }
+
+    [Theory]
+    [InlineData("claiming")]
+    [InlineData("releasing")]
+    public async Task A_transient_conflict_wrapped_by_the_provider_execution_strategy_is_retried(string operation)
+    {
+        await using var fixture = await Fixture.CreateAsync("scope-a");
+        var lease = (await fixture.Store.TryClaimAsync(Claim("node-a", "wf-wrapped-transient"), Now)).Lease;
+        var interceptor = new FailingSaveInterceptor(() => WrappedByExecutionStrategy(new SqlException(Deadlock)), failures: 1);
+        await using var contender = await fixture.ReopenAsync("scope-a", interceptor);
+
+        if (operation == "claiming")
+        {
+            var renewed = await contender.Store.TryClaimAsync(Claim("node-a", "wf-wrapped-transient", Now.AddSeconds(1)), Now.AddSeconds(1));
+            Assert.Equal(ExecutionPlacementClaimOutcome.Renewed, renewed.Outcome);
+            AssertLeaseEqual(renewed.Lease, await fixture.Store.FindAsync(lease.WorkflowExecutionId));
+        }
+        else
+        {
+            await contender.Store.ReleaseAsync(lease);
+            Assert.Null(await fixture.Store.FindAsync(lease.WorkflowExecutionId));
+        }
+
+        Assert.Equal(2, interceptor.Attempts);
+    }
+
+    [Fact]
+    public async Task Wrapped_transient_contention_exhausts_the_pinned_budget()
+    {
+        var interceptor = new FailingSaveInterceptor(() => WrappedByExecutionStrategy(new SqlException(Deadlock)));
+        await using var fixture = await Fixture.CreateAsync("scope-a", interceptor);
+
+        var failure = await Assert.ThrowsAsync<ExecutionPlacementEntityFrameworkPersistenceException>(() =>
+            fixture.Store.TryClaimAsync(Claim("node-a", "wf-wrapped-contention"), Now).AsTask());
+
+        Assert.Equal("claiming", failure.Operation);
+        Assert.Contains("8 bounded compare-and-swap attempts", failure.Message, StringComparison.Ordinal);
+        Assert.IsType<InvalidOperationException>(failure.InnerException);
+        Assert.Equal(8, interceptor.Attempts);
+        Assert.Null(await fixture.Store.FindAsync("wf-wrapped-contention"));
+    }
+
+    [Fact]
+    public async Task A_wrapped_provider_failure_that_is_not_a_transient_conflict_fails_without_a_retry()
+    {
+        var interceptor = new FailingSaveInterceptor(() => WrappedByExecutionStrategy(new SyntheticProviderException()));
+        await using var fixture = await Fixture.CreateAsync("scope-a", interceptor);
+
+        var failure = await Assert.ThrowsAsync<ExecutionPlacementEntityFrameworkPersistenceException>(() =>
+            fixture.Store.TryClaimAsync(Claim("node-a", "wf-wrapped-failure"), Now).AsTask());
+
+        Assert.Equal("claiming", failure.Operation);
+        Assert.DoesNotContain("bounded compare-and-swap attempts", failure.Message, StringComparison.Ordinal);
+        Assert.Equal(1, interceptor.Attempts);
+    }
+
+    private static DbUpdateConcurrencyException Contention() => new("Synthetic placement contention.");
+
+    /// <summary>
+    /// The shape SQL Server's default execution strategy gives a save that failed with an error it treats as transient.
+    /// </summary>
+    private static InvalidOperationException WrappedByExecutionStrategy(DbException providerError) =>
+        new("An exception has been raised that is likely due to a transient failure.",
+            new DbUpdateException("An error occurred while saving the entity changes.", providerError));
 
     private static ExecutionPlacementClaim Claim(string owner, string id, DateTimeOffset? requestedAt = null, int seconds = 30)
     {
@@ -609,7 +674,8 @@ public sealed class EfExecutionPlacementStoreTests
             Interlocked.Exchange(ref fired, 1) == 0;
     }
 
-    private sealed class AlwaysFailConcurrencyInterceptor : SaveChangesInterceptor
+    /// <summary>Fails the first <paramref name="failures"/> saves with <paramref name="failure"/>, then lets saves through.</summary>
+    private sealed class FailingSaveInterceptor(Func<Exception> failure, int failures = int.MaxValue) : SaveChangesInterceptor
     {
         private int attempts;
 
@@ -618,15 +684,18 @@ public sealed class EfExecutionPlacementStoreTests
         public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
             DbContextEventData eventData,
             InterceptionResult<int> result,
-            CancellationToken cancellationToken = default)
-        {
-            Interlocked.Increment(ref attempts);
-            throw new DbUpdateConcurrencyException("Synthetic placement contention.");
-        }
+            CancellationToken cancellationToken = default) =>
+            Interlocked.Increment(ref attempts) <= failures ? throw failure() : ValueTask.FromResult(result);
     }
 
     private sealed class SyntheticProviderException() : DbException("synthetic provider failure")
     {
+    }
+
+    /// <summary>Carries a SQL Server error number the way the shared classifier reads it, by type name and <c>Number</c>.</summary>
+    private sealed class SqlException(int number) : DbException($"synthetic SQL Server error {number}")
+    {
+        public int Number { get; } = number;
     }
 
     private static bool IsMutationCommand(string commandText)
