@@ -49,6 +49,43 @@ public sealed class ActivityVersionDiffTests
         Assert.Equal(bump, result.RequiredBump);
     }
 
+    [Theory]
+    [InlineData("Name", "contract", "member-renamed")]
+    [InlineData("Type", "contract", "type-changed")]
+    [InlineData("IsNullable", "contract", "nullability-changed")]
+    [InlineData("StorageDriverKey", "durability", "storage-driver-changed")]
+    [InlineData("DisplayName", "presentation", "display-name-changed")]
+    [InlineData("Description", "presentation", "description-changed")]
+    [InlineData("Category", "presentation", "category-changed")]
+    [InlineData("Order", "presentation", "order-changed")]
+    [InlineData("UiHint", "presentation", "ui-metadata-changed")]
+    [InlineData("UiSpecifications", "presentation", "ui-metadata-changed")]
+    public async Task A_changed_shared_value_member_field_is_reported_for_both_inputs_and_outputs(string field, string area, string kind)
+    {
+        var changed = field switch
+        {
+            "Name" => ValueMember.Baseline with { Name = "Renamed" },
+            "Type" => ValueMember.Baseline with { Alias = "number" },
+            "IsNullable" => ValueMember.Baseline with { IsNullable = true },
+            "StorageDriverKey" => ValueMember.Baseline with { StorageDriverKey = "elsa.blob" },
+            "DisplayName" => ValueMember.Baseline with { DisplayName = "Value" },
+            "Description" => ValueMember.Baseline with { Description = "The value." },
+            "Category" => ValueMember.Baseline with { Category = "Values" },
+            "Order" => ValueMember.Baseline with { Order = 2 },
+            "UiHint" => ValueMember.Baseline with { UiHint = "multi-line" },
+            "UiSpecifications" => ValueMember.Baseline with { UiSpecifications = Json("{\"rows\":3}") },
+            _ => throw new ArgumentOutOfRangeException(nameof(field), field, null)
+        };
+
+        var result = await new ActivityVersionDiffer().DiffAsync(Request(
+            Contract(inputs: [ValueMember.Baseline.ToInput()], outputs: [ValueMember.Baseline.ToOutput()]),
+            Contract(inputs: [changed.ToInput()], outputs: [changed.ToOutput()])));
+
+        Assert.Equal(
+            [$"{area}:input:value:{kind}", $"{area}:output:value:{kind}"],
+            result.Changes.Select(change => change.ChangeId));
+    }
+
     [Fact]
     public async Task Nullability_changes_include_exact_member_projections()
     {
@@ -300,5 +337,29 @@ public sealed class ActivityVersionDiffTests
     {
         using var document = JsonDocument.Parse(json);
         return document.RootElement.Clone();
+    }
+
+    /// <summary>One set of the fields inputs and outputs share, projected onto either record.</summary>
+    private sealed record ValueMember(
+        string Name = "value",
+        string Alias = "string",
+        bool IsNullable = false,
+        string StorageDriverKey = "elsa.json",
+        string? DisplayName = null,
+        string? Description = null,
+        string? Category = null,
+        float Order = 0,
+        string? UiHint = null,
+        JsonElement? UiSpecifications = null)
+    {
+        public static readonly ValueMember Baseline = new();
+
+        public ActivityInputContract ToInput() => new(
+            "value", Name, new(Alias, CollectionKind.Single), false, IsNullable, null, StorageDriverKey,
+            DisplayName: DisplayName, Description: Description, Category: Category, Order: Order, UiHint: UiHint, UiSpecifications: UiSpecifications);
+
+        public ActivityOutputContract ToOutput() => new(
+            "value", Name, new(Alias, CollectionKind.Single), false, IsNullable, StorageDriverKey,
+            DisplayName: DisplayName, Description: Description, Category: Category, Order: Order, UiHint: UiHint, UiSpecifications: UiSpecifications);
     }
 }

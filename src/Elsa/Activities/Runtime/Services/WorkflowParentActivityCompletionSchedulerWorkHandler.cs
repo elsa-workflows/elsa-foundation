@@ -555,7 +555,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
             containerVariableSnapshots = RuntimeContainerVariableEvidence.Capture(
                 payloadCapturePolicy, scopeService, parentExecutableNode, currentParentState,
                 workItem.WorkflowExecutionId, payload.ActivityExecutionId, workItem.WorkItemId, TimeProvider.GetUtcNow());
-            completedParentState = CompleteParentActivity(
+            completedParentState = StructuralParentEvaluationSupport.CompleteParentActivity(
                 workItem,
                 payload,
                 currentParentState,
@@ -775,28 +775,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
             payload: JsonSerializer.SerializeToElement(payload),
             commandMetadata: sourceWorkItem.CommandMetadata,
             envelopeMetadata: sourceWorkItem.EnvelopeMetadata);
-    }
-
-    private ActivityExecutionState CompleteParentActivity(
-        RuntimeSchedulerWorkItem workItem,
-        RuntimeCompleteActivityCommandPayload payload,
-        ActivityExecutionState state,
-        IReadOnlyCollection<string> outcomeNames,
-        DateTimeOffset completedAt)
-    {
-        var normalizedOutcomeNames = SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(outcomeNames, defaultToDone: true);
-        var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        metadata[RuntimeMetadataKeys.InvokeReason] = payload.Reason;
-        metadata[RuntimeMetadataKeys.InvokeSchedulerWorkItemId] = workItem.WorkItemId;
-        metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(normalizedOutcomeNames);
-
-        return RuntimeContainerScopeService.CloseOwnedFrames(state with
-        {
-            Status = ActivityExecutionStatus.Completed,
-            CompletedAt = completedAt,
-            PrivateState = null,
-            Metadata = metadata
-        });
     }
 
     // True when this parent-evaluation work item was raised by a child fault (vs. a child completion). Set by

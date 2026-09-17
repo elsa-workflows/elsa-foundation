@@ -1,11 +1,12 @@
 using System.Text.Json.Serialization;
+using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
 /// Scheduler payload for starting work on one executable activity node.
 /// </summary>
-public sealed class RuntimeScheduleActivityCommandPayload
+public sealed class RuntimeScheduleActivityCommandPayload : IActivityCommandPayload
 {
     public const string WorkflowStartReason = "WorkflowStart";
     public const string ActivityCompletionReason = "ActivityCompletion";

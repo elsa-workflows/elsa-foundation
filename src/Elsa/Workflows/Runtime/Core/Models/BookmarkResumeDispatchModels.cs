@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -102,7 +103,7 @@ public sealed class BookmarkResumeDispatchResult
     public BookmarkStimulusLookupResult? Lookup { get; }
 }
 
-public sealed class RuntimeResumeBookmarkCommandPayload
+public sealed class RuntimeResumeBookmarkCommandPayload : IActivityCommandPayload
 {
     public const string StimulusMatchedReason = "BookmarkStimulusMatched";
 

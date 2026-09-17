@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 
@@ -20,10 +21,7 @@ internal static class ActivityAttemptActivationClaimer
             checkpointCommitter,
             timeProvider,
             workItem,
-            payload.PinnedExecutable,
-            payload.ExecutableNodeId,
-            payload.ActivityExecutionId,
-            payload.Reason,
+            payload,
             state,
             sideEffectProfile,
             freshAttemptReason: ActivityAttemptReason.Retry,
@@ -33,39 +31,15 @@ internal static class ActivityAttemptActivationClaimer
             triggerDelivery: null,
             cancellationToken);
 
-    public static ValueTask<ActivityAttemptActivationClaim> ClaimStructuralCallbackAsync(
-        RuntimeCheckpointCommitter checkpointCommitter,
-        TimeProvider timeProvider,
-        RuntimeSchedulerWorkItem workItem,
-        RuntimeCompleteActivityCommandPayload payload,
-        ActivityExecutionState state,
-        Elsa.Activities.Runtime.Core.Models.SideEffectProfile sideEffectProfile,
-        CancellationToken cancellationToken) =>
-        ClaimStructuralCallbackAsync(
-            checkpointCommitter,
-            timeProvider,
-            workItem,
-            payload.PinnedExecutable,
-            payload.ExecutableNodeId,
-            payload.ActivityExecutionId,
-            payload.Reason,
-            state,
-            sideEffectProfile,
-            cancellationToken);
-
     /// <summary>
-    /// Field-level overload of <see cref="ClaimStructuralCallbackAsync(RuntimeCheckpointCommitter, TimeProvider, RuntimeSchedulerWorkItem, RuntimeCompleteActivityCommandPayload, ActivityExecutionState, Elsa.Activities.Runtime.Core.Models.SideEffectProfile, CancellationToken)"/>
-    /// so a structural callback riding a non-completion command (spec 126 seam-C parent notifications) claims
-    /// the target parent's activation the same way, without funnelling through the completion payload.
+    /// Claims the target parent's activation for a structural callback, whether it rides a completion command
+    /// (child completion/fault evaluation) or a spec 126 seam-C parent notification.
     /// </summary>
     public static ValueTask<ActivityAttemptActivationClaim> ClaimStructuralCallbackAsync(
         RuntimeCheckpointCommitter checkpointCommitter,
         TimeProvider timeProvider,
         RuntimeSchedulerWorkItem workItem,
-        WorkflowExecutableIdentity pinnedExecutable,
-        string executableNodeId,
-        string activityExecutionId,
-        string checkpointReason,
+        IActivityCommandPayload payload,
         ActivityExecutionState state,
         Elsa.Activities.Runtime.Core.Models.SideEffectProfile sideEffectProfile,
         CancellationToken cancellationToken) =>
@@ -73,10 +47,7 @@ internal static class ActivityAttemptActivationClaimer
             checkpointCommitter,
             timeProvider,
             workItem,
-            pinnedExecutable,
-            executableNodeId,
-            activityExecutionId,
-            checkpointReason,
+            payload,
             state,
             sideEffectProfile,
             freshAttemptReason: ActivityAttemptReason.Resume,
@@ -309,10 +280,7 @@ internal static class ActivityAttemptActivationClaimer
         RuntimeCheckpointCommitter checkpointCommitter,
         TimeProvider timeProvider,
         RuntimeSchedulerWorkItem workItem,
-        WorkflowExecutableIdentity pinnedExecutable,
-        string executableNodeId,
-        string activityExecutionId,
-        string checkpointReason,
+        IActivityCommandPayload payload,
         ActivityExecutionState state,
         Elsa.Activities.Runtime.Core.Models.SideEffectProfile sideEffectProfile,
         ActivityAttemptReason freshAttemptReason,
@@ -374,7 +342,7 @@ internal static class ActivityAttemptActivationClaimer
         {
             [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
             [RuntimeMetadataKeys.CommandId] = workItem.CommandId,
-            [RuntimeMetadataKeys.CheckpointReason] = checkpointReason,
+            [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
             // ADR 0032 R2: the claim boundary stays Mandatory (IsMandatoryCheckpoint forbids only Skip, never
             // Deferred), so the committer's guardrail is preserved for both profiles while ReplaySafe still
             // permits the coalescing policy to Defer this flush. The resolved profile rides as transport so the
@@ -383,15 +351,15 @@ internal static class ActivityAttemptActivationClaimer
             [RuntimeMetadataKeys.CheckpointSideEffectProfile] = sideEffectProfile == Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe
                 ? RuntimeMetadataKeys.CheckpointSideEffectProfileReplaySafe
                 : RuntimeMetadataKeys.CheckpointSideEffectProfileExternal,
-            [RuntimeMetadataKeys.ActivityExecutionId] = activityExecutionId,
+            [RuntimeMetadataKeys.ActivityExecutionId] = payload.ActivityExecutionId,
             [RuntimeMetadataKeys.ActivityAttemptActivationClaim] = openAttempt.AttemptId,
             [RuntimeMetadataKeys.ActivityAttemptActivationClaimWorkItemId] = workItem.WorkItemId,
-            [RuntimeMetadataKeys.ExecutableNodeId] = executableNodeId,
-            [RuntimeMetadataKeys.ExecutableArtifactId] = pinnedExecutable.ArtifactId,
-            [RuntimeMetadataKeys.ExecutableArtifactVersion] = pinnedExecutable.ArtifactVersion,
-            [RuntimeMetadataKeys.ExecutableArtifactHash] = pinnedExecutable.ArtifactHash
+            [RuntimeMetadataKeys.ExecutableNodeId] = payload.ExecutableNodeId,
+            [RuntimeMetadataKeys.ExecutableArtifactId] = payload.PinnedExecutable.ArtifactId,
+            [RuntimeMetadataKeys.ExecutableArtifactVersion] = payload.PinnedExecutable.ArtifactVersion,
+            [RuntimeMetadataKeys.ExecutableArtifactHash] = payload.PinnedExecutable.ArtifactHash
         });
-        var checkpointSuffix = $"activity-attempt-claimed:{activityExecutionId}:{openAttempt.AttemptId}";
+        var checkpointSuffix = $"activity-attempt-claimed:{payload.ActivityExecutionId}:{openAttempt.AttemptId}";
         var commit = new RuntimeCheckpointCommit(
             CommitId: $"commit:{workItem.WorkItemId}:{checkpointSuffix}",
             Checkpoint: new RuntimeCheckpoint(
@@ -399,7 +367,7 @@ internal static class ActivityAttemptActivationClaimer
                 Name: RuntimeCheckpointNames.ActivityAttemptClaimed,
                 WorkflowExecutionId: workItem.WorkflowExecutionId,
                 OccurredAt: occurredAt,
-                ActivityExecutionIds: [activityExecutionId],
+                ActivityExecutionIds: [payload.ActivityExecutionId],
                 Metadata: checkpointMetadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: null,
@@ -407,7 +375,7 @@ internal static class ActivityAttemptActivationClaimer
                 activityExecutions:
                 [
                     new RuntimeStateChange<ActivityExecutionState>(
-                        StateId: activityExecutionId,
+                        StateId: payload.ActivityExecutionId,
                         Operation: RuntimeStateChangeOperation.Upsert,
                         State: claimedState,
                         Metadata: checkpointMetadata)

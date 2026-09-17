@@ -1,11 +1,12 @@
 using System.Text.Json.Serialization;
+using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
 /// Scheduler payload for recording that one activity execution reached completed state and needs completion-drain work.
 /// </summary>
-public sealed class RuntimeCompleteActivityCommandPayload
+public sealed class RuntimeCompleteActivityCommandPayload : IActivityCommandPayload
 {
     public const string ActivityInvocationCompletedReason = "ActivityInvocationCompleted";
     public const string ParentCompletionEvaluationReason = "ParentCompletionEvaluation";

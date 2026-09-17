@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -10,7 +11,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// target is always the notifying child's committed parent, resolved by the runtime at build time — there is
 /// no caller-supplied target (spoof-proofing).
 /// </summary>
-public sealed class RuntimeNotifyParentCommandPayload
+public sealed class RuntimeNotifyParentCommandPayload : IActivityCommandPayload
 {
     public const string NotifyParentReason = "NotifyParentActivity";
 
