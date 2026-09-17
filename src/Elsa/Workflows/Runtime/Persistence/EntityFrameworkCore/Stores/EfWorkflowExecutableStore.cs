@@ -84,9 +84,8 @@ public sealed class EfWorkflowExecutableStore(
             await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
                 context, "saving", scope, () => transaction.CommitAsync(cancellationToken));
         }
-        catch (DbUpdateException exception) when (
-            EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception) ||
-            EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
+        catch (Exception exception) when (
+            EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey | EfWriteConflict.Transient))
         {
             context.ChangeTracker.Clear();
             try
