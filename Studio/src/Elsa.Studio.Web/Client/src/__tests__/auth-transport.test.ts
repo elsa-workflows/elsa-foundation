@@ -31,6 +31,38 @@ describe("authenticated HTTP transport", () => {
     expect(headers.get("Authorization")).toBe("Bearer token-1");
   });
 
+  it("exposes response headers through getJsonWithHeaders, still bearing the bearer token", async () => {
+    // Some endpoints put part of their contract in a header — the executable-artifact export names its
+    // download in Content-Disposition (studio #493) — which the JSON verbs discard.
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "content-disposition": "attachment; filename=\"orders-1.4.0-closure.json\"" }
+    }));
+    const auth = stubAuth("token-1");
+    const client = createAuthenticatedHttpClient("https://foundation.example/", auth, { fetch: fetchMock });
+
+    const response = await client.getJsonWithHeaders!<{ ok: boolean }>("/publishing/workflows/version-1/executable-export");
+
+    expect(response.value).toEqual({ ok: true });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-disposition")).toBe("attachment; filename=\"orders-1.4.0-closure.json\"");
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer token-1");
+    expect(new Headers(init.headers).get("Accept")).toBe("application/json");
+  });
+
+  it("maps a failed getJsonWithHeaders response onto the same error as the JSON verbs", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ status: 409, detail: "Never published." }), {
+      status: 409,
+      headers: { "content-type": "application/problem+json" }
+    }));
+    const auth = stubAuth("token-1");
+    const client = createAuthenticatedHttpClient("https://foundation.example/", auth, { fetch: fetchMock });
+
+    await expect(client.getJsonWithHeaders!("/publishing/workflows/version-1/executable-export"))
+      .rejects.toMatchObject({ status: 409, message: "Never published." });
+  });
+
   it("surfaces problem details messages from failed responses", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       errors: { name: ["Name is required."] }

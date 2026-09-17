@@ -167,6 +167,17 @@ export interface StudioRequestInit extends RequestInit {
   timeoutMs?: number;
 }
 
+/**
+ * A parsed JSON response together with the response metadata the JSON verbs discard. Returned by
+ * {@link StudioHttpClient.getJsonWithHeaders} for the rare endpoint whose contract lives partly in a
+ * header — a download name in `Content-Disposition`, for instance.
+ */
+export interface StudioJsonResponse<T> {
+  value: T;
+  status: number;
+  headers: Headers;
+}
+
 export interface StudioHttpClient {
   requestJson<T>(url: string, init?: StudioRequestInit): Promise<T>;
   getJson<T>(url: string, init?: StudioRequestInit): Promise<T>;
@@ -174,6 +185,12 @@ export interface StudioHttpClient {
   putJson<T>(url: string, body: unknown, init?: StudioRequestInit): Promise<T>;
   deleteJson<T>(url: string, init?: StudioRequestInit): Promise<T>;
   postForm<T>(url: string, body: FormData, init?: StudioRequestInit): Promise<T>;
+  /**
+   * GETs JSON and also hands back the response headers. Optional so existing client implementations and
+   * test doubles stay valid: callers must fall back to {@link getJson} when it is absent. Note that a
+   * cross-origin response only exposes a header the server names in `Access-Control-Expose-Headers`.
+   */
+  getJsonWithHeaders?<T>(url: string, init?: StudioRequestInit): Promise<StudioJsonResponse<T>>;
 }
 
 export interface StudioEndpointContext {
@@ -1964,6 +1981,9 @@ export function createHttpClient(baseUrl: string, defaultHeadersOrOptions?: Head
     async getJson<T>(url: string, init?: StudioRequestInit) {
       return send<T>(url, withDefaultHeaders(defaultHeaders, withJsonAccept(init)));
     },
+    async getJsonWithHeaders<T>(url: string, init?: StudioRequestInit) {
+      return requestJsonWithHeaders<T>(baseUrl, url, withDefaultHeaders(defaultHeaders, withJsonAccept(init)), options);
+    },
     async postJson<T>(url: string, body: unknown, init?: StudioRequestInit) {
       return send<T>(url, withDefaultHeaders(defaultHeaders, {
         ...init,
@@ -2029,6 +2049,30 @@ function mergeHeaders(defaultHeaders: HeadersInit, requestHeaders?: HeadersInit)
 }
 
 async function requestJson<T>(baseUrl: string, url: string, init?: StudioRequestInit, options: StudioHttpClientOptions = {}): Promise<T> {
+  const { requestUrl, response } = await sendRequest(baseUrl, url, init, options);
+  return parseJsonResponse<T>(requestUrl, response);
+}
+
+async function requestJsonWithHeaders<T>(
+  baseUrl: string,
+  url: string,
+  init?: StudioRequestInit,
+  options: StudioHttpClientOptions = {}
+): Promise<StudioJsonResponse<T>> {
+  const { requestUrl, response } = await sendRequest(baseUrl, url, init, options);
+  return {
+    value: await parseJsonResponse<T>(requestUrl, response),
+    status: response.status,
+    headers: response.headers
+  };
+}
+
+async function sendRequest(
+  baseUrl: string,
+  url: string,
+  init?: StudioRequestInit,
+  options: StudioHttpClientOptions = {}
+): Promise<{ requestUrl: string; response: Response }> {
   const requestUrl = resolveStudioUrl(baseUrl, url);
   const request = options.fetch ?? fetch;
   // applyTimeout: false (the authenticated client) opts out of the implicit default timeout only; an explicit
@@ -2037,7 +2081,7 @@ async function requestJson<T>(baseUrl: string, url: string, init?: StudioRequest
     ? await request(requestUrl, init)
     : await fetchWithTimeout(request, requestUrl, init);
 
-  return parseJsonResponse<T>(requestUrl, response);
+  return { requestUrl, response };
 }
 
 async function fetchWithTimeout(request: typeof fetch, requestUrl: string, init?: StudioRequestInit): Promise<Response> {

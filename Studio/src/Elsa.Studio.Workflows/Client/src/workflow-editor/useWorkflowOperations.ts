@@ -29,6 +29,13 @@ import {
 } from "./editorHelpers";
 import type { WorkflowEditorOperation, WorkflowErrorInput, WorkflowTestRunState } from "./editorTypes";
 import {
+  anonymousArtifactFileName,
+  describeExecutableArtifactExportFailure,
+  downloadExecutableArtifact,
+  publishFirstMessage,
+  type PublishedExecutableTarget
+} from "./useExecutableArtifactExport";
+import {
   createPublicationReview,
   publicationBlockedMessage,
   publicationIntentFor,
@@ -43,6 +50,11 @@ interface WorkflowOperationsParams {
   details: WorkflowDefinitionDetails | null;
   catalog: ActivityCatalogItem[];
   busy: boolean;
+  /**
+   * The published version whose compiled artifact can be exported (foundation #1304), or null when the
+   * workflow has no published version or the server does not advertise the export relation.
+   */
+  publishedExecutable?: PublishedExecutableTarget | null;
   saveDraft(draft: WorkflowDraft, savedStatus: string): Promise<WorkflowDraft>;
   flushPendingSave(): Promise<void>;
   reload(): Promise<void>;
@@ -65,6 +77,7 @@ export function useWorkflowOperations({
   details,
   catalog,
   busy,
+  publishedExecutable = null,
   saveDraft,
   flushPendingSave,
   reload,
@@ -95,6 +108,33 @@ export function useWorkflowOperations({
     downloadWorkflowJson(buildExportPayload(draft, name), name);
     setStatus("Exported workflow as JSON.");
   }, [draft, details, setStatus]);
+
+  // Distinct from `exportJson` above: that serializes the design draft, this downloads the *compiled*
+  // artifact closure the server produced for the published version (foundation #1304). The payload is
+  // saved exactly as it arrived — Studio never assembles or reshapes a closure (FR-C-004).
+  const exportExecutableArtifact = useCallback(async () => {
+    if (busy) return;
+    if (!publishedExecutable) {
+      setError({ message: publishFirstMessage });
+      return;
+    }
+    setOperation("exportingArtifact");
+    setStatus("Exporting executable artifact...");
+    setError("");
+    try {
+      const fileName = await downloadExecutableArtifact(context, publishedExecutable);
+      // Both name segments come from the root artifact's identity; the double fallback means it carried
+      // none, which is worth saying rather than shipping an anonymous file as if it were normal.
+      setStatus(fileName === anonymousArtifactFileName
+        ? `Exported ${fileName} — the artifact carried no definition id or version.`
+        : `Exported executable artifact as ${fileName}.`);
+    } catch (e) {
+      setStatus("");
+      setError(describeExecutableArtifactExportFailure(e));
+    } finally {
+      setOperation("idle");
+    }
+  }, [busy, context, publishedExecutable, setError, setOperation, setStatus]);
 
   const save = useCallback(async () => {
     if (!draft || busy) return;
@@ -495,6 +535,7 @@ export function useWorkflowOperations({
 
   return {
     exportJson,
+    exportExecutableArtifact,
     save,
     preparePublication,
     publicationReview,

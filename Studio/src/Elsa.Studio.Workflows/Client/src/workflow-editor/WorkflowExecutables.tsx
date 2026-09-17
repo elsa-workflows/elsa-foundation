@@ -23,6 +23,8 @@ import {
   useExecutableWorkflowRun
 } from "./useExecutableWorkflowRun";
 import { ExecutableRunButton } from "./ExecutableRunButton";
+import { ExecutableExportButton } from "./ExecutableExportButton";
+import { useExecutableArtifactDownload } from "./useExecutableArtifactExport";
 import {
   compareExecutablesByPublishedDate,
   dispatchAiAction,
@@ -66,6 +68,11 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
   const executableRun = useExecutableWorkflowRun({
     context,
     ...createExecutableWorkflowRunFeedback({ setStatus, setLastRun, setError })
+  });
+  const artifactExport = useExecutableArtifactDownload({
+    context,
+    onExported: fileName => { setError(""); setLastRun(null); setStatus(`Exported ${fileName}`); },
+    onFailed: message => { setStatus(""); setLastRun(null); setError(message); }
   });
 
   const load = useCallback(async () => {
@@ -229,6 +236,14 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
                       runningArtifactId={executableRun.runningArtifactId}
                       onRequest={executableRun.request}
                     />
+                    {artifactExport.supported ? (
+                      <ExecutableExportButton
+                        executable={executable}
+                        exportingArtifactId={artifactExport.exportingArtifactId}
+                        ariaLabel={`Export executable artifact ${executable.artifactId}`}
+                        onRequest={artifactExport.exportArtifact}
+                      />
+                    ) : null}
                     {explainExecutableAction ? (
                       <button type="button" onClick={() => explain(executable)}><Sparkles size={13} /> Explain</button>
                     ) : null}
@@ -292,6 +307,11 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
   const executableRun = useExecutableWorkflowRun({
     context,
     ...createExecutableWorkflowRunFeedback({ setStatus, setLastRun, setError })
+  });
+  const artifactExport = useExecutableArtifactDownload({
+    context,
+    onExported: fileName => { setError(""); setLastRun(null); setStatus(`Exported ${fileName}`); },
+    onFailed: message => { setStatus(""); setLastRun(null); setError(message); }
   });
 
   const load = useCallback(async () => {
@@ -472,6 +492,14 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
                   ariaLabel={`Run executable ${artifact.artifactId}`}
                   onRequest={executableRun.request}
                 />
+                {artifactExport.supported ? (
+                  <ExecutableExportButton
+                    executable={artifact}
+                    exportingArtifactId={artifactExport.exportingArtifactId}
+                    ariaLabel={`Export executable artifact ${artifact.artifactId}`}
+                    onRequest={artifactExport.exportArtifact}
+                  />
+                ) : null}
                 {explainExecutableAction ? <button type="button" onClick={() => explain(artifact)}><Sparkles size={13} /> Explain</button> : null}
               </div>
               </article>

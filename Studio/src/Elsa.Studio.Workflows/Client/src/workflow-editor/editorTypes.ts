@@ -42,7 +42,7 @@ export type SetWorkflowError = (value: WorkflowErrorInput) => void;
 
 export type WorkflowEdge = Edge<WorkflowEdgeData>;
 
-export type WorkflowEditorOperation = "idle" | "saving" | "promoting" | "publicationPreflight" | "publishing" | "testRunPreparing" | "testRunStarting";
+export type WorkflowEditorOperation = "idle" | "saving" | "promoting" | "publicationPreflight" | "publishing" | "exportingArtifact" | "testRunPreparing" | "testRunStarting";
 
 export interface WorkflowTestRunState {
   draftSignature: string;
