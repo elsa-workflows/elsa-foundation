@@ -5,6 +5,7 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Identity;
@@ -44,7 +45,8 @@ public sealed class EfCoreIdentityUserStore(
     private const string RecoveryCodeTokenName = "RecoveryCodes";
     private const int AmbiguousEmailTake = 2;
     private const int MaximumMaterializedRelationshipEntries = 512;
-    private const int LockoutTransitionMaxAttempts = 3;
+    // Identity keeps its budget of 3 (spec 095, bounded retry for lockout transitions).
+    private static readonly EfWriteRetry LockoutTransitions = new(3, EfWriteConflict.Concurrency);
 
     private readonly IIdentityEmailUniquenessPolicy emailPolicy =
         emailUniquenessPolicy ?? IdentityEmailUniquenessPolicy.NonUnique;
@@ -631,10 +633,13 @@ public sealed class EfCoreIdentityUserStore(
                 return mutate(user);
             throw new InvalidOperationException("The requested user has no valid EF revision stamp for a lockout mutation.");
         }
-        for (var attempt = 0; attempt < LockoutTransitionMaxAttempts; attempt++)
+        // The first attempt works on a copy of the caller's user; after a lost revision race the next one reloads it.
+        var reload = false;
+        return await LockoutTransitions.RunUntilSettledAsync<int>(db, async () =>
         {
-            var candidate = attempt == 0 ? CloneUser(user) : await FindByIdAsync(user.Id, cancellationToken)
+            var candidate = !reload ? CloneUser(user) : await FindByIdAsync(user.Id, cancellationToken)
                 ?? throw new InvalidOperationException("The requested user does not exist in the current persistence scope.");
+            reload = true;
             if (!IdentityEntityFrameworkRevisionCodec.TryGetUserVersion(candidate.ConcurrencyStamp, user.TenantId, user.Id, out expected))
                 throw new InvalidOperationException("The requested user has no valid EF revision stamp.");
             var value = mutate(candidate);
@@ -643,8 +648,8 @@ public sealed class EfCoreIdentityUserStore(
             { CopyLockoutState(candidate, user); return value; }
             if (!result.Errors.Any(error => error.Code == nameof(IdentityErrorDescriber.ConcurrencyFailure)))
                 throw new InvalidOperationException("The EF Identity lockout transition failed.");
-        }
-        throw new InvalidOperationException("EF Identity lockout transition exceeded the bounded retry limit.");
+            return EfWriteAttempt<int>.Retry();
+        }, _ => throw new InvalidOperationException("EF Identity lockout transition exceeded the bounded retry limit."), cancellationToken);
     }
 
     private async Task WriteRelationshipAsync(

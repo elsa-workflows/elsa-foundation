@@ -17,8 +17,6 @@ public sealed class EfProviderConfigurationStore(
     IPersistenceAccessContextAccessor accessContextAccessor)
     : IProviderConfigurationStore, IRevisionAwareProviderConfigurationStore
 {
-    private const int MaximumWriteAttempts = 3;
-
     public async ValueTask<ProviderConfigurationRecord?> FindGlobalAsync(
         string provider,
         CancellationToken cancellationToken = default)
@@ -193,7 +191,7 @@ public sealed class EfProviderConfigurationStore(
         EnsureWriteAccess(configuration);
         context.EnsureProviderBinding();
 
-        for (var attempt = 0; attempt < MaximumWriteAttempts; attempt++)
+        await EfIdentityStoreSupport.UnconditionalWrites.RunAsync(context, async () =>
         {
             try
             {
@@ -213,17 +211,10 @@ public sealed class EfProviderConfigurationStore(
                 context.ChangeTracker.Clear();
                 return;
             }
-            catch (DbUpdateConcurrencyException)
+            catch (Exception exception) when (EfIdentityStoreSupport.UnconditionalWrites.ShouldRetry(context, exception))
             {
                 context.ChangeTracker.Clear();
-            }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
-            {
-                context.ChangeTracker.Clear();
-            }
-            catch (Exception exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
-            {
-                context.ChangeTracker.Clear();
+                throw;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -235,17 +226,14 @@ public sealed class EfProviderConfigurationStore(
                 context.ChangeTracker.Clear();
                 throw Failure("Unable to save the provider configuration.", exception);
             }
-        }
-
-        context.ChangeTracker.Clear();
-        throw Failure("Unable to save the provider configuration after bounded concurrency retries.", new InvalidOperationException("The provider configuration was concurrently modified."));
+        }, _ => throw Failure("Unable to save the provider configuration after bounded concurrency retries.", new InvalidOperationException("The provider configuration was concurrently modified.")), cancellationToken);
     }
 
     private async Task<IamRevisionSaveResult> SaveCreateOnlyAsync(ProviderConfigurationRecord configuration, CancellationToken cancellationToken)
     {
         EnsureWriteAccess(configuration);
         context.EnsureProviderBinding();
-        for (var attempt = 0; attempt < MaximumWriteAttempts; attempt++)
+        return await EfIdentityStoreSupport.TransientWrites.RunUntilSettledAsync<IamRevisionSaveResult>(context, async () =>
         {
             try
             {
@@ -270,9 +258,10 @@ public sealed class EfProviderConfigurationStore(
                 context.ChangeTracker.Clear();
                 return Conflict();
             }
-            catch (Exception exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
+            catch (Exception exception) when (EfIdentityStoreSupport.TransientWrites.ShouldRetry(context, exception))
             {
                 context.ChangeTracker.Clear();
+                return EfWriteAttempt<IamRevisionSaveResult>.Retry(exception);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -284,17 +273,14 @@ public sealed class EfProviderConfigurationStore(
                 context.ChangeTracker.Clear();
                 throw Failure("Unable to create the provider configuration.", exception);
             }
-        }
-
-        context.ChangeTracker.Clear();
-        throw Failure("Unable to create the provider configuration after bounded transient retries.", new InvalidOperationException("The provider configuration could not be created."));
+        }, _ => throw Failure("Unable to create the provider configuration after bounded transient retries.", new InvalidOperationException("The provider configuration could not be created.")), cancellationToken);
     }
 
     private async Task<IamRevisionSaveResult> SaveCompareAndSwapAsync(ProviderConfigurationRecord configuration, long expectedVersion, CancellationToken cancellationToken)
     {
         EnsureWriteAccess(configuration);
         context.EnsureProviderBinding();
-        for (var attempt = 0; attempt < MaximumWriteAttempts; attempt++)
+        return await EfIdentityStoreSupport.TransientWrites.RunUntilSettledAsync<IamRevisionSaveResult>(context, async () =>
         {
             try
             {
@@ -335,9 +321,10 @@ public sealed class EfProviderConfigurationStore(
                     throw Failure("Unable to classify the provider configuration concurrency conflict.", exception);
                 }
             }
-            catch (Exception exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
+            catch (Exception exception) when (EfIdentityStoreSupport.TransientWrites.ShouldRetry(context, exception))
             {
                 context.ChangeTracker.Clear();
+                return EfWriteAttempt<IamRevisionSaveResult>.Retry(exception);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -349,10 +336,7 @@ public sealed class EfProviderConfigurationStore(
                 context.ChangeTracker.Clear();
                 throw Failure("Unable to update the provider configuration.", exception);
             }
-        }
-
-        context.ChangeTracker.Clear();
-        throw Failure("Unable to update the provider configuration after bounded transient retries.", new InvalidOperationException("The provider configuration could not be updated."));
+        }, _ => throw Failure("Unable to update the provider configuration after bounded transient retries.", new InvalidOperationException("The provider configuration could not be updated.")), cancellationToken);
     }
 
     private async Task<ProviderConfigurationEntity?> FindEntityForWriteAsync(ProviderConfigurationRecord configuration, CancellationToken cancellationToken)

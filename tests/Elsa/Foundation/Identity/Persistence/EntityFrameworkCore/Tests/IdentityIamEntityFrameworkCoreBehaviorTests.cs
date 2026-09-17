@@ -426,6 +426,31 @@ public sealed class IdentityIamEntityFrameworkCoreBehaviorTests
     }
 
     [Fact]
+    public async Task Transient_conflict_inside_a_caller_transaction_fails_at_once_instead_of_retrying_inside_it()
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await EnsureDatabaseAsync(databasePath);
+            var interceptor = new TransientSaveInterceptor(failures: 1);
+            await using var context = CreateContext(databasePath, interceptor);
+            await using var transaction = await context.Database.BeginTransactionAsync();
+
+            var failure = await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() =>
+                ApplicationStore(context, "acme").SaveAsync(Application("acme", "app-in-caller-transaction", "never-saved")).AsTask());
+
+            Assert.Equal("Unable to save the Identity application.", failure.Message);
+            Assert.Equal(5, Assert.IsType<SqliteException>(failure.InnerException).SqliteErrorCode);
+            Assert.Equal(1, interceptor.Attempts);
+            Assert.Empty(context.ChangeTracker.Entries());
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
+    [Fact]
     public async Task Unconditional_transient_conflicts_retry_with_a_bound_and_leave_no_ghost_rows()
     {
         var databasePath = TemporaryDatabasePath();

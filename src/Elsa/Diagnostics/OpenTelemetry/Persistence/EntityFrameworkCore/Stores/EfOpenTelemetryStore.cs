@@ -29,12 +29,15 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     // capture has one transaction and one replay ledger, while still retaining the shared lifecycle.
     private const int DrainBatchSize = 1;
     private const int MaxDrainAttempts = 3;
-    private const int MaxSummaryRetry = 3;
     private const int MaximumAffectedSummaryKeys = 100_000;
     private const int ProviderSafeKeyBatchSize = 500;
     private const int RetentionDeleteBatchSize = 500;
     private static readonly TimeSpan AppendIdempotencyWindow = TimeSpan.FromHours(1);
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(25);
+    private static readonly EfWriteRetry CaptureCommits = new(
+        EfWriteRetry.DefaultMaxAttempts,
+        EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey | EfWriteConflict.Transient,
+        attempt => RetryDelay * attempt + TimeSpan.FromMilliseconds(Random.Shared.Next(1, 16)));
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter() }
@@ -379,8 +382,8 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         await operationGate.WaitAsync(cancellationToken);
         try
         {
-            Exception? retryFailure = null;
-            for (var attempt = 1; attempt <= MaxSummaryRetry; attempt++)
+            // Every attempt resolves its own context from a fresh scope, so no caller transaction can be in scope.
+            await CaptureCommits.RunAsync(null, async () =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 await using var scope = scopeFactory.CreateAsyncScope();
@@ -434,21 +437,19 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
                     await transaction.CommitAsync(cancellationToken);
                     return;
                 }
-                catch (Exception exception) when (attempt < MaxSummaryRetry && IsRetryableWriteConflict(exception))
+                catch (Exception exception) when (CaptureCommits.ShouldRetry(null, exception))
                 {
-                    retryFailure = exception;
                     if (transaction is not null)
                         await transaction.RollbackAsync(cancellationToken);
-                    await Task.Delay(RetryDelay * attempt + TimeSpan.FromMilliseconds(Random.Shared.Next(1, 16)), cancellationToken);
+                    throw;
                 }
                 finally
                 {
                     if (transaction is not null)
                         await transaction.DisposeAsync();
                 }
-            }
-
-            throw new OpenTelemetryPersistenceUnavailableException(operation, "The OpenTelemetry capture could not be committed after bounded retries.", ScopeContext(), retryFailure ?? new IOException("Optimistic-concurrency retries were exhausted."));
+            }, lastRace => throw new OpenTelemetryPersistenceUnavailableException(
+                operation, "The OpenTelemetry capture could not be committed after bounded retries.", ScopeContext(), lastRace!), cancellationToken);
         }
         catch (OpenTelemetryPersistenceException) { throw; }
         catch (OperationCanceledException) { throw; }
@@ -470,11 +471,6 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
             items.SelectMany(x => x.MetricPoints).ToArray(),
             items.SelectMany(x => x.Logs).ToArray());
     }
-
-    private static bool IsRetryableWriteConflict(Exception exception) =>
-        exception is DbUpdateConcurrencyException ||
-        exception is DbUpdateException updateException && EfRelationalExceptionClassifier.IsUniqueConstraintViolation(updateException) ||
-        EfRelationalExceptionClassifier.IsTransientWriteConflict(exception);
 
     private async ValueTask<DiagnosticsDrainCommit<bool>> CommitBatchAsync(DiagnosticsDrainBatch<OpenTelemetryBatch> batch, CancellationToken cancellationToken)
     {

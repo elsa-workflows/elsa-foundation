@@ -21,6 +21,10 @@ public sealed class EfDesignAtomicWriter(
     Func<CancellationToken, Task<IDbContextTransaction>>? transactionFactory = null) : IDesignAtomicWriter
 {
     private static readonly TimeSpan ReconciliationBackoff = TimeSpan.FromMilliseconds(25);
+    private static readonly EfWriteRetry TransientWrites = new(
+        EfWriteRetry.DefaultMaxAttempts,
+        exception => exception is DbUpdateException && EfRelationalExceptionClassifier.IsTransientWriteConflict(exception),
+        attempt => TimeSpan.FromMilliseconds(25 * attempt));
     private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
     private readonly TimeSpan timeout = reconciliationTimeout ?? TimeSpan.FromSeconds(10);
     private readonly Func<CancellationToken, Task<IDbContextTransaction>> beginTransaction = transactionFactory ?? (ct => db.Database.BeginTransactionAsync(ct));
@@ -50,18 +54,21 @@ public sealed class EfDesignAtomicWriter(
         if (timeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(reconciliationTimeout));
         resultCodec ??= new DefaultResultCodec<T>();
-        return ExecuteAttemptAsync(key, operationKind, request, stage, beforeAttempt, cancellationToken, resultCodec, 0);
+        return TransientWrites.RunUntilSettledAsync(
+            db,
+            () => ExecuteAttemptAsync(key, operationKind, request, stage, beforeAttempt, cancellationToken, resultCodec),
+            conflict => throw ProviderFailure(operationKind, conflict!),
+            cancellationToken).AsTask();
     }
 
-    private async Task<DesignAtomicWriteResult<T>> ExecuteAttemptAsync<T>(
+    private async ValueTask<EfWriteAttempt<DesignAtomicWriteResult<T>>> ExecuteAttemptAsync<T>(
         DesignOperationKey key,
         string operationKind,
         object request,
         Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage,
         Func<CancellationToken, Task>? beforeAttempt,
         CancellationToken cancellationToken,
-        IDesignAtomicWriteResultCodec<T> resultCodec,
-        int attempt)
+        IDesignAtomicWriteResultCodec<T> resultCodec)
     {
         ArgumentNullException.ThrowIfNull(key);
         ArgumentException.ThrowIfNullOrWhiteSpace(operationKind);
@@ -200,10 +207,10 @@ public sealed class EfDesignAtomicWriter(
             transactionDisposed = true;
             await CleanupAsync(transaction, exception, operationKind, rollback: true);
             db.ChangeTracker.Clear();
-            if (attempt >= 3)
+            // Rolling back an enlisted operation leaves the caller's shared transaction open, so this refuses the retry.
+            if (!TransientWrites.ShouldRetry(db, exception))
                 throw ProviderFailure(operationKind, exception);
-            await Task.Delay(TimeSpan.FromMilliseconds(25 * (attempt + 1)), cancellationToken);
-            return await ExecuteAttemptAsync(key, operationKind, request, stage, beforeAttempt, cancellationToken, resultCodec, attempt + 1);
+            return EfWriteAttempt<DesignAtomicWriteResult<T>>.Retry(exception);
         }
         catch (DbUpdateException exception)
         {

@@ -58,7 +58,13 @@ public sealed class EfIdentityAtomicWrite
 {
     private const int CleanupAttemptInterval = 32;
     private const int CleanupBatchSize = 64;
-    private const int MaximumReclaimAttempts = 3;
+    private static readonly EfWriteRetry TransientMutations = new(
+        EfIdentityStoreSupport.MaximumWriteAttempts,
+        EfWriteConflict.Transient,
+        attempt => TimeSpan.FromMilliseconds(25 * attempt));
+
+    // Identity keeps its budget of 3 (spec 095, bounded retry): a receipt still changing after 3 observations is uncertain.
+    private static readonly EfWriteRetry ReceiptReclamation = new(3, EfWriteConflict.Concurrency);
     private static readonly TimeSpan DefaultReconciliationTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan DefaultReceiptLifetime = TimeSpan.FromDays(7);
     private static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(5);
@@ -134,7 +140,7 @@ public sealed class EfIdentityAtomicWrite
             throw EfIdentityStoreSupport.Failure("Unable to prepare the Identity atomic mutation.", exception);
         }
 
-        for (var attempt = 0; attempt < EfIdentityStoreSupport.MaximumWriteAttempts; attempt++)
+        return await TransientMutations.RunUntilSettledAsync<EfIdentityWriteResult>(context, async () =>
         {
             var ownsTransaction = context.Database.CurrentTransaction is null;
             // Rollback/reconciliation must be able to dispose an owned transaction before issuing
@@ -242,14 +248,7 @@ public sealed class EfIdentityAtomicWrite
                 }
                 if (rollbackException is not null)
                     return await ReconcileOrThrowAsync(mutation, exception, rollbackException, CancellationToken.None);
-                if (attempt + 1 < EfIdentityStoreSupport.MaximumWriteAttempts)
-                {
-                    await Task.Delay(TimeSpan.FromMilliseconds(25 * (attempt + 1)), cancellationToken);
-                    continue;
-                }
-
-                var failure = exception;
-                throw EfIdentityStoreSupport.Failure($"Identity mutation '{mutation.OperationId}' exceeded the {EfIdentityStoreSupport.MaximumWriteAttempts}-attempt transient conflict limit.", failure);
+                return EfWriteAttempt<EfIdentityWriteResult>.Retry(exception);
             }
             catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
             {
@@ -297,9 +296,9 @@ public sealed class EfIdentityAtomicWrite
                 }
                 return await ReconcileOrThrowAsync(mutation, exception, rollbackException, CancellationToken.None);
             }
-        }
-
-        throw new InvalidOperationException("Identity mutation execution did not produce a result.");
+        }, conflict => throw EfIdentityStoreSupport.Failure(
+            $"Identity mutation '{mutation.OperationId}' exceeded the {TransientMutations.MaxAttempts}-attempt transient conflict limit.",
+            conflict!), cancellationToken);
     }
 
     public async Task<int> CleanupExpiredAsync(CancellationToken cancellationToken = default)
@@ -377,7 +376,8 @@ public sealed class EfIdentityAtomicWrite
 
     private async Task<EfIdentityWriteResult?> ReadActiveReceiptAsync(EfIdentityAtomicMutation mutation, CancellationToken cancellationToken)
     {
-        for (var attempt = 0; attempt < MaximumReclaimAttempts; attempt++)
+        // Each attempt observes the receipt once. Reclaiming an expired one, or losing that race, means observing again.
+        return await ReceiptReclamation.RunUntilSettledAsync<EfIdentityWriteResult?>(context, async () =>
         {
             var row = await EfIdentityStoreSupport.ReadAsync(
                 context,
@@ -394,18 +394,19 @@ public sealed class EfIdentityAtomicWrite
                 "Re-reading the expired Identity mutation receipt",
                 () => context.MutationReceipts.SingleOrDefaultAsync(x => x.Id == row.Id, cancellationToken));
             if (expired is null)
-                continue;
+                return EfWriteAttempt<EfIdentityWriteResult?>.Retry();
             EnsureReceiptIdentity(expired, mutation);
             context.MutationReceipts.Remove(expired);
             try
             {
                 await context.SaveChangesAsync(cancellationToken);
                 context.ChangeTracker.Clear();
-                continue;
+                return EfWriteAttempt<EfIdentityWriteResult?>.Retry();
             }
-            catch (DbUpdateConcurrencyException)
+            catch (DbUpdateConcurrencyException exception)
             {
                 context.ChangeTracker.Clear();
+                return EfWriteAttempt<EfIdentityWriteResult?>.Retry(exception);
             }
             catch (OperationCanceledException)
             {
@@ -422,8 +423,9 @@ public sealed class EfIdentityAtomicWrite
                 context.ChangeTracker.Clear();
                 throw EfIdentityStoreSupport.Failure("Unable to reclaim the expired Identity mutation receipt.", exception);
             }
-        }
-        throw new IdentityEntityFrameworkUncertainCommitException($"Expired Identity mutation receipt '{mutation.MutationReceiptId}' kept changing during bounded reclamation.", new InvalidOperationException("Receipt reclaim limit exceeded."));
+        }, _ => throw new IdentityEntityFrameworkUncertainCommitException(
+            $"Expired Identity mutation receipt '{mutation.MutationReceiptId}' kept changing during bounded reclamation.",
+            new InvalidOperationException("Receipt reclaim limit exceeded.")), cancellationToken);
     }
 
     private static void EnsureReceiptIdentity(MutationReceiptEntity row, EfIdentityAtomicMutation mutation)
