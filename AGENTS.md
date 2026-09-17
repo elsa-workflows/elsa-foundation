@@ -70,6 +70,15 @@ Re-check for competing work before committing, not only at session start. That c
 
 A claim is advisory. It narrows the window rather than closing it, and two sessions starting within the same minute still race. When a unit is split into slices, prefer giving one session the whole stack, or naming an owner per slice in the issue, over relying on claims alone.
 
+## Builds on a shared machine
+
+Parallel sessions on one machine compete for the same CPU. Four concurrent solution builds on an 8-core machine have pushed the load average past 400, which makes every build slower and makes timeout-based tests fail when nothing is wrong.
+
+- Build and test only the projects your change touches. Run a whole-solution test run only when the change is cross-cutting, and leave the rest to CI.
+- A machine may queue `dotnet` build, test, restore, pack, publish, msbuild and clean commands through a build-slot wrapper earlier on `PATH`. When a command prints `[dotnet-build-slots] waiting for a build slot`, it is queued behind another session, not hung. Do not bypass the queue, and allow for the wait in command timeouts.
+- Check `uptime` before trusting a timing-shaped failure. The load average counts runnable tasks, so compare it with the core count, and rerun at lower load before calling the failure real.
+- A process started as a background job of a non-interactive shell ignores SIGINT. Stop such a process with SIGTERM; a SIGINT that has no effect there does not mean the process hangs on Ctrl+C.
+
 ## Program bookkeeping
 
 When work belongs to a program, the GitHub issue is the public, legible record of progress. The program's project board Status alone is not enough.
