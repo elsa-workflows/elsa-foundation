@@ -99,6 +99,35 @@ public sealed class WorkbenchProcess : IAsyncDisposable
         return registry!.Modules.Single(module => module.Id == "Elsa.Workbench").Features;
     }
 
+    /// <summary>
+    /// Asks the host to stop with SIGTERM, as a process manager does, and waits up to <paramref name="limit"/> for the
+    /// process to exit. Returns how long the exit took, or <see langword="null"/> if the host was still running.
+    /// </summary>
+    /// <remarks>
+    /// SIGTERM enters the same <c>ConsoleLifetime</c> handler as Ctrl+C. SIGINT is not used: a background job of a
+    /// non-interactive shell inherits SIGINT as ignored, and a child process keeps that disposition. When the tests run
+    /// under such a job, SIGINT would never arrive and a healthy host would look hung.
+    /// </remarks>
+    public async Task<TimeSpan?> StopAsync(TimeSpan limit)
+    {
+        var stopping = Stopwatch.StartNew();
+        using (var terminate = Process.Start("kill", ["-TERM", _process.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)]))
+            await terminate.WaitForExitAsync();
+
+        try
+        {
+            // Also waits for the redirected output to reach its end, so Output holds every shutdown line.
+            await _process.WaitForExitAsync().WaitAsync(limit);
+            return stopping.Elapsed;
+        }
+        catch (TimeoutException)
+        {
+            return null;
+        }
+    }
+
+    public int ExitCode => _process.ExitCode;
+
     /// <summary>The host's console output so far, for assertion messages.</summary>
     public string Output
     {
