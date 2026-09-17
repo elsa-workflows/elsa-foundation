@@ -1,5 +1,6 @@
 using System.Data;
 using System.Globalization;
+using System.Linq.Expressions;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -23,7 +24,7 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
     private const int DrainBatchSize = 200;
     private const int MaxDrainAttempts = 3;
     private const int RetentionInterval = 5_000;
-    private const int RetentionDeleteBatchSize = 1_000;
+    private const string InconsistentBindingMessage = "The EF structured-log scope binding is inconsistent.";
     private static readonly TimeSpan AppendIdempotencyWindow = TimeSpan.FromHours(1);
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(25);
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
@@ -371,21 +372,23 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
         }
 
         var deletedCount = 0;
-        while (true)
+        if (keepNewest == 0 || boundaryRecord is not null)
         {
-            var deleteBatch = await db.Records
-                .Where(record => record.ScopeKey == ScopeKey &&
-                                 (keepNewest == 0 || boundaryRecord != null && record.Position < boundaryRecord.Position))
-                .OrderBy(record => record.Position)
-                .Take(RetentionDeleteBatchSize)
-                .ToListAsync(cancellationToken);
-            if (deleteBatch.Count == 0)
-                break;
-            ValidateRecords(deleteBatch);
-            db.Records.RemoveRange(deleteBatch);
-            deletedCount += deleteBatch.Count;
-            await db.SaveChangesAsync(cancellationToken);
+            var expired = db.Records.Where(record => record.ScopeKey == ScopeKey);
+            if (boundaryRecord is not null)
+            {
+                var boundaryPosition = boundaryRecord.Position;
+                expired = expired.Where(record => record.Position < boundaryPosition);
+            }
+
+            deletedCount = await DeleteBoundRowsAsync(
+                expired,
+                record => record.TenantId == binding.TenantId &&
+                          record.ScopeId == binding.ScopeId &&
+                          record.StreamId == binding.StreamId,
+                cancellationToken);
         }
+
         state.Version = NewVersion();
         state.UpdatedAtTicks = now.UtcTicks;
         await db.SaveChangesAsync(cancellationToken);
@@ -393,25 +396,42 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
         return deletedCount;
     }
 
-    private async Task PruneAppendOperationsAsync(
+    private Task PruneAppendOperationsAsync(
         StructuredLogsDbContext db,
         long cutoffTicks,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken) =>
+        DeleteBoundRowsAsync(
+            db.AppendOperations.Where(operation => operation.ScopeKey == ScopeKey && operation.IssuedAtTicks <= cutoffTicks),
+            operation => operation.TenantId == binding.TenantId &&
+                         operation.ScopeId == binding.ScopeId &&
+                         operation.StreamId == binding.StreamId,
+            cancellationToken);
+
+    /// <summary>
+    /// Deletes every row <paramref name="selected"/> matches that also carries this store's binding, and fails when a
+    /// selected row survives the delete.
+    /// </summary>
+    /// <remarks>
+    /// Retention deletes rows it has no other use for, so the binding check that used to run client-side over each
+    /// materialized batch is folded into the delete predicate instead. The provider then enforces the scope, which is
+    /// strictly stronger than the check it replaces -- but it changes what a drifted row does: the delete passes over
+    /// it rather than failing. Letting such a row outlive retention unnoticed is not acceptable, because a row whose
+    /// TenantId/ScopeId/StreamId disagree with the ScopeKey they hash to means a hash collision or a corrupted row,
+    /// and every other path in this store fails closed on exactly that. So the delete is followed by an existence
+    /// probe over the same selection <em>without</em> the binding filter: anything still there failed the binding.
+    /// Throwing rolls back the enclosing transaction, which reproduces the outcome the per-batch validation produced
+    /// -- nothing deleted, <see cref="StructuredLogsException"/> raised. The probe reads at most one row, over the
+    /// index range the delete has just emptied.
+    /// </remarks>
+    private static async Task<int> DeleteBoundRowsAsync<T>(
+        IQueryable<T> selected,
+        Expression<Func<T, bool>> boundToBinding,
+        CancellationToken cancellationToken) where T : class
     {
-        while (true)
-        {
-            var expired = await db.AppendOperations
-                .Where(operation => operation.ScopeKey == ScopeKey && operation.IssuedAtTicks <= cutoffTicks)
-                .OrderBy(operation => operation.IssuedAtTicks)
-                .Take(RetentionDeleteBatchSize)
-                .ToListAsync(cancellationToken);
-            if (expired.Count == 0)
-                return;
-            foreach (var operation in expired)
-                ValidateBinding(operation.TenantId, operation.ScopeId, operation.StreamId);
-            db.AppendOperations.RemoveRange(expired);
-            await db.SaveChangesAsync(cancellationToken);
-        }
+        var deleted = await selected.Where(boundToBinding).ExecuteDeleteAsync(cancellationToken);
+        if (await selected.AnyAsync(cancellationToken))
+            throw new StructuredLogsException(InconsistentBindingMessage);
+        return deleted;
     }
 
     private static bool AdvanceAppendOperationCutoff(StructuredLogStreamState state, DateTimeOffset now)
@@ -554,7 +574,7 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
         if (!StringComparer.Ordinal.Equals(tenantId, binding.TenantId) ||
             !StringComparer.Ordinal.Equals(scopeId, binding.ScopeId) ||
             !StringComparer.Ordinal.Equals(streamId, binding.StreamId))
-            throw new StructuredLogsException("The EF structured-log scope binding is inconsistent.");
+            throw new StructuredLogsException(InconsistentBindingMessage);
     }
 
     private static string NewVersion() => Guid.NewGuid().ToString("N");
