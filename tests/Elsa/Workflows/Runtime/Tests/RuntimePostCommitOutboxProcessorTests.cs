@@ -338,15 +338,17 @@ public sealed class RuntimePostCommitOutboxProcessorTests
 
     /// <summary>
     /// #1780: a store that finds the child already started persists the failed start as delivered and discards the
-    /// DispatchFailed projection and its parent resume, so logging that incident and that resume would report events that
-    /// never happened. The delivery attempt itself did fail, so its own events are still logged.
+    /// DispatchFailed projection and its parent resume, so logging that incident and that resume, or a final failure, would
+    /// report events that never happened. The delivery attempt itself did fail, so it is still logged, with the status the
+    /// store persisted.
     /// </summary>
     [Theory]
-    [InlineData(RuntimePostCommitOutboxClaimCompletionOutcome.Persisted, new[] { 68105, 68106, 68101, 68103 })]
-    [InlineData(RuntimePostCommitOutboxClaimCompletionOutcome.DeliveredOnChildEvidence, new[] { 68101, 68103 })]
-    public async Task Processor_LogsTheDispatchFailureProjectionOnlyWhenTheStorePersistedIt(
+    [InlineData(RuntimePostCommitOutboxClaimCompletionOutcome.Persisted, new[] { 68105, 68106, 68101, 68103 }, RuntimePostCommitOutboxStatus.FailedFinal)]
+    [InlineData(RuntimePostCommitOutboxClaimCompletionOutcome.DeliveredOnChildEvidence, new[] { 68101 }, RuntimePostCommitOutboxStatus.Delivered)]
+    public async Task Processor_LogsOnlyWhatTheStorePersisted(
         RuntimePostCommitOutboxClaimCompletionOutcome outcome,
-        int[] expectedEventIds)
+        int[] expectedEventIds,
+        RuntimePostCommitOutboxStatus persistedStatus)
     {
         var dispatch = NewDispatchRecord(WorkflowDispatchMode.WaitForCompletion);
         var identity = new WorkflowDispatchIdentity(dispatch.ParentWorkflowExecutionId, dispatch.ParentActivityExecutionId);
@@ -377,6 +379,9 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         Assert.NotNull(completion.WorkflowDispatch);
         Assert.NotNull(completion.FollowUpOutboxItem);
         Assert.Equal(expectedEventIds, logger.Entries.Select(entry => entry.EventId.Id));
+        Assert.All(
+            logger.Entries.Where(entry => entry.EventId.Id is 68101 or 68103),
+            entry => Assert.Equal(persistedStatus, entry.Fields["EffectiveStatus"]));
     }
 
     [Fact]

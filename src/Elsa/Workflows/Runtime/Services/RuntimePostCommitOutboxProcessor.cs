@@ -192,7 +192,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 ? RetryUntilAcknowledgedFailureMessage
                 : _faultCapturePolicy.Capture(exception).ToSummaryString());
             var recordedAt = _timeProvider.GetUtcNow();
-            var recordingException = await TryRecordDeliveryResultAsync(
+            var (outcome, recordingException) = await TryRecordDeliveryResultAsync(
                 item,
                 claim,
                 effectiveStatus,
@@ -204,7 +204,10 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             if (recordingException is not null)
                 throw new OutboxProcessingException(item.OutboxItemId, item.Intent.IntentId, exception, recordingException);
 
-            LogDeliveryFailure(item, exception, classification, effectiveStatus, recordedAt);
+            var persistedStatus = outcome == RuntimePostCommitOutboxClaimCompletionOutcome.DeliveredOnChildEvidence
+                ? RuntimePostCommitOutboxStatus.Delivered
+                : effectiveStatus;
+            LogDeliveryFailure(item, exception, classification, persistedStatus, recordedAt);
 
             return new RuntimePostCommitOutboxProcessedItem(
                 item.OutboxItemId,
@@ -223,7 +226,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             FailureMessage: null);
     }
 
-    private async ValueTask<Exception?> TryRecordDeliveryResultAsync(
+    private async ValueTask<(RuntimePostCommitOutboxClaimCompletionOutcome Outcome, Exception? Failure)> TryRecordDeliveryResultAsync(
         RuntimePostCommitOutboxItem item,
         RuntimePostCommitOutboxClaim? claim,
         RuntimePostCommitOutboxStatus status,
@@ -234,8 +237,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
     {
         try
         {
-            await RecordDeliveryResultAsync(item, claim, status, failureMessage, recordedAt, deliveryFailure, cancellationToken);
-            return null;
+            return (await RecordDeliveryResultAsync(item, claim, status, failureMessage, recordedAt, deliveryFailure, cancellationToken), null);
         }
         catch (OperationCanceledException)
         {
@@ -243,11 +245,11 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         }
         catch (Exception exception)
         {
-            return exception;
+            return (RuntimePostCommitOutboxClaimCompletionOutcome.Persisted, exception);
         }
     }
 
-    private async ValueTask RecordDeliveryResultAsync(
+    private async ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> RecordDeliveryResultAsync(
         RuntimePostCommitOutboxItem item,
         RuntimePostCommitOutboxClaim? claim,
         RuntimePostCommitOutboxStatus status,
@@ -277,6 +279,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 // projection, so there is no delivery incident or failure resume to report.
                 if (dispatchFailure is not null && outcome == RuntimePostCommitOutboxClaimCompletionOutcome.Persisted)
                     LogDeliveryFailureProjection(item, dispatchFailure, result.RecordedAt, deliveryFailure);
+                return outcome;
             }
             else if (dispatchFailure is not null)
             {
@@ -288,6 +291,8 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         }
         else
             await _outboxStore.RecordDeliveryResultAsync(result, cancellationToken);
+
+        return RuntimePostCommitOutboxClaimCompletionOutcome.Persisted;
     }
 
     private async ValueTask<PostCommitFailureProjection?> CreateDeliveryFailureProjectionAsync(
@@ -361,7 +366,9 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
     /// Every failure event carries the delivery exception, so the cause and its stack trace reach the log; the structured
     /// fields stay identifiers and classifications. An expected deferral (<see cref="IRuntimePostCommitDeferral"/>) is a
     /// routine wait rather than a failure and is logged without its exception. The persisted <c>LastFailureMessage</c> and every durable dispatch
-    /// and incident projection stay free of exception text.
+    /// and incident projection stay free of exception text. <paramref name="effectiveStatus"/> is the status the store
+    /// persisted, which is <see cref="RuntimePostCommitOutboxStatus.Delivered"/> when it found the child of a failed start
+    /// already started: the attempt still failed, but nothing became final and no retry was scheduled.
     /// </remarks>
     private void LogDeliveryFailure(
         RuntimePostCommitOutboxItem item,
@@ -411,6 +418,9 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 recordedAt);
             return;
         }
+
+        if (effectiveStatus != RuntimePostCommitOutboxStatus.FailedRetryable)
+            return;
 
         var nextAvailableAt = recordedAt.Add(item.RetryPolicy.Delay!.Value);
         _logger.LogWarning(
