@@ -217,6 +217,21 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
                 $"A checkpoint rule refused a commit of child workflow execution '{payload.ChildWorkflowExecutionId}' before it reached an outcome: {faulted.Reason}"));
         }
 
+        // A duplicate is not proof that a child exists. An agent answers Duplicate from a process-local, bounded
+        // idempotency cache, so it means only that this key was already seen there, never that the run it belonged to
+        // reached a child. The case that matters is a start whose refusal could not be recorded: the key was consumed
+        // before the refusal was reported, the claim expires, and the redelivery is answered Duplicate with the refusal
+        // already lost. Counting that as delivered leaves a waiting parent waiting forever (#1799).
+        //
+        // So the start fails here, and the claim completion decides. Its child-evidence rule reads the child in the same
+        // transaction that would record the failure and overrules it whenever a matching child exists, which is what
+        // keeps a live child from being marked failed and what repairs a dispatch still sitting at Pending. Permanent,
+        // not transient: every retry in this process is answered Duplicate from the same cache, so retrying only spends
+        // the budget before reaching the same verdict.
+        if (result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Duplicate &&
+            !await HasChildOutcomeAsync(payload.DispatchId, cancellationToken))
+            throw DeliveryFailure(PostCommitFailureKind.Permanent);
+
         if (result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Deferred &&
             !HasDurableDistributedForwardingEvidence(result.CommandDispatch.Metadata))
             throw DeliveryFailure(PostCommitFailureKind.Transient);

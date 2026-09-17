@@ -20,6 +20,8 @@ The runtime feature registers the default allow start policy. Hosts may replace 
 
 #681 adds host-configured finite child-start retry, fixed safe delivery classification, provider-atomic exhausted-delivery projection, and separately authorized detached redrive. The Runtime domain owns the replacement seam and fenced completion/redrive contracts; this feature supplies the single `WorkflowDispatchDeliveryFailureProjector` replacement and the child-specific policy. A visible deterministic child always wins over a stale failure. Wait exhaustion produces one safe, permanently non-redrivable `DispatchFailed` resume; fire-and-forget exhaustion exposes only allowlisted incident/dead-letter metadata and can reopen the same dispatch/outbox identity through the tenant-scoped manage endpoint.
 
+#1799 stops a `Duplicate` dispatch result from counting as a delivered start. An agent answers `Duplicate` out of a process-local, bounded idempotency cache, so it proves only that the key was already seen there, never that a child exists. A start whose refusal could not be recorded consumes its key before the refusal is reported, so claim expiry redelivers into a `Duplicate` carrying none of it. Such a start now fails permanently and the claim completion's child-evidence rule decides, which keeps a live child from being marked failed and still repairs a dispatch left at Pending.
+
 TestRun behavior and distributed two-node delivery remain owned by #682 and #683 respectively.
 
 See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) and the feature specifications under `specs/096-dispatch-workflow-fire-and-forget/` through `specs/101-dispatch-delivery-recovery/`.

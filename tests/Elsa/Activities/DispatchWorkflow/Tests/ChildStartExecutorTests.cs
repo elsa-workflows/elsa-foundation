@@ -19,7 +19,6 @@ public sealed class ChildStartExecutorTests
     [Theory]
     [InlineData(WorkflowExecutionCommandDispatchStatus.Accepted)]
     [InlineData(WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted)]
-    [InlineData(WorkflowExecutionCommandDispatchStatus.Duplicate)]
     public async Task MaterializedStart_AdvancesPendingDispatchToStarted(
         WorkflowExecutionCommandDispatchStatus status)
     {
@@ -358,15 +357,29 @@ public sealed class ChildStartExecutorTests
         Assert.Equal(WorkflowDispatchStatus.Faulted, (await dispatchStore.FindAsync(NewIdentity().DispatchId))?.Status);
     }
 
-    private static async Task<(ChildStartExecutor Executor, InMemoryWorkflowDispatchStore DispatchStore)> NewRuleRefusedStartAsync(
-        bool childReachesAnOutcome)
+    private static Task<(ChildStartExecutor Executor, InMemoryWorkflowDispatchStore DispatchStore)> NewRuleRefusedStartAsync(
+        bool childReachesAnOutcome) =>
+        NewStartAsync(
+            WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted,
+            childReachesAnOutcome,
+            new Dictionary<string, string> { [RuntimeMetadataKeys.DispatchCheckpointRuleViolation] = "true" });
+
+    /// <summary>
+    /// A pending dispatch whose start the agent answers with <paramref name="status"/>. When
+    /// <paramref name="childReachesAnOutcome"/> is set, the dispatch carries the child's own terminal outcome by the time
+    /// the result is read, which is the evidence that the child really ran.
+    /// </summary>
+    private static async Task<(ChildStartExecutor Executor, InMemoryWorkflowDispatchStore DispatchStore)> NewStartAsync(
+        WorkflowExecutionCommandDispatchStatus status,
+        bool childReachesAnOutcome,
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
         var dispatchStore = new InMemoryWorkflowDispatchStore();
         var pending = NewDispatchRecord();
         await dispatchStore.SaveAsync(pending);
         var startDispatcher = new StubStartDispatcher(
-            WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted,
-            new Dictionary<string, string> { [RuntimeMetadataKeys.DispatchCheckpointRuleViolation] = "true" },
+            status,
+            metadata,
             childReachesAnOutcome
                 ? async () =>
                 {
@@ -379,6 +392,37 @@ public sealed class ChildStartExecutorTests
             dispatchStore,
             new FakeTimeProvider(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1)));
         return (executor, dispatchStore);
+    }
+
+    /// <summary>
+    /// #1799. An agent answers Duplicate out of a process-local, bounded idempotency cache, so it proves only that the key
+    /// was seen there. The case that matters is a start whose refusal could not be recorded: the key was consumed before
+    /// the refusal was reported, and claim expiry redelivers into a Duplicate that carries none of it. Counting that as
+    /// delivered leaves a waiting parent waiting forever, so the start fails and the claim completion's child-evidence
+    /// rule decides.
+    /// </summary>
+    [Fact]
+    public async Task DuplicateStartWithoutAChildOutcome_FailsPermanently()
+    {
+        var (executor, _) = await NewStartAsync(WorkflowExecutionCommandDispatchStatus.Duplicate, childReachesAnOutcome: false);
+
+        var exception = await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(
+            () => executor.HandleAsync(NewOutboxItem().Intent).AsTask());
+
+        Assert.Equal(PostCommitFailureKind.Permanent, exception.Kind);
+        Assert.Equal("The child workflow could not be started.", exception.SafeSummary);
+        Assert.Null(exception.InnerException);
+    }
+
+    /// <summary>The other direction: a duplicate whose child reached an outcome really did start, so it stays delivered.</summary>
+    [Fact]
+    public async Task DuplicateStartWhoseChildReachedAnOutcome_IsDelivered()
+    {
+        var (executor, dispatchStore) = await NewStartAsync(WorkflowExecutionCommandDispatchStatus.Duplicate, childReachesAnOutcome: true);
+
+        await executor.HandleAsync(NewOutboxItem().Intent);
+
+        Assert.Equal(WorkflowDispatchStatus.Faulted, (await dispatchStore.FindAsync(NewIdentity().DispatchId))?.Status);
     }
 
     [Fact]

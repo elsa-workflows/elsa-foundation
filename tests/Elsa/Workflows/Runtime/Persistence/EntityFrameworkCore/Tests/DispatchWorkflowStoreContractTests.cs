@@ -43,6 +43,8 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
     private static readonly TimeSpan TerminalTimeout = TimeSpan.FromSeconds(60);
     private readonly ScriptedChildCommitFailure _childCommitFailure = new(ParentWorkflowExecutionId);
     private readonly SwitchableRetryPolicy _retryPolicy = new();
+    private readonly ScriptedRecordingFailure _recordingFailure = new();
+    private readonly OffsetClock _clock = new();
     private WorkflowExecutionHarness _harness = null!;
     private int _outboxFailures;
 
@@ -61,6 +63,8 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
                 ConfigureStore(services);
                 services.AddScoped<IRuntimeCheckpointCommitEnricher>(_ => _childCommitFailure);
                 services.AddSingleton<IRuntimeDomainRetryPolicy>(_retryPolicy);
+                services.AddSingleton<TimeProvider>(_clock);
+                DecorateOutboxStore(services, _recordingFailure);
             })
             .Build(Enumerable.Range(1, 16).Select(ordinal => $"actexec-{ordinal}"));
 
@@ -193,6 +197,55 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
             candidate => candidate.FailureType == CheckpointRuleViolationWorkflowFaulter.IncidentFailureType);
     }
 
+    /// <summary>
+    /// #1799 path 1. A rule refuses the child's first commit, so the start must fail. Recording that failure fails, which
+    /// leaves the claimed outbox item Delivering; claim expiry then redelivers the same deterministic start. The refusal
+    /// must survive that redelivery: the dispatch must still reach DispatchFailed and the parent must still resume.
+    /// </summary>
+    [Fact]
+    public async Task A_refused_first_start_whose_recording_fails_still_fails_after_claim_expiry()
+    {
+        _childCommitFailure.RefuseFirst();
+        _recordingFailure.FailNextCompletion();
+
+        // Sweep until the delivery failure could not be recorded, which strands the claim.
+        await RunParentAsync(
+            childFaults: false,
+            _ => _recordingFailure.Failures > 0,
+            "fail to record its child start's delivery result");
+
+        var claimed = Assert.IsType<RuntimePostCommitOutboxItem>(await FindStartOutboxItemAsync());
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, claimed.Status);
+        Assert.Equal(WorkflowDispatchStatus.Started, Assert.Single(await ListDispatchesAsync()).Status);
+
+        // Past the processor's one-minute claim visibility timeout, so the same deterministic start is redelivered.
+        _clock.Advance(TimeSpan.FromSeconds(61));
+        _outboxFailures += (await _harness.SweepAsync()).OutboxFailedCount;
+
+        // The agent answers Duplicate because it consumed the key before the refusal was reported, so nothing about the
+        // redelivery itself carries the refusal. The start fails all the same, because no child exists to prove otherwise.
+        var redelivered = Assert.IsType<RuntimePostCommitOutboxItem>(await FindStartOutboxItemAsync());
+        var dispatch = Assert.Single(await ListDispatchesAsync());
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, redelivered.Status);
+        Assert.Equal(WorkflowDispatchStatus.DispatchFailed, dispatch.Status);
+        Assert.NotNull(WorkflowDispatchLifecycle.ReadDeliveryDeadLetterId(dispatch));
+        Assert.NotNull(WorkflowDispatchLifecycle.ReadDeliveryIncidentId(dispatch));
+        Assert.Null((await _harness.ReadRunAsync(dispatch.ChildWorkflowExecutionId)).WorkflowState);
+
+        // Which is the point: the parent resumes instead of waiting forever.
+        var parent = await SweepUntilAsync(run => run.WorkflowState?.Status.IsTerminal() == true, "reach a terminal status");
+        parent.AssertWorkflowCompleted();
+        parent.AssertOutcomes(DispatchNodeId, DispatchWorkflowOutcomes.DispatchFailed);
+        parent.AssertCompleted(AfterDispatchNodeId);
+    }
+
+    private async Task<RuntimePostCommitOutboxItem?> FindStartOutboxItemAsync()
+    {
+        var outboxItemId = Assert.IsType<string>(_recordingFailure.LastClaimedStartItemId);
+        await using var scope = _harness.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IPostCommitOutboxLookupStore>().FindAsync(outboxItemId);
+    }
+
     private Task<WorkflowExecutionRun> RunParentAsync(bool childFaults) =>
         RunParentAsync(childFaults, run => run.WorkflowState?.Status.IsTerminal() == true, "reach a terminal status");
 
@@ -201,7 +254,10 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
     /// real-time, so this polls against a deadline rather than a fixed number of sweeps, and reports where the chain stopped
     /// when it never gets there.
     /// </summary>
-    private async Task<WorkflowExecutionRun> RunParentAsync(bool childFaults, Func<WorkflowExecutionRun, bool> reached, string expectation)
+    private async Task<WorkflowExecutionRun> RunParentAsync(
+        bool childFaults,
+        Func<WorkflowExecutionRun, bool> reached,
+        string expectation)
     {
         var child = NewChildExecutable(childFaults);
         var childReference = await _harness.PublishAsync(child, "source-child");
@@ -214,10 +270,24 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
             correlationId: "correlation-parent",
             partition: new WorkflowExecutionPartition(PersistenceScope.DefaultValue));
 
+        return await SweepUntilAsync(reached, expectation);
+    }
+
+    private async Task<WorkflowExecutionRun> SweepUntilAsync(Func<WorkflowExecutionRun, bool> reached, string expectation)
+    {
         var deadline = Stopwatch.StartNew();
         while (true)
         {
-            _outboxFailures += (await _harness.SweepAsync()).OutboxFailedCount;
+            try
+            {
+                _outboxFailures += (await _harness.SweepAsync()).OutboxFailedCount;
+            }
+            catch (OutboxProcessingException)
+            {
+                // The delivery failure could not be recorded, so the claimed item stays Delivering until claim expiry.
+                _recordingFailure.Observe();
+            }
+
             var run = await _harness.ReadRunAsync(ParentWorkflowExecutionId);
             if (reached(run))
                 return run;
@@ -385,6 +455,103 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
             Interlocked.Increment(ref _failures);
             throw _failure();
         }
+    }
+
+    /// <summary>
+    /// Wraps whichever store the backend registered so a scripted completion failure models the process failing to record
+    /// a delivery result. Implements the whole outbox contract family because the processor resolves one service and casts.
+    /// </summary>
+    private static void DecorateOutboxStore(IServiceCollection services, ScriptedRecordingFailure failure)
+    {
+        var descriptor = services.Last(candidate => candidate.ServiceType == typeof(IRuntimePostCommitOutboxStore));
+        var factory = descriptor.ImplementationFactory
+            ?? throw new InvalidOperationException("The outbox store registration is expected to be a factory.");
+        services.Remove(descriptor);
+        services.Add(ServiceDescriptor.Describe(
+            typeof(IRuntimePostCommitOutboxStore),
+            provider => new FailingRecordingOutboxStore((IRuntimePostCommitOutboxStore)factory(provider), failure),
+            descriptor.Lifetime));
+    }
+
+    private sealed class ScriptedRecordingFailure
+    {
+        private int _armed;
+        private int _failures;
+
+        public int Failures => _failures;
+
+        /// <summary>The outbox item id of the most recently claimed child-start intent.</summary>
+        public string? LastClaimedStartItemId { get; private set; }
+
+        public void ObserveClaims(IEnumerable<RuntimePostCommitOutboxClaim> claims)
+        {
+            foreach (var claim in claims)
+            {
+                if (StringComparer.Ordinal.Equals(claim.Item.Intent.Kind, DispatchWorkflowConstants.StartChildIntentKind))
+                    LastClaimedStartItemId = claim.OutboxItemId;
+            }
+        }
+
+        public void FailNextCompletion() => Interlocked.Exchange(ref _armed, 1);
+
+        /// <summary>Records that the sweep surfaced the recording failure, so the driver can move past claim expiry.</summary>
+        public void Observe() => Interlocked.CompareExchange(ref _failures, 1, 0);
+
+        public void ThrowIfArmed()
+        {
+            if (Interlocked.Exchange(ref _armed, 0) == 1)
+                throw new InvalidOperationException("A test outage refuses to record the delivery result.");
+        }
+    }
+
+    private sealed class FailingRecordingOutboxStore(IRuntimePostCommitOutboxStore inner, ScriptedRecordingFailure failure) :
+        IRuntimePostCommitOutboxStore,
+        IRuntimePostCommitOutboxClaimStore,
+        IRuntimePostCommitOutboxClaimCompletionStore
+    {
+        public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetDeliverableAsync(
+            RuntimePostCommitOutboxQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.GetDeliverableAsync(query, cancellationToken);
+
+        public ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> RecordDeliveryResultAsync(
+            RuntimePostCommitOutboxDeliveryResult result,
+            CancellationToken cancellationToken = default) =>
+            inner.RecordDeliveryResultAsync(result, cancellationToken);
+
+        public async ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>> ClaimAsync(
+            RuntimePostCommitOutboxClaimRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            var claims = await ((IRuntimePostCommitOutboxClaimStore)inner).ClaimAsync(request, cancellationToken);
+            failure.ObserveClaims(claims);
+            return claims;
+        }
+
+        public ValueTask RecordDeliveryResultAsync(
+            RuntimePostCommitOutboxClaim claim,
+            RuntimePostCommitOutboxDeliveryResult result,
+            CancellationToken cancellationToken = default) =>
+            ((IRuntimePostCommitOutboxClaimStore)inner).RecordDeliveryResultAsync(claim, result, cancellationToken);
+
+        public ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> CompleteClaimAsync(
+            RuntimePostCommitOutboxClaimCompletion completion,
+            CancellationToken cancellationToken = default)
+        {
+            failure.ThrowIfArmed();
+            return ((IRuntimePostCommitOutboxClaimCompletionStore)inner).CompleteClaimAsync(completion, cancellationToken);
+        }
+    }
+
+    /// <summary>Wall time plus a test-controlled offset, so a case can jump past a visibility timeout without freezing time.</summary>
+    private sealed class OffsetClock : TimeProvider
+    {
+        private long _offsetTicks;
+
+        public void Advance(TimeSpan amount) => Interlocked.Add(ref _offsetTicks, amount.Ticks);
+
+        public override DateTimeOffset GetUtcNow() =>
+            System.GetUtcNow().AddTicks(Interlocked.Read(ref _offsetTicks));
     }
 
     /// <summary>The default policy, which never retries, until a case asks for a faulted work item to be retried at once.</summary>
