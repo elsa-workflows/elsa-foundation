@@ -60,7 +60,7 @@ COPY Elsa.Server.slnx ./
 # Copy only restore inputs while preserving their source-tree paths. Ordinary source
 # changes no longer invalidate the expensive RID-specific restore layer. The recursive
 # patterns cover the complete project graph without a manually maintained file list.
-COPY --parents src/**/*.csproj src/**/*.targets ./
+COPY --parents src/**/*.csproj src/**/*.targets extensions/**/*.csproj extensions/**/*.targets ./
 
 # Restore only the server host; project references are pulled in transitively.
 #
@@ -79,7 +79,10 @@ RUN RID="linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/')" \
 FROM restore AS build
 
 # Copy the source tree (tests, docs, local dev artifacts are excluded via .dockerignore).
+# Optional modules live under extensions/ (#1815); the Workbench composes them, so both roots
+# are needed or the publish fails to resolve its own project references.
 COPY src/ ./src/
+COPY extensions/ ./extensions/
 
 # ReadyToRun publish (spec 134): framework-dependent, RID-targeted, crossgen'd.
 # TieredCompilation and TieredPGO are left at their .NET 10 defaults (both already

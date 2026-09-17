@@ -343,6 +343,9 @@
   <Folder Name="/tests/Elsa/Architecture/">
     <Project Path="tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Architecture/ExtensionBoundary/">
+    <Project Path="tests/Elsa/Architecture/ExtensionBoundary/Tests/Elsa.Architecture.ExtensionBoundary.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Caching/">
     <Project Path="tests/Elsa/Caching/Tests/Elsa.Caching.Tests.csproj" />
   </Folder>

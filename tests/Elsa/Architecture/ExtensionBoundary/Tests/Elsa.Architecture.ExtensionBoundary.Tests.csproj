@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <!--
+    Deliberately references no Elsa project.
+
+    This guard reads .csproj files off disk rather than inspecting compiled assemblies, so it needs
+    nothing on its reference graph. That is what lets it sit inside the core-only solution filter and
+    prove the boundary from within core. Its sibling Elsa.Architecture.Tests cannot: it references
+    several optional modules directly, so including it would expand the core-only filter's dependency
+    closure back over most of the tree and the filter would stop proving anything.
+
+    Keep it reference-free. A ProjectReference added here silently widens the core-only filter.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+</Project>
