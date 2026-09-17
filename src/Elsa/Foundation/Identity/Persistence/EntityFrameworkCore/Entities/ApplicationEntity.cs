@@ -7,7 +7,7 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 /// retained for lossless contract round trips while the normalized storage key makes lookups
 /// independent of the provider's collation rules.
 /// </summary>
-public sealed class ApplicationEntity
+public sealed class ApplicationEntity : IRevisionedIdentityEntity
 {
     public string Id { get; set; } = "";
     public string TenantId { get; set; } = "";

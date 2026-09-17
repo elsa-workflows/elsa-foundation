@@ -1,7 +1,6 @@
 using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
-using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
 
@@ -83,11 +82,11 @@ public sealed class EfApplicationStore(
         var expectedVersion = 0L;
         if (expectedRevision is not null &&
             !IdentityEntityFrameworkRevisionCodec.TryGetVersion(expectedRevision, out expectedVersion))
-            return Conflict();
+            return EfIdentityStoreSupport.InvalidRevision();
 
         return expectedRevision is null
-            ? await SaveCreateOnlyAsync(application, cancellationToken)
-            : await SaveCompareAndSwapAsync(application, expectedVersion, cancellationToken);
+            ? await EfIdentityRevisionedRowWrite.SaveCreateOnlyAsync(context, Row(application), cancellationToken)
+            : await EfIdentityRevisionedRowWrite.SaveCompareAndSwapAsync(context, Row(application), expectedVersion, cancellationToken);
     }
 
     private async Task SaveUnconditionallyAsync(ApplicationRecord application, CancellationToken cancellationToken)
@@ -95,159 +94,15 @@ public sealed class EfApplicationStore(
         ArgumentNullException.ThrowIfNull(application);
         ValidateApplication(application);
         PrepareTenantWrite(application.TenantId, cancellationToken);
-        await EfIdentityStoreSupport.UnconditionalWrites.RunAsync(context, async () =>
-        {
-            try
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var row = await FindEntityForWriteAsync(application, cancellationToken);
-                if (row is null)
-                    context.Add(CreateEntity(application, 1));
-                else
-                {
-                    Apply(row, application);
-                    row.Revision = checked(row.Revision + 1);
-                }
-
-                await context.SaveChangesAsync(cancellationToken);
-                context.ChangeTracker.Clear();
-                return;
-            }
-            catch (Exception exception) when (EfIdentityStoreSupport.UnconditionalWrites.ShouldRetry(context, exception))
-            {
-                context.ChangeTracker.Clear();
-                throw;
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                context.ChangeTracker.Clear();
-                throw;
-            }
-            catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
-            {
-                context.ChangeTracker.Clear();
-                throw Failure("Unable to save the Identity application.", exception);
-            }
-        }, _ => throw Failure(
-            "Unable to save the Identity application after bounded concurrency retries.",
-            new InvalidOperationException("The Identity application was concurrently modified.")), cancellationToken);
+        await EfIdentityRevisionedRowWrite.SaveUnconditionallyAsync(context, Row(application), cancellationToken);
     }
 
-    private async Task<IamRevisionSaveResult> SaveCreateOnlyAsync(
-        ApplicationRecord application,
-        CancellationToken cancellationToken)
-    {
-        return await EfIdentityStoreSupport.TransientWrites.RunUntilSettledAsync<IamRevisionSaveResult>(context, async () =>
-        {
-            try
-            {
-                if (await FindEntityForWriteAsync(application, cancellationToken) is not null)
-                {
-                    context.ChangeTracker.Clear();
-                    return Conflict();
-                }
-
-                context.Add(CreateEntity(application, 1));
-                await context.SaveChangesAsync(cancellationToken);
-                context.ChangeTracker.Clear();
-                return Saved(1);
-            }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
-            {
-                context.ChangeTracker.Clear();
-                return Conflict();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                context.ChangeTracker.Clear();
-                return Conflict();
-            }
-            catch (Exception exception) when (EfIdentityStoreSupport.TransientWrites.ShouldRetry(context, exception))
-            {
-                context.ChangeTracker.Clear();
-                return EfWriteAttempt<IamRevisionSaveResult>.Retry(exception);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                context.ChangeTracker.Clear();
-                throw;
-            }
-            catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
-            {
-                context.ChangeTracker.Clear();
-                throw Failure("Unable to create the Identity application.", exception);
-            }
-        }, _ => throw Failure(
-            "Unable to create the Identity application after bounded transient retries.",
-            new InvalidOperationException("The Identity application could not be created.")), cancellationToken);
-    }
-
-    private async Task<IamRevisionSaveResult> SaveCompareAndSwapAsync(
-        ApplicationRecord application,
-        long expectedVersion,
-        CancellationToken cancellationToken)
-    {
-        return await EfIdentityStoreSupport.TransientWrites.RunUntilSettledAsync<IamRevisionSaveResult>(context, async () =>
-        {
-            try
-            {
-                var row = await FindEntityForWriteAsync(application, cancellationToken);
-                if (row is null)
-                {
-                    context.ChangeTracker.Clear();
-                    return new IamRevisionSaveResult(IamRevisionSaveStatus.NotFound);
-                }
-
-                if (row.Revision != expectedVersion)
-                {
-                    context.ChangeTracker.Clear();
-                    return Conflict();
-                }
-
-                var nextRevision = checked(row.Revision + 1);
-                Apply(row, application);
-                row.Revision = nextRevision;
-                await context.SaveChangesAsync(cancellationToken);
-                context.ChangeTracker.Clear();
-                return Saved(nextRevision);
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                context.ChangeTracker.Clear();
-                try
-                {
-                    var exists = await ExistsAsync(application, cancellationToken);
-                    context.ChangeTracker.Clear();
-                    return exists ? Conflict() : new IamRevisionSaveResult(IamRevisionSaveStatus.NotFound);
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
-                {
-                    throw Failure("Unable to classify the Identity application concurrency conflict.", exception);
-                }
-            }
-            catch (Exception exception) when (EfIdentityStoreSupport.TransientWrites.ShouldRetry(context, exception))
-            {
-                context.ChangeTracker.Clear();
-                return EfWriteAttempt<IamRevisionSaveResult>.Retry(exception);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                context.ChangeTracker.Clear();
-                throw;
-            }
-            catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
-            {
-                context.ChangeTracker.Clear();
-                throw Failure("Unable to update the Identity application.", exception);
-            }
-        }, _ => throw Failure(
-            "Unable to update the Identity application after bounded transient retries.",
-            new InvalidOperationException("The Identity application could not be updated.")), cancellationToken);
-    }
+    private EfIdentityRevisionedRow<ApplicationEntity> Row(ApplicationRecord application) => new(
+        "Identity application",
+        cancellationToken => FindEntityForWriteAsync(application, cancellationToken),
+        cancellationToken => ExistsAsync(application, cancellationToken),
+        static () => new ApplicationEntity(),
+        entity => Apply(entity, application));
 
     private async Task<ApplicationEntity?> FindEntityForWriteAsync(
         ApplicationRecord application,
@@ -276,13 +131,6 @@ public sealed class EfApplicationStore(
         context.EnsureProviderBinding();
         IdentityEntityFrameworkAccessGuard.EnsureTenant(accessContextAccessor, tenantId);
         cancellationToken.ThrowIfCancellationRequested();
-    }
-
-    private static ApplicationEntity CreateEntity(ApplicationRecord application, long revision)
-    {
-        var entity = new ApplicationEntity { Revision = revision };
-        Apply(entity, application);
-        return entity;
     }
 
     private static void Apply(ApplicationEntity entity, ApplicationRecord application)
@@ -332,11 +180,6 @@ public sealed class EfApplicationStore(
         ArgumentNullException.ThrowIfNull(application.AllowedGrantTypes);
         ArgumentNullException.ThrowIfNull(application.Scopes);
     }
-
-    private static IamRevisionSaveResult Saved(long revision) =>
-        new(IamRevisionSaveStatus.Saved, IdentityEntityFrameworkRevisionCodec.FromVersion(revision));
-
-    private static IamRevisionSaveResult Conflict() => new(IamRevisionSaveStatus.Conflict);
 
     private static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception) =>
         new(message, exception);
