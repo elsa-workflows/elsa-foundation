@@ -1,4 +1,4 @@
-namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
+namespace Elsa.Persistence.EntityFramework;
 
 // Canonical persisted-key projection selected after the merged Phase 1 EF pilot exposed that
 // .NET 10 invariant casing can consume different Unicode data on different hosts. The baseline is
@@ -12,7 +12,8 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
 // the .NET Unicode-16 mappings except for U+017F and the 25 scalars
 // U+16EBB..U+16ED3 observed in the Phase 1 development environment. Tests pin this compatibility
 // boundary exhaustively; the current host runtime is deliberately not a compatibility oracle.
-internal static class UnicodeOrdinalCasingData
+// No generator is checked in; UnicodeOrdinalCasingTable.cs reads this data.
+public static partial class UnicodeOrdinalCasingTable
 {
     public const string UnicodeVersion = "16.0.0+phase1-dotnet10-delta";
     public const int SimpleUppercaseMappingCount = 1504;

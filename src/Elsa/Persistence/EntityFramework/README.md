@@ -31,6 +31,7 @@ until its migration slice proves four-provider parity and performs the explicit 
 | `EfRelationalExceptionClassifier` | Classify unique-key violations and transient write conflicts by provider error code without referencing provider engines; `IsSaveConflict` recognizes a race SaveChanges reported even when the provider's execution strategy wrapped it in `InvalidOperationException` (SQL Server, PostgreSQL) |
 | `EfProviderBindingValidator` | Fail a host closed at startup, in the CShells `Prepare` phase ahead of every module migrator, when a configured module's provider engine is missing or no longer exposes what the reflection binding calls |
 | `EfWriteRetry` | The one bounded retry loop for compare-and-swap and race-prone store writes: the store supplies budget (`DefaultMaxAttempts` unless pinned), the `EfWriteConflict` kinds or predicate it retries, backoff, and exhaustion outcome; a transient conflict inside a caller's open transaction is rethrown, never retried |
+| `UnicodeOrdinalCasingTable` | The pinned Unicode simple-uppercase mappings that Secrets and OpenTelemetry project persisted ordinal-ignore-case search keys from; each consumer pins `ComputeMappingFingerprint()` in its algorithm id, so the table is never edited in place |
 
 ## Choosing the policy (operator setting)
 
