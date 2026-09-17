@@ -43,7 +43,7 @@ public sealed class EfReusableActivityImportCommand(
     IPayloadSerializer payloadSerializer,
     TimeProvider? timeProvider = null) : IReusableActivityImportCommand
 {
-    private const int MaximumAttempts = 3;
+    private static readonly EfWriteRetry WriteConflicts = new(EfWriteRetry.DefaultMaxAttempts, IsWriteConflict);
     private const int ReconciliationReads = 3;
     private const string DefinitionBindingKind = "elsa3ReusableImportDefinitionBinding";
     private const string AuthoringOperationKind = "elsa3.import.activity-authoring.v1";
@@ -68,7 +68,8 @@ public sealed class EfReusableActivityImportCommand(
         var tenantId = WritableTenant(mutation);
         var plan = CreatePlan(mutation, tenantId, scoped);
 
-        for (var attempt = 1; ; attempt++)
+        // Every attempt opens its own shared transaction over fresh contexts, so no caller transaction can be in scope.
+        return await WriteConflicts.RunUntilSettledAsync<ReusableActivityImportCommitResult>(null, async () =>
         {
             var commitAttemptId = Guid.NewGuid().ToString("N");
             var outcome = await AttemptAsync(mutation, plan, tenantId, scoped, commitAttemptId, cancellationToken);
@@ -78,23 +79,23 @@ public sealed class EfReusableActivityImportCommand(
             var failure = outcome.Failure!;
             if (failure is EfCommitOutcomeUnknownException)
                 return await ReconcileUncertainCommitAsync(mutation, scoped, commitAttemptId, failure, cancellationToken);
-            if (!IsWriteConflict(failure))
+            if (!WriteConflicts.ShouldRetry(null, failure))
                 throw Persistence("atomic apply", mutation, failure);
-            if (attempt < MaximumAttempts)
-                continue;
-
+            return EfWriteAttempt<ReusableActivityImportCommitResult>.Retry(failure);
+        }, async failure =>
+        {
             if (scoped)
             {
-                var reconciled = await ReconcileAsync(mutation, failure);
+                var reconciled = await ReconcileAsync(mutation, failure!);
                 if (reconciled is not null)
                     return new(true, reconciled.Receipt with { Status = ReusableActivityImportReceiptStatus.AlreadyImported });
                 throw new ReusableActivityImportCollisionException(
                     "The Elsa 3 import identities changed before the atomic commit; no partial import was written.",
-                    failure);
+                    failure!);
             }
 
-            throw Persistence("atomic apply", mutation, failure);
-        }
+            throw Persistence("atomic apply", mutation, failure!);
+        }, cancellationToken);
     }
 
     private async Task<AttemptOutcome> AttemptAsync(

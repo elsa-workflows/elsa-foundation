@@ -9,7 +9,10 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 public sealed class EfSecretRepository(SecretsDbContext context) : ISecretRepository, IRevisionAwareSecretRepository, IPagedSecretRepository
 {
     private const int MaximumSubstringSearchCatalogRows = 10_000;
-    private const int MaximumUnconditionalSaveAttempts = 3;
+    // SaveAsync is an unconditional last-write-wins operation. After another writer wins the optimistic race, or a
+    // concurrent creator wins between FindAsync and INSERT, it refreshes and applies this caller's complete document.
+    // Pinned: SqliteEfSecretRepositoryTests asserts that the save gives up after 3 attempts.
+    private static readonly EfWriteRetry UnconditionalSaves = new(3, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey);
 
     public async ValueTask<Secret?> FindAsync(
         string tenantId,
@@ -104,7 +107,7 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
         ArgumentNullException.ThrowIfNull(secret);
         ValidateIdentity(secret.TenantId, secret.Name);
         var document = SecretDocument.FromSecret(secret);
-        for (var attempt = 0; attempt < MaximumUnconditionalSaveAttempts; attempt++)
+        await UnconditionalSaves.RunAsync(context, async () =>
         {
             var existing = await context.Secrets.FindAsync([secret.TenantId, secret.Name], cancellationToken);
             if (existing is null)
@@ -115,34 +118,19 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
             try
             {
                 await context.SaveChangesAsync(cancellationToken);
-                return;
-            }
-            catch (DbUpdateConcurrencyException) when (attempt + 1 < MaximumUnconditionalSaveAttempts)
-            {
-                // SaveAsync is an unconditional last-write-wins operation. Refresh after another
-                // writer wins the optimistic race, then apply this caller's complete document.
-                context.ChangeTracker.Clear();
-            }
-            catch (DbUpdateConcurrencyException exception)
-            {
-                context.ChangeTracker.Clear();
-                throw new InvalidOperationException($"Could not save secret '{secret.Name}' after {MaximumUnconditionalSaveAttempts} attempts.", exception);
-            }
-            catch (DbUpdateException exception)
-                when (attempt + 1 < MaximumUnconditionalSaveAttempts && EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
-            {
-                // A concurrent creator may win between FindAsync and INSERT. Refresh and turn the
-                // operation into an update on the next attempt rather than reporting a conflict.
-                context.ChangeTracker.Clear();
             }
             catch (DbUpdateException exception)
             {
                 context.ChangeTracker.Clear();
+                if (UnconditionalSaves.ShouldRetry(context, exception))
+                    throw;
                 throw new InvalidOperationException($"Could not save secret '{secret.Name}'.", exception);
             }
-        }
-
-        throw new InvalidOperationException($"Could not save secret '{secret.Name}'.");
+        }, lastRace => throw new InvalidOperationException(
+            lastRace is DbUpdateConcurrencyException
+                ? $"Could not save secret '{secret.Name}' after {UnconditionalSaves.MaxAttempts} attempts."
+                : $"Could not save secret '{secret.Name}'.",
+            lastRace), cancellationToken);
     }
 
     public async ValueTask<SecretRevisionSaveResult> SaveWithRevisionAsync(
