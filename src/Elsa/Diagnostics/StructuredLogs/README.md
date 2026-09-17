@@ -1,6 +1,6 @@
 # Elsa.Diagnostics.StructuredLogs
 
-Captures host log events (`Microsoft.Extensions.Logging`) into a store and exposes them to Elsa Studio over HTTP (recent history, known sources) and Server-Sent Events (live tail). It is a **server** shell feature. Without a persistence feature, `InMemoryStructuredLogStore` remains the default. The store role is isolated behind `IStructuredLogStore` so durable storage can replace that default without changing capture, transport, or the UI. The current first-party durable composition is EF Core (see _Persistence_).
+Captures the log events (`Microsoft.Extensions.Logging`) of the shell that enables it into a store and exposes them to Elsa Studio over HTTP (recent history, known sources) and Server-Sent Events (live tail). It is a **server** shell feature. Without a persistence feature, `InMemoryStructuredLogStore` remains the default. The store role is isolated behind `IStructuredLogStore` so durable storage can replace that default without changing capture, transport, or the UI. The current first-party durable composition is EF Core (see _Persistence_).
 
 Feature name (manifest / appsettings key): **`DiagnosticsStructuredLogs`**.
 
@@ -11,7 +11,7 @@ Feature name (manifest / appsettings key): **`DiagnosticsStructuredLogs`**.
   - **`InMemoryStructuredLogStore`** → `IStructuredLogStore` — a bounded ring buffer holding recent history. Registered with `TryAddSingleton` so a persistence feature can override it.
   - **`InMemoryStructuredLogLiveFeed`** → `IStructuredLogLiveFeed` + `IStructuredLogLivePublisher` — an independent bounded channel per subscriber. For SSE it is only a wake hint; durable storage remains the payload and ordering authority.
 - **`LocalStructuredLogSourceProvider`** → `IStructuredLogSourceProvider` — exposes the single local host as the only known source and stamps every captured entry with its source id.
-- **`StructuredLogCaptureProvider`** — an `ILoggerProvider` (registered via `TryAddEnumerable`) that bridges host logging into `IStructuredLogSink`. It ignores its own categories (prefix `Elsa.Diagnostics.StructuredLogs`) to prevent feedback loops and swallows sink failures so capture never throws into the host logging path.
+- **`StructuredLogCaptureProvider`** — an `ILoggerProvider` (registered via `TryAddEnumerable`) that bridges the shell's logging into `IStructuredLogSink` (see _Capture scope_). It ignores its own categories (prefix `Elsa.Diagnostics.StructuredLogs`) to prevent feedback loops and swallows sink failures so capture never throws into the host logging path.
 - **Endpoints** (explicit Minimal APIs mapped by `StructuredLogsFeature.MapEndpoints` through
   `StructuredLogsApi.MapStructuredLogsApi`):
   - `GET /_elsa/studio/diagnostics/structured-logs/recent` — newest-aligned recent entries as a JSON array.
@@ -64,9 +64,14 @@ they can coexist with third-party FastEndpoints routes while using the same Foun
 cancellation, and bounds cleanup of a pending async read to five seconds. The endpoint validates filters,
 replay cursors, and its first durable page before starting the SSE response.
 
-## Capture scope (host-wide logging)
+## Capture scope (the shell's loggers, not the host's)
 
-`StructuredLogCaptureProvider` is registered as an `ILoggerProvider` in the feature's `ConfigureServices`. Because the CShells default shell shares the host's root `ILoggerFactory`, this captures **host-wide** log events — validated against `Elsa.Workbench`, where the feed surfaces EF Core, FastEndpoints, and other host-level logs, not just the feature's own scope. If a future deployment topology gives a shell an isolated logger factory and capture only sees that scope, register the provider at the host level instead (on the host `builder.Services`).
+`StructuredLogCaptureProvider` is registered as an `ILoggerProvider` in the feature's `ConfigureServices`, so it joins the service container of the shell that enables the feature. CShells builds that container from copies of the host's service registrations plus the shell's features. The shell therefore gets its own `ILoggerFactory`, which writes to the logger providers the host registered, such as the console, and to capture. The host's root `ILoggerFactory` never receives the capture provider.
+
+- **Captured:** loggers resolved from the shell's container. That covers the shell's features and background tasks, and EF Core for the shell's `DbContext`s.
+- **Not captured:** loggers resolved from the root host. In `Elsa.Workbench` these include `CShells.*` (shell activation, draining and endpoint registration), `Microsoft.Hosting.Lifetime`, and `Elsa.Workbench.Readiness`. They reach the console but never the store.
+
+Capturing root host loggers would need a host-level provider that forwards into a shell's sink. That provider would have to choose a shell, drop events logged before that shell's store starts or after it stops, and follow shell reloads. No such forwarder exists.
 
 ## Persistence
 
