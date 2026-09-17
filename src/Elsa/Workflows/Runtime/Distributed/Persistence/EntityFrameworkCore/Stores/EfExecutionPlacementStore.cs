@@ -18,7 +18,10 @@ public sealed class EfExecutionPlacementStore(
     ExecutionPlacementDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IExecutionPlacementStore
 {
+    // Pinned: EfExecutionPlacementStoreTests asserts that claim and release contention give up after 8 attempts.
     private const int MaxCasAttempts = 8;
+    private static readonly EfWriteRetry ClaimRetry = new(MaxCasAttempts, exception => IsProviderConflict(exception, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey | EfWriteConflict.Transient));
+    private static readonly EfWriteRetry ReleaseRetry = new(MaxCasAttempts, exception => IsProviderConflict(exception, EfWriteConflict.Concurrency | EfWriteConflict.Transient));
 
     /// <inheritdoc/>
     /// <exception cref="ExecutionPlacementEntityFrameworkPersistenceException">The EF provider cannot complete the lookup.</exception>
@@ -67,87 +70,55 @@ public sealed class EfExecutionPlacementStore(
         var scope = RequireScope();
         var id = EfDistributedIdentity.CreateId(scope, claim.WorkflowExecutionId);
 
-        Exception lastContention = null!;
-        for (var attempt = 0; attempt < MaxCasAttempts; attempt++)
+        return await CompareAndSwapAsync(ClaimRetry, "claiming", claim.WorkflowExecutionId, async () =>
         {
-            context.ChangeTracker.Clear();
-            try
-            {
-                var current = await context.PlacementLeases.SingleOrDefaultAsync(
-                    row => row.Id == id,
-                    cancellationToken);
-                if (current is not null)
-                    EnsureIdentity(current, scope, claim.WorkflowExecutionId, id);
+            var current = await context.PlacementLeases.SingleOrDefaultAsync(
+                row => row.Id == id,
+                cancellationToken);
+            if (current is not null)
+                EnsureIdentity(current, scope, claim.WorkflowExecutionId, id);
 
-                var isLive = current is not null && IsLive(current, now);
+            var isLive = current is not null && IsLive(current, now);
 
-                if (current is not null && isLive &&
-                    !StringComparer.Ordinal.Equals(current.OwnerId, claim.OwnerId))
-                {
-                    return new ExecutionPlacementClaimResult(
-                        ExecutionPlacementClaimOutcome.Denied,
-                        Map(current));
-                }
+            if (current is not null && isLive &&
+                !StringComparer.Ordinal.Equals(current.OwnerId, claim.OwnerId))
+            {
+                return new ExecutionPlacementClaimResult(
+                    ExecutionPlacementClaimOutcome.Denied,
+                    Map(current));
+            }
 
-                var outcome = current is not null &&
-                              StringComparer.Ordinal.Equals(current.OwnerId, claim.OwnerId) &&
-                              isLive
-                    ? ExecutionPlacementClaimOutcome.Renewed
-                    : ExecutionPlacementClaimOutcome.Granted;
-                var lease = new ExecutionPlacementLease(
-                    claim.WorkflowExecutionId,
-                    claim.OwnerId,
-                    checked((current?.PlacementToken ?? 0) + 1),
-                    claim.RequestedAt,
-                    claim.ExpiresAt);
+            var outcome = current is not null &&
+                          StringComparer.Ordinal.Equals(current.OwnerId, claim.OwnerId) &&
+                          isLive
+                ? ExecutionPlacementClaimOutcome.Renewed
+                : ExecutionPlacementClaimOutcome.Granted;
+            var lease = new ExecutionPlacementLease(
+                claim.WorkflowExecutionId,
+                claim.OwnerId,
+                checked((current?.PlacementToken ?? 0) + 1),
+                claim.RequestedAt,
+                claim.ExpiresAt);
 
-                if (current is null)
-                {
-                    context.PlacementLeases.Add(ToEntity(lease, scope, id, revision: 1));
-                }
-                else
-                {
-                    current.OwnerId = lease.OwnerId;
-                    current.OwnerIdHash = EfDistributedIdentity.Hash(lease.OwnerId);
-                    current.PlacementToken = lease.PlacementToken;
-                    current.AcquiredAt = lease.AcquiredAt;
-                    current.ExpiresAtUtcTicks = lease.ExpiresAt.UtcTicks;
-                    current.ExpiresAtOffsetMinutes = checked((int)lease.ExpiresAt.Offset.TotalMinutes);
-                    current.IsReleased = false;
-                    current.Revision = checked(current.Revision + 1);
-                }
+            if (current is null)
+            {
+                context.PlacementLeases.Add(ToEntity(lease, scope, id, revision: 1));
+            }
+            else
+            {
+                current.OwnerId = lease.OwnerId;
+                current.OwnerIdHash = EfDistributedIdentity.Hash(lease.OwnerId);
+                current.PlacementToken = lease.PlacementToken;
+                current.AcquiredAt = lease.AcquiredAt;
+                current.ExpiresAtUtcTicks = lease.ExpiresAt.UtcTicks;
+                current.ExpiresAtOffsetMinutes = checked((int)lease.ExpiresAt.Offset.TotalMinutes);
+                current.IsReleased = false;
+                current.Revision = checked(current.Revision + 1);
+            }
 
-                await context.SaveChangesAsync(cancellationToken);
-                return new ExecutionPlacementClaimResult(outcome, lease);
-            }
-            catch (OperationCanceledException)
-            {
-                context.ChangeTracker.Clear();
-                throw;
-            }
-            catch (DbUpdateConcurrencyException exception)
-            {
-                context.ChangeTracker.Clear();
-                lastContention = exception;
-            }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception) || EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
-            {
-                context.ChangeTracker.Clear();
-                lastContention = exception;
-            }
-            catch (DbException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
-            {
-                context.ChangeTracker.Clear();
-                lastContention = exception;
-            }
-            catch (Exception exception) when (IsPersistenceBoundaryFailure(exception))
-            {
-                context.ChangeTracker.Clear();
-                throw NormalizeProviderFailure("claiming", claim.WorkflowExecutionId, exception);
-            }
-        }
-
-        throw ContentionFailure("claiming", claim.WorkflowExecutionId, lastContention);
+            await context.SaveChangesAsync(cancellationToken);
+            return new ExecutionPlacementClaimResult(outcome, lease);
+        }, cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -163,56 +134,24 @@ public sealed class EfExecutionPlacementStore(
         var scope = RequireScope();
         var id = EfDistributedIdentity.CreateId(scope, lease.WorkflowExecutionId);
 
-        Exception lastContention = null!;
-        for (var attempt = 0; attempt < MaxCasAttempts; attempt++)
+        _ = await CompareAndSwapAsync(ReleaseRetry, "releasing", lease.WorkflowExecutionId, async () =>
         {
-            context.ChangeTracker.Clear();
-            try
-            {
-                var current = await context.PlacementLeases.SingleOrDefaultAsync(
-                    row => row.Id == id,
-                    cancellationToken);
-                if (current is null)
-                    return;
-                EnsureIdentity(current, scope, lease.WorkflowExecutionId, id);
-                if (current.IsReleased ||
-                    !StringComparer.Ordinal.Equals(current.OwnerId, lease.OwnerId) ||
-                    current.PlacementToken != lease.PlacementToken)
-                    return;
+            var current = await context.PlacementLeases.SingleOrDefaultAsync(
+                row => row.Id == id,
+                cancellationToken);
+            if (current is null)
+                return false;
+            EnsureIdentity(current, scope, lease.WorkflowExecutionId, id);
+            if (current.IsReleased ||
+                !StringComparer.Ordinal.Equals(current.OwnerId, lease.OwnerId) ||
+                current.PlacementToken != lease.PlacementToken)
+                return false;
 
-                current.IsReleased = true;
-                current.Revision = checked(current.Revision + 1);
-                await context.SaveChangesAsync(cancellationToken);
-                return;
-            }
-            catch (OperationCanceledException)
-            {
-                context.ChangeTracker.Clear();
-                throw;
-            }
-            catch (DbUpdateConcurrencyException exception)
-            {
-                context.ChangeTracker.Clear();
-                lastContention = exception;
-            }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
-            {
-                context.ChangeTracker.Clear();
-                lastContention = exception;
-            }
-            catch (DbException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
-            {
-                context.ChangeTracker.Clear();
-                lastContention = exception;
-            }
-            catch (Exception exception) when (IsPersistenceBoundaryFailure(exception))
-            {
-                context.ChangeTracker.Clear();
-                throw NormalizeProviderFailure("releasing", lease.WorkflowExecutionId, exception);
-            }
-        }
-
-        throw ContentionFailure("releasing", lease.WorkflowExecutionId, lastContention);
+            current.IsReleased = true;
+            current.Revision = checked(current.Revision + 1);
+            await context.SaveChangesAsync(cancellationToken);
+            return true;
+        }, cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -262,6 +201,24 @@ public sealed class EfExecutionPlacementStore(
             throw NormalizeProviderFailure("listing", $"scope:{scopeHash}", exception);
         }
     }
+
+    private ValueTask<T> CompareAndSwapAsync<T>(
+        EfWriteRetry retry,
+        string operation,
+        string workflowExecutionId,
+        Func<Task<T>> attempt,
+        CancellationToken cancellationToken) =>
+        EfDistributedCompareAndSwap.RunAsync(
+            context,
+            retry,
+            attempt,
+            exception => IsPersistenceBoundaryFailure(exception) ? NormalizeProviderFailure(operation, workflowExecutionId, exception) : null,
+            lastContention => ContentionFailure(operation, workflowExecutionId, lastContention!),
+            cancellationToken);
+
+    // Placement retries only conflicts raised as provider or update exceptions, never ones wrapped in another exception type.
+    private static bool IsProviderConflict(Exception exception, EfWriteConflict conflicts) =>
+        exception is DbUpdateException or DbException && EfRelationalExceptionClassifier.IsWriteConflict(exception, conflicts);
 
     private string RequireScope() => accessContextAccessor.Current.RequireScope().Value;
 
