@@ -8,7 +8,7 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 /// database's collation and round trips do not rewrite user-supplied provider names or tenants.
 /// </summary>
 [NotMapped]
-public abstract class ProviderConfigurationEntity
+public abstract class ProviderConfigurationEntity : IRevisionedIdentityEntity
 {
     public string Id { get; set; } = "";
     public string? TenantId { get; set; }

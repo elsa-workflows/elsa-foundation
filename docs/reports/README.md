@@ -4,7 +4,7 @@ Reports are point-in-time findings. They may become work units, but they are not
 
 ## Current reports
 
-- [EF Core persistence completion ledger](ef-core-persistence-completion-ledger.md) - active Program #1665 baseline and removal-audit boundary; #1671 owns entry-level expansion before broad implementation.
+- [EF Core persistence completion ledger](ef-core-persistence-completion-ledger.md) - closed (2026-09-16) Program #1665 ledger: the pre-program inventory plus each row's replacement, default-flip (#1763) and deletion (#1764) disposition, with the carry-forwards it does not claim.
 - [Secrets EF persistence pilot verdict and conditional replacement plan 2026-09](secrets-ef-persistence-pilot-verdict-2026-09.md) - historical narrow technical pilot for provider-derived EF contexts, dual migration modes, and per-shell EF/Groundwork selection; its bounded recommendation is superseded by ADR 0073 while the technical evidence remains valid.
 - [Wave 4 Agent REST and SSE API migration 2026-08](wave-4-agent-api-migration-2026-08.md) - exact eleven-route FastEndpoints-before HTTP/OpenAPI evidence, shared Agent permissions, SSE framing/cancellation, mixed coexistence, and collectible owner lifecycle.
 - [Structured Logs Minimal API migration 2026-08](structured-logs-minimal-api-migration-2026-08.md) - streaming program wave: exact HTTP/SSE/OpenAPI parity, Foundation authorization and FastEndpoints coexistence, production dependency retirement, and repeated clean collection after real OpenAPI generation with no module-owned transformer contexts.

@@ -71,6 +71,7 @@ public sealed class EfActivityPublicationReceiptStore(
         var candidates = await context.ActivityPublicationReceipts.AsNoTracking()
             .Where(row => row.TenantIdHash == EfPublishingStoreSupport.TenantHash(scope) &&
                           row.ReceiptKeyHash == EfPublishingStoreSupport.Hash(receiptKey))
+            .OrderBy(row => row.Id)
             .Take(2)
             .ToArrayAsync(cancellationToken);
         if (candidates.Length == 0)

@@ -33,20 +33,6 @@ public sealed class RuntimePostCommitOutboxStoreTests
     }
 
     [Fact]
-    public async Task InMemoryRuntimeCheckpointCommitStore_RejectsOwnerFilteredQueriesBecauseClaimingIsOutOfScope()
-    {
-        var store = new InMemoryRuntimeCheckpointCommitStore();
-        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1"));
-
-        var exception = await Assert.ThrowsAsync<NotSupportedException>(() => store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(
-            now: _now,
-            limit: 10,
-            ownerId: "dispatcher-1")).AsTask());
-
-        Assert.Contains("ownership filtering", exception.Message);
-    }
-
-    [Fact]
     public async Task InMemoryRuntimeCheckpointCommitStore_ReturnsDeliverableItemsInDeterministicOrderWithLimit()
     {
         var store = new InMemoryRuntimeCheckpointCommitStore();
@@ -106,19 +92,34 @@ public sealed class RuntimePostCommitOutboxStoreTests
         Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddMinutes(1), 10)));
     }
 
+    /// <summary>
+    /// Same subject as before (a claimed item receiving a claim-less delivery result), corrected objective. This used to
+    /// assert an InvalidOperationException; that throw WAS the defect behind issue #1798 — it escaped the drain
+    /// orchestrator and surfaced as an HTTP 500 on workflow start whenever the resumption sweep claimed an item a live
+    /// drain was delivering. Contention between the two deliverers is legitimate, so the store now reports the loss and
+    /// writes nothing.
+    /// </summary>
     [Fact]
-    public async Task ClaimedItem_RejectsLegacyResultWithoutOwnerAndFence()
+    public async Task ClaimedItem_ReportsSupersededForResultWithoutOwnerAndFence()
     {
         var store = new InMemoryRuntimeCheckpointCommitStore();
         await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1"));
         await store.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
             "worker-1", _now, TimeSpan.FromMinutes(1), 10));
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult(
-                "outbox-1", RuntimePostCommitOutboxStatus.Delivered, _now.AddSeconds(1))).AsTask());
+        var outcome = await store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult(
+            "outbox-1", RuntimePostCommitOutboxStatus.Delivered, _now.AddSeconds(1)));
 
-        Assert.Contains("owner and fencing token", exception.Message);
+        Assert.Equal(RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner, outcome);
+
+        // Nothing was written: the owning deliverer's claim is intact, so its completion still governs.
+        var current = await store.FindAsync("outbox-1");
+        Assert.NotNull(current);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, current.Status);
+        Assert.Equal("worker-1", current.DeliveringOwnerId);
+        Assert.Equal(1, current.DeliveryFencingToken);
+        Assert.Equal(0, current.DeliveryAttemptCount);
+        Assert.Null(current.DeliveredAt);
     }
 
     [Fact]

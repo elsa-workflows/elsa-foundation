@@ -183,8 +183,8 @@ public sealed class EfWorkflowPortfolioDataSource(
         CancellationToken cancellationToken)
     {
         // SQLite cannot translate DateTimeOffset ordering, while the design contract requires full
-        // identity ordering. The candidate set is explicitly bounded before the provider read, then the
-        // small bounded projection is sorted using the domain's ordinal rules on the client.
+        // identity ordering. The candidate set is explicitly bounded in identity order before the provider
+        // read, then the small bounded projection is sorted using the domain's ordinal rules on the client.
         var rows = await CurrentDraftQuery(scope)
             .Take(MaximumSourceRows + 1)
             .ToArrayAsync(cancellationToken);
@@ -203,6 +203,8 @@ public sealed class EfWorkflowPortfolioDataSource(
         designContext.Drafts
             .AsNoTracking()
             .Where(row => EF.Property<string>(row, "ScopeKey") == ScopeKey(scope) && row.TenantId == scope)
+            .OrderBy(row => row.Id)
+            .ThenBy(row => row.IdLookupHash)
             .Select(row => new DraftProjection(row, EF.Property<string>(row, "ScopeKey")));
 
     private WorkflowDefinitionDraft ReadDraftState(WorkflowDefinitionDraft row)

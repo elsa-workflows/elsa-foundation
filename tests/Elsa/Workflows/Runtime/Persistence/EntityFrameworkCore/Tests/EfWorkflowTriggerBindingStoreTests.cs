@@ -9,8 +9,10 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using static Elsa.Persistence.EntityFramework.Tests.ProviderFailures;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
@@ -313,12 +315,72 @@ public sealed class EfWorkflowTriggerBindingStoreTests
         Assert.False((await context.WorkflowTriggerBindings.AsNoTracking().SingleAsync()).IsActive);
     }
 
+    [Fact]
+    public async Task Activation_reports_a_transient_conflict_the_provider_execution_strategy_wrapped_and_rolls_back()
+    {
+        await using var activation = await PreparedActivation.CreateAsync(FailingSaveInterceptor.WrappedDeadlock());
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => activation.Store.ActivateAsync("activation-a", null).AsTask());
+
+        Assert.EndsWith("encountered a transient write conflict; retry the operation.", failure.Message, StringComparison.Ordinal);
+        Assert.Empty(activation.Context.ChangeTracker.Entries());
+        Assert.Empty((await activation.Store.ListByStimulusAsync(new WorkflowTriggerBindingPageQuery("Event", "hash-a"))).Items);
+    }
+
+    [Fact]
+    public async Task Activation_does_not_report_a_wrapped_provider_failure_that_is_not_a_transient_conflict_as_one()
+    {
+        var saves = FailingSaveInterceptor.WrappedProviderFailure();
+        await using var activation = await PreparedActivation.CreateAsync(saves);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => activation.Store.ActivateAsync("activation-a", null).AsTask());
+
+        Assert.DoesNotContain("transient write conflict", failure.Message, StringComparison.Ordinal);
+        Assert.Equal(1, saves.Attempts);
+    }
+
     private static WorkflowTriggerBinding Binding(string id, string? activationId, string stimulusHash, string artifactId = "artifact-a") =>
         new(WorkflowTriggerBinding.BuildId(activationId is null ? artifactId : activationId, artifactId, "node-" + id, stimulusHash), artifactId, "definition-a", "1", "artifact-hash", "node-" + id, "Event", stimulusHash, null, new Dictionary<string, string> { ["k"] = id }, DateTimeOffset.UnixEpoch, activationId, activationId is null ? null : "slot-a");
 
     private sealed class Accessor(string scope) : IPersistenceAccessContextAccessor
     {
         public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(scope));
+    }
+
+    private sealed class PreparedActivation : IAsyncDisposable
+    {
+        private readonly SqliteConnection connection;
+
+        private PreparedActivation(SqliteConnection connection, BookmarkStateSqliteDbContext context)
+        {
+            this.connection = connection;
+            Context = context;
+            Store = new EfWorkflowTriggerBindingStore(context, new Accessor("tenant-a"));
+        }
+
+        public BookmarkStateSqliteDbContext Context { get; }
+
+        public EfWorkflowTriggerBindingStore Store { get; }
+
+        /// <summary>Prepares activation-a with one binding, then opens the store through a context whose saves run <paramref name="saves"/>.</summary>
+        public static async Task<PreparedActivation> CreateAsync(IInterceptor saves)
+        {
+            var connection = new SqliteConnection("Data Source=:memory:");
+            await connection.OpenAsync();
+            await using (var seed = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options))
+            {
+                await seed.Database.EnsureCreatedAsync();
+                await new EfWorkflowTriggerBindingStore(seed, new Accessor("tenant-a")).PrepareActivationAsync("activation-a", [Binding("a", "activation-a", "hash-a")]);
+            }
+            return new PreparedActivation(connection, new(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>()
+                .UseSqlite(connection).AddInterceptors(saves).Options));
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await Context.DisposeAsync();
+            await connection.DisposeAsync();
+        }
     }
 
     private sealed class MutableRegistrationState : IRuntimePersistenceRegistrationState

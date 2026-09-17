@@ -10,14 +10,18 @@ using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Recovery;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using Xunit;
 using Microsoft.Extensions.DependencyInjection;
+using static Elsa.Persistence.EntityFramework.Tests.ProviderFailures;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class EfWorkflowExecutionStateStoreTests
 {
+    private const string ConcurrentChange = "The workflow execution state changed concurrently; retry the operation.";
+
     [Fact]
     public void Registration_is_idempotent_and_rejects_foreign_ownership()
     {
@@ -330,6 +334,49 @@ public sealed class EfWorkflowExecutionStateStoreTests
         Assert.Empty(right.Context.ChangeTracker.Entries());
     }
 
+    [Fact]
+    public async Task Save_reports_a_transient_conflict_the_provider_execution_strategy_wrapped_as_a_concurrent_change()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a", FailingSaveInterceptor.WrappedDeadlock());
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            fixture.Store.SaveAsync(State("wrapped-transient", "tenant-a", DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Equal(ConcurrentChange, failure.Message);
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+    }
+
+    [Fact]
+    public async Task Save_does_not_report_a_wrapped_provider_failure_that_is_not_a_transient_conflict_as_a_concurrent_change()
+    {
+        await using var database = await Database.CreateAsync();
+        var saves = FailingSaveInterceptor.WrappedProviderFailure();
+        await using var fixture = database.Open("tenant-a", saves);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            fixture.Store.SaveAsync(State("wrapped-provider-failure", "tenant-a", DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.NotEqual(ConcurrentChange, failure.Message);
+        Assert.Equal(1, saves.Attempts);
+    }
+
+    [Fact]
+    public async Task Delete_reports_a_transient_conflict_the_provider_execution_strategy_wrapped_as_a_failed_delete()
+    {
+        await using var database = await Database.CreateAsync();
+        var state = State("wrapped-delete", "tenant-a", DateTimeOffset.UtcNow);
+        await using (var seed = database.Open("tenant-a"))
+            await seed.Store.SaveAsync(state);
+        await using var fixture = database.Open("tenant-a", FailingSaveInterceptor.WrappedDeadlock());
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.DeleteAsync(state.WorkflowExecutionId).AsTask());
+
+        Assert.Equal($"EF workflow execution state deleting failed for '{state.WorkflowExecutionId}'.", failure.Message);
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+        Assert.NotNull(await fixture.Store.FindAsync(state.WorkflowExecutionId));
+    }
+
     private static async Task<Exception?> Capture(ValueTask<WorkflowExecutionState> operation)
     {
         try { await operation; return null; }
@@ -356,7 +403,7 @@ public sealed class EfWorkflowExecutionStateStoreTests
             await context.Database.EnsureCreatedAsync();
             return new Database(connection, connectionString);
         }
-        public Fixture Open(string scope) => new(_connectionString, scope);
+        public Fixture Open(string scope, params IInterceptor[] interceptors) => new(_connectionString, scope, interceptors);
         public async ValueTask DisposeAsync() => await _connection.DisposeAsync();
     }
     private sealed class Fixture : IAsyncDisposable
@@ -364,11 +411,11 @@ public sealed class EfWorkflowExecutionStateStoreTests
         private readonly SqliteConnection _connection;
         public readonly BookmarkStateSqliteDbContext Context;
         public readonly EfWorkflowExecutionStateStore Store;
-        public Fixture(string connectionString, string scope)
+        public Fixture(string connectionString, string scope, IInterceptor[] interceptors)
         {
             _connection = new SqliteConnection(connectionString);
             _connection.Open();
-            Context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(_connection).Options);
+            Context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(_connection).AddInterceptors(interceptors).Options);
             Store = new EfWorkflowExecutionStateStore(Context, new Accessor(scope), new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "01234567890123456789012345678901" })));
         }
         public async ValueTask DisposeAsync()

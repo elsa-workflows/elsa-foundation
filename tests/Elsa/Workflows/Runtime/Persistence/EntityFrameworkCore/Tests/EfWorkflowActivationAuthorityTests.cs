@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -7,8 +8,10 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using static Elsa.Persistence.EntityFramework.Tests.ProviderFailures;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
@@ -161,11 +164,95 @@ public sealed class EfWorkflowActivationAuthorityTests
         Assert.Single(await context.WorkflowActivationSlots.AsNoTracking().ToArrayAsync());
     }
 
+    [Fact]
+    public async Task A_transient_conflict_the_provider_execution_strategy_wrapped_around_a_save_is_retried()
+    {
+        var saves = FailingSaveInterceptor.WrappedDeadlock(failures: 1);
+        await using var database = await ActivationDatabase.CreateAsync(saves);
+
+        var activated = await database.Authority.TryActivateAsync(new("definition-1", "default", "activation-a", Importer, 0, Now));
+
+        Assert.True(activated.Succeeded);
+        Assert.Equal(activated.Slot, await database.Authority.FindAsync("definition-1", "default"));
+        Assert.Equal(2, saves.Attempts);
+    }
+
+    [Fact]
+    public async Task A_wrapped_provider_failure_that_is_not_a_transient_conflict_fails_without_a_retry()
+    {
+        var saves = FailingSaveInterceptor.WrappedProviderFailure();
+        await using var database = await ActivationDatabase.CreateAsync(saves);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => database.Authority.TryActivateAsync(
+            new("definition-1", "default", "activation-a", Importer, 0, Now)).AsTask());
+
+        Assert.Equal(1, saves.Attempts);
+    }
+
+    [Fact]
+    public async Task A_transient_conflict_the_provider_execution_strategy_wrapped_around_a_read_is_not_retried()
+    {
+        var reads = new FailingReadInterceptor(() => WrappedByExecutionStrategy(new SqlException(Deadlock)));
+        await using var database = await ActivationDatabase.CreateAsync(reads);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => database.Authority.TryActivateAsync(
+            new("definition-1", "default", "activation-a", Importer, 0, Now)).AsTask());
+
+        Assert.Equal(1, reads.Attempts);
+    }
+
     private static BookmarkStateSqliteDbContext NewContext(SqliteConnection connection) =>
         new(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
 
     private sealed class Accessor(string scope) : IPersistenceAccessContextAccessor
     {
         public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(scope));
+    }
+
+    private sealed class ActivationDatabase : IAsyncDisposable
+    {
+        private readonly SqliteConnection connection;
+        private readonly BookmarkStateSqliteDbContext context;
+
+        private ActivationDatabase(SqliteConnection connection, BookmarkStateSqliteDbContext context)
+        {
+            this.connection = connection;
+            this.context = context;
+            Authority = new EfWorkflowActivationAuthority(context, new Accessor("tenant-a"));
+        }
+
+        public EfWorkflowActivationAuthority Authority { get; }
+
+        /// <summary>Creates the schema, then opens the authority through a context that runs <paramref name="interceptor"/>.</summary>
+        public static async Task<ActivationDatabase> CreateAsync(IInterceptor interceptor)
+        {
+            var connection = new SqliteConnection("Data Source=:memory:");
+            await connection.OpenAsync();
+            await using (var schema = NewContext(connection))
+                await schema.Database.EnsureCreatedAsync();
+            return new ActivationDatabase(connection, new(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>()
+                .UseSqlite(connection).AddInterceptors(interceptor).Options));
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await context.DisposeAsync();
+            await connection.DisposeAsync();
+        }
+    }
+
+    /// <summary>Fails the first read with <paramref name="failure"/>, then lets reads through.</summary>
+    private sealed class FailingReadInterceptor(Func<Exception> failure) : DbCommandInterceptor
+    {
+        private int attempts;
+
+        public int Attempts => Volatile.Read(ref attempts);
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default) =>
+            Interlocked.Increment(ref attempts) == 1 ? throw failure() : ValueTask.FromResult(result);
     }
 }

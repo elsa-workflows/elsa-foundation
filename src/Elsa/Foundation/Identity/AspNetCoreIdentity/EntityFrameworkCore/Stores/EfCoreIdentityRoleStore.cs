@@ -9,8 +9,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using EfIdentityStoreSupport = Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores.IdentityEntityFrameworkAdapterSupport;
-using IdentityEntityFrameworkRevisionCodec = Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores.IdentityEntityFrameworkRevisionSupport;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Stores;
 
@@ -61,7 +59,7 @@ public sealed class EfCoreIdentityRoleStore(
         ArgumentNullException.ThrowIfNull(role);
         var tenantId = CurrentTenantId();
         EnsureTenant(tenantId);
-        if (!IdentityEntityFrameworkRevisionCodec.TryGetRoleVersion(role.ConcurrencyStamp, tenantId, role.Id, out var revision))
+        if (!IdentityEntityFrameworkRevisionSupport.TryGetRoleVersion(role.ConcurrencyStamp, tenantId, role.Id, out var revision))
             return ConcurrencyFailure();
         return await SaveFrameworkRoleAsync(role, tenantId, revision, createOnly: false, cancellationToken);
     }
@@ -71,7 +69,7 @@ public sealed class EfCoreIdentityRoleStore(
         ArgumentNullException.ThrowIfNull(role);
         var tenantId = CurrentTenantId();
         EnsureTenant(tenantId);
-        if (!IdentityEntityFrameworkRevisionCodec.TryGetRoleVersion(role.ConcurrencyStamp, tenantId, role.Id, out var revision))
+        if (!IdentityEntityFrameworkRevisionSupport.TryGetRoleVersion(role.ConcurrencyStamp, tenantId, role.Id, out var revision))
             return ConcurrencyFailure();
         var result = await aggregates.DeleteRoleAsync(tenantId, role.Id, revision, cancellationToken);
         if (result.Succeeded)
@@ -91,7 +89,7 @@ public sealed class EfCoreIdentityRoleStore(
     {
         var tenantId = CurrentTenantId();
         EnsureTenant(tenantId);
-        var entity = await EfIdentityStoreSupport.ReadAsync(
+        var entity = await IdentityEntityFrameworkAdapterSupport.ReadAsync(
             db,
             "Unable to find the ASP.NET Core Identity role by normalized name.",
             () => db.Roles.AsNoTracking().SingleOrDefaultAsync(x => x.TenantLookupKey == TenantKey(tenantId) && x.NormalizedNameKey == RoleKey(tenantId, normalizedRoleName), cancellationToken));
@@ -102,7 +100,7 @@ public sealed class EfCoreIdentityRoleStore(
     {
         var tenantId = CurrentTenantId();
         EnsureTenant(tenantId);
-        var rows = await EfIdentityStoreSupport.ReadAsync(
+        var rows = await IdentityEntityFrameworkAdapterSupport.ReadAsync(
             db,
             "Unable to read ASP.NET Core Identity role claims.",
             () => db.RoleClaims.AsNoTracking().Where(x => x.TenantLookupKey == TenantKey(tenantId) && x.RoleLookupKey == RoleKey(tenantId, role.Id)).OrderBy(x => x.Id)
@@ -174,7 +172,7 @@ public sealed class EfCoreIdentityRoleStore(
             entity => ApplyFrameworkState(entity, role));
         if (!result.WriteResult.Succeeded)
             return ToIdentityResult(role, result);
-        role.ConcurrencyStamp = IdentityEntityFrameworkRevisionCodec.FromRole(
+        role.ConcurrencyStamp = IdentityEntityFrameworkRevisionSupport.FromRole(
             tenantId,
             role.Id,
             result.WriteResult.Version ?? throw new InvalidOperationException("The Identity role aggregate did not return a revision."));
@@ -183,24 +181,24 @@ public sealed class EfCoreIdentityRoleStore(
 
     private async Task<RoleEntity?> FindEntityAsync(string tenantId, string roleId, bool forWrite, CancellationToken cancellationToken)
     {
-        return await EfIdentityStoreSupport.ReadAsync(
+        return await IdentityEntityFrameworkAdapterSupport.ReadAsync(
             db,
             "Unable to find the ASP.NET Core Identity role.",
             async () =>
             {
-                var query = db.Roles.Where(x => x.Id == EfIdentityStoreSupport.RecordId(tenantId, roleId) && x.TenantLookupKey == TenantKey(tenantId));
+                var query = db.Roles.Where(x => x.Id == IdentityEntityFrameworkAdapterSupport.RecordId(tenantId, roleId) && x.TenantLookupKey == TenantKey(tenantId));
                 return forWrite ? await query.SingleOrDefaultAsync(cancellationToken) : await query.AsNoTracking().SingleOrDefaultAsync(cancellationToken);
             });
     }
 
-    private static IdentityRole ToFrameworkRole(RoleEntity entity) => new() { Id = entity.RoleId, Name = entity.Name, NormalizedName = entity.NormalizedName, ConcurrencyStamp = IdentityEntityFrameworkRevisionCodec.FromRole(entity.TenantId, entity.RoleId, entity.Revision) };
+    private static IdentityRole ToFrameworkRole(RoleEntity entity) => new() { Id = entity.RoleId, Name = entity.Name, NormalizedName = entity.NormalizedName, ConcurrencyStamp = IdentityEntityFrameworkRevisionSupport.FromRole(entity.TenantId, entity.RoleId, entity.Revision) };
     private static void ApplyFrameworkState(RoleEntity entity, IdentityRole role)
     {
-        entity.NormalizedName = role.NormalizedName ?? (string.IsNullOrWhiteSpace(role.Name) ? null : EfIdentityStoreSupport.Normalize(role.Name));
-        entity.ConcurrencyStamp = IdentityEntityFrameworkRevisionCodec.FromRole(entity.TenantId, entity.RoleId, entity.Revision);
+        entity.NormalizedName = role.NormalizedName ?? (string.IsNullOrWhiteSpace(role.Name) ? null : IdentityEntityFrameworkAdapterSupport.Normalize(role.Name));
+        entity.ConcurrencyStamp = IdentityEntityFrameworkRevisionSupport.FromRole(entity.TenantId, entity.RoleId, entity.Revision);
     }
 
-    private static RoleRecord ToRoleRecord(RoleEntity entity) => new(entity.RoleId, entity.TenantId, entity.Name, entity.Description, EfIdentityStoreSupport.DeserializeSet(entity.PermissionsJson), entity.System);
+    private static RoleRecord ToRoleRecord(RoleEntity entity) => new(entity.RoleId, entity.TenantId, entity.Name, entity.Description, IdentityEntityFrameworkAdapterSupport.DeserializeSet(entity.PermissionsJson), entity.System);
     private static void EnsureRelationshipMaterializationLimit(int count, string subject)
     {
         if (count > MaximumMaterializedRelationshipEntries)
@@ -209,18 +207,18 @@ public sealed class EfCoreIdentityRoleStore(
 
     private void EnsureTenant(string tenantId) => accessContextAccessor.Current.EnsureTenantScope(tenantId);
     private string CurrentTenantId() => accessContextAccessor.Current.Scope?.Value ?? PersistenceScope.DefaultValue;
-    private static string TenantKey(string tenantId) => EfIdentityStoreSupport.TenantLookup(tenantId);
-    private static string RoleKey(string tenantId, string? value) => EfIdentityStoreSupport.Lookup(tenantId, value);
+    private static string TenantKey(string tenantId) => IdentityEntityFrameworkAdapterSupport.TenantLookup(tenantId);
+    private static string RoleKey(string tenantId, string? value) => IdentityEntityFrameworkAdapterSupport.Lookup(tenantId, value);
     private static IdentityResult ConcurrencyFailure() => IdentityResult.Failed(new IdentityErrorDescriber().ConcurrencyFailure());
     private static long RequireRevision(IdentityRole role, string tenantId) =>
-        IdentityEntityFrameworkRevisionCodec.TryGetRoleVersion(role.ConcurrencyStamp, tenantId, role.Id, out var version)
+        IdentityEntityFrameworkRevisionSupport.TryGetRoleVersion(role.ConcurrencyStamp, tenantId, role.Id, out var version)
             ? version
             : throw new InvalidOperationException("The requested role has no valid EF revision stamp.");
 
     private static void ApplyRevisionStamp(IdentityRole role, string tenantId, EfIdentityWriteResult result)
     {
         if (result.Succeeded && result.Version is { } version)
-            role.ConcurrencyStamp = IdentityEntityFrameworkRevisionCodec.FromRole(tenantId, role.Id, version);
+            role.ConcurrencyStamp = IdentityEntityFrameworkRevisionSupport.FromRole(tenantId, role.Id, version);
     }
 
     private static void EnsureRelationshipSucceeded(EfIdentityWriteResult result, string operation)

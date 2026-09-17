@@ -356,7 +356,20 @@ public enum RuntimePostCommitOutboxClaimCompletionOutcome
     /// (<see cref="WorkflowDispatchLifecycle.ResolveSuccessfulChildDelivery"/>), so the start was persisted as delivered and
     /// the dispatch projection and follow-up it carried were discarded.
     /// </summary>
-    DeliveredOnChildEvidence
+    DeliveredOnChildEvidence,
+
+    /// <summary>
+    /// Another deliverer owns this item — it is <see cref="RuntimePostCommitOutboxStatus.Delivering"/> under a different
+    /// owner, or it carries a fencing token from a claim the caller does not hold. NOTHING was written: status, owner,
+    /// fencing token, attempt count, failure message and availability are all untouched, and the owning deliverer's
+    /// completion governs the item's terminal state.
+    ///
+    /// <para>Contention is legitimate rather than exceptional. A live drain skips the durable claim round-trip while the
+    /// resumption sweep claims across every execution with no filter, so the two can hold the same item; this outcome is
+    /// how the losing deliverer reports that without failing its caller. The item remains a crash backstop — claim expiry
+    /// and the resumption sweep still redeliver it idempotently.</para>
+    /// </summary>
+    SupersededByOtherOwner
 }
 
 /// <summary>
@@ -702,7 +715,6 @@ public sealed class RuntimePostCommitOutboxQuery
         DateTimeOffset now,
         int limit,
         string? workflowExecutionId = null,
-        string? ownerId = null,
         string? intentKind = null)
     {
         if (limit <= 0)
@@ -711,23 +723,18 @@ public sealed class RuntimePostCommitOutboxQuery
         if (workflowExecutionId is not null && string.IsNullOrWhiteSpace(workflowExecutionId))
             throw new ArgumentException("Outbox workflow execution filter cannot be blank.", nameof(workflowExecutionId));
 
-        if (ownerId is not null && string.IsNullOrWhiteSpace(ownerId))
-            throw new ArgumentException("Outbox owner filter cannot be blank.", nameof(ownerId));
-
         if (intentKind is not null)
             RuntimePostCommitIntent.ValidateKind(intentKind, nameof(intentKind));
 
         Now = now;
         Limit = limit;
         WorkflowExecutionId = workflowExecutionId;
-        OwnerId = ownerId;
         IntentKind = intentKind;
     }
 
     public DateTimeOffset Now { get; }
     public int Limit { get; }
     public string? WorkflowExecutionId { get; }
-    public string? OwnerId { get; }
     public string? IntentKind { get; }
 }
 

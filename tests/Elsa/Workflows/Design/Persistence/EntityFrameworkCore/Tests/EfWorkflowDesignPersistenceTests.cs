@@ -43,6 +43,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
+using static Elsa.Persistence.EntityFramework.Tests.ProviderFailures;
 
 namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests;
 
@@ -2299,6 +2300,74 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.Equal(5, Assert.IsType<SqliteException>(failure.InnerException).SqliteErrorCode);
         Assert.Equal(1, stageCalls);
         Assert.True(shared.IsRollbackOnly);
+    }
+
+    [Fact]
+    public async Task Ef_retries_a_transient_write_the_provider_execution_strategy_wrapped()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        var saves = FailingSaveInterceptor.WrappedDeadlock(failures: 1);
+        var options = new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>()
+            .UseSqlite(connection).AddInterceptors(saves).Options;
+        await using var db = new WorkflowsDesignSqliteDbContext(options); await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        IDesignAtomicWriter writer = new EfDesignAtomicWriter(db, access);
+        var stageCalls = 0;
+
+        var result = await writer.ExecuteAsync(
+            new DesignOperationKey("wrapped-transient-retry"), "test.op", new { Value = 1 }, ["test"],
+            (_, _) =>
+            {
+                stageCalls++;
+                return Task.FromResult(DesignAtomicWriteStage<int>.Accepted(1));
+            });
+
+        Assert.Equal(DesignAtomicWriteStatus.Committed, result.Status);
+        Assert.Equal(2, stageCalls);
+        Assert.Equal(2, saves.Attempts);
+    }
+
+    [Fact]
+    public async Task Ef_fails_a_wrapped_transient_write_at_once_inside_a_caller_owned_shared_transaction()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        var saves = FailingSaveInterceptor.WrappedDeadlock();
+        var options = new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>()
+            .UseSqlite(connection).AddInterceptors(saves).Options;
+        await using (var schema = new WorkflowsDesignSqliteDbContext(options))
+            await schema.Database.EnsureCreatedAsync();
+        await using var configured = new WorkflowsDesignSqliteDbContext(options);
+        await using var shared = await Elsa.Persistence.EntityFramework.EfSharedTransaction.BeginAsync([configured]);
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        IDesignAtomicWriter writer = new EfDesignAtomicWriter(
+            shared.Context<WorkflowsDesignSqliteDbContext>(), access, transactionFactory: shared.BeginOperationAsync);
+
+        var failure = await Assert.ThrowsAsync<DesignPersistenceException>(() => writer.ExecuteAsync(
+            new DesignOperationKey("wrapped-transient-in-shared-transaction"), "test.op", new { Value = 1 }, ["test"],
+            (_, _) => Task.FromResult(DesignAtomicWriteStage<int>.Accepted(1))));
+
+        Assert.Equal(DesignPersistenceFailureKind.Provider, failure.FailureKind);
+        Assert.True(Elsa.Persistence.EntityFramework.EfRelationalExceptionClassifier.IsTransientWriteConflict(failure));
+        Assert.Equal(1, saves.Attempts);
+        Assert.True(shared.IsRollbackOnly);
+    }
+
+    [Fact]
+    public async Task Ef_fails_a_wrapped_provider_failure_that_is_not_a_transient_conflict_without_a_retry()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        var saves = FailingSaveInterceptor.WrappedProviderFailure();
+        var options = new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>()
+            .UseSqlite(connection).AddInterceptors(saves).Options;
+        await using var db = new WorkflowsDesignSqliteDbContext(options); await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        IDesignAtomicWriter writer = new EfDesignAtomicWriter(db, access);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.ExecuteAsync(
+            new DesignOperationKey("wrapped-provider-failure"), "test.op", new { Value = 1 }, ["test"],
+            (_, _) => Task.FromResult(DesignAtomicWriteStage<int>.Accepted(1))));
+
+        Assert.Equal(1, saves.Attempts);
     }
 
     [Fact]

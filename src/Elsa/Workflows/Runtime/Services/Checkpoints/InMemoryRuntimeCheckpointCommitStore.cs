@@ -314,9 +314,6 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (query.OwnerId is not null)
-            throw new NotSupportedException("The in-memory post-commit outbox store does not implement delivery ownership filtering.");
-
         lock (_state.SyncRoot)
         {
             var items = _state.OutboxItems.Values
@@ -345,7 +342,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         }
     }
 
-    public ValueTask RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default)
+    public ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(result);
         cancellationToken.ThrowIfCancellationRequested();
@@ -357,8 +354,12 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
             if (existing.IsTerminal)
                 throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is already terminal.");
-            if (existing.Status == RuntimePostCommitOutboxStatus.Delivering)
-                throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is claimed; its owner and fencing token are required.");
+            // Same ownership test the durable store applies, so both stores answer a contended claim-less recording
+            // identically: write nothing and report the loss. The fencing-token arm matters because the token never
+            // resets, so a released claim leaves the item deliverable while still fenced.
+            if (existing.Status == RuntimePostCommitOutboxStatus.Delivering || existing.DeliveryFencingToken > 0)
+                return new ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome>(
+                    RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner);
 
             var deliveryAttemptCount = RuntimePostCommitRetryPolicy.SaturatingIncrement(existing.DeliveryAttemptCount);
             var status = NormalizeDeliveryStatus(existing, result.Status, deliveryAttemptCount);
@@ -382,7 +383,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                 deliveryFencingToken: existing.DeliveryFencingToken);
         }
 
-        return ValueTask.CompletedTask;
+        return new ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome>(
+            RuntimePostCommitOutboxClaimCompletionOutcome.Persisted);
     }
 
     public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>> ClaimAsync(

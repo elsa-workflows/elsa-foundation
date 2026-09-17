@@ -7,7 +7,7 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 /// normalized tenant/record storage key; the original tenant and credential values are retained
 /// separately so a read never rewrites contract data.
 /// </summary>
-public sealed class CredentialEntity
+public sealed class CredentialEntity : IRevisionedIdentityEntity
 {
     public string Id { get; set; } = "";
     public string TenantId { get; set; } = "";

@@ -592,12 +592,12 @@ public sealed class ChildStartExecutorTests
             CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<RuntimePostCommitOutboxItem>>([item]);
 
-        public ValueTask RecordDeliveryResultAsync(
+        public ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> RecordDeliveryResultAsync(
             RuntimePostCommitOutboxDeliveryResult result,
             CancellationToken cancellationToken = default)
         {
             Results.Add(result);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(RuntimePostCommitOutboxClaimCompletionOutcome.Persisted);
         }
     }
 

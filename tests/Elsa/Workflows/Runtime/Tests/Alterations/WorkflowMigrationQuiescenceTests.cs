@@ -100,7 +100,8 @@ public sealed class WorkflowMigrationQuiescenceTests
         public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetDeliverableAsync(RuntimePostCommitOutboxQuery query, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<RuntimePostCommitOutboxItem>>([]);
 
-        public ValueTask RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(RuntimePostCommitOutboxClaimCompletionOutcome.Persisted);
     }
 
     private sealed class EmptyDispatchStore : IWorkflowDispatchQueryStore

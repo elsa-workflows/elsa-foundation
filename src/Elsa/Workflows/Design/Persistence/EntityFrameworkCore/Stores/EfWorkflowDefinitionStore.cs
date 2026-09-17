@@ -53,11 +53,12 @@ public sealed class EfWorkflowDefinitionStore(WorkflowsDesignDbContext db, IPers
         }
         var exactRoute = filter.Id is not null || filter.Ids is not null || filter.Name is not null ||
                          filter.Names is not null || filter.Description is not null;
+        var ordered = query.OrderBy(x => x.Id).ThenBy(x => x.TenantId);
         var values = await EfDesignSupport.ReadAsync("listing workflow definitions", () =>
             (exactRoute || string.IsNullOrWhiteSpace(filter.SearchTerm)
-                ? query
-                : query.Take(10_001))
-            .OrderBy(x => x.Id).ThenBy(x => x.TenantId).ToListAsync(cancellationToken));
+                ? ordered
+                : ordered.Take(10_001))
+            .ToListAsync(cancellationToken));
         if (!exactRoute && !string.IsNullOrWhiteSpace(filter.SearchTerm) && values.Count > 10_000)
             throw new InvalidOperationException("Workflow definition search exceeded the bounded result limit of 10000.");
         IEnumerable<WorkflowDefinition> validated = values;

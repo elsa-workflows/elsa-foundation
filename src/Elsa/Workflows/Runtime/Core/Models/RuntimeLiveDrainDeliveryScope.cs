@@ -7,9 +7,21 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// (spec 105-runtime-live-drain-delivery). While this scope is ambient, the post-commit outbox processor
 /// delivers <c>EnqueueSchedulerWork</c> intents for the owning execution IN-MEMORY: it enqueues the continuation
 /// work item through the queue's idempotent <c>EnqueueAsync</c> and marks the durable outbox item Delivered directly,
-/// WITHOUT the durable claim round-trip. Ownership is bounded by the drain's single-writer lease, so no other
-/// deliverer competes for the same execution's intents; the durable outbox item remains a crash backstop that the
-/// resumption sweep re-drives idempotently.
+/// WITHOUT the durable claim round-trip. The durable outbox item remains a crash backstop that the resumption sweep
+/// re-drives idempotently.
+///
+/// <para><b>This scope does NOT confer exclusive ownership (issue #1798).</b> It once claimed that "ownership is bounded
+/// by the drain's single-writer lease, so no other deliverer competes for the same execution's intents". That was never
+/// true in the product: <c>RuntimeResumptionService.SweepAsync</c> processes the outbox with NO execution filter and NO
+/// intent filter, on the durable claim path, driven by a timer. The sweep therefore competes for the intents of every
+/// execution, including one that is being live-drained right now.
+///
+/// Building on the false invariant is what produced #1798 — the sweep claimed an item between a live drain's read and
+/// its record, the claim-less recording was rejected, and the exception surfaced as an HTTP 500 on workflow start.
+/// Contention here is legitimate and expected: a claim-less recording that loses the race reports
+/// <see cref="RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner"/> and writes nothing, leaving the
+/// owning deliverer's completion authoritative. Do not reintroduce an exclusivity assumption on top of this scope;
+/// drain liveness is ambient in-process state, and the sweep may not even be in this process.</para>
 ///
 /// <para><b>In-process-hop payload carrier (spec 109, ADR 0031 follow-up item (a)).</b> The scope also carries the
 /// already-materialized continuation <see cref="RuntimeSchedulerWorkItem"/>s across the enqueue→dispatch hop in memory,

@@ -279,7 +279,7 @@ public sealed class EfWorkflowTriggerBindingStore(
             await RollbackAndClearAsync(transaction);
             throw new InvalidOperationException($"{operation} changed concurrently; retry the operation.", exception);
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Transient))
         {
             await RollbackAndClearAsync(transaction);
             throw new InvalidOperationException($"{operation} encountered a transient write conflict; retry the operation.", exception);

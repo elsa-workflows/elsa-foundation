@@ -44,7 +44,7 @@ public sealed class EfWorkflowRunHealthDataSource(
         var failures = new Dictionary<string, FailureCount>(StringComparer.Ordinal);
 
         var startedRows = 0;
-        await foreach (var row in QueryStartedRows(scope, request.Query).Take(MaximumSourceRows + 1)
+        await foreach (var row in BoundedSourceRows(QueryStartedRows(scope, request.Query))
                            .AsAsyncEnumerable().WithCancellation(cancellationToken))
         {
             if (++startedRows > MaximumSourceRows)
@@ -73,7 +73,7 @@ public sealed class EfWorkflowRunHealthDataSource(
 
         var runningCount = 0;
         var runningRows = 0;
-        await foreach (var row in QueryRunningRows(scope, request.Query).Take(MaximumSourceRows + 1)
+        await foreach (var row in BoundedSourceRows(QueryRunningRows(scope, request.Query))
                            .AsAsyncEnumerable().WithCancellation(cancellationToken))
         {
             if (++runningRows > MaximumSourceRows)
@@ -117,6 +117,14 @@ public sealed class EfWorkflowRunHealthDataSource(
         string scope,
         WorkflowRunHealthQuery query) =>
         ApplyRunKind(BaseQuery(scope).Where(row => row.Status == (int)WorkflowExecutionStatus.Running), query.IncludeTestRuns);
+
+    // A read past the bound is refused rather than truncated, so the order never selects rows. It only makes the
+    // limited read deterministic, following the scope indexes and ending in the key.
+    private static IQueryable<WorkflowRunHealthStateEntity> BoundedSourceRows(IQueryable<WorkflowRunHealthStateEntity> rows) =>
+        rows.OrderBy(row => row.StartedAtUtcTicks)
+            .ThenBy(row => row.WorkflowExecutionIdOrderKey)
+            .ThenBy(row => row.Id)
+            .Take(MaximumSourceRows + 1);
 
     private IQueryable<WorkflowRunHealthStateEntity> BaseQuery(string scope) =>
         context.WorkflowRunHealthStates

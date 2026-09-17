@@ -84,8 +84,6 @@ public sealed class EfRuntimePostCommitOutboxStoreTests
             workflowExecutionId: "workflow-a",
             intentKind: "publish"));
         Assert.Equal(["a", "z"], filtered.Select(item => item.OutboxItemId));
-        Assert.Throws<NotSupportedException>(() =>
-            store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10, ownerId: "owner-a")).AsTask().GetAwaiter().GetResult());
     }
 
     [Fact]

@@ -817,8 +817,8 @@ public sealed class EfReusableActivityImportCommand(
         var tenantKey = ActivitiesDesignDbContext.NormalizeTenantKey(tenantId);
         var identityHash = ActivitiesDesignDbContext.ComputeIdentityHash(identity);
         var hashProperty = identityProperty + "IdentityHash";
-        var matches = await rows
-            .Where(row => EF.Property<string>(row, "TenantScopeKey") == tenantKey && EF.Property<string>(row, hashProperty) == identityHash)
+        var matches = await ActivitiesDesignDbContext.InPhysicalIdentityOrder(rows
+                .Where(row => EF.Property<string>(row, "TenantScopeKey") == tenantKey && EF.Property<string>(row, hashProperty) == identityHash))
             .Take(2)
             .ToListAsync(cancellationToken);
         if (matches.Count > 1)

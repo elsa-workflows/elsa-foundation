@@ -1,6 +1,5 @@
 using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
-using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
 
@@ -24,8 +23,8 @@ public sealed class EfTenantMembershipStore(
         return row is null ? null : Map(row);
     }
 
-    public ValueTask SaveAsync(TenantMembershipRecord membership, CancellationToken cancellationToken = default) =>
-        new(SaveCoreAsync(membership, expectedVersion: null, createOnly: false, cancellationToken));
+    public async ValueTask SaveAsync(TenantMembershipRecord membership, CancellationToken cancellationToken = default) =>
+        EfIdentityStoreSupport.EnsureSaved(await SaveCoreAsync(membership, expectedVersion: null, createOnly: false, cancellationToken), "Unable to save the tenant Identity membership.");
 
     public async ValueTask<IamRevisionedRecord<TenantMembershipRecord>?> FindWithRevisionAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
     {
@@ -46,9 +45,7 @@ public sealed class EfTenantMembershipStore(
     {
         ArgumentNullException.ThrowIfNull(record); Validate(record.TenantId, nameof(record.TenantId)); Validate(record.UserId, nameof(record.UserId)); ArgumentNullException.ThrowIfNull(record.RoleIds); ArgumentNullException.ThrowIfNull(record.DirectPermissions); Prepare(record.TenantId, cancellationToken);
         var row = new TenantMembershipEntity { TenantId = record.TenantId, UserId = record.UserId, Status = (int)record.Status, RoleIdsJson = EfIdentityStoreSupport.SerializeSet(record.RoleIds), DirectPermissionsJson = EfIdentityStoreSupport.SerializeSet(record.DirectPermissions) };
-        var result = await relationship.SaveTenantMembershipAsync(row, createOnly || expectedVersion is not null ? expectedVersion : null, enforceMembershipVersion: createOnly || expectedVersion is not null, cancellationToken);
-        if (!result.Succeeded && !createOnly && expectedVersion is null) throw new IdentityEntityFrameworkPersistenceException("Unable to save the tenant Identity membership.", new InvalidOperationException(result.Message));
-        return result;
+        return await relationship.SaveTenantMembershipAsync(row, createOnly || expectedVersion is not null ? expectedVersion : null, enforceMembershipVersion: createOnly || expectedVersion is not null, cancellationToken);
     }
 
     private async Task<TenantMembershipEntity?> FindEntityAsync(string tenantId, string userId, CancellationToken cancellationToken)

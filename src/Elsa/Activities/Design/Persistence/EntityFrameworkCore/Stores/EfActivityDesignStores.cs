@@ -106,7 +106,9 @@ public sealed class EfActivityDesignStores(
     {
         if (string.IsNullOrWhiteSpace(filter.SearchTerm))
             return;
-        var rows = await Access(db.ActivityDefinitions.AsNoTracking()).Take(MaximumSearchCatalogRows + 1).CountAsync(cancellationToken);
+        var rows = await ActivitiesDesignDbContext.InPhysicalIdentityOrder(Access(db.ActivityDefinitions.AsNoTracking()))
+            .Take(MaximumSearchCatalogRows + 1)
+            .CountAsync(cancellationToken);
         if (rows > MaximumSearchCatalogRows)
             throw new InvalidOperationException(
                 $"Activity-definition substring search is refused when the current scope contains more than {MaximumSearchCatalogRows} rows.");
@@ -220,8 +222,8 @@ public sealed class EfActivityDesignStores(
                 return byId;
             }
             var hash = ActivityForkIdentityMaterial.ExactHash(candidateId);
-            var candidates = await Access(db.ActivityForkCandidates.AsNoTracking())
-                .Where(x => x.CandidateIdIdentityHash == hash && x.CandidateId == candidateId)
+            var candidates = await ActivitiesDesignDbContext.InPhysicalIdentityOrder(Access(db.ActivityForkCandidates.AsNoTracking())
+                    .Where(x => x.CandidateIdIdentityHash == hash && x.CandidateId == candidateId))
                 .Take(2).ToListAsync(cancellationToken);
             foreach (var candidate in candidates)
                 ValidateForkIdentity(candidate);
@@ -945,9 +947,9 @@ public sealed class EfActivityDesignStores(
         {
             var candidateHash = ActivityForkIdentityMaterial.ExactHash(request.CandidateId);
             var actorHash = ActivityForkIdentityMaterial.ExactHash(request.ActorId);
-            var candidates = await Access(db.ActivityForkCandidates)
-                .Where(x => x.ActorIdentityHash == actorHash && x.ActorId == request.ActorId &&
-                            x.CandidateIdIdentityHash == candidateHash && x.CandidateId == request.CandidateId)
+            var candidates = await ActivitiesDesignDbContext.InPhysicalIdentityOrder(Access(db.ActivityForkCandidates)
+                    .Where(x => x.ActorIdentityHash == actorHash && x.ActorId == request.ActorId &&
+                                x.CandidateIdIdentityHash == candidateHash && x.CandidateId == request.CandidateId))
                 .Take(2).ToListAsync(cancellationToken);
             foreach (var candidateMatch in candidates)
                 ValidateForkIdentity(candidateMatch);
@@ -978,9 +980,9 @@ public sealed class EfActivityDesignStores(
             !StringComparer.Ordinal.Equals(ActivityForkMaterialFingerprint.Compute(candidate.ReservedDraft.State.Contract), candidate.TargetContractFingerprint))
             throw new ActivityForkCandidateStaleException("The reviewed fork target material was tampered with.");
         var targetScopeKey = NormalizeTenantKey(candidate.TenantId);
-        var typeKeyMatches = await db.ActivityDefinitions.AsNoTracking()
-            .Where(x => EF.Property<string>(x, "TenantScopeKey") == targetScopeKey &&
-                        x.ActivityTypeKey == candidate.ReservedDefinition.ActivityTypeKey)
+        var typeKeyMatches = await ActivitiesDesignDbContext.InPhysicalIdentityOrder(db.ActivityDefinitions.AsNoTracking()
+                .Where(x => EF.Property<string>(x, "TenantScopeKey") == targetScopeKey &&
+                            x.ActivityTypeKey == candidate.ReservedDefinition.ActivityTypeKey))
             .Select(x => new
             {
                 x.TenantId,
@@ -1259,14 +1261,6 @@ public sealed class EfActivityDesignStores(
     }
 
     private static string NormalizeTenantKey(string? tenantId) => ActivitiesDesignDbContext.NormalizeTenantKey(tenantId);
-
-    /// <summary>
-    /// Orders a bounded probe, such as <c>Take(2)</c> to detect a duplicate, by the physical key. Without an order
-    /// the provider chooses which rows a row limit returns, and EF reports the query as warning 10102.
-    /// </summary>
-    internal static IOrderedQueryable<T> InPhysicalIdentityOrder<T>(IQueryable<T> query) where T : class =>
-        query.OrderBy(x => EF.Property<string>(x, "TenantScopeKey"))
-            .ThenBy(x => EF.Property<string>(x, "IdIdentityHash"));
 
     // A provider collation may consider distinct raw IDs equal. The physical hash-backed key
     // finishes every paged order so offset and keyset boundaries remain total on all providers.

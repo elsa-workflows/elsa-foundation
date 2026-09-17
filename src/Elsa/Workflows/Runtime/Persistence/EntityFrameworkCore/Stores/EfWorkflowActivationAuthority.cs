@@ -21,7 +21,7 @@ public sealed class EfWorkflowActivationAuthority(
     // A transient conflict is retried only when SaveChanges reports it, never when a read raises it.
     private static readonly EfWriteRetry Transitions = new(
         EfWriteRetry.DefaultMaxAttempts,
-        exception => exception is DbUpdateException && EfRelationalExceptionClassifier.IsWriteConflict(
+        exception => EfRelationalExceptionClassifier.IsSaveConflict(
             exception, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey | EfWriteConflict.Transient));
     private readonly BookmarkStateDbContext context = context ?? throw new ArgumentNullException(nameof(context));
     private readonly IPersistenceAccessContextAccessor accessContextAccessor = accessContextAccessor ?? throw new ArgumentNullException(nameof(accessContextAccessor));

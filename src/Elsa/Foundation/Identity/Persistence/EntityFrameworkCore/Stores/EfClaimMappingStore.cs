@@ -58,8 +58,8 @@ public sealed class EfClaimMappingStore(
         return row is null ? null : new IamRevisionedRecord<ClaimMappingRule>(Map(row), IdentityEntityFrameworkRevisionCodec.FromVersion(row.Revision));
     }
 
-    public ValueTask SaveAsync(ClaimMappingRule rule, CancellationToken cancellationToken = default) =>
-        new(SaveCoreAsync(rule, expectedVersion: null, createOnly: false, cancellationToken));
+    public async ValueTask SaveAsync(ClaimMappingRule rule, CancellationToken cancellationToken = default) =>
+        EfIdentityStoreSupport.EnsureSaved(await SaveCoreAsync(rule, expectedVersion: null, createOnly: false, cancellationToken), "Unable to save the Identity claim mapping.");
 
     public async ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(ClaimMappingRule rule, string? expectedRevision, CancellationToken cancellationToken = default)
     {

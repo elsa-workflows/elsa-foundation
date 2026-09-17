@@ -21,13 +21,19 @@ different provider, connection string, or connection name fails before registrat
 Direct host registrations for a selected feature's replacement contracts conflict with explicit EF selection
 and fail instead of being silently removed or winning by registration order. Startup validation also rejects
 a registration added after a feature. Selection is order-independent, and each authority has exactly
-one owner. Broader rollout gates remain in the later rollout
-gate explicitly flips host composition.
+one owner.
 
 The module preserves tenant/global access checks, tenant-first effective fallback for provider configurations,
 lossless record round trips, bounded and stably ordered queries, uniqueness reservations, atomic aggregate and
-relationship writes, replay receipts, and optimistic compare-and-swap revisions. Provider-specific migrations,
-runtime schema initialization and default host selection are later rollout gates.
+relationship writes, replay receipts, and optimistic compare-and-swap revisions.
+
+## Schema and migrations
+
+`IdentityIamDbContext` and `IdentityProviderConfigurationDbContext` each ship migrations for SQLite, SQL
+Server, PostgreSQL, and MySQL under `Migrations/`, recorded in their own `__EFMigrationsHistory_ElsaIdentityIam`
+and `__EFMigrationsHistory_ElsaIdentityProviderConfiguration` tables. Each feature registers
+`AddEfModuleMigrations<TContext>(Provider)`, so the shared `EfModuleMigrator<TContext>` applies or validates
+them in the CShells Prepare phase according to `EfMigrateOptions.Policy`.
 
 OpenIddict remains in its separate vendor-owned context. This module does not reference, configure, or merge
 `OpenIddictIdentityDbContext`.
