@@ -21,7 +21,11 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// </remarks>
 public sealed class EfActivityPublicationRuntimeCommit
 {
-    private const int MaximumAttempts = 3;
+    // A racing publication committed first. The next attempt re-reads the winner: the same material is adopted,
+    // anything else surfaces as a conflict.
+    private static readonly EfWriteRetry Commits = new(
+        EfWriteRetry.DefaultMaxAttempts,
+        exception => exception is DbUpdateException && EfRelationalExceptionClassifier.IsWriteConflict(exception, EfWriteConflict.UniqueKey | EfWriteConflict.Transient));
     private readonly BookmarkStateDbContext context;
     private readonly EfExecutableActivityTemplateStore templates;
     private readonly EfWorkflowExecutableSourceReferenceStore sourceReferences;
@@ -62,7 +66,7 @@ public sealed class EfActivityPublicationRuntimeCommit
         if (!StringComparer.Ordinal.Equals(reference.ArtifactId, template.TemplateId))
             throw new ArgumentException("A publication's source reference must retain the template it is published with.", nameof(reference));
 
-        for (var attempt = 1; ; attempt++)
+        return await Commits.RunAsync(context, async () =>
         {
             context.ChangeTracker.Clear();
             try
@@ -78,22 +82,10 @@ public sealed class EfActivityPublicationRuntimeCommit
                     context, "publishing", template.TemplateId, () => transaction.CommitAsync(cancellationToken));
                 return createsTemplate || createsReference;
             }
-            catch (DbUpdateException exception) when (
-                attempt < MaximumAttempts &&
-                (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception) || EfRelationalExceptionClassifier.IsTransientWriteConflict(exception)))
-            {
-                // A racing publication committed first. The next attempt re-reads the winner: the same
-                // material is adopted, anything else surfaces as a conflict.
-            }
-            catch (DbUpdateException exception) when (
-                EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception) || EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
-            {
-                throw new InvalidOperationException(
-                    $"The Runtime material of activity template '{template.TemplateId}' changed concurrently and did not settle after {MaximumAttempts} attempts.",
-                    exception);
-            }
             catch (Exception exception) when (exception is DbUpdateException or DbException)
             {
+                if (Commits.ShouldRetry(context, exception))
+                    throw;
                 throw new RuntimeArtifactEntityFrameworkPersistenceException(
                     "publishing",
                     template.TemplateId,
@@ -104,6 +96,8 @@ public sealed class EfActivityPublicationRuntimeCommit
             {
                 context.ChangeTracker.Clear();
             }
-        }
+        }, lastConflict => throw new InvalidOperationException(
+            $"The Runtime material of activity template '{template.TemplateId}' changed concurrently and did not settle after {Commits.MaxAttempts} attempts.",
+            lastConflict), cancellationToken);
     }
 }

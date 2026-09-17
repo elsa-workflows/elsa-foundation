@@ -23,7 +23,7 @@ public sealed class EfDurableTimerStore(
     IRuntimeRecoveryContinuationCodec continuationCodec) : IDurableTimerStore
 {
     private const string CursorPurpose = "ef-runtime-durable-timers-v1";
-    private const int MaxTransitionAttempts = 16;
+    private static readonly EfWriteRetry Transitions = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);
 
     public bool SupportsClaimTransitions => true;
 
@@ -145,7 +145,7 @@ public sealed class EfDurableTimerStore(
         cancellationToken.ThrowIfCancellationRequested();
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
         var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, workflowExecutionId, timerId);
-        for (var attempt = 0; attempt < MaxTransitionAttempts; attempt++)
+        await Transitions.RunAsync(context, async () =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             var row = await context.DurableTimers.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
@@ -156,20 +156,13 @@ public sealed class EfDurableTimerStore(
             try
             {
                 await context.SaveChangesAsync(cancellationToken);
-                return;
             }
-            catch (DbUpdateConcurrencyException)
-            {
-                Detach(row);
-            }
-            catch (OperationCanceledException)
+            catch (Exception exception) when (exception is DbUpdateConcurrencyException or OperationCanceledException)
             {
                 Detach(row);
                 throw;
             }
-        }
-
-        throw TransitionDidNotSettle("delete", workflowExecutionId, timerId);
+        }, _ => throw TransitionDidNotSettle("delete", workflowExecutionId, timerId), cancellationToken);
     }
 
     public async ValueTask<IReadOnlyCollection<RuntimeDurableTimerClaim>> ClaimDueAsync(
@@ -563,5 +556,5 @@ public sealed class EfDurableTimerStore(
     }
 
     private static InvalidOperationException TransitionDidNotSettle(string transition, string workflowExecutionId, string timerId) =>
-        new($"Durable-timer {transition} for workflow execution '{workflowExecutionId}' and timer '{timerId}' did not settle after {MaxTransitionAttempts} compare-and-swap attempts.");
+        new($"Durable-timer {transition} for workflow execution '{workflowExecutionId}' and timer '{timerId}' did not settle after {Transitions.MaxAttempts} compare-and-swap attempts.");
 }

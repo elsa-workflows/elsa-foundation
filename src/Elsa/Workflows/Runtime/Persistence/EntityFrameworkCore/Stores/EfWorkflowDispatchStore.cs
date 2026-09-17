@@ -22,7 +22,7 @@ public sealed class EfWorkflowDispatchStore(
     IWorkflowDispatchAdmissionStore,
     IWorkflowDispatchCancellationStore
 {
-    private const int MaxTransitionAttempts = 16;
+    private static readonly EfWriteRetry Transitions = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);
     private readonly BookmarkStateDbContext _context = context ?? throw new ArgumentNullException(nameof(context));
     private readonly IPersistenceAccessContextAccessor _access = accessContextAccessor ?? throw new ArgumentNullException(nameof(accessContextAccessor));
 
@@ -33,7 +33,8 @@ public sealed class EfWorkflowDispatchStore(
         var scope = RequireScope();
         _access.Current.EnsureTenantScope(record.TenantId);
         var id = WorkflowDispatchEfSupport.RowId(scope, record.DispatchId);
-        for (var attempt = 0; attempt < MaxTransitionAttempts; attempt++)
+        // An insert retries only the unique-key race a concurrent creator wins; an update only its revision race.
+        return await Transitions.RunUntilSettledAsync<WorkflowDispatchRecord>(_context, async () =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             var row = await LoadAsync(scope, record.DispatchId, tracking: true, cancellationToken);
@@ -47,14 +48,11 @@ public sealed class EfWorkflowDispatchStore(
                     await _context.SaveChangesAsync(cancellationToken);
                     return record;
                 }
-                catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+                catch (Exception exception)
                 {
                     Detach(added);
-                    continue;
-                }
-                catch
-                {
-                    Detach(added);
+                    if (exception is DbUpdateException update && EfRelationalExceptionClassifier.IsUniqueConstraintViolation(update))
+                        return EfWriteAttempt<WorkflowDispatchRecord>.Retry(exception);
                     throw;
                 }
             }
@@ -69,18 +67,14 @@ public sealed class EfWorkflowDispatchStore(
                 await _context.SaveChangesAsync(cancellationToken);
                 return record;
             }
-            catch (DbUpdateConcurrencyException)
+            catch (Exception exception)
             {
                 Detach(row);
-            }
-            catch
-            {
-                Detach(row);
+                if (exception is DbUpdateConcurrencyException)
+                    return EfWriteAttempt<WorkflowDispatchRecord>.Retry(exception);
                 throw;
             }
-        }
-
-        throw new InvalidOperationException($"Workflow dispatch '{record.DispatchId}' changed concurrently and did not settle.");
+        }, _ => throw DidNotSettle(record.DispatchId), cancellationToken);
     }
 
     public async ValueTask<WorkflowDispatchRecord?> FindAsync(string dispatchId, CancellationToken cancellationToken = default)
@@ -164,7 +158,7 @@ public sealed class EfWorkflowDispatchStore(
             throw new ArgumentOutOfRangeException(nameof(admittedAt));
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        for (var attempt = 0; attempt < MaxTransitionAttempts; attempt++)
+        return await Transitions.RunAsync(_context, async () =>
         {
             var row = await LoadAsync(scope, dispatchId, tracking: true, cancellationToken)
                       ?? throw new InvalidOperationException($"Workflow dispatch '{dispatchId}' was not found for child admission.");
@@ -184,19 +178,14 @@ public sealed class EfWorkflowDispatchStore(
             try
             {
                 await _context.SaveChangesAsync(cancellationToken);
-                return new(WorkflowDispatchAdmissionDisposition.Admitted, candidate);
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                Detach(row);
+                return new WorkflowDispatchAdmissionResult(WorkflowDispatchAdmissionDisposition.Admitted, candidate);
             }
             catch
             {
                 Detach(row);
                 throw;
             }
-        }
-        throw new InvalidOperationException($"Workflow dispatch '{dispatchId}' changed concurrently and did not settle.");
+        }, _ => throw DidNotSettle(dispatchId), cancellationToken);
     }
 
     private async ValueTask<WorkflowDispatchAdmissionResult> TryAdmitTestScopedAsync(
@@ -205,7 +194,7 @@ public sealed class EfWorkflowDispatchStore(
         CancellationToken cancellationToken)
     {
         var scope = RequireScope();
-        for (var attempt = 0; attempt < MaxTransitionAttempts; attempt++)
+        return await Transitions.RunAsync(_context, async () =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             var dispatchRow = await LoadAsync(scope, dispatchId, tracking: true, cancellationToken)
@@ -271,25 +260,14 @@ public sealed class EfWorkflowDispatchStore(
 
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
-                return new(disposition, candidate);
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                await RollbackAndDetachAsync(transaction, dispatchRow, scopeRow);
-            }
-            catch (OperationCanceledException)
-            {
-                await RollbackAndDetachAsync(transaction, dispatchRow, scopeRow);
-                throw;
+                return new WorkflowDispatchAdmissionResult(disposition, candidate);
             }
             catch
             {
                 await RollbackAndDetachAsync(transaction, dispatchRow, scopeRow);
                 throw;
             }
-        }
-
-        throw new InvalidOperationException($"Workflow dispatch '{dispatchId}' changed concurrently and did not settle.");
+        }, _ => throw DidNotSettle(dispatchId), cancellationToken);
     }
 
     public async ValueTask<WorkflowDispatchCancellationResult> ApplyCancellationAsync(WorkflowDispatchCancellationRequest request, CancellationToken cancellationToken = default)
@@ -297,7 +275,7 @@ public sealed class EfWorkflowDispatchStore(
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        for (var attempt = 0; attempt < MaxTransitionAttempts; attempt++)
+        return await Transitions.RunAsync(_context, async () =>
         {
             var row = await LoadAsync(scope, request.DispatchId, tracking: true, cancellationToken);
             var current = row is null ? null : Read(row, scope, request.DispatchId);
@@ -310,17 +288,12 @@ public sealed class EfWorkflowDispatchStore(
                 await _context.SaveChangesAsync(cancellationToken);
                 return result;
             }
-            catch (DbUpdateConcurrencyException)
-            {
-                Detach(row);
-            }
             catch
             {
                 Detach(row);
                 throw;
             }
-        }
-        throw new InvalidOperationException($"Workflow dispatch '{request.DispatchId}' changed concurrently and did not settle.");
+        }, _ => throw DidNotSettle(request.DispatchId), cancellationToken);
     }
 
     public async ValueTask<bool> TryDeleteAsync(WorkflowDispatchRecord expected, CancellationToken cancellationToken = default)
@@ -415,6 +388,9 @@ public sealed class EfWorkflowDispatchStore(
     }
 
     private string RequireScope() => EfRuntimeOperationalStoreSupport.RequireScope(_access);
+
+    private static InvalidOperationException DidNotSettle(string dispatchId) =>
+        new($"Workflow dispatch '{dispatchId}' changed concurrently and did not settle.");
 
     private static void ValidateDispatchId(string dispatchId)
     {

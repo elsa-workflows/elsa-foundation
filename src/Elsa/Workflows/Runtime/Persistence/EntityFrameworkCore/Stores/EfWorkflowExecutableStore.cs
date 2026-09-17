@@ -14,7 +14,7 @@ public sealed class EfWorkflowExecutableStore(
     BookmarkStateDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowExecutableStore
 {
-    private const int MaximumCoordinationAttempts = 16;
+    private static readonly EfWriteRetry Coordination = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);
 
     public ValueTask SaveAsync(
         WorkflowExecutable executable,
@@ -224,7 +224,7 @@ public sealed class EfWorkflowExecutableStore(
         ValidateTransition(artifactId, leaseId, expiresAt, now);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        for (var attempt = 0; attempt < 16; attempt++)
+        return await Coordination.RunAsync<WorkflowExecutableRootWriteLease?>(context, async () =>
         {
             context.ChangeTracker.Clear();
             var pair = await LoadPairAsync(scope, artifactId, cancellationToken);
@@ -239,11 +239,9 @@ public sealed class EfWorkflowExecutableStore(
                 return new WorkflowExecutableRootWriteLease(artifactId, leaseId, existing.Token);
             var created = new Lease(leaseId, Token(), expiresAt);
             leases[leaseId] = created;
-            if (await UpdateCoordination(row, new CoordinationState(leases, null), cancellationToken))
-                return new WorkflowExecutableRootWriteLease(artifactId, leaseId, created.Token);
-        }
-
-        throw new InvalidOperationException("Runtime coordination changed concurrently.");
+            await UpdateCoordination(row, new CoordinationState(leases, null), cancellationToken);
+            return new WorkflowExecutableRootWriteLease(artifactId, leaseId, created.Token);
+        }, _ => throw new InvalidOperationException("Runtime coordination changed concurrently."), cancellationToken);
     }
 
     public async ValueTask<bool> RenewRootWriteLeaseAsync(
@@ -256,7 +254,7 @@ public sealed class EfWorkflowExecutableStore(
         ValidateTransition(lease.ArtifactId, lease.LeaseId, expiresAt, now);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        for (var attempt = 0; attempt < MaximumCoordinationAttempts; attempt++)
+        return await Coordination.RunAsync(context, async () =>
         {
             var pair = await LoadPairAsync(scope, lease.ArtifactId, cancellationToken);
             if (pair is null)
@@ -272,14 +270,10 @@ public sealed class EfWorkflowExecutableStore(
 
             var leases = state.Leases.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
             leases[lease.LeaseId] = current with { ExpiresAt = expiresAt };
-            if (await UpdateCoordination(row, new CoordinationState(leases, state.Guard), cancellationToken))
-            {
-                context.ChangeTracker.Clear();
-                return true;
-            }
-        }
-
-        throw new InvalidOperationException($"Runtime coordination for workflow executable '{lease.ArtifactId}' changed concurrently and did not settle after {MaximumCoordinationAttempts} attempts.");
+            await UpdateCoordination(row, new CoordinationState(leases, state.Guard), cancellationToken);
+            context.ChangeTracker.Clear();
+            return true;
+        }, _ => throw CoordinationDidNotSettle(lease.ArtifactId), cancellationToken);
     }
 
     public async ValueTask ReleaseRootWriteLeaseAsync(
@@ -293,7 +287,7 @@ public sealed class EfWorkflowExecutableStore(
         var scope = RequireScope();
         try
         {
-            for (var attempt = 0; attempt < MaximumCoordinationAttempts; attempt++)
+            await Coordination.RunAsync(context, async () =>
             {
                 var pair = await LoadPairAsync(scope, lease.ArtifactId, cancellationToken);
                 if (pair is null)
@@ -304,14 +298,9 @@ public sealed class EfWorkflowExecutableStore(
                     return;
                 var leases = state.Leases.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
                 leases.Remove(lease.LeaseId);
-                if (await UpdateCoordination(row, new CoordinationState(leases, state.Guard), cancellationToken))
-                {
-                    context.ChangeTracker.Clear();
-                    return;
-                }
-            }
-
-            throw new InvalidOperationException($"Runtime coordination for workflow executable '{lease.ArtifactId}' changed concurrently and did not settle after {MaximumCoordinationAttempts} attempts.");
+                await UpdateCoordination(row, new CoordinationState(leases, state.Guard), cancellationToken);
+                context.ChangeTracker.Clear();
+            }, _ => throw CoordinationDidNotSettle(lease.ArtifactId), cancellationToken);
         }
         catch (DbUpdateException exception)
         {
@@ -335,7 +324,7 @@ public sealed class EfWorkflowExecutableStore(
         ValidateTransition(artifactId, operationId, expiresAt, now);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        for (var attempt = 0; attempt < 16; attempt++)
+        return await Coordination.RunAsync<WorkflowExecutableDeletionGuard?>(context, async () =>
         {
             context.ChangeTracker.Clear();
             var pair = await LoadPairAsync(scope, artifactId, cancellationToken);
@@ -351,11 +340,9 @@ public sealed class EfWorkflowExecutableStore(
                     ? new WorkflowExecutableDeletionGuard(artifactId, operationId, existing.Token)
                     : null;
             var created = new Guard(operationId, Token(), expiresAt);
-            if (await UpdateCoordination(row, new CoordinationState(leases, created), cancellationToken))
-                return new WorkflowExecutableDeletionGuard(artifactId, operationId, created.Token);
-        }
-
-        throw new InvalidOperationException("Runtime coordination changed concurrently.");
+            await UpdateCoordination(row, new CoordinationState(leases, created), cancellationToken);
+            return new WorkflowExecutableDeletionGuard(artifactId, operationId, created.Token);
+        }, _ => throw new InvalidOperationException("Runtime coordination changed concurrently."), cancellationToken);
     }
 
     public async ValueTask<bool> CancelDeletionAsync(
@@ -368,7 +355,7 @@ public sealed class EfWorkflowExecutableStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(guard.ConcurrencyToken);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        for (var attempt = 0; attempt < MaximumCoordinationAttempts; attempt++)
+        return await Coordination.RunAsync(context, async () =>
         {
             var pair = await LoadPairAsync(scope, guard.ArtifactId, cancellationToken);
             if (pair is null)
@@ -377,14 +364,10 @@ public sealed class EfWorkflowExecutableStore(
             var state = ReadCoordination(row, scope, guard.ArtifactId, CreateId(scope, guard.ArtifactId));
             if (state.Guard is not { } current || current.OperationId != guard.OperationId || current.Token != guard.ConcurrencyToken)
                 return false;
-            if (await UpdateCoordination(row, new CoordinationState(state.Leases, null), cancellationToken))
-            {
-                context.ChangeTracker.Clear();
-                return true;
-            }
-        }
-
-        throw new InvalidOperationException($"Runtime coordination for workflow executable '{guard.ArtifactId}' changed concurrently and did not settle after {MaximumCoordinationAttempts} attempts.");
+            await UpdateCoordination(row, new CoordinationState(state.Leases, null), cancellationToken);
+            context.ChangeTracker.Clear();
+            return true;
+        }, _ => throw CoordinationDidNotSettle(guard.ArtifactId), cancellationToken);
     }
     public async ValueTask<bool> DeleteAsync(
         WorkflowExecutableDeletionGuard guard,
@@ -417,7 +400,7 @@ public sealed class EfWorkflowExecutableStore(
     {
         var id = CreateId(scope, artifactId);
 
-        for (var attempt = 0; attempt < 32; attempt++)
+        return await Coordination.RunAsync(context, async () =>
         {
             context.ChangeTracker.Clear();
             await using var transaction = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
@@ -462,40 +445,15 @@ public sealed class EfWorkflowExecutableStore(
                     context, "deleting", artifactId, () => transaction.CommitAsync(cancellationToken));
                 return true;
             }
-            catch (DbUpdateConcurrencyException exception)
+            catch (Exception exception)
             {
                 await RollbackQuietlyAsync(transaction);
                 context.ChangeTracker.Clear();
-                if (attempt == 31)
-                    throw new InvalidOperationException("The workflow executable changed concurrently; retry the operation.", exception);
-            }
-            catch (OperationCanceledException)
-            {
-                await RollbackQuietlyAsync(transaction);
-                context.ChangeTracker.Clear();
+                if (exception is DbUpdateException and not DbUpdateConcurrencyException or DbException)
+                    throw NormalizeProviderFailure("deleting", artifactId, exception);
                 throw;
             }
-            catch (DbUpdateException exception)
-            {
-                await RollbackQuietlyAsync(transaction);
-                context.ChangeTracker.Clear();
-                throw NormalizeProviderFailure("deleting", artifactId, exception);
-            }
-            catch (DbException exception)
-            {
-                await RollbackQuietlyAsync(transaction);
-                context.ChangeTracker.Clear();
-                throw NormalizeProviderFailure("deleting", artifactId, exception);
-            }
-            catch
-            {
-                await RollbackQuietlyAsync(transaction);
-                context.ChangeTracker.Clear();
-                throw;
-            }
-        }
-
-        throw new InvalidOperationException("The workflow executable changed concurrently; retry the operation.");
+        }, lastContention => throw new InvalidOperationException("The workflow executable changed concurrently; retry the operation.", lastContention), cancellationToken);
     }
 
     private static async Task RollbackQuietlyAsync(IDbContextTransaction transaction)
@@ -571,19 +529,19 @@ public sealed class EfWorkflowExecutableStore(
         return (artifact, coordination);
     }
 
-    private async Task<bool> UpdateCoordination(WorkflowExecutableCoordinationEntity row, CoordinationState state, CancellationToken ct)
+    /// <summary>Saves the coordination row; a lost revision race clears tracking and propagates for the caller's retry.</summary>
+    private async Task UpdateCoordination(WorkflowExecutableCoordinationEntity row, CoordinationState state, CancellationToken ct)
     {
         row.ContentJson = RuntimeArtifactJson.Serialize(state);
         row.Revision++;
         try
         {
             await context.SaveChangesAsync(ct);
-            return true;
         }
         catch (DbUpdateConcurrencyException)
         {
             context.ChangeTracker.Clear();
-            return false;
+            throw;
         }
         catch (Exception exception) when (IsProviderFailure(exception))
         {
@@ -787,6 +745,9 @@ public sealed class EfWorkflowExecutableStore(
         state.Leases
             .Where(x => x.Value.ExpiresAt > now)
             .ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
+
+    private static InvalidOperationException CoordinationDidNotSettle(string artifactId) =>
+        new($"Runtime coordination for workflow executable '{artifactId}' changed concurrently and did not settle after {Coordination.MaxAttempts} attempts.");
 
     private static RuntimeArtifactEntityFrameworkPersistenceException NormalizeProviderFailure(
         string operation,

@@ -18,7 +18,11 @@ public sealed class EfWorkflowAlterationStore(
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowAlterationStore
 {
-    private const int TransitionAttempts = 16;
+    // A claim retries only the races SaveChanges reports; any other database failure surfaces with its own cause.
+    private static readonly EfWriteRetry ClaimRetry = new(
+        EfWriteRetry.DefaultMaxAttempts,
+        exception => exception is DbUpdateException && EfRelationalExceptionClassifier.IsWriteConflict(
+            exception, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey | EfWriteConflict.Transient));
     private const string ActiveCursorPurpose = "ef-runtime-alteration-active-v1";
     private const string JobCursorPurpose = "ef-runtime-alteration-jobs-v1";
     private readonly BookmarkStateDbContext _context = context ?? throw new ArgumentNullException(nameof(context));
@@ -234,7 +238,7 @@ public sealed class EfWorkflowAlterationStore(
 
         var scopeKey = Key(RequireScope());
         var nowTicks = now.UtcTicks;
-        for (var attempt = 0; attempt < TransitionAttempts; attempt++)
+        return await ClaimRetry.RunAsync<WorkflowAlterationJobState?>(_context, async () =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             var planRow = await RequirePlan(planId, cancellationToken);
@@ -274,10 +278,9 @@ public sealed class EfWorkflowAlterationStore(
             catch (DbUpdateException)
             {
                 _context.ChangeTracker.Clear();
+                throw;
             }
-        }
-
-        throw new WorkflowAlterationConcurrencyException(planId);
+        }, _ => throw new WorkflowAlterationConcurrencyException(planId), cancellationToken);
     }
 
     public async ValueTask<WorkflowAlterationPlanState> ReconcileAsync(string planId, DateTimeOffset now, CancellationToken cancellationToken = default)
