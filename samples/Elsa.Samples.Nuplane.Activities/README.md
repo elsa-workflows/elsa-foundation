@@ -18,16 +18,19 @@ produces a startup warning:
 "SampleNuplaneActivities": {}
 ```
 
-Then reload the shell:
+Then reload the shell. The Workbench serves `https://localhost:7243` (and `http://localhost:5095`), and the
+shell-management endpoints require the management key configured at `Elsa:ModuleManagement:ApiKey`:
 
 ```bash
-curl -k -X POST https://localhost:5001/_admin/shells/reload/default
+curl -k -X POST https://localhost:7243/_admin/shells/reload/default \
+  -H "X-Elsa-Module-Management-Key: <management-key>"
 ```
 
 Or reload every active shell:
 
 ```bash
-curl -k -X POST https://localhost:5001/_admin/shells/reload-all
+curl -k -X POST https://localhost:7243/_admin/shells/reload-all \
+  -H "X-Elsa-Module-Management-Key: <management-key>"
 ```
 
 The package contributes:
