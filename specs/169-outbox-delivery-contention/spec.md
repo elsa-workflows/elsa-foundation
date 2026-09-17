@@ -221,7 +221,15 @@ A team implementing a new persistence provider for the outbox cannot produce a s
 
 ## Follow-Up — filed separately (D7)
 
-**Unguarded concurrency failure on the claim-completion path.** The claim operation in the EF store catches a concurrency conflict, detaches, and moves on. The claim-*completion* operation has no equivalent guard. This is a second, independent path to a 500 on the claim side, it is untested at every layer, and the same background-drain pressure that provokes this defect would provoke it too.
+**Concurrency behaviour on the claim-completion path — verify whether it is a defect at all.**
+
+*Corrected 2026-09-17 after reading the code.* This item was originally recorded as "`CompleteClaimAsync` has no concurrency guard". **That is wrong.** It does have one: it catches `DbUpdateConcurrencyException`, rolls back, re-reads, re-runs the transition to surface a stale claim, and then throws `InvalidOperationException("…changed concurrently; retry completion.")`.
+
+So the open question is narrower than first stated: `ClaimAsync` *swallows* the conflict and skips the item, while `CompleteClaimAsync` *throws*. That asymmetry is plausibly correct by design — a failed claim is trivially skippable because another cycle re-claims it, whereas a failed completion means the delivery already happened and was not recorded, which cannot be skipped silently.
+
+What remains worth checking is (a) whether that throw can reach an HTTP caller, and (b) that the path is untested at every layer. On the start path it is not reached: `DrainImmediateAsync` requests only `EnqueueSchedulerWork` and the live-drain accessor is registered by default, so the claim-less branch is taken. A coalescing burst does take the claim path, so a non-session-owned item's completion could reach it there — unproven either way.
+
+**This is not the defect the reporter observed.** Their logs carry only the claim-less message, "is claimed; its owner and fencing token are required". The claim-completion path produces a different message that never appeared.
 
 **Decision (D7)**: handled **as a separate unit of work, after this one.** It is a different code path with a different fix, and bundling it would blur the per-change revert-to-red evidence that D5 requires.
 

@@ -127,6 +127,8 @@ The coalescing overlay needs care: when a session owns the item it records into 
 
 **Decision**: The missing concurrency guard on the EF claim-completion path is **filed separately**, not fixed here.
 
-**Evidence**: [`ClaimAsync`](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs#L132) catches `DbUpdateConcurrencyException` and detaches; [`CompleteClaimAsync`](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs#L237) has no equivalent guard.
+**Evidence, corrected after reading the code**: `ClaimAsync` catches `DbUpdateConcurrencyException` and detaches (skipping the item). `CompleteClaimAsync` **does have a guard too** — the original note that it had none was wrong. It rolls back, re-reads, re-runs the transition to surface a stale claim, then throws `InvalidOperationException("…changed concurrently; retry completion.")`.
+
+The remaining question is whether that asymmetry is a defect. It is plausibly correct: a skipped claim is re-claimed next cycle, whereas a skipped completion loses the record of a delivery that already happened. Not the reporter's defect either way — their logs carry only the claim-less message.
 
 **Scheduling constraint** (architect, this session): downstream consumers are blocked by the 500 this unit fixes, so nothing here may sit on that fix's critical path. Reflected in the phase ordering in [plan.md](./plan.md#implementation-phases).

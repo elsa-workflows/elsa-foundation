@@ -86,7 +86,7 @@ Note that the *fence* test (FR-017) and the *race* test (FR-016) guard different
 ## What is not in this unit
 
 - **The duplicate-key log noise.** Already handled correctly by the work-queue store; it is EF's logger printing before the catch runs. Expected to get quieter as a side effect, but **not diagnosed** — two other routes produce an identical line.
-- **The missing concurrency guard on the EF claim-completion path.** Real, separate, filed as its own unit (D7). Do not fold it in — it would blur the revert-to-red evidence.
+- **The claim-completion path's concurrency behaviour.** Filed separately (D7). Note the original framing was wrong: `CompleteClaimAsync` is not unguarded — it catches the conflict and throws a specific error rather than swallowing it like `ClaimAsync` does. Whether that asymmetry is a defect is the open question, and it is not the defect behind #1798.
 - **A host-level concurrent-start test.** No host fixture exists to build it on, and it would miss the single-start case anyway.
 
 ---
