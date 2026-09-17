@@ -43,7 +43,7 @@ public sealed class EfUserStore(
             var rows = await EfIdentityStoreSupport.ReadAsync(
                 context,
                 "Unable to find the Identity user by email.",
-                () => context.Users.AsNoTracking().Where(x => x.TenantLookupKey == EfIdentityStoreSupport.TenantLookup(tenantId) && x.NormalizedEmailKey == key).Take(2).ToListAsync(cancellationToken));
+                () => context.Users.AsNoTracking().Where(x => x.TenantLookupKey == EfIdentityStoreSupport.TenantLookup(tenantId) && x.NormalizedEmailKey == key).OrderBy(x => x.Id).Take(2).ToListAsync(cancellationToken));
             return rows.Count == 1 && string.Equals(EfIdentityStoreSupport.Normalize(rows[0].Email), EfIdentityStoreSupport.Normalize(email), StringComparison.Ordinal) ? Map(rows[0]) : null;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { context.ChangeTracker.Clear(); throw; }
