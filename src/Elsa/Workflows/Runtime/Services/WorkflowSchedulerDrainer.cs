@@ -31,7 +31,9 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// <c>BlockingIncidentWorkflowFaultObserver</c> as the backstop for drains that did not quiesce.</description></item>
 /// <item><description>A <b>handler</b> fault lands in <see cref="DispatchAsync"/>'s general catch, is poisoned by
 /// <see cref="HandleHandlerCrashAsync"/>, and is projected into a blocking incident by
-/// <c>PoisonedSchedulerWorkIncidentObserver</c>, which deliberately leaves the workflow non-terminal.</description></item>
+/// <c>PoisonedSchedulerWorkIncidentObserver</c>, which deliberately leaves the workflow non-terminal. A handler fault a
+/// checkpoint rule caused is marked <see cref="RuntimeSchedulerWorkItemResult.CheckpointRuleViolation"/>, and the drain
+/// orchestrator faults the workflow for it (#1780).</description></item>
 /// </list>
 ///
 /// <para>Both paths, the defaults that decide them, and the source for each claim are mapped in
@@ -341,7 +343,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 handlerName: handlerName,
                 startedAt: startedAt,
                 completedAt: _timeProvider.GetUtcNow(),
-                error: faultInfo.ToSummaryString());
+                error: faultInfo.ToSummaryString(),
+                checkpointRuleViolation: RuntimeCheckpointCommitValidationException.IsCauseOf(exception));
         }
     }
 

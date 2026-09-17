@@ -218,7 +218,35 @@ activity state: the activity that was mid-dispatch stays whatever it was, typica
 
 So the honest one-line answer to "what happens by default when a handler faults" is: **the work item
 is dropped from the queue, parked as poisoned with no retry, and surfaced as a blocking critical
-incident, while the workflow itself stays `Running` and needs an operator.**
+incident, while the workflow itself stays `Running` and needs an operator.** The one exception is a
+fault caused by a checkpoint rule, below.
+
+## When a checkpoint rule refuses a commit
+
+A `RuntimeCheckpointCommitValidationException` means a checkpoint rule refused a commit. Redelivering the
+same work commits the same checkpoint and is refused again, so leaving the workflow `Running` would
+leave it at its last accepted checkpoint forever, and a parent waiting on it as a child would never
+resume (#1780). Such a refusal therefore faults the workflow, whichever path it arrived on:
+
+- a **handler's** commit is refused: Path B still runs in full, and the drainer marks the faulted item
+  result `CheckpointRuleViolation`;
+- a **drain observer's** commit is refused, such as the incident strategy's `FaultWorkflow`: the
+  refusal escapes the drain inside the observers' `AggregateException`.
+
+`WorkflowDrainOrchestrator` hands the drain's result or failure to
+`CheckpointRuleViolationWorkflowFaulter` while it still holds the execution lease. When the workflow
+has accepted state and is not yet terminal, the faulter commits a `WorkflowFaulted` checkpoint built
+from that last accepted state, never from the refused commit: the workflow moved to `Faulted`, and one
+blocking `Critical` incident of failure type `CheckpointRuleViolation` with a `FaultWorkflow` outcome
+and system source `CheckpointRuleViolation`. Nothing else, so the refused content is not offered again.
+The ordinary enrichers still run, so a waited child's dispatch moves to `Faulted` and its parent-resume
+intent is queued exactly as for a child's business fault.
+
+What the drain reports is unchanged: a refused handler commit still returns `AcceptedButFaulted`, and a
+refused observer commit still throws. Only a fault commit that itself fails is added to the failure, so
+a workflow that could not be faulted is never reported as handled. A workflow with no accepted state
+has nothing to fault and is left alone. Any other failure, such as a lost lease, a concurrency conflict,
+or an infrastructure fault, faults nothing here, because a retry can still succeed.
 
 ## The observer chain
 
@@ -289,6 +317,7 @@ Changing the catalog default only affects workflows published afterwards.
 | poison records become blocking critical incidents with a `WaitForIntervention` outcome, idempotently and best-effort | `src/Elsa/Workflows/Runtime/Services/PoisonedSchedulerWorkIncidentObserver.cs` |
 | observer order, and the defaults table | `src/Elsa/Workflows/Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs` |
 | quiescence is the orchestrator's aggregate stop reason, and observers are notified after the drain | `src/Elsa/Workflows/Runtime/Services/WorkflowDrainOrchestrator.cs` (`DrainSchedulerAndPostCommitWorkAsync`, `NotifyObserversAsync`) |
+| a checkpoint rule refusal faults the workflow under the drain's lease, with a commit built from its last accepted state | `WorkflowDrainOrchestrator.DrainAsync`, `src/Elsa/Workflows/Runtime/Services/CheckpointRuleViolationWorkflowFaulter.cs`, `WorkflowSchedulerDrainer.DispatchAsync` (`checkpointRuleViolation`) |
 
 Behavioral guards worth reading alongside the code:
 
@@ -309,6 +338,11 @@ Behavioral guards worth reading alongside the code:
   condition and the ancestor-faulting rule.
 - `tests/Elsa/Workflows/Runtime/Tests/IncidentResolutionBatchExecutorTests.cs`: batch atomicity and
   both fail-closed fallbacks.
+- `tests/Elsa/Workflows/Runtime/Tests/CheckpointRuleViolationWorkflowFaulterTests.cs`: the fault commit
+  carries only the workflow state and its incident, and no other failure faults a workflow.
+- `tests/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/DispatchWorkflowStoreContractTests.cs`:
+  on both stores, a waited child whose terminal checkpoint is refused ends `Faulted` and its parent
+  resumes, while a transient commit failure faults nothing.
 
 ## Not covered here
 

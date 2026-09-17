@@ -9,4 +9,5 @@ public static class IncidentResolutionSystemSources
     public const string PoisonedSchedulerWork = "PoisonedSchedulerWork";
     public const string MissingStrategyImplementation = "MissingStrategyImplementation";
     public const string IncidentStrategyFailure = "IncidentStrategyFailure";
+    public const string CheckpointRuleViolation = "CheckpointRuleViolation";
 }

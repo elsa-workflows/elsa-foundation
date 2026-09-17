@@ -538,6 +538,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
                 drainer,
                 outboxProcessor ?? EmptyPostCommitOutboxProcessor.Instance,
                 observers,
+                TestCheckpointRuleViolationFaulter.Create(timeProvider),
                 new RuntimeExecutionOwnershipService(new InMemoryExecutionLivenessStateStore()),
                 new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
                 options),

@@ -431,7 +431,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask CompleteClaimAsync(
+    public async ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> CompleteClaimAsync(
         RuntimePostCommitOutboxClaimCompletion completion,
         CancellationToken cancellationToken = default)
     {
@@ -504,6 +504,9 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                     _state.WorkflowDispatches[winningDispatch.DispatchId] = winningDispatch;
                 if (!admissionWins && completion.FollowUpOutboxItem is { } followUpOutboxItem)
                     _state.OutboxItems.TryAdd(followUpOutboxItem.OutboxItemId, followUpOutboxItem);
+                return admissionWins
+                    ? RuntimePostCommitOutboxClaimCompletionOutcome.DeliveredOnChildEvidence
+                    : RuntimePostCommitOutboxClaimCompletionOutcome.Persisted;
             }
         }
         finally

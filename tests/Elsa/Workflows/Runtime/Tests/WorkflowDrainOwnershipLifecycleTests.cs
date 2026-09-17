@@ -89,6 +89,7 @@ public sealed class WorkflowDrainOwnershipLifecycleTests
             drainer,
             EmptyPostCommitOutboxProcessor.Instance,
             [],
+            TestCheckpointRuleViolationFaulter.Create(),
             ownership,
             new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
             timeProvider: TimeProvider.System);

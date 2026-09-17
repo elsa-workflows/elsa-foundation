@@ -266,14 +266,16 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             var dispatchFailure = await CreateDeliveryFailureProjectionAsync(item, result, cancellationToken);
             if (_claimCompletionStore is not null)
             {
-                await _claimCompletionStore.CompleteClaimAsync(
+                var outcome = await _claimCompletionStore.CompleteClaimAsync(
                     new RuntimePostCommitOutboxClaimCompletion(
                         claim,
                         result,
                         dispatchFailure?.WorkflowDispatch,
                         dispatchFailure?.FollowUpOutboxItem),
                     cancellationToken);
-                if (dispatchFailure is not null)
+                // A store that found the child already started persisted the start as delivered and discarded the
+                // projection, so there is no delivery incident or failure resume to report.
+                if (dispatchFailure is not null && outcome == RuntimePostCommitOutboxClaimCompletionOutcome.Persisted)
                     LogDeliveryFailureProjection(item, dispatchFailure, result.RecordedAt, deliveryFailure);
             }
             else if (dispatchFailure is not null)

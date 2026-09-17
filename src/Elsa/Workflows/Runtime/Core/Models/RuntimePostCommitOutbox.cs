@@ -345,6 +345,20 @@ public sealed class RuntimePostCommitOutboxClaimCompletion
     public RuntimePostCommitOutboxItem? FollowUpOutboxItem { get; }
 }
 
+/// <summary>Which outcome a <see cref="RuntimePostCommitOutboxClaimCompletion"/> actually persisted.</summary>
+public enum RuntimePostCommitOutboxClaimCompletionOutcome
+{
+    /// <summary>The delivery result was persisted as presented, with the dispatch projection and follow-up it carried.</summary>
+    Persisted,
+
+    /// <summary>
+    /// A final child-start failure found durable evidence that the child exists
+    /// (<see cref="WorkflowDispatchLifecycle.ResolveSuccessfulChildDelivery"/>), so the start was persisted as delivered and
+    /// the dispatch projection and follow-up it carried were discarded.
+    /// </summary>
+    DeliveredOnChildEvidence
+}
+
 /// <summary>Provider-neutral DispatchWorkflow final-failure projection produced before fenced completion.</summary>
 public sealed class PostCommitFailureProjection
 {

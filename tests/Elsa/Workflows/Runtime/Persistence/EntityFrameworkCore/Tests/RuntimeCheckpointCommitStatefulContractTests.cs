@@ -1,3 +1,5 @@
+using Elsa.Activities.DispatchWorkflow.Runtime.Services;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -60,6 +62,80 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
         Assert.Single(result.PendingPostCommitWorkIds);
         Assert.Equal(1, await backend.CountMarkersAsync());
         Assert.Equal(WorkflowDispatchStatus.Completed, (await backend.Dispatches.FindAsync(pending.DispatchId))!.Status);
+    }
+
+    public static TheoryData<string, bool> StoreAndChildData()
+    {
+        var data = new TheoryData<string, bool>();
+        foreach (var store in RuntimeCheckpointCommitContract.Stores)
+        {
+            data.Add(store, true);
+            data.Add(store, false);
+        }
+        return data;
+    }
+
+    /// <summary>
+    /// #1780: completing a final child-start failure reports what the store persisted. A child that exists makes the start
+    /// delivered and discards the DispatchFailed projection and its parent resume; without one, all three are persisted.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(StoreAndChildData))]
+    public async Task Completing_a_final_child_start_failure_reports_the_outcome_it_persisted(string store, bool childExists)
+    {
+        await using var backend = await RuntimeCheckpointCommitContractBackend.CreateAsync(store);
+        var pending = PendingDispatch("workflow-parent", "activity-waited", mode: WorkflowDispatchMode.WaitForCompletion);
+        var started = pending.TransitionTo(WorkflowDispatchStatus.Started, OccurredAt.AddSeconds(1));
+        await backend.Dispatches.SaveAsync(pending);
+        await backend.Dispatches.SaveAsync(started);
+        if (childExists)
+        {
+            var child = Execution(pending.ChildWorkflowExecutionId) with
+            {
+                PinnedExecutable = pending.ChildExecutable,
+                ParentWorkflowExecutionId = pending.ParentWorkflowExecutionId,
+                RunKind = pending.RunKind,
+                Partition = pending.Partition,
+                Authority = pending.Authority
+            };
+            await backend.Committer.CommitAsync(Commit(
+                child.WorkflowExecutionId,
+                new RuntimeCheckpointStateChangeSet(Change(child.WorkflowExecutionId, child), null, [], [], [], [], [])));
+        }
+        var identity = new WorkflowDispatchIdentity(pending.ParentWorkflowExecutionId, pending.ParentActivityExecutionId);
+        await backend.SeedPendingOutboxItemAsync(new RuntimePostCommitOutboxItem(
+            "outbox-child-start",
+            new RuntimePostCommitIntent(
+                identity.StartIntentId,
+                pending.ParentWorkflowExecutionId,
+                WorkflowDispatchLifecycle.StartChildIntentKind,
+                OccurredAt,
+                pending.ParentActivityExecutionId,
+                identity.StartIdempotencyKey,
+                null,
+                new Dictionary<string, string> { [RuntimeMetadataKeys.DispatchId] = pending.DispatchId }),
+            RuntimePostCommitOutboxStatus.Pending,
+            OccurredAt,
+            OccurredAt));
+        var claim = Assert.Single(await backend.Claims.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+            "owner-contract", OccurredAt.AddSeconds(2), TimeSpan.FromMinutes(1), 1)));
+        var result = new RuntimePostCommitOutboxDeliveryResult(claim.OutboxItemId, RuntimePostCommitOutboxStatus.FailedFinal, OccurredAt.AddSeconds(3), "The child workflow could not be started.");
+        var projection = await new WorkflowDispatchDeliveryFailureProjector(backend.Dispatches).ProjectAsync(claim.Item, result);
+        var followUp = Assert.IsType<RuntimePostCommitOutboxItem>(projection?.FollowUpOutboxItem);
+
+        var outcome = await ((IRuntimePostCommitOutboxClaimCompletionStore)backend.Claims).CompleteClaimAsync(
+            new RuntimePostCommitOutboxClaimCompletion(claim, result, projection!.WorkflowDispatch, followUp));
+
+        Assert.Equal(
+            childExists ? RuntimePostCommitOutboxClaimCompletionOutcome.DeliveredOnChildEvidence : RuntimePostCommitOutboxClaimCompletionOutcome.Persisted,
+            outcome);
+        Assert.Equal(
+            childExists ? RuntimePostCommitOutboxStatus.Delivered : RuntimePostCommitOutboxStatus.FailedFinal,
+            (await backend.Outbox.FindAsync(claim.OutboxItemId))?.Status);
+        Assert.Equal(
+            childExists ? WorkflowDispatchStatus.Started : WorkflowDispatchStatus.DispatchFailed,
+            (await backend.Dispatches.FindAsync(pending.DispatchId))?.Status);
+        Assert.Equal(childExists, await backend.Outbox.FindAsync(followUp.OutboxItemId) is null);
     }
 
     /// <summary>
