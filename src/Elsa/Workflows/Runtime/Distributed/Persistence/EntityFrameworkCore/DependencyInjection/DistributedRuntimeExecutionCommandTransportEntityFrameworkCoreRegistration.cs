@@ -81,11 +81,6 @@ public static class DistributedRuntimeExecutionCommandTransportEntityFrameworkCo
         return services;
     }
 
-    public static IServiceCollection AddExecutionCommandTransportEntityFrameworkCore(
-        this IServiceCollection services,
-        DistributedRuntimeExecutionCommandTransportEntityFrameworkCoreOptions options) =>
-        services.AddDistributedRuntimeExecutionCommandTransportEntityFrameworkCore(options);
-
     private static void AddContext<TContext>(
         IServiceCollection services,
         DistributedRuntimeExecutionCommandTransportEntityFrameworkCoreOptions options,

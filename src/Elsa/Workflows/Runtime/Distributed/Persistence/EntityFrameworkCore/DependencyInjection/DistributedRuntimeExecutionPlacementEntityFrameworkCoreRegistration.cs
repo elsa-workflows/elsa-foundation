@@ -83,11 +83,6 @@ public static class DistributedRuntimeExecutionPlacementEntityFrameworkCoreRegis
         return services;
     }
 
-    public static IServiceCollection AddExecutionPlacementEntityFrameworkCore(
-        this IServiceCollection services,
-        DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions options) =>
-        services.AddDistributedRuntimeExecutionPlacementEntityFrameworkCore(options);
-
     private static void AddContext<TContext>(
         IServiceCollection services,
         DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions options,

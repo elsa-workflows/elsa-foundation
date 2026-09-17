@@ -159,9 +159,6 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
         }
     }
 
-    public static IServiceCollection AddRuntimeActivityExecutionStateEntityFrameworkCore(this IServiceCollection services, RuntimeActivityExecutionEntityFrameworkCoreOptions options) => services.AddRuntimeActivityExecutionEntityFrameworkCore(options);
-    public static IServiceCollection AddRuntimeActivityExecutionsEntityFrameworkCore(this IServiceCollection services, RuntimeActivityExecutionEntityFrameworkCoreOptions options) => services.AddRuntimeActivityExecutionEntityFrameworkCore(options);
-
     private static bool OptionsEqual(RuntimeActivityExecutionEntityFrameworkCoreOptions left, RuntimeActivityExecutionEntityFrameworkCoreOptions right) =>
         StringComparer.Ordinal.Equals(EfRelationalProviderBinding.Normalize(left.Provider), EfRelationalProviderBinding.Normalize(right.Provider)) &&
         StringComparer.Ordinal.Equals(left.ConnectionString, right.ConnectionString) &&

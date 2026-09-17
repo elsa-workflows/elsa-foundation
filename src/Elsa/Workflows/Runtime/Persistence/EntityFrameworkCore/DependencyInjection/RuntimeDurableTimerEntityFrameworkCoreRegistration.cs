@@ -119,16 +119,6 @@ public static class RuntimeDurableTimerEntityFrameworkCoreRegistration
         }
     }
 
-    public static IServiceCollection AddRuntimeDurableTimersEntityFrameworkCore(
-        this IServiceCollection services,
-        RuntimeDurableTimerEntityFrameworkCoreOptions options) =>
-        services.AddRuntimeDurableTimerEntityFrameworkCore(options);
-
-    public static IServiceCollection AddDurableTimerEntityFrameworkCore(
-        this IServiceCollection services,
-        RuntimeDurableTimerEntityFrameworkCoreOptions options) =>
-        services.AddRuntimeDurableTimerEntityFrameworkCore(options);
-
     private static bool OptionsEqual(
         RuntimeDurableTimerEntityFrameworkCoreOptions left,
         RuntimeDurableTimerEntityFrameworkCoreOptions right) =>

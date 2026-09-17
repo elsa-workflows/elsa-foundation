@@ -59,9 +59,6 @@ public static class RuntimeWorkflowTriggerBindingEntityFrameworkCoreRegistration
         }
     }
 
-    public static IServiceCollection AddRuntimeWorkflowTriggerBindingsEntityFrameworkCore(this IServiceCollection services) =>
-        services.AddRuntimeWorkflowTriggerBindingEntityFrameworkCore();
-
     private static bool IsRuntimeDefault(ServiceDescriptor descriptor) =>
         descriptor.Lifetime == ServiceLifetime.Singleton &&
         descriptor.ImplementationType == typeof(InMemoryWorkflowTriggerBindingStore);

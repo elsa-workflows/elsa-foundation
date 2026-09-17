@@ -47,10 +47,3 @@ public sealed record RefreshTokenRequest(string RefreshToken);
 /// <c>expiresAt</c> is additive.
 /// </summary>
 public sealed record AccessTokenResponse(string AccessToken, DateTimeOffset ExpiresAt);
-
-public sealed record RevokeTokenRequest(string Token, string? Reason);
-
-public sealed record ProviderRouteRequest
-{
-    public string Provider { get; init; } = string.Empty;
-}

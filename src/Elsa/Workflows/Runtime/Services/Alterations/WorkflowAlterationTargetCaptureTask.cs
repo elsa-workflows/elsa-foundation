@@ -218,9 +218,6 @@ public sealed class WorkflowAlterationTargetCaptureTask
         bool HasNext);
 }
 
-public sealed class WorkflowAlterationCaptureRetryExhaustedException(string planId)
-    : InvalidOperationException($"Alteration target capture for plan '{planId}' did not stabilize after bounded retries.");
-
 /// <summary>Bounded optimistic-concurrency retry policy for one capture page delivery.</summary>
 public sealed class WorkflowAlterationTargetCaptureOptions
 {
