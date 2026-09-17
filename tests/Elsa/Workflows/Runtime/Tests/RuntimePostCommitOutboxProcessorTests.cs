@@ -1030,4 +1030,81 @@ public sealed class RuntimePostCommitOutboxProcessorTests
             CancellationToken cancellationToken = default) =>
             inner.RecordDeliveryResultAsync(result, cancellationToken);
     }
+
+    /// <summary>
+    /// Issue #1798, second trigger - deterministic, no concurrency involved.
+    ///
+    /// The fencing token never resets: every claim increments it, and a claim that expires or fails retryably returns the
+    /// item to a deliverable state with the incremented token still on it. The claim-less live-drain path then picked it
+    /// up and tried to record without a fence, which was rejected on the FIRST attempt, every time. One start meeting one
+    /// expired claim was enough - no race required.
+    ///
+    /// The exclusion lives in the claim-less branch rather than in the store's deliverable query, because that query is
+    /// shared with retry visibility and with the migration quiescence probe. The two tests below pin both halves of that:
+    /// the live drain skips the fenced item, and the shared query still reports it.
+    /// </summary>
+    [Fact]
+    public async Task Processor_LiveDrain_SkipsItemsAlreadyCarryingAFencingToken()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        var dispatcher = new RecordingDispatcher();
+        var liveDrain = new AsyncLocalRuntimeLiveDrainDeliveryAccessor();
+        await store.AddPendingForTestingAsync(NewOutboxItem(
+            "outbox-1", "intent-1", "wfexec-1",
+            kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
+            retryPolicy: new RuntimePostCommitRetryPolicy(5, TimeSpan.FromSeconds(10))));
+
+        // Build the actually-poisoned state: claimed (fence -> 1), then released back with a retryable failure. The item
+        // is now DELIVERABLE again - Pending/FailedRetryable, past its retry delay - while still carrying the fence.
+        // Claiming alone would not reproduce it: a Delivering item is already excluded by the deliverable query, so a
+        // test that stops there passes with or without this fix and proves nothing.
+        var claim = Assert.Single(await store.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+            "worker-1", _now, TimeSpan.FromMinutes(1), 10)));
+        await store.RecordDeliveryResultAsync(claim, new RuntimePostCommitOutboxDeliveryResult(
+            "outbox-1", RuntimePostCommitOutboxStatus.FailedRetryable, _now.AddSeconds(1), "transient"));
+
+        var later = _now.AddMinutes(5);
+        var processor = NewLiveDrainProcessor(store, dispatcher, later, liveDrain);
+
+        var beforeDrain = await store.FindAsync("outbox-1");
+        Assert.NotNull(beforeDrain);
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, beforeDrain.Status);
+        Assert.True(beforeDrain.DeliveryFencingToken > 0);
+        // Deliverable AND fenced - the state that threw deterministically on the first attempt, every time.
+        Assert.Single(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(later, 10)));
+
+        using (liveDrain.Push(new RuntimeLiveDrainDeliveryScope("wfexec-1")))
+        {
+            var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(
+                limit: 10, workflowExecutionId: "wfexec-1", intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+
+            // Not attempted at all: it belongs to the claim path, the only path that can present the fence its
+            // completion requires. Without the skip this item is dispatched and then recorded as superseded.
+            Assert.Equal(0, result.AttemptedCount);
+        }
+
+        Assert.Empty(dispatcher.Intents);
+    }
+
+    [Fact]
+    public async Task FencedItem_StaysVisibleToTheSharedDeliverableQueryForRetryAndQuiescence()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1"));
+        await store.ClaimAsync(new RuntimePostCommitOutboxClaimRequest("worker-1", _now, TimeSpan.FromMinutes(1), 10));
+        await store.RecordDeliveryResultAsync(
+            new RuntimePostCommitOutboxClaim(
+                (await store.FindAsync("outbox-1"))!, "worker-1", 1, _now, _now.AddMinutes(1)),
+            new RuntimePostCommitOutboxDeliveryResult(
+                "outbox-1", RuntimePostCommitOutboxStatus.FailedRetryable, _now.AddSeconds(1), "transient"));
+
+        // The item is now FailedRetryable and fenced. The shared query MUST still surface it once its retry delay has
+        // elapsed: it is the retry-visibility query, and the migration quiescence probe reads it to decide whether outbox
+        // work is still outstanding. Hiding fenced items here would strand retries and let a migration run over live work.
+        var deliverable = await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddMinutes(5), 10));
+
+        var item = Assert.Single(deliverable);
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, item.Status);
+        Assert.True(item.DeliveryFencingToken > 0);
+    }
 }

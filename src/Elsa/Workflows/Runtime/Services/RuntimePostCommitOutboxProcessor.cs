@@ -146,7 +146,21 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 intentKind: request.IntentKind),
                 cancellationToken);
             foreach (var item in items)
+            {
+                // Skip anything already fenced. The fencing token never resets, so a claim that expired or failed
+                // retryably leaves the item deliverable again while still carrying its token — and a claim-less recording
+                // has no fence to present, so it could only ever come back superseded. Delivering it here would re-run
+                // the dispatch for nothing and hand the work to a deliverer that cannot complete it.
+                //
+                // This filter lives here, not in the store's deliverable query, because that query is shared: it is also
+                // the retry-visibility query (a retryable item must reappear once its delay elapses) and the query the
+                // migration quiescence probe uses to decide whether outbox work is still outstanding. Hiding fenced items
+                // from it would break retries and would let a migration proceed while delivery is still in flight.
+                if (item.DeliveryFencingToken > 0)
+                    continue;
+
                 processedItems.Add(await ProcessItemAsync(item, claim: null, cancellationToken));
+            }
         }
 
         return new RuntimePostCommitOutboxProcessResult(processedItems);
