@@ -373,7 +373,8 @@ public sealed class EfRuntimePostCommitOutboxStore(
                             WorkflowDispatchEfSupport.ReadChecked(dispatchEntry, scope, winningDispatch.DispatchId),
                             winningDispatch);
                 }
-                var followUpReconciled = completion.FollowUpOutboxItem is null ||
+                // Child evidence discards the follow-up, so a completion it won wrote none.
+                var followUpReconciled = admissionWins || completion.FollowUpOutboxItem is null ||
                     await LoadAsync(scope, completion.FollowUpOutboxItem.OutboxItemId, tracking: false, cancellationToken) is { } followUpEntry &&
                     ReadChecked(followUpEntry, scope, completion.FollowUpOutboxItem.OutboxItemId).IsEquivalentTo(completion.FollowUpOutboxItem);
                 if (dispatchReconciled && followUpReconciled)
