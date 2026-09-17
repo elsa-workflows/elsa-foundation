@@ -60,6 +60,13 @@ public static class RuntimeMetadataKeys
     public const string DispatchShed = "runtime.dispatch.shed";
     /// <summary>Retry-After hint, in whole seconds, accompanying a <see cref="DispatchShed"/> result.</summary>
     public const string DispatchRetryAfterSeconds = "runtime.dispatch.retryAfterSeconds";
+    /// <summary>
+    /// Set to <c>"true"</c> on an <c>AcceptedButFaulted</c> dispatch result whose drain had a commit refused by a checkpoint
+    /// rule (<see cref="Exceptions.RuntimeCheckpointCommitValidationException"/>). The runtime faults an execution a rule
+    /// refused, but an execution whose first commit was refused has no accepted state to fault, so a caller that started it
+    /// reads this key to tell that turn apart from one that faulted for another reason.
+    /// </summary>
+    public const string DispatchCheckpointRuleViolation = "runtime.dispatch.checkpointRuleViolation";
     public const string ChildWorkflowExecutionId = "runtime.childWorkflowExecutionId";
     public const string CreateBookmarkSchedulerWorkItemId = "runtime.createBookmarkSchedulerWorkItemId";
     public const string ExecutableArtifactHash = "runtime.executableArtifactHash";

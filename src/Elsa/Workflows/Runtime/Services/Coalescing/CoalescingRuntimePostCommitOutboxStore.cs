@@ -11,7 +11,8 @@ namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
 /// </summary>
 public sealed class CoalescingRuntimePostCommitOutboxStore(
     CoalescingInner<IRuntimePostCommitOutboxStore> inner,
-    IRuntimeCoalescingSessionAccessor sessionAccessor) : IRuntimePostCommitOutboxStore, IPostCommitOutboxLookupStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore
+    IRuntimeCoalescingSessionAccessor sessionAccessor,
+    IWorkflowExecutionStateStore workflowExecutionStateStore) : IRuntimePostCommitOutboxStore, IPostCommitOutboxLookupStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore
 {
     private readonly IRuntimePostCommitOutboxStore _inner = inner.Value;
     private readonly IRuntimePostCommitOutboxClaimStore? _innerClaimStore = inner.Value as IRuntimePostCommitOutboxClaimStore;
@@ -94,7 +95,7 @@ public sealed class CoalescingRuntimePostCommitOutboxStore(
             .RecordDeliveryResultAsync(claim, result, cancellationToken);
     }
 
-    public ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> CompleteClaimAsync(
+    public async ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> CompleteClaimAsync(
         RuntimePostCommitOutboxClaimCompletion completion,
         CancellationToken cancellationToken = default)
     {
@@ -102,11 +103,13 @@ public sealed class CoalescingRuntimePostCommitOutboxStore(
 
         if (sessionAccessor.Current is { } session && session.IsActive && session.OwnsOutboxItem(completion.Claim.OutboxItemId))
         {
-            session.CompleteOutboxClaim(completion);
-            return ValueTask.FromResult(RuntimePostCommitOutboxClaimCompletionOutcome.Persisted);
+            var childExecution = completion.WorkflowDispatch is { } dispatch
+                ? await workflowExecutionStateStore.FindAsync(dispatch.ChildWorkflowExecutionId, cancellationToken)
+                : null;
+            return session.CompleteOutboxClaim(completion, childExecution);
         }
 
-        return (_innerCompletionStore ?? throw new InvalidOperationException(
+        return await (_innerCompletionStore ?? throw new InvalidOperationException(
             "The configured post-commit outbox store does not provide atomic claim completion support."))
             .CompleteClaimAsync(completion, cancellationToken);
     }

@@ -41,7 +41,7 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
     private const string AfterDispatchNodeId = "node-after";
     private const string ChildNodeId = "node-child";
     private static readonly TimeSpan TerminalTimeout = TimeSpan.FromSeconds(60);
-    private readonly ScriptedChildTerminalCommitFailure _childTerminalCommitFailure = new(ParentWorkflowExecutionId);
+    private readonly ScriptedChildCommitFailure _childCommitFailure = new(ParentWorkflowExecutionId);
     private readonly SwitchableRetryPolicy _retryPolicy = new();
     private WorkflowExecutionHarness _harness = null!;
     private int _outboxFailures;
@@ -59,7 +59,7 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
             {
                 services.AddLogging();
                 ConfigureStore(services);
-                services.AddScoped<IRuntimeCheckpointCommitEnricher>(_ => _childTerminalCommitFailure);
+                services.AddScoped<IRuntimeCheckpointCommitEnricher>(_ => _childCommitFailure);
                 services.AddSingleton<IRuntimeDomainRetryPolicy>(_retryPolicy);
             })
             .Build(Enumerable.Range(1, 16).Select(ordinal => $"actexec-{ordinal}"));
@@ -100,7 +100,7 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
     [InlineData(true)]
     public async Task A_child_whose_terminal_checkpoint_a_rule_refuses_is_faulted_and_its_parent_resumes(bool childFaults)
     {
-        _childTerminalCommitFailure.Refuse();
+        _childCommitFailure.Refuse();
 
         var parent = await RunParentAsync(childFaults);
 
@@ -116,10 +116,34 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
         Assert.Equal(CheckpointRuleViolationWorkflowFaulter.IncidentId(dispatch.ChildWorkflowExecutionId), incident.IncidentId);
         Assert.Equal(IncidentResolutionActionKinds.FaultWorkflow, incident.ResolutionOutcome?.ActionKind);
         Assert.Equal(IncidentResolutionSystemSources.CheckpointRuleViolation, incident.ResolutionOutcome?.SystemSource);
-        Assert.Contains(ScriptedChildTerminalCommitFailure.RefusalMessage, incident.Message, StringComparison.Ordinal);
+        Assert.Contains(ScriptedChildCommitFailure.RefusalMessage, incident.Message, StringComparison.Ordinal);
         // The child really started, so its start was delivered rather than failed.
         Assert.Equal(0, _outboxFailures);
-        Assert.True(_childTerminalCommitFailure.Failures > 0);
+        Assert.True(_childCommitFailure.Failures > 0);
+    }
+
+    /// <summary>
+    /// A rule refuses the child's first commit, so no child execution exists for the runtime to fault. That start is a
+    /// failed delivery, not an accepted one: it fails final on its first attempt, dead-letters with its delivery incident,
+    /// and the parent resumes through <c>DispatchFailed</c> instead of waiting forever.
+    /// </summary>
+    [Fact]
+    public async Task A_child_whose_first_checkpoint_a_rule_refuses_fails_its_start_and_its_parent_resumes()
+    {
+        _childCommitFailure.RefuseFirst();
+
+        var parent = await RunParentAsync(childFaults: false);
+
+        parent.AssertWorkflowCompleted();
+        parent.AssertOutcomes(DispatchNodeId, DispatchWorkflowOutcomes.DispatchFailed);
+        parent.AssertCompleted(AfterDispatchNodeId);
+        var dispatch = Assert.Single(await ListDispatchesAsync());
+        Assert.Equal(WorkflowDispatchStatus.DispatchFailed, dispatch.Status);
+        Assert.NotNull(WorkflowDispatchLifecycle.ReadDeliveryDeadLetterId(dispatch));
+        Assert.NotNull(WorkflowDispatchLifecycle.ReadDeliveryIncidentId(dispatch));
+        Assert.Null((await _harness.ReadRunAsync(dispatch.ChildWorkflowExecutionId)).WorkflowState);
+        Assert.Equal(1, _outboxFailures);
+        Assert.True(_childCommitFailure.Failures > 0);
     }
 
     /// <summary>
@@ -130,7 +154,7 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
     [Fact]
     public async Task A_child_whose_terminal_checkpoint_fails_transiently_is_not_faulted_and_completes()
     {
-        _childTerminalCommitFailure.FailTransientlyOnce();
+        _childCommitFailure.FailTransientlyOnce();
         _retryPolicy.RetryNow = true;
 
         var parent = await RunParentAsync(childFaults: false);
@@ -144,7 +168,7 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
             await ListBlockingIncidentsAsync(dispatch.ChildWorkflowExecutionId),
             candidate => candidate.FailureType == CheckpointRuleViolationWorkflowFaulter.IncidentFailureType);
         Assert.Equal(0, _outboxFailures);
-        Assert.Equal(1, _childTerminalCommitFailure.Failures);
+        Assert.Equal(1, _childCommitFailure.Failures);
         Assert.Equal(1, _retryPolicy.Retries);
     }
 
@@ -156,7 +180,7 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
     [Fact]
     public async Task A_child_that_cannot_be_faulted_fails_its_start_instead_of_passing_for_delivered()
     {
-        _childTerminalCommitFailure.RefuseIncludingTheFault();
+        _childCommitFailure.RefuseIncludingTheFault();
 
         var parent = await RunParentAsync(childFaults: false, _ => _outboxFailures > 0, "see its child's start fail");
 
@@ -315,14 +339,16 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
     /// <summary>
     /// Fails the commits that would end the child, as the last enricher, so it sees each commit as a store receives it.
     /// A refusal stands in for a checkpoint rule the terminal content breaks; unless told otherwise it lets through the
-    /// fault the runtime commits for a refusal, which carries none of that content. A transient failure stands in for an
+    /// fault the runtime commits for a refusal, which carries none of that content. Refusing the first commit refuses
+    /// every commit that carries the child's state, so none is ever accepted. A transient failure stands in for an
     /// infrastructure fault.
     /// </summary>
-    private sealed class ScriptedChildTerminalCommitFailure(string parentWorkflowExecutionId) : IRuntimeCheckpointCommitEnricher
+    private sealed class ScriptedChildCommitFailure(string parentWorkflowExecutionId) : IRuntimeCheckpointCommitEnricher
     {
-        public const string RefusalMessage = "A test checkpoint rule refuses the child's terminal checkpoint.";
+        public const string RefusalMessage = "A test checkpoint rule refuses the child's checkpoint.";
         private Func<Exception>? _failure;
         private bool _includingTheFault;
+        private bool _firstCommit;
         private int _remaining;
         private int _failures;
 
@@ -338,13 +364,19 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
             _includingTheFault = true;
         }
 
+        public void RefuseFirst()
+        {
+            RefuseIncludingTheFault();
+            _firstCommit = true;
+        }
+
         public void FailTransientlyOnce() => (_failure, _remaining) = (() => new InvalidOperationException("A transient checkpoint store outage."), 1);
 
         public ValueTask<RuntimeCheckpointCommit> EnrichAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)
         {
             var endsChild = commit.StateChanges.WorkflowExecution?.State is { } state &&
                             state.ParentWorkflowExecutionId == parentWorkflowExecutionId &&
-                            state.Status.IsTerminal() &&
+                            (_firstCommit || state.Status.IsTerminal()) &&
                             (_includingTheFault ||
                              commit.Checkpoint.Metadata.GetValueOrDefault(RuntimeMetadataKeys.CheckpointReason) != CheckpointRuleViolationWorkflowFaulter.IncidentFailureType);
             if (_failure is null || !endsChild || Interlocked.Decrement(ref _remaining) < 0)

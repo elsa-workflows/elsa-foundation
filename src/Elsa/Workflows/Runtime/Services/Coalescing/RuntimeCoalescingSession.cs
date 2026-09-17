@@ -500,41 +500,49 @@ public sealed class RuntimeCoalescingSession
         _outboxItems[claim.OutboxItemId] = RuntimePostCommitOutboxClaimTransitions.Complete(existing, claim, result);
     }
 
-    public void CompleteOutboxClaim(RuntimePostCommitOutboxClaimCompletion completion)
+    /// <summary>
+    /// Completes a claim this overlay owns by the same rule every durable store applies
+    /// (<see cref="RuntimePostCommitOutboxClaimTransitions.ResolveCompletion"/>), and reports the outcome it applied.
+    /// </summary>
+    /// <param name="childExecution">
+    /// The state of the child a projected dispatch names. A child is never this session's own execution, so the caller reads it
+    /// from the state store.
+    /// </param>
+    public RuntimePostCommitOutboxClaimCompletionOutcome CompleteOutboxClaim(
+        RuntimePostCommitOutboxClaimCompletion completion,
+        WorkflowExecutionState? childExecution)
     {
         ArgumentNullException.ThrowIfNull(completion);
         if (!_outboxItems.TryGetValue(completion.Claim.OutboxItemId, out var existingOutbox))
             throw new InvalidOperationException($"Post-commit outbox item '{completion.Claim.OutboxItemId}' was not found in the coalescing session.");
+        WorkflowDispatchRecord? existingDispatch = null;
+        if (completion.WorkflowDispatch is { } dispatch &&
+            !_workflowDispatchUpserts.TryGetValue(dispatch.DispatchId, out existingDispatch))
+        {
+            throw new InvalidOperationException($"Workflow dispatch '{dispatch.DispatchId}' was not found in the coalescing session.");
+        }
 
-        var completedOutbox = RuntimePostCommitOutboxClaimTransitions.Complete(
+        var resolution = RuntimePostCommitOutboxClaimTransitions.ResolveCompletion(
+            completion,
             existingOutbox,
-            completion.Claim,
-            completion.DeliveryResult);
-        if (completion.WorkflowDispatch is { } dispatch)
+            existingDispatch,
+            childExecution);
+        if (resolution.FollowUpOutboxItem is { } followUp &&
+            _outboxItems.TryGetValue(followUp.OutboxItemId, out var existingFollowUp) &&
+            !existingFollowUp.IsEquivalentPendingItem(followUp))
         {
-            if (!_workflowDispatchUpserts.TryGetValue(dispatch.DispatchId, out var existingDispatch))
-                throw new InvalidOperationException($"Workflow dispatch '{dispatch.DispatchId}' was not found in the coalescing session.");
-            WorkflowDispatchLifecycle.ValidateTransition(existingDispatch, dispatch);
-        }
-        if (completion.FollowUpOutboxItem is { } followUp)
-        {
-            if (StringComparer.Ordinal.Equals(followUp.OutboxItemId, completion.Claim.OutboxItemId))
-                throw new InvalidOperationException("A post-commit follow-up cannot replace the claimed outbox item.");
-            if (_outboxItems.TryGetValue(followUp.OutboxItemId, out var existingFollowUp) &&
-                !existingFollowUp.IsEquivalentPendingItem(followUp))
-            {
-                throw new InvalidOperationException($"Post-commit follow-up item '{followUp.OutboxItemId}' already exists with conflicting state.");
-            }
+            throw new InvalidOperationException($"Post-commit follow-up item '{followUp.OutboxItemId}' already exists with conflicting state.");
         }
 
-        _outboxItems[completion.Claim.OutboxItemId] = completedOutbox;
-        if (completion.WorkflowDispatch is { } workflowDispatch)
+        _outboxItems[completion.Claim.OutboxItemId] = resolution.OutboxItem;
+        if (resolution.WorkflowDispatch is { } workflowDispatch)
             _workflowDispatchUpserts[workflowDispatch.DispatchId] = workflowDispatch;
-        if (completion.FollowUpOutboxItem is { } followUpOutboxItem)
+        if (resolution.FollowUpOutboxItem is { } followUpOutboxItem)
         {
             if (_outboxItems.TryAdd(followUpOutboxItem.OutboxItemId, followUpOutboxItem))
                 _outboxOrder.Add(followUpOutboxItem.OutboxItemId);
         }
+        return resolution.Outcome;
     }
 
     // ---- Queue overlay ---------------------------------------------------------------------------------------------

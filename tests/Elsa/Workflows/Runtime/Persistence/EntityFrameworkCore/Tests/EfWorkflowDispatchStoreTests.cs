@@ -13,6 +13,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
@@ -161,6 +162,46 @@ public sealed class EfWorkflowDispatchStoreTests
         Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, (await outbox.FindAsync(item.OutboxItemId))!.Status);
         Assert.Equal(WorkflowDispatchStatus.DispatchFailed, (await dispatchStore.FindAsync(dispatch.DispatchId))!.Status);
         Assert.Equal(RuntimePostCommitOutboxStatus.Pending, (await outbox.FindAsync(followUp.OutboxItemId))!.Status);
+    }
+
+    /// <summary>
+    /// A completion whose transaction committed but whose acknowledgement was lost reconciles against what it wrote. The
+    /// child already exists, so the start was written as delivered and the parent resume was discarded: a missing
+    /// follow-up is exactly what the completion persisted, not a sign that it failed.
+    /// </summary>
+    [Fact]
+    public async Task Sqlite_lost_completion_ack_reconciles_a_start_delivered_on_child_evidence()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var interceptor = new LoseCommitAcknowledgementInterceptor();
+        await using var context = database.Open(interceptors: interceptor);
+        var access = new FixedAccessor("tenant-a");
+        var dispatchStore = new EfWorkflowDispatchStore(context, access);
+        var dispatch = Pending("parent-lost-ack", "activity-lost-ack", mode: WorkflowDispatchMode.WaitForCompletion);
+        await dispatchStore.SaveAsync(dispatch);
+        await new EfWorkflowExecutionStateStore(context, access, Codec).SaveAsync(ChildOf(dispatch));
+        var item = StartItem("start-lost-ack", dispatch);
+        var outbox = new EfRuntimePostCommitOutboxStore(context, access);
+        await outbox.SavePendingAsync(item);
+        var claim = Assert.Single(await outbox.ClaimAsync(new RuntimePostCommitOutboxClaimRequest("worker", Now, TimeSpan.FromMinutes(1), 1)));
+        var failedAt = Now.AddSeconds(1);
+        var failed = WorkflowDispatchLifecycle.TransitionToDispatchFailed(dispatch, item.OutboxItemId, 0, 1, Now, failedAt);
+        var followUp = ParentResume(failed, failedAt);
+
+        interceptor.LoseNextAcknowledgement();
+        var outcome = await outbox.CompleteClaimAsync(new RuntimePostCommitOutboxClaimCompletion(
+            claim,
+            new RuntimePostCommitOutboxDeliveryResult(item.OutboxItemId, RuntimePostCommitOutboxStatus.FailedRetryable, failedAt, "delivery-failed"),
+            failed,
+            followUp));
+
+        Assert.True(interceptor.LostAcknowledgement);
+        Assert.Equal(RuntimePostCommitOutboxClaimCompletionOutcome.DeliveredOnChildEvidence, outcome);
+        await using var restarted = database.Open();
+        var persistedOutbox = new EfRuntimePostCommitOutboxStore(restarted, access);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await persistedOutbox.FindAsync(item.OutboxItemId))!.Status);
+        Assert.Null(await persistedOutbox.FindAsync(followUp.OutboxItemId));
+        Assert.Equal(WorkflowDispatchStatus.Started, (await new EfWorkflowDispatchStore(restarted, access).FindAsync(dispatch.DispatchId))!.Status);
     }
 
     [Fact]
@@ -444,6 +485,32 @@ public sealed class EfWorkflowDispatchStoreTests
         Now,
         retryPolicy ?? new RuntimePostCommitRetryPolicy(1, TimeSpan.FromSeconds(1)));
 
+    private static readonly HmacRuntimeRecoveryContinuationCodec Codec = new(
+        Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "ef-workflow-dispatch-store-tests-signing-key-32" }));
+
+    /// <summary>The child execution <paramref name="dispatch"/> started, in exactly the context it retains.</summary>
+    private static WorkflowExecutionState ChildOf(WorkflowDispatchRecord dispatch) =>
+        new(
+            dispatch.ChildWorkflowExecutionId,
+            dispatch.ChildExecutable,
+            WorkflowExecutionStatus.Running,
+            null,
+            Now,
+            Now,
+            Now,
+            null,
+            dispatch.CorrelationId,
+            dispatch.ParentWorkflowExecutionId,
+            dispatch.TenantId,
+            new Dictionary<string, string>())
+        {
+            RunKind = dispatch.RunKind,
+            PinnedSource = dispatch.ChildSource,
+            Partition = dispatch.Partition,
+            Authority = dispatch.Authority,
+            DispatchNestingDepth = dispatch.DispatchNestingDepth
+        };
+
     private static RuntimePostCommitOutboxItem ParentResume(WorkflowDispatchRecord dispatch, DateTimeOffset recordedAt)
     {
         var identity = new WorkflowDispatchIdentity(dispatch.ParentWorkflowExecutionId, dispatch.ParentActivityExecutionId);
@@ -493,6 +560,28 @@ public sealed class EfWorkflowDispatchStoreTests
         }
 
         public ValueTask DisposeAsync() => connection.DisposeAsync();
+    }
+
+    /// <summary>Lets the next transaction commit, then fails as if the commit's acknowledgement had been lost.</summary>
+    private sealed class LoseCommitAcknowledgementInterceptor : DbTransactionInterceptor
+    {
+        private int loseNext;
+
+        public bool LostAcknowledgement { get; private set; }
+
+        public void LoseNextAcknowledgement() => Interlocked.Exchange(ref loseNext, 1);
+
+        public override Task TransactionCommittedAsync(
+            DbTransaction transaction,
+            TransactionEndEventData eventData,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Exchange(ref loseNext, 0) == 0)
+                return Task.CompletedTask;
+
+            LostAcknowledgement = true;
+            throw new InvalidOperationException("Simulated lost commit acknowledgement.");
+        }
     }
 
     private sealed class FailTransactionStartInterceptor : DbTransactionInterceptor

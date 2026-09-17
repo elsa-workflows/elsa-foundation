@@ -452,61 +452,31 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             {
                 if (!_state.OutboxItems.TryGetValue(completion.Claim.OutboxItemId, out var existingOutbox))
                     throw new InvalidOperationException($"Post-commit outbox item '{completion.Claim.OutboxItemId}' was not found.");
+                WorkflowDispatchRecord? existingDispatch = null;
+                if (completion.WorkflowDispatch is { } dispatch &&
+                    !_state.WorkflowDispatches.TryGetValue(dispatch.DispatchId, out existingDispatch))
+                {
+                    throw new InvalidOperationException($"Workflow dispatch '{dispatch.DispatchId}' was not found in the atomic checkpoint store.");
+                }
 
-                // Validate the claim/fence before considering lifecycle precedence. A stale claimant cannot turn a
-                // newer generation into an acknowledgement merely because the deterministic child is now visible.
-                var completedOutbox = RuntimePostCommitOutboxClaimTransitions.Complete(
+                var resolution = RuntimePostCommitOutboxClaimTransitions.ResolveCompletion(
+                    completion,
                     existingOutbox,
-                    completion.Claim,
-                    completion.DeliveryResult);
-                WorkflowDispatchRecord? winningDispatch = null;
-                var admissionWins = false;
-                if (completion.WorkflowDispatch is { } dispatch)
+                    existingDispatch,
+                    childExecution);
+                if (resolution.FollowUpOutboxItem is { } followUp &&
+                    _state.OutboxItems.TryGetValue(followUp.OutboxItemId, out var existingFollowUp) &&
+                    !existingFollowUp.IsEquivalentPendingItem(followUp))
                 {
-                    if (!_state.WorkflowDispatches.TryGetValue(dispatch.DispatchId, out var existingDispatch))
-                        throw new InvalidOperationException($"Workflow dispatch '{dispatch.DispatchId}' was not found in the atomic checkpoint store.");
-
-                    winningDispatch = WorkflowDispatchLifecycle.ResolveSuccessfulChildDelivery(
-                        existingDispatch,
-                        childExecution,
-                        completion.DeliveryResult.RecordedAt);
-                    admissionWins = winningDispatch is not null;
-                    if (admissionWins)
-                    {
-                        completedOutbox = RuntimePostCommitOutboxClaimTransitions.Complete(
-                            existingOutbox,
-                            completion.Claim,
-                            new RuntimePostCommitOutboxDeliveryResult(
-                                completion.Claim.OutboxItemId,
-                                RuntimePostCommitOutboxStatus.Delivered,
-                                completion.DeliveryResult.RecordedAt));
-                    }
-                    else
-                    {
-                        WorkflowDispatchLifecycle.ValidateTransition(existingDispatch, dispatch);
-                        winningDispatch = dispatch;
-                    }
+                    throw new InvalidOperationException($"Post-commit follow-up item '{followUp.OutboxItemId}' already exists with conflicting state.");
                 }
 
-                if (!admissionWins && completion.FollowUpOutboxItem is { } followUp)
-                {
-                    if (StringComparer.Ordinal.Equals(followUp.OutboxItemId, completion.Claim.OutboxItemId))
-                        throw new InvalidOperationException("A post-commit follow-up cannot replace the claimed outbox item.");
-                    if (_state.OutboxItems.TryGetValue(followUp.OutboxItemId, out var existingFollowUp) &&
-                        !existingFollowUp.IsEquivalentPendingItem(followUp))
-                    {
-                        throw new InvalidOperationException($"Post-commit follow-up item '{followUp.OutboxItemId}' already exists with conflicting state.");
-                    }
-                }
-
-                _state.OutboxItems[completion.Claim.OutboxItemId] = completedOutbox;
-                if (winningDispatch is not null)
+                _state.OutboxItems[completion.Claim.OutboxItemId] = resolution.OutboxItem;
+                if (resolution.WorkflowDispatch is { } winningDispatch)
                     _state.WorkflowDispatches[winningDispatch.DispatchId] = winningDispatch;
-                if (!admissionWins && completion.FollowUpOutboxItem is { } followUpOutboxItem)
+                if (resolution.FollowUpOutboxItem is { } followUpOutboxItem)
                     _state.OutboxItems.TryAdd(followUpOutboxItem.OutboxItemId, followUpOutboxItem);
-                return admissionWins
-                    ? RuntimePostCommitOutboxClaimCompletionOutcome.DeliveredOnChildEvidence
-                    : RuntimePostCommitOutboxClaimCompletionOutcome.Persisted;
+                return resolution.Outcome;
             }
         }
         finally

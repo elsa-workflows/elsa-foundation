@@ -279,6 +279,53 @@ public sealed class RuntimePostCommitOutboxProcessorTests
 
     private sealed class ExpectedDeferralException() : Exception("waiting"), IRuntimePostCommitDeferral;
 
+    /// <summary>
+    /// A permanent failure ends delivery under a retry-until-acknowledged policy too, so it is logged as final like any
+    /// other final failure, never as a deferred retry that will not happen.
+    /// </summary>
+    [Fact]
+    public async Task Processor_LogsAPermanentFailureUnderRetryUntilAcknowledgedAsFinal()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        var logger = new RecordingLogger<RuntimePostCommitOutboxProcessor>();
+        var failure = new RuntimePostCommitDeliveryException(
+            PostCommitFailureKind.Permanent,
+            "parent-resume-refused",
+            "The parent workflow could not be resumed.",
+            new InvalidOperationException("provider-secret stack-secret"));
+        var processor = new RuntimePostCommitOutboxProcessor(
+            store,
+            new RecordingDispatcher(failOnIntentId: "intent-resume", failure: failure),
+            new FakeTimeProvider(_now),
+            DefaultRuntimeFaultCapturePolicy.CreateDefault(),
+            workflowDispatchStore: null,
+            logger);
+        await store.AddPendingForTestingAsync(NewOutboxItem(
+            "outbox-resume",
+            "intent-resume",
+            "wfexec-1",
+            retryPolicy: RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(15)),
+            kind: "Elsa.Activities.DispatchWorkflow.ResumeParent"));
+
+        var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10));
+
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, Assert.Single(result.Items).RequestedDeliveryResultStatus);
+        Assert.Collection(
+            logger.Entries,
+            attempt =>
+            {
+                Assert.Equal(new EventId(68101, "RuntimePostCommitDeliveryAttemptFailed"), attempt.EventId);
+                AssertCarriesFailure(attempt, failure);
+            },
+            final =>
+            {
+                Assert.Equal(new EventId(68103, "RuntimePostCommitDeliveryFailedFinal"), final.EventId);
+                Assert.Equal(nameof(PostCommitFailureKind.Permanent), final.Fields["FailureKind"]);
+                Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, final.Fields["EffectiveStatus"]);
+                AssertCarriesFailure(final, failure);
+            });
+    }
+
     [Fact]
     public async Task Processor_UnsupportedKindUsesExistingPolicySelectedFinalFailurePath()
     {
@@ -338,15 +385,17 @@ public sealed class RuntimePostCommitOutboxProcessorTests
 
     /// <summary>
     /// #1780: a store that finds the child already started persists the failed start as delivered and discards the
-    /// DispatchFailed projection and its parent resume, so logging that incident and that resume would report events that
-    /// never happened. The delivery attempt itself did fail, so its own events are still logged.
+    /// DispatchFailed projection and its parent resume, so logging that incident and that resume, or a final failure, would
+    /// report events that never happened. The delivery attempt itself did fail, so it is still logged, with the status the
+    /// store persisted.
     /// </summary>
     [Theory]
-    [InlineData(RuntimePostCommitOutboxClaimCompletionOutcome.Persisted, new[] { 68105, 68106, 68101, 68103 })]
-    [InlineData(RuntimePostCommitOutboxClaimCompletionOutcome.DeliveredOnChildEvidence, new[] { 68101, 68103 })]
-    public async Task Processor_LogsTheDispatchFailureProjectionOnlyWhenTheStorePersistedIt(
+    [InlineData(RuntimePostCommitOutboxClaimCompletionOutcome.Persisted, new[] { 68105, 68106, 68101, 68103 }, RuntimePostCommitOutboxStatus.FailedFinal)]
+    [InlineData(RuntimePostCommitOutboxClaimCompletionOutcome.DeliveredOnChildEvidence, new[] { 68101 }, RuntimePostCommitOutboxStatus.Delivered)]
+    public async Task Processor_LogsOnlyWhatTheStorePersisted(
         RuntimePostCommitOutboxClaimCompletionOutcome outcome,
-        int[] expectedEventIds)
+        int[] expectedEventIds,
+        RuntimePostCommitOutboxStatus persistedStatus)
     {
         var dispatch = NewDispatchRecord(WorkflowDispatchMode.WaitForCompletion);
         var identity = new WorkflowDispatchIdentity(dispatch.ParentWorkflowExecutionId, dispatch.ParentActivityExecutionId);
@@ -377,6 +426,9 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         Assert.NotNull(completion.WorkflowDispatch);
         Assert.NotNull(completion.FollowUpOutboxItem);
         Assert.Equal(expectedEventIds, logger.Entries.Select(entry => entry.EventId.Id));
+        Assert.All(
+            logger.Entries.Where(entry => entry.EventId.Id is 68101 or 68103),
+            entry => Assert.Equal(persistedStatus, entry.Fields["EffectiveStatus"]));
     }
 
     [Fact]

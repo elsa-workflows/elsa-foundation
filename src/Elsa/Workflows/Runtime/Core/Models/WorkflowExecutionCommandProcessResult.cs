@@ -17,7 +17,8 @@ public sealed record WorkflowExecutionCommandProcessResult(
     bool WorkflowTerminated = false,
     bool Shed = false,
     TimeSpan? RetryAfter = null,
-    bool ShedWorkQueued = false)
+    bool ShedWorkQueued = false,
+    bool CheckpointRuleViolation = false)
 {
     /// <summary>
     /// The command was enqueued but no drain was performed (the drain policy returned no request). There is no fault verdict.
@@ -58,7 +59,8 @@ public sealed record WorkflowExecutionCommandProcessResult(
             Faulted: faulted,
             OutboxDeliveryFailed: outboxDeliveryFailed,
             FaultReason: faultReason,
-            WorkflowTerminated: drainResult.StoppedOnTerminalStatus);
+            WorkflowTerminated: drainResult.StoppedOnTerminalStatus,
+            CheckpointRuleViolation: drainResult.Items.Any(item => item.CheckpointRuleViolation));
     }
 
     /// <summary>

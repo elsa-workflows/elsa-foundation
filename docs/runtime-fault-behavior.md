@@ -243,9 +243,13 @@ The ordinary enrichers still run, so a waited child's dispatch moves to `Faulted
 intent is queued exactly as for a child's business fault.
 
 What the drain reports is unchanged: a refused handler commit still returns `AcceptedButFaulted`, and a
-refused observer commit still throws. Only a fault commit that itself fails is added to the failure, so
+refused observer commit still throws. The in-process actor marks that `AcceptedButFaulted` result with
+`runtime.dispatch.checkpointRuleViolation`. Only a fault commit that itself fails is added to the failure, so
 a workflow that could not be faulted is never reported as handled. A workflow with no accepted state
-has nothing to fault and is left alone. Any other failure, such as a lost lease, a concurrency conflict,
+has nothing to fault and is left alone. For a dispatched child that means its first commit was refused and
+no child exists, so `ChildStartExecutor` fails the start permanently: the dispatch reaches
+`DispatchFailed` with its dead letter and delivery incident, and a waiting parent resumes through
+`DispatchFailed`. Any other failure, such as a lost lease, a concurrency conflict,
 or an infrastructure fault, faults nothing here, because a retry can still succeed.
 
 ## The observer chain
