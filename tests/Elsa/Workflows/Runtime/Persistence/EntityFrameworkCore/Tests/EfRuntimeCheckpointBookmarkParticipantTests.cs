@@ -181,10 +181,10 @@ public sealed class EfRuntimeCheckpointBookmarkParticipantTests
     {
         var type = typeof(EfRuntimeCheckpointCommitStore).Assembly.GetType(
             "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointParticipantStaging")!;
-        var method = type.GetMethod("StageBookmarkAsync", BindingFlags.Public | BindingFlags.Static)!;
+        var method = type.GetMethod("StageBookmarksAsync", BindingFlags.Public | BindingFlags.Static)!;
         try
         {
-            var result = (ValueTask)method.Invoke(null, [context, change, scope, CancellationToken.None])!;
+            var result = (ValueTask)method.Invoke(null, [context, new[] { change }, scope, CancellationToken.None])!;
             await result.AsTask();
         }
         catch (TargetInvocationException exception) when (exception.InnerException is not null)

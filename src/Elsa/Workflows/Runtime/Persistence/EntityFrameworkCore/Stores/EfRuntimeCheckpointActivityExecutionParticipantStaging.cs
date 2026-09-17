@@ -1,9 +1,10 @@
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
-/// <summary>Stages one activity-execution participant in a caller-owned checkpoint transaction.</summary>
+/// <summary>Stages the activity-execution participants of one caller-owned checkpoint transaction.</summary>
 /// <remarks>
 /// The direct activity-execution store owns independent writes and clears the change tracker around them. A
 /// checkpoint must retain all participants in one unit of work, so this seam deliberately only changes EF tracking
@@ -12,14 +13,45 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// </remarks>
 internal static class EfRuntimeCheckpointActivityExecutionParticipantStaging
 {
-    public static async ValueTask StageActivityExecutionAsync(
+    public static async ValueTask StageActivityExecutionsAsync(
+        BookmarkStateDbContext context,
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> changes,
+        string scope,
+        string expectedWorkflowExecutionId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(changes);
+        if (changes.Count == 0)
+            return;
+
+        var staged = changes
+            .Select(change => Validated(context, change, scope, expectedWorkflowExecutionId, cancellationToken))
+            .ToArray();
+
+        // Load by immutable physical identity first. Filtering by projections would turn a corrupt row into a false
+        // insert/miss instead of allowing the authoritative content and projection checks to fail closed. One read
+        // covers every participant of this type; an id it does not return is the same "row is null" case as before.
+        var rows = await EfRuntimeCheckpointParticipantRows.LoadAsync(
+            staged.Select(entry => entry.Id).ToArray(),
+            batch => context.ActivityExecutionStates.Where(row => batch.Contains(row.Id)),
+            row => row.Id,
+            cancellationToken);
+
+        foreach (var (change, id) in staged)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Stage(context, change, scope, id, rows.GetValueOrDefault(id));
+        }
+    }
+
+    private static (RuntimeStateChange<ActivityExecutionState> Change, string Id) Validated(
         BookmarkStateDbContext context,
         RuntimeStateChange<ActivityExecutionState> change,
         string scope,
         string expectedWorkflowExecutionId,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(change);
         ArgumentException.ThrowIfNullOrWhiteSpace(scope);
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedWorkflowExecutionId);
@@ -33,15 +65,21 @@ internal static class EfRuntimeCheckpointActivityExecutionParticipantStaging
             throw new InvalidOperationException("Activity execution state must be staged inside a caller-owned EF transaction.");
 
         var state = change.State;
-        var id = ActivityExecutionEfSupport.CreateId(
+        return (change, ActivityExecutionEfSupport.CreateId(
             "state",
             scope,
             state.Execution.WorkflowExecutionId,
-            state.Execution.ActivityExecutionId);
+            state.Execution.ActivityExecutionId));
+    }
 
-        // Load by immutable physical identity first. Filtering by projections would turn a corrupt row into a false
-        // insert/miss instead of allowing the authoritative content and projection checks to fail closed.
-        var row = await context.ActivityExecutionStates.SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+    private static void Stage(
+        BookmarkStateDbContext context,
+        RuntimeStateChange<ActivityExecutionState> change,
+        string scope,
+        string id,
+        ActivityExecutionStateEntity? row)
+    {
+        var state = change.State;
         if (row is null)
         {
             if (change.Operation is RuntimeStateChangeOperation.Append or RuntimeStateChangeOperation.Upsert)

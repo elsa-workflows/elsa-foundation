@@ -83,20 +83,48 @@ internal static class EfRuntimeCheckpointParticipantStaging
     }
 
     /// <summary>
-    /// Stages one bookmark state change inside the caller-owned transaction.
+    /// Stages the bookmark state changes of one checkpoint inside the caller-owned transaction.
     /// </summary>
     /// <remarks>
     /// The public bookmark store owns independent writes and clears the tracker around them. Checkpoint writes must
     /// retain all participants in one unit of work, so this seam only changes EF tracking state. SaveChanges,
     /// transaction creation, and commit remain the caller's responsibility.
     /// </remarks>
-    public static async ValueTask StageBookmarkAsync(
+    public static async ValueTask StageBookmarksAsync(
+        BookmarkStateDbContext context,
+        IReadOnlyCollection<RuntimeStateChange<BookmarkState>> changes,
+        string scope,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(changes);
+        if (changes.Count == 0)
+            return;
+
+        var staged = changes.Select(change => ValidatedBookmark(context, change, scope, cancellationToken)).ToArray();
+
+        // Load by immutable physical identity first. Filtering on projections would turn a corrupt row into a false
+        // insert/miss instead of allowing the authoritative content and projection checks to fail closed. One read
+        // covers every bookmark of this commit; an id it does not return is the same "row is null" case as before.
+        var rows = await EfRuntimeCheckpointParticipantRows.LoadAsync(
+            staged.Select(entry => entry.Id).ToArray(),
+            batch => context.Bookmarks.Where(row => batch.Contains(row.Id)),
+            row => row.Id,
+            cancellationToken);
+
+        foreach (var (change, id) in staged)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            StageBookmark(context, change, scope, id, rows.GetValueOrDefault(id));
+        }
+    }
+
+    private static (RuntimeStateChange<BookmarkState> Change, string Id) ValidatedBookmark(
         BookmarkStateDbContext context,
         RuntimeStateChange<BookmarkState> change,
         string scope,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(change);
         ArgumentException.ThrowIfNullOrWhiteSpace(scope);
         ArgumentNullException.ThrowIfNull(change.State);
@@ -109,10 +137,17 @@ internal static class EfRuntimeCheckpointParticipantStaging
             throw new InvalidOperationException("Bookmark state must be staged inside a caller-owned EF transaction.");
 
         var state = change.State;
-        var id = EfBookmarkStateStore.CreateId(scope, state.WorkflowExecutionId, state.BookmarkId);
-        // Load by immutable physical identity first. Filtering on projections would turn a corrupt row into a false
-        // insert/miss instead of allowing the authoritative content and projection checks to fail closed.
-        var row = await context.Bookmarks.SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+        return (change, EfBookmarkStateStore.CreateId(scope, state.WorkflowExecutionId, state.BookmarkId));
+    }
+
+    private static void StageBookmark(
+        BookmarkStateDbContext context,
+        RuntimeStateChange<BookmarkState> change,
+        string scope,
+        string id,
+        BookmarkStateEntity? row)
+    {
+        var state = change.State;
         if (row is null)
         {
             if (change.Operation == RuntimeStateChangeOperation.Upsert)
@@ -133,20 +168,48 @@ internal static class EfRuntimeCheckpointParticipantStaging
     }
 
     /// <summary>
-    /// Stages one durable-value state change inside the caller-owned transaction.
+    /// Stages the durable-value state changes of one checkpoint inside the caller-owned transaction.
     /// </summary>
     /// <remarks>
     /// The public durable-value store owns independent writes and therefore clears the tracker around them. A
     /// checkpoint must retain all participants in one unit of work, so this seam deliberately only changes EF
     /// tracking state. SaveChanges, transaction creation, and commit remain the caller's responsibility.
     /// </remarks>
-    public static async ValueTask StageDurableValueAsync(
+    public static async ValueTask StageDurableValuesAsync(
+        BookmarkStateDbContext context,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> changes,
+        string scope,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(changes);
+        if (changes.Count == 0)
+            return;
+
+        var staged = changes.Select(change => ValidatedDurableValue(context, change, scope, cancellationToken)).ToArray();
+
+        // Load by the immutable physical identity first. Filtering on projected fields would turn a corrupt row into
+        // a false insert/miss instead of letting the authoritative content/projection validation fail closed. One
+        // read covers every durable value of this commit; an id it does not return is the same "row is null" case.
+        var rows = await EfRuntimeCheckpointParticipantRows.LoadAsync(
+            staged.Select(entry => entry.Id).ToArray(),
+            batch => context.DurableValueStates.Where(row => batch.Contains(row.Id)),
+            row => row.Id,
+            cancellationToken);
+
+        foreach (var (change, id) in staged)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            StageDurableValue(context, change, scope, id, rows.GetValueOrDefault(id));
+        }
+    }
+
+    private static (RuntimeStateChange<DurableValueState> Change, string Id) ValidatedDurableValue(
         BookmarkStateDbContext context,
         RuntimeStateChange<DurableValueState> change,
         string scope,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(change);
         ArgumentException.ThrowIfNullOrWhiteSpace(scope);
         if (scope.Length > 256)
@@ -162,10 +225,17 @@ internal static class EfRuntimeCheckpointParticipantStaging
             throw new InvalidOperationException("Durable value state must be staged inside a caller-owned EF transaction.");
 
         var state = change.State;
-        var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, state.WorkflowExecutionId, state.DurableValueId);
-        // Load by the immutable physical identity first. Filtering on projected fields would turn a corrupt row
-        // into a false insert/miss instead of letting the authoritative content/projection validation fail closed.
-        var row = await context.DurableValueStates.SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+        return (change, EfRuntimeOperationalStoreSupport.CompositeId(scope, state.WorkflowExecutionId, state.DurableValueId));
+    }
+
+    private static void StageDurableValue(
+        BookmarkStateDbContext context,
+        RuntimeStateChange<DurableValueState> change,
+        string scope,
+        string id,
+        DurableValueStateEntity? row)
+    {
+        var state = change.State;
         if (row is null)
         {
             if (change.Operation == RuntimeStateChangeOperation.Upsert)
@@ -188,11 +258,39 @@ internal static class EfRuntimeCheckpointParticipantStaging
     /// <summary>Stages execution-liveness state without committing or clearing sibling checkpoint writes.</summary>
     public static async ValueTask StageOperationalAsync(
         BookmarkStateDbContext context,
-        RuntimeStateChange<ExecutionLivenessState> change,
+        IReadOnlyCollection<RuntimeStateChange<ExecutionLivenessState>> changes,
         string scope,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(changes);
+        if (changes.Count == 0)
+            return;
+
+        var staged = changes.Select(change => ValidatedOperational(context, change, scope, cancellationToken)).ToArray();
+
+        // Read by immutable physical identity, then validate every projection; filtering a corrupt projection here
+        // would turn a drifted persisted row into an incorrect insert or silent delete miss. One read covers every
+        // operational change of this commit; an id it does not return is the same "row is null" case as before.
+        var rows = await EfRuntimeCheckpointParticipantRows.LoadAsync(
+            staged.Select(entry => entry.Id).ToArray(),
+            batch => context.ExecutionLivenessStates.Where(row => batch.Contains(row.Id)),
+            row => row.Id,
+            cancellationToken);
+
+        foreach (var (change, id) in staged)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            StageOperational(context, change, scope, rows.GetValueOrDefault(id));
+        }
+    }
+
+    private static (RuntimeStateChange<ExecutionLivenessState> Change, string Id) ValidatedOperational(
+        BookmarkStateDbContext context,
+        RuntimeStateChange<ExecutionLivenessState> change,
+        string scope,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(change);
         ArgumentException.ThrowIfNullOrWhiteSpace(scope);
         EfRuntimeOperationalStoreSupport.ValidateIdentity(change.State.WorkflowExecutionId, nameof(change.State.WorkflowExecutionId));
@@ -202,11 +300,16 @@ internal static class EfRuntimeCheckpointParticipantStaging
             throw new InvalidOperationException("Operational checkpoint changes require a caller-owned EF transaction.");
 
         var state = change.State;
-        var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, state.WorkflowExecutionId, state.OperationalStateId);
-        // Read by immutable physical identity, then validate every projection; filtering a corrupt projection here
-        // would turn a drifted persisted row into an incorrect insert or silent delete miss.
-        var row = await context.ExecutionLivenessStates.SingleOrDefaultAsync(candidate => candidate.Id == id,
-            cancellationToken);
+        return (change, EfRuntimeOperationalStoreSupport.CompositeId(scope, state.WorkflowExecutionId, state.OperationalStateId));
+    }
+
+    private static void StageOperational(
+        BookmarkStateDbContext context,
+        RuntimeStateChange<ExecutionLivenessState> change,
+        string scope,
+        ExecutionLivenessStateEntity? row)
+    {
+        var state = change.State;
         if (row is null)
         {
             if (change.Operation != RuntimeStateChangeOperation.Delete)
