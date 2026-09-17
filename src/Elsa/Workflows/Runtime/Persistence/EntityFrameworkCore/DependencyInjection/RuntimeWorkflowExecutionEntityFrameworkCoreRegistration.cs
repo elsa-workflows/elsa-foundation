@@ -69,8 +69,6 @@ public static class RuntimeWorkflowExecutionEntityFrameworkCoreRegistration
         }
         catch { services.Clear(); foreach (var descriptor in snapshot) services.Add(descriptor); throw; }
     }
-    public static IServiceCollection AddRuntimeWorkflowExecutionStateEntityFrameworkCore(this IServiceCollection services, RuntimeWorkflowExecutionEntityFrameworkCoreOptions options) => services.AddRuntimeWorkflowExecutionEntityFrameworkCore(options);
-    public static IServiceCollection AddRuntimeWorkflowExecutionStateEfCore(this IServiceCollection services, RuntimeWorkflowExecutionEntityFrameworkCoreOptions options) => services.AddRuntimeWorkflowExecutionEntityFrameworkCore(options);
 
     private static bool OptionsEqual(RuntimeWorkflowExecutionEntityFrameworkCoreOptions a, RuntimeWorkflowExecutionEntityFrameworkCoreOptions b) => StringComparer.Ordinal.Equals(EfRelationalProviderBinding.Normalize(a.Provider), EfRelationalProviderBinding.Normalize(b.Provider)) && a.ConnectionString == b.ConnectionString && a.ConnectionName == b.ConnectionName && a.RecoveryContinuationSigningKey == b.RecoveryContinuationSigningKey;
     private static void RemoveOwned(IServiceCollection services, IReadOnlyCollection<ServiceDescriptor> owned) { foreach (var descriptor in owned.Where(x => services.Contains(x) && RuntimeArtifactStoreBackend.Find(services)?.Owns(x) != true && RuntimeActivityExecutionStoreBackend.Find(services)?.Owns(x) != true && BookmarkStateStoreBackend.Find(services)?.Owns(x) != true && RuntimeWorkflowAlterationStoreBackend.Find(services)?.Owns(x) != true && WorkflowTestScopeStoreBackend.Find(services)?.Owns(x) != true && RuntimeOperationalStateStoreBackend.Find(services)?.Owns(x) != true)) services.Remove(descriptor); }

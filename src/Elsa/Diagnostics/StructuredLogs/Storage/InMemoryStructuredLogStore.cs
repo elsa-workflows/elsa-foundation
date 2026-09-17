@@ -18,7 +18,6 @@ public sealed class InMemoryStructuredLogStore : IStructuredLogStore
     private readonly object _gate = new();
     private readonly StructuredLogStoreBinding _binding;
     private readonly Queue<StoredEntry> _buffer;
-    private long _highWaterMark;
     private long _cursorHighWater;
 
     public InMemoryStructuredLogStore(
@@ -56,18 +55,8 @@ public sealed class InMemoryStructuredLogStore : IStructuredLogStore
             while (_buffer.Count > _bufferCapacity)
                 _buffer.Dequeue();
 
-            if (entry.Sequence > _highWaterMark)
-                _highWaterMark = entry.Sequence;
-
             return ValueTask.FromResult(committed);
         }
-    }
-
-    /// <inheritdoc />
-    public Task<long> GetHighWaterMarkAsync(CancellationToken cancellationToken = default)
-    {
-        lock (_gate)
-            return Task.FromResult(_highWaterMark);
     }
 
     /// <inheritdoc />

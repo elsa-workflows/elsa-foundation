@@ -161,11 +161,6 @@ public sealed class AgentContextAttachmentRequest
     public IReadOnlyDictionary<string, string> References { get; init; } = new Dictionary<string, string>();
 }
 
-public sealed record AgentMessageResponse(
-    string MessageId,
-    string Status,
-    string StreamUrl);
-
 public sealed class AgentProposalDecisionRequest
 {
     public string ProposalId { get; init; } = string.Empty;

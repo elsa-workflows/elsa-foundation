@@ -104,15 +104,6 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
         }
     }
 
-    public Task<long> GetHighWaterMarkAsync(CancellationToken cancellationToken = default) =>
-        ExecuteReadAsync(async (db, ct) =>
-        {
-            var state = await db.StreamStates.AsNoTracking()
-                .SingleOrDefaultAsync(value => value.ScopeKey == ScopeKey, ct);
-            ValidateState(state);
-            return state?.HighWater ?? 0L;
-        }, cancellationToken);
-
     public Task<IReadOnlyList<StructuredLogEntry>> GetRecentAsync(
         StructuredLogFilter filter,
         CancellationToken cancellationToken = default)

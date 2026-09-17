@@ -20,12 +20,6 @@ public interface IStructuredLogStore
         StructuredLogEntry entry,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Returns the lifetime maximum committed <see cref="StructuredLogEntry.Sequence"/>, or 0 only when
-    /// the bound stream has never committed an entry. Retention must never rewind this value.
-    /// </summary>
-    Task<long> GetHighWaterMarkAsync(CancellationToken cancellationToken = default);
-
     /// <summary>Returns the most-recent entries matching <paramref name="filter"/>, newest last.</summary>
     Task<IReadOnlyList<StructuredLogEntry>> GetRecentAsync(StructuredLogFilter filter, CancellationToken cancellationToken = default);
 

@@ -26,7 +26,7 @@ public sealed class InMemoryStructuredLogStoreTests
     }
 
     [Fact]
-    public async Task Trim_to_zero_preserves_lifetime_logical_high_water_and_expires_the_cursor()
+    public async Task Trim_to_zero_empties_history_and_expires_the_cursor()
     {
         var store = new InMemoryStructuredLogStore(TestOptions.Create());
         var committed = await store.AppendAsync(Seq(9, "only"));
@@ -34,7 +34,6 @@ public sealed class InMemoryStructuredLogStoreTests
         await store.TrimAsync(0);
 
         Assert.Empty(await store.GetRecentAsync(StructuredLogFilter.None));
-        Assert.Equal(9, await store.GetHighWaterMarkAsync());
         var exception = await Assert.ThrowsAsync<StructuredLogReplayCursorUnavailableException>(() =>
             store.ReadAfterAsync(committed.ReplayCursor, StructuredLogFilter.None, 100));
         Assert.Equal("The structured log replay cursor is unavailable.", exception.Message);
@@ -76,7 +75,7 @@ public sealed class InMemoryStructuredLogStoreTests
     }
 
     [Fact]
-    public async Task AppendRetainsEntriesAndTracksHighWaterMark()
+    public async Task AppendRetainsEntries()
     {
         var store = new InMemoryStructuredLogStore(TestOptions.Create());
 
@@ -85,13 +84,6 @@ public sealed class InMemoryStructuredLogStoreTests
 
         var recent = await store.GetRecentAsync(StructuredLogFilter.None);
         Assert.Equal(new[] { 1L, 2L }, recent.Select(e => e.Sequence));
-        Assert.Equal(2L, await store.GetHighWaterMarkAsync());
-    }
-
-    [Fact]
-    public async Task HighWaterMarkIsZeroWhenEmpty()
-    {
-        Assert.Equal(0L, await new InMemoryStructuredLogStore(TestOptions.Create()).GetHighWaterMarkAsync());
     }
 
     [Fact]

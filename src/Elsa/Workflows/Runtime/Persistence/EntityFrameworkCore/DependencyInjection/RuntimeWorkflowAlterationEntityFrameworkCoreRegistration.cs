@@ -115,9 +115,6 @@ public static class RuntimeWorkflowAlterationEntityFrameworkCoreRegistration
         }
         catch { services.Clear(); foreach (var descriptor in snapshot) services.Add(descriptor); throw; }
     }
-    public static IServiceCollection AddRuntimeWorkflowAlterationsEntityFrameworkCore(this IServiceCollection services, RuntimeWorkflowAlterationEntityFrameworkCoreOptions options) => services.AddRuntimeWorkflowAlterationEntityFrameworkCore(options);
-    public static IServiceCollection AddRuntimeWorkflowAlterationStateEntityFrameworkCore(this IServiceCollection services, RuntimeWorkflowAlterationEntityFrameworkCoreOptions options) => services.AddRuntimeWorkflowAlterationEntityFrameworkCore(options);
-    public static IServiceCollection AddRuntimeWorkflowAlterationEfCore(this IServiceCollection services, RuntimeWorkflowAlterationEntityFrameworkCoreOptions options) => services.AddRuntimeWorkflowAlterationEntityFrameworkCore(options);
     private static bool OptionsEqual(RuntimeWorkflowAlterationEntityFrameworkCoreOptions a, RuntimeWorkflowAlterationEntityFrameworkCoreOptions b) => StringComparer.Ordinal.Equals(EfRelationalProviderBinding.Normalize(a.Provider), EfRelationalProviderBinding.Normalize(b.Provider)) && a.ConnectionString == b.ConnectionString && a.ConnectionName == b.ConnectionName && a.RecoveryContinuationSigningKey == b.RecoveryContinuationSigningKey;
     private static void EnsureOnlyCoreAlterationRegistration(IServiceCollection services)
     {

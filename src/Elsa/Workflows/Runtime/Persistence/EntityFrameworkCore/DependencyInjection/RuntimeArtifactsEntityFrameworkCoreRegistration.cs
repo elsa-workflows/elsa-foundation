@@ -193,7 +193,6 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             throw;
         }
     }
-    public static IServiceCollection AddRuntimeExecutableArtifactsEntityFrameworkCore(this IServiceCollection services, RuntimeArtifactsEntityFrameworkCoreOptions options) => services.AddRuntimeArtifactsEntityFrameworkCore(options);
 
     /// <summary>
     /// Selects the executable-store surface. Enabled caching keeps the provider-neutral composition: ordinary scoped

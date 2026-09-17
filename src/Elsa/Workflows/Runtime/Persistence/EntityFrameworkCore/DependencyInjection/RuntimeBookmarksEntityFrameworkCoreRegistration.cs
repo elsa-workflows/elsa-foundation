@@ -180,9 +180,6 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
         }
     }
 
-    public static IServiceCollection AddRuntimeBookmarkEntityFrameworkCore(this IServiceCollection services, RuntimeBookmarksEntityFrameworkCoreOptions options) =>
-        services.AddRuntimeBookmarksEntityFrameworkCore(options);
-
     private static void RemoveEfArtifacts(IServiceCollection services, IReadOnlyCollection<ServiceDescriptor> ownedArtifacts)
     {
         if (ownedArtifacts.Any(descriptor => services.Count(candidate => ReferenceEquals(candidate, descriptor)) != 1))

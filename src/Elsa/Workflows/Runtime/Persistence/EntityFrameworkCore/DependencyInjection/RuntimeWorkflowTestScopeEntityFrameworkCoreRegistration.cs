@@ -127,9 +127,6 @@ public static class RuntimeWorkflowTestScopeEntityFrameworkCoreRegistration
         }
         catch { services.Clear(); foreach (var descriptor in snapshot) services.Add(descriptor); throw; }
     }
-    public static IServiceCollection AddRuntimeWorkflowTestScopesEntityFrameworkCore(this IServiceCollection services, RuntimeWorkflowTestScopeEntityFrameworkCoreOptions options) => services.AddRuntimeWorkflowTestScopeEntityFrameworkCore(options);
-    public static IServiceCollection AddRuntimeWorkflowTestScopeStateEntityFrameworkCore(this IServiceCollection services, RuntimeWorkflowTestScopeEntityFrameworkCoreOptions options) => services.AddRuntimeWorkflowTestScopeEntityFrameworkCore(options);
-    public static IServiceCollection AddRuntimeWorkflowTestScopeEfCore(this IServiceCollection services, RuntimeWorkflowTestScopeEntityFrameworkCoreOptions options) => services.AddRuntimeWorkflowTestScopeEntityFrameworkCore(options);
     private static bool OptionsEqual(RuntimeWorkflowTestScopeEntityFrameworkCoreOptions a, RuntimeWorkflowTestScopeEntityFrameworkCoreOptions b) => StringComparer.Ordinal.Equals(EfRelationalProviderBinding.Normalize(a.Provider), EfRelationalProviderBinding.Normalize(b.Provider)) && a.ConnectionString == b.ConnectionString && a.ConnectionName == b.ConnectionName && a.RecoveryContinuationSigningKey == b.RecoveryContinuationSigningKey;
     private static void EnsureOnlyCoreScopeRegistrations(IServiceCollection services)
     {

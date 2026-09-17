@@ -158,7 +158,11 @@ internal static class StructuredLogsProviderSmoke
         }
 
         await store.TrimAsync(0);
-        Assert.Equal(committed.Sequence + 1, await store.GetHighWaterMarkAsync());
+        await using (var verifyTrimScope = serviceProvider.CreateAsyncScope())
+        {
+            var state = await verifyTrimScope.ServiceProvider.GetRequiredService<StructuredLogsDbContext>().StreamStates.AsNoTracking().SingleAsync();
+            Assert.Equal(committed.Sequence + 1, state.HighWater);
+        }
         await store.StopAsync();
     }
 }

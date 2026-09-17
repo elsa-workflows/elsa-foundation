@@ -338,9 +338,6 @@ public sealed class StreamEndpointTests
             return ValueTask.FromResult(durable.Append(entry));
         }
 
-        public Task<long> GetHighWaterMarkAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(durable.Snapshot().Select(x => x.Sequence).DefaultIfEmpty().Max());
-
         public Task<IReadOnlyList<StructuredLogEntry>> GetRecentAsync(StructuredLogFilter filter, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<StructuredLogEntry>>(durable.Snapshot().Where(filter.Matches).ToArray());
 
@@ -410,8 +407,6 @@ public sealed class StreamEndpointTests
     {
         public ValueTask<StructuredLogEntry> AppendAsync(StructuredLogEntry entry, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(entry);
-
-        public Task<long> GetHighWaterMarkAsync(CancellationToken cancellationToken = default) => Task.FromResult(0L);
 
         public Task<IReadOnlyList<StructuredLogEntry>> GetRecentAsync(
             StructuredLogFilter filter,

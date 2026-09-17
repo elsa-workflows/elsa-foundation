@@ -143,12 +143,6 @@ public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
         }
     }
 
-    public static IServiceCollection AddRuntimeSchedulerEntityFrameworkCore(this IServiceCollection services, RuntimeOperationalStateEntityFrameworkCoreOptions options) => services.AddRuntimeOperationalStateEntityFrameworkCore(options);
-    public static IServiceCollection AddRuntimeDurableValueStateEntityFrameworkCore(this IServiceCollection services, RuntimeDurableValueStateEntityFrameworkCoreOptions options) => services.AddRuntimeOperationalStateEntityFrameworkCore(options.ToOperationalOptions());
-    public static IServiceCollection AddRuntimeSchedulerStateEntityFrameworkCore(this IServiceCollection services, RuntimeSchedulerStateEntityFrameworkCoreOptions options) => services.AddRuntimeOperationalStateEntityFrameworkCore(options.ToOperationalOptions());
-    public static IServiceCollection AddRuntimeExecutionLivenessStateEntityFrameworkCore(this IServiceCollection services, RuntimeExecutionLivenessStateEntityFrameworkCoreOptions options) => services.AddRuntimeOperationalStateEntityFrameworkCore(options.ToOperationalOptions());
-    public static IServiceCollection AddRuntimeWorkflowHoldStateEntityFrameworkCore(this IServiceCollection services, RuntimeWorkflowHoldStateEntityFrameworkCoreOptions options) => services.AddRuntimeOperationalStateEntityFrameworkCore(options.ToOperationalOptions());
-
     private static bool OptionsEqual(RuntimeOperationalStateEntityFrameworkCoreOptions left, RuntimeOperationalStateEntityFrameworkCoreOptions right) =>
         StringComparer.Ordinal.Equals(EfRelationalProviderBinding.Normalize(left.Provider), EfRelationalProviderBinding.Normalize(right.Provider)) &&
         StringComparer.Ordinal.Equals(left.ConnectionString, right.ConnectionString) &&
@@ -175,40 +169,4 @@ public sealed class RuntimeOperationalStateEntityFrameworkCoreOptions
     public string? ConnectionString { get; set; }
     public string? ConnectionName { get; set; }
     public string? RecoveryContinuationSigningKey { get; set; }
-}
-
-public sealed class RuntimeDurableValueStateEntityFrameworkCoreOptions
-{
-    public string Provider { get; set; } = "Sqlite";
-    public string? ConnectionString { get; set; }
-    public string? ConnectionName { get; set; }
-    public string? RecoveryContinuationSigningKey { get; set; }
-    internal RuntimeOperationalStateEntityFrameworkCoreOptions ToOperationalOptions() => new() { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName, RecoveryContinuationSigningKey = RecoveryContinuationSigningKey };
-}
-
-public sealed class RuntimeSchedulerStateEntityFrameworkCoreOptions
-{
-    public string Provider { get; set; } = "Sqlite";
-    public string? ConnectionString { get; set; }
-    public string? ConnectionName { get; set; }
-    public string? RecoveryContinuationSigningKey { get; set; }
-    internal RuntimeOperationalStateEntityFrameworkCoreOptions ToOperationalOptions() => new() { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName, RecoveryContinuationSigningKey = RecoveryContinuationSigningKey };
-}
-
-public sealed class RuntimeExecutionLivenessStateEntityFrameworkCoreOptions
-{
-    public string Provider { get; set; } = "Sqlite";
-    public string? ConnectionString { get; set; }
-    public string? ConnectionName { get; set; }
-    public string? RecoveryContinuationSigningKey { get; set; }
-    internal RuntimeOperationalStateEntityFrameworkCoreOptions ToOperationalOptions() => new() { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName, RecoveryContinuationSigningKey = RecoveryContinuationSigningKey };
-}
-
-public sealed class RuntimeWorkflowHoldStateEntityFrameworkCoreOptions
-{
-    public string Provider { get; set; } = "Sqlite";
-    public string? ConnectionString { get; set; }
-    public string? ConnectionName { get; set; }
-    public string? RecoveryContinuationSigningKey { get; set; }
-    internal RuntimeOperationalStateEntityFrameworkCoreOptions ToOperationalOptions() => new() { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName, RecoveryContinuationSigningKey = RecoveryContinuationSigningKey };
 }

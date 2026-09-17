@@ -60,10 +60,4 @@ public static class RuntimeRecurringTriggerScheduleEntityFrameworkCoreRegistrati
             throw;
         }
     }
-
-    public static IServiceCollection AddRuntimeRecurringTriggerSchedulesEntityFrameworkCore(this IServiceCollection services) =>
-        services.AddRuntimeRecurringTriggerScheduleEntityFrameworkCore();
-
-    public static IServiceCollection AddRecurringTriggerScheduleEntityFrameworkCore(this IServiceCollection services) =>
-        services.AddRuntimeRecurringTriggerScheduleEntityFrameworkCore();
 }

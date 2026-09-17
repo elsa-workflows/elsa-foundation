@@ -106,16 +106,6 @@ public static class RuntimeSchedulerPoisonEntityFrameworkCoreRegistration
         }
     }
 
-    public static IServiceCollection AddRuntimeSchedulerPoisonStoreEntityFrameworkCore(
-        this IServiceCollection services,
-        RuntimeSchedulerPoisonEntityFrameworkCoreOptions options) =>
-        services.AddRuntimeSchedulerPoisonEntityFrameworkCore(options);
-
-    public static IServiceCollection AddWorkflowSchedulerPoisonEntityFrameworkCore(
-        this IServiceCollection services,
-        RuntimeSchedulerPoisonEntityFrameworkCoreOptions options) =>
-        services.AddRuntimeSchedulerPoisonEntityFrameworkCore(options);
-
     private static bool OptionsEqual(
         RuntimeSchedulerPoisonEntityFrameworkCoreOptions left,
         RuntimeSchedulerPoisonEntityFrameworkCoreOptions right) =>

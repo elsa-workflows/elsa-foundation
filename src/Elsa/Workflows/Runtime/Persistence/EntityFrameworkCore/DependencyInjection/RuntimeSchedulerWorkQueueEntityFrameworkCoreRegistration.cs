@@ -115,16 +115,6 @@ public static class RuntimeSchedulerWorkQueueEntityFrameworkCoreRegistration
         }
     }
 
-    public static IServiceCollection AddRuntimeSchedulerWorkEntityFrameworkCore(
-        this IServiceCollection services,
-        RuntimeSchedulerWorkQueueEntityFrameworkCoreOptions options) =>
-        services.AddRuntimeSchedulerWorkQueueEntityFrameworkCore(options);
-
-    public static IServiceCollection AddSchedulerWorkQueueEntityFrameworkCore(
-        this IServiceCollection services,
-        RuntimeSchedulerWorkQueueEntityFrameworkCoreOptions options) =>
-        services.AddRuntimeSchedulerWorkQueueEntityFrameworkCore(options);
-
     private static bool OptionsEqual(
         RuntimeSchedulerWorkQueueEntityFrameworkCoreOptions left,
         RuntimeSchedulerWorkQueueEntityFrameworkCoreOptions right) =>

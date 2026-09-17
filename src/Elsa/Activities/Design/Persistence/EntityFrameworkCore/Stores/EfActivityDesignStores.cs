@@ -936,10 +936,9 @@ public sealed class EfActivityDesignStores(
         var existing = await ById(Access(db.ActivityForkReceipts.AsNoTracking()), request.ReceiptId).SingleOrDefaultAsync(cancellationToken);
         if (existing is not null)
         {
-            var candidateReceipt = await ById(Access(db.ActivityForkReceipts.AsNoTracking()), request.ReceiptId).SingleAsync(cancellationToken);
-            ValidateReceiptIdentity(candidateReceipt, request);
+            ValidateReceiptIdentity(existing, request);
             await transaction.RollbackAsync(cancellationToken);
-            return new(MapReceipt(candidateReceipt), true);
+            return new(MapReceipt(existing), true);
         }
         var candidate = await ById(Access(db.ActivityForkCandidates), request.CandidateId).SingleOrDefaultAsync(cancellationToken);
         if (candidate is null)

@@ -268,22 +268,6 @@ public sealed record ReusableActivityDraft(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
-public sealed record ReusableActivityVersion(
-    string VersionId,
-    string DefinitionId,
-    string? TenantId,
-    string Version,
-    string? SourceDraftId,
-    string? SourceVersionId,
-    ActivityContract Contract,
-    ActivityProviderManifest Provider,
-    string TemplateId,
-    string TemplateHash,
-    string SourceReferenceId,
-    string ProviderFingerprint,
-    ActivityDefinitionVersionLifecycle Lifecycle,
-    DateTimeOffset PublishedAt);
-
 public sealed record ActivityDiagnosticSubject(
     string Kind,
     string Id,
