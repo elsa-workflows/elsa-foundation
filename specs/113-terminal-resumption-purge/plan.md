@@ -17,7 +17,7 @@ Chosen over the alternatives:
 
 ## Files
 
-- `src/Elsa/Workflows/Runtime/Services/RuntimeResumptionService.cs` — add required `IWorkflowExecutionStateStore`;
+- `src/Elsa/Workflows/Runtime/Services/Recovery/RuntimeResumptionService.cs` — add required `IWorkflowExecutionStateStore`;
   in `SweepAsync`, for each discovered id: if terminal, `PurgeResidualSchedulerWorkAsync` + skip; else re-drive.
   Purge lists a bounded page (`BacklogBatchSize`) and deletes by identity, looping to a safety cap.
 - `src/Elsa/Workflows/Runtime/Core/Models/RuntimeResumption.cs` — add `TerminalExecutionsPurged` +

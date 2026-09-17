@@ -97,11 +97,11 @@ suspend/resume cycle.
 
 ## Runtime evidence
 
-- [`BookmarkStimulusLookup`](../src/Elsa/Workflows/Runtime/Services/BookmarkStimulusLookup.cs) applies
+- [`BookmarkStimulusLookup`](../src/Elsa/Workflows/Runtime/Services/Bookmarks/BookmarkStimulusLookup.cs) applies
   the per-execution cutoff.
-- [`GlobalBookmarkStimulusLookup`](../src/Elsa/Workflows/Runtime/Services/GlobalBookmarkStimulusLookup.cs)
+- [`GlobalBookmarkStimulusLookup`](../src/Elsa/Workflows/Runtime/Services/Bookmarks/GlobalBookmarkStimulusLookup.cs)
   applies the same cutoff to cross-execution and type-scoped lookup.
-- [`BookmarkResumeDispatcher`](../src/Elsa/Workflows/Runtime/Services/BookmarkResumeDispatcher.cs)
+- [`BookmarkResumeDispatcher`](../src/Elsa/Workflows/Runtime/Services/Bookmarks/BookmarkResumeDispatcher.cs)
   evaluates lookup against the runtime clock and treats an expired bookmark as not found.
 - [`BookmarkStateDbContext`](../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/BookmarkStateDbContext.cs)
   declares bookmark indexes by workflow execution and stimulus identity, not by expiration.

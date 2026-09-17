@@ -1,8 +1,9 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Diagnostics;
 
-namespace Elsa.Workflows.Runtime.Core.Middleware;
+namespace Elsa.Workflows.Runtime.Middleware;
 
 /// <summary>
 /// The activity pipeline's <c>Invoke</c> slot: runs the work item's selected handler (staged by the dispatcher) in the

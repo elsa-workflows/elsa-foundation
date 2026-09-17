@@ -1,7 +1,8 @@
 using System.Diagnostics;
+using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Runtime.Core.Diagnostics;
+namespace Elsa.Workflows.Runtime.Diagnostics;
 
 /// <summary>
 /// The default no-op <see cref="IWorkflowEngineTracer"/>, registered by the runtime composition root when the tracing

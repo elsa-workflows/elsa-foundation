@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services.Coalescing;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;

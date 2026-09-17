@@ -1,9 +1,11 @@
+using Elsa.Workflows.Runtime.Core.Builders;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Middleware;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Middleware;
 
-namespace Elsa.Workflows.Runtime.Core.Builders;
+namespace Elsa.Workflows.Runtime.Builders;
 
 public sealed class ActivityRuntimePipelineBuilder : RuntimePipelinePlanBuilder
 {

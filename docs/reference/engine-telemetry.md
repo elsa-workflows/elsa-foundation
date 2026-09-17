@@ -70,7 +70,7 @@ the ingestion domain: nothing that could carry user payload or a security token 
 
 These names are a **stable contract**. Renaming a span or an attribute is a breaking change for
 anyone building dashboards or alerts on them. The constants live in
-`WorkflowEngineTelemetry` (`Elsa.Workflows.Runtime.Core.Diagnostics`).
+`WorkflowEngineTelemetry` (`Elsa.Workflows.Runtime.Diagnostics`).
 
 ## Semantic-safety guarantees
 

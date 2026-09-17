@@ -1,4 +1,4 @@
-namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
+namespace Elsa.Workflows.Runtime.Services.Coalescing;
 
 /// <summary>
 /// Metadata keys used to mark synthetic coalescing checkpoints so the policy and the coalescing commit store can

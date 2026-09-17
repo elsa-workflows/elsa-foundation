@@ -95,7 +95,7 @@ claim (`ActivityAttemptActivationClaimer`).
 
 **Start at:** `benchmarks/Elsa/Workflows/Runtime/Benchmarks/EngineExecutionBenchmarks.cs`
 (`Durable_Sqlite_HotLoop_ProductionShapes`), `src/Elsa/Activities/Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs`,
-`src/Elsa/Workflows/Runtime/Services/WorkflowStartActivitySchedulerWorkHandler.cs`.
+`src/Elsa/Workflows/Runtime/Services/WorkHandlers/WorkflowStartActivitySchedulerWorkHandler.cs`.
 
 **Done when:** the ~42 ms is attributed to named components with a profile, and either a fix lands with the
 benchmark showing the gap narrowing, or the gap is documented as irreducible with the reason.
@@ -180,9 +180,9 @@ that RT-8 collapsed seven into one, with the workflow execution state store made
 constructor, required collaborators first, optional ones defaulting to their no-op implementations. Sweep for
 others.
 
-**Start at:** `src/Elsa/Workflows/Runtime/Services/WorkflowDrainOrchestrator.cs`,
-`src/Elsa/Workflows/Runtime/Services/RuntimeCheckpointCommitter.cs`, and
-`src/Elsa/Workflows/Runtime/Services/WorkflowSchedulerDrainer.cs` for the target shape and rationale.
+**Start at:** `src/Elsa/Workflows/Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs`,
+`src/Elsa/Workflows/Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs`, and
+`src/Elsa/Workflows/Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs` for the target shape and rationale.
 
 **Done when:** each type has one public constructor, the DI registrations resolve it explicitly, and any
 collaborator whose absence would disable a guard is non-optional.
@@ -268,9 +268,9 @@ design and a serious onboarding tax at the same time.
 outcomes, or (b) write an execution-behaviour map that starts from the observer list and the default
 registrations rather than from the loop. (b) is more useful; (a) is cheaper and degrades less.
 
-**Start at:** `src/Elsa/Workflows/Runtime/Services/WorkflowSchedulerDrainer.cs` (`DispatchAsync`,
+**Start at:** `src/Elsa/Workflows/Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs` (`DispatchAsync`,
 `HandleHandlerCrashAsync`), `WorkflowDrainOrchestrator.NotifyObserversAsync`,
-`src/Elsa/Workflows/Runtime/Services/PoisonedSchedulerWorkIncidentObserver.cs`,
+`src/Elsa/Workflows/Runtime/Services/Incidents/PoisonedSchedulerWorkIncidentObserver.cs`,
 `BlockingIncidentWorkflowFaultObserver`, `IncidentStrategyResolutionDrainObserver`.
 
 **Done when:** "what happens when an activity throws" and "what happens when a handler throws" are each
@@ -397,7 +397,7 @@ caller can see. Port the pattern from `RuntimeResumptionOptions`, whose doc comm
 verbatim: bound the work "so a large backlog or a poisoned execution cannot overwhelm the host."
 
 **Start at:** `src/Elsa/Workflows/Runtime/Resumption/Options/RuntimeResumptionOptions.cs` (the pattern),
-`src/Elsa/Workflows/Runtime/Services/WorkflowDrainOrchestrator.cs` (the meter point),
+`src/Elsa/Workflows/Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs` (the meter point),
 `WorkflowExecutionCommandDispatchStatus` (`Deferred` already exists and the distributed leaf uses it for
 "accepted for routing, not run locally").
 
@@ -442,7 +442,7 @@ is client-supplied but the engine always raises an incident on exhaustion. Elsa'
 **Do:** consider a small bounded `RetryAfter` default. The disposition and the `NextRetryAt` re-drive path already
 exist and are honoured by `RuntimeResumptionPumpTask`.
 
-**Start at:** `src/Elsa/Workflows/Runtime/Services/NoopRuntimeDomainRetryPolicy.cs`,
+**Start at:** `src/Elsa/Workflows/Runtime/Services/Incidents/NoopRuntimeDomainRetryPolicy.cs`,
 `WorkflowSchedulerDrainer.HandleHandlerCrashAsync`.
 
 **Done when:** the default is evidence-backed either way.
@@ -465,7 +465,7 @@ trade at all, because the log is written for correctness and exporters read it f
 [ADR 0020](../adr/0020-runtime-checkpoint-commit-post-commit-work.md) already established, and let a projector
 consume it.
 
-**Start at:** `src/Elsa/Workflows/Runtime/Services/RuntimeCheckpointCommitter.cs` (the fold),
+**Start at:** `src/Elsa/Workflows/Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs` (the fold),
 `RuntimePostCommitOutboxItems`, `IRuntimeActivityExecutionInspectionAccumulator`.
 
 **Done when:** commit cadence and inspection granularity are independently configurable.

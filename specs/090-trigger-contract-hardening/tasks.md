@@ -65,8 +65,8 @@ not be read as a current compatibility promise for those versions.
 
 ### Implementation for User Story 1
 
-- [X] T013 [US1] Implement all-provider evaluation, exact-one claim enforcement, provider-id validation, descriptor duplicate validation, and complete preflight outcomes in `src/Elsa/Workflows/Runtime/Services/WorkflowTriggerBindingExtractor.cs`
-- [X] T014 [US1] Make `WorkflowTriggerIndexer` validate and apply the completed preflight binding set without changing delete/save/observer semantics in `src/Elsa/Workflows/Runtime/Services/WorkflowTriggerIndexer.cs`
+- [X] T013 [US1] Implement all-provider evaluation, exact-one claim enforcement, provider-id validation, descriptor duplicate validation, and complete preflight outcomes in `src/Elsa/Workflows/Runtime/Services/Triggers/WorkflowTriggerBindingExtractor.cs`
+- [X] T014 [US1] Make `WorkflowTriggerIndexer` validate and apply the completed preflight binding set without changing delete/save/observer semantics in `src/Elsa/Workflows/Runtime/Services/Triggers/WorkflowTriggerIndexer.cs`
 - [X] T015 [US1] Pre-materialize the complete Timer/Cron schedule set before the inner indexer; wrap calculator/parser failures in contextual typed failures while preserving `InnerException`, reject exhausted schedules, and persist only prepared schedules in `src/Elsa/Workflows/Runtime/Scheduling/RecurringTriggerScheduleIndexer.cs`
 - [X] T016 [P] [US1] Add explicit stable provider ids to Event in `src/Elsa/Activities/Primitives/Activities/EventTriggerStimulusProvider.cs`
 - [X] T017 [P] [US1] Add explicit stable provider ids to Timer and Cron in `src/Elsa/Activities/Scheduling/Activities/TimerTriggerStimulusProvider.cs` and `src/Elsa/Activities/Scheduling/Activities/CronTriggerStimulusProvider.cs`
@@ -92,7 +92,7 @@ not be read as a current compatibility promise for those versions.
 
 ### Implementation for User Story 2
 
-- [X] T024 [US2] Map a single provider's recognized-empty result to `IntentionallyNonStarting` without emitting bindings or failing preflight in `src/Elsa/Workflows/Runtime/Services/WorkflowTriggerBindingExtractor.cs`
+- [X] T024 [US2] Map a single provider's recognized-empty result to `IntentionallyNonStarting` without emitting bindings or failing preflight in `src/Elsa/Workflows/Runtime/Services/Triggers/WorkflowTriggerBindingExtractor.cs`
 - [X] T025 [US2] Verify the HttpEndpoint provider keeps absent/false activation as `Recognized([])` while reporting its stable id in `src/Elsa/Activities/Http/Activities/HttpEndpointTriggerStimulusProvider.cs`
 - [X] T026 [US2] Run the P2 focused Runtime and Activities.Http test filters from `specs/090-trigger-contract-hardening/quickstart.md`
 

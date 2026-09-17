@@ -53,9 +53,9 @@
 
 ### Implementation
 
-- [x] T027 [US2] Assert Open scope for root start/checkpoint and child dispatch commit under the shared in-memory provider fence in `src/Elsa/Workflows/Runtime/Services/InMemoryRuntimeCheckpointCommitStore.cs`
-- [x] T028 [US2] Extend workflow dispatch queries with exact optional scope routing without cross-tenant/partition scans in `src/Elsa/Workflows/Runtime/Core/Models/WorkflowDispatchRecord.cs` and `src/Elsa/Workflows/Runtime/Services/InMemoryWorkflowDispatchStore.cs`
-- [x] T029 [US2] Implement atomic detached cleanup transitions for Pending, Started, terminal, and cleanup/admission races with durable cancellation responsibility in `src/Elsa/Workflows/Runtime/Services/InMemoryWorkflowTestScopeStore.cs`
+- [x] T027 [US2] Assert Open scope for root start/checkpoint and child dispatch commit under the shared in-memory provider fence in `src/Elsa/Workflows/Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs`
+- [x] T028 [US2] Extend workflow dispatch queries with exact optional scope routing without cross-tenant/partition scans in `src/Elsa/Workflows/Runtime/Core/Models/WorkflowDispatchRecord.cs` and `src/Elsa/Workflows/Runtime/Services/Dispatch/InMemoryWorkflowDispatchStore.cs`
+- [x] T029 [US2] Implement atomic detached cleanup transitions for Pending, Started, terminal, and cleanup/admission races with durable cancellation responsibility in `src/Elsa/Workflows/Runtime/Services/Dispatch/InMemoryWorkflowTestScopeStore.cs`
 - [x] T030 [US2] Add scope-cancellation metadata/state and deterministic scope cancel responsibility while preserving ordinary detached and waited semantics in `src/Elsa/Workflows/Runtime/Core/Models/WorkflowDispatchCancellation.cs` and `WorkflowDispatchRecord.cs`
 - [x] T031 [US2] Bridge authoritative detached scope cancellation through the existing child actor Cancel delivery in `src/Elsa/Activities/DispatchWorkflow/Runtime/Services/ChildCancelExecutor.cs`
 - [x] T032 [US2] Implement the bounded scope cleaner and close-to-Closed convergence in `src/Elsa/Activities/DispatchWorkflow/Runtime/Services/WorkflowTestScopeCleaner.cs`

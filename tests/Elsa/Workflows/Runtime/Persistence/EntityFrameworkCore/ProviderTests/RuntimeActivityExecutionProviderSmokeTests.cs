@@ -1,9 +1,10 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Services.ActivityExecutions;
+using Elsa.Workflows.Runtime.Services.Recovery;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -50,7 +51,7 @@ internal static class RuntimeActivityExecutionProviderSmoke
             await context.Database.EnsureCreatedAsync();
             var state = new EfActivityExecutionStateStore(context, new FixedAccessor(scope), codec);
             var inspection = new EfActivityExecutionInspectionStore(context, new FixedAccessor(scope), codec);
-            var hierarchy = new EfActivityExecutionHierarchyStore(context, new FixedAccessor(scope), new Elsa.Workflows.Runtime.Core.Services.HmacActivityExecutionHierarchyCursorCodec(Options.Create(new Elsa.Workflows.Runtime.Core.Services.ActivityExecutionHierarchyCursorOptions { SigningKey = SigningKey })));
+            var hierarchy = new EfActivityExecutionHierarchyStore(context, new FixedAccessor(scope), new Elsa.Workflows.Runtime.Services.ActivityExecutions.HmacActivityExecutionHierarchyCursorCodec(Options.Create(new Elsa.Workflows.Runtime.Services.ActivityExecutions.ActivityExecutionHierarchyCursorOptions { SigningKey = SigningKey })));
 
             await state.SaveAsync(State(workflow, "root", 1, null));
             await state.SaveAsync(State(workflow, "child", 2, "root"));

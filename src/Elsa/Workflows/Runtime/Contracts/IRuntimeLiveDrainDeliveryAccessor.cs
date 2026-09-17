@@ -1,6 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Runtime.Core.Contracts;
+namespace Elsa.Workflows.Runtime.Contracts;
 
 /// <summary>
 /// Ambient, explicitly-scoped accessor for the live drain that currently owns post-commit intent delivery for an

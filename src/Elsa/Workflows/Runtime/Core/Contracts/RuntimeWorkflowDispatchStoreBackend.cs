@@ -96,7 +96,7 @@ public sealed class RuntimeWorkflowDispatchStoreBackend
 
     public static bool IsRuntimeDefault(ServiceDescriptor descriptor) =>
         descriptor.ServiceType == typeof(IWorkflowDispatchStore) &&
-        descriptor.ImplementationType?.FullName == "Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowDispatchStore" ||
+        descriptor.ImplementationType?.FullName == "Elsa.Workflows.Runtime.Services.Dispatch.InMemoryWorkflowDispatchStore" ||
         ContractTypes.Contains(descriptor.ServiceType) &&
         RuntimeCoreRegistrationOwnership.IsCoreFactory(descriptor);
 

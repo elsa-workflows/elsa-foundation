@@ -8,13 +8,13 @@ namespace Elsa.Workflows.Publishing.Services;
 /// Backward-compatible Publishing facade for the runtime-owned executable content hasher.
 /// </summary>
 /// <remarks>
-/// The canonical algorithm lives in <see cref="Elsa.Workflows.Runtime.Services.WorkflowExecutableHasher"/> so
+/// The canonical algorithm lives in <see cref="Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableHasher"/> so
 /// export and import cannot drift onto different wire-significant hashes. This public type remains as a thin
 /// facade to preserve existing constructor signatures and direct <c>new WorkflowExecutableHasher()</c> callers.
 /// </remarks>
 public sealed class WorkflowExecutableHasher
 {
-    private readonly IWorkflowExecutableHasher _inner = new Elsa.Workflows.Runtime.Services.WorkflowExecutableHasher();
+    private readonly IWorkflowExecutableHasher _inner = new Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableHasher();
 
     public string ComputeHash(ExecutableNode rootActivity) => _inner.ComputeHash(rootActivity);
 

@@ -20,8 +20,8 @@ traces one request from `Program.cs` to a durable checkpoint.
   `WorkflowExecutable` and saves it through `IWorkflowExecutableStore`. This is the only bridge from Design to Runtime.
 - **Runtime** (`src/Elsa/Workflows/Runtime`, `src/Elsa/Activities/Runtime`): executes executables. Contracts and
   models live in `src/Elsa/Workflows/Runtime/Core`; the engine (dispatcher, mailbox, drainer, work handlers,
-  checkpoint committer) lives in `src/Elsa/Workflows/Runtime/Services`; the API in `src/Elsa/Workflows/Runtime/Api`.
-  Runtime must not depend on Design.
+  checkpoint committer) lives in `src/Elsa/Workflows/Runtime/Services`, one folder per concept; the API in
+  `src/Elsa/Workflows/Runtime/Api`. Runtime must not depend on Design.
 
 Activity implementations (`HttpEndpoint`, `Sequence`, `Flowchart`, ...) live under `src/Elsa/Activities/<Name>`.
 

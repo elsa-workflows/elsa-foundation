@@ -5,7 +5,7 @@ using Elsa.Activities.Scripting.Activities;
 using Elsa.Expressions.JavaScript;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Jint;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 

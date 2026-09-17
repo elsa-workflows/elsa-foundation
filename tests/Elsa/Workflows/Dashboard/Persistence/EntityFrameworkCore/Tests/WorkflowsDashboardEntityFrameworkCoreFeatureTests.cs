@@ -9,7 +9,7 @@ using Elsa.Serialization.Core;
 using Elsa.Tasks;
 using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
-using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Resumption;
 using Microsoft.AspNetCore.Builder;

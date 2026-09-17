@@ -1,4 +1,4 @@
-namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
+namespace Elsa.Workflows.Runtime.Services.Coalescing;
 
 /// <summary>
 /// Typed holder capturing the pre-decoration (durable) implementation of a runtime store contract so both the

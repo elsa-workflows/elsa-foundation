@@ -6,8 +6,7 @@ using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
-using Elsa.Workflows.Runtime.Services;
+using Elsa.Workflows.Runtime.Services.Executables;
 using Xunit;
 using Microsoft.Extensions.Time.Testing;
 

@@ -1,5 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services.Dispatch;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Publishing.Api.Services;

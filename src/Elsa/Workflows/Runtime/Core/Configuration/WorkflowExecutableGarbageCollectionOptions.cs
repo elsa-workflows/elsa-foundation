@@ -1,4 +1,4 @@
-namespace Elsa.Workflows.Runtime.Configuration;
+namespace Elsa.Workflows.Runtime.Core.Configuration;
 
 /// <summary>Runtime-owned safety policy for physical executable artifact reclamation.</summary>
 public sealed class WorkflowExecutableGarbageCollectionOptions

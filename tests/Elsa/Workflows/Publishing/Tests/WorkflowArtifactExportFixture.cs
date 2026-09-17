@@ -14,8 +14,8 @@ using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
-using Elsa.Workflows.Runtime.Services;
+using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.Triggers;
 
 namespace Elsa.Workflows.Publishing.Tests;
 
@@ -42,7 +42,7 @@ namespace Elsa.Workflows.Publishing.Tests;
 internal sealed class WorkflowArtifactExportFixture
 {
     private static readonly DateTimeOffset PublishedAt = new(2026, 8, 17, 9, 0, 0, TimeSpan.Zero);
-    private static readonly IWorkflowExecutableHasher Hasher = new Elsa.Workflows.Runtime.Services.WorkflowExecutableHasher();
+    private static readonly IWorkflowExecutableHasher Hasher = new Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableHasher();
 
     private int _referenceSequence;
 

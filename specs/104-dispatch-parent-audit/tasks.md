@@ -10,7 +10,7 @@
 
 ## Phase 2: Crash-safe dispatch work
 
-- [x] T004 [US1] Make final-failure observation durably replayable in `src/Elsa/Workflows/Runtime/Services/RuntimePostCommitOutboxProcessor.cs` and related outbox models/stores
+- [x] T004 [US1] Make final-failure observation durably replayable in `src/Elsa/Workflows/Runtime/Services/Checkpoints/RuntimePostCommitOutboxProcessor.cs` and related outbox models/stores
 - [x] T005 [US1] Verify atomic dispatch-failure projection in `src/Elsa/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchDeliveryFailureProjector.cs`
 - [x] T006 [US1] Verify provider-atomic redrive evidence/state convergence in the in-memory checkpoint store and `src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimePostCommitOutboxStore.cs`
 - [x] T007 [US1] Apply bounded retry metadata to parent resume and child cancellation work in `src/Elsa/Workflows/Runtime/Services/`
@@ -20,7 +20,7 @@
 
 - [x] T009 [US1] Reconcile durable distributed forwarding and admission/cancellation races in `src/Elsa/Activities/DispatchWorkflow/Runtime/Services/ChildStartExecutor.cs` and runtime transition contracts
 - [x] T010 [US2] Verify snapshot-conditional retention deletion through `IWorkflowDispatchDeleteStore` and provider dispatch stores
-- [x] T011 [US2] Verify bounded continuation progress in `src/Elsa/Workflows/Runtime/Services/WorkflowDispatchRetentionCollector.cs` and provider test-scope cleanup stores
+- [x] T011 [US2] Verify bounded continuation progress in `src/Elsa/Workflows/Runtime/Services/Dispatch/WorkflowDispatchRetentionCollector.cs` and provider test-scope cleanup stores
 - [x] T012 [US2] Push stable ordering/limits into `src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowDispatchStore.cs` and `src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimePostCommitOutboxStore.cs`
 - [x] T013 [US2] Add greater-than-page-size and provider-bound regression tests under `tests/Elsa/Workflows/Runtime/` and `tests/Elsa/Persistence/Groundwork/`
 
@@ -29,7 +29,7 @@
 - [x] T014 [US3] Preserve the safe redrive disposition contract in `src/Elsa/Workflows/Runtime/Api/`
 - [x] T015 [US3] Return safe failure evidence from list and detail inspection without per-record unbounded access in `src/Elsa/Workflows/Runtime/Api/Handlers/WorkflowDispatchInspectionRequestHandlers.cs`
 - [x] T016 [US3] Validate deterministic failure identifiers before exposing them from `src/Elsa/Workflows/Runtime/Api/Models/WorkflowDispatchViews.cs`
-- [x] T017 [US3] Verify safe retry attempt/scheduling evidence produced by `src/Elsa/Workflows/Runtime/Services/RuntimePostCommitOutboxProcessor.cs`
+- [x] T017 [US3] Verify safe retry attempt/scheduling evidence produced by `src/Elsa/Workflows/Runtime/Services/Checkpoints/RuntimePostCommitOutboxProcessor.cs`
 - [x] T018 [US3] Add Runtime API contract, permission, corruption, and list/detail parity tests under `tests/Elsa/Workflows/Runtime/Api/Tests/`
 
 ## Phase 5: Acceptance evidence and audit

@@ -1,6 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
+namespace Elsa.Workflows.Runtime.Services.Coalescing;
 
 /// <summary>
 /// Folds the ordered checkpoint change-sets buffered during a coalesced drain segment into a single change-set.

@@ -3,9 +3,9 @@ using Elsa.Activities.Design.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Services;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Services.Recovery;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests;

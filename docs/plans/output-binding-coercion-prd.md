@@ -16,7 +16,7 @@ The initial implementation targets durable coercion with JSON and XML content de
 Foundation currently models bindings as durable source references and target types, but does not yet provide a general source-to-target coercion mechanism.
 
 - Activity output capture currently requires the output definition type and target workflow-variable type to match exactly in [`RuntimeOutputCaptureCompiler`](../../src/Elsa/Workflows/Publishing/Api/Services/RuntimeOutputCaptureCompiler.cs).
-- Direct activity-result and variable bindings retype the value envelope but preserve the underlying payload representation in [`RuntimeActivityInputMaterializer`](../../src/Elsa/Workflows/Runtime/Services/RuntimeActivityInputMaterializer.cs).
+- Direct activity-result and variable bindings retype the value envelope but preserve the underlying payload representation in [`RuntimeActivityInputMaterializer`](../../src/Elsa/Workflows/Runtime/Services/Values/RuntimeActivityInputMaterializer.cs).
 - Expression result coercion handles some `JsonElement`-to-target cases, but a formatted JSON string is not automatically parsed before it reaches a target.
 - Dynamic `Any` values have an established canonical JSON representation and expression-engine boundary through [ADR 0036](../adr/0036-dynamic-any-expression-values-materialize-as-jsonnode-with-per-engine-adapters.md).
 
