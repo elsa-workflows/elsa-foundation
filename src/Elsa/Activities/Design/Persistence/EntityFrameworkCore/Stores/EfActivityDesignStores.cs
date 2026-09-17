@@ -1260,6 +1260,14 @@ public sealed class EfActivityDesignStores(
 
     private static string NormalizeTenantKey(string? tenantId) => ActivitiesDesignDbContext.NormalizeTenantKey(tenantId);
 
+    /// <summary>
+    /// Orders a bounded probe, such as <c>Take(2)</c> to detect a duplicate, by the physical key. Without an order
+    /// the provider chooses which rows a row limit returns, and EF reports the query as warning 10102.
+    /// </summary>
+    internal static IOrderedQueryable<T> InPhysicalIdentityOrder<T>(IQueryable<T> query) where T : class =>
+        query.OrderBy(x => EF.Property<string>(x, "TenantScopeKey"))
+            .ThenBy(x => EF.Property<string>(x, "IdIdentityHash"));
+
     // A provider collation may consider distinct raw IDs equal. The physical hash-backed key
     // finishes every paged order so offset and keyset boundaries remain total on all providers.
     private static IOrderedQueryable<T> WithPhysicalIdentityTie<T>(IOrderedQueryable<T> ordered) where T : class =>

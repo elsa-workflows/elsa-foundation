@@ -96,6 +96,20 @@ public sealed class DiagnosticsDrainLifecycleTests : DiagnosticsDrainTestBase
     }
 
     [Fact]
+    public void Writes_before_start_are_counted_once_each_and_writes_after_start_are_not()
+    {
+        var counters = new DiagnosticsPersistenceCounters();
+        var drain = Fixture.Create(new DiagnosticsFailureTarget(), counters);
+
+        Assert.True(drain.RecordWriteBeforeStart());
+        Assert.True(drain.RecordWriteBeforeStart());
+        drain.Start();
+        Assert.False(drain.RecordWriteBeforeStart());
+
+        Assert.Equal(2, counters.Snapshot().Losses[DiagnosticsPersistenceLossReason.WriteBeforeStart]);
+    }
+
+    [Fact]
     public async Task Async_disposal_gracefully_drains_and_is_idempotent()
     {
         var target = new DiagnosticsFailureTarget();
