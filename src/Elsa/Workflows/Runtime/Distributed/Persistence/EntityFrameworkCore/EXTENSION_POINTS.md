@@ -31,8 +31,15 @@ operation identity. Missing scope, invalid input, and cancellation are rejected 
 The selected placement backend captures its exact service descriptor and revalidates exclusive
 ownership through options startup validation, catching host registrations added after feature setup.
 
-Schema creation is deliberately test-owned (`EnsureCreated`); this slice adds no migration or
-default-flip artifacts.
+## Schema and migrations
+
+Each context ships its own migrations for SQLite, SQL Server, PostgreSQL, and MySQL under
+`Migrations/ExecutionPlacement/` and `Migrations/ExecutionCommandTransport/`, recorded in a
+per-module history table (`ExecutionPlacementEfModule.HistoryTableName` and
+`ExecutionCommandTransportEfModule.HistoryTableName`, both `__EFMigrationsHistory_<Module>`). Each
+feature registers its context through `AddEfModuleMigrations<TContext>(Provider)`, so the shared
+`EfModuleMigrator<TContext>` applies or validates that module's migrations in the CShells Prepare
+phase (or as a hosted service in plain hosts), according to the host-wide `EfMigrateOptions.Policy`.
 
 ## D02-D03 command-stream and transport persistence
 
@@ -67,6 +74,6 @@ deterministically ordinal, provider-filtered, and bounded in SQL; pending count 
 rows and comes from the durable head.
 
 The D02-D03 implementation is tracked by [#1720](https://github.com/elsa-workflows/elsa-foundation/issues/1720).
-Its SQLite behavior suite and SQL Server/PostgreSQL/MySQL live smoke suite are the executable proof;
-provider-specific migrations, default flips, and broad host journeys remain
-deferred by that task.
+Its SQLite behavior suite and SQL Server/PostgreSQL/MySQL live smoke suite are the executable proof.
+Provider-specific migrations were added by #1755 (see "Schema and migrations" above); default flips
+and broad host journeys remain deferred.

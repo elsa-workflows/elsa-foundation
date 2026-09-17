@@ -56,8 +56,8 @@ proof are active under #1681.
 ## Current Roadmap Notes
 
 - Backend-first in `elsa-foundation`; studio panels follow in a separate `elsa-foundation-studio` session that consumes the backend hubs/endpoints.
-- Structured Logs has a Groundwork diagnostic-record adapter and OpenTelemetry has existing EF/Groundwork
-  evidence. Their all-EF replacement and four-provider proof now belong to #1681 under
+- Structured Logs and OpenTelemetry persist through EF Core (#1696 and #1701, default since #1763);
+  the former Groundwork adapters were deleted by #1764 under
   [EF Core Persistence](ef-core-persistence.md).
 - Studio UX consolidates observability into the bottom panel (tabs) rather than separate nav pages.
 - **Live transport decision (Structured Logs, spec 073):** Server-Sent Events (SSE), not SignalR — the workload is one-way server→client browser streaming, SSE adds no dependency (no `@microsoft/signalr`, no shared-framework hub), and native `EventSource` gives auto-reconnect + `Last-Event-ID` resume. The Console tab keeps its third-party SignalR transport for now; unifying it onto SSE is objective 7. OTEL's transport is decided per-slice (SSE preferred for consistency).
