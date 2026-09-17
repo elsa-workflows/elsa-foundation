@@ -279,6 +279,53 @@ public sealed class RuntimePostCommitOutboxProcessorTests
 
     private sealed class ExpectedDeferralException() : Exception("waiting"), IRuntimePostCommitDeferral;
 
+    /// <summary>
+    /// A permanent failure ends delivery under a retry-until-acknowledged policy too, so it is logged as final like any
+    /// other final failure, never as a deferred retry that will not happen.
+    /// </summary>
+    [Fact]
+    public async Task Processor_LogsAPermanentFailureUnderRetryUntilAcknowledgedAsFinal()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        var logger = new RecordingLogger<RuntimePostCommitOutboxProcessor>();
+        var failure = new RuntimePostCommitDeliveryException(
+            PostCommitFailureKind.Permanent,
+            "parent-resume-refused",
+            "The parent workflow could not be resumed.",
+            new InvalidOperationException("provider-secret stack-secret"));
+        var processor = new RuntimePostCommitOutboxProcessor(
+            store,
+            new RecordingDispatcher(failOnIntentId: "intent-resume", failure: failure),
+            new FakeTimeProvider(_now),
+            DefaultRuntimeFaultCapturePolicy.CreateDefault(),
+            workflowDispatchStore: null,
+            logger);
+        await store.AddPendingForTestingAsync(NewOutboxItem(
+            "outbox-resume",
+            "intent-resume",
+            "wfexec-1",
+            retryPolicy: RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(15)),
+            kind: "Elsa.Activities.DispatchWorkflow.ResumeParent"));
+
+        var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10));
+
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, Assert.Single(result.Items).RequestedDeliveryResultStatus);
+        Assert.Collection(
+            logger.Entries,
+            attempt =>
+            {
+                Assert.Equal(new EventId(68101, "RuntimePostCommitDeliveryAttemptFailed"), attempt.EventId);
+                AssertCarriesFailure(attempt, failure);
+            },
+            final =>
+            {
+                Assert.Equal(new EventId(68103, "RuntimePostCommitDeliveryFailedFinal"), final.EventId);
+                Assert.Equal(nameof(PostCommitFailureKind.Permanent), final.Fields["FailureKind"]);
+                Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, final.Fields["EffectiveStatus"]);
+                AssertCarriesFailure(final, failure);
+            });
+    }
+
     [Fact]
     public async Task Processor_UnsupportedKindUsesExistingPolicySelectedFinalFailurePath()
     {

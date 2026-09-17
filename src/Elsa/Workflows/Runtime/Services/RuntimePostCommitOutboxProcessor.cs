@@ -377,7 +377,9 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         RuntimePostCommitOutboxStatus effectiveStatus,
         DateTimeOffset recordedAt)
     {
-        if (item.RetryPolicy.RetryUntilAcknowledged)
+        // Under retry-until-acknowledged a retryable failure is deferred, not scheduled. A permanent failure still ends
+        // delivery, so it is logged as final like any other.
+        if (item.RetryPolicy.RetryUntilAcknowledged && effectiveStatus == RuntimePostCommitOutboxStatus.FailedRetryable)
         {
             LogRetryUntilAcknowledged(item, exception, recordedAt);
             return;
