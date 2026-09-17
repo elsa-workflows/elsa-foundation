@@ -54,7 +54,8 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
         var store = new CoalescingRuntimePostCommitOutboxStore(
             new CoalescingInner<IRuntimePostCommitOutboxStore>(inner),
-            accessor);
+            accessor,
+            new InMemoryWorkflowExecutionStateStore());
         var session = new RuntimeCoalescingSession(
             "parent-dispatch",
             new InMemoryWorkflowSchedulerWorkQueue(),

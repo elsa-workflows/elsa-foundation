@@ -359,6 +359,17 @@ public enum RuntimePostCommitOutboxClaimCompletionOutcome
     DeliveredOnChildEvidence
 }
 
+/// <summary>
+/// What one <see cref="RuntimePostCommitOutboxClaimCompletion"/> persists, decided by
+/// <see cref="RuntimePostCommitOutboxClaimTransitions.ResolveCompletion"/>: the completed claimed item, the dispatch record and
+/// follow-up item to write, if any, and the outcome to report.
+/// </summary>
+public sealed record RuntimePostCommitOutboxClaimCompletionResolution(
+    RuntimePostCommitOutboxItem OutboxItem,
+    WorkflowDispatchRecord? WorkflowDispatch,
+    RuntimePostCommitOutboxItem? FollowUpOutboxItem,
+    RuntimePostCommitOutboxClaimCompletionOutcome Outcome);
+
 /// <summary>Provider-neutral DispatchWorkflow final-failure projection produced before fenced completion.</summary>
 public sealed class PostCommitFailureProjection
 {
@@ -496,6 +507,61 @@ public static class RuntimePostCommitOutboxClaimTransitions
             current.DeliveryFencingToken,
             deliveryVisibleAfter: null,
             current.Metadata);
+    }
+
+    /// <summary>
+    /// Decides what completing <paramref name="completion"/> persists. Every claim-completion store, and a coalescing session
+    /// that owns the claim, calls this inside its own atomic boundary with the claimed item it holds and, when the completion
+    /// projects a dispatch failure, the dispatch it holds and the child execution state it reads. Durable evidence that the
+    /// child exists outranks a final start failure (<see cref="WorkflowDispatchLifecycle.ResolveSuccessfulChildDelivery"/>):
+    /// the start is persisted as delivered, and the projection and its follow-up are discarded.
+    /// </summary>
+    public static RuntimePostCommitOutboxClaimCompletionResolution ResolveCompletion(
+        RuntimePostCommitOutboxClaimCompletion completion,
+        RuntimePostCommitOutboxItem current,
+        WorkflowDispatchRecord? currentDispatch,
+        WorkflowExecutionState? childExecution)
+    {
+        ArgumentNullException.ThrowIfNull(completion);
+        ArgumentNullException.ThrowIfNull(current);
+
+        // Validate the claim and its fence before lifecycle precedence. A stale claimant cannot turn a newer generation into
+        // an acknowledgement merely because the deterministic child is now visible.
+        var completed = Complete(current, completion.Claim, completion.DeliveryResult);
+        if (completion.WorkflowDispatch is not { } projectedDispatch)
+            return new(completed, null, null, RuntimePostCommitOutboxClaimCompletionOutcome.Persisted);
+        if (currentDispatch is null || !StringComparer.Ordinal.Equals(currentDispatch.DispatchId, projectedDispatch.DispatchId))
+            throw new InvalidOperationException($"Workflow dispatch '{projectedDispatch.DispatchId}' is required to complete its claimed start.");
+
+        if (WorkflowDispatchLifecycle.ResolveSuccessfulChildDelivery(
+                currentDispatch,
+                childExecution,
+                completion.DeliveryResult.RecordedAt) is { } childEvidence)
+        {
+            var delivered = Complete(
+                current,
+                completion.Claim,
+                new RuntimePostCommitOutboxDeliveryResult(
+                    completion.Claim.OutboxItemId,
+                    RuntimePostCommitOutboxStatus.Delivered,
+                    completion.DeliveryResult.RecordedAt));
+            return new(delivered, childEvidence, null, RuntimePostCommitOutboxClaimCompletionOutcome.DeliveredOnChildEvidence);
+        }
+
+        WorkflowDispatchLifecycle.ValidateTransition(currentDispatch, projectedDispatch);
+        if (completed.Status != RuntimePostCommitOutboxStatus.FailedFinal ||
+            projectedDispatch.Status != WorkflowDispatchStatus.DispatchFailed)
+        {
+            throw new InvalidOperationException(
+                "An atomic workflow-dispatch projection is valid only for a final outbox failure and DispatchFailed lifecycle state.");
+        }
+        if (completion.FollowUpOutboxItem is { } followUp &&
+            StringComparer.Ordinal.Equals(followUp.OutboxItemId, completion.Claim.OutboxItemId))
+        {
+            throw new InvalidOperationException("A post-commit follow-up cannot replace the claimed outbox item.");
+        }
+
+        return new(completed, projectedDispatch, completion.FollowUpOutboxItem, RuntimePostCommitOutboxClaimCompletionOutcome.Persisted);
     }
 
     /// <summary>Reopens the same terminal delivery responsibility while advancing its fence.</summary>

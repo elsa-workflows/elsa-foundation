@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Core.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Alterations;
 using Xunit;
 using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.RuntimeCheckpointCommitContract;
@@ -64,24 +65,25 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
         Assert.Equal(WorkflowDispatchStatus.Completed, (await backend.Dispatches.FindAsync(pending.DispatchId))!.Status);
     }
 
-    public static TheoryData<string, bool> StoreAndChildData()
+    public static TheoryData<string, bool, bool> ClaimCompletionData()
     {
-        var data = new TheoryData<string, bool>();
+        var data = new TheoryData<string, bool, bool>();
         foreach (var store in RuntimeCheckpointCommitContract.Stores)
-        {
-            data.Add(store, true);
-            data.Add(store, false);
-        }
+        foreach (var coalesced in (bool[])[false, true])
+        foreach (var childExists in (bool[])[true, false])
+            data.Add(store, coalesced, childExists);
         return data;
     }
 
     /// <summary>
-    /// #1780: completing a final child-start failure reports what the store persisted. A child that exists makes the start
+    /// #1780: completing a final child-start failure reports what was persisted. A child that exists makes the start
     /// delivered and discards the DispatchFailed projection and its parent resume; without one, all three are persisted.
+    /// Every store applies one shared rule, and so does a coalescing session that owns the claim, which persists into its
+    /// overlay; without a session the coalescing decorator passes straight through to the store.
     /// </summary>
     [Theory]
-    [MemberData(nameof(StoreAndChildData))]
-    public async Task Completing_a_final_child_start_failure_reports_the_outcome_it_persisted(string store, bool childExists)
+    [MemberData(nameof(ClaimCompletionData))]
+    public async Task Completing_a_final_child_start_failure_reports_the_outcome_it_persisted(string store, bool coalesced, bool childExists)
     {
         await using var backend = await RuntimeCheckpointCommitContractBackend.CreateAsync(store);
         var pending = PendingDispatch("workflow-parent", "activity-waited", mode: WorkflowDispatchMode.WaitForCompletion);
@@ -103,7 +105,7 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
                 new RuntimeCheckpointStateChangeSet(Change(child.WorkflowExecutionId, child), null, [], [], [], [], [])));
         }
         var identity = new WorkflowDispatchIdentity(pending.ParentWorkflowExecutionId, pending.ParentActivityExecutionId);
-        await backend.SeedPendingOutboxItemAsync(new RuntimePostCommitOutboxItem(
+        var start = new RuntimePostCommitOutboxItem(
             "outbox-child-start",
             new RuntimePostCommitIntent(
                 identity.StartIntentId,
@@ -116,14 +118,31 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
                 new Dictionary<string, string> { [RuntimeMetadataKeys.DispatchId] = pending.DispatchId }),
             RuntimePostCommitOutboxStatus.Pending,
             OccurredAt,
-            OccurredAt));
-        var claim = Assert.Single(await backend.Claims.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
-            "owner-contract", OccurredAt.AddSeconds(2), TimeSpan.FromMinutes(1), 1)));
+            OccurredAt);
+        var sessions = new AsyncLocalRuntimeCoalescingSessionAccessor();
+        var outbox = new CoalescingRuntimePostCommitOutboxStore(
+            new CoalescingInner<IRuntimePostCommitOutboxStore>(backend.Delivery),
+            sessions,
+            backend.Executions);
+        RuntimeCoalescingSession? session = null;
+        if (coalesced)
+        {
+            // Seeded straight into the overlay: a segment never defers a dispatch, but a session must apply the rule to any
+            // claim it owns.
+            session = new RuntimeCoalescingSession(pending.ParentWorkflowExecutionId, backend.Queue, new CoalescingRuntimeCheckpointPersistenceOptions(), backend.Delivery);
+            session.RecordCapFlushState(new RuntimeCheckpointStateChangeSet(
+                null, null, [], [], [], [], [], [DispatchChange(started)], postCommitOutbox: [Change(start.OutboxItemId, start)]));
+        }
+        else
+            await backend.SeedPendingOutboxItemAsync(start);
+        using var sessionScope = sessions.Push(session);
+        var claim = Assert.Single(await outbox.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+            "owner-contract", OccurredAt.AddSeconds(2), TimeSpan.FromMinutes(1), 1, pending.ParentWorkflowExecutionId)));
         var result = new RuntimePostCommitOutboxDeliveryResult(claim.OutboxItemId, RuntimePostCommitOutboxStatus.FailedFinal, OccurredAt.AddSeconds(3), "The child workflow could not be started.");
         var projection = await new WorkflowDispatchDeliveryFailureProjector(backend.Dispatches).ProjectAsync(claim.Item, result);
         var followUp = Assert.IsType<RuntimePostCommitOutboxItem>(projection?.FollowUpOutboxItem);
 
-        var outcome = await ((IRuntimePostCommitOutboxClaimCompletionStore)backend.Claims).CompleteClaimAsync(
+        var outcome = await outbox.CompleteClaimAsync(
             new RuntimePostCommitOutboxClaimCompletion(claim, result, projection!.WorkflowDispatch, followUp));
 
         Assert.Equal(
@@ -131,11 +150,13 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
             outcome);
         Assert.Equal(
             childExists ? RuntimePostCommitOutboxStatus.Delivered : RuntimePostCommitOutboxStatus.FailedFinal,
-            (await backend.Outbox.FindAsync(claim.OutboxItemId))?.Status);
-        Assert.Equal(
-            childExists ? WorkflowDispatchStatus.Started : WorkflowDispatchStatus.DispatchFailed,
-            (await backend.Dispatches.FindAsync(pending.DispatchId))?.Status);
-        Assert.Equal(childExists, await backend.Outbox.FindAsync(followUp.OutboxItemId) is null);
+            (await outbox.FindAsync(claim.OutboxItemId))?.Status);
+        // A session writes its dispatch at its next flush, so read what that flush would persist.
+        var dispatch = session is null
+            ? await backend.Dispatches.FindAsync(pending.DispatchId)
+            : Assert.Single(session.FoldBufferedStateChanges().WorkflowDispatches).State;
+        Assert.Equal(childExists ? WorkflowDispatchStatus.Started : WorkflowDispatchStatus.DispatchFailed, dispatch?.Status);
+        Assert.Equal(childExists, await outbox.FindAsync(followUp.OutboxItemId) is null);
     }
 
     /// <summary>
