@@ -78,9 +78,55 @@ public sealed class ClaimsPermissionEvaluatorTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => targetEvaluator.EvaluateAsync(Context("admin", "read")).AsTask());
     }
 
+    [Fact]
+    public async Task BuildsTheCatalogIndexOnceAcrossEvaluations()
+    {
+        // An endpoint that authorizes each row of a page evaluates twice per row against one scoped evaluator, so a
+        // per-evaluation rebuild put a full catalog walk on the per-row path.
+        var catalog = new CountingPermissionCatalog(
+        [
+            new("admin", "Admin", "Test", "Admin.", new HashSet<string> { "READ" }),
+            new("read", "Read", "Test", "Read.")
+        ]);
+        var evaluator = new ClaimsPermissionEvaluator(catalog);
+
+        var first = await evaluator.EvaluateAsync(Context("ADMIN", "read"));
+        var second = await evaluator.EvaluateAsync(Context("ADMIN", "read"));
+        var third = await evaluator.EvaluateAsync(Context("read", "admin"));
+
+        Assert.True(first.Succeeded);
+        Assert.True(second.Succeeded);
+        Assert.False(third.Succeeded);
+        Assert.Equal(1, catalog.ListCalls);
+    }
+
+    [Fact]
+    public async Task KeepsThrowingForAMalformedCatalogOnEveryEvaluation()
+    {
+        // A failed build must not be cached as a success, and must not be swallowed on the second call.
+        var evaluator = new ClaimsPermissionEvaluator(new TestPermissionCatalog(
+        [new("*", "Wildcard", "Test", "Invalid definition.")]));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => evaluator.EvaluateAsync(Context("admin", "read")).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => evaluator.EvaluateAsync(Context("admin", "read")).AsTask());
+    }
+
     private static PermissionEvaluationContext Context(string granted, string requested) =>
         new(new ClaimsPrincipal(new ClaimsIdentity(
         [new Claim(IdentityClaimTypes.Permission, granted)], "test")), requested);
+
+    private sealed class CountingPermissionCatalog(IReadOnlyCollection<Permission> permissions) : IPermissionCatalog
+    {
+        public int ListCalls { get; private set; }
+
+        public IReadOnlyCollection<Permission> List()
+        {
+            ListCalls++;
+            return permissions;
+        }
+
+        public Permission? Find(string key) => permissions.FirstOrDefault(permission => permission.Key == key);
+    }
 
     private sealed class TestPermissionCatalog(IReadOnlyCollection<Permission> permissions) : IPermissionCatalog
     {
