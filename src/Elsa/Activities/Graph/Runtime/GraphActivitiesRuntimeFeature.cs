@@ -24,10 +24,8 @@ public sealed class GraphActivitiesRuntimeFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IActivityActivationStrategy, GraphActivityActivationStrategy>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability>(
-            new RuntimeActivityConsumerCapability(
-                WellKnownRuntimeActivityConsumers.GraphActivity,
-                [RuntimeActivityDescriptor.InitialSchemaVersion])));
+        // Distinct type per capability -- see ClrActivityConsumerCapability's remarks.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability, GraphActivityConsumerCapability>());
         services.AddSingleton<GraphActivityScopeFactory>();
         services.AddSingleton<GraphActivityRecovery>();
     }
