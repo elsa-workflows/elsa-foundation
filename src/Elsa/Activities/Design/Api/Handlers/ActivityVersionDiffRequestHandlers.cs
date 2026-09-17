@@ -34,15 +34,12 @@ public sealed class ActivityVersionDiffService(
         if (!StringComparer.Ordinal.Equals(from.DefinitionId, to.DefinitionId))
             throw BadRequest("Activity versions from different definitions cannot be compared.");
 
-        var fromDependenciesTask = ReadDependenciesAsync(from, cancellationToken);
-        var toDependenciesTask = ReadDependenciesAsync(to, cancellationToken);
-        var fromLayoutTask = layoutStore.FindVersionLayoutAsync(from.DefinitionVersionId, cancellationToken);
-        var toLayoutTask = layoutStore.FindVersionLayoutAsync(to.DefinitionVersionId, cancellationToken);
-        await Task.WhenAll(fromDependenciesTask, toDependenciesTask, fromLayoutTask, toLayoutTask);
-        var fromDependencies = await fromDependenciesTask;
-        var toDependencies = await toDependenciesTask;
-        var fromLayout = await fromLayoutTask;
-        var toLayout = await toLayoutTask;
+        // The dependency and layout stores share the request's scoped persistence context, so these four reads are
+        // awaited one at a time. Starting them together issues concurrent operations on that single context.
+        var fromDependencies = await ReadDependenciesAsync(from, cancellationToken);
+        var toDependencies = await ReadDependenciesAsync(to, cancellationToken);
+        var fromLayout = await layoutStore.FindVersionLayoutAsync(from.DefinitionVersionId, cancellationToken);
+        var toLayout = await layoutStore.FindVersionLayoutAsync(to.DefinitionVersionId, cancellationToken);
 
         var result = await differ.DiffAsync(new(
             VersionIdentity(from),

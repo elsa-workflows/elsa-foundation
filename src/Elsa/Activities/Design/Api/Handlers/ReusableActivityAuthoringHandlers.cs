@@ -386,11 +386,12 @@ public sealed class ReusableActivityAuthoringService(
         var draft = await draftStore.FindAsync(draftId, cancellationToken);
         if (draft is null || !IsVisible(draft.TenantId))
             throw NotFound("activity.draft.not-found", "Activity draft not found", "The requested activity draft was not found.");
-        var layoutTask = layoutStore.FindDraftLayoutAsync(draftId, cancellationToken);
-        var validationTask = validationStore.FindAsync(draftId, draft.Revision, cancellationToken);
-        await Task.WhenAll(layoutTask, validationTask);
-        var layout = await layoutTask ?? throw OperationFailed("The draft layout is unavailable.");
-        return await ToDraftViewAsync(draft, layout.Records.ToArray(), await validationTask, cancellationToken);
+        // The layout and validation stores share the request's scoped persistence context, so these reads are awaited
+        // one at a time rather than started together.
+        var layout = await layoutStore.FindDraftLayoutAsync(draftId, cancellationToken)
+            ?? throw OperationFailed("The draft layout is unavailable.");
+        var validation = await validationStore.FindAsync(draftId, draft.Revision, cancellationToken);
+        return await ToDraftViewAsync(draft, layout.Records.ToArray(), validation, cancellationToken);
     }
 
     public async Task<ReusableActivityVersionView> GetVersionAsync(string versionId, CancellationToken cancellationToken)
