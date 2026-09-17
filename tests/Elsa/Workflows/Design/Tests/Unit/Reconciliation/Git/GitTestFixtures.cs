@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Elsa.Git;
 using Elsa.Serialization.Core;
@@ -90,6 +91,21 @@ public abstract class GitIntegrationTest : IDisposable
 
 internal static class GitTestSupport
 {
+    /// <summary>
+    /// Isolates every git process this test assembly starts from the developer's global and system git config. A global
+    /// <c>commit.gpgsign = true</c> would otherwise make each test commit ask a GPG agent to sign, which launches pinentry
+    /// and fails whenever the agent is locked. No test relies on that config: the harness and the exporter set their
+    /// commit identity explicitly. Git child processes inherit the variables, because <see cref="GitClient"/> builds its
+    /// start info from the current environment.
+    /// </summary>
+    [ModuleInitializer]
+    internal static void IsolateFromDeveloperGitConfig()
+    {
+        // Git for Windows maps /dev/null to nul, so the same value isolates the global config on every platform.
+        Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", "/dev/null");
+        Environment.SetEnvironmentVariable("GIT_CONFIG_NOSYSTEM", "1");
+    }
+
     public static IGitClient NewGitClient() => new GitClient("git", NullLogger<GitClient>.Instance);
 
     public static IOptions<GitReconciliationOptions> Options(GitReconciliationOptions options) =>
