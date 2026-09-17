@@ -130,7 +130,13 @@ public sealed class WorkflowArtifactReconciler(
                 var readError = file.ReadError;
                 if (readError is not null || file.Closure is null)
                 {
-                    var diagnostic = readError?.Message ?? $"workflow artifact closure at '{file.Origin}' was empty.";
+                    // Include the inner cause. The wrapper's own message says only "the file is not a valid
+                    // closure envelope", which reads as a malformed file when the real cause is usually a
+                    // specific value that could not be converted — and this diagnostic is what the startup
+                    // task logs and what the rejection record carries, so dropping it here loses it for good.
+                    var diagnostic = readError is null
+                        ? $"workflow artifact closure at '{file.Origin}' was empty."
+                        : Describe(readError);
                     entries.Add(WorkflowArtifactImportEntry.Rejected(
                         file.Origin,
                         source.SourceId,
@@ -516,6 +522,15 @@ public sealed class WorkflowArtifactReconciler(
         // activation, so a dependent that dispatches into it is not dispatching into nothing.
         return ForeignOwnerEntry(decision, file, source, identity, ownership);
     }
+
+    /// <summary>
+    /// Flattens an <see cref="InvalidWorkflowArtifactClosureException"/> and its cause into one diagnostic line.
+    /// The wrapper names the file and the stage; the inner exception names what actually failed.
+    /// </summary>
+    private static string Describe(InvalidWorkflowArtifactClosureException readError) =>
+        readError.InnerException is null
+            ? readError.Message
+            : $"{readError.Message} {readError.InnerException.Message}";
 
     private static bool IsSameArtifactActivation(
         WorkflowExecutableSourceReference? active,
