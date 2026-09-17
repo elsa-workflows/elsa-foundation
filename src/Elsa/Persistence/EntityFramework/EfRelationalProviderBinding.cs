@@ -11,52 +11,77 @@ namespace Elsa.Persistence.EntityFramework;
 /// </summary>
 public static class EfRelationalProviderBinding
 {
+    /// <summary>
+    /// One provider's reflection target: the extension type that carries the <c>Use*</c> overload, the overload's
+    /// name, and the NuGet package a host adds to supply both. For all four default packs the engine assembly is
+    /// named after its package, so <see cref="PackageId"/> also names the assembly to load. Binding and validation
+    /// resolve through the same descriptor, so a validated provider is one that will configure.
+    /// </summary>
+    private sealed record ProviderEngine(string ExtensionTypeName, string MethodName, string PackageId)
+    {
+        public string AssemblyQualifiedTypeName => $"{ExtensionTypeName}, {PackageId}";
+    }
+
+    private static readonly ProviderEngine SqliteEngine = new(
+        "Microsoft.EntityFrameworkCore.SqliteDbContextOptionsBuilderExtensions",
+        "UseSqlite",
+        "Microsoft.EntityFrameworkCore.Sqlite");
+
+    private static readonly ProviderEngine SqlServerEngine = new(
+        "Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions",
+        "UseSqlServer",
+        "Microsoft.EntityFrameworkCore.SqlServer");
+
+    private static readonly ProviderEngine PostgreSqlEngine = new(
+        "Microsoft.EntityFrameworkCore.NpgsqlDbContextOptionsBuilderExtensions",
+        "UseNpgsql",
+        "Npgsql.EntityFrameworkCore.PostgreSQL");
+
+    private static readonly ProviderEngine MySqlEngine = new(
+        "Microsoft.EntityFrameworkCore.MySQLDbContextOptionsExtensions",
+        "UseMySQL",
+        "MySql.EntityFrameworkCore");
+
     public static void UseSqlite(DbContextOptionsBuilder builder, string connectionString, string historyTableName, string? migrationsAssembly = null) =>
-        Use(
-            builder,
-            "Microsoft.EntityFrameworkCore.SqliteDbContextOptionsBuilderExtensions, Microsoft.EntityFrameworkCore.Sqlite",
-            "UseSqlite",
-            connectionString,
-            historyTableName,
-            migrationsAssembly);
+        Use(builder, SqliteEngine, connectionString, historyTableName, migrationsAssembly);
 
     public static void UseSqlServer(DbContextOptionsBuilder builder, string connectionString, string historyTableName, string? migrationsAssembly = null) =>
-        Use(
-            builder,
-            "Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions, Microsoft.EntityFrameworkCore.SqlServer",
-            "UseSqlServer",
-            connectionString,
-            historyTableName,
-            migrationsAssembly);
+        Use(builder, SqlServerEngine, connectionString, historyTableName, migrationsAssembly);
 
     public static void UseNpgsql(DbContextOptionsBuilder builder, string connectionString, string historyTableName, string? migrationsAssembly = null) =>
-        Use(
-            builder,
-            "Microsoft.EntityFrameworkCore.NpgsqlDbContextOptionsBuilderExtensions, Npgsql.EntityFrameworkCore.PostgreSQL",
-            "UseNpgsql",
-            connectionString,
-            historyTableName,
-            migrationsAssembly);
+        Use(builder, PostgreSqlEngine, connectionString, historyTableName, migrationsAssembly);
 
     public static void UseMySql(DbContextOptionsBuilder builder, string connectionString, string historyTableName, string? migrationsAssembly = null) =>
-        Use(
-            builder,
-            "Microsoft.EntityFrameworkCore.MySQLDbContextOptionsExtensions, MySql.EntityFrameworkCore",
-            "UseMySQL",
-            connectionString,
-            historyTableName,
-            migrationsAssembly);
+        Use(builder, MySqlEngine, connectionString, historyTableName, migrationsAssembly);
 
     public static void Use(DbContextOptionsBuilder builder, string provider, string connectionString, string historyTableName, string? migrationsAssembly = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrWhiteSpace(provider);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         ArgumentException.ThrowIfNullOrWhiteSpace(historyTableName);
+        Use(builder, EngineFor(provider), connectionString, historyTableName, migrationsAssembly);
+    }
 
-        var use = Select<Action<DbContextOptionsBuilder, string, string, string?>>(
-            provider, "relational", UseSqlite, UseSqlServer, UseNpgsql, UseMySql);
-        use(builder, connectionString, historyTableName, migrationsAssembly);
+    /// <summary>
+    /// Resolves what <see cref="Use(DbContextOptionsBuilder,string,string,string,string?)"/> would reflect over for
+    /// <paramref name="provider"/> — the engine assembly, its <c>Use*</c> overload, and the two relational options
+    /// methods the binding calls — without configuring a context or opening a connection. Returns <c>null</c> when
+    /// the provider binds, and otherwise a message naming the missing assembly or method and the package to add.
+    /// </summary>
+    public static string? DescribeBindingFailure(string provider)
+    {
+        try
+        {
+            var method = ResolveExtensionMethod(EngineFor(provider));
+            var optionsBuilderType = method.GetParameters()[2].ParameterType.GenericTypeArguments[0];
+            ResolveMigrationsHistoryTable(optionsBuilderType);
+            ResolveMigrationsAssembly(optionsBuilderType);
+            return null;
+        }
+        catch (Exception failure) when (failure is InvalidOperationException or ArgumentException)
+        {
+            return failure.Message;
+        }
     }
 
     /// <summary>
@@ -95,34 +120,43 @@ public static class EfRelationalProviderBinding
     public static string ExpectedProviderName(string provider) =>
         Select(provider, "relational", EfProviderNames.Sqlite, EfProviderNames.SqlServer, EfProviderNames.PostgreSql, EfProviderNames.MySql);
 
+    /// <summary>The NuGet package a host must reference for <paramref name="provider"/> to bind.</summary>
+    public static string ProviderPackageId(string provider) => EngineFor(provider).PackageId;
+
+    private static ProviderEngine EngineFor(string provider) =>
+        Select(provider, "relational", SqliteEngine, SqlServerEngine, PostgreSqlEngine, MySqlEngine);
+
     private static void Use(
         DbContextOptionsBuilder builder,
-        string extensionTypeName,
-        string methodName,
+        ProviderEngine engine,
         string connectionString,
         string historyTableName,
         string? migrationsAssembly)
     {
-        var extensionType = Type.GetType(extensionTypeName, throwOnError: false)
-                            ?? FindLoadedType(extensionTypeName)
-                            ?? LoadType(extensionTypeName)
-                            ?? throw ProviderMissing(extensionTypeName, methodName);
-
-        var method = extensionType
-                         .GetMethods(BindingFlags.Public | BindingFlags.Static)
-                         .FirstOrDefault(candidate =>
-                             candidate.Name == methodName &&
-                             candidate.GetParameters() is { Length: 3 } parameters &&
-                             parameters[0].ParameterType == typeof(DbContextOptionsBuilder) &&
-                             parameters[1].ParameterType == typeof(string) &&
-                             parameters[2].ParameterType.IsGenericType &&
-                             parameters[2].ParameterType.GetGenericTypeDefinition() == typeof(Action<>))
-                     ?? throw ProviderMissing(extensionTypeName, methodName);
-
+        var method = ResolveExtensionMethod(engine);
         var actionType = method.GetParameters()[2].ParameterType;
         var optionsBuilderType = actionType.GenericTypeArguments[0];
         var configure = BuildRelationalConfigure(actionType, optionsBuilderType, historyTableName, migrationsAssembly);
         method.Invoke(null, [builder, connectionString, configure]);
+    }
+
+    private static MethodInfo ResolveExtensionMethod(ProviderEngine engine)
+    {
+        var extensionType = Type.GetType(engine.AssemblyQualifiedTypeName, throwOnError: false)
+                            ?? FindLoadedType(engine)
+                            ?? LoadType(engine)
+                            ?? throw EngineMissing(engine);
+
+        return extensionType
+                   .GetMethods(BindingFlags.Public | BindingFlags.Static)
+                   .FirstOrDefault(candidate =>
+                       candidate.Name == engine.MethodName &&
+                       candidate.GetParameters() is { Length: 3 } parameters &&
+                       parameters[0].ParameterType == typeof(DbContextOptionsBuilder) &&
+                       parameters[1].ParameterType == typeof(string) &&
+                       parameters[2].ParameterType.IsGenericType &&
+                       parameters[2].ParameterType.GetGenericTypeDefinition() == typeof(Action<>))
+               ?? throw ExtensionMethodMissing(engine, extensionType);
     }
 
     private static Delegate BuildRelationalConfigure(
@@ -132,52 +166,52 @@ public static class EfRelationalProviderBinding
         string? migrationsAssembly)
     {
         var parameter = Expression.Parameter(optionsBuilderType, "relational");
-        Expression body = parameter;
-
-        var history = optionsBuilderType
-                          .GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                          .FirstOrDefault(method =>
-                              method.Name == "MigrationsHistoryTable" &&
-                              method.GetParameters() is { Length: 2 } parameters &&
-                              parameters[0].ParameterType == typeof(string) &&
-                              parameters[1].ParameterType == typeof(string))
-                      ?? throw new InvalidOperationException(
-                          $"{optionsBuilderType.FullName} does not expose MigrationsHistoryTable(string, string).");
-        body = Expression.Call(body, history, Expression.Constant(historyTableName), Expression.Constant(null, typeof(string)));
+        Expression body = Expression.Call(
+            parameter,
+            ResolveMigrationsHistoryTable(optionsBuilderType),
+            Expression.Constant(historyTableName),
+            Expression.Constant(null, typeof(string)));
 
         if (!string.IsNullOrWhiteSpace(migrationsAssembly))
-        {
-            var assembly = optionsBuilderType
-                               .GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                               .FirstOrDefault(method =>
-                                   method.Name == "MigrationsAssembly" &&
-                                   method.GetParameters() is { Length: 1 } parameters &&
-                                   parameters[0].ParameterType == typeof(string))
-                           ?? throw new InvalidOperationException(
-                               $"{optionsBuilderType.FullName} does not expose MigrationsAssembly(string).");
-            body = Expression.Call(body, assembly, Expression.Constant(migrationsAssembly));
-        }
+            body = Expression.Call(body, ResolveMigrationsAssembly(optionsBuilderType), Expression.Constant(migrationsAssembly));
 
         return Expression.Lambda(actionType, body, parameter).Compile();
     }
 
-    private static Type? FindLoadedType(string assemblyQualifiedName)
+    private static MethodInfo ResolveMigrationsHistoryTable(Type optionsBuilderType) =>
+        optionsBuilderType
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(method =>
+                method.Name == "MigrationsHistoryTable" &&
+                method.GetParameters() is { Length: 2 } parameters &&
+                parameters[0].ParameterType == typeof(string) &&
+                parameters[1].ParameterType == typeof(string))
+        ?? throw new InvalidOperationException(
+            $"{optionsBuilderType.FullName} does not expose MigrationsHistoryTable(string, string).");
+
+    private static MethodInfo ResolveMigrationsAssembly(Type optionsBuilderType) =>
+        optionsBuilderType
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(method =>
+                method.Name == "MigrationsAssembly" &&
+                method.GetParameters() is { Length: 1 } parameters &&
+                parameters[0].ParameterType == typeof(string))
+        ?? throw new InvalidOperationException(
+            $"{optionsBuilderType.FullName} does not expose MigrationsAssembly(string).");
+
+    private static Type? FindLoadedType(ProviderEngine engine)
     {
-        if (!TrySplitAssemblyQualifiedName(assemblyQualifiedName, out var typeName, out var assemblyName))
-            return null;
         var assembly = AppDomain.CurrentDomain.GetAssemblies()
             .FirstOrDefault(candidate =>
-                string.Equals(candidate.GetName().Name, assemblyName, StringComparison.Ordinal));
-        return assembly?.GetType(typeName, throwOnError: false);
+                string.Equals(candidate.GetName().Name, engine.PackageId, StringComparison.Ordinal));
+        return assembly?.GetType(engine.ExtensionTypeName, throwOnError: false);
     }
 
-    private static Type? LoadType(string assemblyQualifiedName)
+    private static Type? LoadType(ProviderEngine engine)
     {
-        if (!TrySplitAssemblyQualifiedName(assemblyQualifiedName, out var typeName, out var assemblyName))
-            return null;
         try
         {
-            return Assembly.Load(assemblyName).GetType(typeName, throwOnError: false);
+            return Assembly.Load(engine.PackageId).GetType(engine.ExtensionTypeName, throwOnError: false);
         }
         catch (FileNotFoundException)
         {
@@ -201,24 +235,13 @@ public static class EfRelationalProviderBinding
         }
     }
 
-    private static bool TrySplitAssemblyQualifiedName(string assemblyQualifiedName, out string typeName, out string assemblyName)
-    {
-        var comma = assemblyQualifiedName.LastIndexOf(',');
-        if (comma < 0)
-        {
-            typeName = "";
-            assemblyName = "";
-            return false;
-        }
-
-        typeName = assemblyQualifiedName[..comma].Trim();
-        assemblyName = assemblyQualifiedName[(comma + 1)..].Trim();
-        return typeName.Length > 0 && assemblyName.Length > 0;
-    }
-
-    private static InvalidOperationException ProviderMissing(string extensionTypeName, string methodName) =>
-        new(
-            $"Cannot bind {methodName} because '{extensionTypeName}' is not loaded. " +
-            "The host must PackageReference the matching EF provider engine (Sqlite, SqlServer, Npgsql, or MySql.EntityFrameworkCore). " +
+    private static InvalidOperationException EngineMissing(ProviderEngine engine) =>
+        new($"assembly '{engine.PackageId}' is not loaded, so '{engine.ExtensionTypeName}.{engine.MethodName}' cannot be bound. " +
+            $"Add <PackageReference Include=\"{engine.PackageId}\" /> to the host project. " +
             "The module and policy packages stay provider-free.");
+
+    private static InvalidOperationException ExtensionMethodMissing(ProviderEngine engine, Type extensionType) =>
+        new($"'{extensionType.FullName}' loaded from '{extensionType.Assembly.GetName().Name} {extensionType.Assembly.GetName().Version}' exposes no " +
+            $"{engine.MethodName}(DbContextOptionsBuilder, string, Action<T>) overload. " +
+            $"The referenced {engine.PackageId} version is not the one this Elsa build binds against.");
 }

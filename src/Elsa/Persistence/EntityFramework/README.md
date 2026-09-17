@@ -29,6 +29,7 @@ until its migration slice proves four-provider parity and performs the explicit 
 | `EfModuleBinding` | A module's owner name, history table, migrations assembly and connection defaults; selects its per-dialect registration and binds its context |
 | `EfSharedTransaction` | Own one connection and one transaction for several module contexts that must commit together; refuse split targets and provider mismatches |
 | `EfRelationalExceptionClassifier` | Classify unique-key violations and transient write conflicts by provider error code without referencing provider engines; `IsSaveConflict` recognizes a race SaveChanges reported even when the provider's execution strategy wrapped it in `InvalidOperationException` (SQL Server, PostgreSQL) |
+| `EfProviderBindingValidator` | Fail a host closed at startup, in the CShells `Prepare` phase ahead of every module migrator, when a configured module's provider engine is missing or no longer exposes what the reflection binding calls |
 | `EfWriteRetry` | The one bounded retry loop for compare-and-swap and race-prone store writes: the store supplies budget (`DefaultMaxAttempts` unless pinned), the `EfWriteConflict` kinds or predicate it retries, backoff, and exhaustion outcome; a transient conflict inside a caller's open transaction is rethrown, never retried |
 
 ## Custom migrate loops
@@ -48,3 +49,22 @@ and `dotnet ef migrations has-pending-model-changes` per derived context).
 
 This project has no `PackageReference` to SqlServer, Sqlite, Npgsql, or MySql.EntityFrameworkCore. The host (or a
 design-time tooling project) brings exactly one runtime provider package.
+
+Because the binding is reflective, a missing or mismatched provider package cannot fail at compile time. Two
+guards replace that compile check:
+
+- **At startup.** `AddEfModuleMigrations<TContext>` records the provider each module context is configured for, and
+  `EfProviderBindingValidator` probes every one of them in the CShells `Prepare` phase — before any migrator runs, and
+  as the first hosted service on a plain host. The error names each module, its configured provider, the missing
+  assembly or extension method, and the `PackageReference` to add.
+- **In CI.** [tests/Elsa/Persistence/EntityFramework/BindingDriftTests](../../../../tests/Elsa/Persistence/EntityFramework/BindingDriftTests)
+  references all four engines at the versions `Directory.Packages.props` pins and binds against each, so a provider
+  upgrade that renames, moves, or reshapes a `Use*` extension fails CI rather than a host.
+
+### Why no typed registration helper
+
+ADR 0073's [EF dependency guard](../../../../tests/Elsa/Architecture/EfCoreDependencyGuardTests.cs) admits engine
+packages in `Elsa.Workbench` only, and asserts each admitted module project's EF closure exactly. Adding a typed
+`UseSqlServer` call to a module project would therefore fail the guard as an unexpectedly resolved package, and
+splitting each module into four provider-specific projects would turn thirteen module projects into fifty-two and
+needs its own ADR. Reflection stays the binding; the two guards above cover what a typed call would have caught.

@@ -51,6 +51,8 @@ public static class EfModuleMigrationServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         var migration = new EfModuleMigration<TContext>(EfRelationalProviderBinding.ExpectedProviderName(provider));
+        // Registered first so the validator that reports a missing engine starts ahead of every migrator.
+        services.AddEfProviderBindingValidation<TContext>(provider);
         foreach (var existing in services.Where(descriptor => descriptor.ServiceType == typeof(EfModuleMigration<TContext>)).ToArray())
             services.Remove(existing);
         services.AddSingleton(migration);
