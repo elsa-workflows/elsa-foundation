@@ -167,12 +167,19 @@ public sealed class CompositePermissionCatalog : IPermissionCatalog
 
 public sealed class ClaimsPermissionEvaluator(IPermissionCatalog catalog) : IPermissionEvaluator
 {
+    // The catalog is a singleton whose contributors have all run by the time anything evaluates, so its canonical
+    // index is the same for every evaluation this scoped evaluator serves. Rebuilding it per evaluation put a full
+    // catalog walk, key canonicalization and dictionary allocation on the per-row path of any endpoint that
+    // authorizes each row of a page. A malformed catalog still throws on every evaluation, because a failed build
+    // assigns nothing.
+    private IReadOnlyDictionary<string, Permission>? _catalogIndex;
+
     public ValueTask<PermissionEvaluationResult> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         context.CancellationToken.ThrowIfCancellationRequested();
 
-        var permissions = BuildCatalogIndex();
+        var permissions = _catalogIndex ??= BuildCatalogIndex();
         var granted = context.Principal.Claims
             .Where(x => x.Type == IdentityClaimTypes.Permission)
             .Select(x => x.Value)
