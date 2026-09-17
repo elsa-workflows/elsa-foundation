@@ -2,7 +2,7 @@ using System.Text.Json;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services.Executables;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;

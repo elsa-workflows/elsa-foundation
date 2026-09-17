@@ -5,7 +5,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <summary>Identifies the exact Runtime core factory, not a caller with a similar type name.</summary>
 internal static class RuntimeCoreRegistrationOwnership
 {
-    private const string CoreRegistrationType = "Elsa.Workflows.Runtime.Core.Extensions.RuntimeCoreServiceCollectionExtensions";
+    private const string CoreRegistrationType = "Elsa.Workflows.Runtime.Extensions.RuntimeCoreServiceCollectionExtensions";
 
     public static bool IsCoreFactory(ServiceDescriptor descriptor)
     {

@@ -60,7 +60,7 @@
 - [x] T021 [US1] Carry publication tenant context and project a version-1 runtime input contract from WorkflowDefinitionState while keeping Runtime Design-free in src/Elsa/Workflows/Publishing/Api/Handlers/PublishWorkflowRequestHandler.cs and src/Elsa/Workflows/Publishing/Api/Services/WorkflowExecutableCompiler.cs
 - [x] T022 [US1] Extend the canonical hasher with declared inputs and direct dependency/node bindings while excluding publication facts in src/Elsa/Workflows/Publishing/Api/Services/WorkflowExecutableHasher.cs
 - [x] T023 [US1] Publish/read the Sequential compile event and assemble validated dependencies before final hashing in src/Elsa/Workflows/Publishing/Api/Services/WorkflowExecutableCompiler.cs
-- [x] T024 [US1] Implement reusable shared-TypeReference validation, unknown-alias failure, literal-default materialization, and safe findings in src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowExecutableInputValidator.cs, src/Elsa/Workflows/Runtime/Services/WorkflowExecutableInputValidator.cs, and src/Elsa/Workflows/Runtime/Core/Models/WorkflowExecutableInputValidation.cs
+- [x] T024 [US1] Implement reusable shared-TypeReference validation, unknown-alias failure, literal-default materialization, and safe findings in src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowExecutableInputValidator.cs, src/Elsa/Workflows/Runtime/Services/Executables/WorkflowExecutableInputValidator.cs, and src/Elsa/Workflows/Runtime/Core/Models/WorkflowExecutableInputValidation.cs
 - [x] T025 [US1] Register the default input validator and cover its feature wiring in src/Elsa/Workflows/Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs and tests/Elsa/Workflows/Runtime/Tests/RuntimeCoreCompositionRootTests.cs
 - [x] T026 [US1] Evolve DispatchPinSource into a compilation source that revalidates same-tenant live Published upgraded children, validates literal inputs, and contributes exact dependency/node claims in src/Elsa/Activities/DispatchWorkflow/Design/Services/DispatchPinSource.cs
 - [x] T027 [US1] Register the DispatchWorkflow compilation source and replace the superseded metadata-source registration in src/Elsa/Activities/DispatchWorkflow/Design/DispatchWorkflowDesignFeature.cs
@@ -88,14 +88,14 @@
 
 ### Implementation for User Story 2
 
-- [x] T036 [US2] Authorize retained dependency starts by loading the exact parent edge while preserving ordinary live-reference gates in src/Elsa/Workflows/Runtime/Services/WorkflowStartDispatcher.cs
-- [x] T037 [US2] Evaluate the replacement start policy after authority/input/depth validation and before actor lookup in src/Elsa/Workflows/Runtime/Services/WorkflowStartDispatcher.cs
+- [x] T036 [US2] Authorize retained dependency starts by loading the exact parent edge while preserving ordinary live-reference gates in src/Elsa/Workflows/Runtime/Services/Executions/WorkflowStartDispatcher.cs
+- [x] T037 [US2] Evaluate the replacement start policy after authority/input/depth validation and before actor lookup in src/Elsa/Workflows/Runtime/Services/Executions/WorkflowStartDispatcher.cs
 - [x] T038 [US2] Register the default allow policy and detect replacement conflicts in src/Elsa/Workflows/Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs
 - [x] T039 [US2] Remove historical-child live-reference dependence and send typed retained authority from src/Elsa/Activities/DispatchWorkflow/Runtime/Services/ChildStartExecutor.cs
-- [x] T040 [US2] Add deterministic dependency-closure traversal with missing/cycle/hash failure modes in src/Elsa/Workflows/Runtime/Services/WorkflowExecutableDependencyGraph.cs
-- [x] T041 [US2] Add an additive closure-wide ExecuteAsync overload that leases sorted distinct artifacts and safely releases partial acquisitions in src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowExecutableRootWriteLeaseManager.cs and src/Elsa/Workflows/Runtime/Services/WorkflowExecutableRootWriteLeaseManager.cs
-- [x] T042 [US2] Use closure-wide leases for publication source-root and execution-state root creation in src/Elsa/Workflows/Publishing/Api/Handlers/PublishWorkflowRequestHandler.cs and src/Elsa/Workflows/Runtime/Services/InMemoryRuntimeCheckpointCommitStore.cs
-- [x] T043 [US2] Compute live source/execution protected closures and repeat reachability under deletion guards in src/Elsa/Workflows/Runtime/Services/WorkflowExecutableReferenceGarbageCollector.cs
+- [x] T040 [US2] Add deterministic dependency-closure traversal with missing/cycle/hash failure modes in src/Elsa/Workflows/Runtime/Services/Executables/WorkflowExecutableDependencyGraph.cs
+- [x] T041 [US2] Add an additive closure-wide ExecuteAsync overload that leases sorted distinct artifacts and safely releases partial acquisitions in src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowExecutableRootWriteLeaseManager.cs and src/Elsa/Workflows/Runtime/Services/Executables/WorkflowExecutableRootWriteLeaseManager.cs
+- [x] T042 [US2] Use closure-wide leases for publication source-root and execution-state root creation in src/Elsa/Workflows/Publishing/Api/Handlers/PublishWorkflowRequestHandler.cs and src/Elsa/Workflows/Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs
+- [x] T043 [US2] Compute live source/execution protected closures and repeat reachability under deletion guards in src/Elsa/Workflows/Runtime/Services/Executables/WorkflowExecutableReferenceGarbageCollector.cs
 - [x] T044 [US2] Persist and fence the expanded immutable artifact/lease behavior in src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowExecutableStore.cs
 
 **Checkpoint**: US2 passes independently; retained dependencies survive source replacement/unpublication and become collectable only after the final root.
@@ -117,11 +117,11 @@
 
 ### Implementation for User Story 3
 
-- [x] T049 [US3] Validate child graphs by full artifact ID/hash and reject deterministic malformed/recurrent identity paths after candidate computation in src/Elsa/Workflows/Publishing/Api/Services/WorkflowExecutableCompiler.cs and src/Elsa/Workflows/Runtime/Services/WorkflowExecutableDependencyGraph.cs
+- [x] T049 [US3] Validate child graphs by full artifact ID/hash and reject deterministic malformed/recurrent identity paths after candidate computation in src/Elsa/Workflows/Publishing/Api/Services/WorkflowExecutableCompiler.cs and src/Elsa/Workflows/Runtime/Services/Executables/WorkflowExecutableDependencyGraph.cs
 - [x] T050 [US3] Add positive configurable MaxNestingDepth defaulting to 32 in src/Elsa/Activities/DispatchWorkflow/Runtime/Configuration/DispatchWorkflowOptions.cs and src/Elsa/Activities/DispatchWorkflow/Runtime/DispatchWorkflowRuntimeFeature.cs
 - [x] T051 [US3] Thread DispatchNestingDepth compatibly through start request/command/checkpoint/state models in src/Elsa/Workflows/Runtime/Core/Models/WorkflowExecutionStartDispatch.cs, src/Elsa/Workflows/Runtime/Core/Models/RuntimeCheckpointCommandPayload.cs, and src/Elsa/Workflows/Runtime/Core/Models/WorkflowExecutionState.cs
 - [x] T052 [US3] Persist one computed child depth through dispatch record/start payload and checkpoint staging in src/Elsa/Workflows/Runtime/Core/Models/WorkflowDispatchRecord.cs and src/Elsa/Activities/DispatchWorkflow/Runtime/Activities/DispatchWorkflow.cs
-- [x] T053 [US3] Recheck stable depth without incrementing during outbox delivery and start dispatch in src/Elsa/Activities/DispatchWorkflow/Runtime/Services/ChildStartExecutor.cs and src/Elsa/Workflows/Runtime/Services/WorkflowStartDispatcher.cs
+- [x] T053 [US3] Recheck stable depth without incrementing during outbox delivery and start dispatch in src/Elsa/Activities/DispatchWorkflow/Runtime/Services/ChildStartExecutor.cs and src/Elsa/Workflows/Runtime/Services/Executions/WorkflowStartDispatcher.cs
 
 **Checkpoint**: US3 passes independently; exact cycles cannot publish and all legal recursive shapes are bounded by typed durable depth.
 

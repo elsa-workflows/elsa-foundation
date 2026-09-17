@@ -2,7 +2,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Runtime.Core.Resolvers;
+namespace Elsa.Workflows.Runtime.Resolvers;
 
 public sealed class BookmarkResumeResolver : IBookmarkResumeResolver
 {

@@ -1,0 +1,178 @@
+using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Models;
+
+namespace Elsa.Workflows.Runtime.Services.WorkHandlers;
+
+/// <summary>
+/// Shared, behavior-preserving helpers for the scheduler work-handlers (#412). Consolidates the
+/// duplication families that were copied verbatim (or near-verbatim) across the Invoke / Complete /
+/// Resume / Schedule / Start / Checkpoint / CreateBookmark handlers in both
+/// <c>Elsa.Workflows.Runtime</c> and <c>Elsa.Activities.Runtime</c>. Public (not internal) so the
+/// Activities-assembly handlers can consume it without <c>InternalsVisibleTo</c> (constitution
+/// §2.23.3), matching the runtime inspection-capture convention.
+/// </summary>
+public static class SchedulerWorkHandlerHelpers
+{
+    /// <summary>
+    /// Guards that the loaded executable artifact matches the pinned snapshot the work item was
+    /// scheduled against. The exception message is keyed on <see cref="RuntimeSchedulerWorkItem.CommandKind"/>,
+    /// which renders identically to the per-handler command label the local copies hard-coded.
+    /// </summary>
+    public static void ValidatePinnedExecutable(
+        RuntimeSchedulerWorkItem workItem,
+        WorkflowExecutableIdentity pinnedExecutable,
+        WorkflowExecutableIdentity loadedExecutable)
+    {
+        if (WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(loadedExecutable, pinnedExecutable))
+            return;
+
+        throw new InvalidOperationException(
+            $"{workItem.CommandKind} scheduler work item '{workItem.WorkItemId}' loaded executable artifact '{WorkflowExecutableIdentityComparer.Format(loadedExecutable)}' " +
+            $"but pinned executable artifact '{WorkflowExecutableIdentityComparer.Format(pinnedExecutable)}'.");
+    }
+
+    /// <summary>
+    /// Resolves an executable node by id, throwing the canonical "references executable node …, which
+    /// is missing from executable artifact …" error when absent. <paramref name="commandLabel"/> is
+    /// passed in (rather than derived from <see cref="RuntimeSchedulerWorkItem.CommandKind"/>) so each
+    /// caller reproduces its exact historical message text (#412 item 4, per the preserve-wording ruling).
+    /// </summary>
+    public static ExecutableNode ResolveExecutableNode(
+        RuntimeSchedulerWorkItem workItem,
+        WorkflowExecutable executable,
+        string executableNodeId,
+        string commandLabel)
+    {
+        if (executable.NodesById.TryGetValue(executableNodeId, out var executableNode))
+            return executableNode;
+
+        throw new InvalidOperationException(
+            $"{commandLabel} scheduler work item '{workItem.WorkItemId}' references executable node '{executableNodeId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
+    }
+
+    /// <summary>
+    /// Resolves either a globally placed resume-target id or the activity-local id captured in a
+    /// reusable template. Local ids are scoped to their placed executable node.
+    /// </summary>
+    public static WorkflowExecutableResumeTarget? FindResumeTargetForNode(
+        WorkflowExecutable executable,
+        string executableNodeId,
+        string requestedResumeTargetId)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestedResumeTargetId);
+
+        if (executable.ResumeTargets.TryGetValue(requestedResumeTargetId, out var direct))
+            return direct;
+
+        var matches = executable.ResumeTargets.Values
+            .Where(target => StringComparer.Ordinal.Equals(target.ExecutableNodeId, executableNodeId))
+            .Where(target => StringComparer.Ordinal.Equals(target.LocalResumeTargetId, requestedResumeTargetId))
+            .ToArray();
+        return matches.Length switch
+        {
+            0 => null,
+            1 => matches[0],
+            _ => throw new InvalidOperationException(
+                $"Local resume target '{requestedResumeTargetId}' is ambiguous for executable node '{executableNodeId}'.")
+        };
+    }
+
+    /// <summary>
+    /// Shared payload-deserialization boilerplate (#412 item 1). Reproduces, byte-for-byte, the
+    /// null-guard → deserialize-or-null-throw → catch-wrap shape the handlers each duplicated. The
+    /// three message fragments, the <paramref name="deserialize"/> delegate (some handlers reuse a
+    /// per-work-item memo instead of a fresh parse), and the <paramref name="isPayloadValidationException"/>
+    /// catch-filter (which differs per payload type — a ParamName whitelist vs. a dedicated validation
+    /// exception vs. Start's deliberately-broad filter) are all supplied by the caller so no observable
+    /// behavior changes.
+    /// </summary>
+    public static T DeserializePayload<T>(
+        RuntimeSchedulerWorkItem workItem,
+        string requiresPayloadMessage,
+        string resolvedToNullMessage,
+        string invalidPayloadMessage,
+        Func<RuntimeSchedulerWorkItem, JsonElement, T?> deserialize,
+        Func<Exception, bool> isPayloadValidationException)
+    {
+        if (workItem.Payload is not { } payload)
+            throw new InvalidOperationException(requiresPayloadMessage);
+
+        try
+        {
+            return deserialize(workItem, payload)
+                   ?? throw new InvalidOperationException(resolvedToNullMessage);
+        }
+        catch (Exception exception) when (isPayloadValidationException(exception))
+        {
+            throw new InvalidOperationException(invalidPayloadMessage, exception);
+        }
+    }
+
+    /// <summary>
+    /// Builds the <see cref="RuntimePostCommitIntentKinds.EnqueueSchedulerWork"/> post-commit intent
+    /// that enqueues a follow-up scheduler work item after the source commit lands (#412 item 2).
+    /// Extracted from five verbatim copies. The <c>intentId</c> and <c>idempotencyKey</c> strings and
+    /// the intent kind are §E6-frozen persisted identifiers and are reproduced exactly.
+    /// </summary>
+    public static RuntimePostCommitIntent NewEnqueueSchedulerWorkIntent(
+        RuntimeSchedulerWorkItem sourceWorkItem,
+        string activityExecutionId,
+        RuntimeSchedulerWorkItem schedulerWorkItem,
+        DateTimeOffset recordedAt) =>
+        new(
+            intentId: $"{sourceWorkItem.WorkItemId}:post-commit:{schedulerWorkItem.WorkItemId}",
+            workflowExecutionId: sourceWorkItem.WorkflowExecutionId,
+            kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
+            recordedAt: recordedAt,
+            activityExecutionId: activityExecutionId,
+            idempotencyKey: $"{sourceWorkItem.IdempotencyKey}:post-commit:{schedulerWorkItem.IdempotencyKey}",
+            payload: JsonSerializer.SerializeToElement(schedulerWorkItem),
+            metadata: sourceWorkItem.CommandMetadata,
+            // spec 109: carry the already-materialized work item alongside its authoritative serialized payload so
+            // a live drain's in-process hop can skip re-deserializing it. In-process conduit only ([JsonIgnore]); the
+            // serialized payload above stays the sole durable form.
+            materializedSchedulerWorkItem: schedulerWorkItem);
+
+    /// <summary>
+    /// Normalizes activity completion outcome names: snapshots the sequence, applies the empty-set
+    /// default (<see cref="ActivityOutcomes.Done"/> when <paramref name="defaultToDone"/>, otherwise
+    /// empty), and rejects blank or duplicate values. Extracted verbatim from the Invoke / Complete /
+    /// Resume handlers, which each carried a byte-identical copy (#412).
+    /// </summary>
+    public static IReadOnlyCollection<string> NormalizeOutcomeNames(IEnumerable<string> outcomeNames, bool defaultToDone)
+    {
+        var snapshot = outcomeNames.ToArray();
+        if (snapshot.Length == 0)
+            return defaultToDone ? [ActivityOutcomes.Done] : [];
+
+        if (snapshot.Any(string.IsNullOrWhiteSpace))
+            throw new InvalidOperationException("Activity completion outcome names cannot contain blank values.");
+
+        if (snapshot.Distinct(StringComparer.Ordinal).Count() != snapshot.Length)
+            throw new InvalidOperationException("Activity completion outcome names cannot contain duplicates.");
+
+        return snapshot;
+    }
+
+    /// <summary>
+    /// Reads the completion outcome names persisted on a completed activity execution state. Falls back
+    /// to <see cref="ActivityOutcomes.Done"/> when nothing was persisted — unless the state's sub-status
+    /// equals <paramref name="skippedSubStatus"/> (pass <c>null</c> to never treat a state as skipped),
+    /// in which case a skipped activity yields no outcomes.
+    /// </summary>
+    public static IReadOnlyCollection<string> ReadCompletionOutcomeNames(ActivityExecutionState completedState, string? skippedSubStatus)
+    {
+        if (completedState.Metadata.TryGetValue(RuntimeMetadataKeys.CompletionOutcomeNames, out var serializedOutcomeNames))
+        {
+            var outcomeNames = JsonSerializer.Deserialize<string[]>(serializedOutcomeNames)
+                ?? throw new InvalidOperationException("Persisted completion outcome names resolved to null.");
+
+            return NormalizeOutcomeNames(outcomeNames, defaultToDone: false);
+        }
+
+        return skippedSubStatus is not null && completedState.SubStatus == skippedSubStatus ? [] : [ActivityOutcomes.Done];
+    }
+}

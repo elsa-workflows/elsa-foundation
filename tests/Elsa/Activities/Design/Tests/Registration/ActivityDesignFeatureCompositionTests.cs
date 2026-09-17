@@ -58,7 +58,7 @@ public sealed class ActivityDesignFeatureCompositionTests
         using var provider = services.BuildServiceProvider();
 
         Assert.Contains(services, d => d.ServiceType == typeof(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityInputMaterializer)
-            && d.ImplementationType == typeof(Elsa.Workflows.Runtime.Core.Services.RuntimeActivityInputMaterializer));
+            && d.ImplementationType == typeof(Elsa.Workflows.Runtime.Services.Values.RuntimeActivityInputMaterializer));
         Assert.Contains(services, d => d.ServiceType == typeof(Elsa.Activities.Runtime.Services.ActivityInputHydrator));
         Assert.Contains(services, d => d.ServiceType == typeof(IStartupTask)
             && d.ImplementationType == typeof(Elsa.Activities.Runtime.Tasks.RegisterActivityTypesStartupTask));

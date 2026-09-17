@@ -1,9 +1,10 @@
 using System.Diagnostics;
 using Activity = System.Diagnostics.Activity;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
-using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Diagnostics;
+using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Tracing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;

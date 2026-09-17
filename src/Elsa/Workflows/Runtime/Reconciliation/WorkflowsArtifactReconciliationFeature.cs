@@ -1,6 +1,6 @@
 using CShells.Features;
 using Elsa.Tasks.Core;
-using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Reconciliation.Contracts;
 using Elsa.Workflows.Runtime.Reconciliation.Core.Contracts;
 using Elsa.Workflows.Runtime.Reconciliation.Options;

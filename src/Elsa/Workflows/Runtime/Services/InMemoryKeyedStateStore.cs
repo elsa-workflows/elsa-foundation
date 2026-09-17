@@ -1,4 +1,4 @@
-namespace Elsa.Workflows.Runtime.Core.Services;
+namespace Elsa.Workflows.Runtime.Services;
 
 /// <summary>
 /// Shared lock + dictionary core for the in-memory runtime state stores (#415 item 4). Each store

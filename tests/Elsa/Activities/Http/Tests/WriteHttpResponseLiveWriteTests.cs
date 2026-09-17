@@ -6,7 +6,7 @@ using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Microsoft.AspNetCore.Http;
 using Xunit;
 

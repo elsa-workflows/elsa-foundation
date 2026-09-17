@@ -48,10 +48,10 @@ Replay-safety travels with the artifact (R5), so the cadence feeds `WorkflowExec
 | `src/Elsa/Workflows/Publishing/Api/Services/WorkflowExecutableHasher.cs` | Conditional `checkpointCadence` object in the behavioral payload. |
 | `src/Elsa/Workflows/Runtime/Core/Models/ResolvedCheckpointCadence.cs` | Effective-cadence value type. |
 | `src/Elsa/Workflows/Runtime/Core/Contracts/IRuntimeCheckpointCadenceResolver.cs` + `Services/RuntimeCheckpointCadenceResolver.cs` | The per-execution resolver (D2/D3). |
-| `src/Elsa/Workflows/Runtime/Services/WorkflowDrainOrchestrator.cs` | D1 seam: resolve before `Begin`, `DrainImmediateAsync` extraction, authored cap pass-through. |
+| `src/Elsa/Workflows/Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs` | D1 seam: resolve before `Begin`, `DrainImmediateAsync` extraction, authored cap pass-through. |
 | `src/Elsa/Workflows/Runtime/Contracts/IRuntimeCoalescingDrainScopeFactory.cs` + `Services/Coalescing/RuntimeCoalescingDrainScopeFactory.cs` | `Begin(workflowExecutionId, int? maxSegmentCheckpoints)` per-run cap override. |
 | `src/Elsa/Workflows/Runtime/Core/Constants/RuntimeMetadataKeys.cs` | `CheckpointCadence` / `CheckpointMaxSegmentCheckpoints` stamp keys. |
-| `src/Elsa/Workflows/Runtime/Services/WorkflowCheckpointSchedulerWorkHandler.cs` | D4 stamp at workflow-started + carry-forward. |
+| `src/Elsa/Workflows/Runtime/Services/WorkHandlers/WorkflowCheckpointSchedulerWorkHandler.cs` | D4 stamp at workflow-started + carry-forward. |
 | `src/Elsa/Workflows/Runtime/Api/Coalescing/RuntimeCheckpointCadenceInspector.cs` | Prefer the per-run stamp; limitation note replaced. |
 | `src/Elsa/Workflows/Runtime/Api/Handlers/GetWorkflowInstanceRequestHandler.cs` | Pass the instance state to the inspector. |
 | `src/Elsa/Workflows/Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs` | Resolver registration. |

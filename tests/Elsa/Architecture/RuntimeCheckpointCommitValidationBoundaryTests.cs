@@ -11,7 +11,7 @@ namespace Elsa.Architecture.Tests;
 /// </summary>
 public sealed partial class RuntimeCheckpointCommitValidationBoundaryTests
 {
-    private const string Committer = "src/Elsa/Workflows/Runtime/Services/RuntimeCheckpointCommitter.cs";
+    private const string Committer = "src/Elsa/Workflows/Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs";
     private const string CoalescingStore = "src/Elsa/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs";
     private static readonly string RepoRoot = FindRepoRoot();
 
@@ -29,10 +29,10 @@ public sealed partial class RuntimeCheckpointCommitValidationBoundaryTests
         "src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeAlterationCheckpointParticipationGate.cs",
         "src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs",
         CoalescingStore,
-        "src/Elsa/Workflows/Runtime/Services/InMemoryRuntimeCheckpointCommitStore.cs",
-        "src/Elsa/Workflows/Runtime/Services/RuntimeCheckpointCommitValidator.cs",
+        "src/Elsa/Workflows/Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs",
+        "src/Elsa/Workflows/Runtime/Services/Checkpoints/RuntimeCheckpointCommitValidator.cs",
         Committer,
-        "src/Elsa/Workflows/Runtime/Services/ScopedWorkflowDispatchRedriveStore.cs",
+        "src/Elsa/Workflows/Runtime/Services/Dispatch/ScopedWorkflowDispatchRedriveStore.cs",
     ];
 
     [Fact]

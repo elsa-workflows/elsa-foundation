@@ -5,7 +5,7 @@ using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services.Values;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;

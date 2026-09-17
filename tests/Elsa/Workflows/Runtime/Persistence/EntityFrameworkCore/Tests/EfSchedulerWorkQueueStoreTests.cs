@@ -2,10 +2,11 @@ using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Services.Recovery;
+using Elsa.Workflows.Runtime.Services.Scheduler;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -237,7 +238,7 @@ public sealed class EfSchedulerWorkQueueStoreTests
         foreach (var queueFirst in new[] { true, false })
         {
             var services = new ServiceCollection();
-            services.AddSingleton<IWorkflowSchedulerWorkQueue, Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowSchedulerWorkQueue>();
+            services.AddSingleton<IWorkflowSchedulerWorkQueue, Elsa.Workflows.Runtime.Services.Scheduler.InMemoryWorkflowSchedulerWorkQueue>();
             services.AddSingleton<IPersistenceAccessContextAccessor>(new FixedAccessor("tenant-a"));
             var connection = $"Data Source=file:ef-r22-registration-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
             var options = new RuntimeSchedulerWorkQueueEntityFrameworkCoreOptions

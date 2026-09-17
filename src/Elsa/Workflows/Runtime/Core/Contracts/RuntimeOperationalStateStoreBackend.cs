@@ -37,12 +37,12 @@ public sealed class RuntimeOperationalStateStoreBackend
 
     private static bool IsRuntimeCoreDefault(ServiceDescriptor descriptor) =>
         descriptor.ImplementationType?.FullName is
-            "Elsa.Workflows.Runtime.Core.Services.InMemoryDurableValueStateStore" or
-            "Elsa.Workflows.Runtime.Core.Services.InMemorySchedulerStateStore" or
-            "Elsa.Workflows.Runtime.Core.Services.InMemoryExecutionLivenessStateStore" or
-            "Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowHoldStateStore" or
-            "Elsa.Workflows.Runtime.Core.Services.InMemoryRuntimeRecoveryScanner" or
-            "Elsa.Workflows.Runtime.Core.Services.InMemoryIncidentStateStore" ||
+            "Elsa.Workflows.Runtime.Services.Values.InMemoryDurableValueStateStore" or
+            "Elsa.Workflows.Runtime.Services.Scheduler.InMemorySchedulerStateStore" or
+            "Elsa.Workflows.Runtime.Services.Executions.InMemoryExecutionLivenessStateStore" or
+            "Elsa.Workflows.Runtime.Services.Executions.InMemoryWorkflowHoldStateStore" or
+            "Elsa.Workflows.Runtime.Services.Recovery.InMemoryRuntimeRecoveryScanner" or
+            "Elsa.Workflows.Runtime.Services.Incidents.InMemoryIncidentStateStore" ||
         descriptor.ImplementationFactory?.Method.DeclaringType?.FullName is { } declaringType &&
         (declaringType.Contains("RuntimeCoreServiceCollectionExtensions", StringComparison.Ordinal) ||
          declaringType.Contains("WorkflowsRuntimeAttentionFeature", StringComparison.Ordinal));

@@ -1,4 +1,4 @@
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;

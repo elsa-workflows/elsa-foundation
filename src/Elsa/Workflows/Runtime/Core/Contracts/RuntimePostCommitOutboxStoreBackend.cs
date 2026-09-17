@@ -97,7 +97,7 @@ public sealed class RuntimePostCommitOutboxStoreBackend
         ContractTypes.Contains(descriptor.ServiceType) &&
         RuntimeCoreRegistrationOwnership.IsCoreFactory(descriptor) ||
         descriptor.ServiceType == typeof(IWorkflowDispatchRedriveStore) &&
-        descriptor.ImplementationType?.FullName == "Elsa.Workflows.Runtime.Services.ScopedWorkflowDispatchRedriveStore";
+        descriptor.ImplementationType?.FullName == "Elsa.Workflows.Runtime.Services.Dispatch.ScopedWorkflowDispatchRedriveStore";
 
     public static void EnsureRuntimeDefaultsOwnRegisteredContracts(
         IServiceCollection services,

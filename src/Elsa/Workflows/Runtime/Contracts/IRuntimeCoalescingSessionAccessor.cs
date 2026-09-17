@@ -1,6 +1,6 @@
-using Elsa.Workflows.Runtime.Core.Services.Coalescing;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 
-namespace Elsa.Workflows.Runtime.Core.Contracts;
+namespace Elsa.Workflows.Runtime.Contracts;
 
 /// <summary>
 /// Ambient, explicitly-scoped accessor for the active checkpoint-coalescing session. Mirrors the

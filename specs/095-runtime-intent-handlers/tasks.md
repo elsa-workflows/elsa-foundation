@@ -37,9 +37,9 @@
 - [x] T005 [P] [US1] Define `IRuntimePostCommitIntentHandler` in `src/Elsa/Workflows/Runtime/Core/Contracts/IRuntimePostCommitIntentHandler.cs`
 - [x] T006 [P] [US1] Define validated keyed contribution metadata in `src/Elsa/Workflows/Runtime/Core/Models/RuntimePostCommitIntentHandlerContribution.cs`
 - [x] T007 [US1] Implement idempotent/conflict-safe `AddRuntimePostCommitIntentHandler<THandler>` in `src/Elsa/Workflows/Runtime/Extensions/RuntimePostCommitIntentHandlerServiceCollectionExtensions.cs`
-- [x] T008 [US1] Implement the ordinal keyed aggregate dispatcher in `src/Elsa/Workflows/Runtime/Services/RuntimePostCommitIntentDispatcher.cs`
+- [x] T008 [US1] Implement the ordinal keyed aggregate dispatcher in `src/Elsa/Workflows/Runtime/Services/Checkpoints/RuntimePostCommitIntentDispatcher.cs`
 - [x] T009 [US1] Register the aggregate as the default dispatcher in `src/Elsa/Workflows/Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs`
-- [x] T010 [US1] Remove only the global intent-kind filter while retaining the local scheduler-only filter in `src/Elsa/Workflows/Runtime/Services/RuntimeResumptionService.cs`
+- [x] T010 [US1] Remove only the global intent-kind filter while retaining the local scheduler-only filter in `src/Elsa/Workflows/Runtime/Services/Recovery/RuntimeResumptionService.cs`
 - [x] T011 [US1] Run the US1 contribution and marker guardrail tests in `tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj`
 
 **Checkpoint**: Contributed marker work completes through the global runtime path with one invocation.
@@ -53,9 +53,9 @@
 **Independent Test**: Existing scheduler intent tests and an explicit before/after work-item parity assertion pass.
 
 - [x] T012 [P] [US2] Add scheduler contribution and persisted work-item parity assertions in `tests/Elsa/Workflows/Runtime/Tests/RuntimeDownstreamSchedulingTests.cs`
-- [x] T013 [US2] Adapt `RuntimeSchedulerPostCommitIntentDispatcher` to the handler contract without changing its dispatch body in `src/Elsa/Workflows/Runtime/Services/RuntimeSchedulerPostCommitIntentDispatcher.cs`
+- [x] T013 [US2] Adapt `RuntimeSchedulerPostCommitIntentDispatcher` to the handler contract without changing its dispatch body in `src/Elsa/Workflows/Runtime/Services/Checkpoints/RuntimeSchedulerPostCommitIntentDispatcher.cs`
 - [x] T014 [US2] Register scheduler delivery through `AddRuntimePostCommitIntentHandler` in `src/Elsa/Workflows/Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs`
-- [x] T015 [US2] Verify the per-execution scheduler filter remains unchanged in `src/Elsa/Workflows/Runtime/Services/WorkflowDrainOrchestrator.cs`
+- [x] T015 [US2] Verify the per-execution scheduler filter remains unchanged in `src/Elsa/Workflows/Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs`
 - [x] T016 [US2] Run scheduler, checkpoint, outbox, command-drain, and resumption regressions in `tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj`
 
 **Checkpoint**: Existing scheduler behavior is unchanged and built-ins use no privileged registration path.
@@ -69,7 +69,7 @@
 **Independent Test**: A committed unknown kind is processed by the real outbox processor and persists the provider-normalized safe failure state without delivery.
 
 - [x] T017 [P] [US3] Add outbox-level unsupported-kind and safe-diagnostic assertions in `tests/Elsa/Workflows/Runtime/Tests/RuntimePostCommitOutboxProcessorTests.cs`
-- [x] T018 [US3] Harden deterministic validation/error context in `src/Elsa/Workflows/Runtime/Services/RuntimePostCommitIntentDispatcher.cs`
+- [x] T018 [US3] Harden deterministic validation/error context in `src/Elsa/Workflows/Runtime/Services/Checkpoints/RuntimePostCommitIntentDispatcher.cs`
 - [x] T019 [US3] Run unsupported-kind and handler-failure tests in `tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj`
 
 **Checkpoint**: Unsupported committed work remains observable and unacknowledged.

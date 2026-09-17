@@ -81,7 +81,7 @@ public sealed class HttpEndpointRouteTableSynchronizerTests
     [Fact]
     public async Task RefreshAsync_ResolvesFreshly_ReflectingRoutesAddedBetweenRefreshes()
     {
-        var bindings = new Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowTriggerBindingStore();
+        var bindings = new Elsa.Workflows.Runtime.Services.Triggers.InMemoryWorkflowTriggerBindingStore();
         var routeTable = new FakeRouteTable();
         var synchronizer = Synchronizers.Build(bindings, routeTable);
 
@@ -100,7 +100,7 @@ public sealed class HttpEndpointRouteTableSynchronizerTests
     [Fact]
     public async Task RefreshAsync_ProjectsOnlyTheAuthoritativePublication_AcrossActivationAndCompensation()
     {
-        var bindings = new Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowTriggerBindingStore();
+        var bindings = new Elsa.Workflows.Runtime.Services.Triggers.InMemoryWorkflowTriggerBindingStore();
         var routeTable = new FakeRouteTable();
         var synchronizer = Synchronizers.Build(bindings, routeTable);
         var oldBinding = PublicationBinding("publication-old", "artifact-old", "foo");

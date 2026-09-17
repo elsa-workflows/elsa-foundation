@@ -2,7 +2,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
+namespace Elsa.Workflows.Runtime.Services.Coalescing;
 
 /// <summary>
 /// Burst-coalescing checkpoint persistence policy. Non-suspending intra-drain checkpoints are folded

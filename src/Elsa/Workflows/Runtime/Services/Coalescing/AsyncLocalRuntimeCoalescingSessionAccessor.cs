@@ -1,6 +1,6 @@
-using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Contracts;
 
-namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
+namespace Elsa.Workflows.Runtime.Services.Coalescing;
 
 /// <summary>
 /// <see cref="AsyncLocal{T}"/>-backed coalescing session accessor. Mirrors

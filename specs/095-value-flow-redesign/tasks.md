@@ -114,11 +114,11 @@ and then recover after completion without reevaluation or reactivation.
 
 ### Implementation
 
-- [X] T040 [US3] Move complete input materialization into the Scheduled→Running checkpoint in `src/Elsa/Workflows/Runtime/Services/WorkflowStartActivitySchedulerWorkHandler.cs`
-- [X] T041 [US3] Make `RuntimeActivityInputMaterializer` produce wrapper-free immutable snapshots with persistability/policy validation in `src/Elsa/Workflows/Runtime/Services/RuntimeActivityInputMaterializer.cs`
+- [X] T040 [US3] Move complete input materialization into the Scheduled→Running checkpoint in `src/Elsa/Workflows/Runtime/Services/WorkHandlers/WorkflowStartActivitySchedulerWorkHandler.cs`
+- [X] T041 [US3] Make `RuntimeActivityInputMaterializer` produce wrapper-free immutable snapshots with persistability/policy validation in `src/Elsa/Workflows/Runtime/Services/Values/RuntimeActivityInputMaterializer.cs`
 - [X] T042 [US3] Make retry, resume, and parent completion hydrate only from the committed snapshot in `src/Elsa/Activities/Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs` and related handlers
 - [X] T043 [US3] Commit result/outcome/status/inspection/continuation intent atomically and short-circuit already-completed invocations in `src/Elsa/Activities/Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs`
-- [X] T044 [US3] Replace active/latest-output semantics with structural-frame and causal-lineage result resolution in `src/Elsa/Workflows/Runtime/Services/CausalActivityResultResolver.cs`
+- [X] T044 [US3] Replace active/latest-output semantics with structural-frame and causal-lineage result resolution in `src/Elsa/Workflows/Runtime/Services/Values/CausalActivityResultResolver.cs`
 - [X] T045 [US3] Propagate effective persistence, external-payload, encryption, sensitivity, and redaction policy through materialization and projection in `src/Elsa/Workflows/Runtime/Services/`
 - [X] T046 [US3] Run focused runtime, Groundwork, distributed recovery, and publishing tests and mark US3 ledger successors implemented/passing
 
@@ -176,7 +176,7 @@ explicit boundary transfer, concurrent-write rejection, and stable collection or
 ### Implementation
 
 - [X] T063 [US4] Implement Runtime-owned `VariableFrameState` and root/container/iteration frame creation in `src/Elsa/Workflows/Runtime/Core/Models/VariableFrameState.cs` and runtime scope services
-- [X] T064 [US4] Implement explicit intrinsic Set/merge/reduce execution and checkpoint ordering in `src/Elsa/Workflows/Runtime/Services/WorkflowIntrinsicExecutor.cs`
+- [X] T064 [US4] Implement explicit intrinsic Set/merge/reduce execution and checkpoint ordering in `src/Elsa/Workflows/Runtime/Services/Values/WorkflowIntrinsicExecutor.cs`
 - [X] T065 [US4] Compile variable reads, explicit scope returns, collections, merges, and reductions in `src/Elsa/Workflows/Publishing/Api/Services/ExecutableNodeCompiler.cs`
 - [X] T066 [US4] Implement publication data-flow validation for concurrency, availability, scopes, cycles, and stable collection identity in `src/Elsa/Workflows/Design/Validations/`
 - [X] T067 [US4] Migrate sequence, flowchart, loop, and parallel runtime scope services off memory-backed variables and metadata value bags in `src/Elsa/Activities/`

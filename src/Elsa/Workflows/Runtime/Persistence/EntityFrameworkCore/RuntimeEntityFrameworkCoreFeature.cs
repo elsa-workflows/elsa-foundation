@@ -2,8 +2,8 @@ using CShells.Features;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;

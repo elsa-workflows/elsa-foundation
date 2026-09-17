@@ -54,7 +54,7 @@
 ### Tests for User Story 2
 
 - [x] T008 [US2] Add Event-suspension regression cases for null, empty, and whitespace-only `CorrelationId` values in `tests/Elsa/Activities/Runtime/Tests/EventTriggerStimulusProviderTests.cs`; assert each registration omits `RuntimeMetadataKeys.CorrelationId` rather than retaining a blank or whitespace value.
-- [x] T009 [US2] Run the focused Event and global-lookup filters documented in `specs/137-receive-correlation/quickstart.md`; verify the new unscoped-registration assertions and the existing unscoped-broadcast/correlated-exclusion lookup assertions pass without modifying `src/Elsa/Workflows/Runtime/Services/GlobalBookmarkStimulusLookup.cs`.
+- [x] T009 [US2] Run the focused Event and global-lookup filters documented in `specs/137-receive-correlation/quickstart.md`; verify the new unscoped-registration assertions and the existing unscoped-broadcast/correlated-exclusion lookup assertions pass without modifying `src/Elsa/Workflows/Runtime/Services/Bookmarks/GlobalBookmarkStimulusLookup.cs`.
 
 **Checkpoint**: Unscoped Events retain their prior broadcast behavior, and pre-existing bookmarks without the metadata key remain compatible.
 
@@ -68,7 +68,7 @@
 
 ### Tests for User Story 3
 
-- [x] T010 [US3] Add a start-fan-out regression test with a non-null, deliberately nonmatching `WorkflowTriggerBinding.CorrelationScope` in `tests/Elsa/Workflows/Runtime/Tests/StimulusRouterTests.cs`; assert a correlated `StimulusDispatchRequest` still starts the type/hash-matched binding and do not change `src/Elsa/Workflows/Runtime/Services/StimulusRouter.cs`.
+- [x] T010 [US3] Add a start-fan-out regression test with a non-null, deliberately nonmatching `WorkflowTriggerBinding.CorrelationScope` in `tests/Elsa/Workflows/Runtime/Tests/StimulusRouterTests.cs`; assert a correlated `StimulusDispatchRequest` still starts the type/hash-matched binding and do not change `src/Elsa/Workflows/Runtime/Services/Triggers/StimulusRouter.cs`.
 - [x] T011 [US3] Run the `StimulusRouterTests` filter in `specs/137-receive-correlation/quickstart.md` and confirm the existing correlated-resume fan-in and the new non-filtered-start assertion both pass.
 
 **Checkpoint**: Correlation narrows only already-waiting Event resumes; published trigger candidates retain existing type/hash fan-out.

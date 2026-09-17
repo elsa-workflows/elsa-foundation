@@ -181,12 +181,12 @@ internal static class RuntimeCheckpointInspectionParticipantProviderSmoke
     }
 
     private static IRuntimeRecoveryContinuationCodec RecoveryCodec() =>
-        new Elsa.Workflows.Runtime.Core.Services.HmacRuntimeRecoveryContinuationCodec(
+        new Elsa.Workflows.Runtime.Services.Recovery.HmacRuntimeRecoveryContinuationCodec(
             Microsoft.Extensions.Options.Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "ef-r19-inspection-signing-key-32-bytes" }));
 
     private static IActivityExecutionHierarchyCursorCodec HierarchyCodec() =>
-        new Elsa.Workflows.Runtime.Core.Services.HmacActivityExecutionHierarchyCursorCodec(
-            Microsoft.Extensions.Options.Options.Create(new Elsa.Workflows.Runtime.Core.Services.ActivityExecutionHierarchyCursorOptions { SigningKey = "ef-r19-hierarchy-signing-key-32-bytes" }));
+        new Elsa.Workflows.Runtime.Services.ActivityExecutions.HmacActivityExecutionHierarchyCursorCodec(
+            Microsoft.Extensions.Options.Options.Create(new Elsa.Workflows.Runtime.Services.ActivityExecutions.ActivityExecutionHierarchyCursorOptions { SigningKey = "ef-r19-hierarchy-signing-key-32-bytes" }));
 
     private sealed class FixedAccessor(string scope) : IPersistenceAccessContextAccessor
     {

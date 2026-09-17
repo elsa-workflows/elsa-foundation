@@ -33,9 +33,9 @@ payloads, and handler resolution exist without persistence or orchestration.
 - [x] T014 [P] [US1] Add failing checkpoint tests proving terminal job evidence commits atomically with workflow state, fingerprint/replay equality, claim-fence validation, acknowledgement reconciliation, and no deferred coalescing in `tests/Elsa/Workflows/Runtime/Tests/Alterations/AlterationCheckpointTests.cs`
 - [x] T015 [US1] Add plan/target query, admission, capture/seal, claim, cancel, page, and reconciliation store contracts under `src/Elsa/Workflows/Runtime/Core/Contracts/Alterations/`
 - [x] T016 [US1] Add immutable tenant-partition/execution-ID target-scan query semantics to `src/Elsa/Workflows/Runtime/Core/Models/` and `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowExecutionStateStore.cs`
-- [x] T017 [US1] Implement in-memory alteration plan/target/job/idempotency stores and immutable target scan in `src/Elsa/Workflows/Runtime/Services/Alterations/InMemory*.cs` and `src/Elsa/Workflows/Runtime/Services/InMemoryWorkflowExecutionStateStore.cs`
+- [x] T017 [US1] Implement in-memory alteration plan/target/job/idempotency stores and immutable target scan in `src/Elsa/Workflows/Runtime/Services/Alterations/InMemory*.cs` and `src/Elsa/Workflows/Runtime/Services/Executions/InMemoryWorkflowExecutionStateStore.cs`
 - [x] T018 [US1] Add alteration job state changes, validation, copier methods, fingerprint identity, and replay equivalence to `src/Elsa/Workflows/Runtime/Core/Models/RuntimeCheckpointCommit.cs` and related checkpoint models
-- [x] T019 [US1] Apply alteration job changes inside the in-memory checkpoint critical section and commit marker in `src/Elsa/Workflows/Runtime/Services/InMemoryRuntimeCheckpointCommitStore.cs`
+- [x] T019 [US1] Apply alteration job changes inside the in-memory checkpoint critical section and commit marker in `src/Elsa/Workflows/Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs`
 - [x] T020 [US1] Add `RuntimeAlterationJob` checkpoint name and force a mandatory immediate boundary in `src/Elsa/Workflows/Runtime/Core/Constants/RuntimeCheckpointNames.cs` and `src/Elsa/Workflows/Runtime/Services/Coalescing/`
 - [x] T021 [P] [US1] Add failing Groundwork golden fixture, query-route, claim-fence, paging, replay, and same-unit workflow/job commit tests under `tests/Elsa/Persistence/Groundwork/Tests/Alterations/`
 - [x] T022 [US1] Add alteration plan/job document kinds, versions, projections, indexes, and bounded query routes in `src/Elsa/Persistence/Groundwork/ElsaRuntimeStorageManifest.cs`, `Serialization/`, `Querying/`, and schema admission fixtures
@@ -84,7 +84,7 @@ complete preflight, atomic rollback, cooperative cancellation, and acknowledgeme
 including already-terminal no-ops.
 
 - [x] T042 [P] [US2] Add failing handler tests for exclusivity, active cleanup, already-terminal no-op, concurrent terminal race, dispatch cancellation, replay, and success-only-after-checkpoint in `tests/Elsa/Workflows/Runtime/Tests/Alterations/CancelWorkflowAlterationHandlerTests.cs`
-- [x] T043 [US2] Extract reusable cancellation staging from `src/Elsa/Workflows/Runtime/Services/WorkflowCancelSchedulerWorkHandler.cs` into `src/Elsa/Workflows/Runtime/Services/WorkflowCancellationPlanner.cs` without changing ordinary cancel behavior
+- [x] T043 [US2] Extract reusable cancellation staging from `src/Elsa/Workflows/Runtime/Services/WorkHandlers/WorkflowCancelSchedulerWorkHandler.cs` into `src/Elsa/Workflows/Runtime/Services/ActivityExecutions/WorkflowCancellationPlanner.cs` without changing ordinary cancel behavior
 - [x] T044 [US2] Implement/register `CancelWorkflow/1` under `src/Elsa/Workflows/Runtime/Services/Alterations/Handlers/`
 - [x] T045 [US2] Add authenticated single/bulk cancellation integration tests under `tests/Elsa/Workflows/Runtime/Api/Tests/Alterations/CancelWorkflowAlterationApiTests.cs`
 - [x] T046 [US2] Run cancellation, actor, dispatch-workflow, and checkpoint regression suites
@@ -111,7 +111,7 @@ workflows reject atomically.
 - [x] T054 [US4] Add capability/policy contracts under `src/Elsa/Activities/Runtime/Core/`, pin capability data into executable child relations, and include it in `src/Elsa/Workflows/Publishing/Api/Services/WorkflowExecutableHasher.cs`
 - [x] T055 [US4] Add startup registration and at least one first-party activity-owned scheduling policy needed by the e2e fixture under the owning activity module
 - [x] T056 [P] [US4] Add failing `ScheduleActivity/1` tests for exact artifact/node/direct-parent capability, active scope, conflict detection, server-derived identity/provenance, authored input evaluation, and replay in `tests/Elsa/Workflows/Runtime/Tests/Alterations/ScheduleActivityAlterationHandlerTests.cs`
-- [x] T057 [US4] Extract reusable scheduling staging from `src/Elsa/Workflows/Runtime/Services/WorkflowScheduleActivitySchedulerWorkHandler.cs` and implement/register `ScheduleActivity/1`
+- [x] T057 [US4] Extract reusable scheduling staging from `src/Elsa/Workflows/Runtime/Services/WorkHandlers/WorkflowScheduleActivitySchedulerWorkHandler.cs` and implement/register `ScheduleActivity/1`
 - [x] T058 [P] [US4] Add failing supersession tests for all eligible/ineligible statuses, blocking incidents, terminal workflow, claimed work, descendant/bookmark/timer/queue cleanup, immutable pinned inputs, fresh scope/identity, and lineage in `tests/Elsa/Workflows/Runtime/Tests/Alterations/RescheduleActivityAlterationHandlerTests.cs`
 - [x] T059 [US4] Add `Superseded` status, successor fields, serialization/upcast fixtures, inspection projection, and immutable supersession lineage under `src/Elsa/Workflows/Runtime/Core/Models/` and `src/Elsa/Persistence/Groundwork/Serialization/`
 - [x] T060 [US4] Implement targeted source-subtree inventory/reclamation and successor staging under `src/Elsa/Workflows/Runtime/Services/Alterations/ActivityExecutionSupersessionPlanner.cs`

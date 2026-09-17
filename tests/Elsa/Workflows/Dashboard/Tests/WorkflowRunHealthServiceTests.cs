@@ -1,6 +1,7 @@
 using Elsa.Workflows.Dashboard;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Incidents;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 

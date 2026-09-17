@@ -143,10 +143,10 @@ internal static class Resolvers
     /// </summary>
     public static Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver Build(
         Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerBindingStore bindingStore,
-        Elsa.Workflows.Runtime.Core.Services.InMemoryBookmarkStateStore? bookmarks = null) =>
+        Elsa.Workflows.Runtime.Services.Bookmarks.InMemoryBookmarkStateStore? bookmarks = null) =>
         new(
             bindingStore,
-            new Elsa.Workflows.Runtime.Core.Services.GlobalBookmarkStimulusLookup(bookmarks ?? new()),
+            new Elsa.Workflows.Runtime.Services.Bookmarks.GlobalBookmarkStimulusLookup(bookmarks ?? new()),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver>.Instance);
 }
 
@@ -161,13 +161,13 @@ internal static class Synchronizers
     public static Elsa.Workflows.Runtime.Http.Services.HttpEndpointRouteTableSynchronizer Build(
         Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerBindingStore bindingStore,
         IRouteTable routeTable,
-        Elsa.Workflows.Runtime.Core.Services.InMemoryBookmarkStateStore? bookmarks = null)
+        Elsa.Workflows.Runtime.Services.Bookmarks.InMemoryBookmarkStateStore? bookmarks = null)
     {
         var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
         services.AddSingleton(bindingStore);
         services.AddSingleton(routeTable);
         services.AddSingleton<Elsa.Workflows.Runtime.Core.Contracts.IGlobalBookmarkStimulusLookup>(
-            new Elsa.Workflows.Runtime.Core.Services.GlobalBookmarkStimulusLookup(bookmarks ?? new()));
+            new Elsa.Workflows.Runtime.Services.Bookmarks.GlobalBookmarkStimulusLookup(bookmarks ?? new()));
         services.AddScoped<Elsa.Workflows.Runtime.Http.Contracts.IHttpEndpointRoutesResolver>(sp =>
             new Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver(
                 sp.GetRequiredService<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerBindingStore>(),

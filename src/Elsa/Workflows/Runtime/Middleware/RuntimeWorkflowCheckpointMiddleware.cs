@@ -1,8 +1,8 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 
-namespace Elsa.Workflows.Runtime.Core.Middleware;
+namespace Elsa.Workflows.Runtime.Middleware;
 
 /// <summary>
 /// The workflow pipeline's <c>Checkpoint</c> slot: persists the checkpoint commit the handler assembled and staged on

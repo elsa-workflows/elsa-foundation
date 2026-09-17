@@ -3,9 +3,9 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Resolvers;
-using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Serialization.Core;
+using Elsa.Workflows.Runtime.Resolvers;
+using Elsa.Workflows.Runtime.Services.Values;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
