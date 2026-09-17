@@ -11,13 +11,11 @@ namespace Elsa.Diagnostics.StructuredLogs.Tests;
 
 public sealed class StructuredLogSinkTests
 {
-    private sealed class FakeStore(long highWaterMark) : IStructuredLogStore
+    private sealed class FakeStore : IStructuredLogStore
     {
-        private int _highWaterMarkReads;
         private long _cursorHighWater;
 
         public ConcurrentQueue<StructuredLogEntry> Appended { get; } = [];
-        public int HighWaterMarkReads => _highWaterMarkReads;
 
         public ValueTask<StructuredLogEntry> AppendAsync(StructuredLogEntry entry, CancellationToken cancellationToken = default)
         {
@@ -26,12 +24,6 @@ public sealed class StructuredLogSinkTests
             {
                 ReplayCursor = new StructuredLogReplayCursor($"slrc1.test.{Interlocked.Increment(ref _cursorHighWater)}")
             });
-        }
-
-        public Task<long> GetHighWaterMarkAsync(CancellationToken cancellationToken = default)
-        {
-            Interlocked.Increment(ref _highWaterMarkReads);
-            return Task.FromResult(highWaterMark);
         }
 
         public Task<IReadOnlyList<StructuredLogEntry>> GetRecentAsync(StructuredLogFilter filter, CancellationToken cancellationToken = default) =>
@@ -60,10 +52,8 @@ public sealed class StructuredLogSinkTests
     private sealed class MigratingStore : IStructuredLogStore
     {
         private int _ready;
-        private int _highWaterMarkReads;
 
         public ConcurrentQueue<StructuredLogEntry> Persisted { get; } = [];
-        public int HighWaterMarkReads => _highWaterMarkReads;
 
         public void CompleteMigration() => Volatile.Write(ref _ready, 1);
 
@@ -74,14 +64,6 @@ public sealed class StructuredLogSinkTests
 
             Persisted.Enqueue(entry);
             return ValueTask.FromResult(entry with { ReplayCursor = new StructuredLogReplayCursor($"slrc1.test.{Persisted.Count}") });
-        }
-
-        public Task<long> GetHighWaterMarkAsync(CancellationToken cancellationToken = default)
-        {
-            Interlocked.Increment(ref _highWaterMarkReads);
-            return Volatile.Read(ref _ready) == 0
-                ? Task.FromException<long>(NoSuchTable("elsa_structured_log_stream_states"))
-                : Task.FromResult((long)Persisted.Count);
         }
 
         public Task<IReadOnlyList<StructuredLogEntry>> GetRecentAsync(StructuredLogFilter filter, CancellationToken cancellationToken = default) =>
@@ -117,8 +99,6 @@ public sealed class StructuredLogSinkTests
                 ReplayCursor = new StructuredLogReplayCursor(cursor)
             });
 
-        public Task<long> GetHighWaterMarkAsync(CancellationToken cancellationToken = default) => Task.FromResult(0L);
-
         public Task<IReadOnlyList<StructuredLogEntry>> GetRecentAsync(StructuredLogFilter filter, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<StructuredLogEntry>>([]);
 
@@ -132,22 +112,21 @@ public sealed class StructuredLogSinkTests
     }
 
     [Fact]
-    public void EmitStampsMonotonicDisplaySequencesWithoutReadingTheStore()
+    public void EmitStampsMonotonicDisplaySequences()
     {
-        var store = new FakeStore(highWaterMark: 10);
+        var store = new FakeStore();
         var sink = new StructuredLogSink(store, new FakePublisher());
 
         sink.Emit(TestEntries.Create());
         sink.Emit(TestEntries.Create());
 
         Assert.Equal(new[] { 1L, 2L }, store.Appended.Select(e => e.Sequence));
-        Assert.Equal(0, store.HighWaterMarkReads);
     }
 
     [Fact]
     public void EmitAppendsToStoreAndPublishesTheSameStampedEntry()
     {
-        var store = new FakeStore(highWaterMark: 0);
+        var store = new FakeStore();
         var publisher = new FakePublisher();
         var sink = new StructuredLogSink(store, publisher);
 
@@ -161,10 +140,10 @@ public sealed class StructuredLogSinkTests
     }
 
     [Fact]
-    public async Task ConcurrentEmitsStampDistinctDisplaySequencesWithoutReadingTheStore()
+    public async Task ConcurrentEmitsStampDistinctDisplaySequences()
     {
         const int emitters = 16;
-        var store = new FakeStore(highWaterMark: 100);
+        var store = new FakeStore();
         var sink = new StructuredLogSink(store, new FakePublisher());
 
         using var startGate = new ManualResetEventSlim(false);
@@ -176,7 +155,6 @@ public sealed class StructuredLogSinkTests
         startGate.Set();
         await Task.WhenAll(tasks);
 
-        Assert.Equal(0, store.HighWaterMarkReads);
         var sequences = store.Appended.Select(e => e.Sequence).OrderBy(s => s).ToArray();
         Assert.Equal(Enumerable.Range(1, emitters).Select(i => (long)i), sequences);
     }
@@ -202,8 +180,6 @@ public sealed class StructuredLogSinkTests
         logger.LogInformation("after-migration-2");
 
         Assert.Equal(["after-migration-1", "after-migration-2"], store.Persisted.Select(entry => entry.Message));
-        // The capture path never reads the store, so a store that is not ready has nothing to log back into it.
-        Assert.Equal(0, store.HighWaterMarkReads);
         await WaitUntilAsync(() => publisher.Published.Count == 2);
         Assert.Equal(["after-migration-1", "after-migration-2"], publisher.Published.Select(entry => entry.Message));
     }

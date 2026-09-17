@@ -5,7 +5,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Diagnostics.Struc
 The capture/serve pipeline is decomposed into three single-responsibility roles so a durable backend can replace just one of them:
 
 - **`IStructuredLogSink`** assigns display-only `Sequence` metadata, submits to the store, and publishes a local wake hint only after commitment.
-- **`IStructuredLogStore`** owns append commit, lifetime high-water, recent history, opaque-cursor bounded tail reads, and exact retention. Swap this to make logs durable.
+- **`IStructuredLogStore`** owns append commit, recent history, opaque-cursor bounded tail reads, and exact retention. Swap this to make logs durable.
 - **`IStructuredLogLiveFeed` / `IStructuredLogLivePublisher`** is an in-process wake channel for SSE durable tails. It stays in-process for every storage backend.
 
 ---
@@ -15,9 +15,9 @@ The capture/serve pipeline is decomposed into three single-responsibility roles 
 All contracts live in `Elsa.Diagnostics.StructuredLogs.Core`. The feature registers `InMemoryStructuredLogStore` (history), `InMemoryStructuredLogLiveFeed` (live fan-out, also the publisher), a `StructuredLogSink` (sequencing/dispatch), and a `LocalStructuredLogSourceProvider`. The store is registered with `TryAddSingleton` so a persistence feature can override it; the others use `AddSingleton`.
 
 ### `IStructuredLogStore` *(Core — `Elsa.Diagnostics.StructuredLogs.Core`)*
-- **Signature:** `ValueTask<StructuredLogEntry> AppendAsync(...)`, `Task<long> GetHighWaterMarkAsync(...)`, `Task<IReadOnlyList<StructuredLogEntry>> GetRecentAsync(...)`, `Task<StructuredLogReplayCursor?> GetTailCursorAsync(...)`, `Task<StructuredLogReadPage> ReadAfterAsync(...)`, and `Task TrimAsync(int keepNewest, ...)`.
-- **Contract:** append returns the committed entry carrying the authoritative cursor. `ReadAfterAsync` validates an optional source/scope/stream-bound opaque anchor and returns one oldest-first bounded snapshot page strictly after it, plus the next scanned cursor and `HasMore`. Cursor codecs and decoded provider positions stay internal to each adapter. The lifetime logical high-water never rewinds after retention or restart. `Sequence` is display metadata and is neither unique nor a replay identity.
-- **Default impl:** `InMemoryStructuredLogStore` — a bounded ring buffer with process-lifetime cursor and high-water state.
+- **Signature:** `ValueTask<StructuredLogEntry> AppendAsync(...)`, `Task<IReadOnlyList<StructuredLogEntry>> GetRecentAsync(...)`, `Task<StructuredLogReplayCursor?> GetTailCursorAsync(...)`, `Task<StructuredLogReadPage> ReadAfterAsync(...)`, and `Task TrimAsync(int keepNewest, ...)`.
+- **Contract:** append returns the committed entry carrying the authoritative cursor. `ReadAfterAsync` validates an optional source/scope/stream-bound opaque anchor and returns one oldest-first bounded snapshot page strictly after it, plus the next scanned cursor and `HasMore`. Cursor codecs and decoded provider positions stay internal to each adapter. A store that assigns committed sequences from a lifetime high-water never rewinds it after retention or restart. `Sequence` is display metadata and is neither unique nor a replay identity.
+- **Default impl:** `InMemoryStructuredLogStore` — a bounded ring buffer with process-lifetime cursor state.
 - **Override:** register your own `IStructuredLogStore` to persist entries and serve recent/bounded tail reads. Durable adapters own a bounded nonblocking ingest queue and complete `AppendAsync` only after commit. `ReadAfterAsync` must scan in committed cursor order and advance its next cursor over filtered-out records. The default uses `TryAddSingleton`, so a persistence feature's `AddSingleton<IStructuredLogStore>` wins regardless of feature order.
 
 ### `IStructuredLogLiveFeed` *(Core — `Elsa.Diagnostics.StructuredLogs.Core`)*

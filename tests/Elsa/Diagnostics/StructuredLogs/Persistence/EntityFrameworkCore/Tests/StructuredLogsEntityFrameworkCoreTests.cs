@@ -46,7 +46,6 @@ public sealed class StructuredLogsEntityFrameworkCoreTests
         Assert.Equal(entry.Scopes.Select(scope => (scope.Items.Select(item => (item.Name, item.Value)).ToArray(), scope.Text)),
             committed.Scopes.Select(scope => (scope.Items.Select(item => (item.Name, item.Value)).ToArray(), scope.Text)));
         Assert.Equal(entry.Exception, committed.Exception);
-        Assert.Equal(1, await fixture.Store.GetHighWaterMarkAsync());
         var recent = (await fixture.Store.GetRecentAsync(StructuredLogFilter.None)).Single();
         Assert.Equal(committed.Sequence, recent.Sequence);
         Assert.Equal(committed.ReplayCursor, recent.ReplayCursor);
@@ -127,7 +126,6 @@ public sealed class StructuredLogsEntityFrameworkCoreTests
         var committed = await fixture.Store.AppendAsync(Entry("retained", LogLevel.Information, "source-a"));
         await fixture.Store.TrimAsync(0);
 
-        Assert.Equal(1, await fixture.Store.GetHighWaterMarkAsync());
         Assert.Null(await fixture.Store.GetTailCursorAsync());
         await Assert.ThrowsAsync<StructuredLogReplayCursorUnavailableException>(() =>
             fixture.Store.ReadAfterAsync(committed.ReplayCursor, StructuredLogFilter.None, 10));
@@ -160,7 +158,7 @@ public sealed class StructuredLogsEntityFrameworkCoreTests
         Assert.Equal(entries[3].ReplayCursor, await fixture.Store.GetTailCursorAsync());
         await Assert.ThrowsAsync<StructuredLogReplayCursorUnavailableException>(() =>
             fixture.Store.ReadAfterAsync(entries[1].ReplayCursor, StructuredLogFilter.None, 10));
-        Assert.Equal(4, await fixture.Store.GetHighWaterMarkAsync());
+        Assert.Equal(5, (await fixture.Store.AppendAsync(Entry("five", LogLevel.Information, "source-a"))).Sequence);
     }
 
     [Fact]
@@ -358,7 +356,7 @@ public sealed class StructuredLogsEntityFrameworkCoreTests
             Options.Create(new StructuredLogsOptions()),
             new("tenant", "scope", "stream"));
 
-        var read = await Assert.ThrowsAsync<StructuredLogsException>(() => store.GetHighWaterMarkAsync());
+        var read = await Assert.ThrowsAsync<StructuredLogsException>(() => store.GetTailCursorAsync());
         var write = await Assert.ThrowsAsync<StructuredLogsException>(() => store.TrimAsync(0));
 
         Assert.Same(cause, read.InnerException);
