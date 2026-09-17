@@ -329,10 +329,10 @@ public sealed class EfActivityManagementProjectionWriter(ActivitiesDesignDbConte
                 StringComparer.Ordinal.Equals(x.Entity.DefinitionId, definitionId) &&
                 StringComparer.Ordinal.Equals(x.Entity.TenantId, tenantId)))
             return true;
-        var candidates = await db.ActivityDefinitionVersions.AsNoTracking()
-            .Where(x =>
-                EF.Property<string>(x, "TenantScopeKey") == ActivitiesDesignDbContext.NormalizeTenantKey(tenantId) &&
-                EF.Property<string>(x, "IdIdentityHash") == ActivitiesDesignDbContext.ComputeIdentityHash(versionId))
+        var candidates = await ActivitiesDesignDbContext.InPhysicalIdentityOrder(db.ActivityDefinitionVersions.AsNoTracking()
+                .Where(x =>
+                    EF.Property<string>(x, "TenantScopeKey") == ActivitiesDesignDbContext.NormalizeTenantKey(tenantId) &&
+                    EF.Property<string>(x, "IdIdentityHash") == ActivitiesDesignDbContext.ComputeIdentityHash(versionId)))
             .Select(x => new { x.Id, x.DefinitionId, x.TenantId })
             .Take(2)
             .ToListAsync(token);
@@ -491,7 +491,7 @@ public sealed class EfActivityManagementProjectionRetention(ActivitiesDesignDbCo
     {
         while (true)
         {
-            var batch = await set.Where(predicate).Take(DeleteBatchSize).ToListAsync(token);
+            var batch = await ActivitiesDesignDbContext.InPhysicalIdentityOrder(set.Where(predicate)).Take(DeleteBatchSize).ToListAsync(token);
             if (batch.Count == 0) return;
             set.RemoveRange(batch);
             await db.SaveChangesAsync(token);

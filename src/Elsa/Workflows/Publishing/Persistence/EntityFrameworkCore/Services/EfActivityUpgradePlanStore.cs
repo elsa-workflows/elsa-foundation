@@ -1179,7 +1179,7 @@ public sealed class EfActivityUpgradePlanStore(
     private static async Task<T> SingleAsync<T>(IQueryable<T> query, string identity, CancellationToken cancellationToken)
         where T : class
     {
-        var matches = await query.Take(2).ToListAsync(cancellationToken);
+        var matches = await ActivitiesDesignDbContext.InPhysicalIdentityOrder(query).Take(2).ToListAsync(cancellationToken);
         return matches.Count == 1
             ? matches[0]
             : throw Stale($"Required snapshot '{identity}' is unavailable.");

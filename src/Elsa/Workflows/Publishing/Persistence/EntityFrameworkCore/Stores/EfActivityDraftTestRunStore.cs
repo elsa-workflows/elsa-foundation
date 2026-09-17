@@ -141,6 +141,7 @@ public sealed class EfActivityDraftTestRunStore(
         var candidates = await context.ActivityDraftTestRuns.AsNoTracking()
             .Where(row => row.TenantIdHash == EfPublishingStoreSupport.TenantHash(scope) &&
                           row.TestRunIdHash == EfPublishingStoreSupport.Hash(testRunId))
+            .OrderBy(row => row.Id)
             .Take(2)
             .ToArrayAsync(cancellationToken);
         if (candidates.Length == 0)

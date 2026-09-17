@@ -150,6 +150,7 @@ public sealed class EfPublicationRecordStore(
         var candidates = await context.PublicationRecords.AsNoTracking()
             .Where(row => row.TenantIdHash == EfPublishingStoreSupport.TenantHash(tenantId) &&
                           row.PublicationIdHash == EfPublishingStoreSupport.Hash(publicationId))
+            .OrderBy(row => row.Id)
             .Take(2)
             .ToArrayAsync(cancellationToken);
         if (candidates.Length == 0)

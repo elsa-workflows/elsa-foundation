@@ -44,10 +44,6 @@ internal sealed class OpenTelemetryEntityFrameworkCoreFixture : IAsyncDisposable
             Provider = "Sqlite",
             ConnectionString = $"Data Source={path}"
         });
-        // EF reports a Skip or Take without an OrderBy only as query-time warning 10102 when a query first compiles,
-        // so the store's queries raise it as an error here.
-        services.ConfigureDbContext<OpenTelemetrySqliteDbContext>(builder =>
-            builder.ConfigureWarnings(warnings => warnings.Throw(CoreEventId.RowLimitingOperationWithoutOrderByWarning)));
 
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }

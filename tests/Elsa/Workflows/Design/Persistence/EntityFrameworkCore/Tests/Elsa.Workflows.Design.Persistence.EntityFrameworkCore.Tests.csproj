@@ -12,4 +12,8 @@
     <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Publishing/Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->
+    <Compile Include="../../../../../Persistence/EntityFramework/Tests/UnorderedRowLimitGuard.cs" Link="UnorderedRowLimitGuard.cs" />
+  </ItemGroup>
 </Project>
