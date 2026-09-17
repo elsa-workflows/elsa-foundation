@@ -796,7 +796,7 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetDeliverableAsync(RuntimePostCommitOutboxQuery query, CancellationToken cancellationToken = default) =>
             inner.GetDeliverableAsync(query, cancellationToken);
 
-        public ValueTask RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default) =>
+        public ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default) =>
             inner.RecordDeliveryResultAsync(result, cancellationToken);
 
         public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>> ClaimAsync(RuntimePostCommitOutboxClaimRequest request, CancellationToken cancellationToken = default) =>
@@ -857,7 +857,7 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetDeliverableAsync(RuntimePostCommitOutboxQuery query, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<RuntimePostCommitOutboxItem>>([item]);
 
-        public ValueTask RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default) =>
+        public ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default) =>
             throw exception;
     }
 
@@ -873,5 +873,242 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         Assert.DoesNotContain("stack-secret", serialized, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("signal", serialized, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("sent", serialized, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // Issue #1798 - concurrent post-commit outbox delivery contention.
+    //
+    // The live drain skips the durable claim round-trip; the resumption sweep claims across EVERY execution with no
+    // filter, on a timer. So the sweep can take an item between the live drain's read and its record. That used to throw
+    // out of the store, escape the drain orchestrator and surface as an HTTP 500 on workflow start.
+    //
+    // StealingOutboxStore reproduces exactly that interleaving deterministically: it hands the live drain the items it
+    // asked for, then immediately claims them under a different owner - so by the time the drain records, the item is
+    // owned by someone else. No threads, no timing budget, no flake.
+    // ---------------------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Processor_LiveDrain_ItemStolenBetweenReadAndRecord_DoesNotThrow()
+    {
+        var inner = new InMemoryRuntimeCheckpointCommitStore();
+        var store = new StealingOutboxStore(inner, _now, stealingOwnerId: "sweep-worker");
+        var dispatcher = new RecordingDispatcher();
+        var liveDrain = new AsyncLocalRuntimeLiveDrainDeliveryAccessor();
+        var processor = NewLiveDrainProcessor(store, dispatcher, _now, liveDrain);
+        await inner.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1", kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+
+        using (liveDrain.Push(new RuntimeLiveDrainDeliveryScope("wfexec-1")))
+        {
+            // Before the fix this call threw InvalidOperationException("... is claimed; its owner and fencing token are
+            // required."), which became the 500. The assertion that matters most is simply that it returns.
+            var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(
+                limit: 10, workflowExecutionId: "wfexec-1", intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+
+            Assert.Equal(1, result.AttemptedCount);
+            // Neither delivered nor failed: this deliverer persisted nothing, and the owning deliverer will record the
+            // item's real terminal state. Counting it as delivered would inflate the drain's continuation signal.
+            Assert.Equal(0, result.DeliveredCount);
+            Assert.Equal(0, result.FailedCount);
+            Assert.Equal(1, result.SupersededCount);
+            Assert.True(Assert.Single(result.Items).IsSuperseded);
+        }
+
+        Assert.True(store.DidSteal);
+    }
+
+    [Fact]
+    public async Task Processor_LiveDrain_SupersededRecording_LeavesTheOwningClaimIntact()
+    {
+        var inner = new InMemoryRuntimeCheckpointCommitStore();
+        var store = new StealingOutboxStore(inner, _now, stealingOwnerId: "sweep-worker");
+        var dispatcher = new RecordingDispatcher();
+        var liveDrain = new AsyncLocalRuntimeLiveDrainDeliveryAccessor();
+        var processor = NewLiveDrainProcessor(store, dispatcher, _now, liveDrain);
+        await inner.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1", kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+
+        using (liveDrain.Push(new RuntimeLiveDrainDeliveryScope("wfexec-1")))
+        {
+            await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(
+                limit: 10, workflowExecutionId: "wfexec-1", intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+        }
+
+        // Write NOTHING when superseded: status, owner, fence, attempt count and delivery timestamp all belong to the
+        // stealing owner's claim and must be untouched, or the owner's own completion would be rejected as stale.
+        var current = await inner.FindAsync("outbox-1");
+        Assert.NotNull(current);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, current.Status);
+        Assert.Equal("sweep-worker", current.DeliveringOwnerId);
+        Assert.Equal(1, current.DeliveryFencingToken);
+        Assert.Equal(0, current.DeliveryAttemptCount);
+        Assert.Null(current.DeliveredAt);
+    }
+
+    [Fact]
+    public async Task Processor_LiveDrain_SupersededItem_StaysRecoverableByClaimExpiry()
+    {
+        var inner = new InMemoryRuntimeCheckpointCommitStore();
+        var store = new StealingOutboxStore(inner, _now, stealingOwnerId: "sweep-worker");
+        var dispatcher = new RecordingDispatcher();
+        var liveDrain = new AsyncLocalRuntimeLiveDrainDeliveryAccessor();
+        var processor = NewLiveDrainProcessor(store, dispatcher, _now, liveDrain);
+        await inner.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1", kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+
+        using (liveDrain.Push(new RuntimeLiveDrainDeliveryScope("wfexec-1")))
+        {
+            await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(
+                limit: 10, workflowExecutionId: "wfexec-1", intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+        }
+
+        // Tolerating supersession must not weaken the crash backstop: if the stealing owner dies without completing,
+        // the claim expires and the item is reclaimable with a higher fence, exactly as before this change.
+        var reclaimed = await inner.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+            "recovery-worker", _now.AddMinutes(5), TimeSpan.FromMinutes(1), 10));
+
+        Assert.Equal("outbox-1", Assert.Single(reclaimed).OutboxItemId);
+        Assert.Equal(2, Assert.Single(reclaimed).FencingToken);
+    }
+
+    [Fact]
+    public async Task Processor_LiveDrain_SupersededRecording_IsLoggedAsSupersededNotAsFailure()
+    {
+        var inner = new InMemoryRuntimeCheckpointCommitStore();
+        var store = new StealingOutboxStore(inner, _now, stealingOwnerId: "sweep-worker");
+        var dispatcher = new RecordingDispatcher();
+        var liveDrain = new AsyncLocalRuntimeLiveDrainDeliveryAccessor();
+        var logger = new RecordingLogger<RuntimePostCommitOutboxProcessor>();
+        var processor = new RuntimePostCommitOutboxProcessor(
+            store,
+            dispatcher,
+            new FakeTimeProvider(_now),
+            DefaultRuntimeFaultCapturePolicy.CreateDefault(),
+            workflowDispatchStore: null,
+            logger,
+            liveDrain);
+        await inner.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1", kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+
+        using (liveDrain.Push(new RuntimeLiveDrainDeliveryScope("wfexec-1")))
+        {
+            await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(
+                limit: 10, workflowExecutionId: "wfexec-1", intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+        }
+
+        // This enum has no exhaustive switch anywhere and the build is warnings-only, so a new value reaches the
+        // comparison sites silently. Pin the observable result: superseded is reported as its own event, at Information,
+        // and never as a delivery success or a delivery failure.
+        var superseded = Assert.Single(logger.Entries, entry => entry.EventId.Id == 68110);
+        Assert.Equal(LogLevel.Information, superseded.Level);
+        Assert.DoesNotContain(logger.Entries, entry => entry.EventId.Id == 68104);
+        Assert.DoesNotContain(logger.Entries, entry => entry.EventId.Id is 68101 or 68103);
+    }
+
+    /// <summary>
+    /// Hands out the deliverable items the caller asked for, then immediately claims them under a different owner - the
+    /// exact interleaving of issue #1798, where the resumption sweep takes an item between a live drain's read and its
+    /// record.
+    /// </summary>
+    private sealed class StealingOutboxStore(
+        InMemoryRuntimeCheckpointCommitStore inner,
+        DateTimeOffset now,
+        string stealingOwnerId) : IRuntimePostCommitOutboxStore
+    {
+        public bool DidSteal { get; private set; }
+
+        public async ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetDeliverableAsync(
+            RuntimePostCommitOutboxQuery query,
+            CancellationToken cancellationToken = default)
+        {
+            var items = await inner.GetDeliverableAsync(query, cancellationToken);
+            if (items.Count > 0)
+            {
+                var stolen = await inner.ClaimAsync(
+                    new RuntimePostCommitOutboxClaimRequest(stealingOwnerId, now, TimeSpan.FromMinutes(1), items.Count),
+                    cancellationToken);
+                DidSteal = stolen.Count > 0;
+            }
+
+            return items;
+        }
+
+        public ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> RecordDeliveryResultAsync(
+            RuntimePostCommitOutboxDeliveryResult result,
+            CancellationToken cancellationToken = default) =>
+            inner.RecordDeliveryResultAsync(result, cancellationToken);
+    }
+
+    /// <summary>
+    /// Issue #1798, second trigger - deterministic, no concurrency involved.
+    ///
+    /// The fencing token never resets: every claim increments it, and a claim that expires or fails retryably returns the
+    /// item to a deliverable state with the incremented token still on it. The claim-less live-drain path then picked it
+    /// up and tried to record without a fence, which was rejected on the FIRST attempt, every time. One start meeting one
+    /// expired claim was enough - no race required.
+    ///
+    /// The exclusion lives in the claim-less branch rather than in the store's deliverable query, because that query is
+    /// shared with retry visibility and with the migration quiescence probe. The two tests below pin both halves of that:
+    /// the live drain skips the fenced item, and the shared query still reports it.
+    /// </summary>
+    [Fact]
+    public async Task Processor_LiveDrain_SkipsItemsAlreadyCarryingAFencingToken()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        var dispatcher = new RecordingDispatcher();
+        var liveDrain = new AsyncLocalRuntimeLiveDrainDeliveryAccessor();
+        await store.AddPendingForTestingAsync(NewOutboxItem(
+            "outbox-1", "intent-1", "wfexec-1",
+            kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
+            retryPolicy: new RuntimePostCommitRetryPolicy(5, TimeSpan.FromSeconds(10))));
+
+        // Build the actually-poisoned state: claimed (fence -> 1), then released back with a retryable failure. The item
+        // is now DELIVERABLE again - Pending/FailedRetryable, past its retry delay - while still carrying the fence.
+        // Claiming alone would not reproduce it: a Delivering item is already excluded by the deliverable query, so a
+        // test that stops there passes with or without this fix and proves nothing.
+        var claim = Assert.Single(await store.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+            "worker-1", _now, TimeSpan.FromMinutes(1), 10)));
+        await store.RecordDeliveryResultAsync(claim, new RuntimePostCommitOutboxDeliveryResult(
+            "outbox-1", RuntimePostCommitOutboxStatus.FailedRetryable, _now.AddSeconds(1), "transient"));
+
+        var later = _now.AddMinutes(5);
+        var processor = NewLiveDrainProcessor(store, dispatcher, later, liveDrain);
+
+        var beforeDrain = await store.FindAsync("outbox-1");
+        Assert.NotNull(beforeDrain);
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, beforeDrain.Status);
+        Assert.True(beforeDrain.DeliveryFencingToken > 0);
+        // Deliverable AND fenced - the state that threw deterministically on the first attempt, every time.
+        Assert.Single(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(later, 10)));
+
+        using (liveDrain.Push(new RuntimeLiveDrainDeliveryScope("wfexec-1")))
+        {
+            var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(
+                limit: 10, workflowExecutionId: "wfexec-1", intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+
+            // Not attempted at all: it belongs to the claim path, the only path that can present the fence its
+            // completion requires. Without the skip this item is dispatched and then recorded as superseded.
+            Assert.Equal(0, result.AttemptedCount);
+        }
+
+        Assert.Empty(dispatcher.Intents);
+    }
+
+    [Fact]
+    public async Task FencedItem_StaysVisibleToTheSharedDeliverableQueryForRetryAndQuiescence()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1"));
+        await store.ClaimAsync(new RuntimePostCommitOutboxClaimRequest("worker-1", _now, TimeSpan.FromMinutes(1), 10));
+        await store.RecordDeliveryResultAsync(
+            new RuntimePostCommitOutboxClaim(
+                (await store.FindAsync("outbox-1"))!, "worker-1", 1, _now, _now.AddMinutes(1)),
+            new RuntimePostCommitOutboxDeliveryResult(
+                "outbox-1", RuntimePostCommitOutboxStatus.FailedRetryable, _now.AddSeconds(1), "transient"));
+
+        // The item is now FailedRetryable and fenced. The shared query MUST still surface it once its retry delay has
+        // elapsed: it is the retry-visibility query, and the migration quiescence probe reads it to decide whether outbox
+        // work is still outstanding. Hiding fenced items here would strand retries and let a migration run over live work.
+        var deliverable = await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddMinutes(5), 10));
+
+        var item = Assert.Single(deliverable);
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, item.Status);
+        Assert.True(item.DeliveryFencingToken > 0);
     }
 }

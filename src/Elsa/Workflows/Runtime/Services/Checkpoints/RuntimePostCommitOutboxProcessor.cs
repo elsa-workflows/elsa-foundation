@@ -147,7 +147,16 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 workflowExecutionId: request.WorkflowExecutionId,
                 intentKind: request.IntentKind),
                 cancellationToken);
-            foreach (var item in items)
+            // Deliver only the unfenced items. The fencing token never resets, so a claim that expired or failed
+            // retryably leaves the item deliverable again while still carrying its token — and a claim-less recording
+            // has no fence to present, so it could only ever come back superseded. Delivering it here would re-run the
+            // dispatch for nothing and hand the work to a deliverer that cannot complete it.
+            //
+            // This filter lives here, not in the store's deliverable query, because that query is shared: it is also
+            // the retry-visibility query (a retryable item must reappear once its delay elapses) and the query the
+            // migration quiescence probe uses to decide whether outbox work is still outstanding. Hiding fenced items
+            // from it would break retries and would let a migration proceed while delivery is still in flight.
+            foreach (var item in items.Where(item => item.DeliveryFencingToken == 0))
                 processedItems.Add(await ProcessItemAsync(item, claim: null, cancellationToken));
         }
 
@@ -206,6 +215,20 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             if (recordingException is not null)
                 throw new OutboxProcessingException(item.OutboxItemId, item.Intent.IntentId, exception, recordingException);
 
+            // H2: this enum has no exhaustive switch anywhere and the build is warnings-only, so a new value reaches here
+            // silently. Superseded is handled FIRST and explicitly — falling through would log this item with the failure
+            // status even though the store persisted nothing, misreporting an item this processor does not own.
+            if (outcome == RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner)
+            {
+                LogDeliverySuperseded(item);
+                return new RuntimePostCommitOutboxProcessedItem(
+                    item.OutboxItemId,
+                    item.Intent.IntentId,
+                    effectiveStatus,
+                    failureMessage,
+                    RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner);
+            }
+
             var persistedStatus = outcome == RuntimePostCommitOutboxClaimCompletionOutcome.DeliveredOnChildEvidence
                 ? RuntimePostCommitOutboxStatus.Delivered
                 : effectiveStatus;
@@ -218,7 +241,21 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 failureMessage);
         }
 
-        await RecordDeliveryResultAsync(item, claim, RuntimePostCommitOutboxStatus.Delivered, null, recordedAt: null, deliveryFailure: null, cancellationToken);
+        var successOutcome = await RecordDeliveryResultAsync(item, claim, RuntimePostCommitOutboxStatus.Delivered, null, recordedAt: null, deliveryFailure: null, cancellationToken);
+        if (successOutcome == RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner)
+        {
+            // The dispatch above still happened, and the continuation queue's enqueue is idempotent, so the work is done
+            // exactly once. What this processor must NOT do is claim the delivery: the owning deliverer records the item's
+            // terminal state, and counting it as delivered here would keep the drain cycling on work it does not own.
+            LogDeliverySuperseded(item);
+            return new RuntimePostCommitOutboxProcessedItem(
+                item.OutboxItemId,
+                item.Intent.IntentId,
+                RuntimePostCommitOutboxStatus.Delivered,
+                FailureMessage: null,
+                RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner);
+        }
+
         LogDelivered(item);
 
         return new RuntimePostCommitOutboxProcessedItem(
@@ -292,7 +329,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 await _claimStore!.RecordDeliveryResultAsync(claim, result, cancellationToken);
         }
         else
-            await _outboxStore.RecordDeliveryResultAsync(result, cancellationToken);
+            return await _outboxStore.RecordDeliveryResultAsync(result, cancellationToken);
 
         return RuntimePostCommitOutboxClaimCompletionOutcome.Persisted;
     }
@@ -454,6 +491,20 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             dispatchId,
             RuntimePostCommitRetryPolicy.SaturatingIncrement(item.DeliveryAttemptCount),
             RuntimePostCommitOutboxStatus.Delivered);
+    }
+
+    private void LogDeliverySuperseded(RuntimePostCommitOutboxItem item)
+    {
+        item.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId);
+        // Information, not Warning: losing this race is the designed behaviour of a claim-less live drain running
+        // alongside the resumption sweep, not a fault. The owning deliverer records the item's real terminal state.
+        _logger.LogInformation(
+            new EventId(68110, "RuntimePostCommitDeliverySuperseded"),
+            "Runtime post-commit delivery was superseded by another owner; nothing was persisted by this deliverer. OutboxItemId={OutboxItemId} IntentId={IntentId} IntentKind={IntentKind} DispatchId={DispatchId}",
+            item.OutboxItemId,
+            item.Intent.IntentId,
+            item.Intent.Kind,
+            dispatchId);
     }
 
     private void LogDeliveryFailureProjection(

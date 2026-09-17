@@ -85,9 +85,6 @@ public sealed class EfRuntimePostCommitOutboxStore(
     {
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
-        if (query.OwnerId is not null)
-            throw new NotSupportedException("The EF post-commit outbox store does not implement delivery ownership filtering.");
-
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
         return await QueryCandidatesAsync(scope, query, CandidateSelection.Deliverable, cancellationToken);
     }
@@ -143,7 +140,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
         return claims;
     }
 
-    public async ValueTask RecordDeliveryResultAsync(
+    public async ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> RecordDeliveryResultAsync(
         RuntimePostCommitOutboxDeliveryResult result,
         CancellationToken cancellationToken = default)
     {
@@ -155,10 +152,14 @@ public sealed class EfRuntimePostCommitOutboxStore(
         var current = ReadChecked(row, scope, result.OutboxItemId);
         if (current.IsTerminal)
             throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is already terminal.");
+        // Contention is legitimate, not exceptional: a live drain skips the durable claim round-trip while the resumption
+        // sweep claims with no execution filter, so the sweep can take this item between this caller's read and this write.
+        // Report the loss and write nothing — the owning deliverer's completion governs, and the durable item stays a crash
+        // backstop that claim expiry and the sweep redeliver idempotently.
         if (current.Status == RuntimePostCommitOutboxStatus.Delivering || current.DeliveryFencingToken > 0)
         {
-            throw new InvalidOperationException(
-                $"Post-commit outbox item '{result.OutboxItemId}' is claimed; its owner and fencing token are required.");
+            Detach(row);
+            return RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner;
         }
 
         var attemptCount = RuntimePostCommitRetryPolicy.SaturatingIncrement(current.DeliveryAttemptCount);
@@ -182,18 +183,21 @@ public sealed class EfRuntimePostCommitOutboxStore(
         {
             await context.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateConcurrencyException exception)
+        catch (DbUpdateConcurrencyException)
         {
+            // The row changed under us between the read above and this write — the same contention the status guard
+            // catches, only detected by the optimistic-concurrency token instead. It is the identical situation and
+            // takes the identical answer: write nothing, report the loss, let the winning deliverer complete the item.
             Detach(row);
-            throw new InvalidOperationException(
-                $"The post-commit outbox item '{result.OutboxItemId}' changed concurrently; retry the delivery result.",
-                exception);
+            return RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner;
         }
         catch
         {
             Detach(row);
             throw;
         }
+
+        return RuntimePostCommitOutboxClaimCompletionOutcome.Persisted;
     }
 
     public async ValueTask RecordDeliveryResultAsync(
