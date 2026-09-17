@@ -251,6 +251,39 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
     }
 
     [Fact]
+    public async Task Unconditional_claim_mapping_save_that_loses_a_create_race_fails_instead_of_reporting_success()
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await using (var schema = CreateContext(databasePath))
+                await schema.Database.EnsureCreatedAsync();
+
+            var interceptor = new LostClaimMappingCreateInterceptor();
+            await using var context = CreateContext(databasePath, interceptor);
+            var store = new EfClaimMappingStore(context, new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+            var rule = ClaimMapping("tenant-a", "oidc", "lost-create", order: 1);
+
+            var failure = await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() => store.SaveAsync(rule).AsTask());
+            Assert.Equal("Unable to save the Identity claim mapping.", failure.Message);
+            Assert.IsType<InvalidOperationException>(failure.InnerException);
+            Assert.Empty(context.ChangeTracker.Entries());
+            Assert.Empty(await context.ClaimMappings.AsNoTracking().ToListAsync());
+
+            // A revision-aware create reports the same lost race as a conflict, not as a failure.
+            Assert.Equal(IamRevisionSaveStatus.Conflict, (await store.SaveWithRevisionAsync(rule, expectedRevision: null)).Status);
+
+            interceptor.Armed = false;
+            await store.SaveAsync(rule);
+            Assert.Equal(rule.Order, Assert.Single(await store.ListForProviderAsync(rule.TenantId, rule.Provider)).Order);
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
+    [Fact]
     public async Task Concurrent_same_name_creates_have_one_duplicate_name_loser()
     {
         var databasePath = TemporaryDatabasePath();
@@ -2561,6 +2594,31 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
             throw new DbUpdateException(
                 $"Violation of unique constraint '{constraintName}'.",
                 new SqlException(2627),
+                entries);
+        }
+    }
+
+    /// <summary>
+    /// Fails a claim-mapping insert with the provider error of a competing insert that committed first. SQLite cannot
+    /// stage that race for real: it serializes writers, so a second connection waits on or is refused by the atomic
+    /// writer's transaction instead of losing on the unique key.
+    /// </summary>
+    private sealed class LostClaimMappingCreateInterceptor : SaveChangesInterceptor
+    {
+        public bool Armed { get; set; } = true;
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            var entries = eventData.Context!.ChangeTracker.Entries().ToArray();
+            if (!Armed || !entries.Any(entry => entry is { Entity: ClaimMappingEntity, State: EntityState.Added }))
+                return ValueTask.FromResult(result);
+
+            throw new DbUpdateException(
+                "An error occurred while saving the entity changes.",
+                new SqliteException($"SQLite Error 19: 'UNIQUE constraint failed: {IdentityIamEfModule.ClaimMappingTableName}.Id'.", 19, 1555),
                 entries);
         }
     }

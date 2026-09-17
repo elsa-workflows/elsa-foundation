@@ -18,4 +18,8 @@
     <ProjectReference Include="../../../../../../../src/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->
+    <Compile Include="../../../../../Persistence/EntityFramework/Tests/UnorderedRowLimitGuard.cs" Link="UnorderedRowLimitGuard.cs" />
+  </ItemGroup>
 </Project>

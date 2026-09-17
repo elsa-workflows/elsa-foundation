@@ -1,7 +1,6 @@
 using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
-using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,7 +22,7 @@ public sealed class EfCredentialStore(
     {
         ValidateIdentity(tenantId, nameof(tenantId));
         ValidateIdentity(credentialId, nameof(credentialId));
-        PrepareTenantRead(tenantId, cancellationToken);
+        PrepareTenant(tenantId, cancellationToken);
         try
         {
             var row = await context.Credentials.AsNoTracking().SingleOrDefaultAsync(
@@ -53,7 +52,7 @@ public sealed class EfCredentialStore(
     {
         ValidateIdentity(tenantId, nameof(tenantId));
         ValidateIdentity(credentialId, nameof(credentialId));
-        PrepareTenantRead(tenantId, cancellationToken);
+        PrepareTenant(tenantId, cancellationToken);
         try
         {
             var row = await context.Credentials.AsNoTracking().SingleOrDefaultAsync(
@@ -84,180 +83,33 @@ public sealed class EfCredentialStore(
     {
         ArgumentNullException.ThrowIfNull(credential);
         ValidateCredential(credential);
-        PrepareTenantWrite(credential.TenantId, cancellationToken);
+        PrepareTenant(credential.TenantId, cancellationToken);
 
         var expectedVersion = 0L;
         if (expectedRevision is not null &&
             !IdentityEntityFrameworkRevisionCodec.TryGetVersion(expectedRevision, out expectedVersion))
-            return Conflict();
+            return EfIdentityStoreSupport.InvalidRevision();
 
         return expectedRevision is null
-            ? await SaveCreateOnlyAsync(credential, cancellationToken)
-            : await SaveCompareAndSwapAsync(credential, expectedVersion, cancellationToken);
+            ? await EfIdentityRevisionedRowWrite.SaveCreateOnlyAsync(context, Row(credential), cancellationToken)
+            : await EfIdentityRevisionedRowWrite.SaveCompareAndSwapAsync(context, Row(credential), expectedVersion, cancellationToken);
     }
 
     private async Task SaveUnconditionallyAsync(CredentialRecord credential, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(credential);
         ValidateCredential(credential);
-        PrepareTenantWrite(credential.TenantId, cancellationToken);
+        PrepareTenant(credential.TenantId, cancellationToken);
 
-        await EfIdentityStoreSupport.UnconditionalWrites.RunAsync(context, async () =>
-        {
-            try
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var row = await FindEntityForWriteAsync(credential, cancellationToken);
-                if (row is null)
-                {
-                    context.Add(CreateEntity(credential, revision: 1));
-                }
-                else
-                {
-                    Apply(row, credential);
-                    row.Revision = checked(row.Revision + 1);
-                }
-
-                await context.SaveChangesAsync(cancellationToken);
-                context.ChangeTracker.Clear();
-                return;
-            }
-            catch (Exception exception) when (EfIdentityStoreSupport.UnconditionalWrites.ShouldRetry(context, exception))
-            {
-                context.ChangeTracker.Clear();
-                throw;
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                context.ChangeTracker.Clear();
-                throw;
-            }
-            catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
-            {
-                context.ChangeTracker.Clear();
-                throw Failure("Unable to save the Identity credential.", exception);
-            }
-        }, _ => throw Failure(
-            "Unable to save the Identity credential after bounded concurrency retries.",
-            new InvalidOperationException("The Identity credential was concurrently modified.")), cancellationToken);
+        await EfIdentityRevisionedRowWrite.SaveUnconditionallyAsync(context, Row(credential), cancellationToken);
     }
 
-    private async Task<IamRevisionSaveResult> SaveCreateOnlyAsync(
-        CredentialRecord credential,
-        CancellationToken cancellationToken)
-    {
-        return await EfIdentityStoreSupport.TransientWrites.RunUntilSettledAsync<IamRevisionSaveResult>(context, async () =>
-        {
-            try
-            {
-                if (await FindEntityForWriteAsync(credential, cancellationToken) is not null)
-                {
-                    context.ChangeTracker.Clear();
-                    return Conflict();
-                }
-
-                context.Add(CreateEntity(credential, revision: 1));
-                await context.SaveChangesAsync(cancellationToken);
-                context.ChangeTracker.Clear();
-                return Saved(1);
-            }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
-            {
-                context.ChangeTracker.Clear();
-                return Conflict();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                context.ChangeTracker.Clear();
-                return Conflict();
-            }
-            catch (Exception exception) when (EfIdentityStoreSupport.TransientWrites.ShouldRetry(context, exception))
-            {
-                context.ChangeTracker.Clear();
-                return EfWriteAttempt<IamRevisionSaveResult>.Retry(exception);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                context.ChangeTracker.Clear();
-                throw;
-            }
-            catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
-            {
-                context.ChangeTracker.Clear();
-                throw Failure("Unable to create the Identity credential.", exception);
-            }
-        }, _ => throw Failure(
-            "Unable to create the Identity credential after bounded transient retries.",
-            new InvalidOperationException("The Identity credential could not be created.")), cancellationToken);
-    }
-
-    private async Task<IamRevisionSaveResult> SaveCompareAndSwapAsync(
-        CredentialRecord credential,
-        long expectedVersion,
-        CancellationToken cancellationToken)
-    {
-        return await EfIdentityStoreSupport.TransientWrites.RunUntilSettledAsync<IamRevisionSaveResult>(context, async () =>
-        {
-            try
-            {
-                var row = await FindEntityForWriteAsync(credential, cancellationToken);
-                if (row is null)
-                {
-                    context.ChangeTracker.Clear();
-                    return new IamRevisionSaveResult(IamRevisionSaveStatus.NotFound);
-                }
-                if (row.Revision != expectedVersion)
-                {
-                    context.ChangeTracker.Clear();
-                    return Conflict();
-                }
-
-                var nextRevision = checked(row.Revision + 1);
-                Apply(row, credential);
-                row.Revision = nextRevision;
-                await context.SaveChangesAsync(cancellationToken);
-                context.ChangeTracker.Clear();
-                return Saved(nextRevision);
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                context.ChangeTracker.Clear();
-                try
-                {
-                    var exists = await ExistsAsync(credential, cancellationToken);
-                    context.ChangeTracker.Clear();
-                    return exists ? Conflict() : new IamRevisionSaveResult(IamRevisionSaveStatus.NotFound);
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    context.ChangeTracker.Clear();
-                    throw;
-                }
-                catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
-                {
-                    context.ChangeTracker.Clear();
-                    throw Failure("Unable to classify the Identity credential concurrency conflict.", exception);
-                }
-            }
-            catch (Exception exception) when (EfIdentityStoreSupport.TransientWrites.ShouldRetry(context, exception))
-            {
-                context.ChangeTracker.Clear();
-                return EfWriteAttempt<IamRevisionSaveResult>.Retry(exception);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                context.ChangeTracker.Clear();
-                throw;
-            }
-            catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
-            {
-                context.ChangeTracker.Clear();
-                throw Failure("Unable to update the Identity credential.", exception);
-            }
-        }, _ => throw Failure(
-            "Unable to update the Identity credential after bounded transient retries.",
-            new InvalidOperationException("The Identity credential could not be updated.")), cancellationToken);
-    }
+    private EfIdentityRevisionedRow<CredentialEntity> Row(CredentialRecord credential) => new(
+        "Identity credential",
+        cancellationToken => FindEntityForWriteAsync(credential, cancellationToken),
+        cancellationToken => ExistsAsync(credential, cancellationToken),
+        static () => new CredentialEntity(),
+        entity => Apply(entity, credential));
 
     private async Task<CredentialEntity?> FindEntityForWriteAsync(
         CredentialRecord credential,
@@ -287,25 +139,11 @@ public sealed class EfCredentialStore(
         return row is null || !Matches(row, tenantId, credentialId) ? null : row;
     }
 
-    private void PrepareTenantRead(string tenantId, CancellationToken cancellationToken)
+    private void PrepareTenant(string tenantId, CancellationToken cancellationToken)
     {
         context.EnsureProviderBinding();
         IdentityEntityFrameworkAccessGuard.EnsureTenant(accessContextAccessor, tenantId);
         cancellationToken.ThrowIfCancellationRequested();
-    }
-
-    private void PrepareTenantWrite(string tenantId, CancellationToken cancellationToken)
-    {
-        context.EnsureProviderBinding();
-        IdentityEntityFrameworkAccessGuard.EnsureTenant(accessContextAccessor, tenantId);
-        cancellationToken.ThrowIfCancellationRequested();
-    }
-
-    private static CredentialEntity CreateEntity(CredentialRecord credential, long revision)
-    {
-        var entity = new CredentialEntity { Revision = revision };
-        Apply(entity, credential);
-        return entity;
     }
 
     private static void Apply(CredentialEntity entity, CredentialRecord credential)
@@ -366,11 +204,6 @@ public sealed class EfCredentialStore(
         ArgumentNullException.ThrowIfNull(credential.HashedSecret);
         ArgumentNullException.ThrowIfNull(credential.HashAlgorithm);
     }
-
-    private static IamRevisionSaveResult Saved(long revision) =>
-        new(IamRevisionSaveStatus.Saved, IdentityEntityFrameworkRevisionCodec.FromVersion(revision));
-
-    private static IamRevisionSaveResult Conflict() => new(IamRevisionSaveStatus.Conflict);
 
     private static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception) =>
         new(message, exception);

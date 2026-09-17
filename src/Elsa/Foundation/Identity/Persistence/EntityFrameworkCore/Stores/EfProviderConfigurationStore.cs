@@ -2,7 +2,6 @@ using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Core.Ownership;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
-using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
 
@@ -176,12 +175,14 @@ public sealed class EfProviderConfigurationStore(
         ValidateConfiguration(configuration);
         var expectedVersion = 0L;
         if (expectedRevision is not null && !IdentityEntityFrameworkRevisionCodec.TryGetVersion(expectedRevision, out expectedVersion))
-            return Conflict();
+            return EfIdentityStoreSupport.InvalidRevision();
 
+        EnsureWriteAccess(configuration);
+        context.EnsureProviderBinding();
         if (expectedRevision is null)
-            return await SaveCreateOnlyAsync(configuration, cancellationToken);
+            return await EfIdentityRevisionedRowWrite.SaveCreateOnlyAsync(context, Row(configuration), cancellationToken);
 
-        return await SaveCompareAndSwapAsync(configuration, expectedVersion, cancellationToken);
+        return await EfIdentityRevisionedRowWrite.SaveCompareAndSwapAsync(context, Row(configuration), expectedVersion, cancellationToken);
     }
 
     private async Task SaveUnconditionallyAsync(ProviderConfigurationRecord configuration, CancellationToken cancellationToken)
@@ -191,153 +192,17 @@ public sealed class EfProviderConfigurationStore(
         EnsureWriteAccess(configuration);
         context.EnsureProviderBinding();
 
-        await EfIdentityStoreSupport.UnconditionalWrites.RunAsync(context, async () =>
-        {
-            try
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var row = await FindEntityForWriteAsync(configuration, cancellationToken);
-                if (row is null)
-                {
-                    context.Add(CreateEntity(configuration, revision: 1));
-                }
-                else
-                {
-                    Apply(row, configuration);
-                    row.Revision = checked(row.Revision + 1);
-                }
-
-                await context.SaveChangesAsync(cancellationToken);
-                context.ChangeTracker.Clear();
-                return;
-            }
-            catch (Exception exception) when (EfIdentityStoreSupport.UnconditionalWrites.ShouldRetry(context, exception))
-            {
-                context.ChangeTracker.Clear();
-                throw;
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                context.ChangeTracker.Clear();
-                throw;
-            }
-            catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
-            {
-                context.ChangeTracker.Clear();
-                throw Failure("Unable to save the provider configuration.", exception);
-            }
-        }, _ => throw Failure("Unable to save the provider configuration after bounded concurrency retries.", new InvalidOperationException("The provider configuration was concurrently modified.")), cancellationToken);
+        await EfIdentityRevisionedRowWrite.SaveUnconditionallyAsync(context, Row(configuration), cancellationToken);
     }
 
-    private async Task<IamRevisionSaveResult> SaveCreateOnlyAsync(ProviderConfigurationRecord configuration, CancellationToken cancellationToken)
-    {
-        EnsureWriteAccess(configuration);
-        context.EnsureProviderBinding();
-        return await EfIdentityStoreSupport.TransientWrites.RunUntilSettledAsync<IamRevisionSaveResult>(context, async () =>
-        {
-            try
-            {
-                if (await FindEntityForWriteAsync(configuration, cancellationToken) is not null)
-                {
-                    context.ChangeTracker.Clear();
-                    return Conflict();
-                }
-
-                context.Add(CreateEntity(configuration, revision: 1));
-                await context.SaveChangesAsync(cancellationToken);
-                context.ChangeTracker.Clear();
-                return Saved(1);
-            }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
-            {
-                context.ChangeTracker.Clear();
-                return Conflict();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                context.ChangeTracker.Clear();
-                return Conflict();
-            }
-            catch (Exception exception) when (EfIdentityStoreSupport.TransientWrites.ShouldRetry(context, exception))
-            {
-                context.ChangeTracker.Clear();
-                return EfWriteAttempt<IamRevisionSaveResult>.Retry(exception);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                context.ChangeTracker.Clear();
-                throw;
-            }
-            catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
-            {
-                context.ChangeTracker.Clear();
-                throw Failure("Unable to create the provider configuration.", exception);
-            }
-        }, _ => throw Failure("Unable to create the provider configuration after bounded transient retries.", new InvalidOperationException("The provider configuration could not be created.")), cancellationToken);
-    }
-
-    private async Task<IamRevisionSaveResult> SaveCompareAndSwapAsync(ProviderConfigurationRecord configuration, long expectedVersion, CancellationToken cancellationToken)
-    {
-        EnsureWriteAccess(configuration);
-        context.EnsureProviderBinding();
-        return await EfIdentityStoreSupport.TransientWrites.RunUntilSettledAsync<IamRevisionSaveResult>(context, async () =>
-        {
-            try
-            {
-                var row = await FindEntityForWriteAsync(configuration, cancellationToken);
-                if (row is null)
-                {
-                    context.ChangeTracker.Clear();
-                    return new IamRevisionSaveResult(IamRevisionSaveStatus.NotFound);
-                }
-                if (row.Revision != expectedVersion)
-                {
-                    context.ChangeTracker.Clear();
-                    return Conflict();
-                }
-
-                var nextRevision = checked(row.Revision + 1);
-                Apply(row, configuration);
-                row.Revision = nextRevision;
-                await context.SaveChangesAsync(cancellationToken);
-                context.ChangeTracker.Clear();
-                return Saved(nextRevision);
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                context.ChangeTracker.Clear();
-                try
-                {
-                    var exists = await ExistsAsync(configuration, cancellationToken);
-                    context.ChangeTracker.Clear();
-                    return exists ? Conflict() : new IamRevisionSaveResult(IamRevisionSaveStatus.NotFound);
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
-                {
-                    throw Failure("Unable to classify the provider configuration concurrency conflict.", exception);
-                }
-            }
-            catch (Exception exception) when (EfIdentityStoreSupport.TransientWrites.ShouldRetry(context, exception))
-            {
-                context.ChangeTracker.Clear();
-                return EfWriteAttempt<IamRevisionSaveResult>.Retry(exception);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                context.ChangeTracker.Clear();
-                throw;
-            }
-            catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
-            {
-                context.ChangeTracker.Clear();
-                throw Failure("Unable to update the provider configuration.", exception);
-            }
-        }, _ => throw Failure("Unable to update the provider configuration after bounded transient retries.", new InvalidOperationException("The provider configuration could not be updated.")), cancellationToken);
-    }
+    private EfIdentityRevisionedRow<ProviderConfigurationEntity> Row(ProviderConfigurationRecord configuration) => new(
+        "provider configuration",
+        cancellationToken => FindEntityForWriteAsync(configuration, cancellationToken),
+        cancellationToken => ExistsAsync(configuration, cancellationToken),
+        () => configuration.TenantId is null
+            ? new GlobalProviderConfigurationEntity()
+            : new TenantProviderConfigurationEntity(),
+        entity => Apply(entity, configuration));
 
     private async Task<ProviderConfigurationEntity?> FindEntityForWriteAsync(ProviderConfigurationRecord configuration, CancellationToken cancellationToken)
     {
@@ -416,16 +281,6 @@ public sealed class EfProviderConfigurationStore(
             IdentityEntityFrameworkAccessGuard.EnsureTenant(accessContextAccessor, configuration.TenantId);
     }
 
-    private static ProviderConfigurationEntity CreateEntity(ProviderConfigurationRecord configuration, long revision)
-    {
-        ProviderConfigurationEntity entity = configuration.TenantId is null
-            ? new GlobalProviderConfigurationEntity()
-            : new TenantProviderConfigurationEntity();
-        entity.Revision = revision;
-        Apply(entity, configuration);
-        return entity;
-    }
-
     private static void Apply(ProviderConfigurationEntity entity, ProviderConfigurationRecord configuration)
     {
         entity.Id = configuration.TenantId is null
@@ -469,8 +324,6 @@ public sealed class EfProviderConfigurationStore(
             IdentityProviderConfigurationSettingsCodec.Deserialize(entity.SettingsJson));
     }
 
-    private static IamRevisionSaveResult Saved(long revision) => new(IamRevisionSaveStatus.Saved, IdentityEntityFrameworkRevisionCodec.FromVersion(revision));
-    private static IamRevisionSaveResult Conflict() => new(IamRevisionSaveStatus.Conflict);
     private static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception) => new(message, exception);
 
     private static void ValidateConfiguration(ProviderConfigurationRecord configuration)
