@@ -1,6 +1,11 @@
-import { AlertCircle, Check, MapPin, Wrench } from "lucide-react";
+import { AlertCircle, Check, Flag, MapPin, Wrench } from "lucide-react";
 import type { ValidationError, WorkflowDraft, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
-import { collectVariableRepairItems, parseValidationErrorPath } from "../validationDiagnostics";
+import {
+  STRUCTURAL_NO_START_TYPE,
+  STRUCTURAL_START_TRIGGER_TYPE,
+  collectVariableRepairItems,
+  parseValidationErrorPath
+} from "../validationDiagnostics";
 import { formatDate } from "../workflowFormatting";
 import { isRejectedTestRun } from "./editorHelpers";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
@@ -16,12 +21,18 @@ export function ValidationPanel({
   errors: providedErrors,
   onRepair,
   onSelectNode,
+  onSetAsStartNode,
   unavailable
 }: {
   draft: WorkflowDraft;
   errors?: ValidationError[];
   onRepair(nodeId: string | null): void;
   onSelectNode?(nodeId: string): void;
+  /**
+   * Applies the fix for a start-node fault: the two structural start errors report a node that cannot be
+   * reached, and the fix is to make it the start. Absent when the canvas is not a Flowchart.
+   */
+  onSetAsStartNode?(nodeId: string): void;
   unavailable?: boolean;
 }) {
   const errors = providedErrors ?? (Array.isArray(draft.validationErrors) ? draft.validationErrors : []);
@@ -50,9 +61,15 @@ export function ValidationPanel({
         {errors.map((error, index) => {
           const repair = repairByError.get(error);
           const nodeId = repair?.path.nodeId ?? parseValidationErrorPath(error.path).nodeId;
+          const startNodeFix = onSetAsStartNode && nodeId && isStartNodeError(error) ? nodeId : null;
           return (
             <li key={index} className={repair ? "wf-validation-item repairable" : "wf-validation-item"}>
               <span className="wf-validation-message">{error.message ?? "Validation issue."}</span>
+              {startNodeFix ? (
+                <button type="button" className="wf-validation-repair" onClick={() => onSetAsStartNode?.(startNodeFix)}>
+                  <Flag size={12} /> Set as start
+                </button>
+              ) : null}
               {repair?.path.nodeId ? (
                 <button type="button" className="wf-validation-repair" onClick={() => onRepair(repair.path.nodeId)}>
                   <Wrench size={12} /> Repair
@@ -68,6 +85,11 @@ export function ValidationPanel({
       </ul>
     </div>
   );
+}
+
+/** The two structural faults a start-node change fixes (see draftValidation). */
+function isStartNodeError(error: ValidationError) {
+  return error.type === STRUCTURAL_START_TRIGGER_TYPE || error.type === STRUCTURAL_NO_START_TYPE;
 }
 
 export function TestRunStatus({

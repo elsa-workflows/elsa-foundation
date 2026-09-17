@@ -239,6 +239,45 @@ describe("workflow adapter", () => {
     expect(normalized?.structure?.payload.startNodeId).toBe("first");
   });
 
+  it("marks the start node on canvas node data so the canvas can badge it", () => {
+    const first = node("first");
+    const second = node("second");
+    const owner = flowchartRoot([first, second]);
+    owner.structure!.payload.startNodeId = "second";
+
+    const canvas = buildCanvas({
+      owner,
+      slot: {
+        id: "activities",
+        label: "Activities",
+        property: "activities",
+        cardinality: "many",
+        mode: "flowchart",
+        activities: [first, second]
+      }
+    }, [flowchartActivity], []);
+
+    expect(canvas.nodes.map(canvasNode => [canvasNode.id, canvasNode.data.isStartNode]))
+      .toEqual([["first", false], ["second", true]]);
+  });
+
+  it("marks no start node on a Sequence, which runs in authored order", () => {
+    const first = node("first");
+    const canvas = buildCanvas({
+      owner: flowchartRoot([first]),
+      slot: {
+        id: "activities",
+        label: "Activities",
+        property: "activities",
+        cardinality: "many",
+        mode: "sequence",
+        activities: [first]
+      }
+    }, [flowchartActivity], []);
+
+    expect(canvas.nodes[0].data.isStartNode).toBe(false);
+  });
+
   it("persists an explicit null start for an empty Flowchart", () => {
     const normalized = normalizeActivityStructures(flowchartRoot([]), [flowchartActivity]);
 

@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type ReactNode } from "react";
-import { AlertTriangle, Repeat2 } from "lucide-react";
+import { AlertTriangle, Flag, Repeat2 } from "lucide-react";
 import { CopyableIdentifier, StudioTabPanel, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
 import type {
   StudioActivityDescriptor,
@@ -88,6 +88,13 @@ interface InspectorPanelProps {
   onEnterSlot(ownerNodeId: string, slot: ChildSlot, label: string): void;
   // Assign or replace the activity of a single-cardinality slot with a fresh instance of `activity`.
   onReplaceSlotActivity(ownerNodeId: string, slot: ChildSlot, label: string, activity: ActivityCatalogItem): void;
+  /**
+   * Whether the inspected node is the Flowchart start node. Undefined outside a Flowchart canvas, where
+   * there is no addressable start (a Sequence runs in authored order).
+   */
+  isStartNode?: boolean;
+  /** Points the containing Flowchart's start at the inspected node. Absent when the canvas has no start. */
+  onSetAsStartNode?(nodeId: string): void;
 }
 
 // The right-hand inspector for the selected activity: identity, availability notice, property editors,
@@ -129,7 +136,9 @@ export function InspectorPanel({
   onSelectedPresentationChange,
   onChangeReusableVersion,
   onEnterSlot,
-  onReplaceSlotActivity
+  onReplaceSlotActivity,
+  isStartNode,
+  onSetAsStartNode
 }: InspectorPanelProps) {
   const [slotPicker, setSlotPicker] = useState<SlotPickerState | null>(null);
   const [localActiveTabId, setLocalActiveTabId] = useState<ActivityInspectorTabId>("inputs");
@@ -238,6 +247,22 @@ export function InspectorPanel({
           <div className="wf-availability-notice">
             <AlertTriangle size={14} />
             <span>No longer available for new use · {getAvailabilityStateLabel(selectedNodeAvailability.state)}</span>
+          </div>
+        ) : null}
+        {isStartNode !== undefined && !inspectingScopeOwner ? (
+          <div className="wf-start-node-control">
+            {isStartNode ? (
+              <span className="wf-chip"><Flag size={12} /> Start node</span>
+            ) : (
+              <button
+                type="button"
+                className="wf-link-button"
+                disabled={readOnly || !onSetAsStartNode}
+                onClick={() => onSetAsStartNode?.(selectedNode.nodeId)}
+              >
+                <Flag size={12} /> Set as start node
+              </button>
+            )}
           </div>
         ) : null}
       </div>

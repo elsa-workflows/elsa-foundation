@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { BaseEdge, EdgeLabelRenderer, Handle, Position, getSmoothStepPath, type EdgeProps, type NodeProps } from "@xyflow/react";
-import { AlertTriangle, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Flag, Plus, Trash2 } from "lucide-react";
 import type { ActivityCatalogItem } from "../workflowTypes";
 import { getActivityDisplay, type WorkflowNodeData } from "../workflowAdapter";
 import { getAvailabilityStateLabel } from "../activityAvailability";
@@ -27,12 +27,18 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
   const availability = availabilityLookup?.({ activityVersionId: nodeData.activityVersionId, activityTypeKey: nodeData.activityTypeKey }) ?? null;
   return (
     <div
-      className={["wf-node", selected ? "selected" : "", runtime ? "wf-node-runtime" : "", runtime?.hasBlockingIncident ? "faulted" : "", availability ? "wf-node-unavailable" : "", nodeData.ghost ? "wf-node-ghost" : ""].filter(Boolean).join(" ")}
+      className={["wf-node", selected ? "selected" : "", runtime ? "wf-node-runtime" : "", runtime?.hasBlockingIncident ? "faulted" : "", availability ? "wf-node-unavailable" : "", nodeData.ghost ? "wf-node-ghost" : "", nodeData.isStartNode ? "wf-node-start" : ""].filter(Boolean).join(" ")}
+      data-start-node={nodeData.isStartNode ? "true" : undefined}
       data-icon={nodeData.icon ?? "activity"}
       title={[nodeData.label, nodeData.description].filter(Boolean).join(" — ")}
       aria-description={nodeData.description}
     >
       {showFlowPorts && nodeData.acceptsInbound ? <Handle type="target" position={Position.Left} /> : null}
+      {nodeData.isStartNode ? (
+        <span className="wf-node-start-badge" title="Execution starts here">
+          <Flag size={11} aria-hidden="true" /> Start
+        </span>
+      ) : null}
       {availability ? (
         <span className="wf-node-availability" title={`No longer available for new use · ${getAvailabilityStateLabel(availability.state)}`}>
           <AlertTriangle size={13} />

@@ -5,6 +5,8 @@ import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workfl
 import {
   collectActivityNodeIds,
   createActivityNode,
+  readFlowchartStartNodeId,
+  setFlowchartStartNode,
   findActivityNode,
   findNodeScopePath,
   getActivityDisplay,
@@ -616,6 +618,33 @@ export function WorkflowEditor({
     });
   }, [catalogByVersion, editDraft, scopeOwner?.nodeId]);
 
+  // A start node is a Flowchart concept; a Sequence runs in authored order and has none.
+  const isFlowchartScope = scope?.slot.mode === "flowchart";
+  // The Flowchart start node is authored, not positional: this is the only writer besides the
+  // normalizer's auto-assignment, so an operator can move the start (e.g. onto a trigger added later)
+  // instead of being told at publish time that a node is unreachable.
+  const flowchartStartNodeId = isFlowchartScope ? readFlowchartStartNodeId(scopeOwner) : null;
+  const setStartNode = useCallback((nodeId: string) => {
+    const ownerNodeId = scopeOwner?.nodeId;
+    if (!ownerNodeId || !isFlowchartScope) return;
+    editDraft(({ draft: current }) => {
+      const rootActivity = current?.state.rootActivity;
+      if (!current || !rootActivity) return null;
+      return {
+        ...current,
+        state: {
+          ...current.state,
+          rootActivity: updateActivity(
+            rootActivity,
+            ownerNodeId,
+            owner => setFlowchartStartNode(owner, nodeId),
+            catalogByVersion)
+        }
+      };
+    });
+    setStatus("Start node updated.");
+  }, [catalogByVersion, editDraft, isFlowchartScope, scopeOwner?.nodeId, setStatus]);
+
   const updateSelectedBpmnElement = useCallback((elementId: string, patch: Partial<BpmnElement>) =>
     updateScopeOwnerBpmnPayload(owner => updateBpmnElement(owner, elementId, patch)), [updateScopeOwnerBpmnPayload]);
 
@@ -903,6 +932,8 @@ export function WorkflowEditor({
           onChangeReusableVersion={openVersionChange}
           onEnterSlot={enterSlotScope}
           onReplaceSlotActivity={replaceSlotActivity}
+          isStartNode={isFlowchartScope && inspectedNode ? inspectedNode.nodeId === flowchartStartNodeId : undefined}
+          onSetAsStartNode={isFlowchartScope ? setStartNode : undefined}
         />
       )
     },
@@ -1215,6 +1246,7 @@ export function WorkflowEditor({
             errors={combinedValidationErrors}
             onRepair={repairVariableReference}
             onSelectNode={repairVariableReference}
+            onSetAsStartNode={isFlowchartScope ? setStartNode : undefined}
             unavailable={draftValidations.available === false}
           />
           </>

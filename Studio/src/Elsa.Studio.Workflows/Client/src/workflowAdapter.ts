@@ -1,6 +1,11 @@
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityNodeStructure, ActivityPresentationRecord, DesignMetadataRecord, IncidentStateSummary } from "./workflowTypes";
-import { flowchartStructureKind, normalizeFlowchartStartNode } from "./flowchartStartNode";
+import {
+  canStartWorkflow as activityCanStartWorkflow,
+  flowchartStructureKind,
+  normalizeFlowchartStartNode,
+  readFlowchartStartNodeId
+} from "./flowchartStartNode";
 import { bpmnStructureKind } from "./bpmn/bpmnTypes";
 import { buildIntrinsicWireBlock, readIntrinsicDescriptor } from "./intrinsicActivities";
 import { getActivityDisplay } from "./activityDisplay";
@@ -9,7 +14,12 @@ import { indexActivityPresentation, resolveActivityLabel } from "./activityPrese
 export { getActivityDisplay } from "./activityDisplay";
 
 export const sequenceStructureKind = "elsa.sequence.structure";
-export { flowchartStructureKind, normalizeFlowchartStartNode } from "./flowchartStartNode";
+export {
+  flowchartStructureKind,
+  normalizeFlowchartStartNode,
+  readFlowchartStartNodeId,
+  setFlowchartStartNode
+} from "./flowchartStartNode";
 export { bpmnStructureKind } from "./bpmn/bpmnTypes";
 
 export interface WorkflowNodeData extends Record<string, unknown> {
@@ -29,6 +39,10 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   suppressFlowPorts?: boolean;
   runtime?: WorkflowRuntimeNodeOverlay;
   description?: string;
+  /** True for the Flowchart activity execution enters first, so the canvas can say which node starts. */
+  isStartNode?: boolean;
+  /** True when this activity can start a workflow (its `CanStartWorkflow` input is a literal true). */
+  canStartWorkflow?: boolean;
   // Set by the Executable Inspector for activity-catalog misses: the node renders as an honest
   // ghost ("not available in this environment") instead of pretending the activity resolves.
   ghost?: boolean;
@@ -563,6 +577,8 @@ export function buildCanvas(
   const catalogByVersion = new Map(catalog.map(activity => [activity.activityVersionId, activity]));
   const layoutByNodeId = new Map(layout.map(record => [record.nodeId, record]));
   const presentationByNodeId = indexActivityPresentation(activityPresentation);
+  // Only a Flowchart has an addressable start; a Sequence runs in authored order.
+  const startNodeId = scope.slot.mode === "flowchart" ? readFlowchartStartNodeId(scope.owner) : null;
   const nodes: Node<WorkflowNodeData>[] = scope.slot.activities.map((activity, index) => {
     const catalogItem = catalogByVersion.get(activity.activityVersionId);
     const position = layoutByNodeId.get(activity.nodeId) ?? defaultPosition(scope.slot.mode, index);
@@ -570,7 +586,7 @@ export function buildCanvas(
       activity,
       catalogItem,
       { x: position.x, y: position.y },
-      {},
+      { isStartNode: activity.nodeId === startNodeId },
       formatSummary,
       presentationByNodeId.get(activity.nodeId)
     );
@@ -854,7 +870,7 @@ function createWorkflowNode(
   activity: ActivityNode,
   catalogItem: ActivityCatalogItem | undefined,
   position: XYPosition,
-  options: { connectable?: boolean; deletable?: boolean; draggable?: boolean; suppressFlowPorts?: boolean } = {},
+  options: { connectable?: boolean; deletable?: boolean; draggable?: boolean; suppressFlowPorts?: boolean; isStartNode?: boolean } = {},
   formatSummary?: WorkflowNodeSummaryFormatter,
   presentation?: ActivityPresentationRecord
 ): Node<WorkflowNodeData> {
@@ -882,7 +898,9 @@ function createWorkflowNode(
       childSlots: getChildSlots(activity, catalogItem),
       acceptsInbound: activityAcceptsInbound(activity, catalogItem),
       sourcePorts: options.suppressFlowPorts ? [] : getActivitySourcePorts(activity, catalogItem),
-      suppressFlowPorts: options.suppressFlowPorts
+      suppressFlowPorts: options.suppressFlowPorts,
+      isStartNode: options.isStartNode,
+      canStartWorkflow: activityCanStartWorkflow(activity)
     }
   };
 }

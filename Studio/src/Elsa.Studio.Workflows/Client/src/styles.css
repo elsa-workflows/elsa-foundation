@@ -6068,6 +6068,32 @@ button.wf-reference-select {
   border-color: var(--wf-warning);
 }
 
+/* The Flowchart start node: a ring plus a badge, so "which node runs first" is never inferred from
+   position on the canvas. */
+.wf-node-start {
+  border-color: var(--wf-accent);
+  box-shadow: 0 0 0 1px var(--wf-accent) inset;
+}
+
+.wf-node-start-badge {
+  position: absolute;
+  top: -10px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--wf-accent);
+  color: var(--primary-foreground, #ffffff);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  box-shadow: var(--wf-shadow-sm, 0 2px 6px rgba(15, 23, 42, 0.25));
+  z-index: 2;
+}
+
 .wf-availability-notice {
   display: flex;
   align-items: center;

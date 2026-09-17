@@ -59,11 +59,20 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // already measure 124.73 kB, so the growth is not avoidable by splitting the fix. Deferring the Object
 // editor's surfaces would reclaim it, but that restructuring is out of scope here. Re-baselined to 125.70 kB
 // to keep the usual sub-0.5 kB review margin.
+// The authored Flowchart start node (#493 follow-up) is eager by construction: the wire normalizer
+// decides the start (now preferring an activity that can start a workflow over the merely-first one) and
+// the canvas adapter marks which node it is, so `flowchartStartNode.ts` sits on the entry path through
+// both activityInputWire and workflowAdapter. Measured growth is ~1.7 kB on the entry (125.37 -> 127.07 kB)
+// and ~1 kB on each landing path (Definitions 383.01 kB, upgrades 373.98 kB); trimming the module's
+// re-export surface and its connection reader reclaimed under 0.1 kB, so the cost is the feature, not
+// packaging. Re-baselined with the usual sub-0.5 kB entry margin and ~1.5 kB landing margins. The
+// diagnostic half stays off the entry: the misplaced-trigger check and the panel's fault types are
+// reached through the deferred validation surface.
 const budgets = {
-  entryJavaScript: 125_700,
+  entryJavaScript: 127_500,
   stylesheet: 185_000,
-  definitionsLandingTotal: 381_500,
-  upgradeLandingTotal: 373_000,
+  definitionsLandingTotal: 384_500,
+  upgradeLandingTotal: 375_500,
   individualChunk: 500_000
 };
 

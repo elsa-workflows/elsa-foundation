@@ -5,6 +5,7 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
   STRUCTURAL_DANGLING_TYPE,
   STRUCTURAL_NO_START_TYPE,
+  STRUCTURAL_START_TRIGGER_TYPE,
   combineValidationErrors,
   detectStructuralValidationErrors,
   fromDraftValidationError
@@ -143,6 +144,33 @@ describe("draft validations API capability handling", () => {
   });
 });
 
+describe("start-trigger detection", () => {
+  it("flags a start trigger that is neither the start node nor connected into", () => {
+    // The reported repro: an If authored first takes the start, then an Http Endpoint with
+    // CanStartWorkflow is added and can never run.
+    const httpEndpoint = node("http", {
+      canStartWorkflow: { typeName: "System.Boolean", expression: { type: "Literal", value: true } }
+    });
+    const state = { rootActivity: flowchart([node("if"), httpEndpoint], [], "if") };
+
+    const errors = detectStructuralValidationErrors(state);
+
+    const startTrigger = errors.find(error => error.type === STRUCTURAL_START_TRIGGER_TYPE);
+    expect(startTrigger?.path).toBe("http");
+    expect(startTrigger?.message).toContain("can start a workflow");
+  });
+
+  it("stops flagging it once it is the start node", () => {
+    const httpEndpoint = node("http", {
+      canStartWorkflow: { typeName: "System.Boolean", expression: { type: "Literal", value: true } }
+    });
+    const state = { rootActivity: flowchart([node("if"), httpEndpoint], [], "http") };
+
+    expect(detectStructuralValidationErrors(state).some(error => error.type === STRUCTURAL_START_TRIGGER_TYPE))
+      .toBe(false);
+  });
+});
+
 describe("ValidationPanel", () => {
   let root: Root;
   let container: HTMLDivElement;
@@ -172,6 +200,49 @@ describe("ValidationPanel", () => {
     const goTo = container.querySelector<HTMLButtonElement>(".wf-validation-repair")!;
     flushSync(() => goTo.click());
     expect(selected).toEqual(["orphan"]);
+  });
+
+  it("offers a one-click start-node fix for both start faults", () => {
+    const madeStart: string[] = [];
+    flushSync(() => root.render(
+      <ValidationPanel
+        draft={draft}
+        errors={[
+          { type: STRUCTURAL_START_TRIGGER_TYPE, message: "Activity 'http' can start a workflow…", path: "http" },
+          { type: STRUCTURAL_NO_START_TYPE, message: "Activity 'write' cannot be reached from the start node.", path: "write" }
+        ]}
+        onRepair={() => {}}
+        onSetAsStartNode={id => madeStart.push(id)}
+      />
+    ));
+
+    const fixes = Array.from(container.querySelectorAll<HTMLButtonElement>(".wf-validation-repair"))
+      .filter(button => button.textContent?.includes("Set as start"));
+    expect(fixes).toHaveLength(2);
+    flushSync(() => fixes[0].click());
+    flushSync(() => fixes[1].click());
+    expect(madeStart).toEqual(["http", "write"]);
+  });
+
+  it("offers no start-node fix for unrelated errors, or when the canvas has no start", () => {
+    flushSync(() => root.render(
+      <ValidationPanel
+        draft={draft}
+        errors={[{ type: STRUCTURAL_DANGLING_TYPE, message: "Activity 'orphan' is not connected.", path: "orphan" }]}
+        onRepair={() => {}}
+        onSetAsStartNode={() => {}}
+      />
+    ));
+    expect(container.textContent).not.toContain("Set as start");
+
+    flushSync(() => root.render(
+      <ValidationPanel
+        draft={draft}
+        errors={[{ type: STRUCTURAL_START_TRIGGER_TYPE, message: "Activity 'http' can start a workflow…", path: "http" }]}
+        onRepair={() => {}}
+      />
+    ));
+    expect(container.textContent).not.toContain("Set as start");
   });
 
   it("notes when server validation is unavailable on the empty state", () => {

@@ -1,5 +1,16 @@
 import type { ValidationError } from "./workflowTypes";
 
+/** Designer-side structural fault types. Kept here, on the panel's own import path, so rendering a
+ * fault does not pull the whole structural analyser into the eager bundles. */
+export const STRUCTURAL_DANGLING_TYPE = "Structure/DisconnectedNode";
+export const STRUCTURAL_NO_START_TYPE = "Structure/NoStartConnection";
+/**
+ * An activity authored to start a workflow that is neither the start node nor connected into. Raised as
+ * soon as the trigger is authored — the designer pairs it with a one-click "set as start" — because the
+ * reachability error alone reports the symptom at publish time and offers no way to fix it.
+ */
+export const STRUCTURAL_START_TRIGGER_TYPE = "Structure/StartTriggerNotStart";
+
 /**
  * Draft validation diagnostics, focused on the scoped-variable repair surface (ADR-0027).
  *
