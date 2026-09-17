@@ -314,7 +314,7 @@ public sealed class EfRecurringTriggerScheduleStore(
             context.ChangeTracker.Clear();
             return false;
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Transient))
         {
             context.ChangeTracker.Clear();
             return false;
@@ -458,7 +458,7 @@ public sealed class EfRecurringTriggerScheduleStore(
     {
         try { await CommitAndClearAsync(transaction, ct); }
         catch (DbUpdateConcurrencyException exception) { await RollbackAndClearAsync(transaction); throw new InvalidOperationException($"{operation} changed concurrently; retry the operation.", exception); }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception)) { await RollbackAndClearAsync(transaction); throw new InvalidOperationException($"{operation} encountered a transient write conflict; retry the operation.", exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Transient)) { await RollbackAndClearAsync(transaction); throw new InvalidOperationException($"{operation} encountered a transient write conflict; retry the operation.", exception); }
         catch (DbUpdateException exception) { await RollbackAndClearAsync(transaction); throw new InvalidOperationException($"{operation} could not be committed.", exception); }
     }
 

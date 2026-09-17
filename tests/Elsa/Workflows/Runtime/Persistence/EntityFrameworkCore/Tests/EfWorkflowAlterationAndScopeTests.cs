@@ -17,6 +17,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
+using static Elsa.Persistence.EntityFramework.Tests.ProviderFailures;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
@@ -321,6 +322,49 @@ public sealed class EfWorkflowAlterationAndScopeTests
         Assert.Empty(fixture.Context.ChangeTracker.Entries());
         interceptor.Disarm();
         Assert.NotNull(await fixture.Store.ClaimNextAsync(plan.PlanId, "worker", plan.CreatedAt.AddMinutes(2), TimeSpan.FromMinutes(1)));
+    }
+
+    [Fact]
+    public async Task Alteration_claim_retries_a_transient_write_race_the_provider_execution_strategy_wrapped_from_reloaded_rows()
+    {
+        await using var db = await Database.CreateAsync();
+        WorkflowAlterationPlanState plan;
+        WorkflowAlterationJobState pending;
+        await using (var seed = db.Open("tenant-a"))
+        {
+            plan = await SealedPlanAsync(seed, "claim-wrapped-busy");
+            pending = Assert.Single((await seed.Store.PageJobsAsync(plan.PlanId, 10)).Items);
+        }
+        var saves = FailingSaveInterceptor.WrappedDeadlock(failures: 1);
+        await using var fixture = db.Open("tenant-a", saves);
+
+        var claimed = await fixture.Store.ClaimNextAsync(plan.PlanId, "worker", plan.CreatedAt.AddMinutes(2), TimeSpan.FromMinutes(1));
+
+        // Retrying on the rows the failed attempt left modified in memory would count the claim twice.
+        Assert.Equal(2, saves.Attempts);
+        Assert.Equal(pending.AttemptCount + 1, claimed!.AttemptCount);
+        Assert.Equal(pending.Revision + 1, claimed.Revision);
+        await using var verification = db.Open("tenant-a");
+        var stored = await verification.Store.FindJobAsync(claimed.JobId);
+        Assert.Equal(claimed.AttemptCount, stored!.AttemptCount);
+        Assert.Equal(claimed.Revision, stored.Revision);
+    }
+
+    [Fact]
+    public async Task Alteration_claim_surfaces_a_wrapped_database_failure_that_is_not_a_write_race_at_once()
+    {
+        await using var db = await Database.CreateAsync();
+        WorkflowAlterationPlanState plan;
+        await using (var seed = db.Open("tenant-a"))
+            plan = await SealedPlanAsync(seed, "claim-wrapped-failure");
+        var saves = FailingSaveInterceptor.WrappedProviderFailure();
+        await using var fixture = db.Open("tenant-a", saves);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            fixture.Store.ClaimNextAsync(plan.PlanId, "worker", plan.CreatedAt.AddMinutes(2), TimeSpan.FromMinutes(1)).AsTask());
+
+        Assert.Equal(1, saves.Attempts);
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
     }
 
     private static async Task<WorkflowAlterationPlanState> SealedPlanAsync(Fixture fixture, string planId)
@@ -869,13 +913,13 @@ public sealed class EfWorkflowAlterationAndScopeTests
         private readonly SqliteConnection _keeper; private readonly string _cs;
         private Database(SqliteConnection keeper, string cs) { _keeper = keeper; _cs = cs; }
         public static async Task<Database> CreateAsync() { var cs = $"Data Source=file:alteration-{Guid.NewGuid():N};Mode=Memory;Cache=Shared"; var keeper = new SqliteConnection(cs); await keeper.OpenAsync(); await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(keeper).Options); await context.Database.EnsureCreatedAsync(); return new(keeper, cs); }
-        public Fixture Open(string scope, DbCommandInterceptor? interceptor = null) => Open(PersistenceAccessContext.Scoped(new PersistenceScope(scope)), interceptor);
-        public Fixture Open(PersistenceAccessContext access, DbCommandInterceptor? interceptor = null) => new(_cs, access, interceptor); public ValueTask DisposeAsync() => _keeper.DisposeAsync();
+        public Fixture Open(string scope, IInterceptor? interceptor = null) => Open(PersistenceAccessContext.Scoped(new PersistenceScope(scope)), interceptor);
+        public Fixture Open(PersistenceAccessContext access, IInterceptor? interceptor = null) => new(_cs, access, interceptor); public ValueTask DisposeAsync() => _keeper.DisposeAsync();
     }
     private sealed class Fixture : IAsyncDisposable
     {
         private readonly SqliteConnection _connection; public readonly BookmarkStateSqliteDbContext Context; public readonly EfWorkflowAlterationStore Store; public readonly EfWorkflowTestScopeStore ScopeStore;
-        public Fixture(string cs, PersistenceAccessContext accessContext, DbCommandInterceptor? interceptor = null) { _connection = new SqliteConnection(cs); _connection.Open(); var options = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(_connection); if (interceptor is not null) options.AddInterceptors(interceptor); Context = new BookmarkStateSqliteDbContext(options.Options); var access = new Accessor(accessContext); var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) })); Store = new(Context, access, codec); ScopeStore = new(Context, access, codec); }
+        public Fixture(string cs, PersistenceAccessContext accessContext, IInterceptor? interceptor = null) { _connection = new SqliteConnection(cs); _connection.Open(); var options = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(_connection); if (interceptor is not null) options.AddInterceptors(interceptor); Context = new BookmarkStateSqliteDbContext(options.Options); var access = new Accessor(accessContext); var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) })); Store = new(Context, access, codec); ScopeStore = new(Context, access, codec); }
         public async ValueTask DisposeAsync() { await Context.DisposeAsync(); await _connection.DisposeAsync(); }
     }
     private sealed class Accessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor

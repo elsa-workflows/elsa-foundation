@@ -63,6 +63,26 @@ public static class EfRelationalExceptionClassifier
     }
 
     /// <summary>
+    /// Returns whether SaveChanges reported one of the lost write races named by <paramref name="conflicts"/>, however
+    /// the report was wrapped on its way out. The default execution strategies of SQL Server and PostgreSQL raise an
+    /// error they treat as transient, a deadlock included, as an <see cref="InvalidOperationException"/> around the
+    /// <see cref="DbUpdateException"/>, and a store's persistence boundary may wrap that again. A race raised by a query
+    /// carries no <see cref="DbUpdateException"/> and never matches.
+    /// </summary>
+    public static bool IsSaveConflict(Exception exception, EfWriteConflict conflicts)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is DbUpdateException update)
+                return IsWriteConflict(update, conflicts);
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Returns whether a relational provider reported a bounded-retry write conflict such as a
     /// serialization failure, deadlock, lock timeout, or SQLite busy/locked result.
     /// </summary>

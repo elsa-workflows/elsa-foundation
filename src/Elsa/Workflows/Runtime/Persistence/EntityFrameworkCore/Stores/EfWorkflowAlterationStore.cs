@@ -21,7 +21,7 @@ public sealed class EfWorkflowAlterationStore(
     // A claim retries only the races SaveChanges reports; any other database failure surfaces with its own cause.
     private static readonly EfWriteRetry ClaimRetry = new(
         EfWriteRetry.DefaultMaxAttempts,
-        exception => exception is DbUpdateException && EfRelationalExceptionClassifier.IsWriteConflict(
+        exception => EfRelationalExceptionClassifier.IsSaveConflict(
             exception, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey | EfWriteConflict.Transient));
     private const string ActiveCursorPurpose = "ef-runtime-alteration-active-v1";
     private const string JobCursorPurpose = "ef-runtime-alteration-jobs-v1";
@@ -275,8 +275,10 @@ public sealed class EfWorkflowAlterationStore(
                 await _context.SaveChangesAsync(cancellationToken);
                 return updated;
             }
-            catch (DbUpdateException)
+            catch
             {
+                // The rows stay tracked with this attempt's changes, however the provider wrapped the failure; a retry
+                // must reload them, or it would apply the claim a second time on top.
                 _context.ChangeTracker.Clear();
                 throw;
             }

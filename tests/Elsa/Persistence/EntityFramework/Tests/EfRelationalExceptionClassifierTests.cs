@@ -105,6 +105,31 @@ public sealed class EfRelationalExceptionClassifierTests
     }
 
     [Fact]
+    public void A_save_conflict_is_recognized_however_its_report_was_wrapped()
+    {
+        var deadlock = new DbUpdateException("write failed", new SqlException(ProviderFailures.Deadlock));
+        var wrapped = ProviderFailures.WrappedByExecutionStrategy(deadlock);
+
+        Assert.True(EfRelationalExceptionClassifier.IsSaveConflict(deadlock, EfWriteConflict.Transient));
+        Assert.True(EfRelationalExceptionClassifier.IsSaveConflict(wrapped, EfWriteConflict.Transient));
+        Assert.True(EfRelationalExceptionClassifier.IsSaveConflict(new InvalidOperationException("store boundary", wrapped), EfWriteConflict.Transient));
+        Assert.True(EfRelationalExceptionClassifier.IsSaveConflict(
+            new InvalidOperationException("store boundary", new DbUpdateConcurrencyException("lost race")), EfWriteConflict.Concurrency));
+    }
+
+    [Fact]
+    public void A_query_race_another_conflict_kind_or_another_save_failure_is_no_save_conflict()
+    {
+        var query = ProviderFailures.WrappedByExecutionStrategy(new SqlException(ProviderFailures.Deadlock));
+        var deadlock = ProviderFailures.WrappedByExecutionStrategy(new DbUpdateException("write failed", new SqlException(ProviderFailures.Deadlock)));
+        var connectionReset = ProviderFailures.WrappedByExecutionStrategy(new DbUpdateException("write failed", new SqlException(10054)));
+
+        Assert.False(EfRelationalExceptionClassifier.IsSaveConflict(query, EfWriteConflict.Transient));
+        Assert.False(EfRelationalExceptionClassifier.IsSaveConflict(deadlock, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey));
+        Assert.False(EfRelationalExceptionClassifier.IsSaveConflict(connectionReset, EfWriteConflict.Transient));
+    }
+
+    [Fact]
     public async Task Classifies_a_real_sqlite_unique_constraint_failure()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
