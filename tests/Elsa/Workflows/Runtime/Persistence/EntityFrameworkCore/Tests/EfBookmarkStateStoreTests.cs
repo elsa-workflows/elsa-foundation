@@ -17,6 +17,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using static Elsa.Persistence.EntityFramework.Tests.ProviderFailures;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
@@ -341,6 +342,46 @@ public sealed class EfBookmarkStateStoreTests
 
         Assert.False(await deleting.Store.DeleteAsync("wf", "delete-transient"));
         Assert.Empty(deleting.Context.ChangeTracker.Entries());
+    }
+
+    [Fact]
+    public async Task Delete_returns_false_for_a_transient_conflict_the_provider_execution_strategy_wrapped()
+    {
+        await using var database = await FileDatabase.CreateAsync();
+        await using (var seed = database.Open())
+            await seed.Store.SaveAsync(State("wf", "delete-strategy-transient", "Event", "hash"));
+
+        await using var deleting = database.Open(FailingSaveInterceptor.WrappedDeadlock());
+
+        Assert.False(await deleting.Store.DeleteAsync("wf", "delete-strategy-transient"));
+        Assert.Empty(deleting.Context.ChangeTracker.Entries());
+    }
+
+    [Fact]
+    public async Task Save_reports_a_transient_conflict_the_provider_execution_strategy_wrapped_as_a_concurrent_change()
+    {
+        await using var database = await FileDatabase.CreateAsync();
+        await using var saving = database.Open(FailingSaveInterceptor.WrappedDeadlock());
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            saving.Store.SaveAsync(State("wf", "save-strategy-transient", "Event", "hash")).AsTask());
+
+        Assert.Equal("The bookmark state changed concurrently; retry the operation.", failure.Message);
+        Assert.Empty(saving.Context.ChangeTracker.Entries());
+    }
+
+    [Fact]
+    public async Task Save_normalizes_a_wrapped_provider_failure_that_is_not_a_transient_conflict()
+    {
+        await using var database = await FileDatabase.CreateAsync();
+        var saves = FailingSaveInterceptor.WrappedProviderFailure();
+        await using var saving = database.Open(saves);
+
+        var failure = await Assert.ThrowsAsync<BookmarkStateEntityFrameworkPersistenceException>(() =>
+            saving.Store.SaveAsync(State("wf", "save-strategy-failure", "Event", "hash")).AsTask());
+
+        Assert.Equal("saving", failure.Operation);
+        Assert.Equal(1, saves.Attempts);
     }
 
     [Fact]

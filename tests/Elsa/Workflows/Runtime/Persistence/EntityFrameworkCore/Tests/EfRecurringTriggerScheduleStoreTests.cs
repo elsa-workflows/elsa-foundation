@@ -9,9 +9,11 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Recovery;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using static Elsa.Persistence.EntityFramework.Tests.ProviderFailures;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
@@ -246,6 +248,42 @@ public sealed class EfRecurringTriggerScheduleStoreTests
         Assert.IsType<BookmarkStateSqliteDbContext>(scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
     }
 
+    [Fact]
+    public async Task Advancing_loses_the_claim_on_a_transient_conflict_the_provider_execution_strategy_wrapped()
+    {
+        await using var schedules = await SeededSchedules.CreateAsync(FailingSaveInterceptor.WrappedDeadlock());
+
+        Assert.False(await schedules.Store.TryAdvanceAsync(SeededSchedules.Standalone.ScheduleId, Now, Now.AddMinutes(1)));
+
+        Assert.Empty(schedules.Context.ChangeTracker.Entries());
+        Assert.Equal(Now, (await schedules.Store.FindAsync(SeededSchedules.Standalone.ScheduleId))!.NextOccurrence);
+    }
+
+    [Fact]
+    public async Task Advancing_fails_on_a_wrapped_provider_failure_that_is_not_a_transient_conflict()
+    {
+        var saves = FailingSaveInterceptor.WrappedProviderFailure();
+        await using var schedules = await SeededSchedules.CreateAsync(saves);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            schedules.Store.TryAdvanceAsync(SeededSchedules.Standalone.ScheduleId, Now, Now.AddMinutes(1)).AsTask());
+
+        Assert.Equal(1, saves.Attempts);
+    }
+
+    [Fact]
+    public async Task Activation_reports_a_transient_conflict_the_provider_execution_strategy_wrapped_and_rolls_back()
+    {
+        await using var schedules = await SeededSchedules.CreateAsync(FailingSaveInterceptor.WrappedDeadlock());
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => schedules.Store.ActivateAsync(SeededSchedules.ActivationId, null).AsTask());
+
+        Assert.EndsWith("encountered a transient write conflict; retry the operation.", failure.Message, StringComparison.Ordinal);
+        Assert.Empty(schedules.Context.ChangeTracker.Entries());
+        Assert.All((await schedules.Store.ListByActivationPageAsync(new RecurringTriggerScheduleActivationPageQuery(SeededSchedules.ActivationId))).Items,
+            schedule => Assert.False(schedule.IsActive));
+    }
+
     private static BookmarkStateSqliteDbContext Context(SqliteConnection connection) =>
         new(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
 
@@ -258,5 +296,48 @@ public sealed class EfRecurringTriggerScheduleStoreTests
     private sealed class Accessor(string scope) : IPersistenceAccessContextAccessor
     {
         public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(scope));
+    }
+
+    private sealed class SeededSchedules : IAsyncDisposable
+    {
+        public const string ActivationId = "publication-a";
+        public static readonly RecurringTriggerSchedule Standalone = Schedule("artifact-a", "standalone", Now);
+        private readonly SqliteConnection connection;
+
+        private SeededSchedules(SqliteConnection connection, BookmarkStateSqliteDbContext context)
+        {
+            this.connection = connection;
+            Context = context;
+            Store = EfRecurringTriggerScheduleStoreTests.Store(context, "tenant-a");
+        }
+
+        public BookmarkStateSqliteDbContext Context { get; }
+
+        public EfRecurringTriggerScheduleStore Store { get; }
+
+        /// <summary>
+        /// Saves a standalone schedule and prepares an activation with one schedule, then opens the store through a
+        /// context whose saves run <paramref name="saves"/>.
+        /// </summary>
+        public static async Task<SeededSchedules> CreateAsync(IInterceptor saves)
+        {
+            var connection = new SqliteConnection("Data Source=:memory:");
+            await connection.OpenAsync();
+            await using (var seed = EfRecurringTriggerScheduleStoreTests.Context(connection))
+            {
+                await seed.Database.EnsureCreatedAsync();
+                var store = EfRecurringTriggerScheduleStoreTests.Store(seed, "tenant-a");
+                await store.SaveAsync(Standalone);
+                await store.PrepareActivationAsync(ActivationId, [Schedule("artifact-b", "prepared", Now, ActivationId, "slot-a")]);
+            }
+            return new SeededSchedules(connection, new(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>()
+                .UseSqlite(connection).AddInterceptors(saves).Options));
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await Context.DisposeAsync();
+            await connection.DisposeAsync();
+        }
     }
 }

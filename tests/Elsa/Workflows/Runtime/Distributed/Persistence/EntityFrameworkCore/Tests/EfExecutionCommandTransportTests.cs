@@ -13,6 +13,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
+using static Elsa.Persistence.EntityFramework.Tests.ProviderFailures;
 
 namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests;
 
@@ -656,8 +657,6 @@ public sealed class EfExecutionCommandTransportTests
             throw new DbUpdateConcurrencyException("Synthetic command transport contention.");
         }
     }
-
-    private sealed class SyntheticProviderException() : DbException("synthetic provider failure");
 
     private static bool IsMutation(string sql)
     {

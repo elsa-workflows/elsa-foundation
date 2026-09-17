@@ -47,7 +47,7 @@ public sealed class EfWorkflowExecutionStateStore(
             context.ChangeTracker.Clear();
             throw new InvalidOperationException("The workflow execution state changed concurrently; retry the operation.", exception);
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception) || EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey | EfWriteConflict.Transient))
         {
             context.ChangeTracker.Clear();
             throw new InvalidOperationException("The workflow execution state changed concurrently; retry the operation.", exception);
@@ -207,7 +207,7 @@ public sealed class EfWorkflowExecutionStateStore(
             return true;
         }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception)) { context.ChangeTracker.Clear(); throw Normalize("deleting", workflowExecutionId, exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Transient)) { context.ChangeTracker.Clear(); throw Normalize("deleting", workflowExecutionId, exception); }
         catch (OperationCanceledException) { context.ChangeTracker.Clear(); throw; }
         catch (InvalidDataException) { context.ChangeTracker.Clear(); throw; }
         catch (DbUpdateException exception) { context.ChangeTracker.Clear(); throw Normalize("deleting", workflowExecutionId, exception); }

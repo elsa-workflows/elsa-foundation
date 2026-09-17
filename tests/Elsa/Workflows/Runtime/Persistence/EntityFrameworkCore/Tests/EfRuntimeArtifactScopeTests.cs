@@ -1,4 +1,5 @@
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -15,6 +16,7 @@ using System.Data.Common;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Xunit;
+using static Elsa.Persistence.EntityFramework.Tests.ProviderFailures;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
@@ -678,6 +680,51 @@ public sealed class EfRuntimeArtifactScopeTests
             failing.Store.SaveAsync(Reference("source-provider-failure", "artifact-provider-failure")).AsTask());
         Assert.Equal("saving", sourceFailure.Operation);
         Assert.Equal("source-provider-failure", sourceFailure.Identity);
+    }
+
+    [Fact]
+    public async Task Template_save_retries_a_transient_conflict_the_provider_execution_strategy_wrapped()
+    {
+        await using var database = await Database.CreateAsync();
+        var saves = FailingSaveInterceptor.WrappedDeadlock(failures: 1);
+        await using var fixture = database.Open("tenant-a", saves);
+
+        await fixture.Template.SaveAsync(Template("wrapped-transient", "wrapped-transient-hash"));
+
+        Assert.Equal(2, saves.Attempts);
+        Assert.NotNull(await fixture.Template.FindAsync("wrapped-transient"));
+    }
+
+    [Fact]
+    public async Task Template_delete_exhausts_its_budget_on_wrapped_transient_conflicts_as_a_persistence_failure()
+    {
+        await using var database = await Database.CreateAsync();
+        await using (var seed = database.Open("tenant-a"))
+            await seed.Template.SaveAsync(Template("wrapped-contention", "wrapped-contention-hash"));
+        var saves = FailingSaveInterceptor.WrappedDeadlock();
+        await using var failing = database.Open("tenant-a", saves);
+
+        var failure = await Assert.ThrowsAsync<RuntimeArtifactEntityFrameworkPersistenceException>(() =>
+            failing.Template.DeleteAsync("wrapped-contention").AsTask());
+
+        Assert.Equal("deleting", failure.Operation);
+        Assert.Equal(EfWriteRetry.DefaultMaxAttempts, saves.Attempts);
+        await using var verification = database.Open("tenant-a");
+        Assert.NotNull(await verification.Template.FindAsync("wrapped-contention"));
+    }
+
+    [Fact]
+    public async Task Template_save_fails_a_wrapped_provider_failure_that_is_not_a_transient_conflict_without_a_retry()
+    {
+        await using var database = await Database.CreateAsync();
+        var saves = FailingSaveInterceptor.WrappedProviderFailure();
+        await using var fixture = database.Open("tenant-a", saves);
+
+        var failure = await Assert.ThrowsAsync<RuntimeArtifactEntityFrameworkPersistenceException>(() =>
+            fixture.Template.SaveAsync(Template("wrapped-provider-failure", "wrapped-provider-failure-hash")).AsTask());
+
+        Assert.Equal("saving", failure.Operation);
+        Assert.Equal(1, saves.Attempts);
     }
 
     [Fact]

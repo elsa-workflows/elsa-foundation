@@ -18,8 +18,8 @@ public sealed class EfExecutableActivityTemplateStore(
     IRuntimeRecoveryContinuationCodec continuationCodec) : IExecutableActivityTemplateStore
 {
     // Both retry only races SaveChanges reports; a provider failure raised any other way is normalized at once.
-    private static readonly EfWriteRetry CreateRetry = new(EfWriteRetry.DefaultMaxAttempts, exception => IsSaveConflict(exception, EfWriteConflict.UniqueKey | EfWriteConflict.Transient));
-    private static readonly EfWriteRetry DeleteRetry = new(EfWriteRetry.DefaultMaxAttempts, exception => IsSaveConflict(exception, EfWriteConflict.Concurrency | EfWriteConflict.Transient));
+    private static readonly EfWriteRetry CreateRetry = new(EfWriteRetry.DefaultMaxAttempts, exception => EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey | EfWriteConflict.Transient));
+    private static readonly EfWriteRetry DeleteRetry = new(EfWriteRetry.DefaultMaxAttempts, exception => EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Concurrency | EfWriteConflict.Transient));
     private const string ContinuationPurpose = "ef-runtime-template-page-v1";
     private readonly IRuntimeRecoveryContinuationCodec continuationCodec = continuationCodec;
 
@@ -228,9 +228,6 @@ public sealed class EfExecutableActivityTemplateStore(
             }
         }, lastConflict => throw NormalizeProviderFailure("deleting", templateId, lastConflict!), cancellationToken);
     }
-
-    private static bool IsSaveConflict(Exception exception, EfWriteConflict conflicts) =>
-        exception is DbUpdateException && EfRelationalExceptionClassifier.IsWriteConflict(exception, conflicts);
 
     private async ValueTask ReconcileCreateAsync(ExecutableActivityTemplate template, TemplateIdentity identity, Exception cause, CancellationToken cancellationToken)
     {

@@ -10,13 +10,13 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
+using static Elsa.Persistence.EntityFramework.Tests.ProviderFailures;
 
 namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class EfExecutionPlacementStoreTests
 {
     private static readonly DateTimeOffset Now = new(2026, 9, 13, 10, 0, 0, TimeSpan.Zero);
-    private const int Deadlock = 1205;
 
     [Fact]
     public async Task Round_trip_scope_isolation_claim_renew_takeover_release_and_restart()
@@ -427,7 +427,7 @@ public sealed class EfExecutionPlacementStoreTests
     {
         await using var fixture = await Fixture.CreateAsync("scope-a");
         var lease = (await fixture.Store.TryClaimAsync(Claim("node-a", "wf-wrapped-transient"), Now)).Lease;
-        var interceptor = new FailingSaveInterceptor(() => WrappedByExecutionStrategy(new SqlException(Deadlock)), failures: 1);
+        var interceptor = FailingSaveInterceptor.WrappedDeadlock(failures: 1);
         await using var contender = await fixture.ReopenAsync("scope-a", interceptor);
 
         if (operation == "claiming")
@@ -448,7 +448,7 @@ public sealed class EfExecutionPlacementStoreTests
     [Fact]
     public async Task Wrapped_transient_contention_exhausts_the_pinned_budget()
     {
-        var interceptor = new FailingSaveInterceptor(() => WrappedByExecutionStrategy(new SqlException(Deadlock)));
+        var interceptor = FailingSaveInterceptor.WrappedDeadlock();
         await using var fixture = await Fixture.CreateAsync("scope-a", interceptor);
 
         var failure = await Assert.ThrowsAsync<ExecutionPlacementEntityFrameworkPersistenceException>(() =>
@@ -464,7 +464,7 @@ public sealed class EfExecutionPlacementStoreTests
     [Fact]
     public async Task A_wrapped_provider_failure_that_is_not_a_transient_conflict_fails_without_a_retry()
     {
-        var interceptor = new FailingSaveInterceptor(() => WrappedByExecutionStrategy(new SyntheticProviderException()));
+        var interceptor = FailingSaveInterceptor.WrappedProviderFailure();
         await using var fixture = await Fixture.CreateAsync("scope-a", interceptor);
 
         var failure = await Assert.ThrowsAsync<ExecutionPlacementEntityFrameworkPersistenceException>(() =>
@@ -476,13 +476,6 @@ public sealed class EfExecutionPlacementStoreTests
     }
 
     private static DbUpdateConcurrencyException Contention() => new("Synthetic placement contention.");
-
-    /// <summary>
-    /// The shape SQL Server's default execution strategy gives a save that failed with an error it treats as transient.
-    /// </summary>
-    private static InvalidOperationException WrappedByExecutionStrategy(DbException providerError) =>
-        new("An exception has been raised that is likely due to a transient failure.",
-            new DbUpdateException("An error occurred while saving the entity changes.", providerError));
 
     private static ExecutionPlacementClaim Claim(string owner, string id, DateTimeOffset? requestedAt = null, int seconds = 30)
     {
@@ -672,30 +665,6 @@ public sealed class EfExecutionPlacementStoreTests
             (!mutationsOnly || IsMutationCommand(command.CommandText)) &&
             Volatile.Read(ref armed) == 1 &&
             Interlocked.Exchange(ref fired, 1) == 0;
-    }
-
-    /// <summary>Fails the first <paramref name="failures"/> saves with <paramref name="failure"/>, then lets saves through.</summary>
-    private sealed class FailingSaveInterceptor(Func<Exception> failure, int failures = int.MaxValue) : SaveChangesInterceptor
-    {
-        private int attempts;
-
-        public int Attempts => Volatile.Read(ref attempts);
-
-        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
-            DbContextEventData eventData,
-            InterceptionResult<int> result,
-            CancellationToken cancellationToken = default) =>
-            Interlocked.Increment(ref attempts) <= failures ? throw failure() : ValueTask.FromResult(result);
-    }
-
-    private sealed class SyntheticProviderException() : DbException("synthetic provider failure")
-    {
-    }
-
-    /// <summary>Carries a SQL Server error number the way the shared classifier reads it, by type name and <c>Number</c>.</summary>
-    private sealed class SqlException(int number) : DbException($"synthetic SQL Server error {number}")
-    {
-        public int Number { get; } = number;
     }
 
     private static bool IsMutationCommand(string commandText)

@@ -23,7 +23,7 @@ public sealed class EfDesignAtomicWriter(
     private static readonly TimeSpan ReconciliationBackoff = TimeSpan.FromMilliseconds(25);
     private static readonly EfWriteRetry TransientWrites = new(
         EfWriteRetry.DefaultMaxAttempts,
-        exception => exception is DbUpdateException && EfRelationalExceptionClassifier.IsTransientWriteConflict(exception),
+        exception => EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Transient),
         attempt => TimeSpan.FromMilliseconds(25 * attempt));
     private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
     private readonly TimeSpan timeout = reconciliationTimeout ?? TimeSpan.FromSeconds(10);
@@ -202,7 +202,7 @@ public sealed class EfDesignAtomicWriter(
                 preserveAuthoritativeOutcome: true);
             return new DesignAtomicWriteResult<T>(DesignAtomicWriteStatus.Committed, value, resultFingerprint, resultJson);
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Transient))
         {
             transactionDisposed = true;
             await CleanupAsync(transaction, exception, operationKind, rollback: true);

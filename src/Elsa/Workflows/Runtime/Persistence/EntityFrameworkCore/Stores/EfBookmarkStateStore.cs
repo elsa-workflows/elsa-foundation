@@ -60,7 +60,7 @@ public sealed class EfBookmarkStateStore(
             context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("saving", state.WorkflowExecutionId, exception);
         }
-        catch (DbException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
         {
             context.ChangeTracker.Clear();
             throw new InvalidOperationException("The bookmark state changed concurrently; retry the operation.", exception);
@@ -119,7 +119,7 @@ public sealed class EfBookmarkStateStore(
             context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("deleting", workflowExecutionId, exception);
         }
-        catch (DbException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
         {
             context.ChangeTracker.Clear();
             return false;
