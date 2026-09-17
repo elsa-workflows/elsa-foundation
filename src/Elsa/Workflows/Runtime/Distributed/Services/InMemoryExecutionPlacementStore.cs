@@ -138,8 +138,6 @@ internal static class InMemoryExecutionPartitionResolver
     public static WorkflowExecutionPartition Resolve(IPersistenceAccessContextAccessor accessContextAccessor)
     {
         ArgumentNullException.ThrowIfNull(accessContextAccessor);
-        var scope = accessContextAccessor.Current.Scope
-            ?? throw new InvalidOperationException("In-memory distributed stores require a scoped persistence access context.");
-        return new WorkflowExecutionPartition(scope.Value);
+        return new WorkflowExecutionPartition(accessContextAccessor.Current.RequireScope().Value);
     }
 }

@@ -77,6 +77,18 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
     }
 
     [Fact]
+    public void AddWorkflowRuntime_partition_accessor_refuses_privileged_access_to_a_partition()
+    {
+        using var provider = new ServiceCollection().AddWorkflowRuntime().BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(
+            PersistenceAccessContext.PrivilegedScoped(new PersistenceScope("tenant-a"), new PersistenceAccessPurpose("maintenance")));
+        var partitionAccessor = scope.ServiceProvider.GetRequiredService<IWorkflowExecutionPartitionAccessor>();
+
+        Assert.Throws<InvalidOperationException>(() => partitionAccessor.Current);
+    }
+
+    [Fact]
     public void AddWorkflowRuntime_registers_the_default_executable_input_validator()
     {
         var services = new ServiceCollection().AddWorkflowRuntime();

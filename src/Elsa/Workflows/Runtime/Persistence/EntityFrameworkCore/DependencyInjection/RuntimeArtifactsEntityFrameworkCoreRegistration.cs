@@ -215,9 +215,7 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
         services.AddSingleton<EfWorkflowExecutableCacheLoader>();
         services.AddScoped(p =>
         {
-            var context = p.GetRequiredService<IPersistenceAccessContextAccessor>().Current;
-            if (context.AccessPolicy != PersistenceAccessPolicy.Ordinary || context.Scope is not { } persistenceScope)
-                throw new InvalidOperationException("The workflow executable cache adapter requires an ordinary persistence scope.");
+            var persistenceScope = p.GetRequiredService<IPersistenceAccessContextAccessor>().Current.RequireScope();
             var loader = p.GetRequiredService<EfWorkflowExecutableCacheLoader>();
             return new CachingWorkflowExecutableStore(
                 p.GetRequiredKeyedService<IWorkflowExecutableStore>(UncachedWorkflowExecutableStoreKey),
