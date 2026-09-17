@@ -58,8 +58,8 @@ public sealed class EfClaimMappingStore(
         return row is null ? null : new IamRevisionedRecord<ClaimMappingRule>(Map(row), IdentityEntityFrameworkRevisionCodec.FromVersion(row.Revision));
     }
 
-    public ValueTask SaveAsync(ClaimMappingRule rule, CancellationToken cancellationToken = default) =>
-        new(SaveCoreAsync(rule, expectedVersion: null, createOnly: false, cancellationToken));
+    public async ValueTask SaveAsync(ClaimMappingRule rule, CancellationToken cancellationToken = default) =>
+        EfIdentityStoreSupport.EnsureSaved(await SaveCoreAsync(rule, expectedVersion: null, createOnly: false, cancellationToken), "Unable to save the Identity claim mapping.");
 
     public async ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(ClaimMappingRule rule, string? expectedRevision, CancellationToken cancellationToken = default)
     {
@@ -75,7 +75,7 @@ public sealed class EfClaimMappingStore(
         ValidateRule(rule); Prepare(rule.TenantId, cancellationToken);
         var operation = createOnly ? "create-claim-mapping" : "save-claim-mapping";
         var fingerprint = EfIdentityStoreSupport.Fingerprint(operation, rule.TenantId, rule.Provider, rule.Id, rule.MatchClaimType, rule.MatchValue, EfIdentityStoreSupport.SerializeSet(rule.GrantRoles), EfIdentityStoreSupport.SerializeSet(rule.GrantPermissions), rule.Order.ToString(CultureInfo.InvariantCulture), rule.StopOnMatch.ToString(), expectedVersion?.ToString(CultureInfo.InvariantCulture));
-        var result = await atomic.ExecuteAsync(EfIdentityAtomicMutation.Create(
+        return await atomic.ExecuteAsync(EfIdentityAtomicMutation.Create(
             operation,
             fingerprint,
             rule.TenantId,
@@ -91,8 +91,6 @@ public sealed class EfClaimMappingStore(
             Apply(row, rule);
             return row.Revision == 1 ? new EfIdentityWriteResult(EfIdentityWriteStatus.Inserted, 1, "Identity claim mapping inserted.", id) : new EfIdentityWriteResult(EfIdentityWriteStatus.Updated, row.Revision, "Identity claim mapping updated.", id);
         }, cancellationToken);
-        if (!result.Succeeded && !createOnly && expectedVersion is null) throw new IdentityEntityFrameworkPersistenceException("Unable to save the Identity claim mapping.", new InvalidOperationException(result.Message));
-        return result;
     }
 
     private IQueryable<ClaimMappingEntity> Query(string tenantId, string provider) =>

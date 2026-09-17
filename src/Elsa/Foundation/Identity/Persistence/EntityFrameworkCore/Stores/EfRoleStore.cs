@@ -63,7 +63,7 @@ public sealed class EfRoleStore(
     {
         ArgumentNullException.ThrowIfNull(role);
         var result = await aggregates.SaveRoleAsync(role, expectedVersion: null, cancellationToken);
-        if (!result.WriteResult.Succeeded) throw new IdentityEntityFrameworkPersistenceException("Unable to save the Identity role.", new InvalidOperationException(result.WriteResult.Message));
+        EfIdentityStoreSupport.EnsureSaved(result.WriteResult, "Unable to save the Identity role.");
     }
 
     public async ValueTask<IamRevisionedRecord<RoleRecord>?> FindWithRevisionAsync(string tenantId, string roleId, CancellationToken cancellationToken = default)

@@ -63,8 +63,8 @@ public sealed class EfExternalIdentityStore(
         return new IamPage<ExternalIdentityRecord>(items, total);
     }
 
-    public ValueTask SaveAsync(ExternalIdentityRecord externalIdentity, CancellationToken cancellationToken = default) =>
-        new(SaveCoreAsync(externalIdentity, expectedVersion: null, createOnly: false, cancellationToken));
+    public async ValueTask SaveAsync(ExternalIdentityRecord externalIdentity, CancellationToken cancellationToken = default) =>
+        EfIdentityStoreSupport.EnsureSaved(await SaveCoreAsync(externalIdentity, expectedVersion: null, createOnly: false, cancellationToken), "Unable to save the external Identity login.");
 
     public async ValueTask<IamRevisionedRecord<ExternalIdentityRecord>?> FindBySubjectWithRevisionAsync(string tenantId, string provider, string providerSubject, CancellationToken cancellationToken = default)
     {
@@ -86,9 +86,7 @@ public sealed class EfExternalIdentityStore(
         ArgumentNullException.ThrowIfNull(record); Validate(record.TenantId, nameof(record.TenantId)); Validate(record.Provider, nameof(record.Provider)); Validate(record.ProviderSubject, nameof(record.ProviderSubject)); _ = EfIdentityStoreSupport.ExternalOrderKey(record.Provider, record.ProviderSubject); Validate(record.UserId, nameof(record.UserId));
         Prepare(record.TenantId, cancellationToken);
         var row = ToEntity(record);
-        var result = await relationship.SaveExternalIdentityPreservingProviderDisplayNameAsync(row, expectedNewOwnerVersion: null, expectedLoginVersion: createOnly ? 0 : expectedVersion, enforceLoginVersion: createOnly || expectedVersion is not null, ownershipPolicy: createOnly || expectedVersion is null ? EfExternalLoginOwnershipPolicy.CreateOrSameOwner : EfExternalLoginOwnershipPolicy.RevisionEnforcedRebind, returnOwnerResult: false, cancellationToken);
-        if (!result.Succeeded && !createOnly && expectedVersion is null) throw new IdentityEntityFrameworkPersistenceException("Unable to save the external Identity login.", new InvalidOperationException(result.Message));
-        return result;
+        return await relationship.SaveExternalIdentityPreservingProviderDisplayNameAsync(row, expectedNewOwnerVersion: null, expectedLoginVersion: createOnly ? 0 : expectedVersion, enforceLoginVersion: createOnly || expectedVersion is not null, ownershipPolicy: createOnly || expectedVersion is null ? EfExternalLoginOwnershipPolicy.CreateOrSameOwner : EfExternalLoginOwnershipPolicy.RevisionEnforcedRebind, returnOwnerResult: false, cancellationToken);
     }
 
     private async Task<ExternalIdentityEntity?> FindEntityAsync(string tenantId, string provider, string subject, CancellationToken cancellationToken)

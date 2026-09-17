@@ -54,8 +54,7 @@ public sealed class EfUserStore(
     {
         ArgumentNullException.ThrowIfNull(user);
         var result = await aggregates.SaveUserAsync(user, expectedVersion: null, emailPolicy.RequireUniqueEmail, cancellationToken);
-        if (!result.WriteResult.Succeeded)
-            throw new IdentityEntityFrameworkPersistenceException("Unable to save the Identity user.", new InvalidOperationException(result.WriteResult.Message));
+        EfIdentityStoreSupport.EnsureSaved(result.WriteResult, "Unable to save the Identity user.");
     }
 
     public async ValueTask<IamRevisionedRecord<UserRecord>?> FindWithRevisionAsync(string tenantId, string userId, CancellationToken cancellationToken = default)

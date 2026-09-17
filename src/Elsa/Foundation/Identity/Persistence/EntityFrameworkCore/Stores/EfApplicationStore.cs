@@ -19,7 +19,7 @@ public sealed class EfApplicationStore(
     {
         ValidateIdentity(tenantId, nameof(tenantId));
         ValidateIdentity(applicationId, nameof(applicationId));
-        PrepareTenantRead(tenantId, cancellationToken);
+        PrepareTenant(tenantId, cancellationToken);
         try
         {
             var row = await context.Applications.AsNoTracking().SingleOrDefaultAsync(
@@ -49,7 +49,7 @@ public sealed class EfApplicationStore(
     {
         ValidateIdentity(tenantId, nameof(tenantId));
         ValidateIdentity(applicationId, nameof(applicationId));
-        PrepareTenantRead(tenantId, cancellationToken);
+        PrepareTenant(tenantId, cancellationToken);
         try
         {
             var row = await context.Applications.AsNoTracking().SingleOrDefaultAsync(
@@ -78,7 +78,7 @@ public sealed class EfApplicationStore(
     {
         ArgumentNullException.ThrowIfNull(application);
         ValidateApplication(application);
-        PrepareTenantWrite(application.TenantId, cancellationToken);
+        PrepareTenant(application.TenantId, cancellationToken);
         var expectedVersion = 0L;
         if (expectedRevision is not null &&
             !IdentityEntityFrameworkRevisionCodec.TryGetVersion(expectedRevision, out expectedVersion))
@@ -93,7 +93,7 @@ public sealed class EfApplicationStore(
     {
         ArgumentNullException.ThrowIfNull(application);
         ValidateApplication(application);
-        PrepareTenantWrite(application.TenantId, cancellationToken);
+        PrepareTenant(application.TenantId, cancellationToken);
         await EfIdentityRevisionedRowWrite.SaveUnconditionallyAsync(context, Row(application), cancellationToken);
     }
 
@@ -119,14 +119,7 @@ public sealed class EfApplicationStore(
             candidate => candidate.Id == StorageId(application.TenantId, application.Id),
             cancellationToken);
 
-    private void PrepareTenantRead(string tenantId, CancellationToken cancellationToken)
-    {
-        context.EnsureProviderBinding();
-        IdentityEntityFrameworkAccessGuard.EnsureTenant(accessContextAccessor, tenantId);
-        cancellationToken.ThrowIfCancellationRequested();
-    }
-
-    private void PrepareTenantWrite(string tenantId, CancellationToken cancellationToken)
+    private void PrepareTenant(string tenantId, CancellationToken cancellationToken)
     {
         context.EnsureProviderBinding();
         IdentityEntityFrameworkAccessGuard.EnsureTenant(accessContextAccessor, tenantId);

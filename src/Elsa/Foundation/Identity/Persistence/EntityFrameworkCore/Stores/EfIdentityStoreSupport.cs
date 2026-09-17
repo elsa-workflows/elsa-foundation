@@ -360,6 +360,13 @@ internal static class EfIdentityStoreSupport
 
     public static IamRevisionSaveResult InvalidRevision() => new(IamRevisionSaveStatus.Conflict);
 
+    /// <summary>An unconditional save has no result to report a conflict through, so a write that did not succeed fails it.</summary>
+    public static void EnsureSaved(EfIdentityWriteResult result, string failureMessage)
+    {
+        if (!result.Succeeded)
+            throw Failure(failureMessage, new InvalidOperationException(result.Message));
+    }
+
     public static void Clear(DbContext context) => context.ChangeTracker.Clear();
 
     /// <summary>
