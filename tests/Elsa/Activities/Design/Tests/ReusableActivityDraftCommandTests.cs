@@ -1038,7 +1038,7 @@ public sealed class ReusableActivityDraftCommandTests
                 new ActivityContractAuthoringValidator(contractCapabilities),
                 typeKeyPolicy ?? new DefaultActivityTypeKeyPolicy(),
                 _ids,
-                new HmacActivityForkCandidateIdCodec(Options.Create(new ActivityDependencyCursorOptions
+                new HmacActivityForkCandidateIdCodec(Options.Create(new ActivityTokenSigningOptions
                 {
                     SigningKey = "0123456789abcdef0123456789abcdef"
                 })),

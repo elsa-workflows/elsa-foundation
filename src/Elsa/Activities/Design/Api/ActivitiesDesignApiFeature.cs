@@ -93,7 +93,7 @@ public class ActivitiesDesignApiFeature : IWebShellFeature
         services.TryAddScoped<IActivityDraftValidator, ActivityDraftValidator>();
         services.TryAddSingleton<IActivityVersionDiffer, ActivityVersionDiffer>();
         services.TryAddSingleton(TimeProvider.System);
-        services.AddOptions<ActivityDependencyCursorOptions>().Configure(options =>
+        services.AddOptions<ActivityTokenSigningOptions>().Configure(options =>
             options.SigningKey = string.IsNullOrWhiteSpace(DependencyCursorSigningKey)
                 ? ProcessDependencyCursorSigningKey
                 : DependencyCursorSigningKey);

@@ -191,7 +191,7 @@ public sealed class ActivityDependencyQueryTests
         stores,
         stores,
         projection ?? stores,
-        new HmacActivityDependencyCursorCodec(Options.Create(new ActivityDependencyCursorOptions
+        new HmacActivityDependencyCursorCodec(Options.Create(new ActivityTokenSigningOptions
         {
             SigningKey = "dependency-cursor-test-key-at-least-32-bytes"
         })),
