@@ -154,10 +154,10 @@ internal static class EfRuntimeCheckpointActivityExecutionParticipantProviderSmo
     {
         var type = typeof(EfRuntimeCheckpointCommitStore).Assembly.GetType(
             "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointActivityExecutionParticipantStaging")!;
-        var method = type.GetMethod("StageActivityExecutionAsync", BindingFlags.Public | BindingFlags.Static)!;
+        var method = type.GetMethod("StageActivityExecutionsAsync", BindingFlags.Public | BindingFlags.Static)!;
         try
         {
-            var result = (ValueTask)method.Invoke(null, [context, change, scope, workflowExecutionId, CancellationToken.None])!;
+            var result = (ValueTask)method.Invoke(null, [context, new[] { change }, scope, workflowExecutionId, CancellationToken.None])!;
             await result.AsTask();
         }
         catch (TargetInvocationException exception) when (exception.InnerException is not null)

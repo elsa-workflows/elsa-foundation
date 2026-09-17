@@ -142,37 +142,34 @@ public sealed class EfRuntimeCheckpointCommitStore(
                         writeCancellationToken);
                 }
 
-                foreach (var activity in commit.StateChanges.ActivityExecutions)
-                    await EfRuntimeCheckpointActivityExecutionParticipantStaging.StageActivityExecutionAsync(
-                        context, activity, scope, commit.WorkflowExecutionId, writeCancellationToken);
+                // Each participant type below stages its whole collection, because the insert/update/delete decision
+                // needs only the row carrying each participant's immutable physical identity. Reading those one at a
+                // time made a commit's round-trip count equal to its participant count, and no validator caps any of
+                // these collections; the seams now take one chunked tracked load per type instead.
+                await EfRuntimeCheckpointActivityExecutionParticipantStaging.StageActivityExecutionsAsync(
+                    context, commit.StateChanges.ActivityExecutions, scope, commit.WorkflowExecutionId, writeCancellationToken);
 
-                foreach (var inspection in commit.StateChanges.ActivityExecutionInspections)
-                    await EfRuntimeCheckpointInspectionParticipantStaging.StageAsync(
-                        context, inspection, scope, commit.WorkflowExecutionId, writeCancellationToken);
+                await EfRuntimeCheckpointInspectionParticipantStaging.StageAsync(
+                    context, commit.StateChanges.ActivityExecutionInspections, scope, commit.WorkflowExecutionId, writeCancellationToken);
 
-                foreach (var incident in commit.StateChanges.Incidents)
-                    await EfRuntimeCheckpointIncidentParticipantStaging.StageIncidentAsync(
-                        context, incident, scope, commit.WorkflowExecutionId, writeCancellationToken);
+                await EfRuntimeCheckpointIncidentParticipantStaging.StageIncidentsAsync(
+                    context, commit.StateChanges.Incidents, scope, commit.WorkflowExecutionId, writeCancellationToken);
 
                 await EfRuntimeCheckpointRunHealthParticipantStaging.StageWorkflowRunHealthAsync(
                     context, commit.WorkflowExecutionId, commit.StateChanges.WorkflowExecution,
                     commit.StateChanges.Incidents, scope, writeCancellationToken);
 
-                foreach (var bookmark in commit.StateChanges.Bookmarks)
-                    await EfRuntimeCheckpointParticipantStaging.StageBookmarkAsync(
-                        context, bookmark, scope, writeCancellationToken);
+                await EfRuntimeCheckpointParticipantStaging.StageBookmarksAsync(
+                    context, commit.StateChanges.Bookmarks, scope, writeCancellationToken);
 
-                foreach (var durableValue in commit.StateChanges.DurableValues)
-                    await EfRuntimeCheckpointParticipantStaging.StageDurableValueAsync(
-                        context, durableValue, scope, writeCancellationToken);
+                await EfRuntimeCheckpointParticipantStaging.StageDurableValuesAsync(
+                    context, commit.StateChanges.DurableValues, scope, writeCancellationToken);
 
-                foreach (var cleanup in commit.StateChanges.ActivityScopeCleanups)
-                    await EfRuntimeCheckpointActivityScopeCleanupParticipantStaging.StageAsync(
-                        context, cleanup, scope, writeCancellationToken);
+                await EfRuntimeCheckpointActivityScopeCleanupParticipantStaging.StageAsync(
+                    context, commit.StateChanges.ActivityScopeCleanups, scope, writeCancellationToken);
 
-                foreach (var operational in commit.StateChanges.Operational)
-                    await EfRuntimeCheckpointParticipantStaging.StageOperationalAsync(
-                        context, operational, scope, writeCancellationToken);
+                await EfRuntimeCheckpointParticipantStaging.StageOperationalAsync(
+                    context, commit.StateChanges.Operational, scope, writeCancellationToken);
 
                 await EfRuntimeCheckpointDispatchParticipantStaging.StageAsync(
                     context,

@@ -14,12 +14,55 @@ internal static class EfRuntimeCheckpointInspectionParticipantStaging
 {
     public static async ValueTask StageAsync(
         BookmarkStateDbContext context,
-        RuntimeStateChange<ActivityExecutionInspectionProjection> change,
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>> changes,
         string scope,
         string expectedWorkflowExecutionId,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(changes);
+        if (changes.Count == 0)
+            return;
+
+        var staged = changes
+            .Select(change => Validated(context, change, scope, expectedWorkflowExecutionId, cancellationToken))
+            .ToArray();
+
+        // Both sets are loaded by immutable physical identity. Filtering on projections would turn a corrupt row into
+        // a false insert/miss instead of allowing the authoritative content and projection checks to fail closed, and
+        // an id a batch does not return is the same "row is null" case the per-item reads produced.
+        var inspectionRows = await EfRuntimeCheckpointParticipantRows.LoadAsync(
+            staged.Select(entry => entry.InspectionId).ToArray(),
+            batch => context.ActivityExecutionInspections.Where(row => batch.Contains(row.Id)),
+            row => row.Id,
+            cancellationToken);
+        var hierarchyRows = await EfRuntimeCheckpointParticipantRows.LoadAsync(
+            staged.Select(entry => entry.HierarchyId).ToArray(),
+            batch => context.ActivityExecutionHierarchies.Where(row => batch.Contains(row.Id)),
+            row => row.Id,
+            cancellationToken);
+
+        foreach (var (change, inspectionId, hierarchyId) in staged)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Stage(
+                context,
+                change.State,
+                scope,
+                inspectionId,
+                inspectionRows.GetValueOrDefault(inspectionId),
+                hierarchyId,
+                hierarchyRows.GetValueOrDefault(hierarchyId));
+        }
+    }
+
+    private static (RuntimeStateChange<ActivityExecutionInspectionProjection> Change, string InspectionId, string HierarchyId) Validated(
+        BookmarkStateDbContext context,
+        RuntimeStateChange<ActivityExecutionInspectionProjection> change,
+        string scope,
+        string expectedWorkflowExecutionId,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(change);
         ArgumentException.ThrowIfNullOrWhiteSpace(scope);
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedWorkflowExecutionId);
@@ -38,14 +81,21 @@ internal static class EfRuntimeCheckpointInspectionParticipantStaging
         if (context.Database.CurrentTransaction is null)
             throw new InvalidOperationException("Activity execution inspection changes must be staged inside a caller-owned EF transaction.");
 
-        var inspectionId = ActivityExecutionEfSupport.CreateId(
-            "inspection",
-            scope,
-            projection.WorkflowExecutionId,
-            projection.ActivityExecutionId);
-        var inspectionRow = await context.ActivityExecutionInspections.SingleOrDefaultAsync(
-            row => row.Id == inspectionId,
-            cancellationToken);
+        return (
+            change,
+            ActivityExecutionEfSupport.CreateId("inspection", scope, projection.WorkflowExecutionId, projection.ActivityExecutionId),
+            ActivityExecutionEfSupport.CreateId("hierarchy", scope, projection.WorkflowExecutionId, projection.ActivityExecutionId));
+    }
+
+    private static void Stage(
+        BookmarkStateDbContext context,
+        ActivityExecutionInspectionProjection projection,
+        string scope,
+        string inspectionId,
+        ActivityExecutionInspectionEntity? inspectionRow,
+        string hierarchyId,
+        ActivityExecutionHierarchyEntity? hierarchyRow)
+    {
         if (inspectionRow is null)
         {
             context.ActivityExecutionInspections.Add(
@@ -68,15 +118,6 @@ internal static class EfRuntimeCheckpointInspectionParticipantStaging
         }
 
         var effectiveExecutionScope = ActivityExecutionEfSupport.EffectiveExecutionScope(projection);
-        var hierarchyId = ActivityExecutionEfSupport.CreateId(
-            "hierarchy",
-            scope,
-            projection.WorkflowExecutionId,
-            projection.ActivityExecutionId);
-        var hierarchyRow = await context.ActivityExecutionHierarchies.SingleOrDefaultAsync(
-            row => row.Id == hierarchyId,
-            cancellationToken);
-
         if (string.IsNullOrWhiteSpace(effectiveExecutionScope))
         {
             if (hierarchyRow is not null)

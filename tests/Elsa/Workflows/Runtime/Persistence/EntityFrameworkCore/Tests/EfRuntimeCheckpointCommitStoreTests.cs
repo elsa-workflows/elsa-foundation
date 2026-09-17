@@ -690,6 +690,88 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         Assert.True((await context.ActivityExecutionStates.SingleAsync()).Revision > 0);
     }
 
+    /// <summary>
+    /// The per-participant identity reads are one batched load per participant type. A corrupt row that the batch
+    /// returns must still fail the commit closed rather than being silently re-inserted or silently missed — which is
+    /// what a load filtered on projections instead of on <c>Id</c> would do — and its healthy sibling in the same
+    /// commit must not be written either.
+    /// </summary>
+    [Fact]
+    public async Task Damaged_activity_execution_in_a_multi_participant_commit_fails_closed_with_its_siblings()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var access = new FixedAccessor("tenant-a");
+        var healthy = CheckpointActivity("activity-healthy");
+        var damaged = CheckpointActivity("activity-damaged");
+        long healthyRevision;
+
+        await using (var seed = database.Open("tenant-a"))
+        {
+            await new EfRuntimeCheckpointCommitStore(seed, access).CommitAsync(
+                WithActivityExecutions("commit-batch-seed", RuntimeStateChangeOperation.Upsert, [], healthy, damaged),
+                Decision());
+            var damagedRow = await seed.ActivityExecutionStates.SingleAsync(row =>
+                row.ActivityExecutionId == EfRelationalIdentity.Encode("activity-damaged"));
+            damagedRow.ScopeKeyHash = "damaged-scope-hash";
+            await seed.SaveChangesAsync();
+            healthyRevision = (await seed.ActivityExecutionStates.AsNoTracking().SingleAsync(row =>
+                row.ActivityExecutionId == EfRelationalIdentity.Encode("activity-healthy"))).Revision;
+        }
+
+        await using var context = database.Open("tenant-a");
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new EfRuntimeCheckpointCommitStore(context, access).CommitAsync(
+                WithActivityExecutions("commit-batch-corrupt", RuntimeStateChangeOperation.Upsert,
+                    [CheckpointBookmark("bookmark-batch", "batch")], healthy, damaged),
+                Decision()).AsTask());
+
+        Assert.Single(await context.RuntimeCheckpointCommits.AsNoTracking().ToArrayAsync());
+        Assert.Empty(await context.Bookmarks.AsNoTracking().ToArrayAsync());
+        Assert.Equal(2, await context.ActivityExecutionStates.AsNoTracking().CountAsync());
+        Assert.Equal(healthyRevision, (await context.ActivityExecutionStates.AsNoTracking().SingleAsync(row =>
+            row.ActivityExecutionId == EfRelationalIdentity.Encode("activity-healthy"))).Revision);
+    }
+
+    /// <summary>
+    /// The same property for a participant type staged after activity executions: the batched bookmark load fails the
+    /// commit closed on one corrupt row among several, and the activity-execution row already staged in the same
+    /// transaction is rolled back instead of being left at its bumped revision.
+    /// </summary>
+    [Fact]
+    public async Task Damaged_bookmark_in_a_multi_participant_commit_rolls_back_its_staged_siblings()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var access = new FixedAccessor("tenant-a");
+        var activity = CheckpointActivity("activity-batched");
+        BookmarkState[] bookmarks =
+        [
+            CheckpointBookmark("bookmark-healthy", "batch"),
+            CheckpointBookmark("bookmark-damaged", "batch")
+        ];
+        long activityRevision;
+
+        await using (var seed = database.Open("tenant-a"))
+        {
+            await new EfRuntimeCheckpointCommitStore(seed, access).CommitAsync(
+                WithActivityExecutions("commit-bookmark-seed", RuntimeStateChangeOperation.Upsert, bookmarks, activity),
+                Decision());
+            var damagedRow = await seed.Bookmarks.SingleAsync(row => row.BookmarkId == "bookmark-damaged");
+            damagedRow.ScopeKeyHash = "damaged-scope-hash";
+            await seed.SaveChangesAsync();
+            activityRevision = (await seed.ActivityExecutionStates.AsNoTracking().SingleAsync()).Revision;
+        }
+
+        await using var context = database.Open("tenant-a");
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new EfRuntimeCheckpointCommitStore(context, access).CommitAsync(
+                WithActivityExecutions("commit-bookmark-corrupt", RuntimeStateChangeOperation.Upsert, bookmarks, activity),
+                Decision()).AsTask());
+
+        Assert.Single(await context.RuntimeCheckpointCommits.AsNoTracking().ToArrayAsync());
+        Assert.Equal(2, await context.Bookmarks.AsNoTracking().CountAsync());
+        Assert.Equal(activityRevision, (await context.ActivityExecutionStates.AsNoTracking().SingleAsync()).Revision);
+    }
+
     [Fact]
     public async Task Workflow_activity_inspection_incident_and_run_health_share_one_replayable_marker()
     {
@@ -1231,16 +1313,23 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
 
     private static RuntimeCheckpointCommit WithActivityExecution(
         string commitId, ActivityExecutionState state, BookmarkState? bookmark = null,
-        RuntimeStateChangeOperation operation = RuntimeStateChangeOperation.Upsert)
+        RuntimeStateChangeOperation operation = RuntimeStateChangeOperation.Upsert) =>
+        WithActivityExecutions(commitId, operation, bookmark is null ? [] : [bookmark], state);
+
+    private static RuntimeCheckpointCommit WithActivityExecutions(
+        string commitId,
+        RuntimeStateChangeOperation operation,
+        IReadOnlyCollection<BookmarkState> bookmarks,
+        params ActivityExecutionState[] states)
     {
         var commit = Commit(commitId);
         return commit with
         {
             StateChanges = new RuntimeCheckpointStateChangeSet(null, null,
-                [new RuntimeStateChange<ActivityExecutionState>(state.Execution.ActivityExecutionId,
-                    operation, state, new Dictionary<string, string>())],
-                bookmark is null ? [] : [new RuntimeStateChange<BookmarkState>(bookmark.BookmarkId,
-                    RuntimeStateChangeOperation.Upsert, bookmark, new Dictionary<string, string>())],
+                [.. states.Select(state => new RuntimeStateChange<ActivityExecutionState>(
+                    state.Execution.ActivityExecutionId, operation, state, new Dictionary<string, string>()))],
+                [.. bookmarks.Select(bookmark => new RuntimeStateChange<BookmarkState>(
+                    bookmark.BookmarkId, RuntimeStateChangeOperation.Upsert, bookmark, new Dictionary<string, string>()))],
                 [], [], [])
         };
     }
