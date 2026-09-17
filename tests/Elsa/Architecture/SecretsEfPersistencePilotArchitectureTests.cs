@@ -109,6 +109,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/SecretsSqliteDesignTimeFactory.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfConnectionDefaultsTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfDatabaseMigratorTests.cs",
+        "tests/Elsa/Persistence/EntityFramework/Tests/EfMigrateOptionsTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfMigrationsHistoryTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfProviderGuardTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfRelationalExceptionClassifierTests.cs",

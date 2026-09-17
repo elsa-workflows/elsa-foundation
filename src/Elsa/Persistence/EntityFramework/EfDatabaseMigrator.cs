@@ -31,7 +31,8 @@ public static class EfDatabaseMigrator
                     return;
                 throw new InvalidOperationException(
                     $"{context.GetType().Name} has pending migrations: {string.Join(", ", pending)}. " +
-                    "Apply them out of process or set the migrate policy to AutoMigrate.");
+                    "Apply them out of process (tools/ef/module-migrate.sh) or set " +
+                    $"{EfMigrateOptions.SectionName}:{nameof(EfMigrateOptions.Policy)} to {nameof(EfMigratePolicy.AutoMigrate)}.");
             default:
                 throw new ArgumentOutOfRangeException(nameof(policy), policy, "Unknown EF migrate policy.");
         }

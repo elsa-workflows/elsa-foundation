@@ -30,6 +30,12 @@ operator applies migrations out of process first. All Runtime participants share
 the model/migration match on all four providers and a fresh install of every module into one database on
 SQLite (fast gate) and on SQL Server, PostgreSQL and MySQL (Testcontainers).
 
+That policy is configuration, not code: set `Elsa:Persistence:EntityFramework:Migrate:Policy` (environment
+variable `Elsa__Persistence__EntityFramework__Migrate__Policy`) to `Validate` in the deployment a pipeline
+migrates, and leave it unset everywhere else. A value that names neither policy fails the host rather than
+falling back to auto-migrate. See
+[src/Elsa/Persistence/EntityFramework/README.md](../../src/Elsa/Persistence/EntityFramework/README.md#choosing-the-policy-operator-setting).
+
 ## Secrets pilot tooling
 
 ## Layout
