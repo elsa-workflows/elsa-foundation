@@ -1,6 +1,7 @@
 using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
 
@@ -40,7 +41,16 @@ public sealed record EfIdentityAuthorityWriteResult(
 internal static class EfIdentityStoreSupport
 {
     public const int MaximumMaterializedListEntries = 512;
+    // Pinned: the Identity EF behavior tests assert that writes give up after 3 attempts.
     public const int MaximumWriteAttempts = 3;
+
+    /// <summary>An unconditional save retries every lost race: it re-reads the winner's row and writes over it.</summary>
+    public static readonly EfWriteRetry UnconditionalWrites = new(
+        MaximumWriteAttempts,
+        EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey | EfWriteConflict.Transient);
+
+    /// <summary>A create-only or compare-and-swap save reports a lost race as a conflict, so it retries only a transient provider failure.</summary>
+    public static readonly EfWriteRetry TransientWrites = new(MaximumWriteAttempts, EfWriteConflict.Transient);
     public const int SortableKeyWidthBytes =
         IdentityProviderConfigurationCanonicalizer.MaximumIdentityLength * sizeof(char) + sizeof(ushort);
 

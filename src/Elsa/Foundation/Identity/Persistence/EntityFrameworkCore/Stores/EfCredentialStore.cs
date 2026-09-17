@@ -16,8 +16,6 @@ public sealed class EfCredentialStore(
     IPersistenceAccessContextAccessor accessContextAccessor)
     : ICredentialStore, IRevisionAwareCredentialStore
 {
-    private const int MaximumWriteAttempts = 3;
-
     public async ValueTask<CredentialRecord?> FindAsync(
         string tenantId,
         string credentialId,
@@ -104,7 +102,7 @@ public sealed class EfCredentialStore(
         ValidateCredential(credential);
         PrepareTenantWrite(credential.TenantId, cancellationToken);
 
-        for (var attempt = 0; attempt < MaximumWriteAttempts; attempt++)
+        await EfIdentityStoreSupport.UnconditionalWrites.RunAsync(context, async () =>
         {
             try
             {
@@ -124,18 +122,10 @@ public sealed class EfCredentialStore(
                 context.ChangeTracker.Clear();
                 return;
             }
-            catch (DbUpdateConcurrencyException)
+            catch (Exception exception) when (EfIdentityStoreSupport.UnconditionalWrites.ShouldRetry(context, exception))
             {
                 context.ChangeTracker.Clear();
-            }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
-            {
-                context.ChangeTracker.Clear();
-            }
-            catch (Exception exception) when (
-                EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
-            {
-                context.ChangeTracker.Clear();
+                throw;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -147,19 +137,16 @@ public sealed class EfCredentialStore(
                 context.ChangeTracker.Clear();
                 throw Failure("Unable to save the Identity credential.", exception);
             }
-        }
-
-        context.ChangeTracker.Clear();
-        throw Failure(
+        }, _ => throw Failure(
             "Unable to save the Identity credential after bounded concurrency retries.",
-            new InvalidOperationException("The Identity credential was concurrently modified."));
+            new InvalidOperationException("The Identity credential was concurrently modified.")), cancellationToken);
     }
 
     private async Task<IamRevisionSaveResult> SaveCreateOnlyAsync(
         CredentialRecord credential,
         CancellationToken cancellationToken)
     {
-        for (var attempt = 0; attempt < MaximumWriteAttempts; attempt++)
+        return await EfIdentityStoreSupport.TransientWrites.RunUntilSettledAsync<IamRevisionSaveResult>(context, async () =>
         {
             try
             {
@@ -184,10 +171,10 @@ public sealed class EfCredentialStore(
                 context.ChangeTracker.Clear();
                 return Conflict();
             }
-            catch (Exception exception) when (
-                EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
+            catch (Exception exception) when (EfIdentityStoreSupport.TransientWrites.ShouldRetry(context, exception))
             {
                 context.ChangeTracker.Clear();
+                return EfWriteAttempt<IamRevisionSaveResult>.Retry(exception);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -199,12 +186,9 @@ public sealed class EfCredentialStore(
                 context.ChangeTracker.Clear();
                 throw Failure("Unable to create the Identity credential.", exception);
             }
-        }
-
-        context.ChangeTracker.Clear();
-        throw Failure(
+        }, _ => throw Failure(
             "Unable to create the Identity credential after bounded transient retries.",
-            new InvalidOperationException("The Identity credential could not be created."));
+            new InvalidOperationException("The Identity credential could not be created.")), cancellationToken);
     }
 
     private async Task<IamRevisionSaveResult> SaveCompareAndSwapAsync(
@@ -212,7 +196,7 @@ public sealed class EfCredentialStore(
         long expectedVersion,
         CancellationToken cancellationToken)
     {
-        for (var attempt = 0; attempt < MaximumWriteAttempts; attempt++)
+        return await EfIdentityStoreSupport.TransientWrites.RunUntilSettledAsync<IamRevisionSaveResult>(context, async () =>
         {
             try
             {
@@ -255,10 +239,10 @@ public sealed class EfCredentialStore(
                     throw Failure("Unable to classify the Identity credential concurrency conflict.", exception);
                 }
             }
-            catch (Exception exception) when (
-                EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
+            catch (Exception exception) when (EfIdentityStoreSupport.TransientWrites.ShouldRetry(context, exception))
             {
                 context.ChangeTracker.Clear();
+                return EfWriteAttempt<IamRevisionSaveResult>.Retry(exception);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -270,12 +254,9 @@ public sealed class EfCredentialStore(
                 context.ChangeTracker.Clear();
                 throw Failure("Unable to update the Identity credential.", exception);
             }
-        }
-
-        context.ChangeTracker.Clear();
-        throw Failure(
+        }, _ => throw Failure(
             "Unable to update the Identity credential after bounded transient retries.",
-            new InvalidOperationException("The Identity credential could not be updated."));
+            new InvalidOperationException("The Identity credential could not be updated.")), cancellationToken);
     }
 
     private async Task<CredentialEntity?> FindEntityForWriteAsync(
