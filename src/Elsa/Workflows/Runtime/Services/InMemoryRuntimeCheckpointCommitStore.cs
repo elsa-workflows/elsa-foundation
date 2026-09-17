@@ -312,9 +312,6 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (query.OwnerId is not null)
-            throw new NotSupportedException("The in-memory post-commit outbox store does not implement delivery ownership filtering.");
-
         lock (_state.SyncRoot)
         {
             var items = _state.OutboxItems.Values

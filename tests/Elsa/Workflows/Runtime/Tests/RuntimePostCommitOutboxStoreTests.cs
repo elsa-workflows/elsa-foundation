@@ -33,20 +33,6 @@ public sealed class RuntimePostCommitOutboxStoreTests
     }
 
     [Fact]
-    public async Task InMemoryRuntimeCheckpointCommitStore_RejectsOwnerFilteredQueriesBecauseClaimingIsOutOfScope()
-    {
-        var store = new InMemoryRuntimeCheckpointCommitStore();
-        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1"));
-
-        var exception = await Assert.ThrowsAsync<NotSupportedException>(() => store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(
-            now: _now,
-            limit: 10,
-            ownerId: "dispatcher-1")).AsTask());
-
-        Assert.Contains("ownership filtering", exception.Message);
-    }
-
-    [Fact]
     public async Task InMemoryRuntimeCheckpointCommitStore_ReturnsDeliverableItemsInDeterministicOrderWithLimit()
     {
         var store = new InMemoryRuntimeCheckpointCommitStore();

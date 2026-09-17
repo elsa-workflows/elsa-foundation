@@ -85,9 +85,6 @@ public sealed class EfRuntimePostCommitOutboxStore(
     {
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
-        if (query.OwnerId is not null)
-            throw new NotSupportedException("The EF post-commit outbox store does not implement delivery ownership filtering.");
-
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
         return await QueryCandidatesAsync(scope, query, CandidateSelection.Deliverable, cancellationToken);
     }
