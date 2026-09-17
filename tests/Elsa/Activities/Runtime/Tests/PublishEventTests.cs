@@ -186,14 +186,35 @@ public sealed class PublishEventTests
     [Fact]
     public async Task Handler_WrapsRouterFailure_AsTransientDeliveryFailure()
     {
+        var exception = await HandleRoutingFailureAsync(new InvalidOperationException("boom"));
+
+        Assert.Equal(PostCommitFailureKind.Transient, exception.Kind);
+    }
+
+    /// <summary>
+    /// A routed start or resume whose checkpoint breaks a checkpoint rule fails the same way on every attempt, so the
+    /// delivery is permanent, including when the drain hands the violation back wrapped with its observers' failures.
+    /// </summary>
+    [Fact]
+    public async Task Handler_ClassifiesCheckpointRuleViolation_AsPermanentDeliveryFailure()
+    {
+        var violation = new RuntimeCheckpointCommitValidationException("checkpoint rule violated");
+        var routed = new AggregateException(violation);
+
+        var exception = await HandleRoutingFailureAsync(routed);
+
+        Assert.Equal(PostCommitFailureKind.Permanent, exception.Kind);
+        Assert.Same(routed, exception.InnerException);
+    }
+
+    private static async Task<RuntimePostCommitDeliveryException> HandleRoutingFailureAsync(Exception failure)
+    {
         var buffer = new PublishStimulusStagingBuffer(new FakeTimeProvider(Now));
         buffer.StagePublishStimulus(new PublishStimulusRequest(WorkflowExecutionId, ActivityExecutionId, "e"));
         var intent = Assert.Single(buffer.TakePublishStimuli(WorkflowExecutionId, ActivityExecutionId));
-        var router = new ThrowingStimulusRouter();
 
-        var exception = await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(async () => await new PublishStimulusExecutor(router).HandleAsync(intent));
-
-        Assert.Equal(PostCommitFailureKind.Transient, exception.Kind);
+        return await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(async () =>
+            await new PublishStimulusExecutor(new ThrowingStimulusRouter(failure)).HandleAsync(intent));
     }
 
     private static async ValueTask<IActivityCompletionTransition> ExecuteAsync(PublishEvent activity)
@@ -219,10 +240,10 @@ public sealed class PublishEventTests
         public void StagePublishStimulus(PublishStimulusRequest request) => Requests.Add(request);
     }
 
-    private sealed class ThrowingStimulusRouter : IStimulusRouter
+    private sealed class ThrowingStimulusRouter(Exception failure) : IStimulusRouter
     {
         public ValueTask<StimulusRoutingResult> RouteAsync(StimulusDispatchRequest request, CancellationToken cancellationToken = default) =>
-            throw new InvalidOperationException("boom");
+            throw failure;
     }
 
     private sealed class FakeTimeProvider(DateTimeOffset now) : TimeProvider

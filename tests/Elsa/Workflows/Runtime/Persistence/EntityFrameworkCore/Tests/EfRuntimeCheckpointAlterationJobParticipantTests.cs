@@ -90,7 +90,7 @@ public sealed class EfRuntimeCheckpointAlterationJobParticipantTests
             StageAsync(fixture.Context, change, "tenant-a", fixture.Job.WorkflowExecutionId));
 
         await using var transaction = await fixture.Context.Database.BeginTransactionAsync();
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() =>
             StageAsync(fixture.Context, change, "tenant-a", "workflow-other"));
         await Assert.ThrowsAsync<WorkflowAlterationClaimFenceException>(() =>
             StageAsync(fixture.Context, new WorkflowAlterationJobTerminalChange(

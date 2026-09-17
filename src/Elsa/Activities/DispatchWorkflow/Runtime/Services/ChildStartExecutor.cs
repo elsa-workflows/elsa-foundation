@@ -100,7 +100,7 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
             }
             catch (Exception exception)
             {
-                throw DeliveryFailure(PostCommitFailureKind.Transient, exception);
+                throw DeliveryFailure(exception);
             }
             if (durableDispatch is null)
                 throw DeliveryFailure(PostCommitFailureKind.Transient);
@@ -122,7 +122,7 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
             }
             catch (Exception exception)
             {
-                throw DeliveryFailure(PostCommitFailureKind.Transient, exception);
+                throw DeliveryFailure(exception);
             }
             if (admission.Disposition is
                 WorkflowDispatchAdmissionDisposition.CancelledBeforeAdmission or
@@ -189,7 +189,7 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
         }
         catch (Exception exception)
         {
-            throw DeliveryFailure(PostCommitFailureKind.Transient, exception);
+            throw DeliveryFailure(exception);
         }
 
         if (result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Rejected)
@@ -262,6 +262,16 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
         PostCommitFailureKind kind,
         Exception? innerException = null) =>
         new(kind, DeliveryFailureCode, DeliveryFailureSummary, innerException);
+
+    /// <summary>
+    /// A checkpoint rule violation is permanent: the child's run commits the same refused checkpoint on every attempt, and
+    /// a retry that finds the child already started would report success while its parent waits forever. Anything else may
+    /// be infrastructure, so it stays transient.
+    /// </summary>
+    private static RuntimePostCommitDeliveryException DeliveryFailure(Exception exception) =>
+        DeliveryFailure(
+            RuntimeCheckpointCommitValidationException.IsCauseOf(exception) ? PostCommitFailureKind.Permanent : PostCommitFailureKind.Transient,
+            exception);
 
     private static void ValidatePayloadAgainstDispatch(
         string intentId,

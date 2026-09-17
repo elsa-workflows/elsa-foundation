@@ -66,7 +66,12 @@ public sealed class PublishStimulusExecutor : IRuntimePostCommitIntentHandler
         }
         catch (Exception exception)
         {
-            throw new RuntimePostCommitDeliveryException(PostCommitFailureKind.Transient, DeliveryFailureCode, DeliveryFailureSummary, exception);
+            // A checkpoint rule violation in a routed start or resume recurs on every attempt, and a retried start that is
+            // now a duplicate would report the delivery as a success. Anything else may be infrastructure.
+            var kind = RuntimeCheckpointCommitValidationException.IsCauseOf(exception)
+                ? PostCommitFailureKind.Permanent
+                : PostCommitFailureKind.Transient;
+            throw new RuntimePostCommitDeliveryException(kind, DeliveryFailureCode, DeliveryFailureSummary, exception);
         }
     }
 }

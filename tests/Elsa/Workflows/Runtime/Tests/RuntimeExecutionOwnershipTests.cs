@@ -32,7 +32,7 @@ public sealed class RuntimeExecutionOwnershipTests
         var ownership = new ExecutionLivenessState(RuntimeExecutionOwnershipStateId.For(ownerExecutionId), ownerExecutionId, null, null, null, null);
         var ordinary = new ExecutionLivenessState("operational-1", ownerExecutionId, null, null, null, null);
 
-        var exception = Assert.Throws<InvalidOperationException>(() =>
+        var exception = Assert.Throws<RuntimeCheckpointCommitValidationException>(() =>
             RuntimeExecutionOwnershipStateId.EnsureNotWritten([Change(ordinary), Change(ownership)]));
 
         Assert.Equal("Checkpoint operational changes cannot overwrite the reserved execution-ownership state.", exception.Message);

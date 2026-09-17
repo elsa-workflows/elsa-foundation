@@ -1,3 +1,5 @@
+using Elsa.Workflows.Runtime.Core.Exceptions;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>Validates durable incident-state transitions that must preserve prior resolution evidence.</summary>
@@ -35,7 +37,7 @@ public static class IncidentStateTransitionValidator
     }
 
     /// <summary>The Append conflict, for a store whose atomic create-only insert reports the conflict itself.</summary>
-    public static InvalidOperationException AppendConflict(IncidentState candidate) =>
+    public static RuntimeCheckpointCommitValidationException AppendConflict(IncidentState candidate) =>
         new($"Incident '{candidate.IncidentId}' already exists for workflow execution '{candidate.WorkflowExecutionId}' and cannot be appended again.");
 
     private static bool OutcomesAreIdentical(

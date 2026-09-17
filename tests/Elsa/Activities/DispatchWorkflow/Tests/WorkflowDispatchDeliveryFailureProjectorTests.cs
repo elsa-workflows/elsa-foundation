@@ -205,9 +205,10 @@ public sealed class WorkflowDispatchDeliveryFailureProjectorTests
             10,
             intentKind: DispatchWorkflowConstants.ResumeParentIntentKind));
 
-        Assert.Contains(logger.Entries, entry => entry.EventId.Name == "RuntimePostCommitDeliveryAttemptFailed");
-        Assert.Contains(logger.Entries, entry => entry.EventId.Name == "RuntimePostCommitDeliveryFailedFinal");
-        Assert.Contains(logger.Entries, entry => entry.EventId.Name == "WorkflowDispatchDeliveryIncidentRecorded");
+        // Each failure event carries the delivery exception; the dead-letter incident event included.
+        Assert.Contains(logger.Entries, entry => entry.EventId.Name == "RuntimePostCommitDeliveryAttemptFailed" && ReferenceEquals(entry.Exception, failure));
+        Assert.Contains(logger.Entries, entry => entry.EventId.Name == "RuntimePostCommitDeliveryFailedFinal" && ReferenceEquals(entry.Exception, failure));
+        Assert.Contains(logger.Entries, entry => entry.EventId.Name == "WorkflowDispatchDeliveryIncidentRecorded" && ReferenceEquals(entry.Exception, failure));
         Assert.Contains(logger.Entries, entry => entry.EventId.Name == "WorkflowDispatchFailureResumeQueued");
         Assert.Contains(logger.Entries, entry =>
             entry.EventId.Name == "RuntimePostCommitDeliverySucceeded" &&

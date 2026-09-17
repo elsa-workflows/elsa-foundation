@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Core.Services.Coalescing;
@@ -66,13 +67,13 @@ public sealed class WorkflowDispatchDurabilityContractTests
             new ImmediateRuntimeCheckpointPersistencePolicy(), checkpointStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
         var pending = NewRecord("parent-1", "activity-1", Now);
 
-        var wrongPending = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var wrongPending = await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() =>
             committer.CommitAsync(NewDispatchCommit("wrong-pending", pending.ChildWorkflowExecutionId, pending)).AsTask());
         Assert.Equal($"Workflow dispatch '{pending.DispatchId}' status 'Pending' must be committed by its parent workflow execution.", wrongPending.Message);
         await committer.CommitAsync(NewDispatchCommit("pending", pending.ParentWorkflowExecutionId, pending));
 
         var started = pending.TransitionTo(WorkflowDispatchStatus.Started, Now.AddSeconds(1));
-        var wrongStarted = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var wrongStarted = await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() =>
             committer.CommitAsync(NewDispatchCommit("wrong-started", pending.ParentWorkflowExecutionId, started)).AsTask());
         Assert.Equal($"Workflow dispatch '{pending.DispatchId}' status 'Started' must be committed by its child workflow execution.", wrongStarted.Message);
         await committer.CommitAsync(NewDispatchCommit("started", pending.ChildWorkflowExecutionId, started));

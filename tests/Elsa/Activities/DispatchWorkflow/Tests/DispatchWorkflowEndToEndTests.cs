@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Activities.DispatchWorkflow.Runtime.Services;
+using Elsa.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -792,6 +793,77 @@ public sealed class DispatchWorkflowEndToEndTests
         Assert.Equal(WorkflowDispatchRedriveDisposition.NotEligible, afterResumeRedrive.Disposition);
     }
 
+    /// <summary>
+    /// A child start refused by a checkpoint rule, before any child state exists, is refused again on every attempt. It
+    /// fails final on its first attempt instead of spending the retry budget, dead-letters with the delivery incident, and
+    /// resumes the waiting parent through <c>DispatchFailed</c>. Every failure event carries the refusal.
+    /// </summary>
+    [Fact]
+    public async Task Wait_start_refused_by_a_checkpoint_rule_fails_final_on_its_first_attempt_and_resumes_parent_as_dispatch_failed()
+    {
+        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
+        var run = await fixture.StartParentAsync(
+            caseId: "wait-checkpoint-rule-violation",
+            parentWorkflowExecutionId: "parent-wait-checkpoint-rule-violation",
+            parentCorrelationId: "correlation-parent",
+            waitForCompletion: true);
+        await using var scope = fixture.Services.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(
+            PersistenceAccessContext.Scoped(new PersistenceScope(run.Dispatch.TenantId!)));
+        var timeProvider = fixture.Services.GetRequiredService<TimeProvider>();
+        var outboxStore = scope.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxStore>();
+        var dispatchStore = scope.ServiceProvider.GetRequiredService<IWorkflowDispatchStore>();
+        // The shape a refused commit reaches the handler in: aggregated with its drain's observer failures.
+        var refusal = new AggregateException(new RuntimeCheckpointCommitValidationException("The checkpoint broke a rule."));
+        var refusing = new FlakyStartDispatcher(
+            scope.ServiceProvider.GetRequiredService<IWorkflowStartDispatcher>(),
+            transientFailureCount: int.MaxValue,
+            failure: refusal);
+        var logger = new RecordingLogger<RuntimePostCommitOutboxProcessor>();
+        var processor = new RuntimePostCommitOutboxProcessor(
+            outboxStore,
+            new HandlerIntentDispatcher(new ChildStartExecutor(refusing, dispatchStore, timeProvider)),
+            timeProvider,
+            DefaultRuntimeFaultCapturePolicy.CreateDefault(),
+            dispatchStore,
+            [new WorkflowDispatchDeliveryFailureProjector(dispatchStore)],
+            logger);
+
+        var attempt = Assert.Single((await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(
+            10,
+            intentKind: DispatchWorkflowConstants.StartChildIntentKind))).Items);
+
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, attempt.RequestedDeliveryResultStatus);
+        Assert.Single(refusing.Requests);
+        var deadLetter = Assert.IsType<RuntimePostCommitOutboxItem>(await ((IPostCommitOutboxLookupStore)outboxStore)
+            .FindAsync(attempt.OutboxItemId));
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, deadLetter.Status);
+        Assert.Equal(1, deadLetter.DeliveryAttemptCount);
+        Assert.Equal("The child workflow could not be started.", deadLetter.LastFailureMessage);
+        var failed = Assert.IsType<WorkflowDispatchRecord>(await dispatchStore.FindAsync(run.Dispatch.DispatchId));
+        Assert.Equal(WorkflowDispatchStatus.DispatchFailed, failed.Status);
+        Assert.Equal(deadLetter.OutboxItemId, WorkflowDispatchLifecycle.ReadDeliveryDeadLetterId(failed));
+        Assert.Equal(run.Identity.DeliveryIncidentId(0), WorkflowDispatchLifecycle.ReadDeliveryIncidentId(failed));
+        Assert.Equal(1, WorkflowDispatchLifecycle.ReadDeliveryAttemptCount(failed));
+        Assert.Equal([68105, 68106, 68101, 68103], logger.Entries.Select(entry => entry.EventId.Id));
+        Assert.Equal(nameof(PostCommitFailureKind.Permanent), logger.Entries.Single(entry => entry.EventId.Id == 68101).Fields["FailureKind"]);
+        Assert.All(
+            logger.Entries.Where(entry => entry.EventId.Id is 68101 or 68103 or 68105),
+            entry => Assert.Same(refusal, Assert.IsType<RuntimePostCommitDeliveryException>(entry.Exception).InnerException));
+
+        Assert.Equal(1, (await fixture.SweepAsync()).OutboxDeliveredCount);
+        Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.FindWorkflowAsync(run.Start.WorkflowExecutionId))?.Status);
+        Assert.Null(await fixture.FindWorkflowAsync(run.Identity.ChildWorkflowExecutionId));
+        var activity = Assert.Single(await fixture.ListActivitiesAsync(run.Start.WorkflowExecutionId));
+        Assert.Equal(
+            new[] { DispatchWorkflowOutcomes.DispatchFailed },
+            JsonSerializer.Deserialize<string[]>(activity.Metadata[RuntimeMetadataKeys.CompletionOutcomeNames]));
+        var result = Assert.IsType<DispatchWorkflowResult>(ReadActivityResult(activity).Result);
+        Assert.Equal(
+            WorkflowDispatchLifecycle.ReadDeliveryIncidentId(failed),
+            result.DiagnosticMetadata[DispatchWorkflowDiagnostics.DeliveryIncidentIdKey]);
+    }
+
     [Fact]
     public async Task Same_definition_different_artifact_version_skew_is_bounded_but_allowed()
     {
@@ -906,7 +978,8 @@ public sealed class DispatchWorkflowEndToEndTests
 
     private sealed class FlakyStartDispatcher(
         IWorkflowStartDispatcher inner,
-        int transientFailureCount) : IWorkflowStartDispatcher
+        int transientFailureCount,
+        Exception? failure = null) : IWorkflowStartDispatcher
     {
         internal List<WorkflowExecutionStartDispatchRequest> Requests { get; } = [];
 
@@ -920,7 +993,7 @@ public sealed class DispatchWorkflowEndToEndTests
             if (Requests.Count <= transientFailureCount)
             {
                 return ValueTask.FromException<WorkflowExecutionStartDispatchResult>(
-                    new InvalidOperationException("transient provider outage"));
+                    failure ?? new InvalidOperationException("transient provider outage"));
             }
 
             return inner.DispatchAsync(request, requiredScope, dispatchOptions, cancellationToken);

@@ -826,7 +826,7 @@ public sealed class RuntimeCheckpointCommitTests
 
         await writer.CommitAsync(first, decision);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(duplicateAppend, decision).AsTask());
+        var exception = await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() => writer.CommitAsync(duplicateAppend, decision).AsTask());
 
         Assert.Contains("already exists", exception.Message);
         Assert.Equal(IncidentStatus.Blocking, (await incidentStateStore.FindAsync("wfexec-1", "incident-1"))!.Status);

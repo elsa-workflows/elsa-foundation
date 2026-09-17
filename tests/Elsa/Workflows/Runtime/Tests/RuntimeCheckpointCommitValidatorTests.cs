@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
@@ -29,7 +30,7 @@ public sealed class RuntimeCheckpointCommitValidatorTests
     [Fact]
     public void Intents_without_their_folded_outbox_are_rejected()
     {
-        var exception = Assert.Throws<InvalidOperationException>(() => RuntimeCheckpointCommitValidator.Validate(Commit([_intent])));
+        var exception = Assert.Throws<RuntimeCheckpointCommitValidationException>(() => RuntimeCheckpointCommitValidator.Validate(Commit([_intent])));
 
         Assert.Equal("A checkpoint with post-commit intents must include their pending outbox state changes in the same atomic unit.", exception.Message);
     }
@@ -44,7 +45,7 @@ public sealed class RuntimeCheckpointCommitValidatorTests
             State = new RuntimePostCommitOutboxItem(folded.StateId, Intent("intent-a", "other.kind"), RuntimePostCommitOutboxStatus.Pending, OccurredAt, OccurredAt)
         };
 
-        var exception = Assert.Throws<InvalidOperationException>(() => RuntimeCheckpointCommitValidator.Validate(commit with
+        var exception = Assert.Throws<RuntimeCheckpointCommitValidationException>(() => RuntimeCheckpointCommitValidator.Validate(commit with
         {
             StateChanges = commit.StateChanges.WithPostCommitOutbox([substituted])
         }));
@@ -57,7 +58,7 @@ public sealed class RuntimeCheckpointCommitValidatorTests
     {
         var commit = Commit([_intent, Intent("intent-a", "other.kind")]);
 
-        var exception = Assert.Throws<InvalidOperationException>(() => RuntimeCheckpointCommitValidator.Validate(commit));
+        var exception = Assert.Throws<RuntimeCheckpointCommitValidationException>(() => RuntimeCheckpointCommitValidator.Validate(commit));
 
         Assert.Equal(
             $"Post-commit intent '{RuntimePostCommitOutboxIdentity.CreateLogicalValue(commit.CommitId, "intent-a")}' occurs more than once with conflicting content.",

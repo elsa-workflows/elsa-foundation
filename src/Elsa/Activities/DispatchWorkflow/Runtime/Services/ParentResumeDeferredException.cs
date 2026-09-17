@@ -1,7 +1,9 @@
+using Elsa.Workflows.Runtime.Core.Exceptions;
+
 namespace Elsa.Activities.DispatchWorkflow.Runtime.Services;
 
 /// <summary>Safe retry classification for committed resume work whose bookmark is not yet consumed.</summary>
-public sealed class ParentResumeDeferredException : Exception
+public sealed class ParentResumeDeferredException : Exception, IRuntimePostCommitDeferral
 {
     public ParentResumeDeferredException(string dispatchId, string parentWorkflowExecutionId)
         : base($"DispatchWorkflow parent resume for dispatch '{dispatchId}' is not yet consumed by parent '{parentWorkflowExecutionId}'.")
