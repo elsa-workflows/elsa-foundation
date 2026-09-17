@@ -357,7 +357,8 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
 
     /// <remarks>
     /// Every failure event carries the delivery exception, so the cause and its stack trace reach the log; the structured
-    /// fields stay identifiers and classifications. The persisted <c>LastFailureMessage</c> and every durable dispatch
+    /// fields stay identifiers and classifications. An expected deferral (<see cref="IRuntimePostCommitDeferral"/>) is a
+    /// routine wait rather than a failure and is logged without its exception. The persisted <c>LastFailureMessage</c> and every durable dispatch
     /// and incident projection stay free of exception text.
     /// </remarks>
     private void LogDeliveryFailure(
@@ -487,7 +488,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         var nextAvailableAt = recordedAt.Add(item.RetryPolicy.Delay!.Value);
         _logger.LogWarning(
             new EventId(67901, "RuntimePostCommitRetryDeferred"),
-            exception,
+            exception is IRuntimePostCommitDeferral ? null : exception,
             "Runtime post-commit intent retry deferred. OutboxItemId={OutboxItemId} IntentId={IntentId} IntentKind={IntentKind} DispatchId={DispatchId} DeliveryAttemptCount={DeliveryAttemptCount} NextAvailableAt={NextAvailableAt}",
             item.OutboxItemId,
             item.Intent.IntentId,

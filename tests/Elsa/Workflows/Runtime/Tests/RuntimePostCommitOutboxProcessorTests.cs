@@ -251,6 +251,35 @@ public sealed class RuntimePostCommitOutboxProcessorTests
     }
 
     [Fact]
+    public async Task Processor_LogsExpectedDeferralWithoutTheException()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        var logger = new RecordingLogger<RuntimePostCommitOutboxProcessor>();
+        var dispatcher = new RecordingDispatcher(failOnIntentId: "intent-resume", failure: new ExpectedDeferralException());
+        var processor = new RuntimePostCommitOutboxProcessor(
+            store,
+            dispatcher,
+            new FakeTimeProvider(_now),
+            DefaultRuntimeFaultCapturePolicy.CreateDefault(),
+            workflowDispatchStore: null,
+            logger);
+        await store.AddPendingForTestingAsync(NewOutboxItem(
+            "outbox-resume",
+            "intent-resume",
+            "wfexec-1",
+            retryPolicy: RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(15)),
+            kind: "Elsa.Activities.DispatchWorkflow.ResumeParent"));
+
+        await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10));
+
+        var warning = Assert.Single(logger.Entries);
+        Assert.Equal(new EventId(67901, "RuntimePostCommitRetryDeferred"), warning.EventId);
+        Assert.Null(warning.Exception);
+    }
+
+    private sealed class ExpectedDeferralException() : Exception("waiting"), IRuntimePostCommitDeferral;
+
+    [Fact]
     public async Task Processor_UnsupportedKindUsesExistingPolicySelectedFinalFailurePath()
     {
         var store = new InMemoryRuntimeCheckpointCommitStore();

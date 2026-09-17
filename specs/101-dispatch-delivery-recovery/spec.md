@@ -118,7 +118,7 @@ As an authorized operator, I can inspect a safe dead letter for an exhausted fir
 - **SC-005**: At least 100 concurrent duplicate redrive races yield one accepted/current redrive generation, one logical child identity, and no stale result overwrites.
 - **SC-006**: Restart tests at every named durability boundary converge on the same attempt, incident, lifecycle, and redrive state with no lost or duplicate responsibility.
 - **SC-007**: Authorization tests prove read-only callers cannot redrive, unauthorized and cross-tenant callers receive no failure data, and authorized matching-tenant callers can redrive only eligible detached failures.
-- **SC-008**: A sensitive-data corpus produces zero input/output values, authority metadata, exception text/type, stack traces, provider payloads, or arbitrary metadata in incidents, APIs, logs, metrics, or traces.
+- **SC-008**: A sensitive-data corpus produces zero input/output values, authority metadata, exception text/type, stack traces, provider payloads, or arbitrary metadata in incidents, APIs, metrics, traces, persisted failure messages, or structured log fields. Operator-only host log entries for a failed delivery attempt (events 68101, 68102, 68103, 68105, and 67901 for a failure that is not an expected deferral) carry the exception object, because a failure reduced to a code hides its cause. Amended 2026-09-17.
 - **SC-009**: Regression suites report no behavior changes for successful/duplicate/durably-forwarded starts, child business faults/cancellation, parent cancellation, and normal fire-and-forget completion.
 - **SC-010**: Architecture audits report no broker, Studio, TestRun, distributed transport, activity-authored retry, or WorkflowDefinitionActivity scope expansion.
 
