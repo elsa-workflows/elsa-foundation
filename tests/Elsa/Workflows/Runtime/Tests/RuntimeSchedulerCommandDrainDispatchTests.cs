@@ -367,11 +367,13 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         Assert.Empty(queuedItems);
     }
 
-    [Fact]
-    public async Task InProcessAgent_ReturnsAcceptedButFaultedWhenDrainFaults()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InProcessAgent_ReturnsAcceptedButFaultedWhenDrainFaults(bool refusedByCheckpointRule)
     {
         var services = new ServiceCollection();
-        services.AddSingleton<IWorkflowSchedulerWorkHandler, AlwaysFaultingSchedulerWorkHandler>();
+        services.AddSingleton<IWorkflowSchedulerWorkHandler>(new AlwaysFaultingSchedulerWorkHandler(refusedByCheckpointRule));
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         await using var provider = services.BuildServiceProvider();
         var agentProvider = provider.GetRequiredService<IWorkflowExecutionActorProvider>();
@@ -386,6 +388,8 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         // ...and RT-1 gap b: the crashed handler's work item is recorded to the poison store, not dropped.
         var poison = Assert.Single(await poisonStore.ListAsync("wfexec-1"));
         Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, poison.Disposition); // Default Noop retry policy.
+        // A caller can tell a turn a checkpoint rule refused from one that faulted for any other reason.
+        Assert.Equal(refusedByCheckpointRule, result.Metadata.ContainsKey(RuntimeMetadataKeys.DispatchCheckpointRuleViolation));
     }
 
     [Fact]
@@ -877,12 +881,14 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             new("wfexec-other");
     }
 
-    private sealed class AlwaysFaultingSchedulerWorkHandler : IWorkflowSchedulerWorkHandler
+    private sealed class AlwaysFaultingSchedulerWorkHandler(bool refusedByCheckpointRule) : IWorkflowSchedulerWorkHandler
     {
         public string Name => nameof(AlwaysFaultingSchedulerWorkHandler);
         public bool CanHandle(RuntimeSchedulerWorkItem workItem) => workItem.CommandKind == WorkflowExecutionCommandKind.RunSchedulerWork;
 
         public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
-            throw new InvalidOperationException($"Handler crashed for {workItem.WorkItemId}.");
+            throw (refusedByCheckpointRule
+                ? new RuntimeCheckpointCommitValidationException($"A checkpoint rule refused the commit of {workItem.WorkItemId}.")
+                : new InvalidOperationException($"Handler crashed for {workItem.WorkItemId}."));
     }
 }

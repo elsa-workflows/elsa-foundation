@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Runtime.Configuration;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Services;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -326,6 +327,59 @@ public sealed class ChildStartExecutorTests
         Assert.Same(failure, exception.InnerException);
     }
 
+    /// <summary>
+    /// A handler commit a checkpoint rule refused comes back as a marked AcceptedButFaulted start, not as an exception.
+    /// Without the child's outcome on its dispatch, the runtime had no child state to fault: the start failed permanently
+    /// and carries the refusal.
+    /// </summary>
+    [Fact]
+    public async Task RuleRefusedStartWithoutAChildOutcome_FailsPermanently()
+    {
+        var (executor, _) = await NewRuleRefusedStartAsync(childReachesAnOutcome: false);
+
+        var exception = await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(
+            () => executor.HandleAsync(NewOutboxItem().Intent).AsTask());
+
+        Assert.Equal(PostCommitFailureKind.Permanent, exception.Kind);
+        Assert.Equal("The child workflow could not be started.", exception.SafeSummary);
+        var refusal = Assert.IsType<RuntimeCheckpointCommitValidationException>(exception.InnerException);
+        Assert.Contains("set by test", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>The other direction: a refused child the runtime faulted has its outcome on its dispatch, so it really started.</summary>
+    [Fact]
+    public async Task RuleRefusedStartWhoseChildReachedAnOutcome_IsDelivered()
+    {
+        var (executor, dispatchStore) = await NewRuleRefusedStartAsync(childReachesAnOutcome: true);
+
+        await executor.HandleAsync(NewOutboxItem().Intent);
+
+        Assert.Equal(WorkflowDispatchStatus.Faulted, (await dispatchStore.FindAsync(NewIdentity().DispatchId))?.Status);
+    }
+
+    private static async Task<(ChildStartExecutor Executor, InMemoryWorkflowDispatchStore DispatchStore)> NewRuleRefusedStartAsync(
+        bool childReachesAnOutcome)
+    {
+        var dispatchStore = new InMemoryWorkflowDispatchStore();
+        var pending = NewDispatchRecord();
+        await dispatchStore.SaveAsync(pending);
+        var startDispatcher = new StubStartDispatcher(
+            WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted,
+            new Dictionary<string, string> { [RuntimeMetadataKeys.DispatchCheckpointRuleViolation] = "true" },
+            childReachesAnOutcome
+                ? async () =>
+                {
+                    var started = (await dispatchStore.FindAsync(pending.DispatchId))!;
+                    await dispatchStore.SaveAsync(started.TransitionTo(WorkflowDispatchStatus.Faulted, started.UpdatedAt.AddSeconds(1)));
+                }
+                : null);
+        var executor = new ChildStartExecutor(
+            startDispatcher,
+            dispatchStore,
+            new FakeTimeProvider(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1)));
+        return (executor, dispatchStore);
+    }
+
     [Fact]
     public async Task AdmissionStoreException_IsClassifiedWithoutLeakingDetails()
     {
@@ -474,26 +528,30 @@ public sealed class ChildStartExecutorTests
             handler.HandleAsync(intent, cancellationToken);
     }
 
+    /// <param name="onDispatch">What the child's run does to durable state before its result returns.</param>
     private sealed class StubStartDispatcher(
         WorkflowExecutionCommandDispatchStatus status,
-        IReadOnlyDictionary<string, string>? metadata = null) : IWorkflowStartDispatcher
+        IReadOnlyDictionary<string, string>? metadata = null,
+        Func<ValueTask>? onDispatch = null) : IWorkflowStartDispatcher
     {
         internal List<WorkflowExecutionStartDispatchRequest> Requests { get; } = [];
 
-        public ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
+        public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
             WorkflowExecutionStartDispatchRequest request,
             WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published,
             WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
             CancellationToken cancellationToken = default)
         {
             Requests.Add(request);
+            if (onDispatch is not null)
+                await onDispatch();
             var workflowExecutionId = request.WorkflowExecutionId!;
             var reason = status is WorkflowExecutionCommandDispatchStatus.Rejected or
                 WorkflowExecutionCommandDispatchStatus.Deferred or
                 WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted
                 ? "set by test"
                 : null;
-            return ValueTask.FromResult(new WorkflowExecutionStartDispatchResult(
+            return new WorkflowExecutionStartDispatchResult(
                 workflowExecutionId,
                 DispatchWorkflowRuntimeTestFixture.ChildIdentity,
                 new WorkflowExecutionCommandDispatchResult(
@@ -510,7 +568,7 @@ public sealed class ChildStartExecutorTests
                     WorkflowExecutionActorStatus.Active,
                     WorkflowExecutionActorCapabilities.InProcessMailbox,
                     DispatchWorkflowRuntimeTestFixture.Now),
-                WorkflowExecutableSourceProvenance.From(DispatchWorkflowRuntimeTestFixture.ChildSourceReference())));
+                WorkflowExecutableSourceProvenance.From(DispatchWorkflowRuntimeTestFixture.ChildSourceReference()));
         }
     }
 

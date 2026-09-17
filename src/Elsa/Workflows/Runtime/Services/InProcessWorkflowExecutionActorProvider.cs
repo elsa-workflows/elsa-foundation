@@ -374,6 +374,8 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
                         faultMetadata["runtime.dispatch.outboxDeliveryFailed"] = "true";
                     if (processResult.WorkflowTerminated)
                         faultMetadata[WorkflowTerminatedMetadataKey] = "true";
+                    if (processResult.CheckpointRuleViolation)
+                        faultMetadata[RuntimeMetadataKeys.DispatchCheckpointRuleViolation] = "true";
 
                     return DispatchResult(
                         envelope,

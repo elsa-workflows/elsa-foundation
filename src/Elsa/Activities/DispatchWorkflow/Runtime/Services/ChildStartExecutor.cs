@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Runtime.Configuration;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -202,6 +203,19 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
 
         if (result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Rejected)
             throw DeliveryFailure(PostCommitFailureKind.Permanent);
+
+        // The same refusal, reported by the child's run instead of thrown, when a handler's commit was refused. The runtime
+        // faults a refused child that has accepted state, which gives its dispatch the child's outcome. Without that outcome
+        // the refusal came before any child state was accepted, so no child exists and its start failed. The claim
+        // completion's child-evidence rule still overrules this if a child does exist.
+        if (result.CommandDispatch is { Status: WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted } faulted &&
+            faulted.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchCheckpointRuleViolation, out var violation) &&
+            StringComparer.Ordinal.Equals(violation, "true") &&
+            !await HasChildOutcomeAsync(payload.DispatchId, cancellationToken))
+        {
+            throw DeliveryFailure(new RuntimeCheckpointCommitValidationException(
+                $"A checkpoint rule refused a commit of child workflow execution '{payload.ChildWorkflowExecutionId}' before it reached an outcome: {faulted.Reason}"));
+        }
 
         if (result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Deferred &&
             !HasDurableDistributedForwardingEvidence(result.CommandDispatch.Metadata))
