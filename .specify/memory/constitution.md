@@ -3,6 +3,28 @@ Draft history moved to ../../docs/reports/archive/constitution-draft-history.md.
 This constitution file is the Elsa-specific quality-gate layer: gates, allowed exceptions,
 ratification state, and governance. Canonical term lookup lives in ../../docs/glossary/.
 
+Sync Impact Report (4.1.0 -> 4.2.0, 2026-09-17)
+- Bump rationale: MINOR. R4 already gave `…Source` one meaning, pull/returns, and framework §2.6.1
+  defines `I<X>Source` the same way, so reserving the suffix restates the rule. What is new is guidance
+  for types that use "source" in another sense: it names those senses and their established names,
+  keeps the existing origin-value types as exceptions, and says what a new one ends in. Read strictly,
+  that could pass as a PATCH clarification. It is recorded as MINOR because the SemVer policy below counts
+  materially expanded guidance as MINOR, as 4.1.0 did for the View/Response and State/Status conventions,
+  and because MINOR requires the maintainers' review. No gate is added, removed, or redefined, and no type
+  is renamed.
+- Ratification: pending. Governance requires consensus among Joey Barten, Sipke Schoorstra, and Frans van
+  Ek, and no agreement is recorded yet. The R4 bullet stays marked pending inline until there is.
+- Source: finding 3.5 of the 2026-09 code review, "Source means five things". The tree has 46 types that
+  end in `Source` and 34 more with `Source` elsewhere in the name, counted from type declarations under
+  `src/` on 2026-09-17; the review reported 39 of the latter. The finding's read-model query services
+  (`…DataSource`) return values on request, so they use the extension-point sense. Its reconciliation
+  origin is the provenance sense.
+- Added: §E6 R4, a nested rule reserving the `…Source` suffix for the extension-point sense, with three
+  named senses that keep their names: provenance ("source reference", already in the glossary since
+  4.1.0), OpenTelemetry's external `ActivitySource`, and origin values such as `RuntimeInputBindingSource`.
+- Unchanged deliberately: every existing type name, including wire-bearing `…Source` enums and records.
+- Templates requiring updates: none.
+
 Sync Impact Report (4.0.1 -> 4.1.0, 2026-09-16)
 - Bump rationale: MINOR. Most of this change is factual sync with the tree: propagation from accepted
   ADR 0073, which made EF Core the only first-party persistence family, and a reconciliation of every
@@ -101,7 +123,7 @@ Ratification: RATIFIED 2026-08-08 by Sipke Schoorstra, on his authority alone; J
 -->
 # Elsa Workflow Engine Constitution
 
-**Version:** 4.1.0
+**Version:** 4.2.0
 **Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance > Amendment process calls for consensus among Joey Barten, Sipke Schoorstra, and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Section-level gates still marked draft, provisional, or pending architecture-review ratification — whether via their own `Status:` line (§E5) or inline wording (§E2.8 Model X, §E2.9, §E2.9.7) — remain so and are **not** covered by this ratification.
 **Layer:** Elsa-specific specialization of the [Modular Software Design Framework Constitution](constitution-framework.md).
 **Derives from:** framework constitution **v4.0.0**.
@@ -526,6 +548,10 @@ Rationale, rejected alternatives and the supporting measurements are recorded in
 - **R3 — Banned vague words for Elsa-owned types:** `Manager`, `Helper`, `Util(s)`, `Info`, `Data`, `Object`, `Service` (when a more specific role fits), `Processor` (prefer a concrete verb). **Exception:** names that mirror an external framework contract (ASP.NET Core Identity `UserManager`, OpenIddict `IApplicationManager`, `IRoleManager`, `ILiquidTemplateManager`) keep the external name.
 - **R4 — One suffix, one meaning.** Codified role suffixes, pick exactly one per layer and never use two synonyms for adjacent steps:
   - `…Source` = pull/returns; `…Contributor` = push/mutates context; `…PreProcessor`/`…PostProcessor` = phased contributor; `…Validator` = returns findings.
+  - **The `…Source` suffix is reserved for that extension-point sense** *(4.2.0; pending maintainer consensus)*: a contract, or an implementation of one, that returns values on request, as framework §2.6.1's `I<X>Source` does. `IActivityReconciliationSource`, `IJsonConverterSource`, `IApiCapabilitySource` and the read-model query contracts `IWorkflowPortfolioDataSource` and `IWorkflowRunHealthDataSource` all use it this way. "Source" has other senses in the tree. Those keep their established names, and none of them makes a type an extension point:
+    - *Provenance.* `Source` before another component means origin and gives the type no role. `WorkflowExecutableSourceReference` points back to the design document an executable was compiled from; it does not yield executables. The glossary term is **source reference** (`docs/glossary/elsa.md`). The source-identity fields `SourceKind`/`SourceId`/`SourceVersion` and names such as `WorkflowExecutableSourceKinds` belong to the same sense.
+    - *OpenTelemetry.* `ActivitySource` is the external `System.Diagnostics` type. Names that mirror it, such as `ActivitySourceWorkflowEngineTracer` and the `ActivitySourceName` constants, are external names (see Scope and R3).
+    - *Origin values.* Some existing types end in `…Source` but hold where a value came from instead of returning values: the enums `RuntimeInputBindingSource` and `PublicationPolicySource`, records such as `WorkflowActivationSource` and `LogSource`, and the authoring values `ExpressionSource<T>` and `ActivityResultSource<T>`. They are exceptions and keep their names; several are persisted or returned over HTTP. A new type in this sense ends in another head noun, as `RuntimeIngressSourceKind` does.
   - `…Store` = persistence over one aggregate.
   - `…View` = a wire-shaped projection an endpoint returns; `…Response` = the envelope that wraps views, for a collection or an operation result. A view and its envelope sit in one file (`IncidentStrategyViews.cs` declares the `…View` items and `IncidentStrategiesResponse`). `Elsa.Agent.Api` and `Elsa.Foundation.Identity.Api` predate the rule and use `…Response` for single payloads; those are serialized shapes and are not renamed.
   - `…State` = a structure that holds data, as a record or class; `…Status` = an enum naming one lifecycle position. When a type has both, they share a file (`WorkflowExecutionState.cs` declares `WorkflowExecutionState` and its `WorkflowExecutionStatus`). A few older enums still end in `…State`; rename one only where its values are not serialized.
@@ -579,4 +605,4 @@ Same rules as framework §4.2 applied to constitutional content:
 
 ---
 
-**Version:** 4.1.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-09-16 | **Derives from framework constitution:** v4.0.0
+**Version:** 4.2.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-09-17 | **Derives from framework constitution:** v4.0.0
