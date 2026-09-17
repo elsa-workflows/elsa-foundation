@@ -120,6 +120,22 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
         return false;
     }
 
+    /// <summary>
+    /// Counts a capture as <see cref="DiagnosticsPersistenceLossReason.WriteBeforeStart"/> when it is offered before
+    /// <see cref="Start"/>, for an adapter that refuses such captures before any provider I/O. Capture begins while a
+    /// shell activates, before migrations create the schema and before the host starts the drain. Those captures are
+    /// dropped rather than buffered, and counted through the pull-only observer, so the drop stays visible without
+    /// logging through the pipeline being captured.
+    /// </summary>
+    /// <returns><see langword="true"/> when the drain has not started, so the caller must refuse the capture.</returns>
+    public bool RecordWriteBeforeStart()
+    {
+        if (State != DiagnosticsDrainState.Created)
+            return false;
+        Observe(observer => observer.RecordLoss(DiagnosticsPersistenceLossReason.WriteBeforeStart, 1));
+        return true;
+    }
+
     public ValueTask<TResult> EnqueueAsync(TItem item, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

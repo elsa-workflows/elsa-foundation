@@ -37,7 +37,6 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
     private readonly int maxRetainedEntries;
     private readonly SemaphoreSlim operationGate = new(1, 1);
     private readonly DiagnosticsDrain<PendingAppend, StructuredLogEntry> drain;
-    private readonly IDiagnosticsPersistenceObserver? observer;
     private int disposed;
 
     public EfStructuredLogStore(
@@ -59,7 +58,6 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
         this.binding = binding;
         maxRecentQuerySize = Math.Max(1, options.Value.MaxRecentQuerySize);
         this.maxRetainedEntries = maxRetainedEntries;
-        this.observer = observer;
         drain = new(
             new DrainTarget(this),
             new DiagnosticsDrainOptions
@@ -83,14 +81,8 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
     {
         ArgumentNullException.ThrowIfNull(entry);
         ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed) != 0, this);
-        if (drain.State == DiagnosticsDrainState.Created)
-        {
-            // Capture begins while the shell activates, before migrations create the schema and before the host
-            // starts this drain. Those entries are rejected without provider I/O rather than buffered, and counted,
-            // so the drop stays visible without logging through the pipeline that is being captured.
-            RecordWriteBeforeStart();
+        if (drain.RecordWriteBeforeStart())
             throw new InvalidOperationException("The EF structured-log capture drain must be started before use.");
-        }
 
         try
         {
@@ -493,18 +485,6 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
         finally
         {
             operationGate.Release();
-        }
-    }
-
-    private void RecordWriteBeforeStart()
-    {
-        try
-        {
-            observer?.RecordLoss(DiagnosticsPersistenceLossReason.WriteBeforeStart, 1);
-        }
-        catch
-        {
-            // Observability is deliberately outside the persistence correctness boundary.
         }
     }
 

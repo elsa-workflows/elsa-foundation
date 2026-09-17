@@ -4,7 +4,10 @@ using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Diagnostics.Persistence.Draining;
+using Elsa.Diagnostics.Persistence.Observability;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests;
@@ -569,10 +572,30 @@ public sealed class EfOpenTelemetryStoreTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => zeroCapacity.Store.QueryResourcesAsync(new() { Take = 10 }, cancellation.Token).AsTask());
     }
 
+    [Fact]
+    public async Task Write_before_the_drain_starts_is_rejected_and_counted_without_provider_io()
+    {
+        var counters = new DiagnosticsPersistenceCounters();
+        await using var store = new EfOpenTelemetryStore(
+            new SessionlessScopeFactory(),
+            Options.Create(new OpenTelemetryDiagnosticsOptions()),
+            EfOpenTelemetryBinding.Default,
+            observer: counters);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.WriteAsync(TelemetryTestData.Batch("early")).AsTask());
+
+        Assert.Equal(1, counters.Snapshot().Losses[DiagnosticsPersistenceLossReason.WriteBeforeStart]);
+    }
+
     private static async Task<OpenTelemetryEntityFrameworkCoreFixture> CreateFixtureAsync(OpenTelemetryDiagnosticsOptions? options = null)
     {
         var fixture = new OpenTelemetryEntityFrameworkCoreFixture();
         await fixture.InitializeAsync(options);
         return fixture;
+    }
+
+    private sealed class SessionlessScopeFactory : IServiceScopeFactory
+    {
+        public IServiceScope CreateScope() => throw new IOException("The store must not open a session before its drain starts.");
     }
 }
