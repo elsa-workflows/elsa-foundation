@@ -1665,6 +1665,36 @@ public sealed class ActivitiesDesignEntityFrameworkCoreTests
     }
 
     [Fact]
+    public async Task Sqlite_fork_apply_replays_an_existing_receipt_and_rejects_different_material()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<ActivitiesDesignSqliteDbContext>().UseSqlite(connection).Options;
+        await using var db = new ActivitiesDesignSqliteDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+        var candidate = ForkCandidateMaterial();
+        var request = ApplyFork(candidate, "apply-replay");
+        db.ActivityForkReceipts.Add(new()
+        {
+            Id = request.ReceiptId, TenantId = candidate.TenantId, IdempotencyKey = request.IdempotencyKey, CandidateId = request.CandidateId, PublicCandidateId = candidate.CandidateId,
+            RequestFingerprint = request.RequestFingerprint, AccessBindingFingerprint = request.AccessBindingFingerprint, ActorId = request.ActorId, AuthorizationProfile = request.AuthorizationProfile,
+            DefinitionId = candidate.ReservedDefinition.Id, ActivityTypeKey = candidate.ReservedDefinition.ActivityTypeKey, DraftId = candidate.ReservedDraft.Id,
+            DefinitionMaterialJson = JsonSerializer.Serialize(candidate.ReservedDefinition), AuthoringState = candidate.ReservedAuthoringState, Draft = candidate.ReservedDraft, Layout = candidate.ReservedLayout,
+            MigrationDiagnostics = [], AppliedAt = request.AppliedAt
+        });
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        var store = new EfActivityDesignStores(db, new TestAccess(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+
+        // No candidate row exists, so only the receipt replay branch can produce a result.
+        var replay = await store.ExecuteAsync(request);
+
+        Assert.True(replay.AlreadyApplied);
+        Assert.Equal(request.ReceiptId, replay.Receipt.Id);
+        await Assert.ThrowsAsync<ActivityForkIdempotencyConflictException>(() => store.ExecuteAsync(request with { RequestFingerprint = "different-request" }));
+    }
+
+    [Fact]
     public async Task Sqlite_fork_apply_rechecks_provider_source_authority_and_candidate_source_binding()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
