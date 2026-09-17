@@ -21,8 +21,9 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Diagnostics.StructuredLogs;
 
 /// <summary>
-/// Captures host log events into an in-memory store and exposes them over HTTP (recent history, known
-/// sources) and Server-Sent Events (live tail). Persistence is deferred behind the store contract.
+/// Captures the log events of the shell that enables it into a store and exposes them over HTTP (recent history,
+/// known sources) and Server-Sent Events (live tail). Loggers resolved from the root host are not captured. The store
+/// is in memory unless a persistence feature replaces it.
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Diagnostics")]

@@ -7,8 +7,9 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Diagnostics.StructuredLogs.Capture;
 
 /// <summary>
-/// The <see cref="ILoggerProvider"/> that captures host log events into the diagnostics pipeline. Events
-/// from this feature's own categories are ignored so capture cannot feed back on itself.
+/// The <see cref="ILoggerProvider"/> that captures the log events of the shell that registers it into the
+/// diagnostics pipeline. It joins that shell's own logger factory, so loggers resolved from the root host are not
+/// captured. Events from this feature's own categories are ignored so capture cannot feed back on itself.
 /// </summary>
 public sealed class StructuredLogCaptureProvider : ILoggerProvider, ISupportExternalScope
 {
