@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Primitives.Models;
 
 namespace Elsa.Activities.Design.Core.Models;
@@ -180,7 +181,7 @@ public sealed record ActivityInputContract(
     string? Category = null,
     float Order = 0,
     string? UiHint = null,
-    JsonElement? UiSpecifications = null);
+    JsonElement? UiSpecifications = null) : IActivityContractValueMember;
 
 public sealed record ActivityOutputContract(
     string ReferenceKey,
@@ -196,13 +197,13 @@ public sealed record ActivityOutputContract(
     float Order = 0,
     string? UiHint = null,
     JsonElement? UiSpecifications = null,
-    ValueRepresentation? SourceRepresentation = null);
+    ValueRepresentation? SourceRepresentation = null) : IActivityContractValueMember;
 
 public sealed record ActivityOutcomeContract(
     string ReferenceKey,
     string Name,
     bool IsEmitted,
-    string? Description = null);
+    string? Description = null) : IActivityContractMember;
 
 public sealed record ActivityContract(
     string ContractSchemaVersion,

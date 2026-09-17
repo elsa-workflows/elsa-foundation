@@ -89,10 +89,10 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
         Action<T, T, string, IDictionary<string, ActivityVersionChange>> compare,
         Func<T, string, ActivityVersionChange> added,
         Func<T, string, ActivityVersionChange> removed)
-        where T : notnull
+        where T : IActivityContractMember
     {
-        var beforeByKey = before.ToDictionary(MemberKey, StringComparer.Ordinal);
-        var afterByKey = after.ToDictionary(MemberKey, StringComparer.Ordinal);
+        var beforeByKey = before.ToDictionary(member => member.ReferenceKey, StringComparer.Ordinal);
+        var afterByKey = after.ToDictionary(member => member.ReferenceKey, StringComparer.Ordinal);
         foreach (var key in beforeByKey.Keys.Union(afterByKey.Keys, StringComparer.Ordinal).Order(StringComparer.Ordinal))
         {
             if (!beforeByKey.TryGetValue(key, out var oldMember))
@@ -102,14 +102,6 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
             else
                 compare(oldMember, newMember, memberKind, changes);
         }
-
-        static string MemberKey(T member) => member switch
-        {
-            ActivityInputContract input => input.ReferenceKey,
-            ActivityOutputContract output => output.ReferenceKey,
-            ActivityOutcomeContract outcome => outcome.ReferenceKey,
-            _ => throw new InvalidOperationException($"Unsupported activity contract member '{typeof(T)}'.")
-        };
     }
 
     private static ActivityVersionChange AddedInput(ActivityInputContract member, string memberKind)
@@ -139,10 +131,10 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
                 ? $"Emitted outcome '{member.ReferenceKey}' was added."
                 : $"Non-emitted outcome '{member.ReferenceKey}' was added.");
 
-    private static ActivityVersionChange RemovedMember<T>(T member, string memberKind) where T : notnull =>
+    private static ActivityVersionChange RemovedMember<T>(T member, string memberKind) where T : IActivityContractMember =>
         MemberChange(member, memberKind, "MemberRemoved", ProjectMember(member), null,
             ActivityVersionChangeImpact.Breaking, ActivityVersionBump.Major,
-            $"{memberKind} '{ReferenceKey(member)}' was removed.");
+            $"{memberKind} '{member.ReferenceKey}' was removed.");
 
     private static void CompareInput(
         ActivityInputContract before,
@@ -189,18 +181,18 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
         T after,
         string memberKind,
         IDictionary<string, ActivityVersionChange> changes)
-        where T : notnull
+        where T : IActivityContractValueMember
     {
-        var wasNullable = IsNullable(before);
-        var isNullable = IsNullable(after);
+        var wasNullable = before.IsNullable;
+        var isNullable = after.IsNullable;
         if (wasNullable == isNullable) return;
         var tightening = wasNullable && !isNullable;
         Add(changes, MemberChange(after, memberKind, "NullabilityChanged", ProjectMember(before), ProjectMember(after),
             tightening ? ActivityVersionChangeImpact.Breaking : ActivityVersionChangeImpact.Additive,
             tightening ? ActivityVersionBump.Major : ActivityVersionBump.Minor,
             tightening
-                ? $"{memberKind} '{ReferenceKey(after)}' nullability was tightened."
-                : $"{memberKind} '{ReferenceKey(after)}' nullability was relaxed."));
+                ? $"{memberKind} '{after.ReferenceKey}' nullability was tightened."
+                : $"{memberKind} '{after.ReferenceKey}' nullability was relaxed."));
     }
 
     private static void CompareOutcome(
@@ -225,25 +217,21 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
     }
 
     private static void CompareCommon<T>(T before, T after, string memberKind, IDictionary<string, ActivityVersionChange> changes)
-        where T : notnull
+        where T : IActivityContractValueMember
     {
-        var key = ReferenceKey(after);
-        var oldName = Name(before);
-        var newName = Name(after);
-        if (!StringComparer.Ordinal.Equals(oldName, newName))
+        var key = after.ReferenceKey;
+        if (!StringComparer.Ordinal.Equals(before.Name, after.Name))
             Add(changes, MemberChange(after, memberKind, "MemberRenamed", ProjectMember(before), ProjectMember(after), ActivityVersionChangeImpact.Breaking, ActivityVersionBump.Major,
                 $"{memberKind} '{key}' was renamed."));
 
-        var oldType = Type(before);
-        var newType = Type(after);
-        if (oldType != newType)
+        if (before.Type != after.Type)
             Add(changes, MemberChange(after, memberKind, "TypeChanged", ProjectMember(before), ProjectMember(after), ActivityVersionChangeImpact.Breaking, ActivityVersionBump.Major,
                 $"{memberKind} '{key}' changed type."));
 
-        if (!StringComparer.Ordinal.Equals(StorageDriver(before), StorageDriver(after)))
+        if (!StringComparer.Ordinal.Equals(before.StorageDriverKey, after.StorageDriverKey))
             Add(changes, MemberChange(after, memberKind, "StorageDriverChanged", ProjectMember(before), ProjectMember(after), ActivityVersionChangeImpact.Breaking, ActivityVersionBump.Major,
                 $"{memberKind} '{key}' changed storage driver.", ActivityVersionChangeArea.Durability));
-        if (Durability(before) != Durability(after))
+        if (before.Durability != after.Durability)
             Add(changes, MemberChange(after, memberKind, "DurabilityChanged", ProjectMember(before), ProjectMember(after), ActivityVersionChangeImpact.Breaking, ActivityVersionBump.Major,
                 $"{memberKind} '{key}' changed durable-boundary policy.", ActivityVersionChangeArea.Durability));
 
@@ -269,15 +257,15 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
     }
 
     private static void ComparePresentation<T>(T before, T after, string memberKind, IDictionary<string, ActivityVersionChange> changes)
-        where T : notnull
+        where T : IActivityContractValueMember
     {
-        var key = ReferenceKey(after);
-        AddPresentationIfChanged("DisplayNameChanged", DisplayName(before), DisplayName(after));
-        AddPresentationIfChanged("DescriptionChanged", Description(before), Description(after));
-        AddPresentationIfChanged("CategoryChanged", Category(before), Category(after));
-        if (Order(before) != Order(after))
-            Add(changes, PresentationChange(key, memberKind, "OrderChanged", Order(before), Order(after)));
-        if (!StringComparer.Ordinal.Equals(UiHash(before), UiHash(after)))
+        var key = after.ReferenceKey;
+        AddPresentationIfChanged("DisplayNameChanged", before.DisplayName, after.DisplayName);
+        AddPresentationIfChanged("DescriptionChanged", before.Description, after.Description);
+        AddPresentationIfChanged("CategoryChanged", before.Category, after.Category);
+        if (before.Order != after.Order)
+            Add(changes, PresentationChange(key, memberKind, "OrderChanged", before.Order, after.Order));
+        if (!StringComparer.Ordinal.Equals(HashUi(before.UiHint, before.UiSpecifications), HashUi(after.UiHint, after.UiSpecifications)))
             Add(changes, PresentationChange(key, memberKind, "UiMetadataChanged", UiSummary(before), UiSummary(after)));
 
         void AddPresentationIfChanged(string kind, string? oldValue, string? newValue)
@@ -478,11 +466,11 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
         ActivityVersionChangeImpact impact,
         ActivityVersionBump bump,
         string message,
-        ActivityVersionChangeArea? area = null) where T : notnull => new(
-        $"{(area ?? MemberArea(member)).ToString().ToLowerInvariant()}:{memberKind.ToLowerInvariant()}:{IdSegment(ReferenceKey(member))}:{Kebab(kind)}",
+        ActivityVersionChangeArea? area = null) where T : IActivityContractMember => new(
+        $"{(area ?? MemberArea(member)).ToString().ToLowerInvariant()}:{memberKind.ToLowerInvariant()}:{IdSegment(member.ReferenceKey)}:{Kebab(kind)}",
         area ?? MemberArea(member),
         kind,
-        new(memberKind, ReferenceKey(member)),
+        new(memberKind, member.ReferenceKey),
         before,
         after,
         impact,
@@ -538,7 +526,7 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
 
     private static JsonElement Project(ActivityOutcomeContract member) => Element(new { member.Name, member.IsEmitted });
 
-    private static JsonElement ProjectMember<T>(T member) => member switch
+    private static JsonElement ProjectMember<T>(T member) where T : IActivityContractMember => member switch
     {
         ActivityInputContract input => Project(input),
         ActivityOutputContract output => Project(output),
@@ -579,90 +567,8 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
         ? ActivityVersionChangeArea.Outcome
         : ActivityVersionChangeArea.Contract;
 
-    private static string ReferenceKey<T>(T member) => member switch
-    {
-        ActivityInputContract value => value.ReferenceKey,
-        ActivityOutputContract value => value.ReferenceKey,
-        ActivityOutcomeContract value => value.ReferenceKey,
-        _ => throw new InvalidOperationException($"Unsupported member '{typeof(T)}'.")
-    };
-
-    private static string Name<T>(T member) => member switch
-    {
-        ActivityInputContract value => value.Name,
-        ActivityOutputContract value => value.Name,
-        _ => throw new InvalidOperationException()
-    };
-
-    private static TypeReference Type<T>(T member) => member switch
-    {
-        ActivityInputContract value => value.Type,
-        ActivityOutputContract value => value.Type,
-        _ => throw new InvalidOperationException()
-    };
-
-    private static string StorageDriver<T>(T member) => member switch
-    {
-        ActivityInputContract value => value.StorageDriverKey,
-        ActivityOutputContract value => value.StorageDriverKey,
-        _ => throw new InvalidOperationException()
-    };
-
-    private static ActivityBoundaryDurability Durability<T>(T member) => member switch
-    {
-        ActivityInputContract value => value.Durability,
-        ActivityOutputContract value => value.Durability,
-        _ => throw new InvalidOperationException()
-    };
-
-    private static bool IsNullable<T>(T member) => member switch
-    {
-        ActivityInputContract value => value.IsNullable,
-        ActivityOutputContract value => value.IsNullable,
-        _ => throw new InvalidOperationException()
-    };
-
-    private static string? DisplayName<T>(T member) => member switch
-    {
-        ActivityInputContract value => value.DisplayName,
-        ActivityOutputContract value => value.DisplayName,
-        _ => null
-    };
-
-    private static string? Description<T>(T member) => member switch
-    {
-        ActivityInputContract value => value.Description,
-        ActivityOutputContract value => value.Description,
-        _ => null
-    };
-
-    private static string? Category<T>(T member) => member switch
-    {
-        ActivityInputContract value => value.Category,
-        ActivityOutputContract value => value.Category,
-        _ => null
-    };
-
-    private static float Order<T>(T member) => member switch
-    {
-        ActivityInputContract value => value.Order,
-        ActivityOutputContract value => value.Order,
-        _ => 0
-    };
-
-    private static string? UiHash<T>(T member) => member switch
-    {
-        ActivityInputContract value => HashUi(value.UiHint, value.UiSpecifications),
-        ActivityOutputContract value => HashUi(value.UiHint, value.UiSpecifications),
-        _ => null
-    };
-
-    private static object UiSummary<T>(T member) => member switch
-    {
-        ActivityInputContract value => new { value.UiHint, specificationsHash = HashElement(value.UiSpecifications) },
-        ActivityOutputContract value => new { value.UiHint, specificationsHash = HashElement(value.UiSpecifications) },
-        _ => new { }
-    };
+    private static object UiSummary(IActivityContractValueMember member) =>
+        new { member.UiHint, specificationsHash = HashElement(member.UiSpecifications) };
 
     private static string DefaultHash(ActivityInputDefault value) => Hash($"{value.Syntax}\u001f{CanonicalJson(value.Value)}");
 

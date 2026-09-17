@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
@@ -348,6 +349,33 @@ internal static class StructuralParentEvaluationSupport
             Metadata: metadata);
 
         await checkpointCommitter.CommitAsync(commit, cancellationToken);
+    }
+
+    /// <summary>
+    /// Marks a structural parent completed after evaluating a child, recording the evaluating command's reason and
+    /// work item and the normalized outcome names on its metadata. Shared by the completion and notification
+    /// handlers so both terminalize a parent identically.
+    /// </summary>
+    public static ActivityExecutionState CompleteParentActivity(
+        RuntimeSchedulerWorkItem workItem,
+        IActivityCommandPayload payload,
+        ActivityExecutionState state,
+        IReadOnlyCollection<string> outcomeNames,
+        DateTimeOffset completedAt)
+    {
+        var normalizedOutcomeNames = SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(outcomeNames, defaultToDone: true);
+        var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        metadata[RuntimeMetadataKeys.InvokeReason] = payload.Reason;
+        metadata[RuntimeMetadataKeys.InvokeSchedulerWorkItemId] = workItem.WorkItemId;
+        metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(normalizedOutcomeNames);
+
+        return RuntimeContainerScopeService.CloseOwnedFrames(state with
+        {
+            Status = ActivityExecutionStatus.Completed,
+            CompletedAt = completedAt,
+            PrivateState = null,
+            Metadata = metadata
+        });
     }
 
     /// <summary>

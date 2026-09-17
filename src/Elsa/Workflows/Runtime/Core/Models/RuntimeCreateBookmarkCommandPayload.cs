@@ -1,9 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
-public sealed class RuntimeCreateBookmarkCommandPayload
+public sealed class RuntimeCreateBookmarkCommandPayload : IActivityCommandPayload
 {
     public const string ActivitySuspendedReason = "ActivitySuspended";
 

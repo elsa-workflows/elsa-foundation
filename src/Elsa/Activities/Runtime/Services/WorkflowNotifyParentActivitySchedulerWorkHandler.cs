@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
@@ -99,10 +98,7 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
                 checkpointCommitter,
                 TimeProvider,
                 workItem,
-                payload.PinnedExecutable,
-                payload.ExecutableNodeId,
-                payload.ActivityExecutionId,
-                payload.Reason,
+                payload,
                 parentState,
                 parentExecutableNode.ActivityContract!.SideEffectProfile,
                 cancellationToken);
@@ -352,7 +348,7 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
             containerVariableSnapshots = RuntimeContainerVariableEvidence.Capture(
                 payloadCapturePolicy, scopeService, parentExecutableNode, currentParentState,
                 workItem.WorkflowExecutionId, payload.ActivityExecutionId, workItem.WorkItemId, TimeProvider.GetUtcNow());
-            completedParentState = CompleteParentActivity(workItem, payload, currentParentState, [completionProjection.Completion.OutcomeKey], completedAt);
+            completedParentState = StructuralParentEvaluationSupport.CompleteParentActivity(workItem, payload, currentParentState, [completionProjection.Completion.OutcomeKey], completedAt);
 
             if (completedParentState.VariableFrame is not null || completedParentState.IterationVariableFrame is not null)
                 completedParentState = RuntimeContainerScopeService.CloseOwnedFrames(completedParentState);
@@ -452,28 +448,6 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
                 [RuntimeMetadataKeys.ExecutableArtifactHash] = notifyPayload.PinnedExecutable.ArtifactHash
             },
             DerivedCommandMetadata: notifyWorkItem.CommandMetadata);
-
-    private ActivityExecutionState CompleteParentActivity(
-        RuntimeSchedulerWorkItem workItem,
-        RuntimeNotifyParentCommandPayload payload,
-        ActivityExecutionState state,
-        IReadOnlyCollection<string> outcomeNames,
-        DateTimeOffset completedAt)
-    {
-        var normalizedOutcomeNames = SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(outcomeNames, defaultToDone: true);
-        var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        metadata[RuntimeMetadataKeys.InvokeReason] = payload.Reason;
-        metadata[RuntimeMetadataKeys.InvokeSchedulerWorkItemId] = workItem.WorkItemId;
-        metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(normalizedOutcomeNames);
-
-        return RuntimeContainerScopeService.CloseOwnedFrames(state with
-        {
-            Status = ActivityExecutionStatus.Completed,
-            CompletedAt = completedAt,
-            PrivateState = null,
-            Metadata = metadata
-        });
-    }
 
     private static readonly string[] PayloadValidationParamNames =
     [

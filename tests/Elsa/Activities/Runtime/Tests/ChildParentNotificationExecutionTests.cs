@@ -3,6 +3,7 @@ using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -165,6 +166,49 @@ public sealed class ChildParentNotificationExecutionTests
         var child = run.State("node-child");
         Assert.Equal(ActivityExecutionStatus.Cancelled, child.Status);
         Assert.Equal("ParentCancelled", child.SubStatus);
+    }
+
+    [Fact]
+    public async Task NotificationEvaluation_ClaimsAndCompletesTheTargetParentUnderTheNotificationReason()
+    {
+        await using var harness = NewHarness(
+            new ParentNotificationDirective { InvokeCodes = ["complete"] },
+            new ParentNotificationConsumerDirective { CompleteOnNotify = true },
+            new ParentNotificationRecorder());
+
+        var run = await harness.RunAsync(NewGraph(), allowPendingWorkOnTerminalCompletion: true);
+
+        run.AssertWorkflowCompleted();
+        AssertConsumerClaimedAndCompletedBy(harness, run, RuntimeNotifyParentCommandPayload.NotifyParentReason);
+    }
+
+    [Fact]
+    public async Task ChildCompletionEvaluation_ClaimsAndCompletesTheTargetParentUnderTheEvaluationReason()
+    {
+        await using var harness = NewHarness(new ParentNotificationDirective(), new ParentNotificationConsumerDirective(), new ParentNotificationRecorder());
+
+        var run = await harness.RunAsync(NewGraph());
+
+        run.AssertWorkflowCompleted();
+        AssertConsumerClaimedAndCompletedBy(harness, run, RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason);
+    }
+
+    // The claim checkpoint and the completed parent's metadata are persisted, so they must address the parent the
+    // evaluating command targets (never the child that raised it) and carry that command's reason.
+    private static void AssertConsumerClaimedAndCompletedBy(WorkflowExecutionHarness harness, WorkflowExecutionRun run, string reason)
+    {
+        var consumer = run.AssertCompleted("node-consumer");
+        Assert.Equal(reason, consumer.Metadata[RuntimeMetadataKeys.InvokeReason]);
+        var evaluatingWorkItemId = consumer.Metadata[RuntimeMetadataKeys.InvokeSchedulerWorkItemId];
+        var claim = Assert.Single(
+            harness.Services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits(),
+            record => record.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityAttemptClaimed &&
+                      record.Commit.Checkpoint.Metadata[RuntimeMetadataKeys.SchedulerWorkItemId] == evaluatingWorkItemId).Commit.Checkpoint;
+        Assert.Equal(reason, claim.Metadata[RuntimeMetadataKeys.CheckpointReason]);
+        Assert.Equal("actexec-consumer", claim.Metadata[RuntimeMetadataKeys.ActivityExecutionId]);
+        Assert.Equal("node-consumer", claim.Metadata[RuntimeMetadataKeys.ExecutableNodeId]);
+        Assert.Equal(["actexec-consumer"], claim.ActivityExecutionIds);
+        Assert.Equal(run.WorkflowState!.PinnedExecutable.ArtifactHash, claim.Metadata[RuntimeMetadataKeys.ExecutableArtifactHash]);
     }
 
     private static WorkflowExecutionHarness NewHarness(
