@@ -22,6 +22,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class EfWorkflowAlterationAndScopeTests
 {
+    private static readonly PersistenceAccessContext PrivilegedScoped =
+        PersistenceAccessContext.PrivilegedScoped(new PersistenceScope("tenant-a"), new PersistenceAccessPurpose("maintenance"));
+
     [Fact]
     public void Registrations_are_opt_in_and_provider_guarded()
     {
@@ -204,6 +207,22 @@ public sealed class EfWorkflowAlterationAndScopeTests
         await using var fixture = db.Open("tenant-a");
         await Assert.ThrowsAsync<KeyNotFoundException>(() => fixture.Store.GetJobCountsAsync("missing").AsTask());
         await Assert.ThrowsAsync<KeyNotFoundException>(() => fixture.Store.PageJobsAsync("missing", 1).AsTask());
+    }
+
+    [Fact]
+    public async Task Alteration_store_refuses_privileged_access_instead_of_reporting_no_plan()
+    {
+        await using var db = await Database.CreateAsync();
+        await using var privileged = db.Open(PrivilegedScoped);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => privileged.Store.FindPlanAsync("missing").AsTask());
+    }
+
+    [Fact]
+    public async Task Scope_store_refuses_privileged_access_instead_of_reporting_no_scope()
+    {
+        await using var db = await Database.CreateAsync();
+        await using var privileged = db.Open(PrivilegedScoped);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => privileged.ScopeStore.FindAsync("missing").AsTask());
     }
 
     [Fact]
@@ -806,15 +825,20 @@ public sealed class EfWorkflowAlterationAndScopeTests
         private readonly SqliteConnection _keeper; private readonly string _cs;
         private Database(SqliteConnection keeper, string cs) { _keeper = keeper; _cs = cs; }
         public static async Task<Database> CreateAsync() { var cs = $"Data Source=file:alteration-{Guid.NewGuid():N};Mode=Memory;Cache=Shared"; var keeper = new SqliteConnection(cs); await keeper.OpenAsync(); await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(keeper).Options); await context.Database.EnsureCreatedAsync(); return new(keeper, cs); }
-        public Fixture Open(string scope, DbCommandInterceptor? interceptor = null) => new(_cs, scope, interceptor); public ValueTask DisposeAsync() => _keeper.DisposeAsync();
+        public Fixture Open(string scope, DbCommandInterceptor? interceptor = null) => Open(PersistenceAccessContext.Scoped(new PersistenceScope(scope)), interceptor);
+        public Fixture Open(PersistenceAccessContext access, DbCommandInterceptor? interceptor = null) => new(_cs, access, interceptor); public ValueTask DisposeAsync() => _keeper.DisposeAsync();
     }
     private sealed class Fixture : IAsyncDisposable
     {
         private readonly SqliteConnection _connection; public readonly BookmarkStateSqliteDbContext Context; public readonly EfWorkflowAlterationStore Store; public readonly EfWorkflowTestScopeStore ScopeStore;
-        public Fixture(string cs, string scope, DbCommandInterceptor? interceptor = null) { _connection = new SqliteConnection(cs); _connection.Open(); var options = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(_connection); if (interceptor is not null) options.AddInterceptors(interceptor); Context = new BookmarkStateSqliteDbContext(options.Options); var access = new Accessor(scope); var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) })); Store = new(Context, access, codec); ScopeStore = new(Context, access, codec); }
+        public Fixture(string cs, PersistenceAccessContext accessContext, DbCommandInterceptor? interceptor = null) { _connection = new SqliteConnection(cs); _connection.Open(); var options = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(_connection); if (interceptor is not null) options.AddInterceptors(interceptor); Context = new BookmarkStateSqliteDbContext(options.Options); var access = new Accessor(accessContext); var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) })); Store = new(Context, access, codec); ScopeStore = new(Context, access, codec); }
         public async ValueTask DisposeAsync() { await Context.DisposeAsync(); await _connection.DisposeAsync(); }
     }
-    private sealed class Accessor(string value) : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(value)); }
+    private sealed class Accessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
+    {
+        public Accessor(string value) : this(PersistenceAccessContext.Scoped(new PersistenceScope(value))) { }
+        public PersistenceAccessContext Current { get; } = current;
+    }
     private sealed class MarkerInsertFailureInterceptor : DbCommandInterceptor
     {
         private int armed;

@@ -10,11 +10,8 @@ internal static class EfRuntimeOperationalStoreSupport
     public static string RequireScope(IPersistenceAccessContextAccessor accessor)
     {
         ArgumentNullException.ThrowIfNull(accessor);
-        var current = accessor.Current;
-        if (current.AccessPolicy != PersistenceAccessPolicy.Ordinary || current.Scope is null || current.AcrossScopes)
-            throw new InvalidOperationException("Runtime EF persistence requires one explicit ordinary persistence scope.");
-        var scope = current.Scope.Value;
-        if (string.IsNullOrWhiteSpace(scope) || scope.Length > 256)
+        var scope = accessor.Current.RequireScope().Value;
+        if (scope.Length > 256)
             throw new ArgumentException("Runtime persistence scope cannot exceed 256 UTF-16 code units.", nameof(accessor));
         return scope;
     }

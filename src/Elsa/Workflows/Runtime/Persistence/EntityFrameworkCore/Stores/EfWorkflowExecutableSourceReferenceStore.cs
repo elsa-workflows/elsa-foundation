@@ -461,13 +461,8 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         return unreferenced;
     }
 
-    private string RequireScope()
-    {
-        var current = access.Current;
-        if (current.Scope is null || current.AcrossScopes)
-            throw new InvalidOperationException("EF workflow executable source-reference persistence requires one explicit persistence scope.");
-        return current.Scope.Value;
-    }
+    // Admits privileged maintenance of one partition, as every runtime artifact store does.
+    private string RequireScope() => access.Current.RequireScope(admitPrivileged: true).Value;
 
     private string ScopeForRead() => RequireScope();
     private string ScopeForWrite(WorkflowExecutableSourceReference reference)

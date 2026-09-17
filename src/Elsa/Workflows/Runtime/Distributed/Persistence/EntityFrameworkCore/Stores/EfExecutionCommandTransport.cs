@@ -671,8 +671,7 @@ public sealed class EfExecutionCommandTransport(
     private Task<IDbContextTransaction> BeginConsistencyTransactionAsync(CancellationToken cancellationToken) =>
         context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
 
-    private string RequireScope() => accessContextAccessor.Current.Scope?.Value ??
-        throw new InvalidOperationException("EF distributed stores require a scoped persistence access context.");
+    private string RequireScope() => accessContextAccessor.Current.RequireScope().Value;
 
     private static void EnsurePartition(WorkflowExecutionCommandEnvelope envelope, string scope) =>
         EnsurePartitionCore(envelope, scope);

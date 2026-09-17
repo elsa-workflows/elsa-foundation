@@ -17,13 +17,7 @@ internal static class ActivityExecutionEfSupport
     public static string CreateId(string kind, string scope, string workflowExecutionId, string activityExecutionId) =>
         Hash($"{kind.Length}:{kind}{scope.Length}:{scope}{workflowExecutionId.Length}:{workflowExecutionId}{activityExecutionId.Length}:{activityExecutionId}");
 
-    public static string RequireScope(IPersistenceAccessContextAccessor accessor)
-    {
-        var current = accessor.Current;
-        if (current.AccessPolicy != PersistenceAccessPolicy.Ordinary || current.Scope is null || current.AcrossScopes)
-            throw new InvalidOperationException("EF activity-execution persistence requires one explicit persistence scope.");
-        return current.Scope.Value;
-    }
+    public static string RequireScope(IPersistenceAccessContextAccessor accessor) => accessor.Current.RequireScope().Value;
 
     public static string? EffectiveExecutionScope(ActivityExecutionState state) =>
         string.IsNullOrWhiteSpace(state.ExecutionScopeId) ? state.Provenance.ExecutionScopeId : state.ExecutionScopeId;

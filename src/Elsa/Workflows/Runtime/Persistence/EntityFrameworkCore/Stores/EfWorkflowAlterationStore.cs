@@ -337,7 +337,7 @@ public sealed class EfWorkflowAlterationStore(
     }
 
     private async Task<WorkflowAlterationPlanEntity> RequirePlan(string planId, CancellationToken ct) { ArgumentException.ThrowIfNullOrWhiteSpace(planId); var scopeKey = Key(RequireScope()); return await _context.WorkflowAlterationPlans.SingleOrDefaultAsync(x => x.Id == Id(scopeKey, planId) && x.ScopeKey == EfRelationalIdentity.Encode(scopeKey) && x.ScopeKeyHash == EfRelationalIdentity.Hash(scopeKey) && x.PlanId == EfRelationalIdentity.Encode(planId) && x.PlanIdHash == EfRelationalIdentity.Hash(planId), ct) ?? throw new KeyNotFoundException($"Alteration plan '{planId}' was not found."); }
-    private string RequireScope() => _access.Current.Scope?.Value ?? throw new InvalidOperationException("Runtime EF alteration persistence requires an ordinary scoped persistence access context.");
+    private string RequireScope() => _access.Current.RequireScope().Value;
     private static string Key(string scope) => scope;
     private static string DecodeCursorIdentity(string encoded, string parameterName)
     {

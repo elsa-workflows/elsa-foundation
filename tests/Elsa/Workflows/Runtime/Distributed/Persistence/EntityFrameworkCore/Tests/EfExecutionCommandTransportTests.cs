@@ -148,6 +148,17 @@ public sealed class EfExecutionCommandTransportTests
     }
 
     [Fact]
+    public async Task Privileged_scoped_access_is_refused_instead_of_reporting_nothing_pending()
+    {
+        await using var fixture = await Fixture.CreateAsync("scope-a");
+        var privileged = new EfExecutionCommandTransport(fixture.Context, new PrivilegedScopedAccessor("scope-a"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => privileged.CountPendingAsync("wf-1").AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => privileged.SendAsync("wf-1", Envelope("wf-1", "privileged"), Now).AsTask());
+        Assert.Equal(0, await fixture.Transport.CountPendingAsync("wf-1"));
+    }
+
+    [Fact]
     public async Task Durable_head_counts_leased_rows_and_preserves_high_water_after_final_ack()
     {
         await using var fixture = await Fixture.CreateAsync("scope-a");

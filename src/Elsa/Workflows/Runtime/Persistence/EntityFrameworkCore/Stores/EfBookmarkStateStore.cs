@@ -267,13 +267,7 @@ public sealed class EfBookmarkStateStore(
         }
     }
 
-    private string RequireScope()
-    {
-        var current = accessContextAccessor.Current;
-        if (current.AccessPolicy != PersistenceAccessPolicy.Ordinary || current.Scope is null || current.AcrossScopes)
-            throw new InvalidOperationException("EF bookmark persistence requires one explicit persistence scope.");
-        return current.Scope.Value;
-    }
+    private string RequireScope() => accessContextAccessor.Current.RequireScope().Value;
 
     // Internal checkpoint staging reuses the direct store's provider-neutral projection.
     internal static BookmarkStateEntity ToEntity(BookmarkState state, string scope, string id, long revision)

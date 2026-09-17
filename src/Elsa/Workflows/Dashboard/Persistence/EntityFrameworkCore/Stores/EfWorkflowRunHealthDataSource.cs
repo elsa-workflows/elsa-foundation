@@ -135,10 +135,8 @@ public sealed class EfWorkflowRunHealthDataSource(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
         var current = accessContextAccessor.Current;
-        if (current.AccessPolicy != PersistenceAccessPolicy.Ordinary || current.Scope is null || current.AcrossScopes)
-            throw new InvalidOperationException("Dashboard run-health EF persistence requires one explicit ordinary persistence scope.");
+        var scope = current.RequireScope().Value;
         current.EnsureTenantScope(tenantId);
-        var scope = current.Scope.Value;
         if (scope.Length > 256)
             throw new ArgumentException("Runtime persistence scope cannot exceed 256 UTF-16 code units.", nameof(tenantId));
         return scope;
