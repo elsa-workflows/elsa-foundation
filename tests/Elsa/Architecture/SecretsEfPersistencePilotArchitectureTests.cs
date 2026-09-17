@@ -111,6 +111,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "tests/Elsa/Persistence/EntityFramework/BindingDriftTests/EfRelationalProviderBindingDriftTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfConnectionDefaultsTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfDatabaseMigratorTests.cs",
+        "tests/Elsa/Persistence/EntityFramework/Tests/EfMigrateOptionsTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfMigrationsHistoryTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfProviderBindingValidatorTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfProviderGuardTests.cs",

@@ -161,6 +161,72 @@ public sealed class StructuredLogsEntityFrameworkCoreTests
         Assert.Equal(5, (await fixture.Store.AppendAsync(Entry("five", LogLevel.Information, "source-a"))).Sequence);
     }
 
+    /// <summary>
+    /// Retention deletes set-based, so the binding a batch used to be validated against client-side is part of the
+    /// delete predicate. This proves the three properties that predicate has to hold: the boundary row survives,
+    /// everything older than it is gone, and a second binding sharing the database keeps both its records and an
+    /// idempotency row old enough for the prune to have taken it had the prune not been scoped.
+    /// </summary>
+    [Fact]
+    public async Task Retention_keeps_the_boundary_row_and_leaves_a_second_binding_untouched()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        foreach (var message in new[] { "one", "two", "three", "four" })
+            await fixture.Store.AppendAsync(Entry(message, LogLevel.Information, "source-a"));
+        await using var neighbourProvider = StructuredLogsEntityFrameworkCoreFixture.BuildProvider(
+            fixture.DatabasePath,
+            new StructuredLogStoreBinding("tenant-b", "scope-a", "stream-a"));
+        var neighbour = neighbourProvider.GetRequiredService<EfStructuredLogStore>();
+        neighbour.Start();
+        await neighbour.AppendAsync(Entry("neighbour", LogLevel.Information, "source-a"));
+        await WithDatabaseAsync(fixture, async db =>
+        {
+            var operation = await db.AppendOperations.SingleAsync(value => value.TenantId == "tenant-b");
+            operation.IssuedAtTicks = DateTimeOffset.UtcNow.Subtract(TimeSpan.FromHours(2)).UtcTicks;
+            return await db.SaveChangesAsync();
+        });
+
+        await fixture.Store.TrimAsync(2);
+
+        Assert.Equal(["three", "four"], (await fixture.Store.GetRecentAsync(StructuredLogFilter.None)).Select(entry => entry.Message));
+        Assert.Equal(["neighbour"], (await neighbour.GetRecentAsync(StructuredLogFilter.None)).Select(entry => entry.Message));
+        var (retained, neighbourRecords, neighbourOperations) = await WithDatabaseAsync(fixture, async db => (
+            await PositionsAsync(db, "tenant-a"),
+            await PositionsAsync(db, "tenant-b"),
+            await db.AppendOperations.CountAsync(value => value.TenantId == "tenant-b")));
+        Assert.Equal([3L, 4L], retained);
+        Assert.Equal([1L], neighbourRecords);
+        Assert.Equal(1, neighbourOperations);
+        await neighbour.StopAsync();
+    }
+
+    /// <summary>
+    /// A record whose binding columns disagree with the scope key they hash to cannot be reached by the set-based
+    /// delete, so retention would silently pass over it. The delete is followed by a probe for exactly that, and the
+    /// throw rolls the retention transaction back — which is the outcome the per-batch validation it replaced
+    /// produced: nothing deleted, and one public failure shape.
+    /// </summary>
+    [Fact]
+    public async Task Retention_fails_closed_and_deletes_nothing_when_a_record_drifts_from_its_scope_binding()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        foreach (var message in new[] { "one", "two", "three" })
+            await fixture.Store.AppendAsync(Entry(message, LogLevel.Information, "source-a"));
+        await WithDatabaseAsync(fixture, async db =>
+        {
+            var drifted = await db.Records.SingleAsync(record => record.Position == 1);
+            drifted.StreamId = "stream-drifted";
+            return await db.SaveChangesAsync();
+        });
+
+        var failure = await Assert.ThrowsAsync<StructuredLogsException>(() => fixture.Store.TrimAsync(1));
+
+        Assert.Equal("The EF structured-log scope binding is inconsistent.", failure.Message);
+        var survivors = await WithDatabaseAsync(fixture, db =>
+            db.Records.OrderBy(record => record.Position).Select(record => record.Position).ToListAsync());
+        Assert.Equal([1L, 2L, 3L], survivors);
+    }
+
     [Fact]
     public async Task Append_idempotency_outcomes_are_pruned_but_the_expiry_cutoff_remains_durable()
     {
@@ -535,6 +601,22 @@ public sealed class StructuredLogsEntityFrameworkCoreTests
             await Task.Delay(25);
         }
     }
+
+    private static async Task<T> WithDatabaseAsync<T>(
+        StructuredLogsEntityFrameworkCoreFixture fixture,
+        Func<StructuredLogsDbContext, Task<T>> action)
+    {
+        await using var provider = StructuredLogsEntityFrameworkCoreFixture.BuildProvider(fixture.DatabasePath, fixture.Binding);
+        await using var scope = provider.CreateAsyncScope();
+        return await action(scope.ServiceProvider.GetRequiredService<StructuredLogsDbContext>());
+    }
+
+    private static Task<List<long>> PositionsAsync(StructuredLogsDbContext db, string tenantId) =>
+        db.Records
+            .Where(record => record.TenantId == tenantId)
+            .OrderBy(record => record.Position)
+            .Select(record => record.Position)
+            .ToListAsync();
 
     private static async Task<IReadOnlyList<StructuredLogRecord>> ReadRecordsAsync(ServiceProvider provider)
     {

@@ -135,6 +135,11 @@ server outside Docker; the compose file adds the Studio container origin.
   connection, which `docker-compose.yml` supplies as `ConnectionStrings__Elsa`. A module can override
   its own connection with a top-level `ConnectionString` property on its feature section.
 
+- Every EF module migrates its own schema at shell activation. That is the `AutoMigrate` default; a
+  deployment whose pipeline applies migrations out of process (`tools/ef/module-migrate.sh`) sets
+  `Elsa__Persistence__EntityFramework__Migrate__Policy=Validate` instead, and the container then refuses
+  to start against a database that is behind rather than changing it.
+
 - The explicit `WorkflowsRuntimeEntityFrameworkCore`, `WorkflowsDesignEntityFrameworkCore`,
   `ActivitiesDesignEntityFrameworkCore`, `WorkflowsPublishingEntityFrameworkCore`, and
   `WorkflowsRuntimeDistributedEntityFrameworkCorePersistence` features bind the runtime,

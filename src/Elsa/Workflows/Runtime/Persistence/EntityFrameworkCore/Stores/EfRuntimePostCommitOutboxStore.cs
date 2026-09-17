@@ -128,6 +128,10 @@ public sealed class EfRuntimePostCommitOutboxStore(
             }
             catch (DbUpdateConcurrencyException)
             {
+                // Silent by design, and deliberately not what CompleteClaimAsync does with the same exception (#1812).
+                // Losing this race means another claimer took the item first: nothing was delivered, nothing is owed,
+                // and the next cycle — or the sweep — claims whatever is still claimable. Skipping is the whole
+                // correction. The asymmetry is intentional; the reasoning for the other half is at the completion path.
                 Detach(row);
             }
             catch
@@ -220,6 +224,9 @@ public sealed class EfRuntimePostCommitOutboxStore(
         }
         catch (DbUpdateConcurrencyException exception)
         {
+            // Same contract, same reasoning as CompleteClaimAsync's concurrency catch below: a presented claim that lost
+            // its fence is reported as a stale claim, not swallowed. The re-read raises it; the message covers only the
+            // residual case where the claim still appears to own the changed row.
             Detach(row);
             var latest = await LoadAsync(scope, claim.OutboxItemId, tracking: false, cancellationToken);
             if (latest is not null)
@@ -228,7 +235,8 @@ public sealed class EfRuntimePostCommitOutboxStore(
                 _ = RuntimePostCommitOutboxClaimTransitions.Complete(latestItem, claim, result);
             }
             throw new InvalidOperationException(
-                $"The claimed post-commit outbox item '{claim.OutboxItemId}' changed concurrently; retry the delivery result.",
+                $"The claimed post-commit outbox item '{claim.OutboxItemId}' changed concurrently and its claim still " +
+                "appears valid; nothing was written, and claim expiry redelivers the item.",
                 exception);
         }
         catch
@@ -309,6 +317,27 @@ public sealed class EfRuntimePostCommitOutboxStore(
         }
         catch (DbUpdateConcurrencyException exception)
         {
+            // Throws where ClaimAsync above deliberately swallows, and where the claim-less RecordDeliveryResultAsync
+            // deliberately reports SupersededByOtherOwner. The three are not the same situation (#1812). A claim-less
+            // recording never held a lease, so contention there is inherent; a lost claim costs nothing, because nothing
+            // was delivered. A claimant that reaches here held a fenced lease and lost it, which happens only when its
+            // own delivery outran the visibility timeout and another deliverer re-claimed the item. That is a broken
+            // lease, not routine contention, and IRuntimePostCommitOutboxClaimCompletionStore requires every store to
+            // report it as one — the in-memory store and the coalescing overlay answer identically.
+            //
+            // The re-read exists only to honour that contract at this late detection point. ResolveCompletion above
+            // validated the claim against this context's own snapshot, and since one scoped store claims and then
+            // completes within a single processor cycle, that snapshot predates the race — so the loss surfaces here on
+            // the row's concurrency token instead of there on the fence. Re-running Complete against the current row
+            // raises the same RuntimePostCommitOutboxStaleClaimException an early detection raises, so one situation
+            // keeps one exception. The InvalidOperationException below is the residue: the row changed but this claim
+            // still owns it, or the row is gone — neither of which a fence check can explain.
+            //
+            // Nothing retries this completion, so the message says what actually recovers. The rollback leaves the item
+            // Delivering under the winner's fence and the winner's own completion records the delivery; if the winner
+            // also fails, claim expiry returns the item to the sweep, whose redelivery is idempotent. The resumption
+            // pump absorbs this throw into its sweep backoff; a coalescing drain propagates it to its caller once the
+            // session has deactivated, which is accepted because reaching here at all requires a stalled delivery.
             await RollbackAndDetachAsync(transaction, row, dispatchRow, followUpRow);
             var latest = await LoadAsync(scope, completion.Claim.OutboxItemId, tracking: false, cancellationToken);
             if (latest is not null)
@@ -320,7 +349,8 @@ public sealed class EfRuntimePostCommitOutboxStore(
                     completion.DeliveryResult);
             }
             throw new InvalidOperationException(
-                $"The claimed post-commit outbox item '{completion.Claim.OutboxItemId}' changed concurrently; retry completion.",
+                $"The claimed post-commit outbox item '{completion.Claim.OutboxItemId}' changed concurrently and its " +
+                "claim still appears valid; nothing was written, and claim expiry redelivers the item.",
                 exception);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

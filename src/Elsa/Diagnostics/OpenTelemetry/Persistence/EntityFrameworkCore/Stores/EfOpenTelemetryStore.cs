@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using System.Buffers.Binary;
 using System.Data;
+using System.Linq.Expressions;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -31,7 +32,6 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     private const int MaxDrainAttempts = 3;
     private const int MaximumAffectedSummaryKeys = 100_000;
     private const int ProviderSafeKeyBatchSize = 500;
-    private const int RetentionDeleteBatchSize = 500;
     private static readonly TimeSpan AppendIdempotencyWindow = TimeSpan.FromHours(1);
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(25);
     private static readonly EfWriteRetry CaptureCommits = new(
@@ -498,13 +498,11 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
             deleted += await TrimResourcesAsync(db, cancellationToken);
             deleted += await TrimInstrumentsAsync(db, cancellationToken);
             var cutoff = timeProvider.GetUtcNow().Subtract(AppendIdempotencyWindow).UtcTicks;
-            deleted += await TrimAsync(
-                db.CaptureLedger
-                    .Where(x => x.ScopeKey == binding.ScopeKey && x.IssuedAtTicks <= cutoff)
-                    .OrderBy(x => x.IssuedAtTicks)
-                    .ThenBy(x => x.BatchId),
-                db,
-                cancellationToken);
+            // The ledger trim is not a capacity trim: the cutoff predicate already names the whole set to
+            // delete, so it needs no retention order and no boundary row, only the scope and the cutoff.
+            deleted += await db.CaptureLedger
+                .Where(x => x.ScopeKey == binding.ScopeKey && x.IssuedAtTicks <= cutoff)
+                .ExecuteDeleteAsync(cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
             return deleted;
@@ -519,12 +517,14 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
 
     private async Task<(HashSet<string> Keys, int Deleted)> TrimTracesAsync(OpenTelemetryDbContext db, CancellationToken ct)
     {
-        var expired = db.Traces
-            .Where(x => x.ScopeKey == binding.ScopeKey)
+        var scoped = db.Traces.Where(x => x.ScopeKey == binding.ScopeKey);
+        var expired = scoped
             .OrderByDescending(x => x.Sequence)
             .ThenByDescending(x => x.TraceKey)
             .Skip(traceCapacity);
-        // Distinct erases the retention order, so the bounded key read orders its own result.
+        // Distinct erases the retention order, so the bounded key read orders its own result.  The keys must
+        // be projected before the delete, because RecomputeSummariesAsync consumes them and the rows naming
+        // them are gone the moment the delete below is applied.
         var projectedKeys = await expired
             .Select(x => x.TraceKey)
             .Distinct()
@@ -539,27 +539,73 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
                 new InvalidOperationException("The trace-retention affected-key safety bound was exceeded."));
 
         var keys = projectedKeys.ToHashSet(StringComparer.Ordinal);
-        return (keys, await TrimAsync(expired, db, ct));
+        // (ScopeKey, Sequence) is the trace key, so Sequence alone is already a total order within one scope
+        // and the TraceKey tiebreaker above can never decide which rows fall below the boundary.
+        var deleted = await TrimToCapacityAsync(
+            scoped,
+            query => query.OrderByDescending(x => x.Sequence),
+            boundary => x => x.Sequence < boundary.Sequence,
+            traceCapacity,
+            ct);
+        return (keys, deleted);
     }
 
-    private async Task<int> TrimSpansAsync(OpenTelemetryDbContext db, int capacity, CancellationToken ct) => await TrimAsync(db.Spans.Where(x => x.ScopeKey == binding.ScopeKey).OrderByDescending(x => x.Sequence).Skip(capacity), db, ct);
-    private async Task<int> TrimPointsAsync(OpenTelemetryDbContext db, CancellationToken ct) => await TrimAsync(db.MetricPoints.Where(x => x.ScopeKey == binding.ScopeKey).OrderByDescending(x => x.Sequence).Skip(metricPointCapacity), db, ct);
-    private async Task<int> TrimLogsAsync(OpenTelemetryDbContext db, CancellationToken ct) => await TrimAsync(db.Logs.Where(x => x.ScopeKey == binding.ScopeKey).OrderByDescending(x => x.Sequence).Skip(logCapacity), db, ct);
-    private async Task<int> TrimResourcesAsync(OpenTelemetryDbContext db, CancellationToken ct) => await TrimAsync(db.Resources.Where(x => x.ScopeKey == binding.ScopeKey).OrderByDescending(x => x.LastSeenTicks).ThenBy(x => x.IdOrderKey).ThenBy(x => x.IdSearchKey).Skip(resourceCapacity), db, ct);
-    private async Task<int> TrimInstrumentsAsync(OpenTelemetryDbContext db, CancellationToken ct) => await TrimAsync(db.Instruments.Where(x => x.ScopeKey == binding.ScopeKey).OrderByDescending(x => x.LastSeenTicks).ThenBy(x => x.IdOrderKey).ThenBy(x => x.IdSearchKey).Skip(instrumentCapacity), db, ct);
+    // Signal tables are keyed by (ScopeKey, Sequence), so the descending Sequence is the whole retention order.
+    private Task<int> TrimSpansAsync(OpenTelemetryDbContext db, int capacity, CancellationToken ct) => TrimSignalsAsync(db.Spans.Where(x => x.ScopeKey == binding.ScopeKey), capacity, ct);
+    private Task<int> TrimPointsAsync(OpenTelemetryDbContext db, CancellationToken ct) => TrimSignalsAsync(db.MetricPoints.Where(x => x.ScopeKey == binding.ScopeKey), metricPointCapacity, ct);
+    private Task<int> TrimLogsAsync(OpenTelemetryDbContext db, CancellationToken ct) => TrimSignalsAsync(db.Logs.Where(x => x.ScopeKey == binding.ScopeKey), logCapacity, ct);
 
-    private static async Task<int> TrimAsync<T>(IQueryable<T> query, OpenTelemetryDbContext db, CancellationToken ct) where T : class
+    // Catalog tables are keyed by (ScopeKey, IdOrderKey) and retained newest-first by LastSeenTicks, so
+    // (LastSeenTicks descending, IdOrderKey ascending) is a total order and the third ordering term the
+    // materializing loop used to carry, IdSearchKey, was already unreachable.
+    private Task<int> TrimResourcesAsync(OpenTelemetryDbContext db, CancellationToken ct) => TrimToCapacityAsync(
+        db.Resources.Where(x => x.ScopeKey == binding.ScopeKey),
+        query => query.OrderByDescending(x => x.LastSeenTicks).ThenBy(x => x.IdOrderKey),
+        boundary => x => x.LastSeenTicks < boundary.LastSeenTicks
+                         || (x.LastSeenTicks == boundary.LastSeenTicks && string.Compare(x.IdOrderKey, boundary.IdOrderKey) > 0),
+        resourceCapacity,
+        ct);
+
+    private Task<int> TrimInstrumentsAsync(OpenTelemetryDbContext db, CancellationToken ct) => TrimToCapacityAsync(
+        db.Instruments.Where(x => x.ScopeKey == binding.ScopeKey),
+        query => query.OrderByDescending(x => x.LastSeenTicks).ThenBy(x => x.IdOrderKey),
+        boundary => x => x.LastSeenTicks < boundary.LastSeenTicks
+                         || (x.LastSeenTicks == boundary.LastSeenTicks && string.Compare(x.IdOrderKey, boundary.IdOrderKey) > 0),
+        instrumentCapacity,
+        ct);
+
+    private static Task<int> TrimSignalsAsync<T>(IQueryable<T> scoped, int capacity, CancellationToken ct) where T : EfOpenTelemetrySignalEntity =>
+        TrimToCapacityAsync(scoped, query => query.OrderByDescending(x => x.Sequence), boundary => x => x.Sequence < boundary.Sequence, capacity, ct);
+
+    /// <summary>
+    /// Trims one scoped table down to its newest <paramref name="capacity"/> rows with a single set-based delete.
+    /// </summary>
+    /// <remarks>
+    /// The retention order cannot travel into the delete itself, because EF Core refuses <c>ExecuteDelete</c> over a
+    /// query carrying <c>Skip</c>, <c>Take</c> or <c>OrderBy</c>.  So the oldest row that must survive, the boundary,
+    /// is read once in that order, and the delete is expressed as a plain predicate against its ordering key.  That
+    /// is the shape <c>EfStructuredLogStore.TrimCoreAsync</c> already uses.  The rows below the boundary are then
+    /// never materialized, which is the point: the widest rows in this module carry a serialized payload that the
+    /// previous load-and-<c>RemoveRange</c> loop pulled into the change tracker only in order to delete them.
+    /// Every predicate is derived from <paramref name="scoped"/>, so the ScopeKey clause is part of the delete by
+    /// construction.  None of the trimmed entities declares a concurrency token, so no optimistic-concurrency check
+    /// is bypassed, and <c>ExecuteDelete</c> does not mutate the change tracker, so the caller-owned Serializable
+    /// transaction and the summary entities staged on the same context are unaffected.  It does apply immediately
+    /// rather than at the next <c>SaveChanges</c>, which is why the caller's trim ordering has to stay as it is.
+    /// </remarks>
+    private static async Task<int> TrimToCapacityAsync<T>(
+        IQueryable<T> scoped,
+        Func<IQueryable<T>, IOrderedQueryable<T>> newestFirst,
+        Func<T, Expression<Func<T, bool>>> belowBoundary,
+        int capacity,
+        CancellationToken ct) where T : class
     {
-        var deleted = 0;
-        while (true)
-        {
-            var rows = await query.Take(RetentionDeleteBatchSize).ToListAsync(ct);
-            if (rows.Count == 0)
-                return deleted;
-            db.Set<T>().RemoveRange(rows);
-            deleted = checked(deleted + rows.Count);
-            await db.SaveChangesAsync(ct);
-        }
+        // A zero capacity retains nothing, so there is no boundary row to read: the scope predicate is the delete.
+        if (capacity <= 0)
+            return await scoped.ExecuteDeleteAsync(ct);
+        var boundary = await newestFirst(scoped).AsNoTracking().Skip(capacity - 1).FirstOrDefaultAsync(ct);
+        // No boundary row means the table holds fewer rows than the capacity, so nothing has overflowed yet.
+        return boundary is null ? 0 : await scoped.Where(belowBoundary(boundary)).ExecuteDeleteAsync(ct);
     }
 
     private async Task UpsertCatalogAsync(

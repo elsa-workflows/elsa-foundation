@@ -170,7 +170,7 @@ internal static class RuntimeCheckpointInspectionParticipantProviderSmoke
         var method = type.GetMethod("StageAsync", BindingFlags.Public | BindingFlags.Static)!;
         try
         {
-            var result = (ValueTask)method.Invoke(null, [context, change, scope, workflowExecutionId, CancellationToken.None])!;
+            var result = (ValueTask)method.Invoke(null, [context, new[] { change }, scope, workflowExecutionId, CancellationToken.None])!;
             await result.AsTask();
         }
         catch (TargetInvocationException exception) when (exception.InnerException is not null)

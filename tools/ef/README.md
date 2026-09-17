@@ -16,6 +16,8 @@ bash tools/ef/generate-module-migrations.sh [context-regex]   # regenerate Initi
 bash tools/ef/module-migrate.sh pending                        # CI-safe: fails on an unmigrated model change
 bash tools/ef/module-migrate.sh apply PostgreSql "<connection>" # out-of-process apply, every module
 bash tools/ef/module-migrate.sh validate PostgreSql "<connection>"
+bash tools/ef/module-migrate.sh script PostgreSql db/migrations  # reviewable SQL, no database needed
+bash tools/ef/module-migrate.sh script-check PostgreSql db/migrations # CI-safe: fails on edited/stale SQL
 ```
 
 Elsa is pre-release with no production data, so a module keeps a single `Initial` migration per provider
@@ -29,6 +31,75 @@ operator applies migrations out of process first. All Runtime participants share
 `__EFMigrationsHistory_ElsaRuntime` history. `tests/Elsa/Persistence/EntityFrameworkCore/Migrations` proves
 the model/migration match on all four providers and a fresh install of every module into one database on
 SQLite (fast gate) and on SQL Server, PostgreSQL and MySQL (Testcontainers).
+
+That policy is configuration, not code: set `Elsa:Persistence:EntityFramework:Migrate:Policy` (environment
+variable `Elsa__Persistence__EntityFramework__Migrate__Policy`) to `Validate` in the deployment a pipeline
+migrates, and leave it unset everywhere else. A value that names neither policy fails the host rather than
+falling back to auto-migrate. See
+[src/Elsa/Persistence/EntityFramework/README.md](../../src/Elsa/Persistence/EntityFramework/README.md#choosing-the-policy-operator-setting).
+
+## Reviewable SQL scripts (`script` / `script-check`)
+
+A DBA-controlled pipeline does not run `database update` against production; it reviews SQL and runs it
+itself. `script` produces exactly that, from the same context enumeration every other command uses:
+
+```bash
+bash tools/ef/module-migrate.sh script SqlServer db/migrations
+bash tools/ef/module-migrate.sh script PostgreSql db/migrations
+bash tools/ef/module-migrate.sh script MySql db/migrations
+```
+
+**Layout: `<output-dir>/<Module>/<Provider>.sql`** — one file per module context and provider, under the
+same `<Module>/<Provider>` split the compiled migrations use (`Migrations/<Module>/<Provider>/`), so a
+reviewer reads the same tree in both places. `<Module>` is the context name without its provider suffix
+(`BookmarkStateSqlServerDbContext` → `BookmarkState/SqlServer.sql`).
+
+Every file is generated with `--idempotent`, which means:
+
+- It is **safe to re-run**: each migration in it is wrapped in a check against that module's own
+  migrations-history table, so a migration already recorded there is skipped rather than re-applied.
+- It **records what it applied** into that same per-module `__EFMigrationsHistory_*` table — Runtime's is
+  `__EFMigrationsHistory_ElsaRuntime`, Activities Design's is `__EFMigrationsHistory_activities_design`,
+  and each script names its own in its first statement. That is the table a host started with
+  `Elsa:Persistence:EntityFramework:Migrate:Policy=Validate` reads when it decides whether the database is
+  up to date, so applying the script and starting the host in `Validate` agree by construction.
+- It needs **no database to generate**: the design-time factories bind a placeholder connection unless
+  `ELSA_EF_CONNECTION` names a real one, and scripting never opens it.
+
+**SQLite is refused, not scripted.** EF cannot generate an idempotent script for SQLite
+(`SqliteHistoryRepository.GetEndIfScript` throws `NotSupportedException`, because SQLite has no
+conditional statement to wrap a migration in), and a plain script would sit in the same tree looking like
+every other file while being unsafe to re-run. `script Sqlite` therefore exits 2 and says so. A SQLite
+database is brought up to date with `module-migrate.sh apply Sqlite "<connection>"`, or by a host on the
+`AutoMigrate` default.
+
+Secrets ships only a MySQL context in this catalog; its historical SQLite, SQL Server and PostgreSQL
+chains belong to `tools/ef/dual-migrate.sh`.
+
+### Keeping the committed SQL honest
+
+`script-check` regenerates into a temporary directory and diffs against the directory you pass. It checks
+every module context and then exits non-zero if any file differed, was missing, or was stale — a file no
+module context generates any more (that last check runs only for a full, unfiltered check). It prints the
+unified diff, so the failure says which statement moved:
+
+```bash
+bash tools/ef/module-migrate.sh script-check PostgreSql db/migrations
+```
+
+A CI job would call exactly that, once per server provider, after `dotnet tool restore` — nothing else is
+wired up here. It catches the two silent failures that matter: SQL hand-edited after review, and a model
+change merged without a regenerated script. The second one is caught because the command builds the
+tooling project — and with it every module — before it scripts anything, so it compares against the
+current model, not a stale assembly.
+
+### Where the SQL is committed
+
+This repository does not commit generated `.sql`. A team that reviews SQL commits the tree the commands
+above write — conventionally `db/migrations/<Module>/<Provider>.sql` — because that is what makes the
+change reviewable: the schema diff shows up in the pull request next to the model change that caused it,
+a DBA approves the statements before anything runs, and `script-check` in CI proves the committed file is
+still the file the model generates.
 
 ## Secrets pilot tooling
 

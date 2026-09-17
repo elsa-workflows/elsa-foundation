@@ -2,6 +2,7 @@ using CShells.Lifecycle;
 using CShells.Features;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
@@ -10,8 +11,9 @@ namespace Elsa.Persistence.EntityFramework;
 /// <summary>
 /// Applies or validates one module context's migrations on both lifecycle hooks: CShells activates and
 /// reloads shells through <see cref="IShellInitializer"/>, while plain hosts start <see cref="IHostedService"/>s.
-/// The host-wide <see cref="EfMigrateOptions"/> choose between auto-migrate and fail-closed validate, so an
-/// operator can apply migrations out of process and start hosts in validate mode.
+/// The host-wide <see cref="EfMigrateOptions"/> choose between auto-migrate and fail-closed validate, bound from
+/// <see cref="EfMigrateOptions.SectionName"/>, so an operator can apply migrations out of process and start hosts
+/// in validate mode without a code change.
 /// </summary>
 public sealed class EfModuleMigrator<TContext>(
     IServiceScopeFactory scopes,
@@ -57,6 +59,9 @@ public static class EfModuleMigrationServiceCollectionExtensions
             services.Remove(existing);
         services.AddSingleton(migration);
         services.AddOptions<EfMigrateOptions>();
+        // One binding per container however many modules register a migrator; a host that configures the policy in
+        // code after this call still wins, because IConfigureOptions run in registration order.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<EfMigrateOptions>, EfMigrateOptionsConfigurator>());
         if (services.Any(descriptor => descriptor.ServiceType == typeof(EfModuleMigrator<TContext>)))
             return services;
         services.AddSingleton<EfModuleMigrator<TContext>>();

@@ -221,10 +221,10 @@ public sealed class EfRuntimeCheckpointIncidentParticipantTests
     {
         var type = typeof(EfRuntimeCheckpointCommitStore).Assembly.GetType(
             "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointIncidentParticipantStaging")!;
-        var method = type.GetMethod("StageIncidentAsync", BindingFlags.Public | BindingFlags.Static)!;
+        var method = type.GetMethod("StageIncidentsAsync", BindingFlags.Public | BindingFlags.Static)!;
         try
         {
-            var result = (ValueTask)method.Invoke(null, [context, change, scope, workflowExecutionId, CancellationToken.None])!;
+            var result = (ValueTask)method.Invoke(null, [context, new[] { change }, scope, workflowExecutionId, CancellationToken.None])!;
             await result.AsTask();
         }
         catch (TargetInvocationException exception) when (exception.InnerException is not null)

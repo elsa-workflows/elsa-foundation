@@ -17,6 +17,11 @@ Hosts register the derived context that matches the selected relational provider
 Secrets registers that apply on both `IHostedService` and CShells `IShellInitializer`
 so a feature enable or reload uses the same policy as a cold start.
 
+Which one a deployment runs is an operator setting, not a code seam: `EfModuleMigrator<TContext>`
+reads `EfMigrateOptions`, bound from `Elsa:Persistence:EntityFramework:Migrate:Policy`
+(`EfMigrateOptions.SectionName`). A host that needs the policy decided in code can still
+`services.Configure<EfMigrateOptions>(…)` after composing the module.
+
 ## Provider binding validation
 
 `EfRelationalProviderBinding` reaches each engine's `Use*` extension by type and method name, so nothing in a
