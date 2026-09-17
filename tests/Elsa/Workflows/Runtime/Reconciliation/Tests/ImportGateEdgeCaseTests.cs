@@ -85,6 +85,35 @@ public sealed class ImportGateEdgeCaseTests : IDisposable
     }
 
     [Fact]
+    public async Task A_malformed_envelope_diagnostic_names_the_inner_cause_not_just_the_file()
+    {
+        // The reader wraps the JsonException with "the file is not a valid closure envelope", which reads as a
+        // corrupt file when the real cause is usually one value that could not be converted. The rejection
+        // diagnostic is what the startup task logs and what the rejection record carries, so it must carry the
+        // inner cause too — otherwise a well-formed file is reported as malformed with no clue as to why.
+        // Real case: a converter-registry race at boot made an enum written as a string unreadable, and the
+        // operator saw only "not a valid closure envelope" for twelve good files.
+        await using var harness = ArtifactImportHarness.Build(_mount);
+        var executable = ArtifactClosureFixture.Executable(ArtifactClosureFixture.ProbeNode("node-root"), "definition-inner-cause");
+        var path = ArtifactClosureFixture.Mount(
+            harness.Services,
+            _mount,
+            "inner-cause.json",
+            ArtifactClosureFixture.Closure(executable));
+        var full = await File.ReadAllTextAsync(path);
+        await File.WriteAllTextAsync(path, full[..(full.Length / 2)]);
+
+        var entry = Assert.Single((await ArtifactImportHarness.ReconcileAsync(harness)).Entries);
+
+        Assert.Equal(WorkflowArtifactRejectionKind.MalformedClosure, entry.RejectionKind);
+        var diagnostic = Assert.IsType<string>(entry.Diagnostic);
+        Assert.Contains("inner-cause.json", diagnostic);
+        Assert.Contains("the file is not a valid closure envelope", diagnostic);
+        // Only the inner JsonException carries a JSON Path; the wrapper and the file name cannot produce it.
+        Assert.Contains("Path: $.", diagnostic);
+    }
+
+    [Fact]
     public async Task An_envelope_whose_format_version_this_build_does_not_know_is_rejected_loudly()
     {
         // Fail-loud, never a silent upcast: guessing at a format written by a producer this build has never seen
