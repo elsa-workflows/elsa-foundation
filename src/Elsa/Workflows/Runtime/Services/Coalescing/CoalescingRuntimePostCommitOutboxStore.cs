@@ -30,16 +30,21 @@ public sealed class CoalescingRuntimePostCommitOutboxStore(
         return _inner.GetDeliverableAsync(query, cancellationToken);
     }
 
-    public ValueTask RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default)
+    public ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(result);
 
         if (sessionAccessor.Current is { } session && session.IsActive && session.OwnsOutboxItem(result.OutboxItemId))
         {
+            // An overlay item lives only in this session's working set and carries no durable claim, so no other
+            // deliverer can hold it and supersession is not reachable on this branch.
             session.RecordOutboxDelivery(result);
-            return ValueTask.CompletedTask;
+            return new ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome>(
+                RuntimePostCommitOutboxClaimCompletionOutcome.Persisted);
         }
 
+        // Pass-through: the inner store's outcome is the answer. Never substitute Persisted here — that would report a
+        // superseded item as delivered and inflate the drain's continuation signal.
         return _inner.RecordDeliveryResultAsync(result, cancellationToken);
     }
 
