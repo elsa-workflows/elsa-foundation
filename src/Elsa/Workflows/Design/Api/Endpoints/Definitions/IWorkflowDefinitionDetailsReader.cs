@@ -26,13 +26,10 @@ public sealed class WorkflowDefinitionDetailsReader(
 {
     public async Task<WorkflowDefinitionDetailsView> ReadAsync(string definitionId, CancellationToken cancellationToken)
     {
-        var definitionTask = definitionStore.GetAsync(definitionId, cancellationToken);
-        var versionsTask = versionStore.ListByDefinitionAsync(definitionId, cancellationToken);
-        var draftTask = draftStore.FindByWorkflowDefinitionIdAsync(definitionId, cancellationToken);
-
-        var definition = await definitionTask;
-        var versions = await versionsTask;
-        var draft = await draftTask;
+        // All three stores share the request's scoped persistence context, so these reads are awaited one at a time.
+        var definition = await definitionStore.GetAsync(definitionId, cancellationToken);
+        var versions = await versionStore.ListByDefinitionAsync(definitionId, cancellationToken);
+        var draft = await draftStore.FindByWorkflowDefinitionIdAsync(definitionId, cancellationToken);
         var metadata = draft is null
             ? null
             : await draftStore.FindWithLayoutByIdAsync(draft.Id, cancellationToken);

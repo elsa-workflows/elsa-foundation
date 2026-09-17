@@ -54,18 +54,18 @@ public sealed class WorkflowInstanceListService(
         var page = authorization.TenantScope == "all-tenants"
             ? await workflowExecutionStateStore.QueryPageAsync(query, cancellationToken)
             : await QueryAuthorizedPageAsync(query, cancellationToken);
-        var summaryTasks = page.Items.Select(async state =>
+        // Every store in a request resolves the same scoped persistence context, so the per-row reads are issued one
+        // at a time. Overlapping them - across rows or within a row - starts a second operation on that one context,
+        // which relational providers reject, so the page is composed sequentially rather than fanned out.
+        var items = new WorkflowInstanceSummaryView[page.Items.Count];
+        for (var index = 0; index < items.Length; index++)
         {
-            var activityCountTask = activityExecutionStateStore.CountAsync(state.WorkflowExecutionId, cancellationToken).AsTask();
-            var incidentCountTask = incidentStateStore.CountAsync(state.WorkflowExecutionId, cancellationToken).AsTask();
-            await Task.WhenAll(activityCountTask, incidentCountTask);
-            return WorkflowInstanceSummaryView.From(
-                state,
-                await activityCountTask,
-                await incidentCountTask,
-                await authorization.CanInspectSensitiveValuesAsync(state, cancellationToken));
-        });
-        var items = await Task.WhenAll(summaryTasks);
+            var state = page.Items[index];
+            var activityCount = await activityExecutionStateStore.CountAsync(state.WorkflowExecutionId, cancellationToken);
+            var incidentCount = await incidentStateStore.CountAsync(state.WorkflowExecutionId, cancellationToken);
+            var canInspectSensitiveValues = await authorization.CanInspectSensitiveValuesAsync(state, cancellationToken);
+            items[index] = WorkflowInstanceSummaryView.From(state, activityCount, incidentCount, canInspectSensitiveValues);
+        }
 
         return new(
             items,

@@ -95,6 +95,29 @@ public sealed class WorkflowInstanceServicesTests
     }
 
     [Fact]
+    public async Task ListWorkflowInstances_reads_a_page_without_overlapping_operations_on_the_shared_context()
+    {
+        // Relational stores resolve one scoped persistence context per request, so overlapping reads fail. Two rows
+        // are seeded because the first page after a fresh start can serialize by accident and hide the overlap.
+        await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Completed, "definition-1", updatedAt: Now(-1)));
+        await _workflowStore.SaveAsync(Workflow("wf-2", WorkflowExecutionStatus.Completed, "definition-1", updatedAt: Now(-2)));
+        await _activityStore.SaveAsync(Activity("wf-1", "activity-1", ActivityExecutionStatus.Completed));
+        await _incidentStore.TryAddAsync(Incident("wf-2", "incident-1"));
+        var gate = new SingleOperationGate();
+        var handler = new WorkflowInstanceListService(
+            _workflowStore,
+            new SharedContextActivityExecutionStateStore(_activityStore, gate),
+            new SharedContextIncidentStateStore(_incidentStore, gate),
+            AllowAll);
+
+        var result = await handler.ListAsync(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
+
+        Assert.Equal(["wf-1", "wf-2"], result.Items.Select(x => x.WorkflowExecutionId));
+        Assert.Equal(1, result.Items.First().ActivityCount);
+        Assert.Equal(1, result.Items.Last().IncidentCount);
+    }
+
+    [Fact]
     public async Task ListWorkflowInstances_FiltersAndProjectsDurableRunKind()
     {
         await _workflowStore.SaveAsync(Workflow("wf-test", WorkflowExecutionStatus.Completed, "definition-1", runKind: WorkflowRunKind.TestRun));
@@ -508,6 +531,73 @@ public sealed class WorkflowInstanceServicesTests
             CountCalled = true;
             return await inner.CountAsync(workflowExecutionId, cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Stands in for the exclusivity one shared scoped persistence context demands. Entering a second operation
+    /// while another is in flight is exactly what relational providers reject, so it is rejected here too. The
+    /// yield gives an overlapping caller the chance to enter, which a completed read would otherwise hide.
+    /// </summary>
+    private sealed class SingleOperationGate
+    {
+        private int _inFlight;
+
+        public async ValueTask<T> RunAsync<T>(Func<ValueTask<T>> operation)
+        {
+            if (Interlocked.Exchange(ref _inFlight, 1) == 1)
+                throw new InvalidOperationException(
+                    "A second operation was started on this context instance before a previous operation completed.");
+
+            try
+            {
+                await Task.Yield();
+                return await operation();
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _inFlight, 0);
+            }
+        }
+    }
+
+    private sealed class SharedContextActivityExecutionStateStore(IActivityExecutionStateStore inner, SingleOperationGate gate)
+        : IActivityExecutionStateStore
+    {
+        public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default) =>
+            gate.RunAsync(() => inner.SaveAsync(state, cancellationToken));
+
+        public ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default) =>
+            gate.RunAsync(() => inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken));
+
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(ActivityExecutionStatePageQuery query, CancellationToken cancellationToken = default) =>
+            gate.RunAsync(() => inner.ListPageAsync(query, cancellationToken));
+
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListByParentPageAsync(ActivityExecutionStateParentPageQuery query, CancellationToken cancellationToken = default) =>
+            gate.RunAsync(() => inner.ListByParentPageAsync(query, cancellationToken));
+
+        public ValueTask<long> CountAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            gate.RunAsync(() => inner.CountAsync(workflowExecutionId, cancellationToken));
+    }
+
+    private sealed class SharedContextIncidentStateStore(IIncidentStateStore inner, SingleOperationGate gate) : IIncidentStateStore
+    {
+        public ValueTask<bool> TryAddAsync(IncidentState state, CancellationToken cancellationToken = default) =>
+            gate.RunAsync(() => inner.TryAddAsync(state, cancellationToken));
+
+        public ValueTask<IncidentState> SaveAsync(IncidentState state, CancellationToken cancellationToken = default) =>
+            gate.RunAsync(() => inner.SaveAsync(state, cancellationToken));
+
+        public ValueTask<IncidentState?> FindAsync(string workflowExecutionId, string incidentId, CancellationToken cancellationToken = default) =>
+            gate.RunAsync(() => inner.FindAsync(workflowExecutionId, incidentId, cancellationToken));
+
+        public ValueTask<IReadOnlyCollection<IncidentState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            gate.RunAsync(() => inner.ListAsync(workflowExecutionId, cancellationToken));
+
+        public ValueTask<IReadOnlyCollection<IncidentState>> ListBlockingAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            gate.RunAsync(() => inner.ListBlockingAsync(workflowExecutionId, cancellationToken));
+
+        public ValueTask<int> CountAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            gate.RunAsync(() => inner.CountAsync(workflowExecutionId, cancellationToken));
     }
 
     private static ActivityExecutionState Activity(

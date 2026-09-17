@@ -12,11 +12,9 @@ public sealed class GetDefinitionRequestHandler(IActivityDefinitionVersionStore 
 {
     public async Task<ActivityDefinitionDetailsView> Handle(GetDefinition request, CancellationToken cancellationToken)
     {
-        var definitionTask = definitionStore.GetAsync(request.Id, cancellationToken);
-        var versionsTask = versionStore.ListByDefinitionAsync(request.Id, cancellationToken);
-
-        var definition = await definitionTask;
-        var versionRows = await versionsTask;
+        // Both stores share the request's scoped persistence context, so these reads are awaited one at a time.
+        var definition = await definitionStore.GetAsync(request.Id, cancellationToken);
+        var versionRows = await versionStore.ListByDefinitionAsync(request.Id, cancellationToken);
         var versions = versionRows.Select(e => new ActivityDefinitionVersionSummary(e.Id, e.Version, e.CreatedAt, e.ExecutionType)).ToArray();
 
         return new ActivityDefinitionDetailsView(definition.ToView(), versions);
