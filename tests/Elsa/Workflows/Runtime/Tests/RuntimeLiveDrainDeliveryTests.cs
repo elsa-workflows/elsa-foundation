@@ -116,6 +116,7 @@ public sealed class RuntimeLiveDrainDeliveryTests
             drainer,
             processor,
             schedulerDrainObservers: [],
+            checkpointRuleViolationFaulter: TestCheckpointRuleViolationFaulter.Create(),
             ownershipService: new RuntimeExecutionOwnershipService(new InMemoryExecutionLivenessStateStore()),
             ownershipContextAccessor: new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
             options: new WorkflowDrainOrchestratorOptions(),

@@ -336,6 +336,49 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddYears(1), 10)));
     }
 
+    /// <summary>
+    /// #1780: a store that finds the child already started persists the failed start as delivered and discards the
+    /// DispatchFailed projection and its parent resume, so logging that incident and that resume would report events that
+    /// never happened. The delivery attempt itself did fail, so its own events are still logged.
+    /// </summary>
+    [Theory]
+    [InlineData(RuntimePostCommitOutboxClaimCompletionOutcome.Persisted, new[] { 68105, 68106, 68101, 68103 })]
+    [InlineData(RuntimePostCommitOutboxClaimCompletionOutcome.DeliveredOnChildEvidence, new[] { 68101, 68103 })]
+    public async Task Processor_LogsTheDispatchFailureProjectionOnlyWhenTheStorePersistedIt(
+        RuntimePostCommitOutboxClaimCompletionOutcome outcome,
+        int[] expectedEventIds)
+    {
+        var dispatch = NewDispatchRecord(WorkflowDispatchMode.WaitForCompletion);
+        var identity = new WorkflowDispatchIdentity(dispatch.ParentWorkflowExecutionId, dispatch.ParentActivityExecutionId);
+        var inner = new InMemoryRuntimeCheckpointCommitStore();
+        await inner.AddPendingForTestingAsync(NewOutboxItem(
+            "outbox-start",
+            identity.StartIntentId,
+            dispatch.ParentWorkflowExecutionId,
+            kind: WorkflowDispatchLifecycle.StartChildIntentKind,
+            metadata: new Dictionary<string, string> { [RuntimeMetadataKeys.DispatchId] = dispatch.DispatchId }));
+        var store = new ReportingClaimCompletionStore(inner, outcome);
+        var logger = new RecordingLogger<RuntimePostCommitOutboxProcessor>();
+        var processor = new RuntimePostCommitOutboxProcessor(
+            store,
+            new RecordingDispatcher(identity.StartIntentId, new RuntimePostCommitDeliveryException(
+                PostCommitFailureKind.Permanent,
+                "child-start-delivery-failed",
+                "The child workflow could not be started.")),
+            new FakeTimeProvider(_now),
+            DefaultRuntimeFaultCapturePolicy.CreateDefault(),
+            workflowDispatchStore: null,
+            [new WaitedDispatchFailureProjector(dispatch)],
+            logger);
+
+        await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10));
+
+        var completion = Assert.Single(store.Completions);
+        Assert.NotNull(completion.WorkflowDispatch);
+        Assert.NotNull(completion.FollowUpOutboxItem);
+        Assert.Equal(expectedEventIds, logger.Entries.Select(entry => entry.EventId.Id));
+    }
+
     [Fact]
     public async Task Processor_UnsupportedKindWithDispatchMetadata_UsesSafeOutboxFailureWithoutMutatingDispatch()
     {
@@ -646,7 +689,7 @@ public sealed class RuntimePostCommitOutboxProcessorTests
             metadata: metadata ?? new Dictionary<string, string>());
     }
 
-    private WorkflowDispatchRecord NewDispatchRecord()
+    private WorkflowDispatchRecord NewDispatchRecord(WorkflowDispatchMode mode = WorkflowDispatchMode.FireAndForget)
     {
         var identity = new WorkflowDispatchIdentity("wfexec-1", "actexec-1");
         return new WorkflowDispatchRecord(
@@ -658,7 +701,7 @@ public sealed class RuntimePostCommitOutboxProcessorTests
             new WorkflowExecutableSourceProvenance(
                 "source-child", "WorkflowDefinitionVersion", "version-child", "1.0.0",
                 "definition-child", "version-child", "1.0.0", "publication-child", "slot-child"),
-            WorkflowDispatchMode.FireAndForget,
+            mode,
             WorkflowDispatchStatus.Pending,
             null,
             null,
@@ -683,6 +726,68 @@ public sealed class RuntimePostCommitOutboxProcessorTests
 
             Intents.Add(intent);
             return ValueTask.CompletedTask;
+        }
+    }
+
+    /// <summary>Claims through an in-memory store, but completes a claim by reporting a fixed outcome instead of persisting it.</summary>
+    private sealed class ReportingClaimCompletionStore(
+        InMemoryRuntimeCheckpointCommitStore inner,
+        RuntimePostCommitOutboxClaimCompletionOutcome outcome)
+        : IRuntimePostCommitOutboxStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore
+    {
+        public List<RuntimePostCommitOutboxClaimCompletion> Completions { get; } = [];
+
+        public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetDeliverableAsync(RuntimePostCommitOutboxQuery query, CancellationToken cancellationToken = default) =>
+            inner.GetDeliverableAsync(query, cancellationToken);
+
+        public ValueTask RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default) =>
+            inner.RecordDeliveryResultAsync(result, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>> ClaimAsync(RuntimePostCommitOutboxClaimRequest request, CancellationToken cancellationToken = default) =>
+            inner.ClaimAsync(request, cancellationToken);
+
+        public ValueTask RecordDeliveryResultAsync(RuntimePostCommitOutboxClaim claim, RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default) =>
+            inner.RecordDeliveryResultAsync(claim, result, cancellationToken);
+
+        public ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> CompleteClaimAsync(RuntimePostCommitOutboxClaimCompletion completion, CancellationToken cancellationToken = default)
+        {
+            Completions.Add(completion);
+            return ValueTask.FromResult(outcome);
+        }
+    }
+
+    /// <summary>The DispatchWorkflow projection of a waited child's final start failure: DispatchFailed plus the parent resume.</summary>
+    private sealed class WaitedDispatchFailureProjector(WorkflowDispatchRecord dispatch) : IPostCommitFailureProjector
+    {
+        public ValueTask<PostCommitFailureProjection?> ProjectAsync(
+            RuntimePostCommitOutboxItem item,
+            RuntimePostCommitOutboxDeliveryResult finalResult,
+            CancellationToken cancellationToken = default)
+        {
+            var identity = new WorkflowDispatchIdentity(dispatch.ParentWorkflowExecutionId, dispatch.ParentActivityExecutionId);
+            var recordedAt = finalResult.RecordedAt;
+            var resume = new RuntimePostCommitIntent(
+                identity.ParentResumeIntentId,
+                dispatch.ParentWorkflowExecutionId,
+                WorkflowDispatchLifecycle.ResumeParentIntentKind,
+                recordedAt,
+                dispatch.ParentActivityExecutionId,
+                identity.ParentResumeIdempotencyKey,
+                payload: null,
+                metadata: new Dictionary<string, string>
+                {
+                    [RuntimeMetadataKeys.DispatchId] = dispatch.DispatchId,
+                    [RuntimeMetadataKeys.ChildWorkflowExecutionId] = dispatch.ChildWorkflowExecutionId
+                });
+            return ValueTask.FromResult<PostCommitFailureProjection?>(new PostCommitFailureProjection(
+                WorkflowDispatchLifecycle.TransitionToDispatchFailed(dispatch, item.OutboxItemId, 0, 1, recordedAt, recordedAt),
+                new RuntimePostCommitOutboxItem(
+                    identity.WaitFailureResumeOutboxItemId(0),
+                    resume,
+                    RuntimePostCommitOutboxStatus.Pending,
+                    recordedAt,
+                    recordedAt,
+                    RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)))));
         }
     }
 

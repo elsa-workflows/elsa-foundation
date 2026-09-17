@@ -94,7 +94,7 @@ public sealed class CoalescingRuntimePostCommitOutboxStore(
             .RecordDeliveryResultAsync(claim, result, cancellationToken);
     }
 
-    public ValueTask CompleteClaimAsync(
+    public ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> CompleteClaimAsync(
         RuntimePostCommitOutboxClaimCompletion completion,
         CancellationToken cancellationToken = default)
     {
@@ -103,7 +103,7 @@ public sealed class CoalescingRuntimePostCommitOutboxStore(
         if (sessionAccessor.Current is { } session && session.IsActive && session.OwnsOutboxItem(completion.Claim.OutboxItemId))
         {
             session.CompleteOutboxClaim(completion);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(RuntimePostCommitOutboxClaimCompletionOutcome.Persisted);
         }
 
         return (_innerCompletionStore ?? throw new InvalidOperationException(

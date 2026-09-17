@@ -11,6 +11,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private readonly IWorkflowSchedulerDrainer _schedulerDrainer;
     private readonly IRuntimePostCommitOutboxProcessor _postCommitOutboxProcessor;
     private readonly IReadOnlyCollection<IWorkflowSchedulerDrainObserver> _schedulerDrainObservers;
+    private readonly CheckpointRuleViolationWorkflowFaulter _checkpointRuleViolationFaulter;
     private readonly WorkflowDrainOrchestratorOptions _options;
     private readonly IRuntimeExecutionOwnershipService _ownershipService;
     private readonly IRuntimeExecutionOwnershipContextAccessor _ownershipContextAccessor;
@@ -21,17 +22,19 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
 
     /// <summary>
     /// Creates the orchestrator. C1 (#1227): the six telescoping constructors collapsed into this single primary
-    /// constructor: five required collaborators followed by optional collaborators that default to their
+    /// constructor: six required collaborators followed by optional collaborators that default to their
     /// no-op/system implementations. The ownership service and the ownership context accessor are <b>required by
     /// construction</b> so the single-writer lease, which fences every checkpoint commit made during the drain
     /// and cancels the drain when the lease is lost, can never be silently disabled by picking a narrower
     /// constructor. The drain observers are required for the same reason: they decide fault outcomes (blocking
-    /// incidents, poison projection, incident strategy resolution), so the set must be handed in deliberately.
+    /// incidents, poison projection, incident strategy resolution), so the set must be handed in deliberately. So is
+    /// the checkpoint rule violation faulter (#1780), which decides the outcome of an execution a rule refused.
     /// </summary>
     public WorkflowDrainOrchestrator(
         IWorkflowSchedulerDrainer schedulerDrainer,
         IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
         IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
+        CheckpointRuleViolationWorkflowFaulter checkpointRuleViolationFaulter,
         IRuntimeExecutionOwnershipService ownershipService,
         IRuntimeExecutionOwnershipContextAccessor ownershipContextAccessor,
         WorkflowDrainOrchestratorOptions? options = null,
@@ -43,12 +46,14 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         ArgumentNullException.ThrowIfNull(schedulerDrainer);
         ArgumentNullException.ThrowIfNull(postCommitOutboxProcessor);
         ArgumentNullException.ThrowIfNull(schedulerDrainObservers);
+        ArgumentNullException.ThrowIfNull(checkpointRuleViolationFaulter);
         ArgumentNullException.ThrowIfNull(ownershipService);
         ArgumentNullException.ThrowIfNull(ownershipContextAccessor);
 
         _schedulerDrainer = schedulerDrainer;
         _postCommitOutboxProcessor = postCommitOutboxProcessor;
         _schedulerDrainObservers = schedulerDrainObservers.ToArray();
+        _checkpointRuleViolationFaulter = checkpointRuleViolationFaulter;
         _options = options ?? new WorkflowDrainOrchestratorOptions();
         _ownershipService = ownershipService;
         _ownershipContextAccessor = ownershipContextAccessor;
@@ -87,11 +92,31 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             Exception? releaseFailure = null;
             try
             {
-                result = await DrainCoreAsync(envelope, request, drainCancellation.Token);
-            }
-            catch (Exception exception)
-            {
-                drainFailure = exception;
+                try
+                {
+                    result = await DrainCoreAsync(envelope, request, drainCancellation.Token);
+                }
+                catch (Exception exception)
+                {
+                    drainFailure = exception;
+                }
+
+                // #1780: a commit a checkpoint rule refused is refused again on every redelivery, so the execution is
+                // faulted instead of left non-terminal. This runs while the lease is still held, so the fault commit is
+                // fenced like the drain's own. The drain's result or failure is reported unchanged; only a fault commit
+                // that itself fails is added to it, because then the execution was not faulted.
+                try
+                {
+                    await _checkpointRuleViolationFaulter.FaultIfCheckpointRuleViolatedAsync(
+                        request.WorkflowExecutionId,
+                        result,
+                        drainFailure,
+                        drainCancellation.Token);
+                }
+                catch (Exception exception)
+                {
+                    drainFailure = drainFailure is null ? exception : new AggregateException(drainFailure, exception);
+                }
             }
             finally
             {

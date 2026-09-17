@@ -187,6 +187,14 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
         {
             throw;
         }
+        catch (Exception exception) when (RuntimeCheckpointCommitValidationException.IsCauseOf(exception))
+        {
+            // The child's runtime faults a child a checkpoint rule refused, which ends its dispatch and queues the parent's
+            // resume, and then still reports the refusal. The child really ran, so its start is delivered.
+            if (await HasChildOutcomeAsync(payload.DispatchId, cancellationToken))
+                return;
+            throw DeliveryFailure(exception);
+        }
         catch (Exception exception)
         {
             throw DeliveryFailure(exception);
@@ -243,6 +251,26 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
             if (latest is not null && (latest.Status == WorkflowDispatchStatus.Started || IsTerminal(latest.Status)))
                 return;
             throw;
+        }
+    }
+
+    /// <summary>Whether the dispatch already carries the child's own terminal outcome, as opposed to a delivery failure.</summary>
+    private async ValueTask<bool> HasChildOutcomeAsync(string dispatchId, CancellationToken cancellationToken)
+    {
+        if (_workflowDispatchStore is null)
+            return false;
+
+        try
+        {
+            return await _workflowDispatchStore.FindAsync(dispatchId, cancellationToken) is
+            {
+                Status: WorkflowDispatchStatus.Completed or WorkflowDispatchStatus.Faulted or WorkflowDispatchStatus.Cancelled
+            };
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // The refusal stays the reported failure; a dispatch that cannot be read proves no outcome.
+            return false;
         }
     }
 

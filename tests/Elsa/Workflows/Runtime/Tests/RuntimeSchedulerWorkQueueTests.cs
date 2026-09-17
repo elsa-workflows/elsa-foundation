@@ -349,6 +349,7 @@ public sealed class RuntimeSchedulerWorkQueueTests
             ThrowingSchedulerDrainer.Instance,
             EmptyPostCommitOutboxProcessor.Instance,
             [],
+            TestCheckpointRuleViolationFaulter.Create(),
             new RuntimeExecutionOwnershipService(new InMemoryExecutionLivenessStateStore()),
             new AsyncLocalRuntimeExecutionOwnershipContextAccessor());
 

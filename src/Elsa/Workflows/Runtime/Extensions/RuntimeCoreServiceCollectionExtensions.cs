@@ -273,6 +273,7 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<RuntimeAdmissionOptions>(),
                 serviceProvider.GetRequiredService<RuntimeAdmissionDiagnostics>(),
                 serviceProvider.GetRequiredService<TimeProvider>()));
+        services.TryAddScoped<CheckpointRuleViolationWorkflowFaulter>();
         // Explicit factory (not greedy ctor selection): the coalescing drain scope factory is only registered when the
         // coalescing feature is enabled, so which collaborators the orchestrator received used to depend on which
         // constructor the container could satisfy. The factory injects each optional collaborator with GetService so the
@@ -282,6 +283,7 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IWorkflowSchedulerDrainer>(),
                 serviceProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>(),
                 serviceProvider.GetServices<IWorkflowSchedulerDrainObserver>(),
+                serviceProvider.GetRequiredService<CheckpointRuleViolationWorkflowFaulter>(),
                 serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>(),
                 serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>(),
                 serviceProvider.GetRequiredService<WorkflowDrainOrchestratorOptions>(),

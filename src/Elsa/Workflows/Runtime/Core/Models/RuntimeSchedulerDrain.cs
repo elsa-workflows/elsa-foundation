@@ -98,7 +98,8 @@ public sealed class RuntimeSchedulerWorkItemResult
         string handlerName,
         DateTimeOffset startedAt,
         DateTimeOffset completedAt,
-        string? error = null)
+        string? error = null,
+        bool checkpointRuleViolation = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workItemId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
@@ -110,6 +111,9 @@ public sealed class RuntimeSchedulerWorkItemResult
         if (status == RuntimeSchedulerWorkItemResultStatus.Completed && error is not null)
             throw new ArgumentException("Completed scheduler work item results cannot carry an error.", nameof(error));
 
+        if (checkpointRuleViolation && status != RuntimeSchedulerWorkItemResultStatus.Faulted)
+            throw new ArgumentException("Only a faulted scheduler work item result can be a checkpoint rule violation.", nameof(checkpointRuleViolation));
+
         WorkItemId = workItemId;
         WorkflowExecutionId = workflowExecutionId;
         CommandKind = commandKind;
@@ -118,6 +122,7 @@ public sealed class RuntimeSchedulerWorkItemResult
         StartedAt = startedAt;
         CompletedAt = completedAt;
         Error = error;
+        CheckpointRuleViolation = checkpointRuleViolation;
     }
 
     public string WorkItemId { get; }
@@ -128,6 +133,12 @@ public sealed class RuntimeSchedulerWorkItemResult
     public DateTimeOffset StartedAt { get; }
     public DateTimeOffset CompletedAt { get; }
     public string? Error { get; }
+
+    /// <summary>
+    /// The handler faulted because a checkpoint rule refused one of its commits
+    /// (<see cref="Exceptions.RuntimeCheckpointCommitValidationException"/>), so redelivering the item would be refused again.
+    /// </summary>
+    public bool CheckpointRuleViolation { get; }
 }
 
 public enum RuntimeSchedulerWorkItemResultStatus

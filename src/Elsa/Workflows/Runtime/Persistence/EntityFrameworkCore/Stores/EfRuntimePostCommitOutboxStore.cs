@@ -235,7 +235,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
         }
     }
 
-    public async ValueTask CompleteClaimAsync(
+    public async ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> CompleteClaimAsync(
         RuntimePostCommitOutboxClaimCompletion completion,
         CancellationToken cancellationToken = default)
     {
@@ -310,6 +310,9 @@ public sealed class EfRuntimePostCommitOutboxStore(
 
         }
 
+        var outcome = admissionWins
+            ? RuntimePostCommitOutboxClaimCompletionOutcome.DeliveredOnChildEvidence
+            : RuntimePostCommitOutboxClaimCompletionOutcome.Persisted;
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
@@ -336,6 +339,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
             }
             await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+            return outcome;
         }
         catch (DbUpdateConcurrencyException exception)
         {
@@ -373,7 +377,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
                     await LoadAsync(scope, completion.FollowUpOutboxItem.OutboxItemId, tracking: false, cancellationToken) is { } followUpEntry &&
                     ReadChecked(followUpEntry, scope, completion.FollowUpOutboxItem.OutboxItemId).IsEquivalentTo(completion.FollowUpOutboxItem);
                 if (dispatchReconciled && followUpReconciled)
-                    return;
+                    return outcome;
             }
             throw;
         }
