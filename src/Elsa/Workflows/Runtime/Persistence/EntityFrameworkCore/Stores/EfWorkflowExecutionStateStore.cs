@@ -329,10 +329,7 @@ public sealed class EfWorkflowExecutionStateStore(
 
     private string RequireScope()
     {
-        var current = accessContextAccessor.Current;
-        if (current.AccessPolicy != PersistenceAccessPolicy.Ordinary || current.Scope is null || current.AcrossScopes)
-            throw new InvalidOperationException("EF workflow-execution persistence requires one explicit persistence scope.");
-        var scope = current.Scope.Value;
+        var scope = accessContextAccessor.Current.RequireScope().Value;
         ValidateTenant(scope, nameof(scope));
         return scope;
     }

@@ -3,7 +3,6 @@ using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Diagnostics.Persistence.Extensions;
 using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -11,13 +10,25 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Depende
 
 public static class EfOpenTelemetryRegistration
 {
+    private static readonly EfModuleBinding Binding = new(
+        "OpenTelemetry",
+        EfOpenTelemetryModule.HistoryTableName,
+        typeof(OpenTelemetryDbContext).Assembly.GetName().Name,
+        EfOpenTelemetryModule.DefaultConnectionName,
+        EfOpenTelemetryModule.DefaultSqliteConnectionString);
+
     public static IServiceCollection AddOpenTelemetryEntityFrameworkCore(
         this IServiceCollection services,
         OpenTelemetryEntityFrameworkCoreOptions options)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
-        _ = EfRelationalProviderBinding.ExpectedProviderName(options.Provider);
+        var addContext = Binding.Select<Action<IServiceCollection, OpenTelemetryEntityFrameworkCoreOptions>>(
+            options.Provider,
+            AddContext<OpenTelemetrySqliteDbContext>,
+            AddContext<OpenTelemetrySqlServerDbContext>,
+            AddContext<OpenTelemetryPostgreSqlDbContext>,
+            AddContext<OpenTelemetryMySqlDbContext>);
         var provider = EfRelationalProviderBinding.Normalize(options.Provider);
         var binding = new EfOpenTelemetryBinding(options.TenantId, options.ScopeId, options.SourceId);
         binding.Validate();
@@ -59,55 +70,19 @@ public static class EfOpenTelemetryRegistration
         services.TryAddSingleton<IOpenTelemetrySourceRegistry, Elsa.Diagnostics.OpenTelemetry.Services.OpenTelemetrySourceRegistry>();
         services.AddOptions<Elsa.Diagnostics.OpenTelemetry.Core.Options.OpenTelemetryDiagnosticsOptions>();
         services.RemoveAll<Elsa.Diagnostics.OpenTelemetry.Providers.InMemory.InMemoryOpenTelemetryStore>();
-        switch (provider)
-        {
-            case "sqlite":
-                AddContext<OpenTelemetrySqliteDbContext>(services, configuredOptions, EfRelationalProviderBinding.UseSqlite);
-                break;
-            case "sqlserver":
-                AddContext<OpenTelemetrySqlServerDbContext>(services, configuredOptions, EfRelationalProviderBinding.UseSqlServer);
-                break;
-            case "postgresql":
-                AddContext<OpenTelemetryPostgreSqlDbContext>(services, configuredOptions, EfRelationalProviderBinding.UseNpgsql);
-                break;
-            case "mysql":
-                AddContext<OpenTelemetryMySqlDbContext>(services, configuredOptions, EfRelationalProviderBinding.UseMySql);
-                break;
-            default:
-                throw new ArgumentException($"Unknown OpenTelemetry EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.", nameof(options));
-        }
+        addContext(services, configuredOptions);
         services.AddSingleton(configuredOptions);
         services.ReplaceDiagnosticsStore<IOpenTelemetryStore, EfOpenTelemetryStore>(ServiceLifetime.Singleton);
         services.AddDiagnosticsPersistenceLifecycle<EfOpenTelemetryStore>();
         return services;
     }
 
-    private static void AddContext<TContext>(IServiceCollection services, OpenTelemetryEntityFrameworkCoreOptions options, Action<DbContextOptionsBuilder, string, string, string?> bind)
+    private static void AddContext<TContext>(IServiceCollection services, OpenTelemetryEntityFrameworkCoreOptions options)
         where TContext : EfOpenTelemetryDbContext
     {
-        services.AddDbContext<TContext>((provider, builder) => bind(builder, ResolveConnectionString(provider, options), EfOpenTelemetryModule.HistoryTableName, typeof(OpenTelemetryDbContext).Assembly.GetName().Name));
+        services.AddDbContext<TContext>((provider, builder) => Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName));
         services.AddScoped<OpenTelemetryDbContext>(provider => provider.GetRequiredService<TContext>());
         services.AddScoped<EfOpenTelemetryDbContext>(provider => (EfOpenTelemetryDbContext)provider.GetRequiredService<TContext>());
-    }
-
-    internal static string ResolveConnectionString(IServiceProvider provider, OpenTelemetryEntityFrameworkCoreOptions options)
-    {
-        if (!string.IsNullOrWhiteSpace(options.ConnectionString))
-            return options.ConnectionString;
-        var configuration = provider.GetService<IConfiguration>();
-        if (!string.IsNullOrWhiteSpace(options.ConnectionName))
-        {
-            var named = configuration?.GetConnectionString(options.ConnectionName);
-            if (string.IsNullOrWhiteSpace(named))
-                throw new InvalidOperationException($"OpenTelemetry EF connection '{options.ConnectionName}' was not found in ConnectionStrings.");
-            return named;
-        }
-        var fallback = configuration?.GetConnectionString(EfOpenTelemetryModule.DefaultConnectionName);
-        if (!string.IsNullOrWhiteSpace(fallback))
-            return fallback;
-        if (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite")
-            return EfOpenTelemetryModule.DefaultSqliteConnectionString;
-        throw new InvalidOperationException("OpenTelemetry EF requires ConnectionString or ConnectionName for a non-Sqlite provider.");
     }
 
     private sealed record EfOpenTelemetryRegistrationIdentity(

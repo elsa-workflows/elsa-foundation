@@ -35,6 +35,7 @@ using Elsa.Locking.Core;
 using Elsa.Tasks.Core;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -814,6 +815,22 @@ public sealed class EfWorkflowDesignPersistenceTests
 
         Assert.Contains("already selected", exception.Message, StringComparison.Ordinal);
         Assert.Contains(owned, services);
+    }
+
+    [Fact]
+    public void Ef_registration_refuses_a_blank_named_connection_instead_of_handing_it_to_the_provider()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:workflow-design"] = " " })
+            .Build());
+        services.AddWorkflowsDesignEntityFrameworkCore(new WorkflowsDesignEntityFrameworkCoreOptions { Provider = "Sqlite", ConnectionName = "workflow-design" });
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => scope.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>());
+
+        Assert.Contains("'workflow-design' was not found or was empty", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

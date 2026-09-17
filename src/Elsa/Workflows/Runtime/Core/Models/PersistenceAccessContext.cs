@@ -36,6 +36,21 @@ public sealed record PersistenceAccessContext
     public bool IsGlobal => Scope is null && !AcrossScopes;
 
     /// <summary>
+    /// Resolves the one partition an operation is bound to. Global and across-scope access carry no partition and are
+    /// always refused. Privileged access to one partition is refused unless the caller admits it, so a store that
+    /// serves privileged maintenance says so where it resolves its scope rather than by leaving a check out.
+    /// </summary>
+    public PersistenceScope RequireScope(bool admitPrivileged = false)
+    {
+        if (Scope is null || AcrossScopes || (AccessPolicy == PersistenceAccessPolicy.Privileged && !admitPrivileged))
+            throw new InvalidOperationException(admitPrivileged
+                ? "The persistence operation requires one explicit persistence scope."
+                : "The persistence operation requires one explicit ordinary persistence scope.");
+
+        return Scope;
+    }
+
+    /// <summary>
     /// Verifies that an explicit domain scope agrees with the immutable persistence scope selected
     /// for this request. The exception intentionally omits both scope values so a rejected request
     /// cannot disclose another partition's identity.

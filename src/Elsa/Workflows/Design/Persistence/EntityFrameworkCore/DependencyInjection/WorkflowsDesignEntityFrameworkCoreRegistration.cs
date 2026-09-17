@@ -7,7 +7,6 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Elsa.Tasks.Core;
@@ -16,10 +15,22 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.DependencyInject
 
 public static class WorkflowsDesignEntityFrameworkCoreRegistration
 {
+    private static readonly EfModuleBinding Binding = new(
+        "Workflows Design",
+        WorkflowsDesignEfModule.HistoryTableName,
+        typeof(WorkflowsDesignDbContext).Assembly.GetName().Name,
+        WorkflowsDesignEfModule.DefaultConnectionName,
+        WorkflowsDesignEfModule.DefaultSqliteConnectionString);
+
     public static IServiceCollection AddWorkflowsDesignEntityFrameworkCore(this IServiceCollection services, WorkflowsDesignEntityFrameworkCoreOptions options)
     {
         ArgumentNullException.ThrowIfNull(services); ArgumentNullException.ThrowIfNull(options);
-        var provider = EfRelationalProviderBinding.Normalize(options.Provider);
+        var addContext = Binding.Select<Action<IServiceCollection, WorkflowsDesignEntityFrameworkCoreOptions>>(
+            options.Provider,
+            AddContext<WorkflowsDesignSqliteDbContext>,
+            AddContext<WorkflowsDesignSqlServerDbContext>,
+            AddContext<WorkflowsDesignPostgreSqlDbContext>,
+            AddContext<WorkflowsDesignMySqlDbContext>);
         var existingBackend = DesignPersistenceBackend.Find(services);
         if (existingBackend is not null)
         {
@@ -41,14 +52,7 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
             services.Remove(descriptor);
         var registrationStart = services.Count;
         services.AddSingleton(options);
-        switch (provider)
-        {
-            case "sqlite": AddContext<WorkflowsDesignSqliteDbContext>(services, options, EfRelationalProviderBinding.UseSqlite); break;
-            case "sqlserver": AddContext<WorkflowsDesignSqlServerDbContext>(services, options, EfRelationalProviderBinding.UseSqlServer); break;
-            case "postgresql": AddContext<WorkflowsDesignPostgreSqlDbContext>(services, options, EfRelationalProviderBinding.UseNpgsql); break;
-            case "mysql": AddContext<WorkflowsDesignMySqlDbContext>(services, options, EfRelationalProviderBinding.UseMySql); break;
-            default: throw new ArgumentException($"Unknown Workflows Design EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.", nameof(options));
-        }
+        addContext(services, options);
         services.TryAddScoped<IDesignAtomicWriter, EfDesignAtomicWriter>();
         services.TryAddScoped<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
         services.TryAddScoped<IWorkflowDefinitionDraftFactory, WorkflowDefinitionDraftFactory>();
@@ -79,17 +83,10 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         return services;
     }
 
-    private static void AddContext<T>(IServiceCollection services, WorkflowsDesignEntityFrameworkCoreOptions options, Action<DbContextOptionsBuilder, string, string, string?> bind) where T : WorkflowsDesignDbContext
+    private static void AddContext<T>(IServiceCollection services, WorkflowsDesignEntityFrameworkCoreOptions options) where T : WorkflowsDesignDbContext
     {
-        services.AddDbContext<T>((sp, builder) => bind(builder, ResolveConnectionString(sp, options), WorkflowsDesignEfModule.HistoryTableName, typeof(WorkflowsDesignDbContext).Assembly.GetName().Name));
+        services.AddDbContext<T>((provider, builder) => Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName));
         services.AddScoped<WorkflowsDesignDbContext>(sp => sp.GetRequiredService<T>());
-    }
-    internal static string ResolveConnectionString(IServiceProvider services, WorkflowsDesignEntityFrameworkCoreOptions options)
-    {
-        if (!string.IsNullOrWhiteSpace(options.ConnectionString)) return options.ConnectionString;
-        var configuration = services.GetService<IConfiguration>();
-        if (!string.IsNullOrWhiteSpace(options.ConnectionName)) return configuration?.GetConnectionString(options.ConnectionName) ?? throw new InvalidOperationException($"Workflows Design EF connection '{options.ConnectionName}' was not found in ConnectionStrings.");
-        return configuration?.GetConnectionString(WorkflowsDesignEfModule.DefaultConnectionName) ?? (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite" ? WorkflowsDesignEfModule.DefaultSqliteConnectionString : throw new InvalidOperationException("Workflows Design EF requires ConnectionString or ConnectionName for a non-Sqlite provider."));
     }
 
     private static bool HasOwnedSurfaceRegistration(IServiceCollection services) => services.Any(descriptor =>

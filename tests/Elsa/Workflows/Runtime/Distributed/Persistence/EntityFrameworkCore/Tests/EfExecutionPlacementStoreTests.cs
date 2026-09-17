@@ -183,6 +183,17 @@ public sealed class EfExecutionPlacementStoreTests
     }
 
     [Fact]
+    public async Task Privileged_scoped_access_is_refused_instead_of_reporting_no_lease()
+    {
+        await using var fixture = await Fixture.CreateAsync("scope-a");
+        var privileged = new EfExecutionPlacementStore(fixture.Context, new PrivilegedScopedAccessor("scope-a"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => privileged.FindAsync("wf-1").AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => privileged.TryClaimAsync(Claim("node-a", "wf-1"), Now).AsTask());
+        Assert.Null(await fixture.Store.FindAsync("wf-1"));
+    }
+
+    [Fact]
     public async Task Rollback_and_conflicting_write_leave_the_tracker_reusable()
     {
         await using var fixture = await Fixture.CreateAsync("scope-a");

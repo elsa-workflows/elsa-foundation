@@ -76,6 +76,32 @@ public class PersistenceAccessContextTests
     }
 
     [Fact]
+    public void Scope_resolution_admits_only_ordinary_access_to_one_partition_by_default()
+    {
+        var scope = new PersistenceScope("tenant-a");
+        var purpose = new PersistenceAccessPurpose("maintenance");
+
+        Assert.Equal(scope, PersistenceAccessContext.Scoped(scope).RequireScope());
+        Assert.Throws<InvalidOperationException>(() => PersistenceAccessContext.PrivilegedScoped(scope, purpose).RequireScope());
+        Assert.Throws<InvalidOperationException>(() => PersistenceAccessContext.Global.RequireScope());
+        Assert.Throws<InvalidOperationException>(() => PersistenceAccessContext.PrivilegedGlobal(purpose).RequireScope());
+        Assert.Throws<InvalidOperationException>(() => PersistenceAccessContext.PrivilegedAcrossScopes(purpose).RequireScope());
+    }
+
+    [Fact]
+    public void Admitting_privileged_access_still_refuses_global_and_across_scope_access()
+    {
+        var scope = new PersistenceScope("tenant-a");
+        var purpose = new PersistenceAccessPurpose("maintenance");
+
+        Assert.Equal(scope, PersistenceAccessContext.Scoped(scope).RequireScope(admitPrivileged: true));
+        Assert.Equal(scope, PersistenceAccessContext.PrivilegedScoped(scope, purpose).RequireScope(admitPrivileged: true));
+        Assert.Throws<InvalidOperationException>(() => PersistenceAccessContext.Global.RequireScope(admitPrivileged: true));
+        Assert.Throws<InvalidOperationException>(() => PersistenceAccessContext.PrivilegedGlobal(purpose).RequireScope(admitPrivileged: true));
+        Assert.Throws<InvalidOperationException>(() => PersistenceAccessContext.PrivilegedAcrossScopes(purpose).RequireScope(admitPrivileged: true));
+    }
+
+    [Fact]
     public void Explicit_domain_scope_must_match_the_current_persistence_scope()
     {
         var context = PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"));

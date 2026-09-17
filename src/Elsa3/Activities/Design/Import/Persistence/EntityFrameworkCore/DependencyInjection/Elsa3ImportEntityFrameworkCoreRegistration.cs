@@ -5,7 +5,6 @@ using Elsa3.Activities.Design.Import.Composition;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.DependencyInjection;
@@ -13,6 +12,13 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Depende
 /// <summary>Registers, repeats, or explicitly switches the Elsa 3 import persistence to EF Core.</summary>
 public static class Elsa3ImportEntityFrameworkCoreRegistration
 {
+    private static readonly EfModuleBinding Binding = new(
+        "Elsa 3 import",
+        Elsa3ImportEfModule.HistoryTableName,
+        typeof(Elsa3ImportDbContext).Assembly.GetName().Name,
+        Elsa3ImportEfModule.DefaultConnectionName,
+        Elsa3ImportEfModule.DefaultSqliteConnectionString);
+
     public static IServiceCollection AddElsa3ImportEntityFrameworkCore(
         this IServiceCollection services,
         Elsa3ImportEntityFrameworkCoreOptions options)
@@ -20,8 +26,12 @@ public static class Elsa3ImportEntityFrameworkCoreRegistration
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
         var provider = EfRelationalProviderBinding.Normalize(options.Provider);
-        if (provider is not ("sqlite" or "sqlserver" or "postgresql" or "mysql"))
-            throw new ArgumentException($"Unknown Elsa 3 import EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.", nameof(options));
+        var addContext = Binding.Select<Action<IServiceCollection, Elsa3ImportEntityFrameworkCoreOptions>>(
+            options.Provider,
+            AddContext<Elsa3ImportSqliteDbContext>,
+            AddContext<Elsa3ImportSqlServerDbContext>,
+            AddContext<Elsa3ImportPostgreSqlDbContext>,
+            AddContext<Elsa3ImportMySqlDbContext>);
         var configuration = Elsa3ImportPersistenceBackend.Fingerprint(provider, options.ConnectionString, options.ConnectionName);
         var snapshot = services.ToArray();
         // A replaced backend may keep declarations in a shared catalog outside the service
@@ -65,13 +75,7 @@ public static class Elsa3ImportEntityFrameworkCoreRegistration
             };
             var registrationStart = services.Count;
             services.AddSingleton(configured);
-            switch (provider)
-            {
-                case "sqlite": AddContext<Elsa3ImportSqliteDbContext>(services, configured, EfRelationalProviderBinding.UseSqlite); break;
-                case "sqlserver": AddContext<Elsa3ImportSqlServerDbContext>(services, configured, EfRelationalProviderBinding.UseSqlServer); break;
-                case "postgresql": AddContext<Elsa3ImportPostgreSqlDbContext>(services, configured, EfRelationalProviderBinding.UseNpgsql); break;
-                default: AddContext<Elsa3ImportMySqlDbContext>(services, configured, EfRelationalProviderBinding.UseMySql); break;
-            }
+            addContext(services, configured);
 
             services.AddScoped<IReusableActivityImportOperationStore, EfReusableActivityImportOperationStore>();
             services.AddScoped<IReusableActivityImportCommand, EfReusableActivityImportCommand>();
@@ -102,30 +106,11 @@ public static class Elsa3ImportEntityFrameworkCoreRegistration
 
     private static void AddContext<TContext>(
         IServiceCollection services,
-        Elsa3ImportEntityFrameworkCoreOptions options,
-        Action<DbContextOptionsBuilder, string, string, string?> bind)
+        Elsa3ImportEntityFrameworkCoreOptions options)
         where TContext : Elsa3ImportDbContext
     {
-        services.AddDbContext<TContext>((provider, builder) => bind(
-            builder,
-            ResolveConnectionString(provider, options),
-            Elsa3ImportEfModule.HistoryTableName,
-            typeof(Elsa3ImportDbContext).Assembly.GetName().Name));
+        services.AddDbContext<TContext>((provider, builder) => Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName));
         services.AddScoped<Elsa3ImportDbContext>(provider => provider.GetRequiredService<TContext>());
-    }
-
-    internal static string ResolveConnectionString(IServiceProvider provider, Elsa3ImportEntityFrameworkCoreOptions options)
-    {
-        if (!string.IsNullOrWhiteSpace(options.ConnectionString))
-            return options.ConnectionString;
-        var configuration = provider.GetService<IConfiguration>();
-        if (!string.IsNullOrWhiteSpace(options.ConnectionName))
-            return configuration?.GetConnectionString(options.ConnectionName)
-                   ?? throw new InvalidOperationException($"Elsa 3 import EF connection '{options.ConnectionName}' was not found in ConnectionStrings.");
-        return configuration?.GetConnectionString(Elsa3ImportEfModule.DefaultConnectionName)
-               ?? (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite"
-                   ? Elsa3ImportEfModule.DefaultSqliteConnectionString
-                   : throw new InvalidOperationException("Elsa 3 import EF requires ConnectionString or ConnectionName for a non-Sqlite provider."));
     }
 }
 

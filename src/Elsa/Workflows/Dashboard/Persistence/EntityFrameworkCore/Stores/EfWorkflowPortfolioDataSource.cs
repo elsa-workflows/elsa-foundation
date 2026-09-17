@@ -348,13 +348,9 @@ public sealed class EfWorkflowPortfolioDataSource(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
         var current = accessContextAccessor.Current;
-        if (current.AccessPolicy != PersistenceAccessPolicy.Ordinary ||
-            current.Scope is null ||
-            current.AcrossScopes)
-            throw new InvalidOperationException(
-                "Dashboard workflow portfolio EF persistence requires one explicit ordinary persistence scope.");
+        var scope = current.RequireScope().Value;
         current.EnsureTenantScope(tenantId);
-        return current.Scope.Value;
+        return scope;
     }
 
     private static string ScopeKey(string scope) =>

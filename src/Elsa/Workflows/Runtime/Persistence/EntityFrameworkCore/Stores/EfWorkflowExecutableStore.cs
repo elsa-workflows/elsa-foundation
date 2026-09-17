@@ -742,13 +742,8 @@ public sealed class EfWorkflowExecutableStore(
         current.ExpiresAt > now &&
         state.Leases.All(x => x.Value.ExpiresAt <= now);
 
-    private string RequireScope()
-    {
-        var current = accessContextAccessor.Current;
-        if (current.Scope is null || current.AcrossScopes)
-            throw new InvalidOperationException("EF workflow executable persistence requires one explicit persistence scope.");
-        return current.Scope.Value;
-    }
+    // Privileged access to one partition bypasses the executable cache and lands here (spec 092).
+    private string RequireScope() => accessContextAccessor.Current.RequireScope(admitPrivileged: true).Value;
 
     private static void Validate(WorkflowExecutable executable)
     {

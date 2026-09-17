@@ -169,7 +169,7 @@ public sealed class EfWorkflowTestScopeStore(
             throw new TestScopeAdmissionException("The workflow test scope changed during admission.");
         }
     }
-    private string RequireScope() => _access.Current.Scope?.Value ?? throw new InvalidOperationException("Runtime EF test-scope persistence requires an ordinary scoped persistence access context.");
+    private string RequireScope() => _access.Current.RequireScope().Value;
     private void EnsureAccess(WorkflowTestScope scope) => _access.Current.EnsureTenantScope(scope.TenantId);
     private static void ValidateScopeId(string scopeId) { ArgumentException.ThrowIfNullOrWhiteSpace(scopeId); if (scopeId.Length > WorkflowTestScope.MaximumScopeIdLength) throw new ArgumentException($"A workflow test-scope ID must be at most {WorkflowTestScope.MaximumScopeIdLength} UTF-16 code units.", nameof(scopeId)); }
     private string[] DecodeCursor(string cursor)

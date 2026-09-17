@@ -16,13 +16,19 @@ using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.DependencyInjection;
 
 public static class PublishingEntityFrameworkCoreRegistration
 {
+    private static readonly EfModuleBinding Binding = new(
+        "Publishing",
+        PublishingSnapshotReviewEfModule.HistoryTableName,
+        typeof(PublishingSnapshotReviewDbContext).Assembly.GetName().Name,
+        PublishingSnapshotReviewEfModule.DefaultConnectionName,
+        PublishingSnapshotReviewEfModule.DefaultSqliteConnectionString);
+
     /// <summary>
     /// The P01, P05 and P06 families and the reusable-activity publication commands. The commands write the P05
     /// receipt as their last phase, so they are selected together with it: a receipt read from one backend and
@@ -110,7 +116,6 @@ public static class PublishingEntityFrameworkCoreRegistration
         var snapshot = services.ToArray();
         try
         {
-            var provider = EfRelationalProviderBinding.Normalize(options.Provider);
             _ = EfRelationalProviderBinding.ExpectedProviderName(options.Provider);
             var reviewBackend = PublicationSnapshotReviewStoreBackend.Find(services);
             var policyProjectionBackend = PublicationPolicyProjectionStoreBackend.Find(services);
@@ -145,7 +150,7 @@ public static class PublishingEntityFrameworkCoreRegistration
                     reviewBackend.RemoveOwnedArtifacts(services);
                 else
                     PublicationSnapshotReviewStoreBackend.EnsureNoUnownedRegistrations(services);
-                AddSnapshotReview(services, options, provider);
+                AddSnapshotReview(services, options);
             }
             if (policyProjectionBackend?.Name != PublicationPolicyProjectionStoreBackend.EntityFramework)
             {
@@ -182,7 +187,7 @@ public static class PublishingEntityFrameworkCoreRegistration
         }
     }
 
-    private static void AddSnapshotReview(IServiceCollection services, PublishingEntityFrameworkCoreOptions options, string provider)
+    private static void AddSnapshotReview(IServiceCollection services, PublishingEntityFrameworkCoreOptions options)
     {
         var configured = new PublishingEntityFrameworkCoreOptions
         {
@@ -193,7 +198,7 @@ public static class PublishingEntityFrameworkCoreRegistration
         var optionsDescriptor = ServiceDescriptor.Singleton(configured);
         services.Add(optionsDescriptor);
         var reviewOwned = new List<ServiceDescriptor> { optionsDescriptor };
-        reviewOwned.AddRange(AddContext(services, configured, provider));
+        reviewOwned.AddRange(AddContext(services, configured));
 
         var firstStore = services.Count;
         AddStore<IPublicationSnapshotReviewStore, EfPublicationSnapshotReviewStore>(services);
@@ -226,46 +231,26 @@ public static class PublishingEntityFrameworkCoreRegistration
 
     private static IReadOnlyCollection<ServiceDescriptor> AddContext(
         IServiceCollection services,
-        PublishingEntityFrameworkCoreOptions options,
-        string provider)
+        PublishingEntityFrameworkCoreOptions options)
     {
-        return provider switch
-        {
-            "sqlite" => AddContext<PublishingSnapshotReviewSqliteDbContext>(services, options, EfRelationalProviderBinding.UseSqlite),
-            "sqlserver" => AddContext<PublishingSnapshotReviewSqlServerDbContext>(services, options, EfRelationalProviderBinding.UseSqlServer),
-            "postgresql" => AddContext<PublishingSnapshotReviewPostgreSqlDbContext>(services, options, EfRelationalProviderBinding.UseNpgsql),
-            "mysql" => AddContext<PublishingSnapshotReviewMySqlDbContext>(services, options, EfRelationalProviderBinding.UseMySql),
-            _ => throw new ArgumentException($"Unknown Publishing EF provider '{options.Provider}'.", nameof(options))
-        };
+        var addContext = Binding.Select<Func<IServiceCollection, PublishingEntityFrameworkCoreOptions, IReadOnlyCollection<ServiceDescriptor>>>(
+            options.Provider,
+            AddContext<PublishingSnapshotReviewSqliteDbContext>,
+            AddContext<PublishingSnapshotReviewSqlServerDbContext>,
+            AddContext<PublishingSnapshotReviewPostgreSqlDbContext>,
+            AddContext<PublishingSnapshotReviewMySqlDbContext>);
+        return addContext(services, options);
     }
 
     private static IReadOnlyCollection<ServiceDescriptor> AddContext<TContext>(
         IServiceCollection services,
-        PublishingEntityFrameworkCoreOptions options,
-        Action<DbContextOptionsBuilder, string, string, string?> bind)
+        PublishingEntityFrameworkCoreOptions options)
         where TContext : PublishingSnapshotReviewDbContext
     {
         var start = services.Count;
-        services.AddDbContext<TContext>((provider, builder) =>
-            bind(builder, ResolveConnection(provider, options), PublishingSnapshotReviewEfModule.HistoryTableName, typeof(PublishingSnapshotReviewDbContext).Assembly.GetName().Name));
+        services.AddDbContext<TContext>((provider, builder) => Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName));
         services.AddScoped<PublishingSnapshotReviewDbContext>(provider => provider.GetRequiredService<TContext>());
         return services.Skip(start).ToArray();
-    }
-
-    private static string ResolveConnection(IServiceProvider provider, PublishingEntityFrameworkCoreOptions options)
-    {
-        if (!string.IsNullOrWhiteSpace(options.ConnectionString))
-            return options.ConnectionString!;
-        var configuration = provider.GetService<IConfiguration>();
-        if (!string.IsNullOrWhiteSpace(options.ConnectionName))
-            return configuration?.GetConnectionString(options.ConnectionName!) ??
-                   throw new InvalidOperationException($"Publishing EF connection '{options.ConnectionName}' was not found.");
-        var fallback = configuration?.GetConnectionString(PublishingSnapshotReviewEfModule.DefaultConnectionName);
-        if (!string.IsNullOrWhiteSpace(fallback))
-            return fallback!;
-        if (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite")
-            return PublishingSnapshotReviewEfModule.DefaultSqliteConnectionString;
-        throw new InvalidOperationException("Publishing EF persistence requires ConnectionString or ConnectionName for a non-Sqlite provider.");
     }
 
     private static bool OptionsEqual(PublishingEntityFrameworkCoreOptions left, PublishingEntityFrameworkCoreOptions right) =>

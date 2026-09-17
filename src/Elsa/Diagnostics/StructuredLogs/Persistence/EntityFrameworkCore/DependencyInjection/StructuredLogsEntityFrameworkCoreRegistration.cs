@@ -5,7 +5,6 @@ using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Diagnostics.StructuredLogs.Storage;
 using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -13,6 +12,13 @@ namespace Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Depend
 
 public static class StructuredLogsEntityFrameworkCoreRegistration
 {
+    private static readonly EfModuleBinding Binding = new(
+        "Structured Logs",
+        StructuredLogsEfModule.HistoryTableName,
+        typeof(StructuredLogsDbContext).Assembly.GetName().Name,
+        StructuredLogsEfModule.DefaultConnectionName,
+        StructuredLogsEfModule.DefaultSqliteConnectionString);
+
     public static IServiceCollection AddStructuredLogsEntityFrameworkCore(
         this IServiceCollection services,
         StructuredLogsEntityFrameworkCoreOptions options)
@@ -20,29 +26,16 @@ public static class StructuredLogsEntityFrameworkCoreRegistration
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
 
-        var provider = EfRelationalProviderBinding.Normalize(options.Provider);
+        var addContext = Binding.Select<Action<IServiceCollection, StructuredLogsEntityFrameworkCoreOptions>>(
+            options.Provider,
+            AddContext<StructuredLogsSqliteDbContext>,
+            AddContext<StructuredLogsSqlServerDbContext>,
+            AddContext<StructuredLogsPostgreSqlDbContext>,
+            AddContext<StructuredLogsMySqlDbContext>);
         services.TryAddSingleton(StructuredLogStoreBinding.Default);
         services.RemoveAll<InMemoryStructuredLogStore>();
 
-        switch (provider)
-        {
-            case "sqlite":
-                AddContext<StructuredLogsSqliteDbContext>(services, options, EfRelationalProviderBinding.UseSqlite);
-                break;
-            case "sqlserver":
-                AddContext<StructuredLogsSqlServerDbContext>(services, options, EfRelationalProviderBinding.UseSqlServer);
-                break;
-            case "postgresql":
-                AddContext<StructuredLogsPostgreSqlDbContext>(services, options, EfRelationalProviderBinding.UseNpgsql);
-                break;
-            case "mysql":
-                AddContext<StructuredLogsMySqlDbContext>(services, options, EfRelationalProviderBinding.UseMySql);
-                break;
-            default:
-                throw new ArgumentException(
-                    $"Unknown Structured Logs EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.",
-                    nameof(options));
-        }
+        addContext(services, options);
 
         services.AddSingleton(options);
         services.ReplaceDiagnosticsStore<IStructuredLogStore, EfStructuredLogStore>(ServiceLifetime.Singleton);
@@ -52,46 +45,11 @@ public static class StructuredLogsEntityFrameworkCoreRegistration
 
     private static void AddContext<TContext>(
         IServiceCollection services,
-        StructuredLogsEntityFrameworkCoreOptions options,
-        Action<DbContextOptionsBuilder, string, string, string?> bind)
+        StructuredLogsEntityFrameworkCoreOptions options)
         where TContext : StructuredLogsDbContext
     {
-        services.AddDbContext<TContext>((provider, builder) =>
-        {
-            var connectionString = ResolveConnectionString(provider, options);
-            bind(
-                builder,
-                connectionString,
-                StructuredLogsEfModule.HistoryTableName,
-                typeof(StructuredLogsDbContext).Assembly.GetName().Name);
-        });
+        services.AddDbContext<TContext>((provider, builder) => Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName));
         services.AddScoped<StructuredLogsDbContext>(provider => provider.GetRequiredService<TContext>());
-    }
-
-    internal static string ResolveConnectionString(
-        IServiceProvider provider,
-        StructuredLogsEntityFrameworkCoreOptions options)
-    {
-        if (!string.IsNullOrWhiteSpace(options.ConnectionString))
-            return options.ConnectionString;
-
-        var configuration = provider.GetService<IConfiguration>();
-        if (!string.IsNullOrWhiteSpace(options.ConnectionName))
-        {
-            var named = configuration?.GetConnectionString(options.ConnectionName);
-            if (string.IsNullOrWhiteSpace(named))
-                throw new InvalidOperationException($"Structured Logs EF connection '{options.ConnectionName}' was not found in ConnectionStrings.");
-            return named;
-        }
-
-        var fallback = configuration?.GetConnectionString(StructuredLogsEfModule.DefaultConnectionName);
-        if (!string.IsNullOrWhiteSpace(fallback))
-            return fallback;
-
-        if (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite")
-            return StructuredLogsEfModule.DefaultSqliteConnectionString;
-
-        throw new InvalidOperationException("Structured Logs EF requires ConnectionString or ConnectionName for a non-Sqlite provider.");
     }
 }
 

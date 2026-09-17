@@ -325,13 +325,8 @@ public sealed class EfExecutableActivityTemplateStore(
                 .OrderBy(x => x.TemplateIdOrderKey).ThenBy(x => x.Id).Take(2).ToArrayAsync(cancellationToken));
     }
 
-    private string RequireScope()
-    {
-        var current = accessContextAccessor.Current;
-        if (current.Scope is null || current.AcrossScopes)
-            throw new InvalidOperationException("EF executable activity template persistence requires one explicit persistence scope.");
-        return current.Scope.Value;
-    }
+    // Admits privileged maintenance of one partition, as every runtime artifact store does.
+    private string RequireScope() => accessContextAccessor.Current.RequireScope(admitPrivileged: true).Value;
 
     private static ExecutableActivityTemplateEntity ToEntity(ExecutableActivityTemplate template, TemplateIdentity identity, string json, string incarnationId) => new()
     {

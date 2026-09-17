@@ -65,6 +65,22 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
         Assert.NotNull(provider.GetServices<IRecurringTask>().OfType<ExecutionPlacementPumpTask>().Single());
     }
 
+    [Theory]
+    [InlineData(typeof(IExecutionPlacementStore))]
+    [InlineData(typeof(IExecutionCommandTransport))]
+    public void In_memory_defaults_refuse_privileged_access_to_a_partition(Type contract)
+    {
+        var services = BuildBaselineServices();
+        new WorkflowsRuntimeDistributedFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(
+            PersistenceAccessContext.PrivilegedScoped(new PersistenceScope("tenant-a"), new PersistenceAccessPurpose("maintenance")));
+
+        Assert.Throws<InvalidOperationException>(() => scope.ServiceProvider.GetRequiredService(contract));
+    }
+
     [Fact]
     public async Task Host_lifetime_actor_and_pump_open_scopes_for_placement_operations()
     {

@@ -11,7 +11,6 @@ using Elsa.Primitives.Identity;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -21,14 +20,24 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.DependencyInjec
 public static class ActivitiesDesignEntityFrameworkCoreRegistration
 {
     public const string StoreBackendName = "entity-framework";
+    private static readonly EfModuleBinding Binding = new(
+        "Activities Design",
+        ActivitiesDesignEfModule.HistoryTableName,
+        typeof(ActivitiesDesignDbContext).Assembly.GetName().Name,
+        ActivitiesDesignEfModule.DefaultConnectionName,
+        ActivitiesDesignEfModule.DefaultSqliteConnectionString);
 
     public static IServiceCollection AddActivitiesDesignEntityFrameworkCore(this IServiceCollection services, ActivitiesDesignEntityFrameworkCoreOptions options)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
         var provider = EfRelationalProviderBinding.Normalize(options.Provider);
-        if (provider is not ("sqlite" or "sqlserver" or "postgresql" or "mysql"))
-            throw new ArgumentException($"Unknown Activities Design EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.", nameof(options));
+        var addContext = Binding.Select<Action<IServiceCollection, ActivitiesDesignEntityFrameworkCoreOptions>>(
+            options.Provider,
+            AddContext<ActivitiesDesignSqliteDbContext>,
+            AddContext<ActivitiesDesignSqlServerDbContext>,
+            AddContext<ActivitiesDesignPostgreSqlDbContext>,
+            AddContext<ActivitiesDesignMySqlDbContext>);
         var configuration = ActivitiesDesignPersistenceBackend.Fingerprint(provider, options.ConnectionString, options.ConnectionName);
         var snapshot = services.ToArray();
         // A replaced backend may keep declarations outside the service collection, such as a shared
@@ -76,14 +85,7 @@ public static class ActivitiesDesignEntityFrameworkCoreRegistration
             };
             var registrationStart = services.Count;
             services.AddSingleton(configured);
-            switch (provider)
-            {
-                case "sqlite": AddContext<ActivitiesDesignSqliteDbContext>(services, configured, EfRelationalProviderBinding.UseSqlite); break;
-                case "sqlserver": AddContext<ActivitiesDesignSqlServerDbContext>(services, configured, EfRelationalProviderBinding.UseSqlServer); break;
-                case "postgresql": AddContext<ActivitiesDesignPostgreSqlDbContext>(services, configured, EfRelationalProviderBinding.UseNpgsql); break;
-                case "mysql": AddContext<ActivitiesDesignMySqlDbContext>(services, configured, EfRelationalProviderBinding.UseMySql); break;
-                default: throw new ArgumentException($"Unknown Activities Design EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.", nameof(options));
-            }
+            addContext(services, configured);
 
             services.TryAddScoped<EfActivityDesignStores>();
             services.TryAddScoped<EfActivityManagementProjectionWriter>(provider => new EfActivityManagementProjectionWriter(
@@ -205,20 +207,11 @@ public static class ActivitiesDesignEntityFrameworkCoreRegistration
                typeof(ActivitiesDesignDbContext).IsAssignableFrom(type.GetGenericArguments()[0]);
     }
 
-    private static void AddContext<TContext>(IServiceCollection services, ActivitiesDesignEntityFrameworkCoreOptions options, Action<DbContextOptionsBuilder, string, string, string?> bind)
+    private static void AddContext<TContext>(IServiceCollection services, ActivitiesDesignEntityFrameworkCoreOptions options)
         where TContext : ActivitiesDesignDbContext
     {
-        services.AddDbContext<TContext>((provider, builder) => bind(builder, ResolveConnectionString(provider, options), ActivitiesDesignEfModule.HistoryTableName, typeof(ActivitiesDesignDbContext).Assembly.GetName().Name));
+        services.AddDbContext<TContext>((provider, builder) => Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName));
         services.AddScoped<ActivitiesDesignDbContext>(provider => provider.GetRequiredService<TContext>());
-    }
-
-    internal static string ResolveConnectionString(IServiceProvider provider, ActivitiesDesignEntityFrameworkCoreOptions options)
-    {
-        if (!string.IsNullOrWhiteSpace(options.ConnectionString)) return options.ConnectionString;
-        var configuration = provider.GetService<IConfiguration>();
-        if (!string.IsNullOrWhiteSpace(options.ConnectionName)) return configuration?.GetConnectionString(options.ConnectionName) ?? throw new InvalidOperationException($"Activities Design EF connection '{options.ConnectionName}' was not found.");
-        return configuration?.GetConnectionString(ActivitiesDesignEfModule.DefaultConnectionName)
-               ?? (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite" ? ActivitiesDesignEfModule.DefaultSqliteConnectionString : throw new InvalidOperationException("Activities Design EF requires ConnectionString or ConnectionName for non-Sqlite providers."));
     }
 }
 

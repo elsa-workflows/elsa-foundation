@@ -312,6 +312,19 @@ public sealed class RuntimeEntityFrameworkCoreStandaloneTests
     }
 
     [Fact]
+    public async Task Privileged_access_bypasses_the_executable_cache_and_the_cache_adapter_refuses_it()
+    {
+        await using var database = await SharedMemoryDatabase.CreateAsync();
+        await using var provider = database.Compose(Options()).BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(
+            PersistenceAccessContext.PrivilegedScoped(new PersistenceScope("tenant-a"), new PersistenceAccessPurpose("maintenance")));
+
+        Assert.IsType<InvalidatingWorkflowExecutableStore>(scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>());
+        Assert.Throws<InvalidOperationException>(() => scope.ServiceProvider.GetRequiredService<CachingWorkflowExecutableStore>());
+    }
+
+    [Fact]
     public async Task A_disabled_executable_cache_reads_straight_from_the_database()
     {
         await using var database = await SharedMemoryDatabase.CreateAsync();

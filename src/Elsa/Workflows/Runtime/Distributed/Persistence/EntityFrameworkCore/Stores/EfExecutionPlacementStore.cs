@@ -263,8 +263,7 @@ public sealed class EfExecutionPlacementStore(
         }
     }
 
-    private string RequireScope() => accessContextAccessor.Current.Scope?.Value ??
-        throw new InvalidOperationException("EF distributed stores require a scoped persistence access context.");
+    private string RequireScope() => accessContextAccessor.Current.RequireScope().Value;
 
     private static ExecutionPlacementLease MapChecked(
         ExecutionPlacementLeaseEntity row,
