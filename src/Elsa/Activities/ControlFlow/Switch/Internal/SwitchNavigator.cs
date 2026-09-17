@@ -1,4 +1,4 @@
-using Elsa.Activities.Switch.Exceptions;
+using Elsa.Activities.ControlFlow.Exceptions;
 using Elsa.Activities.Switch.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using SwitchActivity = Elsa.Activities.Switch.Activities.Switch;
@@ -25,7 +25,7 @@ internal sealed class SwitchNavigator
         foreach (var @case in cases.Where(item => item.Branch is not null))
         {
             if (!casesByNodeId.TryAdd(@case.Branch!.ExecutableNodeId, @case))
-                throw new SwitchExecutionException($"Switch structure references branch node '{@case.Branch.ExecutableNodeId}' from more than one case.");
+                throw new ControlFlowExecutionException($"Switch structure references branch node '{@case.Branch.ExecutableNodeId}' from more than one case.");
         }
 
         _casesByNodeId = casesByNodeId;
@@ -45,7 +45,7 @@ internal sealed class SwitchNavigator
 
         var duplicateMatch = SwitchCaseRules.DuplicateMatches(structure.Cases.Select(@case => @case.Match)).FirstOrDefault();
         if (duplicateMatch is not null)
-            throw new SwitchExecutionException($"Switch executable node '{executableNode.ExecutableNodeId}' structure contains duplicate case '{duplicateMatch}'.");
+            throw new ControlFlowExecutionException($"Switch executable node '{executableNode.ExecutableNodeId}' structure contains duplicate case '{duplicateMatch}'.");
 
         var cases = structure.Cases
             .Select(@case => new SwitchCase(@case.Match, MatchBranch(
@@ -89,7 +89,7 @@ internal sealed class SwitchNavigator
         if (Default is { } @default && StringComparer.Ordinal.Equals(@default.ExecutableNodeId, executableNodeId))
             return Workflows.Runtime.Core.Constants.ActivityOutcomes.Default;
 
-        throw new SwitchExecutionException($"Completed child executable node '{executableNodeId}' is not a Switch branch.");
+        throw new ControlFlowExecutionException($"Completed child executable node '{executableNodeId}' is not a Switch branch.");
     }
 
     private static ExecutableNode? MatchBranch(
@@ -103,7 +103,7 @@ internal sealed class SwitchNavigator
             executableNode, "Switch", slotName, "branch", $"{branchName} branch", structureNodeId, slotChild, Fail);
     }
 
-    private static SwitchExecutionException Fail(string message, Exception? inner) =>
+    private static ControlFlowExecutionException Fail(string message, Exception? inner) =>
         inner is null ? new(message) : new(message, inner);
 
     private sealed record SwitchCase(string Match, ExecutableNode? Branch);

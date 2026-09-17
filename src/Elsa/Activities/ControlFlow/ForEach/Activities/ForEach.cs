@@ -1,9 +1,9 @@
 using System.Collections;
 using System.Globalization;
 using System.Text.Json;
+using Elsa.Activities.ControlFlow.Exceptions;
+using Elsa.Activities.ControlFlow.Loops;
 using Elsa.Activities.ControlFlow.Results;
-using Elsa.Activities.ForEach.Exceptions;
-using Elsa.Activities.ForEach.Internal;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
@@ -69,7 +69,7 @@ public sealed class ForEach : StructuralActivity, IRuntimeStructuralActivity, IR
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
-        var navigator = ForEachNavigator.From(runtimeContext.ExecutableNode);
+        var navigator = LoopNavigator.From(runtimeContext.ExecutableNode, LoopKind.ForEach);
         var items = ForEachCollection.Resolve(Collection);
 
         // Empty/null collection or empty body short-circuits without scheduling a pass.
@@ -87,10 +87,10 @@ public sealed class ForEach : StructuralActivity, IRuntimeStructuralActivity, IR
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        var navigator = ForEachNavigator.From(runtimeContext.ExecutableNode);
+        var navigator = LoopNavigator.From(runtimeContext.ExecutableNode, LoopKind.ForEach);
 
         if (navigator.Body is null || !navigator.IsBody(context.CompletedChildExecutableNodeId))
-            throw new ForEachExecutionException($"Completed child executable node '{context.CompletedChildExecutableNodeId}' is not the ForEach body.");
+            throw new ControlFlowExecutionException($"Completed child executable node '{context.CompletedChildExecutableNodeId}' is not the ForEach body.");
 
         // Early exit (#299): a body that completes with a Break outcome ends the loop now instead of
         // advancing to the next item. Recognized by outcome name so ForEach takes no dependency on the
@@ -164,9 +164,9 @@ public sealed class ForEach : StructuralActivity, IRuntimeStructuralActivity, IR
 
         var policy = collectionBinding.EffectivePolicy;
         if (policy.Lifecycle == DurableValueLifecycle.None)
-            throw new ForEachExecutionException("ForEach cannot create a durable iteration frame from a transient Collection input.");
+            throw new ControlFlowExecutionException("ForEach cannot create a durable iteration frame from a transient Collection input.");
         if (policy.Storage is DurableValueStorage.External or DurableValueStorage.Custom)
-            throw new ForEachExecutionException($"ForEach cannot derive an item reference from Collection storage strategy '{policy.Storage}'. Materialize the items through an explicit persistable projection first.");
+            throw new ControlFlowExecutionException($"ForEach cannot derive an item reference from Collection storage strategy '{policy.Storage}'. Materialize the items through an explicit persistable projection first.");
 
         var collectionType = collectionBinding.TargetType;
         var itemType = new ValueTypeDescriptor(
@@ -190,11 +190,11 @@ public sealed class ForEach : StructuralActivity, IRuntimeStructuralActivity, IR
     private static int ResolveCompletedIndex(IRuntimeActivityExecutionContext runtimeContext, string? completedChildIterationId)
     {
         if (string.IsNullOrEmpty(completedChildIterationId))
-            throw new ForEachExecutionException("ForEach cannot advance: the completed body child carries no iteration identity.");
+            throw new ControlFlowExecutionException("ForEach cannot advance: the completed body child carries no iteration identity.");
 
         var parentActivityExecutionId = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId;
         if (!StructuredExecutionIdentity.TryReadIteration(parentActivityExecutionId, completedChildIterationId, out var index))
-            throw new ForEachExecutionException($"ForEach cannot advance: completed body iteration id '{completedChildIterationId}' is not a ForEach iteration of '{parentActivityExecutionId}'.");
+            throw new ControlFlowExecutionException($"ForEach cannot advance: completed body iteration id '{completedChildIterationId}' is not a ForEach iteration of '{parentActivityExecutionId}'.");
 
         return index;
     }
@@ -235,9 +235,9 @@ public sealed class ForEach : StructuralActivity, IRuntimeStructuralActivity, IR
             {
                 null => new(Array.Empty<object?>()),
                 JsonElement element => ResolveJson(element),
-                string => throw new ForEachExecutionException("ForEach collection input must be an enumerable, not a string."),
+                string => throw new ControlFlowExecutionException("ForEach collection input must be an enumerable, not a string."),
                 IEnumerable enumerable => new(enumerable.Cast<object?>().ToArray()),
-                _ => throw new ForEachExecutionException($"ForEach collection input of type '{collection.GetType().FullName}' is not enumerable.")
+                _ => throw new ControlFlowExecutionException($"ForEach collection input of type '{collection.GetType().FullName}' is not enumerable.")
             };
 
         // A literal/expression collection arrives as a JsonElement (the runtime materializes 'object'
@@ -248,7 +248,7 @@ public sealed class ForEach : StructuralActivity, IRuntimeStructuralActivity, IR
             {
                 JsonValueKind.Null or JsonValueKind.Undefined => new(Array.Empty<object?>()),
                 JsonValueKind.Array => new(element),
-                _ => throw new ForEachExecutionException($"ForEach collection input JSON value kind '{element.ValueKind}' is not an array.")
+                _ => throw new ControlFlowExecutionException($"ForEach collection input JSON value kind '{element.ValueKind}' is not an array.")
             };
     }
 
@@ -268,6 +268,6 @@ public sealed class ForEach : StructuralActivity, IRuntimeStructuralActivity, IR
         if (context is IRuntimeActivityExecutionContext runtimeContext)
             return runtimeContext;
 
-        throw new ForEachExecutionException("ForEach requires an Elsa runtime activity execution context.");
+        throw new ControlFlowExecutionException("ForEach requires an Elsa runtime activity execution context.");
     }
 }

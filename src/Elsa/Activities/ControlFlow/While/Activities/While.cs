@@ -1,9 +1,9 @@
+using Elsa.Activities.ControlFlow.Exceptions;
+using Elsa.Activities.ControlFlow.Loops;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Activities.While.Exceptions;
-using Elsa.Activities.While.Internal;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -64,7 +64,7 @@ public sealed class While : StructuralActivity, IRuntimeStructuralActivity, IRun
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
-        var navigator = WhileNavigator.From(runtimeContext.ExecutableNode);
+        var navigator = LoopNavigator.From(runtimeContext.ExecutableNode, LoopKind.While);
 
         // First condition evaluation: false on entry means the body never runs.
         return ValueTask.FromResult(ContinueOrComplete(runtimeContext, navigator, Condition, completedChildActivityExecutionId: null));
@@ -75,12 +75,12 @@ public sealed class While : StructuralActivity, IRuntimeStructuralActivity, IRun
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        var navigator = WhileNavigator.From(runtimeContext.ExecutableNode);
+        var navigator = LoopNavigator.From(runtimeContext.ExecutableNode, LoopKind.While);
 
         // #381: validate the completed child is actually this loop's body (mirroring For/ForEach/If/
         // Switch/Parallel) so a stray callback fails diagnosably instead of silently rescheduling.
         if (!navigator.IsBody(context.CompletedChildExecutableNodeId))
-            throw new WhileExecutionException($"Completed child executable node '{context.CompletedChildExecutableNodeId}' is not the While body.");
+            throw new ControlFlowExecutionException($"Completed child executable node '{context.CompletedChildExecutableNodeId}' is not the While body.");
 
         // Early exit (#299): a body that completes with a Break outcome ends the loop now, before the
         // condition is re-evaluated. Recognized by outcome name so While takes no dependency on the
@@ -98,7 +98,7 @@ public sealed class While : StructuralActivity, IRuntimeStructuralActivity, IRun
 
     private static RuntimeStructuralContinuation ContinueOrComplete(
         IRuntimeActivityExecutionContext runtimeContext,
-        WhileNavigator navigator,
+        LoopNavigator navigator,
         bool condition,
         string? completedChildActivityExecutionId)
     {
@@ -146,6 +146,6 @@ public sealed class While : StructuralActivity, IRuntimeStructuralActivity, IRun
         if (context is IRuntimeActivityExecutionContext runtimeContext)
             return runtimeContext;
 
-        throw new WhileExecutionException("While requires an Elsa runtime activity execution context.");
+        throw new ControlFlowExecutionException("While requires an Elsa runtime activity execution context.");
     }
 }

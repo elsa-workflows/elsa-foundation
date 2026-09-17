@@ -10,9 +10,9 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
 
 ## Cross-domain contributions
 
-- `DoStructureHandler` implements `IActivityStructureHandler` (`Elsa.Workflows.Design.Core`). It
-  projects the body branch slot from the authored structure, compiles the executable structure (the body
-  branch node id), and round-trips both through publishing so the runtime resolves the body without
-  re-reading the design document. `Do` is a condition-only loop with no per-iteration item or index and
+- `LoopStructureHandler` (`../Loops/`, registered once per loop activity) implements
+  `IActivityStructureHandler` (`Elsa.Workflows.Design.Core`). It projects the body slot from the
+  authored structure, compiles the executable structure (the body node id), and round-trips both through
+  publishing so the runtime resolves the body without re-reading the design document. `Do` is a condition-only loop with no per-iteration item or index and
   is not a container scope, so it declares no container-scoped variables (`SupportsScopedVariables`
   defaults to `false`).

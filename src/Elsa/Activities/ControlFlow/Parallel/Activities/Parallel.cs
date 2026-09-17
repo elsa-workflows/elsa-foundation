@@ -1,5 +1,5 @@
+using Elsa.Activities.ControlFlow.Exceptions;
 using Elsa.Activities.ControlFlow.Results;
-using Elsa.Activities.Parallel.Exceptions;
 using Elsa.Activities.Parallel.Internal;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
@@ -110,7 +110,7 @@ public sealed class Parallel(IActivityExecutionStateStore activityExecutionState
         var navigator = ParallelNavigator.From(runtimeContext.ExecutableNode);
 
         if (!navigator.IsBranch(context.CompletedChildExecutableNodeId))
-            throw new ParallelExecutionException($"Completed child executable node '{context.CompletedChildExecutableNodeId}' is not a Parallel branch.");
+            throw new ControlFlowExecutionException($"Completed child executable node '{context.CompletedChildExecutableNodeId}' is not a Parallel branch.");
 
         return await ApplyJoinDecisionAsync(runtimeContext, navigator);
     }
@@ -123,7 +123,7 @@ public sealed class Parallel(IActivityExecutionStateStore activityExecutionState
         var navigator = ParallelNavigator.From(runtimeContext.ExecutableNode);
 
         if (!navigator.IsBranch(context.FaultedChildExecutableNodeId))
-            throw new ParallelExecutionException($"Faulted child executable node '{context.FaultedChildExecutableNodeId}' is not a Parallel branch.");
+            throw new ControlFlowExecutionException($"Faulted child executable node '{context.FaultedChildExecutableNodeId}' is not a Parallel branch.");
 
         return await ApplyJoinDecisionAsync(runtimeContext, navigator);
     }
@@ -230,6 +230,6 @@ public sealed class Parallel(IActivityExecutionStateStore activityExecutionState
         if (context is IRuntimeActivityExecutionContext runtimeContext)
             return runtimeContext;
 
-        throw new ParallelExecutionException("Parallel requires an Elsa runtime activity execution context.");
+        throw new ControlFlowExecutionException("Parallel requires an Elsa runtime activity execution context.");
     }
 }

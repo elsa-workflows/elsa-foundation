@@ -5,10 +5,10 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <summary>
 /// Shared helpers for the control-flow activity navigators that resolve executable children from an
 /// <see cref="ExecutableNode"/>'s compiled <see cref="ExecutableActivityStructure"/>. Each navigator
-/// owns its own structure payload type and its own execution-exception type; this reader centralises the
-/// otherwise line-for-line-identical structure validation and single-slot-child resolution so those
-/// navigators do not each re-implement it. Callers pass an <paramref name="exceptionFactory"/> so the
-/// exact exception type and message text of every navigator are preserved.
+/// owns its own structure payload type; this reader centralises the otherwise line-for-line-identical
+/// structure validation and single-slot-child resolution so those navigators do not each re-implement it.
+/// Callers pass an <paramref name="exceptionFactory"/> so each activity module keeps its own exception type
+/// and every navigator keeps its exact message text.
 /// </summary>
 public static class ExecutableStructureReader
 {

@@ -1,11 +1,8 @@
 using CShells.Features;
-using Elsa.Activities.Do.Internal;
-using Elsa.Activities.For.Internal;
-using Elsa.Activities.ForEach.Internal;
+using Elsa.Activities.ControlFlow.Loops;
 using Elsa.Activities.If.Internal;
 using Elsa.Activities.Parallel.Internal;
 using Elsa.Activities.Switch.Internal;
-using Elsa.Activities.While.Internal;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
@@ -33,10 +30,10 @@ public class ActivitiesControlFlowFeature : IShellFeature
     {
         services.AddSingleton<IActivityStructureHandler, IfStructureHandler>();
         services.AddSingleton<IActivityStructureHandler, SwitchStructureHandler>();
-        services.AddSingleton<IActivityStructureHandler, ForEachStructureHandler>();
-        services.AddSingleton<IActivityStructureHandler, ForStructureHandler>();
-        services.AddSingleton<IActivityStructureHandler, WhileStructureHandler>();
-        services.AddSingleton<IActivityStructureHandler, DoStructureHandler>();
+        services.AddSingleton<IActivityStructureHandler>(new LoopStructureHandler(LoopKind.ForEach));
+        services.AddSingleton<IActivityStructureHandler>(new LoopStructureHandler(LoopKind.For));
+        services.AddSingleton<IActivityStructureHandler>(new LoopStructureHandler(LoopKind.While));
+        services.AddSingleton<IActivityStructureHandler>(new LoopStructureHandler(LoopKind.Do));
         services.AddSingleton<IActivityStructureHandler, ParallelStructureHandler>();
 
         // Activity-owned Draft validator (FR-034): surfaces duplicate Switch case match values as a

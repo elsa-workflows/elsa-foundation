@@ -20,6 +20,6 @@ is exhausted completes with a `Done` outcome. A null or empty collection (or an 
 to `Done` without scheduling the body.
 
 The runtime activity class (`Activities/ForEach.cs`) references only the runtime contract surface. The
-design-side `ForEachStructureHandler` (`Internal/`) references `Elsa.Workflows.Design.Core`. The activity
-module bridges both `.Core` sub-domains; `Elsa.Workflows.Runtime.*` never references
-`Elsa.Workflows.Design.*` (Elsa §E2.2).
+design-side `LoopStructureHandler` (`../Loops/`, shared by the four loops) references
+`Elsa.Workflows.Design.Core`. The activity module bridges both `.Core` sub-domains;
+`Elsa.Workflows.Runtime.*` never references `Elsa.Workflows.Design.*` (Elsa §E2.2).

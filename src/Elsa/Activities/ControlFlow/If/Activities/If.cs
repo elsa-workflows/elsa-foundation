@@ -1,4 +1,4 @@
-using Elsa.Activities.If.Exceptions;
+using Elsa.Activities.ControlFlow.Exceptions;
 using Elsa.Activities.If.Internal;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
@@ -92,7 +92,7 @@ public sealed class If : StructuralActivity, IRuntimeStructuralActivity, IRuntim
         if (navigator.Else is { } @else && StringComparer.Ordinal.Equals(@else.ExecutableNodeId, completedChildExecutableNodeId))
             return false;
 
-        throw new IfExecutionException($"Completed child executable node '{completedChildExecutableNodeId}' is not an If branch.");
+        throw new ControlFlowExecutionException($"Completed child executable node '{completedChildExecutableNodeId}' is not an If branch.");
     }
 
     private static string Outcome(bool condition) => condition ? ActivityOutcomes.True : ActivityOutcomes.False;
@@ -102,6 +102,6 @@ public sealed class If : StructuralActivity, IRuntimeStructuralActivity, IRuntim
         if (context is IRuntimeActivityExecutionContext runtimeContext)
             return runtimeContext;
 
-        throw new IfExecutionException("If requires an Elsa runtime activity execution context.");
+        throw new ControlFlowExecutionException("If requires an Elsa runtime activity execution context.");
     }
 }

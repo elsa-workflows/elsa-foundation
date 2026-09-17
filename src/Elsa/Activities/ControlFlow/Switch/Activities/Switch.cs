@@ -1,8 +1,8 @@
+using Elsa.Activities.ControlFlow.Exceptions;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Activities.Switch.Exceptions;
 using Elsa.Activities.Switch.Internal;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -102,6 +102,6 @@ public sealed class Switch : StructuralActivity, IRuntimeStructuralActivity, IRu
         if (context is IRuntimeActivityExecutionContext runtimeContext)
             return runtimeContext;
 
-        throw new SwitchExecutionException("Switch requires an Elsa runtime activity execution context.");
+        throw new ControlFlowExecutionException("Switch requires an Elsa runtime activity execution context.");
     }
 }

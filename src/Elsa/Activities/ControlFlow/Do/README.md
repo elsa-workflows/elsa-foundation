@@ -40,6 +40,6 @@ wired up still runs its body once (the unconditional first pass) and then comple
 post-completion re-evaluation reads `false`.
 
 The runtime activity class (`Activities/Do.cs`) references only the runtime contract surface. The
-design-side `DoStructureHandler` (`Internal/`) references `Elsa.Workflows.Design.Core`. The activity
-module bridges both `.Core` sub-domains; `Elsa.Workflows.Runtime.*` never references
-`Elsa.Workflows.Design.*` (Elsa §E2.2).
+design-side `LoopStructureHandler` (`../Loops/`, shared by the four loops) references
+`Elsa.Workflows.Design.Core`. The activity module bridges both `.Core` sub-domains;
+`Elsa.Workflows.Runtime.*` never references `Elsa.Workflows.Design.*` (Elsa §E2.2).

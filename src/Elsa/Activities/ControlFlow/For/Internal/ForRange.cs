@@ -1,4 +1,4 @@
-using Elsa.Activities.For.Exceptions;
+using Elsa.Activities.ControlFlow.Exceptions;
 
 namespace Elsa.Activities.For.Internal;
 
@@ -27,7 +27,7 @@ namespace Elsa.Activities.For.Internal;
 /// </description></item>
 /// <item><description>
 /// <b>A zero step is rejected.</b> It can never advance toward the end, so it is a configuration error
-/// rather than an empty or infinite loop; <see cref="Create"/> throws <see cref="ForExecutionException"/>.
+/// rather than an empty or infinite loop; <see cref="Create"/> throws <see cref="ControlFlowExecutionException"/>.
 /// </description></item>
 /// <item><description>
 /// <b>An empty range visits no index.</b> <c>Start == End</c> with an exclusive end, or a step pointing
@@ -55,7 +55,7 @@ public readonly record struct ForRange
     public static ForRange Create(int start, int end, int step, bool endInclusive = false)
     {
         if (step == 0)
-            throw new ForExecutionException("For step cannot be zero: a zero step can never advance the loop toward its end.");
+            throw new ControlFlowExecutionException("For step cannot be zero: a zero step can never advance the loop toward its end.");
 
         return new ForRange(start, end, step, endInclusive);
     }

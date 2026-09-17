@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Elsa.Activities.ForEach.Exceptions;
+using Elsa.Activities.ControlFlow.Exceptions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
@@ -65,7 +65,7 @@ public sealed class ForEachActivityTests : IDisposable
     {
         var context = NewContext(new[] { "ephemeral" }, CollectionBinding(ValueProtectionPolicy.Transient));
 
-        var exception = await Assert.ThrowsAsync<ForEachExecutionException>(() => ExecuteAsync(context).AsTask());
+        var exception = await Assert.ThrowsAsync<ControlFlowExecutionException>(() => ExecuteAsync(context).AsTask());
 
         Assert.Contains("transient Collection", exception.Message, StringComparison.Ordinal);
         Assert.Empty(context.GetChildActivityScheduleRequests());
@@ -100,7 +100,7 @@ public sealed class ForEachActivityTests : IDisposable
     {
         var context = NewContext(collection: 42);
 
-        await Assert.ThrowsAsync<ForEachExecutionException>(() => ExecuteAsync(context).AsTask());
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => ExecuteAsync(context).AsTask());
     }
 
     [Fact]
@@ -167,7 +167,7 @@ public sealed class ForEachActivityTests : IDisposable
     {
         var context = NewContext(collection: 42);
 
-        await Assert.ThrowsAsync<ForEachExecutionException>(() =>
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() =>
             ((ForEachActivity)context.Activity).OnChildCompletedAsync(NewCompletion(context, iterationIndex: 0)).AsTask());
     }
 
@@ -177,7 +177,7 @@ public sealed class ForEachActivityTests : IDisposable
     {
         var context = NewContext(collection: "not-a-list");
 
-        await Assert.ThrowsAsync<ForEachExecutionException>(() =>
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() =>
             ((ForEachActivity)context.Activity).OnChildCompletedAsync(NewCompletion(context, iterationIndex: 0)).AsTask());
     }
 
@@ -186,7 +186,7 @@ public sealed class ForEachActivityTests : IDisposable
     {
         var context = NewContext(new[] { "x" });
 
-        await Assert.ThrowsAsync<ForEachExecutionException>(() => new ForEachActivity()
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => new ForEachActivity()
             .OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-x", "node-other", [ActivityOutcomes.Done], $"{ForEachExecutionId}:foreach-iteration:0"))
             .AsTask());
     }
@@ -196,7 +196,7 @@ public sealed class ForEachActivityTests : IDisposable
     {
         var context = NewContext(new[] { "x", "y" });
 
-        await Assert.ThrowsAsync<ForEachExecutionException>(() => new ForEachActivity()
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => new ForEachActivity()
             .OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-body", BodyNodeId, [ActivityOutcomes.Done]))
             .AsTask());
     }
