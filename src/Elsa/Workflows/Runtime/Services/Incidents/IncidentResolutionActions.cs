@@ -2,7 +2,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Runtime.Core.Services.Strategies;
+namespace Elsa.Workflows.Runtime.Services.Incidents;
 
 /// <summary>Built-in public incident-resolution actions with capability-limited execution behavior.</summary>
 public static class IncidentResolutionActions

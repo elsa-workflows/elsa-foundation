@@ -63,7 +63,7 @@ the root `ExecutableNode`, the resume targets and the incident strategy. Publish
 `IWorkflowExecutableStore` (`src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowExecutableStore.cs`) is the store
 Runtime reads from. The default is `InMemoryWorkflowExecutableStore`. With `WorkflowsRuntimeEntityFrameworkCore` enabled,
 `RuntimeArtifactsEntityFrameworkCoreRegistration` replaces it with `CachingWorkflowExecutableStore`
-(`src/Elsa/Workflows/Runtime/Core/Services`) over `EfWorkflowExecutableStore`
+(`src/Elsa/Workflows/Runtime/Services/Executables`) over `EfWorkflowExecutableStore`
 (`src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores`).
 
 `src/Elsa/Workflows/Runtime/Services/Executions/WorkflowStartDispatcher.cs` does the resolution. It finds the artifact,

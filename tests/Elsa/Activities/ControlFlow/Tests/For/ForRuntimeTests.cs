@@ -7,7 +7,6 @@ using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
 using ForActivity = Elsa.Activities.For.Activities.For;
 

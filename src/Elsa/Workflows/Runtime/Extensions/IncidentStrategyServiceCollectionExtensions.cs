@@ -1,11 +1,12 @@
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services.Strategies;
+using Elsa.Workflows.Runtime.Services.Incidents;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace Elsa.Workflows.Runtime.Core.Extensions;
+namespace Elsa.Workflows.Runtime.Extensions;
 
 /// <summary>Registers incident-strategy descriptors, implementations, and the descriptor-only registry.</summary>
 public static class IncidentStrategyServiceCollectionExtensions

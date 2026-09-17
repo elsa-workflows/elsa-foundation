@@ -1,6 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Runtime.Core.Services;
+namespace Elsa.Workflows.Runtime.Services.Recovery;
 
 /// <summary>
 /// Applies the provider-neutral recovery decision and ordering rules to a finite set of liveness states.

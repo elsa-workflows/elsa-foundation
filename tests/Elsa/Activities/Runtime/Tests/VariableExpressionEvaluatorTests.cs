@@ -2,7 +2,6 @@ using System.Text.Json;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Resolvers;
 using Xunit;
 

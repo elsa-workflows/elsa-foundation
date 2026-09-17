@@ -11,7 +11,6 @@ using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Middleware;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
-using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Diagnostics;
 using Elsa.Workflows.Runtime.Middleware;
 using Elsa.Workflows.Runtime.Resolvers;

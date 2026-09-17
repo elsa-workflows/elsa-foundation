@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Diagnostics;
 
-namespace Elsa.Workflows.Runtime.Core.Services;
+namespace Elsa.Workflows.Runtime.Services.Executables;
 
 /// <summary>
 /// Bounded cache state shared by scoped executable-store adapters in one application process.

@@ -1,7 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Runtime.Core.Services;
+namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
 /// Pass-through base for <see cref="IWorkflowExecutableStore"/> decorators: every member forwards to the

@@ -1,8 +1,9 @@
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Runtime.Core.Services.Strategies;
+namespace Elsa.Workflows.Runtime.Services.Incidents;
 
 /// <summary>Startup-built, descriptor-only incident-strategy registry.</summary>
 public sealed class IncidentStrategyCatalog : IIncidentStrategyCatalog, IIncidentStrategyRegistrationLookup
