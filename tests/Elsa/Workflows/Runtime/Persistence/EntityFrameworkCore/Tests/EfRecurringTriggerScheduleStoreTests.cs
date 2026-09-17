@@ -7,11 +7,13 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Recovery;
+using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 using static Elsa.Persistence.EntityFramework.Tests.ProviderFailures;
 
@@ -238,9 +240,7 @@ public sealed class EfRecurringTriggerScheduleStoreTests
     [Fact]
     public void Registration_requires_shared_EF_operational_context_and_resolves_the_opt_in_store()
     {
-        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
-        services.AddWorkflowRuntime();
-        services.AddRuntimeOperationalStateEntityFrameworkCore(new RuntimeOperationalStateEntityFrameworkCoreOptions { Provider = "Sqlite", ConnectionString = "Data Source=:memory:", RecoveryContinuationSigningKey = new string('k', 32) });
+        var services = OperationalComposition();
         services.AddRuntimeRecurringTriggerScheduleEntityFrameworkCore();
         using var provider = services.BuildServiceProvider(validateScopes: true);
         using var scope = provider.CreateScope();
@@ -283,6 +283,39 @@ public sealed class EfRecurringTriggerScheduleStoreTests
         Assert.All((await schedules.Store.ListByActivationPageAsync(new RecurringTriggerScheduleActivationPageQuery(SeededSchedules.ActivationId))).Items,
             schedule => Assert.False(schedule.IsActive));
     }
+
+    /// <summary>
+    /// The recurring-triggers feature, not the runtime root, registers the in-memory schedule store, so only this
+    /// composition proves the EF registration still recognizes it as the replaceable default.
+    /// </summary>
+    [Fact]
+    public void Registration_replaces_the_in_memory_default_the_recurring_triggers_feature_registers()
+    {
+        var services = OperationalComposition();
+        services.TryAddSingleton<IRecurringTriggerScheduleStore, InMemoryRecurringTriggerScheduleStore>();
+
+        services.AddRuntimeRecurringTriggerScheduleEntityFrameworkCore();
+
+        var contract = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IRecurringTriggerScheduleStore));
+        Assert.True(RecurringTriggerScheduleStoreBackend.Find(services)?.Owns(contract));
+    }
+
+    [Fact]
+    public void Registration_refuses_a_host_recurring_schedule_store_and_leaves_the_collection_unchanged()
+    {
+        var services = OperationalComposition();
+        services.AddSingleton<IRecurringTriggerScheduleStore>(_ => new InMemoryRecurringTriggerScheduleStore());
+        var snapshot = services.ToArray();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => services.AddRuntimeRecurringTriggerScheduleEntityFrameworkCore());
+
+        Assert.Contains("explicit recurring-trigger schedule store registration", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(snapshot, services);
+    }
+
+    private static IServiceCollection OperationalComposition() => new ServiceCollection()
+        .AddWorkflowRuntime()
+        .AddRuntimeOperationalStateEntityFrameworkCore(new RuntimeOperationalStateEntityFrameworkCoreOptions { Provider = "Sqlite", ConnectionString = "Data Source=:memory:", RecoveryContinuationSigningKey = new string('k', 32) });
 
     private static BookmarkStateSqliteDbContext Context(SqliteConnection connection) =>
         new(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);

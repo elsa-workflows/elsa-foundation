@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.Services.Recovery;
 
+[RuntimeDefaultRegistration]
 public sealed class InMemoryRuntimeRecoveryScanner : IRuntimeRecoveryPagedScanner
 {
     private readonly IExecutionLivenessStateStore _operationalStateStore;

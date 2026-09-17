@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Services.Incidents;
 
+[RuntimeDefaultRegistration]
 public sealed class InMemoryIncidentStateStore : IIncidentStateStore
 {
     private readonly object _syncRoot = new();

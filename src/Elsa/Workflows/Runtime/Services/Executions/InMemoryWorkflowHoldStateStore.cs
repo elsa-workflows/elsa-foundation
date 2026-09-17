@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Services.Executions;
 
+[RuntimeDefaultRegistration]
 public sealed class InMemoryWorkflowHoldStateStore : IWorkflowHoldStateStore
 {
     private readonly object _syncRoot = new();

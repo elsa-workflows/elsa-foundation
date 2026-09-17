@@ -99,9 +99,7 @@ public sealed class DurableTimerStoreBackend
         descriptor.ImplementationFactory?.Method.ReturnType is { } returnType && typeof(IDurableTimerStore).IsAssignableFrom(returnType);
 
     private static bool IsRuntimeDefault(ServiceDescriptor descriptor) =>
-        descriptor.ImplementationType is { } implementationType &&
-        implementationType.FullName == "Elsa.Workflows.Runtime.Services.Bookmarks.InMemoryDurableTimerStore" &&
-        implementationType.Assembly.GetName().Name == "Elsa.Workflows.Runtime" ||
+        RuntimeCoreRegistrationOwnership.IsDefault(descriptor.ImplementationType) ||
         RuntimeCoreRegistrationOwnership.IsCoreFactory(descriptor);
 
     private static bool IsOwnedBySibling(IServiceCollection services, ServiceDescriptor descriptor) =>

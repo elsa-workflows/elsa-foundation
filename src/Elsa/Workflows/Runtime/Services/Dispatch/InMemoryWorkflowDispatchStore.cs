@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Services.Checkpoints;
 namespace Elsa.Workflows.Runtime.Services.Dispatch;
 
 /// <summary>Application-wide in-memory workflow-dispatch projection.</summary>
+[RuntimeDefaultRegistration]
 public sealed class InMemoryWorkflowDispatchStore : IWorkflowDispatchStore, IWorkflowDispatchQueryStore, IWorkflowDispatchDeleteStore, IWorkflowDispatchRetentionRootStore, IWorkflowDispatchAdmissionStore, IWorkflowDispatchCancellationStore
 {
     private readonly InMemoryRuntimeCheckpointStoreState _state;

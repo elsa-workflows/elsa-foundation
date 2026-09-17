@@ -5,6 +5,7 @@ using System.Text;
 
 namespace Elsa.Workflows.Runtime.Services.Scheduler;
 
+[RuntimeDefaultRegistration]
 public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection
 {
     private readonly object _syncRoot = new();

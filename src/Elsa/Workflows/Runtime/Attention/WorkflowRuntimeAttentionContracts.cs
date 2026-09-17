@@ -1,7 +1,9 @@
 using Elsa.Attention.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Workflows.Runtime.Attention;
 
+[RuntimeOperationalStateContract]
 public interface IWorkflowRuntimeAttentionQuery
 {
     /// <summary>

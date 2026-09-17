@@ -94,9 +94,7 @@ public sealed class SchedulerWorkQueueStoreBackend
         (typeof(IWorkflowSchedulerWorkQueue).IsAssignableFrom(returnType) || typeof(IWorkflowSchedulerWorkClaimInspection).IsAssignableFrom(returnType));
 
     private static bool IsRuntimeDefault(ServiceDescriptor descriptor) =>
-        descriptor.ImplementationType is { } implementationType &&
-        implementationType.FullName == "Elsa.Workflows.Runtime.Services.Scheduler.InMemoryWorkflowSchedulerWorkQueue" &&
-        implementationType.Assembly.GetName().Name == "Elsa.Workflows.Runtime" ||
+        RuntimeCoreRegistrationOwnership.IsDefault(descriptor.ImplementationType) ||
         RuntimeCoreRegistrationOwnership.IsCoreFactory(descriptor);
 
     private static bool IsOwnedBySibling(IServiceCollection services, ServiceDescriptor descriptor) =>

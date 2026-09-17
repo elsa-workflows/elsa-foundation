@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Services.Values;
 
+[RuntimeDefaultRegistration]
 public sealed class InMemoryDurableValueStateStore : InMemoryKeyedStateStore<InMemoryDurableValueStateStore.DurableValueStateKey, DurableValueState>, IDurableValueStateStore
 {
     public ValueTask<DurableValueState> SaveAsync(DurableValueState state, CancellationToken cancellationToken = default)

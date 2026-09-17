@@ -8,6 +8,7 @@ namespace Elsa.Workflows.Runtime.Services.Bookmarks;
 /// by this store is <b>not</b> restart-durable — a process restart forgets every pending timer. Compose a
 /// durable persistence provider (e.g. the Runtime EF Core module) to make timers survive restarts.
 /// </summary>
+[RuntimeDefaultRegistration]
 public sealed class InMemoryDurableTimerStore : IDurableTimerStore
 {
     private readonly object _syncRoot = new();

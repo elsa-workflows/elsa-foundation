@@ -47,6 +47,7 @@ namespace Elsa.Workflows.Runtime.Extensions;
 /// remain application-wide and cross that lifetime seam through <see cref="ScopedWorkflowExecutionCommandExecutor"/>,
 /// which opens a fresh scope for every mailbox command.
 /// </remarks>
+[RuntimeDefaultRegistration]
 public static class RuntimeCoreServiceCollectionExtensions
 {
     /// <summary>
