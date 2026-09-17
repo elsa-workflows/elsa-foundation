@@ -1,15 +1,23 @@
 #!/usr/bin/env bash
-# Out-of-process migration apply and validation for every first-party EF module context.
+# Out-of-process migration apply, validation and SQL scripting for every first-party EF module context.
 #
 # Usage:
 #   bash tools/ef/module-migrate.sh pending [context-regex]
 #   bash tools/ef/module-migrate.sh apply <Sqlite|SqlServer|PostgreSql|MySql> <connection-string> [context-regex]
 #   bash tools/ef/module-migrate.sh validate <Sqlite|SqlServer|PostgreSql|MySql> <connection-string> [context-regex]
+#   bash tools/ef/module-migrate.sh script <Sqlite|SqlServer|PostgreSql|MySql> <output-dir> [context-regex]
+#   bash tools/ef/module-migrate.sh script-check <Sqlite|SqlServer|PostgreSql|MySql> <output-dir> [context-regex]
 #
 # pending needs no database: it fails when a module model changed without a regenerated migration.
 # apply runs `dotnet ef database update` per module context against one database; every module records its
-# own history table, which is the one the host's validate policy (EfMigrateOptions.Policy = Validate) reads.
+# own history table, which is the one a host started with
+# Elsa:Persistence:EntityFramework:Migrate:Policy=Validate reads.
 # validate fails when any module context still has a pending migration in that database.
+# script needs no database either: it writes one idempotent .sql per module context to
+# <output-dir>/<Module>/<Provider>.sql, which is the artifact a DBA reviews and a pipeline runs.
+# SQLite is refused there: EF cannot generate an idempotent script for it.
+# script-check regenerates into a temporary directory and diffs it against <output-dir>, so a hand-edited
+# script, a model change with no regenerated script, or a stale file fails instead of reaching a DBA.
 # Secrets' historical SQLite, SQL Server and PostgreSQL chains are applied by tools/ef/dual-migrate.sh.
 set -euo pipefail
 
@@ -19,7 +27,7 @@ tooling="tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tool
 configuration="${ELSA_EF_CONFIGURATION:-Release}"
 
 usage() {
-  sed -n '4,7p' "${BASH_SOURCE[0]}" | sed 's/^# *//' >&2
+  sed -n '4,9p' "${BASH_SOURCE[0]}" | sed 's/^# *//' >&2
   exit 2
 }
 
@@ -27,7 +35,33 @@ command="${1:-}"
 case "$command" in
   pending) provider=""; connection=""; filter="${2:-.*}" ;;
   apply|validate) [[ $# -ge 3 ]] || usage; provider="$2"; connection="$3"; filter="${4:-.*}" ;;
+  script|script-check) [[ $# -ge 3 ]] || usage; provider="$2"; connection=""; destination="$3"; filter="${4:-.*}" ;;
   *) usage ;;
+esac
+
+# EF cannot express an idempotent script for SQLite: SqliteHistoryRepository.GetEndIfScript throws
+# NotSupportedException, because SQLite has no conditional statement to wrap a migration in. A plain
+# script would sit in the same tree looking identical while being unsafe to re-run, so refuse instead.
+if [[ "$command" == script* && "$provider" == "Sqlite" ]]; then
+  echo "$command: SQLite cannot produce an idempotent script (EF throws NotSupportedException)." >&2
+  echo "Script a server provider, and bring a SQLite database up to date with:" >&2
+  echo "  bash tools/ef/module-migrate.sh apply Sqlite \"<connection>\"" >&2
+  exit 2
+fi
+
+# `dotnet ef --output` resolves against its own working directory, so scripts are written to absolute paths.
+case "$command" in
+  script)
+    mkdir -p "$destination"
+    destination="$(cd "$destination" && pwd -P)"
+    generated="$destination"
+    ;;
+  script-check)
+    [[ -d "$destination" ]] || { echo "No such directory: $destination" >&2; exit 2; }
+    destination="$(cd "$destination" && pwd -P)"
+    generated="$(mktemp -d)"
+    trap 'rm -rf "$generated"' EXIT
+    ;;
 esac
 
 dotnet tool restore >/dev/null
@@ -70,8 +104,35 @@ while IFS='|' read -r context row_provider assembly _; do
         failed=1
       fi
       ;;
+    script|script-check)
+      # The same <Module>/<Provider> split the migrations themselves are stored under.
+      relative="${context%"$row_provider"DbContext}/$row_provider.sql"
+      mkdir -p "$(dirname "$generated/$relative")"
+      ef "$context" "$project" migrations script --idempotent --output "$generated/$relative" >/dev/null
+      if [[ "$command" == script ]]; then
+        echo "script $context -> ${destination#"$root/"}/$relative"
+      elif [[ ! -f "$destination/$relative" ]]; then
+        echo "missing script: ${destination#"$root/"}/$relative" >&2
+        failed=1
+      elif ! diff -u "$destination/$relative" "$generated/$relative" >&2; then
+        echo "out of date: ${destination#"$root/"}/$relative" >&2
+        failed=1
+      fi
+      ;;
   esac
 done < <(dotnet run --project "$tooling" -c "$configuration" --no-build -- list)
+
+# A module that was removed or renamed leaves a script nobody generates any more; only a full check can
+# tell that from a context the caller deliberately filtered out.
+if [[ "$command" == script-check && "$filter" == ".*" ]]; then
+  while IFS= read -r stale; do
+    [[ -n "$stale" ]] || continue
+    echo "stale script: ${destination#"$root/"}/${stale#./}" >&2
+    failed=1
+  done < <(comm -13 \
+    <(cd "$generated" && find . -name "$provider.sql" | sort) \
+    <(cd "$destination" && find . -name "$provider.sql" | sort))
+fi
 
 if [[ $count -eq 0 ]]; then
   echo "No module context matched." >&2
