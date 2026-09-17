@@ -53,6 +53,15 @@ public static class EfRelationalExceptionClassifier
         return false;
     }
 
+    /// <summary>Returns whether <paramref name="exception"/> is one of the lost write races named by <paramref name="conflicts"/>.</summary>
+    public static bool IsWriteConflict(Exception exception, EfWriteConflict conflicts)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        return conflicts.HasFlag(EfWriteConflict.Concurrency) && exception is DbUpdateConcurrencyException ||
+               conflicts.HasFlag(EfWriteConflict.UniqueKey) && exception is DbUpdateException && IsUniqueConstraintViolation(exception) ||
+               conflicts.HasFlag(EfWriteConflict.Transient) && IsTransientWriteConflict(exception);
+    }
+
     /// <summary>
     /// Returns whether a relational provider reported a bounded-retry write conflict such as a
     /// serialization failure, deadlock, lock timeout, or SQLite busy/locked result.
