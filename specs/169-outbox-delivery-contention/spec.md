@@ -231,7 +231,7 @@ What remains worth checking is (a) whether that throw can reach an HTTP caller, 
 
 **This is not the defect the reporter observed.** Their logs carry only the claim-less message, "is claimed; its owner and fencing token are required". The claim-completion path produces a different message that never appeared.
 
-**Decision (D7)**: handled **as a separate unit of work, after this one.** It is a different code path with a different fix, and bundling it would blur the per-change revert-to-red evidence that D5 requires.
+**Decision (D7)**: handled **as a separate unit of work, after this one** — filed as [issue #1812](https://github.com/elsa-workflows/elsa-foundation/issues/1812). It is a different code path with a different fix, and bundling it would blur the per-change revert-to-red evidence that D5 requires.
 
 **This carries a scheduling constraint**: downstream consumers are currently blocked by the 500 this spec fixes, so unblocking them takes priority. Nothing in this unit may sit on the critical path of that fix unless it is required for correctness. Concretely — the P1 stories and their gating tests ship first; documentation corrections and the container-backed provider test are valuable but must not delay the unblocking change.
 
