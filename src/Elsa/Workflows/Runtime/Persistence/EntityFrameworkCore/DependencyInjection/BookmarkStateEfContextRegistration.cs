@@ -1,7 +1,6 @@
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -9,6 +8,13 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjec
 
 internal static class BookmarkStateEfContextRegistration
 {
+    private static readonly EfModuleBinding Binding = new(
+        "Runtime",
+        RuntimeEfModule.HistoryTableName,
+        typeof(BookmarkStateDbContext).Assembly.GetName().Name,
+        RuntimeEfModule.DefaultConnectionName,
+        RuntimeEfModule.DefaultSqliteConnectionString);
+
     public static void EnsureRecoveryContinuationSigningKeyCompatible(
         IServiceCollection services,
         string? requestedKey,
@@ -74,25 +80,22 @@ internal static class BookmarkStateEfContextRegistration
         Func<ServiceDescriptor, bool>? ownsExistingContext,
         string owner)
     {
-        switch (EfRelationalProviderBinding.Normalize(provider))
-        {
-            case "sqlite": EnsureContextIsAvailable<BookmarkStateSqliteDbContext>(services, ownsExistingContext, owner); break;
-            case "sqlserver": EnsureContextIsAvailable<BookmarkStateSqlServerDbContext>(services, ownsExistingContext, owner); break;
-            case "postgresql": EnsureContextIsAvailable<BookmarkStatePostgreSqlDbContext>(services, ownsExistingContext, owner); break;
-            case "mysql": EnsureContextIsAvailable<BookmarkStateMySqlDbContext>(services, ownsExistingContext, owner); break;
-            default: throw new ArgumentException($"Unknown Runtime EF provider '{provider}'.", nameof(provider));
-        }
+        var ensure = Binding.Select<Action<IServiceCollection, Func<ServiceDescriptor, bool>?, string>>(
+            provider,
+            EnsureContextIsAvailable<BookmarkStateSqliteDbContext>,
+            EnsureContextIsAvailable<BookmarkStateSqlServerDbContext>,
+            EnsureContextIsAvailable<BookmarkStatePostgreSqlDbContext>,
+            EnsureContextIsAvailable<BookmarkStateMySqlDbContext>);
+        ensure(services, ownsExistingContext, owner);
     }
 
     public static IReadOnlyCollection<ServiceDescriptor> ContextRegistrations(IServiceCollection services, string provider) =>
-        EfRelationalProviderBinding.Normalize(provider) switch
-        {
-            "sqlite" => services.Where(IsContextRegistration<BookmarkStateSqliteDbContext>).ToArray(),
-            "sqlserver" => services.Where(IsContextRegistration<BookmarkStateSqlServerDbContext>).ToArray(),
-            "postgresql" => services.Where(IsContextRegistration<BookmarkStatePostgreSqlDbContext>).ToArray(),
-            "mysql" => services.Where(IsContextRegistration<BookmarkStateMySqlDbContext>).ToArray(),
-            _ => throw new ArgumentException($"Unknown Runtime EF provider '{provider}'.", nameof(provider))
-        };
+        services.Where(Binding.Select<Func<ServiceDescriptor, bool>>(
+            provider,
+            IsContextRegistration<BookmarkStateSqliteDbContext>,
+            IsContextRegistration<BookmarkStateSqlServerDbContext>,
+            IsContextRegistration<BookmarkStatePostgreSqlDbContext>,
+            IsContextRegistration<BookmarkStateMySqlDbContext>)).ToArray();
 
     private static bool IsContextRegistration<TContext>(ServiceDescriptor descriptor)
         where TContext : BookmarkStateDbContext
@@ -165,60 +168,27 @@ internal static class BookmarkStateEfContextRegistration
         IServiceCollection services,
         string provider,
         string? connectionString,
-        string? connectionName) => EfRelationalProviderBinding.Normalize(provider) switch
+        string? connectionName)
     {
-        "sqlite" => AddContext<BookmarkStateSqliteDbContext>(services, provider, connectionString, connectionName, EfRelationalProviderBinding.UseSqlite),
-        "sqlserver" => AddContext<BookmarkStateSqlServerDbContext>(services, provider, connectionString, connectionName, EfRelationalProviderBinding.UseSqlServer),
-        "postgresql" => AddContext<BookmarkStatePostgreSqlDbContext>(services, provider, connectionString, connectionName, EfRelationalProviderBinding.UseNpgsql),
-        "mysql" => AddContext<BookmarkStateMySqlDbContext>(services, provider, connectionString, connectionName, EfRelationalProviderBinding.UseMySql),
-        _ => throw new ArgumentException($"Unknown Runtime EF provider '{provider}'.", nameof(provider))
-    };
+        var addContext = Binding.Select<Func<IServiceCollection, string, string?, string?, IReadOnlyCollection<ServiceDescriptor>>>(
+            provider,
+            AddContext<BookmarkStateSqliteDbContext>,
+            AddContext<BookmarkStateSqlServerDbContext>,
+            AddContext<BookmarkStatePostgreSqlDbContext>,
+            AddContext<BookmarkStateMySqlDbContext>);
+        return addContext(services, provider, connectionString, connectionName);
+    }
 
     private static IReadOnlyCollection<ServiceDescriptor> AddContext<TContext>(
         IServiceCollection services,
         string provider,
         string? connectionString,
-        string? connectionName,
-        Action<DbContextOptionsBuilder, string, string, string?> bind)
+        string? connectionName)
         where TContext : BookmarkStateDbContext
     {
         var start = services.Count;
-        services.AddDbContext<TContext>((serviceProvider, builder) => bind(
-            builder,
-            ResolveConnectionString(serviceProvider, provider, connectionString, connectionName),
-            RuntimeEfModule.HistoryTableName,
-            typeof(BookmarkStateDbContext).Assembly.GetName().Name));
+        services.AddDbContext<TContext>((serviceProvider, builder) => Binding.Apply(builder, serviceProvider, provider, connectionString, connectionName));
         services.TryAddScoped<BookmarkStateDbContext>(serviceProvider => serviceProvider.GetRequiredService<TContext>());
         return services.Skip(start).ToArray();
-    }
-
-    /// <summary>
-    /// An explicit connection string wins, then a named <c>ConnectionStrings</c> entry, then
-    /// <see cref="RuntimeEfModule.DefaultConnectionName"/>, then the SQLite default file.
-    /// </summary>
-    public static string ResolveConnectionString(
-        IServiceProvider services,
-        string provider,
-        string? connectionString,
-        string? connectionName)
-    {
-        if (!string.IsNullOrWhiteSpace(connectionString))
-            return connectionString;
-        var configuration = services.GetService<IConfiguration>();
-        if (!string.IsNullOrWhiteSpace(connectionName))
-        {
-            var named = configuration?.GetConnectionString(connectionName);
-            return string.IsNullOrWhiteSpace(named)
-                ? throw new InvalidOperationException($"Runtime EF connection '{connectionName}' was not found or was empty in ConnectionStrings.")
-                : named;
-        }
-
-        var fallback = configuration?.GetConnectionString(RuntimeEfModule.DefaultConnectionName);
-        if (!string.IsNullOrWhiteSpace(fallback))
-            return fallback;
-        if (EfRelationalProviderBinding.Normalize(provider) == "sqlite")
-            return RuntimeEfModule.DefaultSqliteConnectionString;
-        throw new InvalidOperationException(
-            $"Runtime EF requires ConnectionString, ConnectionName or ConnectionStrings:{RuntimeEfModule.DefaultConnectionName} for a non-Sqlite provider.");
     }
 }

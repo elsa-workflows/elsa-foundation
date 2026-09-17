@@ -24,7 +24,9 @@ until its migration slice proves four-provider parity and performs the explicit 
 | `EfProviderGuard.Ensure` | Refuse apply when `Database.ProviderName` does not match the derived context |
 | `EfMigratePolicy` | `AutoMigrate` vs `Validate` (fail if pending) |
 | `EfDatabaseMigrator.ApplyAsync` | Guard, then `MigrateAsync` (EF 9+ takes the database lock) or fail closed |
-| `EfRelationalProviderBinding` | Invoke host-supplied `UseSqlite` / `UseSqlServer` / `UseNpgsql` / `UseMySQL` without this package referencing those engines |
+| `EfRelationalProviderBinding` | Invoke host-supplied `UseSqlite` / `UseSqlServer` / `UseNpgsql` / `UseMySQL` without this package referencing those engines; `Select` matches a provider name to what a module registers for that dialect |
+| `EfConnectionDefaults.ResolveConnectionString` | Explicit connection string, then a named `ConnectionStrings` entry (refused when missing or blank), then the module's default entry, then the SQLite file |
+| `EfModuleBinding` | A module's owner name, history table, migrations assembly and connection defaults; selects its per-dialect registration and binds its context |
 | `EfSharedTransaction` | Own one connection and one transaction for several module contexts that must commit together; refuse split targets and provider mismatches |
 
 ## Custom migrate loops

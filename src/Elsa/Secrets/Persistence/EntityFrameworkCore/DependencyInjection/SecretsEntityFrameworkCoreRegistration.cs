@@ -3,7 +3,6 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -13,6 +12,12 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.DependencyInjection;
 public static class SecretsEntityFrameworkCoreRegistration
 {
     private const string RepositoryBackendName = "entity-framework";
+    private static readonly EfModuleBinding Binding = new(
+        "Secrets",
+        SecretsEfModule.HistoryTableName,
+        typeof(SecretsDbContext).Assembly.GetName().Name,
+        SecretsEfModule.DefaultConnectionName,
+        SecretsEfModule.DefaultSqliteConnectionString);
 
     public static IServiceCollection AddSecretsEntityFrameworkCore(
         this IServiceCollection services,
@@ -20,33 +25,17 @@ public static class SecretsEntityFrameworkCoreRegistration
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
-        var provider = EfRelationalProviderBinding.Normalize(options.Provider);
-        var historyTable = SecretsEfModule.HistoryTableName;
-        var migrationsAssembly = typeof(SecretsDbContext).Assembly.GetName().Name;
+        var addContext = Binding.Select<Action<IServiceCollection, SecretsEntityFrameworkCoreOptions>>(
+            options.Provider,
+            AddContext<SecretsSqliteDbContext>,
+            AddContext<SecretsSqlServerDbContext>,
+            AddContext<SecretsPostgreSqlDbContext>,
+            AddContext<SecretsMySqlDbContext>);
 
         services.AddSingleton(options);
         SelectSecretRepositoryBackend(services, RepositoryBackendName);
         services.RemoveAll<ISecretRepository>();
-
-        switch (provider)
-        {
-            case "sqlite":
-                AddContext<SecretsSqliteDbContext>(services, options, historyTable, migrationsAssembly, EfRelationalProviderBinding.UseSqlite);
-                break;
-            case "sqlserver":
-                AddContext<SecretsSqlServerDbContext>(services, options, historyTable, migrationsAssembly, EfRelationalProviderBinding.UseSqlServer);
-                break;
-            case "postgresql":
-                AddContext<SecretsPostgreSqlDbContext>(services, options, historyTable, migrationsAssembly, EfRelationalProviderBinding.UseNpgsql);
-                break;
-            case "mysql":
-                AddContext<SecretsMySqlDbContext>(services, options, historyTable, migrationsAssembly, EfRelationalProviderBinding.UseMySql);
-                break;
-            default:
-                throw new ArgumentException(
-                    $"Unknown Secrets EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.",
-                    nameof(options));
-        }
+        addContext(services, options);
 
         services.AddScoped<ISecretRepository>(sp => new EfSecretRepository(sp.GetRequiredService<SecretsDbContext>()));
         AddMigrationLifecycle(services);
@@ -65,49 +54,11 @@ public static class SecretsEntityFrameworkCoreRegistration
             provider.GetRequiredService<SecretsEfMigrationHostedService>());
     }
 
-    private static void AddContext<TContext>(
-        IServiceCollection services,
-        SecretsEntityFrameworkCoreOptions options,
-        string historyTable,
-        string? migrationsAssembly,
-        Action<DbContextOptionsBuilder, string, string, string?> bind)
+    private static void AddContext<TContext>(IServiceCollection services, SecretsEntityFrameworkCoreOptions options)
         where TContext : SecretsDbContext
     {
-        services.AddDbContext<TContext>((provider, builder) =>
-        {
-            var connectionString = ResolveConnectionString(provider, options);
-            bind(builder, connectionString, historyTable, migrationsAssembly);
-        });
+        services.AddDbContext<TContext>((provider, builder) => Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName));
         services.AddScoped<SecretsDbContext>(provider => provider.GetRequiredService<TContext>());
-    }
-
-    internal static string ResolveConnectionString(IServiceProvider provider, SecretsEntityFrameworkCoreOptions options)
-    {
-        if (!string.IsNullOrWhiteSpace(options.ConnectionString))
-            return options.ConnectionString;
-
-        var configuration = provider.GetService<IConfiguration>();
-        if (!string.IsNullOrWhiteSpace(options.ConnectionName))
-        {
-            var named = configuration?.GetConnectionString(options.ConnectionName);
-            if (string.IsNullOrWhiteSpace(named))
-            {
-                throw new InvalidOperationException(
-                    $"Secrets EF connection '{options.ConnectionName}' was not found in ConnectionStrings.");
-            }
-
-            return named;
-        }
-
-        var fallback = configuration?.GetConnectionString(SecretsEfModule.DefaultConnectionName);
-        if (!string.IsNullOrWhiteSpace(fallback))
-            return fallback;
-
-        if (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite")
-            return SecretsEfModule.DefaultSqliteConnectionString;
-
-        throw new InvalidOperationException(
-            "Secrets EF requires ConnectionString or ConnectionName for a non-Sqlite provider.");
     }
 
     internal static void SelectSecretRepositoryBackend(IServiceCollection services, string backend)

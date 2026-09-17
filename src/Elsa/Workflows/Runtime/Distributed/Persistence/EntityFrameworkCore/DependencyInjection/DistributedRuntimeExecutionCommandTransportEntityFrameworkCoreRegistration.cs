@@ -4,7 +4,6 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -13,6 +12,12 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Dep
 public static class DistributedRuntimeExecutionCommandTransportEntityFrameworkCoreRegistration
 {
     public const string StoreBackendName = ExecutionCommandTransportBackend.EntityFramework;
+    private static readonly EfModuleBinding Binding = new(
+        "Distributed runtime execution command transport",
+        ExecutionCommandTransportEfModule.HistoryTableName,
+        typeof(ExecutionCommandTransportDbContext).Assembly.GetName().Name,
+        ExecutionCommandTransportEfModule.DefaultConnectionName,
+        ExecutionCommandTransportEfModule.DefaultSqliteConnectionString);
 
     public static IServiceCollection AddDistributedRuntimeExecutionCommandTransportEntityFrameworkCore(
         this IServiceCollection services,
@@ -21,7 +26,12 @@ public static class DistributedRuntimeExecutionCommandTransportEntityFrameworkCo
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
         var provider = EfRelationalProviderBinding.Normalize(options.Provider);
-        _ = EfRelationalProviderBinding.ExpectedProviderName(options.Provider);
+        var addContext = Binding.Select<Action<IServiceCollection, DistributedRuntimeExecutionCommandTransportEntityFrameworkCoreOptions>>(
+            options.Provider,
+            AddContext<ExecutionCommandTransportSqliteDbContext>,
+            AddContext<ExecutionCommandTransportSqlServerDbContext>,
+            AddContext<ExecutionCommandTransportPostgreSqlDbContext>,
+            AddContext<ExecutionCommandTransportMySqlDbContext>);
         var configuredOptions = new DistributedRuntimeExecutionCommandTransportEntityFrameworkCoreOptions
         {
             Provider = options.Provider,
@@ -54,23 +64,7 @@ public static class DistributedRuntimeExecutionCommandTransportEntityFrameworkCo
         services.RemoveAll<ExecutionCommandTransportBackend>();
         services.RemoveAll<IExecutionCommandTransport>();
 
-        switch (provider)
-        {
-            case "sqlite":
-                AddContext<ExecutionCommandTransportSqliteDbContext>(services, configuredOptions, EfRelationalProviderBinding.UseSqlite);
-                break;
-            case "sqlserver":
-                AddContext<ExecutionCommandTransportSqlServerDbContext>(services, configuredOptions, EfRelationalProviderBinding.UseSqlServer);
-                break;
-            case "postgresql":
-                AddContext<ExecutionCommandTransportPostgreSqlDbContext>(services, configuredOptions, EfRelationalProviderBinding.UseNpgsql);
-                break;
-            case "mysql":
-                AddContext<ExecutionCommandTransportMySqlDbContext>(services, configuredOptions, EfRelationalProviderBinding.UseMySql);
-                break;
-            default:
-                throw new ArgumentException($"Unknown distributed runtime execution command transport EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.", nameof(options));
-        }
+        addContext(services, configuredOptions);
 
         var transportDescriptor = ServiceDescriptor.Scoped<IExecutionCommandTransport>(provider => new EfExecutionCommandTransport(
             provider.GetRequiredService<ExecutionCommandTransportDbContext>(),
@@ -83,38 +77,11 @@ public static class DistributedRuntimeExecutionCommandTransportEntityFrameworkCo
 
     private static void AddContext<TContext>(
         IServiceCollection services,
-        DistributedRuntimeExecutionCommandTransportEntityFrameworkCoreOptions options,
-        Action<DbContextOptionsBuilder, string, string, string?> bind)
+        DistributedRuntimeExecutionCommandTransportEntityFrameworkCoreOptions options)
         where TContext : ExecutionCommandTransportDbContext
     {
-        services.AddDbContext<TContext>((provider, builder) => bind(
-            builder,
-            ResolveConnectionString(provider, options),
-            ExecutionCommandTransportEfModule.HistoryTableName,
-            typeof(ExecutionCommandTransportDbContext).Assembly.GetName().Name));
+        services.AddDbContext<TContext>((provider, builder) => Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName));
         services.AddScoped<ExecutionCommandTransportDbContext>(provider => provider.GetRequiredService<TContext>());
-    }
-
-    internal static string ResolveConnectionString(
-        IServiceProvider provider,
-        DistributedRuntimeExecutionCommandTransportEntityFrameworkCoreOptions options)
-    {
-        if (!string.IsNullOrWhiteSpace(options.ConnectionString))
-            return options.ConnectionString;
-        var configuration = provider.GetService<IConfiguration>();
-        if (!string.IsNullOrWhiteSpace(options.ConnectionName))
-        {
-            var named = configuration?.GetConnectionString(options.ConnectionName);
-            if (string.IsNullOrWhiteSpace(named))
-                throw new InvalidOperationException($"Distributed runtime execution command transport EF connection '{options.ConnectionName}' was not found in ConnectionStrings.");
-            return named;
-        }
-        var fallback = configuration?.GetConnectionString(ExecutionCommandTransportEfModule.DefaultConnectionName);
-        if (!string.IsNullOrWhiteSpace(fallback))
-            return fallback;
-        if (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite")
-            return ExecutionCommandTransportEfModule.DefaultSqliteConnectionString;
-        throw new InvalidOperationException("Distributed runtime execution command transport EF requires ConnectionString or ConnectionName for a non-Sqlite provider.");
     }
 }
 

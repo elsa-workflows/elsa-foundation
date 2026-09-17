@@ -4,7 +4,6 @@ using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -14,6 +13,12 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInj
 public static class IdentityProviderConfigurationEntityFrameworkCoreRegistration
 {
     public const string StoreBackendName = "entity-framework";
+    private static readonly EfModuleBinding Binding = new(
+        "Identity provider-configuration",
+        IdentityProviderConfigurationEfModule.HistoryTableName,
+        typeof(IdentityProviderConfigurationDbContext).Assembly.GetName().Name,
+        IdentityProviderConfigurationEfModule.DefaultConnectionName,
+        IdentityProviderConfigurationEfModule.DefaultSqliteConnectionString);
 
     public static IServiceCollection AddIdentityProviderConfigurationEntityFrameworkCore(
         this IServiceCollection services,
@@ -23,7 +28,12 @@ public static class IdentityProviderConfigurationEntityFrameworkCoreRegistration
         ArgumentNullException.ThrowIfNull(options);
 
         var provider = EfRelationalProviderBinding.Normalize(options.Provider);
-        EnsureSupportedProvider(provider, options.Provider);
+        var addContext = Binding.Select<Action<IServiceCollection, IdentityProviderConfigurationEntityFrameworkCoreOptions>>(
+            options.Provider,
+            AddContext<IdentityProviderConfigurationSqliteDbContext>,
+            AddContext<IdentityProviderConfigurationSqlServerDbContext>,
+            AddContext<IdentityProviderConfigurationPostgreSqlDbContext>,
+            AddContext<IdentityProviderConfigurationMySqlDbContext>);
         var registration = new IdentityProviderConfigurationEfRegistration(provider, options.ConnectionString, options.ConnectionName);
         var existing = services.Select(descriptor => descriptor.ImplementationInstance)
             .OfType<IdentityProviderConfigurationEfRegistration>()
@@ -60,21 +70,7 @@ public static class IdentityProviderConfigurationEntityFrameworkCoreRegistration
         services.RemoveAll<IProviderConfigurationStore>();
         services.RemoveAll<IRevisionAwareProviderConfigurationStore>();
 
-        switch (provider)
-        {
-            case "sqlite":
-                AddContext<IdentityProviderConfigurationSqliteDbContext>(services, options, EfRelationalProviderBinding.UseSqlite);
-                break;
-            case "sqlserver":
-                AddContext<IdentityProviderConfigurationSqlServerDbContext>(services, options, EfRelationalProviderBinding.UseSqlServer);
-                break;
-            case "postgresql":
-                AddContext<IdentityProviderConfigurationPostgreSqlDbContext>(services, options, EfRelationalProviderBinding.UseNpgsql);
-                break;
-            case "mysql":
-                AddContext<IdentityProviderConfigurationMySqlDbContext>(services, options, EfRelationalProviderBinding.UseMySql);
-                break;
-        }
+        addContext(services, options);
 
         services.AddScoped<EfProviderConfigurationStore>();
         var providerDescriptor = ServiceDescriptor.Scoped<IProviderConfigurationStore>(provider =>
@@ -89,44 +85,13 @@ public static class IdentityProviderConfigurationEntityFrameworkCoreRegistration
         return services;
     }
 
-    private static void EnsureSupportedProvider(string provider, string configuredProvider)
-    {
-        if (provider is not ("sqlite" or "sqlserver" or "postgresql" or "mysql"))
-            throw new ArgumentException($"Unknown Identity provider-configuration EF provider '{configuredProvider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.", nameof(configuredProvider));
-    }
-
     private static void AddContext<TContext>(
         IServiceCollection services,
-        IdentityProviderConfigurationEntityFrameworkCoreOptions options,
-        Action<DbContextOptionsBuilder, string, string, string?> bind)
+        IdentityProviderConfigurationEntityFrameworkCoreOptions options)
         where TContext : IdentityProviderConfigurationDbContext
     {
-        services.AddDbContext<TContext>((provider, builder) =>
-            bind(builder, ResolveConnectionString(provider, options), IdentityProviderConfigurationEfModule.HistoryTableName, typeof(IdentityProviderConfigurationDbContext).Assembly.GetName().Name));
+        services.AddDbContext<TContext>((provider, builder) => Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName));
         services.AddScoped<IdentityProviderConfigurationDbContext>(provider => provider.GetRequiredService<TContext>());
-    }
-
-    internal static string ResolveConnectionString(IServiceProvider provider, IdentityProviderConfigurationEntityFrameworkCoreOptions options)
-    {
-        if (!string.IsNullOrWhiteSpace(options.ConnectionString))
-            return options.ConnectionString;
-
-        var configuration = provider.GetService<IConfiguration>();
-        if (!string.IsNullOrWhiteSpace(options.ConnectionName))
-        {
-            var named = configuration?.GetConnectionString(options.ConnectionName);
-            if (string.IsNullOrWhiteSpace(named))
-                throw new InvalidOperationException($"Identity provider-configuration EF connection '{options.ConnectionName}' was not found in ConnectionStrings.");
-            return named;
-        }
-
-        var fallback = configuration?.GetConnectionString(IdentityProviderConfigurationEfModule.DefaultConnectionName);
-        if (!string.IsNullOrWhiteSpace(fallback))
-            return fallback;
-        if (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite")
-            return IdentityProviderConfigurationEfModule.DefaultSqliteConnectionString;
-
-        throw new InvalidOperationException("Identity provider-configuration EF requires ConnectionString or ConnectionName for a non-Sqlite provider.");
     }
 
     private sealed record IdentityProviderConfigurationEfRegistration(string Provider, string? ConnectionString, string? ConnectionName);

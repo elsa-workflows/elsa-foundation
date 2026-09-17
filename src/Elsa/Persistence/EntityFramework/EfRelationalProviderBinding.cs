@@ -54,27 +54,29 @@ public static class EfRelationalProviderBinding
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         ArgumentException.ThrowIfNullOrWhiteSpace(historyTableName);
 
-        switch (Normalize(provider))
+        var use = Select<Action<DbContextOptionsBuilder, string, string, string?>>(
+            provider, "relational", UseSqlite, UseSqlServer, UseNpgsql, UseMySql);
+        use(builder, connectionString, historyTableName, migrationsAssembly);
+    }
+
+    /// <summary>
+    /// Picks what a module registers for the provider a host named, typically the registration of its derived context
+    /// for that dialect. Every module matches provider names here, so they all accept the same aliases and refuse an
+    /// unknown provider with the same message.
+    /// </summary>
+    public static T Select<T>(string provider, string owner, T sqlite, T sqlServer, T postgreSql, T mySql)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(owner);
+        return Normalize(provider) switch
         {
-            case "sqlite":
-                UseSqlite(builder, connectionString, historyTableName, migrationsAssembly);
-                return;
-            case "sqlserver":
-                UseSqlServer(builder, connectionString, historyTableName, migrationsAssembly);
-                return;
-            case "postgresql":
-            case "npgsql":
-            case "postgres":
-                UseNpgsql(builder, connectionString, historyTableName, migrationsAssembly);
-                return;
-            case "mysql":
-                UseMySql(builder, connectionString, historyTableName, migrationsAssembly);
-                return;
-            default:
-                throw new ArgumentException(
-                    $"Unknown EF relational provider '{provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.",
-                    nameof(provider));
-        }
+            "sqlite" => sqlite,
+            "sqlserver" => sqlServer,
+            "postgresql" => postgreSql,
+            "mysql" => mySql,
+            _ => throw new ArgumentException(
+                $"Unknown {owner} EF provider '{provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.",
+                nameof(provider))
+        };
     }
 
     public static string Normalize(string provider)
@@ -91,14 +93,7 @@ public static class EfRelationalProviderBinding
     }
 
     public static string ExpectedProviderName(string provider) =>
-        Normalize(provider) switch
-        {
-            "sqlite" => EfProviderNames.Sqlite,
-            "sqlserver" => EfProviderNames.SqlServer,
-            "postgresql" => EfProviderNames.PostgreSql,
-            "mysql" => EfProviderNames.MySql,
-            _ => throw new ArgumentException($"Unknown EF relational provider '{provider}'.", nameof(provider))
-        };
+        Select(provider, "relational", EfProviderNames.Sqlite, EfProviderNames.SqlServer, EfProviderNames.PostgreSql, EfProviderNames.MySql);
 
     private static void Use(
         DbContextOptionsBuilder builder,

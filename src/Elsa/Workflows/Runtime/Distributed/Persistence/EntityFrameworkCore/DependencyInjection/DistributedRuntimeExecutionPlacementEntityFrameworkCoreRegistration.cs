@@ -2,7 +2,6 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -11,6 +10,12 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Dep
 public static class DistributedRuntimeExecutionPlacementEntityFrameworkCoreRegistration
 {
     public const string StoreBackendName = ExecutionPlacementStoreBackend.EntityFramework;
+    private static readonly EfModuleBinding Binding = new(
+        "Distributed runtime execution placement",
+        ExecutionPlacementEfModule.HistoryTableName,
+        typeof(ExecutionPlacementDbContext).Assembly.GetName().Name,
+        ExecutionPlacementEfModule.DefaultConnectionName,
+        ExecutionPlacementEfModule.DefaultSqliteConnectionString);
 
     public static IServiceCollection AddDistributedRuntimeExecutionPlacementEntityFrameworkCore(
         this IServiceCollection services,
@@ -19,7 +24,12 @@ public static class DistributedRuntimeExecutionPlacementEntityFrameworkCoreRegis
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
         var provider = EfRelationalProviderBinding.Normalize(options.Provider);
-        _ = EfRelationalProviderBinding.ExpectedProviderName(options.Provider);
+        var addContext = Binding.Select<Action<IServiceCollection, DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions>>(
+            options.Provider,
+            AddContext<ExecutionPlacementSqliteDbContext>,
+            AddContext<ExecutionPlacementSqlServerDbContext>,
+            AddContext<ExecutionPlacementPostgreSqlDbContext>,
+            AddContext<ExecutionPlacementMySqlDbContext>);
         var configuredOptions = new DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions
         {
             Provider = options.Provider,
@@ -55,23 +65,7 @@ public static class DistributedRuntimeExecutionPlacementEntityFrameworkCoreRegis
         services.RemoveAll<ExecutionPlacementStoreBackend>();
         services.RemoveAll<IExecutionPlacementStore>();
 
-        switch (provider)
-        {
-            case "sqlite":
-                AddContext<ExecutionPlacementSqliteDbContext>(services, configuredOptions, EfRelationalProviderBinding.UseSqlite);
-                break;
-            case "sqlserver":
-                AddContext<ExecutionPlacementSqlServerDbContext>(services, configuredOptions, EfRelationalProviderBinding.UseSqlServer);
-                break;
-            case "postgresql":
-                AddContext<ExecutionPlacementPostgreSqlDbContext>(services, configuredOptions, EfRelationalProviderBinding.UseNpgsql);
-                break;
-            case "mysql":
-                AddContext<ExecutionPlacementMySqlDbContext>(services, configuredOptions, EfRelationalProviderBinding.UseMySql);
-                break;
-            default:
-                throw new ArgumentException($"Unknown distributed runtime execution placement EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.", nameof(options));
-        }
+        addContext(services, configuredOptions);
 
         var placementDescriptor = ServiceDescriptor.Scoped<IExecutionPlacementStore>(provider => new EfExecutionPlacementStore(
             provider.GetRequiredService<ExecutionPlacementDbContext>(),
@@ -85,38 +79,11 @@ public static class DistributedRuntimeExecutionPlacementEntityFrameworkCoreRegis
 
     private static void AddContext<TContext>(
         IServiceCollection services,
-        DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions options,
-        Action<DbContextOptionsBuilder, string, string, string?> bind)
+        DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions options)
         where TContext : ExecutionPlacementDbContext
     {
-        services.AddDbContext<TContext>((provider, builder) => bind(
-            builder,
-            ResolveConnectionString(provider, options),
-            ExecutionPlacementEfModule.HistoryTableName,
-            typeof(ExecutionPlacementDbContext).Assembly.GetName().Name));
+        services.AddDbContext<TContext>((provider, builder) => Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName));
         services.AddScoped<ExecutionPlacementDbContext>(provider => provider.GetRequiredService<TContext>());
-    }
-
-    internal static string ResolveConnectionString(
-        IServiceProvider provider,
-        DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions options)
-    {
-        if (!string.IsNullOrWhiteSpace(options.ConnectionString))
-            return options.ConnectionString;
-        var configuration = provider.GetService<IConfiguration>();
-        if (!string.IsNullOrWhiteSpace(options.ConnectionName))
-        {
-            var named = configuration?.GetConnectionString(options.ConnectionName);
-            if (string.IsNullOrWhiteSpace(named))
-                throw new InvalidOperationException($"Distributed runtime execution placement EF connection '{options.ConnectionName}' was not found in ConnectionStrings.");
-            return named;
-        }
-        var fallback = configuration?.GetConnectionString(ExecutionPlacementEfModule.DefaultConnectionName);
-        if (!string.IsNullOrWhiteSpace(fallback))
-            return fallback;
-        if (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite")
-            return ExecutionPlacementEfModule.DefaultSqliteConnectionString;
-        throw new InvalidOperationException("Distributed runtime execution placement EF requires ConnectionString or ConnectionName for a non-Sqlite provider.");
     }
 }
 
