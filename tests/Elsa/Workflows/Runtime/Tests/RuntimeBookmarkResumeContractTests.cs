@@ -4,7 +4,7 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Resolvers;
+using Elsa.Workflows.Runtime.Resolvers;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;

@@ -233,6 +233,15 @@ public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbCo
     public static string ComputeIdentityHash(string value) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
+    /// <summary>
+    /// Orders a bounded read, such as <c>Take(2)</c> to detect a duplicate, by the physical key every scoped entity
+    /// shares. Without an order the provider chooses which rows a row limit returns, and EF reports the query as
+    /// warning 10102.
+    /// </summary>
+    public static IOrderedQueryable<T> InPhysicalIdentityOrder<T>(IQueryable<T> query) where T : class =>
+        query.OrderBy(x => EF.Property<string>(x, "TenantScopeKey"))
+            .ThenBy(x => EF.Property<string>(x, "IdIdentityHash"));
+
     private void StampScopedIdentity()
     {
         foreach (var entry in ChangeTracker.Entries()

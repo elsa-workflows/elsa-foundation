@@ -26,7 +26,7 @@ test over the in-memory queue + state store and confirmed over the Groundwork du
 ### The seed: a residual scheduler work item stranded by the terminal guard
 
 - `WorkflowSchedulerDrainer.DrainAsync` reads terminal status on entry and after each dispatched item
-  (`src/Elsa/Workflows/Runtime/Services/WorkflowSchedulerDrainer.cs:92,125`) and, once terminal, exits the loop.
+  (`src/Elsa/Workflows/Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs:92,125`) and, once terminal, exits the loop.
   Items are removed only on dispatch (`AckAsync`/`CompleteClaimAsync`), so any queued-but-undispatched item stays.
   Covered by `RuntimeSchedulerDrainTests.DrainAsync_StopsBeforeDequeuingWorkOnceWorkflowReachesTerminalStatus`
   (asserts the residual items **remain queued**).

@@ -5,7 +5,8 @@ using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services.Bookmarks;
+using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 

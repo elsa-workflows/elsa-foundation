@@ -1,4 +1,4 @@
-namespace Elsa.Workflows.Runtime.Core.Diagnostics;
+namespace Elsa.Workflows.Runtime.Diagnostics;
 
 /// <summary>
 /// Stable naming conventions for the workflow runtime engine's own distributed-tracing spans. These are the

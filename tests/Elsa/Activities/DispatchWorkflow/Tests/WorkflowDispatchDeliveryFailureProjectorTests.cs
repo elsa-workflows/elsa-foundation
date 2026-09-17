@@ -7,11 +7,14 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.Logging;
 using Xunit;
 using Microsoft.Extensions.Time.Testing;
 using Elsa.Testing;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Dispatch;
+using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Incidents;
 
 namespace Elsa.Activities.DispatchWorkflow.Tests;
 

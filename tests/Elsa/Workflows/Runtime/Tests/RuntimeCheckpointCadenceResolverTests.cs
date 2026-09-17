@@ -1,8 +1,10 @@
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
-using Elsa.Workflows.Runtime.Core.Services.Coalescing;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Coalescing;
+using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;

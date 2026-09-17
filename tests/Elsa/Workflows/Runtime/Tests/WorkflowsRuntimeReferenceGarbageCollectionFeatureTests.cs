@@ -1,6 +1,6 @@
 using CShells.Features;
 using Elsa.Tasks.Core;
-using Elsa.Workflows.Runtime.Configuration;
+using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection;

@@ -44,9 +44,9 @@ incident/workflow results.
 - [x] T022 [P] [US1] Implement `ContinueWithIncidentsStrategy`/action and branch tests under `src/Elsa/Workflows/Runtime/Strategies/` and `tests/Elsa/Workflows/Runtime/Tests/`
 - [x] T023 [US1] Add `IncidentResolutionBatchApplied` checkpoint name and mandatory coalescing boundary in `src/Elsa/Workflows/Runtime/Core/Constants/RuntimeCheckpointNames.cs` and `src/Elsa/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeCheckpointPersistencePolicy.cs`
 - [x] T024 [US1] Implement policy-safe context projection and exact pinned scoped strategy resolution under `src/Elsa/Workflows/Runtime/Services/`
-- [x] T025 [US1] Implement incident-local action staging and ordered one-checkpoint `IncidentResolutionBatchExecutor` in `src/Elsa/Workflows/Runtime/Services/IncidentResolutionBatchExecutor.cs`
-- [x] T026 [US1] Implement `IncidentStrategyResolutionDrainObserver` at outer-drain causal quiescence in `src/Elsa/Workflows/Runtime/Services/IncidentStrategyResolutionDrainObserver.cs`
-- [x] T027 [US1] Order poison → strategy resolution → terminal safety observers and make `BlockingIncidentWorkflowFaultObserver` skip outcome-bearing incidents in `src/Elsa/Workflows/Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs` and `src/Elsa/Workflows/Runtime/Services/BlockingIncidentWorkflowFaultObserver.cs`
+- [x] T025 [US1] Implement incident-local action staging and ordered one-checkpoint `IncidentResolutionBatchExecutor` in `src/Elsa/Workflows/Runtime/Services/Incidents/IncidentResolutionBatchExecutor.cs`
+- [x] T026 [US1] Implement `IncidentStrategyResolutionDrainObserver` at outer-drain causal quiescence in `src/Elsa/Workflows/Runtime/Services/Incidents/IncidentStrategyResolutionDrainObserver.cs`
+- [x] T027 [US1] Order poison → strategy resolution → terminal safety observers and make `BlockingIncidentWorkflowFaultObserver` skip outcome-bearing incidents in `src/Elsa/Workflows/Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs` and `src/Elsa/Workflows/Runtime/Services/Incidents/BlockingIncidentWorkflowFaultObserver.cs`
 - [x] T028 [US1] Add drain-order, two-incident stable order, one-checkpoint atomicity, Fault, Continue, Wait, independent-work, and coalescing tests under `tests/Elsa/Workflows/Runtime/Tests/`
 
 ## Phase 4: User Story 2 — Third-party strategies and decision objects

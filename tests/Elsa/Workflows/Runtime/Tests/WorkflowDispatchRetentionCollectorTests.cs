@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services.Dispatch;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 

@@ -27,4 +27,8 @@
     <ProjectReference Include="../../../../../../../src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->
+    <Compile Include="../../../../../Persistence/EntityFramework/Tests/UnorderedRowLimitGuard.cs" Link="UnorderedRowLimitGuard.cs" />
+  </ItemGroup>
 </Project>

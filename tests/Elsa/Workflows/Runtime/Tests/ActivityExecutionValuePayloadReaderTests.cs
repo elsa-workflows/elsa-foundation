@@ -2,7 +2,8 @@ using System.Text.Json;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services.ActivityExecutions;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;

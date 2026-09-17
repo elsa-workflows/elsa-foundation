@@ -3,8 +3,8 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Services.Dispatch;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -16,6 +16,7 @@ public sealed class EfWorkflowTestScopeStore(
     IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowTestScopeStore, IWorkflowTestScopeAdmissionStore
 {
     private const string CursorPurpose = "ef-runtime-test-scope-v1";
+    private static readonly EfWriteRetry Transitions = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);
     private readonly BookmarkStateDbContext _context = context ?? throw new ArgumentNullException(nameof(context));
     private readonly IPersistenceAccessContextAccessor _access = accessContextAccessor ?? throw new ArgumentNullException(nameof(accessContextAccessor));
     private readonly IRuntimeRecoveryContinuationCodec _codec = continuationCodec ?? throw new ArgumentNullException(nameof(continuationCodec));
@@ -37,7 +38,7 @@ public sealed class EfWorkflowTestScopeStore(
     {
         ArgumentNullException.ThrowIfNull(request);
         var accessScope = RequireScope();
-        for (var attempt = 0; attempt < 16; attempt++)
+        return await Transitions.RunAsync(_context, async () =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             var row = await _context.WorkflowTestScopes
@@ -58,17 +59,16 @@ public sealed class EfWorkflowTestScopeStore(
             catch (DbUpdateConcurrencyException)
             {
                 _context.ChangeTracker.Clear();
+                throw;
             }
-        }
-
-        throw new InvalidOperationException($"Workflow test scope '{request.ScopeId}' changed concurrently.");
+        }, _ => throw new InvalidOperationException($"Workflow test scope '{request.ScopeId}' changed concurrently."), cancellationToken);
     }
 
     public async ValueTask<WorkflowTestScopeRecord> CompleteAsync(string scopeId, DateTimeOffset completedAt, CancellationToken cancellationToken = default)
     {
         ValidateScopeId(scopeId);
         var accessScope = RequireScope();
-        for (var attempt = 0; attempt < 16; attempt++)
+        return await Transitions.RunAsync(_context, async () =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             var row = await _context.WorkflowTestScopes
@@ -89,10 +89,9 @@ public sealed class EfWorkflowTestScopeStore(
             catch (DbUpdateConcurrencyException)
             {
                 _context.ChangeTracker.Clear();
+                throw;
             }
-        }
-
-        throw new InvalidOperationException($"Workflow test scope '{scopeId}' changed concurrently.");
+        }, _ => throw new InvalidOperationException($"Workflow test scope '{scopeId}' changed concurrently."), cancellationToken);
     }
 
     public async ValueTask<WorkflowTestScopePage> QueryAsync(WorkflowTestScopePageQuery query, CancellationToken cancellationToken = default)

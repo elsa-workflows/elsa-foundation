@@ -17,8 +17,9 @@ public sealed class EfExecutableActivityTemplateStore(
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IExecutableActivityTemplateStore
 {
-    private const int MaximumCreateAttempts = 3;
-    private const int MaximumDeleteAttempts = 8;
+    // Both retry only races SaveChanges reports; a provider failure raised any other way is normalized at once.
+    private static readonly EfWriteRetry CreateRetry = new(EfWriteRetry.DefaultMaxAttempts, exception => IsSaveConflict(exception, EfWriteConflict.UniqueKey | EfWriteConflict.Transient));
+    private static readonly EfWriteRetry DeleteRetry = new(EfWriteRetry.DefaultMaxAttempts, exception => IsSaveConflict(exception, EfWriteConflict.Concurrency | EfWriteConflict.Transient));
     private const string ContinuationPurpose = "ef-runtime-template-page-v1";
     private readonly IRuntimeRecoveryContinuationCodec continuationCodec = continuationCodec;
 
@@ -30,7 +31,7 @@ public sealed class EfExecutableActivityTemplateStore(
         var identity = new TemplateIdentity(scope, template.TemplateId, template.TemplateHash);
         var json = SerializeEnvelope(template);
 
-        for (var attempt = 0; attempt < MaximumCreateAttempts; attempt++)
+        await CreateRetry.RunAsync(context, async () =>
         {
             context.ChangeTracker.Clear();
             try
@@ -42,30 +43,15 @@ public sealed class EfExecutableActivityTemplateStore(
                         context, "saving", template.TemplateId, () => context.SaveChangesAsync(cancellationToken));
                 await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
                     context, "saving", template.TemplateId, () => transaction.CommitAsync(cancellationToken));
-                return;
             }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception) || EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
+            catch (Exception exception)
             {
                 context.ChangeTracker.Clear();
-                if (attempt + 1 == MaximumCreateAttempts)
-                    await ReconcileCreateAsync(template, identity, exception, cancellationToken);
-            }
-            catch (DbUpdateException exception)
-            {
-                context.ChangeTracker.Clear();
-                throw NormalizeProviderFailure("saving", template.TemplateId, exception);
-            }
-            catch (DbException exception)
-            {
-                context.ChangeTracker.Clear();
-                throw NormalizeProviderFailure("saving", template.TemplateId, exception);
-            }
-            catch
-            {
-                context.ChangeTracker.Clear();
+                if (exception is DbUpdateException or DbException && !CreateRetry.ShouldRetry(context, exception))
+                    throw NormalizeProviderFailure("saving", template.TemplateId, exception);
                 throw;
             }
-        }
+        }, lastConflict => ReconcileCreateAsync(template, identity, lastConflict!, cancellationToken), cancellationToken);
     }
 
     /// <summary>The context this store reads and stages through.</summary>
@@ -196,7 +182,7 @@ public sealed class EfExecutableActivityTemplateStore(
         if (initialClaim.IncarnationId != initialRow.IncarnationId)
             throw new InvalidDataException("Executable activity template and its hash claim have mismatched incarnation identities.");
         var expectedIncarnationId = initialRow.IncarnationId;
-        for (var attempt = 0; attempt < MaximumDeleteAttempts; attempt++)
+        return await DeleteRetry.RunAsync(context, async () =>
         {
             context.ChangeTracker.Clear();
             var row = await FindRowByIdAsync(identity, cancellationToken);
@@ -233,33 +219,18 @@ public sealed class EfExecutableActivityTemplateStore(
                 context.ChangeTracker.Clear();
                 return true;
             }
-            catch (DbUpdateConcurrencyException) when (attempt + 1 < MaximumDeleteAttempts)
+            catch (Exception exception)
             {
                 context.ChangeTracker.Clear();
-            }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception) && attempt + 1 < MaximumDeleteAttempts)
-            {
-                context.ChangeTracker.Clear();
-            }
-            catch (DbUpdateException exception)
-            {
-                context.ChangeTracker.Clear();
-                throw NormalizeProviderFailure("deleting", templateId, exception);
-            }
-            catch (DbException exception)
-            {
-                context.ChangeTracker.Clear();
-                throw NormalizeProviderFailure("deleting", templateId, exception);
-            }
-            catch
-            {
-                context.ChangeTracker.Clear();
+                if (exception is DbUpdateException or DbException && !DeleteRetry.ShouldRetry(context, exception))
+                    throw NormalizeProviderFailure("deleting", templateId, exception);
                 throw;
             }
-        }
-        context.ChangeTracker.Clear();
-        throw new InvalidOperationException($"Executable activity template '{templateId}' changed concurrently and did not settle after {MaximumDeleteAttempts} attempts.");
+        }, lastConflict => throw NormalizeProviderFailure("deleting", templateId, lastConflict!), cancellationToken);
     }
+
+    private static bool IsSaveConflict(Exception exception, EfWriteConflict conflicts) =>
+        exception is DbUpdateException && EfRelationalExceptionClassifier.IsWriteConflict(exception, conflicts);
 
     private async ValueTask ReconcileCreateAsync(ExecutableActivityTemplate template, TemplateIdentity identity, Exception cause, CancellationToken cancellationToken)
     {

@@ -32,8 +32,14 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Resolvers;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Resolvers;
+using Elsa.Workflows.Runtime.Services.ActivityExecutions;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Incidents;
+using Elsa.Workflows.Runtime.Services.Scheduler;
+using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
@@ -45,6 +51,7 @@ using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
 using CronActivity = Elsa.Activities.Scheduling.Activities.Cron;
 using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 using TimerActivity = Elsa.Activities.Scheduling.Activities.Timer;
+using WorkflowExecutableHasher = Elsa.Workflows.Publishing.Services.WorkflowExecutableHasher;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 

@@ -13,7 +13,7 @@ CI job on a native PostgreSQL, and the SQL Server and MySQL legs of the EF conta
 
 ## Shell feature
 
-- **`SecretsEntityFrameworkCoreFeature`**: host-selected provider (`Sqlite` / `SqlServer` / `PostgreSql`), connection string or named connection, and `EfMigratePolicy`. The host must reference the matching EF provider engine; this package does not.
+- **`SecretsEntityFrameworkCoreFeature`**: host-selected provider (`Sqlite` / `SqlServer` / `PostgreSql` / `MySql`), connection string or named connection, and `EfMigratePolicy`. The host must reference the matching EF provider engine; this package does not.
 
 ## Lifecycle
 
@@ -22,7 +22,8 @@ CI job on a native PostgreSQL, and the SQL Server and MySQL legs of the EF conta
 ## Derived contexts
 
 `SecretsDbContext` is shared model configuration. `SecretsSqliteDbContext`,
-`SecretsSqlServerDbContext`, and `SecretsPostgreSqlDbContext` each own a migrations set.
+`SecretsSqlServerDbContext`, `SecretsPostgreSqlDbContext`, and `SecretsMySqlDbContext` each own a
+migrations set.
 They are not a mandated application `DbContext` base (framework §2.9).
 
 ## Gate ownership

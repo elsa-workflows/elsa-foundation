@@ -6,7 +6,7 @@ using Elsa.Activities.Runtime.Services;
 using Elsa.Activities.Runtime.Tasks;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 

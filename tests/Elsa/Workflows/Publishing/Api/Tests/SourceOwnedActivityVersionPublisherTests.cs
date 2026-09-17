@@ -8,7 +8,7 @@ using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services.Values;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;

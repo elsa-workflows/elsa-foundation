@@ -6,8 +6,8 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Resolvers;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Resolvers;
+using Elsa.Workflows.Runtime.Services.Values;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;

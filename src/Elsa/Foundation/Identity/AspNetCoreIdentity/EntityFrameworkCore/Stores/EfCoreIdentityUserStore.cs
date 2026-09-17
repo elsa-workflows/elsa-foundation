@@ -5,12 +5,11 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using EfIdentityStoreSupport = Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores.IdentityEntityFrameworkAdapterSupport;
-using IdentityEntityFrameworkRevisionCodec = Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores.IdentityEntityFrameworkRevisionSupport;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Stores;
 
@@ -44,7 +43,8 @@ public sealed class EfCoreIdentityUserStore(
     private const string RecoveryCodeTokenName = "RecoveryCodes";
     private const int AmbiguousEmailTake = 2;
     private const int MaximumMaterializedRelationshipEntries = 512;
-    private const int LockoutTransitionMaxAttempts = 3;
+    // Identity keeps its budget of 3 (spec 095, bounded retry for lockout transitions).
+    private static readonly EfWriteRetry LockoutTransitions = new(3, EfWriteConflict.Concurrency);
 
     private readonly IIdentityEmailUniquenessPolicy emailPolicy =
         emailUniquenessPolicy ?? IdentityEmailUniquenessPolicy.NonUnique;
@@ -87,7 +87,7 @@ public sealed class EfCoreIdentityUserStore(
     {
         ArgumentNullException.ThrowIfNull(user);
         EnsureUserScope(user);
-        if (!IdentityEntityFrameworkRevisionCodec.TryGetUserVersion(user.ConcurrencyStamp, user.TenantId, user.Id, out var revision))
+        if (!IdentityEntityFrameworkRevisionSupport.TryGetUserVersion(user.ConcurrencyStamp, user.TenantId, user.Id, out var revision))
             return ConcurrencyFailure();
 
         return await SaveFrameworkUserAsync(user, revision, createOnly: false, cancellationToken);
@@ -97,7 +97,7 @@ public sealed class EfCoreIdentityUserStore(
     {
         ArgumentNullException.ThrowIfNull(user);
         EnsureUserScope(user);
-        if (!IdentityEntityFrameworkRevisionCodec.TryGetUserVersion(user.ConcurrencyStamp, user.TenantId, user.Id, out var revision))
+        if (!IdentityEntityFrameworkRevisionSupport.TryGetUserVersion(user.ConcurrencyStamp, user.TenantId, user.Id, out var revision))
             return ConcurrencyFailure();
 
         var result = await aggregates.DeleteUserAsync(user.TenantId, user.Id, revision, cancellationToken);
@@ -119,7 +119,7 @@ public sealed class EfCoreIdentityUserStore(
         var tenantId = CurrentTenantId();
         EnsureTenant(tenantId);
         var key = UserKey(tenantId, normalizedUserName);
-        var entity = await EfIdentityStoreSupport.ReadAsync(
+        var entity = await IdentityEntityFrameworkAdapterSupport.ReadAsync(
             db,
             "Unable to find the ASP.NET Core Identity user by normalized name.",
             () => db.Users.AsNoTracking().SingleOrDefaultAsync(
@@ -172,7 +172,7 @@ public sealed class EfCoreIdentityUserStore(
         var tenantId = CurrentTenantId();
         EnsureTenant(tenantId);
         var key = UserKey(tenantId, normalizedEmail);
-        var entities = await EfIdentityStoreSupport.ReadAsync(
+        var entities = await IdentityEntityFrameworkAdapterSupport.ReadAsync(
             db,
             "Unable to find the ASP.NET Core Identity user by normalized email.",
             () => db.Users.AsNoTracking()
@@ -243,7 +243,7 @@ public sealed class EfCoreIdentityUserStore(
     public async Task<IList<Claim>> GetClaimsAsync(AspNetCoreIdentityUser user, CancellationToken cancellationToken)
     {
         EnsureUserScope(user);
-        var rows = await EfIdentityStoreSupport.ReadAsync(
+        var rows = await IdentityEntityFrameworkAdapterSupport.ReadAsync(
             db,
             "Unable to read ASP.NET Core Identity user claims.",
             () => db.UserClaims.AsNoTracking()
@@ -263,14 +263,14 @@ public sealed class EfCoreIdentityUserStore(
         ArgumentNullException.ThrowIfNull(claims);
         var additions = claims.Take(MaximumMaterializedRelationshipEntries + 1).Select(claim => new UserClaimEntity
         {
-            Id = EfIdentityStoreSupport.CompoundKey(user.TenantId, user.Id, claim.Type, claim.Value),
+            Id = IdentityEntityFrameworkAdapterSupport.CompoundKey(user.TenantId, user.Id, claim.Type, claim.Value),
             TenantId = user.TenantId,
             TenantLookupKey = TenantKey(user.TenantId),
             UserId = user.Id,
             UserLookupKey = UserKey(user.TenantId, user.Id),
             ClaimType = claim.Type,
             ClaimValue = claim.Value,
-            ClaimKey = EfIdentityStoreSupport.CompoundKey(user.TenantId, claim.Type, claim.Value),
+            ClaimKey = IdentityEntityFrameworkAdapterSupport.CompoundKey(user.TenantId, claim.Type, claim.Value),
             Revision = 1
         }).ToArray();
         EnsureRelationshipMaterializationLimit(additions.Length, "user claim input");
@@ -284,14 +284,14 @@ public sealed class EfCoreIdentityUserStore(
         EnsureUserScope(user);
         var replacement = new UserClaimEntity
         {
-            Id = EfIdentityStoreSupport.CompoundKey(user.TenantId, user.Id, newClaim.Type, newClaim.Value),
+            Id = IdentityEntityFrameworkAdapterSupport.CompoundKey(user.TenantId, user.Id, newClaim.Type, newClaim.Value),
             TenantId = user.TenantId,
             TenantLookupKey = TenantKey(user.TenantId),
             UserId = user.Id,
             UserLookupKey = UserKey(user.TenantId, user.Id),
             ClaimType = newClaim.Type,
             ClaimValue = newClaim.Value,
-            ClaimKey = EfIdentityStoreSupport.CompoundKey(user.TenantId, newClaim.Type, newClaim.Value),
+            ClaimKey = IdentityEntityFrameworkAdapterSupport.CompoundKey(user.TenantId, newClaim.Type, newClaim.Value),
             Revision = 1
         };
         await WriteRelationshipAsync(user, [replacement], [(claim.Type, (string?)claim.Value)], cancellationToken);
@@ -312,8 +312,8 @@ public sealed class EfCoreIdentityUserStore(
     {
         var tenantId = CurrentTenantId();
         EnsureTenant(tenantId);
-        var claimKey = EfIdentityStoreSupport.CompoundKey(tenantId, claim.Type, claim.Value);
-        var entities = await EfIdentityStoreSupport.ReadAsync(
+        var claimKey = IdentityEntityFrameworkAdapterSupport.CompoundKey(tenantId, claim.Type, claim.Value);
+        var entities = await IdentityEntityFrameworkAdapterSupport.ReadAsync(
             db,
             "Unable to find ASP.NET Core Identity users for a claim.",
             () => db.Users.AsNoTracking()
@@ -377,7 +377,7 @@ public sealed class EfCoreIdentityUserStore(
     public async Task<IList<UserLoginInfo>> GetLoginsAsync(AspNetCoreIdentityUser user, CancellationToken cancellationToken)
     {
         EnsureUserScope(user);
-        var rows = await EfIdentityStoreSupport.ReadAsync(
+        var rows = await IdentityEntityFrameworkAdapterSupport.ReadAsync(
             db,
             "Unable to read ASP.NET Core Identity user logins.",
             () => db.ExternalIdentities.AsNoTracking()
@@ -393,8 +393,8 @@ public sealed class EfCoreIdentityUserStore(
     {
         var tenantId = CurrentTenantId();
         EnsureTenant(tenantId);
-        var id = EfIdentityStoreSupport.CompoundKey(tenantId, loginProvider, providerKey);
-        var login = await EfIdentityStoreSupport.ReadAsync(
+        var id = IdentityEntityFrameworkAdapterSupport.CompoundKey(tenantId, loginProvider, providerKey);
+        var login = await IdentityEntityFrameworkAdapterSupport.ReadAsync(
             db,
             "Unable to find the ASP.NET Core Identity user by login.",
             () => db.ExternalIdentities.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.TenantLookupKey == TenantKey(tenantId), cancellationToken));
@@ -436,7 +436,7 @@ public sealed class EfCoreIdentityUserStore(
     public async Task<IList<string>> GetRolesAsync(AspNetCoreIdentityUser user, CancellationToken cancellationToken)
     {
         EnsureUserScope(user);
-        var roleIds = await EfIdentityStoreSupport.ReadAsync(
+        var roleIds = await IdentityEntityFrameworkAdapterSupport.ReadAsync(
             db,
             "Unable to read ASP.NET Core Identity user roles.",
             () => db.UserRoles.AsNoTracking()
@@ -448,10 +448,10 @@ public sealed class EfCoreIdentityUserStore(
                 .ToListAsync(cancellationToken));
         EnsureRelationshipMaterializationLimit(roleIds.Count, "user roles");
         var roleRecordIds = roleIds
-            .Select(roleId => EfIdentityStoreSupport.RecordId(user.TenantId, roleId))
+            .Select(roleId => IdentityEntityFrameworkAdapterSupport.RecordId(user.TenantId, roleId))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        return await EfIdentityStoreSupport.ReadAsync(
+        return await IdentityEntityFrameworkAdapterSupport.ReadAsync(
             db,
             "Unable to read ASP.NET Core Identity role names.",
             () => db.Roles.AsNoTracking()
@@ -466,10 +466,10 @@ public sealed class EfCoreIdentityUserStore(
     {
         EnsureUserScope(user);
         var role = await FindRoleAsync(user.TenantId, roleName, cancellationToken);
-        return role is not null && await EfIdentityStoreSupport.ReadAsync(
+        return role is not null && await IdentityEntityFrameworkAdapterSupport.ReadAsync(
             db,
             "Unable to check ASP.NET Core Identity user role membership.",
-            () => db.UserRoles.AnyAsync(x => x.Id == EfIdentityStoreSupport.CompoundKey(user.TenantId, user.Id, role.RoleId), cancellationToken));
+            () => db.UserRoles.AnyAsync(x => x.Id == IdentityEntityFrameworkAdapterSupport.CompoundKey(user.TenantId, user.Id, role.RoleId), cancellationToken));
     }
 
     public async Task<IList<AspNetCoreIdentityUser>> GetUsersInRoleAsync(string roleName, CancellationToken cancellationToken)
@@ -480,7 +480,7 @@ public sealed class EfCoreIdentityUserStore(
         if (role is null)
             return [];
         var roleLookupKey = RoleKey(tenantId, role.RoleId);
-        var entities = await EfIdentityStoreSupport.ReadAsync(
+        var entities = await IdentityEntityFrameworkAdapterSupport.ReadAsync(
             db,
             "Unable to read ASP.NET Core Identity users in a role.",
             () => db.Users.AsNoTracking()
@@ -539,10 +539,10 @@ public sealed class EfCoreIdentityUserStore(
     public async Task<string?> GetTokenAsync(AspNetCoreIdentityUser user, string loginProvider, string name, CancellationToken cancellationToken)
     {
         EnsureUserScope(user);
-        var token = await EfIdentityStoreSupport.ReadAsync(
+        var token = await IdentityEntityFrameworkAdapterSupport.ReadAsync(
             db,
             "Unable to read ASP.NET Core Identity user token.",
-            () => db.UserTokens.AsNoTracking().SingleOrDefaultAsync(x => x.Id == EfIdentityStoreSupport.CompoundKey(user.TenantId, user.Id, loginProvider, name), cancellationToken));
+            () => db.UserTokens.AsNoTracking().SingleOrDefaultAsync(x => x.Id == IdentityEntityFrameworkAdapterSupport.CompoundKey(user.TenantId, user.Id, loginProvider, name), cancellationToken));
         return token?.Value;
     }
 
@@ -612,7 +612,7 @@ public sealed class EfCoreIdentityUserStore(
         if (!result.WriteResult.Succeeded)
             return ToIdentityResult(user, result);
 
-        user.ConcurrencyStamp = IdentityEntityFrameworkRevisionCodec.FromUser(
+        user.ConcurrencyStamp = IdentityEntityFrameworkRevisionSupport.FromUser(
             user.TenantId,
             user.Id,
             result.WriteResult.Version ?? throw new InvalidOperationException("The Identity aggregate did not return a revision."));
@@ -622,7 +622,7 @@ public sealed class EfCoreIdentityUserStore(
     private async Task<int> MutateLockoutAsync(AspNetCoreIdentityUser user, Func<AspNetCoreIdentityUser, int> mutate, CancellationToken cancellationToken)
     {
         EnsureUserScope(user);
-        if (!IdentityEntityFrameworkRevisionCodec.TryGetUserVersion(user.ConcurrencyStamp, user.TenantId, user.Id, out var expected))
+        if (!IdentityEntityFrameworkRevisionSupport.TryGetUserVersion(user.ConcurrencyStamp, user.TenantId, user.Id, out var expected))
         {
             // UserManager stages lockout defaults before the first CreateAsync call, when the
             // user has no persistence row yet. Preserve that initialization, but never mutate a
@@ -631,11 +631,14 @@ public sealed class EfCoreIdentityUserStore(
                 return mutate(user);
             throw new InvalidOperationException("The requested user has no valid EF revision stamp for a lockout mutation.");
         }
-        for (var attempt = 0; attempt < LockoutTransitionMaxAttempts; attempt++)
+        // The first attempt works on a copy of the caller's user; after a lost revision race the next one reloads it.
+        var reload = false;
+        return await LockoutTransitions.RunUntilSettledAsync<int>(db, async () =>
         {
-            var candidate = attempt == 0 ? CloneUser(user) : await FindByIdAsync(user.Id, cancellationToken)
+            var candidate = !reload ? CloneUser(user) : await FindByIdAsync(user.Id, cancellationToken)
                 ?? throw new InvalidOperationException("The requested user does not exist in the current persistence scope.");
-            if (!IdentityEntityFrameworkRevisionCodec.TryGetUserVersion(candidate.ConcurrencyStamp, user.TenantId, user.Id, out expected))
+            reload = true;
+            if (!IdentityEntityFrameworkRevisionSupport.TryGetUserVersion(candidate.ConcurrencyStamp, user.TenantId, user.Id, out expected))
                 throw new InvalidOperationException("The requested user has no valid EF revision stamp.");
             var value = mutate(candidate);
             var result = await SaveFrameworkUserAsync(candidate, expected, false, cancellationToken);
@@ -643,8 +646,8 @@ public sealed class EfCoreIdentityUserStore(
             { CopyLockoutState(candidate, user); return value; }
             if (!result.Errors.Any(error => error.Code == nameof(IdentityErrorDescriber.ConcurrencyFailure)))
                 throw new InvalidOperationException("The EF Identity lockout transition failed.");
-        }
-        throw new InvalidOperationException("EF Identity lockout transition exceeded the bounded retry limit.");
+            return EfWriteAttempt<int>.Retry();
+        }, _ => throw new InvalidOperationException("EF Identity lockout transition exceeded the bounded retry limit."), cancellationToken);
     }
 
     private async Task WriteRelationshipAsync(
@@ -674,7 +677,7 @@ public sealed class EfCoreIdentityUserStore(
     }
 
     private async Task<RoleEntity?> FindRoleAsync(string tenantId, string name, CancellationToken cancellationToken) =>
-        await EfIdentityStoreSupport.ReadAsync(
+        await IdentityEntityFrameworkAdapterSupport.ReadAsync(
             db,
             "Unable to find the ASP.NET Core Identity role for the user operation.",
             () => db.Roles.AsNoTracking().SingleOrDefaultAsync(
@@ -683,26 +686,26 @@ public sealed class EfCoreIdentityUserStore(
 
     private async Task<UserEntity?> FindEntityAsync(string tenantId, string userId, bool forWrite, CancellationToken cancellationToken)
     {
-        return await EfIdentityStoreSupport.ReadAsync(
+        return await IdentityEntityFrameworkAdapterSupport.ReadAsync(
             db,
             "Unable to find the ASP.NET Core Identity user.",
             async () =>
             {
-                var query = db.Users.Where(x => x.Id == EfIdentityStoreSupport.RecordId(tenantId, userId) && x.TenantLookupKey == TenantKey(tenantId));
+                var query = db.Users.Where(x => x.Id == IdentityEntityFrameworkAdapterSupport.RecordId(tenantId, userId) && x.TenantLookupKey == TenantKey(tenantId));
                 return forWrite ? await query.SingleOrDefaultAsync(cancellationToken) : await query.AsNoTracking().SingleOrDefaultAsync(cancellationToken);
             });
     }
 
     private static void ApplyFrameworkState(UserEntity entity, AspNetCoreIdentityUser user)
     {
-        entity.NormalizedUserName = user.NormalizedUserName ?? (string.IsNullOrWhiteSpace(user.UserName) ? null : EfIdentityStoreSupport.Normalize(user.UserName));
+        entity.NormalizedUserName = user.NormalizedUserName ?? (string.IsNullOrWhiteSpace(user.UserName) ? null : IdentityEntityFrameworkAdapterSupport.Normalize(user.UserName));
         entity.NormalizedUserNameKey = string.IsNullOrWhiteSpace(entity.NormalizedUserName) ? null : UserKey(user.TenantId, entity.NormalizedUserName);
-        entity.NormalizedEmail = user.NormalizedEmail ?? (string.IsNullOrWhiteSpace(user.Email) ? null : EfIdentityStoreSupport.Normalize(user.Email));
+        entity.NormalizedEmail = user.NormalizedEmail ?? (string.IsNullOrWhiteSpace(user.Email) ? null : IdentityEntityFrameworkAdapterSupport.Normalize(user.Email));
         entity.NormalizedEmailKey = string.IsNullOrWhiteSpace(entity.NormalizedEmail) ? null : UserKey(user.TenantId, entity.NormalizedEmail);
         entity.EmailConfirmed = user.EmailConfirmed;
         entity.PasswordHash = user.PasswordHash;
         entity.SecurityStamp = user.SecurityStamp;
-        entity.ConcurrencyStamp = IdentityEntityFrameworkRevisionCodec.FromUser(user.TenantId, user.Id, entity.Revision);
+        entity.ConcurrencyStamp = IdentityEntityFrameworkRevisionSupport.FromUser(user.TenantId, user.Id, entity.Revision);
         entity.PhoneNumber = user.PhoneNumber;
         entity.PhoneNumberConfirmed = user.PhoneNumberConfirmed;
         entity.TwoFactorEnabled = user.TwoFactorEnabled;
@@ -723,7 +726,7 @@ public sealed class EfCoreIdentityUserStore(
         EmailConfirmed = entity.EmailConfirmed,
         PasswordHash = entity.PasswordHash,
         SecurityStamp = entity.SecurityStamp,
-        ConcurrencyStamp = IdentityEntityFrameworkRevisionCodec.FromUser(entity.TenantId, entity.UserId, entity.Revision),
+        ConcurrencyStamp = IdentityEntityFrameworkRevisionSupport.FromUser(entity.TenantId, entity.UserId, entity.Revision),
         PhoneNumber = entity.PhoneNumber,
         PhoneNumberConfirmed = entity.PhoneNumberConfirmed,
         TwoFactorEnabled = entity.TwoFactorEnabled,
@@ -734,7 +737,7 @@ public sealed class EfCoreIdentityUserStore(
 
     private static UserRecord ToUserRecord(UserEntity entity) => new(
         entity.UserId, entity.TenantId, entity.UserName, entity.Email, entity.DisplayName, (UserStatus)entity.Status, (ResourceOwnership)entity.Ownership,
-        EfIdentityStoreSupport.DeserializeSet(entity.RoleIdsJson), EfIdentityStoreSupport.DeserializeSet(entity.DirectPermissionsJson));
+        IdentityEntityFrameworkAdapterSupport.DeserializeSet(entity.RoleIdsJson), IdentityEntityFrameworkAdapterSupport.DeserializeSet(entity.DirectPermissionsJson));
 
     private static AspNetCoreIdentityUser CloneUser(AspNetCoreIdentityUser source) => new()
     {
@@ -771,18 +774,18 @@ public sealed class EfCoreIdentityUserStore(
     private void EnsureTenant(string tenantId) => accessContextAccessor.Current.EnsureTenantScope(tenantId);
 
     private string CurrentTenantId() => accessContextAccessor.Current.Scope?.Value ?? PersistenceScope.DefaultValue;
-    private static string TenantKey(string tenantId) => EfIdentityStoreSupport.TenantLookup(tenantId);
-    private static string UserKey(string tenantId, string? value) => EfIdentityStoreSupport.Lookup(tenantId, value);
-    private static string RoleKey(string tenantId, string value) => EfIdentityStoreSupport.Lookup(tenantId, value);
+    private static string TenantKey(string tenantId) => IdentityEntityFrameworkAdapterSupport.TenantLookup(tenantId);
+    private static string UserKey(string tenantId, string? value) => IdentityEntityFrameworkAdapterSupport.Lookup(tenantId, value);
+    private static string RoleKey(string tenantId, string value) => IdentityEntityFrameworkAdapterSupport.Lookup(tenantId, value);
     private static long RequireRevision(AspNetCoreIdentityUser user) =>
-        IdentityEntityFrameworkRevisionCodec.TryGetUserVersion(user.ConcurrencyStamp, user.TenantId, user.Id, out var version)
+        IdentityEntityFrameworkRevisionSupport.TryGetUserVersion(user.ConcurrencyStamp, user.TenantId, user.Id, out var version)
             ? version
             : throw new InvalidOperationException("The requested user has no valid EF revision stamp.");
 
     private static void ApplyRevisionStamp(AspNetCoreIdentityUser user, EfIdentityWriteResult result)
     {
         if (result.Succeeded && result.Version is { } version)
-            user.ConcurrencyStamp = IdentityEntityFrameworkRevisionCodec.FromUser(user.TenantId, user.Id, version);
+            user.ConcurrencyStamp = IdentityEntityFrameworkRevisionSupport.FromUser(user.TenantId, user.Id, version);
     }
 
     private static void EnsureRelationshipSucceeded(EfIdentityWriteResult result, string operation)

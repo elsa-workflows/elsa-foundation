@@ -5,7 +5,7 @@ using CShells.Lifecycle;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Tasks.Core;
-using Elsa.Workflows.Runtime.Core.Diagnostics;
+using Elsa.Workflows.Runtime.Diagnostics;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workbench;

@@ -1,7 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Runtime.Core.Middleware;
+namespace Elsa.Workflows.Runtime.Middleware;
 
 /// <summary>
 /// The workflow pipeline's <c>Invoke</c> slot: runs the work item's selected handler (staged by the dispatcher) in the

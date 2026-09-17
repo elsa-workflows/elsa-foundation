@@ -19,23 +19,15 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests;
 internal sealed class SqliteTestDatabase : IAsyncDisposable
 {
     private readonly string path;
-    private readonly Action<DbContextOptionsBuilder>? configure;
 
-    private SqliteTestDatabase(string path, Action<DbContextOptionsBuilder>? configure)
-    {
-        this.path = path;
-        this.configure = configure;
-    }
+    private SqliteTestDatabase(string path) => this.path = path;
 
     public string ConnectionString => $"Data Source={path};Pooling=False;Default Timeout=30";
 
-    /// <param name="configure">Applied to every context this database opens, including the one that creates it.</param>
-    public static async Task<SqliteTestDatabase> CreateAsync<TContext>(
-        Func<DbContextOptions<TContext>, TContext> create,
-        Action<DbContextOptionsBuilder>? configure = null)
+    public static async Task<SqliteTestDatabase> CreateAsync<TContext>(Func<DbContextOptions<TContext>, TContext> create)
         where TContext : DbContext
     {
-        var database = new SqliteTestDatabase(Path.Join(Path.GetTempPath(), $"elsa-publishing-ef-{Guid.NewGuid():N}.db"), configure);
+        var database = new SqliteTestDatabase(Path.Join(Path.GetTempPath(), $"elsa-publishing-ef-{Guid.NewGuid():N}.db"));
         await using (var connection = new SqliteConnection(database.ConnectionString))
         {
             await connection.OpenAsync();
@@ -53,7 +45,6 @@ internal sealed class SqliteTestDatabase : IAsyncDisposable
         where TContext : DbContext
     {
         var options = new DbContextOptionsBuilder<TContext>().UseSqlite(ConnectionString);
-        configure?.Invoke(options);
         if (interceptors.Length > 0)
             options.AddInterceptors(interceptors);
         return create(options.Options);

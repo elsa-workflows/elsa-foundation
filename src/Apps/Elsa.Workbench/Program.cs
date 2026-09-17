@@ -148,7 +148,12 @@ builder.Services.AddCors(options =>
         .WithOrigins(studioCorsOrigins)
         .AllowAnyHeader()
         .AllowAnyMethod()
-        .AllowCredentials());
+        .AllowCredentials()
+        // AllowAnyHeader covers request headers only. Content-Disposition is not one of the seven
+        // CORS-safelisted response headers, so without exposing it a cross-origin Studio cannot read the
+        // download name the executable-artifact export sets on the wire -- it silently falls back to
+        // rebuilding the name, leaving the server not actually the authority on a name it owns (#1794).
+        .WithExposedHeaders("Content-Disposition"));
 });
 
 builder.Services.AddNuplaneAdmin();

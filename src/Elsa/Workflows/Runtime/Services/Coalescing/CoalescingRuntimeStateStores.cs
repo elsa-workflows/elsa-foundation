@@ -1,7 +1,8 @@
+using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
+namespace Elsa.Workflows.Runtime.Services.Coalescing;
 
 /// <summary>
 /// Coalescing-aware overlay for <see cref="IWorkflowExecutionStateStore"/>. When an active coalescing session owns the

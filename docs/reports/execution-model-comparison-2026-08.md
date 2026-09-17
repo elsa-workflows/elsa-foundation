@@ -30,10 +30,10 @@ For the extracted BPMN core, `github.com/valence-works/bpmn` (`Bpmn.Semantics`),
 
 **Elsa 4.** Durable, message-driven work items are the source of truth. One command envelope enters
 `WorkflowSchedulerCommandRouter.ProcessAsync`
-([src](../../src/Elsa/Workflows/Runtime/Services/WorkflowSchedulerCommandRouter.cs)), is enqueued on a
+([src](../../src/Elsa/Workflows/Runtime/Services/Scheduler/WorkflowSchedulerCommandRouter.cs)), is enqueued on a
 per-execution queue, and drives a *drain to quiescence* for that one workflow execution.
 `WorkflowSchedulerDrainer.DrainAsync`
-([src](../../src/Elsa/Workflows/Runtime/Services/WorkflowSchedulerDrainer.cs)) claims the FIFO head,
+([src](../../src/Elsa/Workflows/Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs)) claims the FIFO head,
 dispatches it through the runtime pipeline, acks it, and repeats until the queue empties or the
 execution reaches a terminal status. Durable state advances at checkpoint commits whose cadence is
 decided by policy (ADR 0032), and post-commit work is recorded as outbox intents rather than
@@ -289,12 +289,12 @@ one, and they cover for each other.
 
 **Loop one, the work claim.** `WorkflowSchedulerDrainer.RenewClaimUntilStoppedAsync` is a `while (true)`
 that renews on a cadence of `VisibilityTimeout / 3` (default 1 minute, so every 20 s) and stops only when
-the dispatch completes ([src](../../src/Elsa/Workflows/Runtime/Services/WorkflowSchedulerDrainer.cs)).
+the dispatch completes ([src](../../src/Elsa/Workflows/Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs)).
 
 **Loop two, the execution ownership lease.**
 `WorkflowDrainOrchestrator.RenewOwnershipUntilStoppedAsync` has the identical shape: `while (true)`,
 cadence `LeaseDuration / 3` (default 1 minute, so every 20 s), heartbeating until the drain returns
-([src](../../src/Elsa/Workflows/Runtime/Services/WorkflowDrainOrchestrator.cs)).
+([src](../../src/Elsa/Workflows/Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs)).
 
 **Neither bound is a total.** Both are renewal *intervals*. No `RuntimeSchedulerWorkClaimOptions` or
 `RuntimeExecutionOwnershipOptions` field expresses a maximum, and no timeout or deadline concept exists
@@ -328,7 +328,7 @@ those are different failures.
 *One adjacent fact that cuts in Elsa's favor and shortens the fix:* the runtime already has the
 vocabulary. `IRuntimeVolatileWaitPolicy` bounds a *declared* in-memory wait with a `maximumDuration`,
 plus host-shutdown and cancellation behaviors and a durable-fallback policy
-([src](../../src/Elsa/Workflows/Runtime/Services/DefaultRuntimeVolatileWaitPolicy.cs)). That is the
+([src](../../src/Elsa/Workflows/Runtime/Services/Bookmarks/DefaultRuntimeVolatileWaitPolicy.cs)). That is the
 same decision shape a dispatch watchdog needs, applied to the case where the activity *asked* to wait.
 What is missing is the involuntary case.
 
@@ -436,7 +436,7 @@ Classification of every unmarked shipped activity:
 **And the real blocker is not marking at all.** `ReplaySafeFusionDriver.ShouldFuse` requires
 `node.IntrinsicKind is null` — intrinsics are categorically excluded, deliberately, because "those keep
 their durable pre-activation boundary"
-([src](../../src/Elsa/Workflows/Runtime/Services/ReplaySafeFusionDriver.cs)). They could not be marked
+([src](../../src/Elsa/Workflows/Runtime/Services/WorkHandlers/ReplaySafeFusionDriver.cs)). They could not be marked
 even in principle: `ExecutableNodeCompiler.CompileIntrinsicNode` emits `activityContract: null`, so an
 intrinsic node carries no profile to set.
 
@@ -514,7 +514,7 @@ fallthrough.
 
 The drain then reports `StoppedOnFault`, `WorkflowDrainOrchestrator.NotifyObserversAsync` runs the drain
 observers, and `PoisonedSchedulerWorkIncidentObserver`
-([src](../../src/Elsa/Workflows/Runtime/Services/PoisonedSchedulerWorkIncidentObserver.cs)) projects
+([src](../../src/Elsa/Workflows/Runtime/Services/Incidents/PoisonedSchedulerWorkIncidentObserver.cs)) projects
 every `Poisoned` record into a **blocking, `Critical` incident** with failure type
 `SchedulerWorkPoisoned`, a deterministic id, the handler name, failure count, and fault detail in the
 metadata. It is registered *before* `BlockingIncidentWorkflowFaultObserver` on purpose, and records a

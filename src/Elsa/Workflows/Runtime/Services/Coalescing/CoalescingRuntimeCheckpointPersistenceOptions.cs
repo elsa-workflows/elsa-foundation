@@ -1,4 +1,4 @@
-namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
+namespace Elsa.Workflows.Runtime.Services.Coalescing;
 
 /// <summary>
 /// Options for the burst-coalescing checkpoint persistence policy. Bounds a coalesced segment so

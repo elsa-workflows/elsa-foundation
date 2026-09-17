@@ -26,7 +26,7 @@
 - [x] T007 Add redrive request/result/disposition and additive store capability in `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowDispatchRedriveStore.cs` and `src/Elsa/Workflows/Runtime/Core/Models/WorkflowDispatchRedrive.cs`
 - [x] T008 Extend `RuntimePostCommitOutboxClaimCompletion` with validated optional pending follow-up work in `src/Elsa/Workflows/Runtime/Core/Models/RuntimePostCommitOutbox.cs`
 - [x] T009 Add safe generation/dead-letter/redrive metadata and deterministic identities without loosening ordinary terminal transitions in `src/Elsa/Workflows/Runtime/Core/Models/WorkflowDispatchRecord.cs` and `src/Elsa/Workflows/Runtime/Core/Models/WorkflowDispatchIdentity.cs`
-- [x] T010 Implement only the additive follow-up completion validation/storage primitive, without the US2 finalization bundle, in `src/Elsa/Workflows/Runtime/Services/InMemoryRuntimeCheckpointCommitStore.cs`, `src/Elsa/Workflows/Runtime/Services/Coalescing/RuntimeCoalescingSession.cs`, and `src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimePostCommitOutboxStore.cs`
+- [x] T010 Implement only the additive follow-up completion validation/storage primitive, without the US2 finalization bundle, in `src/Elsa/Workflows/Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs`, `src/Elsa/Workflows/Runtime/Services/Coalescing/RuntimeCoalescingSession.cs`, and `src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimePostCommitOutboxStore.cs`
 - [x] T011 Run foundational Runtime and Groundwork contract tests and keep every new test red-before-green using `/usr/local/share/dotnet/dotnet`
 
 **Checkpoint**: Safe finalization and redrive contracts are available to all stories.
@@ -52,7 +52,7 @@
 - [x] T017 [US1] Add validated host delivery policy in `src/Elsa/Activities/DispatchWorkflow/Runtime/Configuration/DispatchWorkflowDeliveryOptions.cs`
 - [x] T018 [US1] Register the finite child-start policy while preserving unbounded cancel/resume policies in `src/Elsa/Activities/DispatchWorkflow/Runtime/DispatchWorkflowRuntimeFeature.cs`
 - [x] T019 [US1] Classify rejection, deferred delivery, infrastructure exceptions, acknowledged delivery, and business terminal behavior safely in `src/Elsa/Activities/DispatchWorkflow/Runtime/Services/ChildStartExecutor.cs`
-- [x] T020 [US1] Make the outbox processor report/store effective retry/final/eventual status with fixed safe child-start text and structured attempt/retry/final-dead-letter events in `src/Elsa/Workflows/Runtime/Services/RuntimePostCommitOutboxProcessor.cs`
+- [x] T020 [US1] Make the outbox processor report/store effective retry/final/eventual status with fixed safe child-start text and structured attempt/retry/final-dead-letter events in `src/Elsa/Workflows/Runtime/Services/Checkpoints/RuntimePostCommitOutboxProcessor.cs`
 - [x] T021 [US1] Preserve deterministic start/admission behavior across retries and repair paths in `src/Elsa/Activities/DispatchWorkflow/Runtime/Services/ChildStartExecutor.cs`
 - [x] T022 [US1] Run the independent US1 contract, processor, executor, and end-to-end tests with `/usr/local/share/dotnet/dotnet`
 
@@ -77,8 +77,8 @@
 ### Implementation for User Story 2
 
 - [x] T028 [US2] Implement DispatchWorkflow final-failure projection, deterministic wait follow-up creation, and safe dead-letter/incident/resume-queued events in `src/Elsa/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchDeliveryFailureProjector.cs`
-- [x] T029 [US2] Resolve the optional final-failure projector and commit its atomic aggregate in `src/Elsa/Workflows/Runtime/Services/RuntimePostCommitOutboxProcessor.cs`
-- [x] T030 [US2] Atomically persist final start, safe `DispatchFailed` dead-letter metadata, and follow-up item in `src/Elsa/Workflows/Runtime/Services/InMemoryRuntimeCheckpointCommitStore.cs`
+- [x] T029 [US2] Resolve the optional final-failure projector and commit its atomic aggregate in `src/Elsa/Workflows/Runtime/Services/Checkpoints/RuntimePostCommitOutboxProcessor.cs`
+- [x] T030 [US2] Atomically persist final start, safe `DispatchFailed` dead-letter metadata, and follow-up item in `src/Elsa/Workflows/Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs`
 - [x] T031 [US2] Atomically persist the same finalization bundle and reject stale versions in `src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimePostCommitOutboxStore.cs`
 - [x] T032 [US2] Extend safe result/payload validation and activity outcome mapping to `DispatchFailed` in `src/Elsa/Activities/DispatchWorkflow/Runtime/Models/DispatchWorkflowResult.cs`, `src/Elsa/Activities/DispatchWorkflow/Runtime/Models/WorkflowDispatchParentResumePayload.cs`, and `src/Elsa/Activities/DispatchWorkflow/Runtime/Activities/DispatchWorkflow.cs`
 - [x] T033 [US2] Extend parent resume validation/delivery and safe resume-consumed/eventual-result observability without changing bookmark identity in `src/Elsa/Activities/DispatchWorkflow/Runtime/Services/ParentResumeExecutor.cs` and `src/Elsa/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCompletionEnricher.cs`
@@ -107,7 +107,7 @@
 ### Implementation for User Story 3
 
 - [x] T042 [US3] Implement sanctioned dispatch/outbox redrive transitions and safe dispositions in `src/Elsa/Workflows/Runtime/Core/Models/WorkflowDispatchRecord.cs` and `src/Elsa/Workflows/Runtime/Core/Models/RuntimePostCommitOutbox.cs`
-- [x] T043 [US3] Implement provider-atomic in-memory redrive over the shared state/fence in `src/Elsa/Workflows/Runtime/Services/InMemoryRuntimeCheckpointCommitStore.cs`
+- [x] T043 [US3] Implement provider-atomic in-memory redrive over the shared state/fence in `src/Elsa/Workflows/Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs`
 - [x] T044 [US3] Implement provider-atomic Groundwork redrive with tenant scope, exact dead-letter linkage, OCC, and fencing in `src/Elsa/Persistence/Groundwork/Stores/GroundworkRuntimePostCommitOutboxStore.cs`
 - [x] T045 [US3] Extend the allowlisted dispatch view/handlers with incident, dead-letter, attempts, generation, failure time, eligibility, and the existing bounded maximum-page/continuation contract in `src/Elsa/Workflows/Runtime/Api/Models/WorkflowDispatchViews.cs` and `src/Elsa/Workflows/Runtime/Api/Handlers/WorkflowDispatchInspectionRequestHandlers.cs`
 - [x] T046 [US3] Add the request/result and manage-protected POST redrive endpoint in `src/Elsa/Workflows/Runtime/Api/Requests/WorkflowDispatchInspectionRequests.cs` and `src/Elsa/Workflows/Runtime/Api/Endpoints/WorkflowDispatchInspection.cs`

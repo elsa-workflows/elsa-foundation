@@ -4,7 +4,8 @@ using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Incidents;
 
 namespace Elsa.Workflows.Runtime.Attention;
 

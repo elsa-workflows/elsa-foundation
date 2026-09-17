@@ -18,7 +18,11 @@ public sealed class EfWorkflowActivationAuthority(
     IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowActivationAuthority
 {
     private const int PageSize = 100;
-    private const int MaxTransitionAttempts = 16;
+    // A transient conflict is retried only when SaveChanges reports it, never when a read raises it.
+    private static readonly EfWriteRetry Transitions = new(
+        EfWriteRetry.DefaultMaxAttempts,
+        exception => exception is DbUpdateException && EfRelationalExceptionClassifier.IsWriteConflict(
+            exception, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey | EfWriteConflict.Transient));
     private readonly BookmarkStateDbContext context = context ?? throw new ArgumentNullException(nameof(context));
     private readonly IPersistenceAccessContextAccessor accessContextAccessor = accessContextAccessor ?? throw new ArgumentNullException(nameof(accessContextAccessor));
 
@@ -77,7 +81,7 @@ public sealed class EfWorkflowActivationAuthority(
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         var rowId = RowId(scope, request.WorkflowDefinitionId, request.SlotName);
-        for (var attempt = 0; attempt < MaxTransitionAttempts; attempt++)
+        return await Transitions.RunAsync(context, async () =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             context.ChangeTracker.Clear();
@@ -112,24 +116,12 @@ public sealed class EfWorkflowActivationAuthority(
                 context.ChangeTracker.Clear();
                 return new WorkflowActivationTransition(true, next, current.ActiveActivationId, ReplacedSource: current.Source);
             }
-            catch (DbUpdateConcurrencyException)
+            catch (Exception exception) when (Transitions.ShouldRetry(context, exception))
             {
                 context.ChangeTracker.Clear();
+                throw;
             }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
-            {
-                context.ChangeTracker.Clear();
-            }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
-            {
-                context.ChangeTracker.Clear();
-            }
-        }
-
-        var settled = await FindAsync(request.WorkflowDefinitionId, request.SlotName, cancellationToken) ??
-                      Empty(request.WorkflowDefinitionId, request.SlotName, request.UpdatedAt);
-        return Conflict(settled, WorkflowActivationConflict.RevisionMismatch,
-            "The activation slot changed concurrently and did not settle.");
+        }, _ => SettledConflictAsync(request.WorkflowDefinitionId, request.SlotName, request.UpdatedAt, cancellationToken), cancellationToken);
     }
 
     public async ValueTask<WorkflowActivationTransition> TryDeactivateAsync(
@@ -147,7 +139,7 @@ public sealed class EfWorkflowActivationAuthority(
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         var rowId = RowId(scope, workflowDefinitionId, slotName);
-        for (var attempt = 0; attempt < MaxTransitionAttempts; attempt++)
+        return await Transitions.RunAsync(context, async () =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             context.ChangeTracker.Clear();
@@ -176,20 +168,20 @@ public sealed class EfWorkflowActivationAuthority(
                 context.ChangeTracker.Clear();
                 return new WorkflowActivationTransition(true, next, current.ActiveActivationId, ReplacedSource: current.Source);
             }
-            catch (DbUpdateConcurrencyException)
+            catch (Exception exception) when (Transitions.ShouldRetry(context, exception))
             {
                 context.ChangeTracker.Clear();
+                throw;
             }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
-            {
-                context.ChangeTracker.Clear();
-            }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
-            {
-                context.ChangeTracker.Clear();
-            }
-        }
+        }, _ => SettledConflictAsync(workflowDefinitionId, slotName, updatedAt, cancellationToken), cancellationToken);
+    }
 
+    private async ValueTask<WorkflowActivationTransition> SettledConflictAsync(
+        string workflowDefinitionId,
+        string slotName,
+        DateTimeOffset updatedAt,
+        CancellationToken cancellationToken)
+    {
         var settled = await FindAsync(workflowDefinitionId, slotName, cancellationToken) ?? Empty(workflowDefinitionId, slotName, updatedAt);
         return Conflict(settled, WorkflowActivationConflict.RevisionMismatch,
             "The activation slot changed concurrently and did not settle.");

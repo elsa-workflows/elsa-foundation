@@ -95,7 +95,7 @@ public sealed class SchedulerWorkQueueStoreBackend
 
     private static bool IsRuntimeDefault(ServiceDescriptor descriptor) =>
         descriptor.ImplementationType is { } implementationType &&
-        implementationType.FullName == "Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowSchedulerWorkQueue" &&
+        implementationType.FullName == "Elsa.Workflows.Runtime.Services.Scheduler.InMemoryWorkflowSchedulerWorkQueue" &&
         implementationType.Assembly.GetName().Name == "Elsa.Workflows.Runtime" ||
         RuntimeCoreRegistrationOwnership.IsCoreFactory(descriptor);
 

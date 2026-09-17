@@ -3,7 +3,12 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services.ActivityExecutions;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Scheduler;
+using Elsa.Workflows.Runtime.Services.WorkHandlers;
 using Xunit;
 using Microsoft.Extensions.Time.Testing;
 

@@ -22,7 +22,10 @@ public sealed class EfExecutionCommandTransport(
     ExecutionCommandTransportDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IExecutionCommandTransport
 {
+    // Pinned: EfExecutionCommandTransportTests asserts that contention gives up after 16 attempts.
     private const int MaxCasAttempts = 16;
+    private static readonly EfWriteRetry AppendAndLeaseRetry = new(MaxCasAttempts, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey | EfWriteConflict.Transient);
+    private static readonly EfWriteRetry AckRetry = new(MaxCasAttempts, EfWriteConflict.Concurrency | EfWriteConflict.Transient);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public async ValueTask<ExecutionCommandTransportItem> SendAsync(
@@ -41,105 +44,68 @@ public sealed class EfExecutionCommandTransport(
         var scopeHash = EfDistributedIdentity.Hash(scope);
         var workflowHash = EfDistributedIdentity.Hash(workflowExecutionId);
 
-        Exception? lastContention = null;
-        for (var attempt = 0; attempt < MaxCasAttempts; attempt++)
+        return await CompareAndSwapAsync(AppendAndLeaseRetry, "sending", workflowExecutionId, async () =>
         {
-            context.ChangeTracker.Clear();
-            try
+            await using var transaction = await BeginConsistencyTransactionAsync(cancellationToken);
+            var head = await FindHeadAsync(scope, workflowExecutionId, cancellationToken);
+            if (head is not null)
             {
-                await using var transaction = await BeginConsistencyTransactionAsync(cancellationToken);
-                var head = await FindHeadAsync(scope, workflowExecutionId, cancellationToken);
-                if (head is not null)
-                {
-                    EnsureHead(head, scope, workflowExecutionId);
-                    await ValidateHeadStateAsync(head, scopeHash, workflowHash, scope, workflowExecutionId, cancellationToken);
-                }
-                else if (await HasItemsAsync(scopeHash, workflowHash, scope, workflowExecutionId, cancellationToken))
-                    throw new InvalidOperationException("Command transport items exist without their stream head.");
+                EnsureHead(head, scope, workflowExecutionId);
+                await ValidateHeadStateAsync(head, scopeHash, workflowHash, scope, workflowExecutionId, cancellationToken);
+            }
+            else if (await HasItemsAsync(scopeHash, workflowHash, scope, workflowExecutionId, cancellationToken))
+                throw new InvalidOperationException("Command transport items exist without their stream head.");
 
-                var sequence = checked((head?.LastSequence ?? 0) + 1);
-                var item = new ExecutionCommandTransportItem(
-                    ComposeTransportItemId(workflowExecutionId, sequence),
-                    workflowExecutionId,
-                    envelope,
-                    sequence,
-                    now);
-                var itemEntity = ToEntity(item, scope, scopeHash, workflowHash);
-                var pendingCount = head?.PendingCount ?? 0;
-                if (pendingCount < 0)
-                    throw new InvalidOperationException("The command stream head has a negative pending count.");
-                if (head is null)
+            var sequence = checked((head?.LastSequence ?? 0) + 1);
+            var item = new ExecutionCommandTransportItem(
+                ComposeTransportItemId(workflowExecutionId, sequence),
+                workflowExecutionId,
+                envelope,
+                sequence,
+                now);
+            var itemEntity = ToEntity(item, scope, scopeHash, workflowHash);
+            var pendingCount = head?.PendingCount ?? 0;
+            if (pendingCount < 0)
+                throw new InvalidOperationException("The command stream head has a negative pending count.");
+            if (head is null)
+            {
+                context.CommandStreamHeads.Add(new ExecutionCommandStreamHeadEntity
                 {
-                    context.CommandStreamHeads.Add(new ExecutionCommandStreamHeadEntity
-                    {
-                        Id = EfDistributedIdentity.CreateId(scope, workflowExecutionId),
-                        ScopeKey = EfDistributedIdentity.EncodeScope(scope),
-                        ScopeKeyHash = scopeHash,
-                        WorkflowExecutionId = workflowExecutionId,
-                        WorkflowExecutionIdHash = workflowHash,
-                        WorkflowExecutionIdOrderKey = EfDistributedIdentity.CreateOrderKey(workflowExecutionId, ExecutionCommandTransportEfModule.WorkflowExecutionIdOrderKeyWidth),
-                        LastSequence = sequence,
-                        PendingCount = 1,
-                        PendingVisibleAtUtcTicks = 0,
-                        PendingSequence = sequence,
-                        Revision = 1
-                    });
-                }
-                else
-                {
-                    head.LastSequence = sequence;
-                    head.PendingCount = checked(pendingCount + 1);
-                    var previousEarliestWasVisible = pendingCount > 0 && head.PendingVisibleAtUtcTicks == 0;
-                    head.PendingVisibleAtUtcTicks = 0;
-                    // A newly appended item is unleased and therefore visible at tick zero. It becomes the
-                    // first pending item when the stream was empty, the earliest-visible item when every older
-                    // item is leased, or follows the earlier sequence among an already-visible prefix.
-                    head.PendingSequence = pendingCount == 0
-                        ? sequence
-                        : previousEarliestWasVisible
-                        ? Math.Min(head.PendingSequence, sequence)
-                        : sequence;
-                    head.Revision = checked(head.Revision + 1);
-                }
+                    Id = EfDistributedIdentity.CreateId(scope, workflowExecutionId),
+                    ScopeKey = EfDistributedIdentity.EncodeScope(scope),
+                    ScopeKeyHash = scopeHash,
+                    WorkflowExecutionId = workflowExecutionId,
+                    WorkflowExecutionIdHash = workflowHash,
+                    WorkflowExecutionIdOrderKey = EfDistributedIdentity.CreateOrderKey(workflowExecutionId, ExecutionCommandTransportEfModule.WorkflowExecutionIdOrderKeyWidth),
+                    LastSequence = sequence,
+                    PendingCount = 1,
+                    PendingVisibleAtUtcTicks = 0,
+                    PendingSequence = sequence,
+                    Revision = 1
+                });
+            }
+            else
+            {
+                head.LastSequence = sequence;
+                head.PendingCount = checked(pendingCount + 1);
+                var previousEarliestWasVisible = pendingCount > 0 && head.PendingVisibleAtUtcTicks == 0;
+                head.PendingVisibleAtUtcTicks = 0;
+                // A newly appended item is unleased and therefore visible at tick zero. It becomes the
+                // first pending item when the stream was empty, the earliest-visible item when every older
+                // item is leased, or follows the earlier sequence among an already-visible prefix.
+                head.PendingSequence = pendingCount == 0
+                    ? sequence
+                    : previousEarliestWasVisible
+                    ? Math.Min(head.PendingSequence, sequence)
+                    : sequence;
+                head.Revision = checked(head.Revision + 1);
+            }
 
-                context.CommandTransportItems.Add(itemEntity);
-                await context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                return item;
-            }
-            catch (OperationCanceledException)
-            {
-                context.ChangeTracker.Clear();
-                throw;
-            }
-            catch (DbUpdateConcurrencyException exception)
-            {
-                context.ChangeTracker.Clear();
-                lastContention = exception;
-            }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception) || EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
-            {
-                context.ChangeTracker.Clear();
-                lastContention = exception;
-            }
-            catch (DbException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
-            {
-                context.ChangeTracker.Clear();
-                lastContention = exception;
-            }
-            catch (Exception exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
-            {
-                context.ChangeTracker.Clear();
-                lastContention = exception;
-            }
-            catch (Exception exception) when (IsPersistenceBoundaryFailure(exception))
-            {
-                context.ChangeTracker.Clear();
-                throw Normalize("sending", workflowExecutionId, exception);
-            }
-        }
-
-        throw Contention("sending", workflowExecutionId, lastContention);
+            context.CommandTransportItems.Add(itemEntity);
+            await context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return item;
+        }, cancellationToken);
     }
 
     public async ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> LeaseAsync(
@@ -161,104 +127,67 @@ public sealed class EfExecutionCommandTransport(
         var scopeHash = EfDistributedIdentity.Hash(scope);
         var workflowHash = EfDistributedIdentity.Hash(workflowExecutionId);
 
-        Exception? lastContention = null;
-        for (var attempt = 0; attempt < MaxCasAttempts; attempt++)
+        return await CompareAndSwapAsync<IReadOnlyList<ExecutionCommandTransportItem>>(AppendAndLeaseRetry, "leasing", workflowExecutionId, async () =>
         {
-            context.ChangeTracker.Clear();
-            try
+            await using var transaction = await BeginConsistencyTransactionAsync(cancellationToken);
+            var head = await FindHeadAsync(scope, workflowExecutionId, cancellationToken);
+            if (head is not null)
             {
-                await using var transaction = await BeginConsistencyTransactionAsync(cancellationToken);
-                var head = await FindHeadAsync(scope, workflowExecutionId, cancellationToken);
-                if (head is not null)
-                {
-                    EnsureHead(head, scope, workflowExecutionId);
-                    await ValidateHeadStateAsync(head, scopeHash, workflowHash, scope, workflowExecutionId, cancellationToken);
-                }
+                EnsureHead(head, scope, workflowExecutionId);
+                await ValidateHeadStateAsync(head, scopeHash, workflowHash, scope, workflowExecutionId, cancellationToken);
+            }
 
-                var candidates = await context.CommandTransportItems.AsTracking()
-                    .Where(row => row.ScopeKeyHash == scopeHash &&
-                                  row.WorkflowExecutionIdHash == workflowHash &&
-                                  row.ScopeKey == EfDistributedIdentity.EncodeScope(scope) &&
-                                  row.WorkflowExecutionId == workflowExecutionId &&
-                                  row.VisibleAtUtcTicks <= now.UtcTicks)
-                    .OrderBy(row => row.Sequence)
-                    .ThenBy(row => row.TransportItemIdHash)
-                    .Take(maxItems)
-                    .ToListAsync(cancellationToken);
+            var candidates = await context.CommandTransportItems.AsTracking()
+                .Where(row => row.ScopeKeyHash == scopeHash &&
+                              row.WorkflowExecutionIdHash == workflowHash &&
+                              row.ScopeKey == EfDistributedIdentity.EncodeScope(scope) &&
+                              row.WorkflowExecutionId == workflowExecutionId &&
+                              row.VisibleAtUtcTicks <= now.UtcTicks)
+                .OrderBy(row => row.Sequence)
+                .ThenBy(row => row.TransportItemIdHash)
+                .Take(maxItems)
+                .ToListAsync(cancellationToken);
 
-                if (head is null)
-                {
-                    if (candidates.Count != 0 || await HasItemsAsync(scopeHash, workflowHash, scope, workflowExecutionId, cancellationToken))
-                        throw new InvalidOperationException("Command transport items exist without their stream head.");
-                    await transaction.CommitAsync(cancellationToken);
-                    return [];
-                }
-                if (candidates.Count == 0)
-                {
-                    await transaction.CommitAsync(cancellationToken);
-                    return [];
-                }
-
-                foreach (var candidate in candidates)
-                {
-                    var current = MapItem(candidate, scope);
-                    if (!StringComparer.Ordinal.Equals(current.WorkflowExecutionId, workflowExecutionId))
-                        throw new InvalidOperationException("The command transport row belongs to a different workflow execution.");
-                    if (!current.IsVisible(now))
-                        continue;
-                    if (current.Sequence > head.LastSequence)
-                        throw new InvalidOperationException("A command transport item is ahead of its stream head.");
-
-                    var next = current.Lease(ownerId, leaseExpiresAt);
-                    ApplyLease(candidate, next, scope, scopeHash, workflowHash);
-                }
-
-                await context.SaveChangesAsync(cancellationToken);
-                var summary = await ReadEarliestPendingAsync(scopeHash, workflowHash, scope, workflowExecutionId, head.PendingCount, head.LastSequence, cancellationToken);
-                head.PendingVisibleAtUtcTicks = summary.VisibleAtUtcTicks;
-                head.PendingSequence = summary.Sequence;
-                head.Revision = checked(head.Revision + 1);
-                await context.SaveChangesAsync(cancellationToken);
+            if (head is null)
+            {
+                if (candidates.Count != 0 || await HasItemsAsync(scopeHash, workflowHash, scope, workflowExecutionId, cancellationToken))
+                    throw new InvalidOperationException("Command transport items exist without their stream head.");
                 await transaction.CommitAsync(cancellationToken);
+                return [];
+            }
+            if (candidates.Count == 0)
+            {
+                await transaction.CommitAsync(cancellationToken);
+                return [];
+            }
 
-                return candidates
-                    .Select(row => MapItem(row, scope))
-                    .Where(item => StringComparer.Ordinal.Equals(item.LeasedByOwnerId, ownerId) && item.LeaseExpiresAt == leaseExpiresAt)
-                    .ToArray();
-            }
-            catch (OperationCanceledException)
+            foreach (var candidate in candidates)
             {
-                context.ChangeTracker.Clear();
-                throw;
-            }
-            catch (DbUpdateConcurrencyException exception)
-            {
-                context.ChangeTracker.Clear();
-                lastContention = exception;
-            }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception) || EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
-            {
-                context.ChangeTracker.Clear();
-                lastContention = exception;
-            }
-            catch (DbException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
-            {
-                context.ChangeTracker.Clear();
-                lastContention = exception;
-            }
-            catch (Exception exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
-            {
-                context.ChangeTracker.Clear();
-                lastContention = exception;
-            }
-            catch (Exception exception) when (IsPersistenceBoundaryFailure(exception))
-            {
-                context.ChangeTracker.Clear();
-                throw Normalize("leasing", workflowExecutionId, exception);
-            }
-        }
+                var current = MapItem(candidate, scope);
+                if (!StringComparer.Ordinal.Equals(current.WorkflowExecutionId, workflowExecutionId))
+                    throw new InvalidOperationException("The command transport row belongs to a different workflow execution.");
+                if (!current.IsVisible(now))
+                    continue;
+                if (current.Sequence > head.LastSequence)
+                    throw new InvalidOperationException("A command transport item is ahead of its stream head.");
 
-        throw Contention("leasing", workflowExecutionId, lastContention);
+                var next = current.Lease(ownerId, leaseExpiresAt);
+                ApplyLease(candidate, next, scope, scopeHash, workflowHash);
+            }
+
+            await context.SaveChangesAsync(cancellationToken);
+            var summary = await ReadEarliestPendingAsync(scopeHash, workflowHash, scope, workflowExecutionId, head.PendingCount, head.LastSequence, cancellationToken);
+            head.PendingVisibleAtUtcTicks = summary.VisibleAtUtcTicks;
+            head.PendingSequence = summary.Sequence;
+            head.Revision = checked(head.Revision + 1);
+            await context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+
+            return candidates
+                .Select(row => MapItem(row, scope))
+                .Where(item => StringComparer.Ordinal.Equals(item.LeasedByOwnerId, ownerId) && item.LeaseExpiresAt == leaseExpiresAt)
+                .ToArray();
+        }, cancellationToken);
     }
 
     public async ValueTask<bool> AckAsync(
@@ -280,95 +209,58 @@ public sealed class EfExecutionCommandTransport(
         var workflowHash = EfDistributedIdentity.Hash(workflowExecutionId);
         var transportItemIdHash = EfDistributedIdentity.Hash(transportItemId);
         var itemId = EfDistributedIdentity.CreateId(scope, transportItemId);
-        Exception? lastContention = null;
 
-        for (var attempt = 0; attempt < MaxCasAttempts; attempt++)
+        return await CompareAndSwapAsync(AckRetry, "acknowledging", workflowExecutionId, async () =>
         {
-            context.ChangeTracker.Clear();
-            try
+            await using var transaction = await BeginConsistencyTransactionAsync(cancellationToken);
+            var head = await FindHeadAsync(scope, workflowExecutionId, cancellationToken);
+            var itemEntity = await context.CommandTransportItems.SingleOrDefaultAsync(
+                row => row.Id == itemId &&
+                       row.ScopeKeyHash == scopeHash &&
+                       row.WorkflowExecutionIdHash == workflowHash &&
+                       row.TransportItemIdHash == transportItemIdHash &&
+                       row.ScopeKey == EfDistributedIdentity.EncodeScope(scope) &&
+                       row.WorkflowExecutionId == workflowExecutionId &&
+                       row.TransportItemId == transportItemId,
+                cancellationToken);
+            if (itemEntity is null)
             {
-                await using var transaction = await BeginConsistencyTransactionAsync(cancellationToken);
-                var head = await FindHeadAsync(scope, workflowExecutionId, cancellationToken);
-                var itemEntity = await context.CommandTransportItems.SingleOrDefaultAsync(
-                    row => row.Id == itemId &&
-                           row.ScopeKeyHash == scopeHash &&
-                           row.WorkflowExecutionIdHash == workflowHash &&
-                           row.TransportItemIdHash == transportItemIdHash &&
-                           row.ScopeKey == EfDistributedIdentity.EncodeScope(scope) &&
-                           row.WorkflowExecutionId == workflowExecutionId &&
-                           row.TransportItemId == transportItemId,
-                    cancellationToken);
-                if (itemEntity is null)
+                if (head is not null)
                 {
-                    if (head is not null)
-                    {
-                        EnsureHead(head, scope, workflowExecutionId);
-                        await ValidateHeadStateAsync(head, scopeHash, workflowHash, scope, workflowExecutionId, cancellationToken);
-                    }
-                    await transaction.CommitAsync(cancellationToken);
-                    return false;
+                    EnsureHead(head, scope, workflowExecutionId);
+                    await ValidateHeadStateAsync(head, scopeHash, workflowHash, scope, workflowExecutionId, cancellationToken);
                 }
-                var item = MapItem(itemEntity, scope);
-                if (!StringComparer.Ordinal.Equals(item.WorkflowExecutionId, workflowExecutionId) ||
-                    !StringComparer.Ordinal.Equals(item.LeasedByOwnerId, ownerId) ||
-                    item.LeaseToken != leaseToken ||
-                    item.IsVisible(now))
-                {
-                    await transaction.CommitAsync(cancellationToken);
-                    return false;
-                }
-
-                if (head is null)
-                    throw new InvalidOperationException("A command transport item exists without its stream head.");
-                EnsureHead(head, scope, workflowExecutionId);
-                await ValidateHeadStateAsync(head, scopeHash, workflowHash, scope, workflowExecutionId, cancellationToken);
-                if (item.Sequence > head.LastSequence)
-                    throw new InvalidOperationException("A command transport item is ahead of its stream head.");
-
-                context.CommandTransportItems.Remove(itemEntity);
-                head.PendingCount--;
-                await context.SaveChangesAsync(cancellationToken);
-                var summary = await ReadEarliestPendingAsync(scopeHash, workflowHash, scope, workflowExecutionId, head.PendingCount, head.LastSequence, cancellationToken);
-                head.PendingVisibleAtUtcTicks = summary.VisibleAtUtcTicks;
-                head.PendingSequence = summary.Sequence;
-                head.Revision = checked(head.Revision + 1);
-                await context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
-                return true;
+                return false;
             }
-            catch (OperationCanceledException)
+            var item = MapItem(itemEntity, scope);
+            if (!StringComparer.Ordinal.Equals(item.WorkflowExecutionId, workflowExecutionId) ||
+                !StringComparer.Ordinal.Equals(item.LeasedByOwnerId, ownerId) ||
+                item.LeaseToken != leaseToken ||
+                item.IsVisible(now))
             {
-                context.ChangeTracker.Clear();
-                throw;
+                await transaction.CommitAsync(cancellationToken);
+                return false;
             }
-            catch (DbUpdateConcurrencyException exception)
-            {
-                context.ChangeTracker.Clear();
-                lastContention = exception;
-            }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
-            {
-                context.ChangeTracker.Clear();
-                lastContention = exception;
-            }
-            catch (DbException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
-            {
-                context.ChangeTracker.Clear();
-                lastContention = exception;
-            }
-            catch (Exception exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
-            {
-                context.ChangeTracker.Clear();
-                lastContention = exception;
-            }
-            catch (Exception exception) when (IsPersistenceBoundaryFailure(exception))
-            {
-                context.ChangeTracker.Clear();
-                throw Normalize("acknowledging", workflowExecutionId, exception);
-            }
-        }
 
-        throw Contention("acknowledging", workflowExecutionId, lastContention);
+            if (head is null)
+                throw new InvalidOperationException("A command transport item exists without its stream head.");
+            EnsureHead(head, scope, workflowExecutionId);
+            await ValidateHeadStateAsync(head, scopeHash, workflowHash, scope, workflowExecutionId, cancellationToken);
+            if (item.Sequence > head.LastSequence)
+                throw new InvalidOperationException("A command transport item is ahead of its stream head.");
+
+            context.CommandTransportItems.Remove(itemEntity);
+            head.PendingCount--;
+            await context.SaveChangesAsync(cancellationToken);
+            var summary = await ReadEarliestPendingAsync(scopeHash, workflowHash, scope, workflowExecutionId, head.PendingCount, head.LastSequence, cancellationToken);
+            head.PendingVisibleAtUtcTicks = summary.VisibleAtUtcTicks;
+            head.PendingSequence = summary.Sequence;
+            head.Revision = checked(head.Revision + 1);
+            await context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return true;
+        }, cancellationToken);
     }
 
     public async ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(
@@ -667,6 +559,20 @@ public sealed class EfExecutionCommandTransport(
             (row.PendingCount > 0 && (row.PendingSequence <= 0 || row.PendingSequence > row.LastSequence)))
             throw new InvalidOperationException("The command stream head contains inconsistent identity or summary projections.");
     }
+
+    private ValueTask<T> CompareAndSwapAsync<T>(
+        EfWriteRetry retry,
+        string operation,
+        string workflowExecutionId,
+        Func<Task<T>> attempt,
+        CancellationToken cancellationToken) =>
+        EfDistributedCompareAndSwap.RunAsync(
+            context,
+            retry,
+            attempt,
+            exception => IsPersistenceBoundaryFailure(exception) ? Normalize(operation, workflowExecutionId, exception) : null,
+            lastContention => Contention(operation, workflowExecutionId, lastContention),
+            cancellationToken);
 
     private Task<IDbContextTransaction> BeginConsistencyTransactionAsync(CancellationToken cancellationToken) =>
         context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);

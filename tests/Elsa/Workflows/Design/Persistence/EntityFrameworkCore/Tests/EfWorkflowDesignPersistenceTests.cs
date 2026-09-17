@@ -2271,6 +2271,37 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Ef_fails_a_transient_write_at_once_inside_a_caller_owned_shared_transaction()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        var interceptor = new TransientSaveInterceptor();
+        var options = new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>()
+            .UseSqlite(connection).AddInterceptors(interceptor).Options;
+        await using (var schema = new WorkflowsDesignSqliteDbContext(options))
+            await schema.Database.EnsureCreatedAsync();
+        await using var configured = new WorkflowsDesignSqliteDbContext(options);
+        await using var shared = await Elsa.Persistence.EntityFramework.EfSharedTransaction.BeginAsync([configured]);
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        IDesignAtomicWriter writer = new EfDesignAtomicWriter(
+            shared.Context<WorkflowsDesignSqliteDbContext>(), access, transactionFactory: shared.BeginOperationAsync);
+        var stageCalls = 0;
+        interceptor.FailNextSave = true;
+
+        var failure = await Assert.ThrowsAsync<DesignPersistenceException>(() => writer.ExecuteAsync(
+            new DesignOperationKey("transient-in-shared-transaction"), "test.op", new { Value = 1 }, ["test"],
+            (_, _) =>
+            {
+                stageCalls++;
+                return Task.FromResult(DesignAtomicWriteStage<int>.Accepted(1));
+            }));
+
+        Assert.Equal(DesignPersistenceFailureKind.Provider, failure.FailureKind);
+        Assert.Equal(5, Assert.IsType<SqliteException>(failure.InnerException).SqliteErrorCode);
+        Assert.Equal(1, stageCalls);
+        Assert.True(shared.IsRollbackOnly);
+    }
+
+    [Fact]
     public async Task Ef_version_allocation_recomputes_latest_version_after_a_transient_retry()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

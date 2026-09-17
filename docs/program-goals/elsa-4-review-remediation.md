@@ -463,7 +463,8 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
   contract for deployed principals and needs Studio coordination; its own gated unit if ever).
 - **Durable poison store** (from W1): `IWorkflowSchedulerPoisonStore` ships with an
   in-memory default; a Groundwork-backed implementation (through the W3 serializer) is the
-  natural follow-up so poison records survive restarts.
+  natural follow-up so poison records survive restarts. **Superseded:** the durable store is
+  `EfWorkflowSchedulerPoisonStore` (#1746); Groundwork was deleted by #1764.
 
 ### Follow-up findings recorded during Phase 1 execution
 
@@ -474,7 +475,8 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
   change; see `docs/runtime-durable-timers.md`.
 - **Native due-time range index in Groundwork** (from W8): Groundwork queries are
   equality-only, so the timer pump's `ListDueAsync` loads the whole timer partition and
-  filters in memory; a native range index is the scale follow-up.
+  filters in memory; a native range index is the scale follow-up. **Moot:** Groundwork was deleted
+  by #1764; durable timers are `EfDurableTimerStore` (#1746).
 - **Timer/Cron start triggers** (from W8 scope cut): W7's trigger index has now landed;
   Timer/Cron start-trigger activities on top of `IActivityTriggerStimulusProvider` + the
   `durableTimer` store are ready to build. Candidate next-wave unit.
@@ -563,7 +565,9 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
   not-found and fall to 500 instead of 404. Convert opportunistically or as a small sweep unit.
 - **Groundwork durable placement + transport stores** (from W20): mechanical drop-in against the
   frozen leaf contracts and the committed `executionCommandTransport` v1 fixture; required before the
-  distributed provider is production-usable across processes.
+  distributed provider is production-usable across processes. **Done:** Groundwork stores landed in
+  W27; their EF Core replacements are #1718 (placement) and #1721 (command transport), and #1764
+  deleted the Groundwork ones.
 
 ## Linked Surfaces
 

@@ -13,7 +13,7 @@ using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Core.Reconciliation.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;

@@ -4,9 +4,9 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
-using Elsa.Workflows.Runtime.Core.Services;
-using Elsa.Workflows.Runtime.Core.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Alterations;
+using Elsa.Workflows.Runtime.Services.Coalescing;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Xunit;
 using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.RuntimeCheckpointCommitContract;
 

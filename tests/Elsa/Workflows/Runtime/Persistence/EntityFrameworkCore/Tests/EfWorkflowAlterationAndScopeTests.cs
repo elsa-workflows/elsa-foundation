@@ -2,15 +2,15 @@ using System.Data.Common;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Exceptions;
-using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
-using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Services.Alterations;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.Services.Recovery;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -286,6 +286,50 @@ public sealed class EfWorkflowAlterationAndScopeTests
 
         Assert.Null(await fixture.Store.ClaimNextAsync(plan.PlanId, "early-worker", plan.CreatedAt.AddTicks(-1), TimeSpan.FromMinutes(1)));
         Assert.NotNull(await fixture.Store.ClaimNextAsync(plan.PlanId, "on-time-worker", plan.CreatedAt, TimeSpan.FromMinutes(1)));
+    }
+
+    [Fact]
+    public async Task Alteration_claim_surfaces_a_database_failure_that_is_not_a_write_race_at_once_with_its_own_cause()
+    {
+        await using var db = await Database.CreateAsync();
+        var interceptor = new JobClaimFailureInterceptor(() => new SqliteException("disk I/O error", 10));
+        await using var fixture = db.Open("tenant-a", interceptor);
+        var plan = await SealedPlanAsync(fixture, "claim-io-failure");
+
+        interceptor.Arm();
+        var failure = await Assert.ThrowsAsync<DbUpdateException>(() =>
+            fixture.Store.ClaimNextAsync(plan.PlanId, "worker", plan.CreatedAt.AddMinutes(2), TimeSpan.FromMinutes(1)).AsTask());
+
+        Assert.Equal(10, Assert.IsType<SqliteException>(failure.InnerException).SqliteErrorCode);
+        Assert.Equal(1, interceptor.Failures);
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+    }
+
+    [Fact]
+    public async Task Alteration_claim_retries_a_transient_write_race_until_the_budget_runs_out()
+    {
+        await using var db = await Database.CreateAsync();
+        var interceptor = new JobClaimFailureInterceptor(() => new SqliteException("database is locked", 5));
+        await using var fixture = db.Open("tenant-a", interceptor);
+        var plan = await SealedPlanAsync(fixture, "claim-busy");
+
+        interceptor.Arm();
+        await Assert.ThrowsAsync<WorkflowAlterationConcurrencyException>(() =>
+            fixture.Store.ClaimNextAsync(plan.PlanId, "worker", plan.CreatedAt.AddMinutes(2), TimeSpan.FromMinutes(1)).AsTask());
+
+        Assert.Equal(EfWriteRetry.DefaultMaxAttempts, interceptor.Failures);
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+        interceptor.Disarm();
+        Assert.NotNull(await fixture.Store.ClaimNextAsync(plan.PlanId, "worker", plan.CreatedAt.AddMinutes(2), TimeSpan.FromMinutes(1)));
+    }
+
+    private static async Task<WorkflowAlterationPlanState> SealedPlanAsync(Fixture fixture, string planId)
+    {
+        var plan = Plan(planId);
+        await fixture.Store.AdmitAsync(plan);
+        await fixture.Store.CaptureAsync(plan.PlanId, 0, [new WorkflowAlterationCapturedTarget("execution-1", "tenant-a")], null);
+        await fixture.Store.SealAsync(plan.PlanId, 1, plan.CreatedAt.AddMinutes(1));
+        return plan;
     }
 
     [Fact]
@@ -864,6 +908,43 @@ public sealed class EfWorkflowAlterationAndScopeTests
                 command.CommandText.Contains("INSERT", StringComparison.OrdinalIgnoreCase) &&
                 Interlocked.Exchange(ref armed, 0) == 1)
                 throw new DbUpdateException("Simulated alteration checkpoint marker insert failure.");
+        }
+    }
+
+    private sealed class JobClaimFailureInterceptor(Func<Exception> failure) : DbCommandInterceptor
+    {
+        private int armed;
+        private int failures;
+
+        public int Failures => Volatile.Read(ref failures);
+
+        public void Arm() => Interlocked.Exchange(ref armed, 1);
+
+        public void Disarm() => Interlocked.Exchange(ref armed, 0);
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            ThrowIfArmed(command);
+            return ValueTask.FromResult(result);
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            ThrowIfArmed(command);
+            return ValueTask.FromResult(result);
+        }
+
+        private void ThrowIfArmed(DbCommand command)
+        {
+            if (Volatile.Read(ref armed) == 1 &&
+                command.CommandText.Contains("UPDATE", StringComparison.OrdinalIgnoreCase) &&
+                command.CommandText.Contains("elsa_runtime_workflow_alteration_job", StringComparison.OrdinalIgnoreCase))
+            {
+                Interlocked.Increment(ref failures);
+                throw failure();
+            }
         }
     }
 }

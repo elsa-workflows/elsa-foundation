@@ -59,10 +59,10 @@
 ### Implementation for User Story 3
 
 - [X] T016 [US3] Add the retained executable-root query and execution removal/retention seam to `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowExecutionStateStore.cs`
-- [X] T017 [P] [US3] Implement distinct retained roots and retention removal in `src/Elsa/Workflows/Runtime/Services/InMemoryWorkflowExecutionStateStore.cs`
+- [X] T017 [P] [US3] Implement distinct retained roots and retention removal in `src/Elsa/Workflows/Runtime/Services/Executions/InMemoryWorkflowExecutionStateStore.cs`
 - [X] T018 [P] [US3] Implement provider-side retained-root projection/index querying in `src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowExecutionStateStore.cs` and `src/Elsa/Persistence/Groundwork/ElsaRuntimeStorageManifest.cs`
 - [X] T019 [US3] Add artifact creation/staging grace and final conditional root-check contracts to `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowExecutableStore.cs` and `src/Elsa/Workflows/Runtime/ReferenceGarbageCollection/Options/WorkflowExecutableReferenceGarbageCollectionOptions.cs`
-- [X] T020 [US3] Protect the live-reference plus retained-execution union and close check-delete races in `src/Elsa/Workflows/Runtime/Services/WorkflowExecutableReferenceGarbageCollector.cs`
+- [X] T020 [US3] Protect the live-reference plus retained-execution union and close check-delete races in `src/Elsa/Workflows/Runtime/Services/Executables/WorkflowExecutableReferenceGarbageCollector.cs`
 - [X] T021 [US3] Wire the new retention dependencies in `src/Elsa/Workflows/Runtime/ReferenceGarbageCollection/WorkflowsRuntimeReferenceGarbageCollectionFeature.cs` and its registration tests
 - [X] T022 [US3] Document the retained-root query and GC behavior in `src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md` and the Runtime feature README
 - [X] T023 [US3] Run the US3 commands from `specs/092-domain-owned-apis/quickstart.md` and record any provider-specific follow-up in `specs/092-domain-owned-apis/migration-matrix.md`

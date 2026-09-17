@@ -1,6 +1,6 @@
 using Elsa.Foundation.Identity.Core.Authorization;
 
-namespace Elsa.Workflows.Runtime.JavaScript;
+namespace Elsa.Workflows.Runtime.JavaScript.Authorization;
 
 public static class JavaScriptExecutionPermissions
 {

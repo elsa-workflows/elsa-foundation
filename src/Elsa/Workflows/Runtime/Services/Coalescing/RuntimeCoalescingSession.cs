@@ -2,8 +2,9 @@ using System.Collections.Concurrent;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Scheduler;
 
-namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
+namespace Elsa.Workflows.Runtime.Services.Coalescing;
 
 /// <summary>
 /// Per-drain in-memory working set for coalesced checkpoint segments. Buffers deferred checkpoint

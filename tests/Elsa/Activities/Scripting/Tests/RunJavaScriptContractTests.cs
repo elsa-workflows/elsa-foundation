@@ -4,7 +4,7 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Scripting.Activities;
 using Elsa.Expressions.JavaScript.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Xunit;
 
 namespace Elsa.Activities.Scripting.Tests;

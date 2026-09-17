@@ -1,5 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
-using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Alterations;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;

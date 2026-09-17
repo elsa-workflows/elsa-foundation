@@ -1,6 +1,6 @@
-using Elsa.Workflows.Runtime.Core.Services.Coalescing;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 
-namespace Elsa.Workflows.Runtime.Core.Contracts;
+namespace Elsa.Workflows.Runtime.Contracts;
 
 /// <summary>
 /// Establishes a checkpoint-coalescing session for the duration of a single workflow-execution drain.

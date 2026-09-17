@@ -1,7 +1,8 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Recovery;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;

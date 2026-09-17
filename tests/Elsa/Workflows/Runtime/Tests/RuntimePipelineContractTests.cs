@@ -1,8 +1,9 @@
-using Elsa.Workflows.Runtime.Core.Builders;
+using Elsa.Workflows.Runtime.Builders;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Middleware;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Middleware;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;

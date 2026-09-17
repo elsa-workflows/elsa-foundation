@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Elsa.Workflows.Runtime.Core.Services;
+namespace Elsa.Workflows.Runtime.Services;
 
 internal static class InMemoryRuntimeStoreContinuation
 {

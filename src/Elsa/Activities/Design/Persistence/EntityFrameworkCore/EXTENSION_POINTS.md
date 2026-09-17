@@ -42,5 +42,7 @@ of that definition in that tenant still fails closed.
 ## Registration
 
 `AddActivitiesDesignEntityFrameworkCore()` validates provider selection and exclusive replacement
-ownership before registering the EF contexts, stores, projection writer, and atomic writer. Schema
-creation is test-owned in this slice; migrations and a default-composition flip are separate gates.
+ownership before registering the EF contexts, stores, projection writer, and atomic writer. The
+`ActivitiesDesignEntityFrameworkCore` feature also registers `AddEfModuleMigrations<ActivitiesDesignDbContext>`,
+so the shared `EfModuleMigrator<TContext>` applies or validates the four-provider migrations under
+`Migrations/ActivitiesDesign/` in the CShells Prepare phase.

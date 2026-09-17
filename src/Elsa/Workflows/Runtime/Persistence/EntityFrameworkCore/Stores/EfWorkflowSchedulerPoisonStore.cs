@@ -17,7 +17,7 @@ public sealed class EfWorkflowSchedulerPoisonStore(
     BookmarkStateDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowSchedulerPoisonStore
 {
-    private const int MaxRecordAttempts = 16;
+    private static readonly EfWriteRetry Records = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey);
     private const int ProviderPageSize = RuntimeStorePageRequest.MaximumLimit;
 
     public async ValueTask<RuntimeSchedulerPoisonRecord> RecordAsync(
@@ -29,7 +29,8 @@ public sealed class EfWorkflowSchedulerPoisonStore(
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
         var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, record.WorkflowExecutionId, record.WorkItemId);
 
-        for (var attempt = 0; attempt < MaxRecordAttempts; attempt++)
+        // An insert retries the unique-key or revision race a concurrent recorder wins; a replacement only its revision race.
+        return await Records.RunUntilSettledAsync<RuntimeSchedulerPoisonRecord>(context, async () =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             var row = await context.WorkflowSchedulerPoisonRecords.AsNoTracking()
@@ -44,27 +45,14 @@ public sealed class EfWorkflowSchedulerPoisonStore(
                     Detach(inserted);
                     return record;
                 }
-                catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
-                {
-                    Detach(inserted);
-                    continue;
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    Detach(inserted);
-                    continue;
-                }
-                catch (OperationCanceledException)
-                {
-                    Detach(inserted);
-                    throw;
-                }
-                catch (DbUpdateException)
+                catch (Exception exception) when (exception is DbUpdateException or OperationCanceledException)
                 {
                     // A provider failure can leave the failed Added entity tracked even though its transaction was
                     // rolled back. Detach it before the caller can stage another shared-context participant; the
                     // failed poison write must never be retried implicitly by a later SaveChanges call.
                     Detach(inserted);
+                    if (Records.ShouldRetry(context, exception))
+                        return EfWriteAttempt<RuntimeSchedulerPoisonRecord>.Retry(exception);
                     throw;
                 }
             }
@@ -78,25 +66,16 @@ public sealed class EfWorkflowSchedulerPoisonStore(
                 Detach(replacement);
                 return record;
             }
-            catch (DbUpdateConcurrencyException)
-            {
-                Detach(replacement);
-            }
-            catch (OperationCanceledException)
-            {
-                Detach(replacement);
-                throw;
-            }
-            catch (DbUpdateException)
+            catch (Exception exception) when (exception is DbUpdateException or OperationCanceledException)
             {
                 // Keep the shared context usable after a generic provider failure, just as after a CAS conflict.
                 Detach(replacement);
+                if (exception is DbUpdateConcurrencyException)
+                    return EfWriteAttempt<RuntimeSchedulerPoisonRecord>.Retry(exception);
                 throw;
             }
-        }
-
-        throw new InvalidOperationException(
-            $"Recording scheduler poison record '{record.WorkItemId}' in workflow execution '{record.WorkflowExecutionId}' did not settle after {MaxRecordAttempts} compare-and-swap attempts.");
+        }, _ => throw new InvalidOperationException(
+            $"Recording scheduler poison record '{record.WorkItemId}' in workflow execution '{record.WorkflowExecutionId}' did not settle after {Records.MaxAttempts} compare-and-swap attempts."), cancellationToken);
     }
 
     public async ValueTask<RuntimeSchedulerPoisonRecord?> FindAsync(

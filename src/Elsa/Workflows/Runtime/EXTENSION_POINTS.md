@@ -19,11 +19,11 @@ contracts are Design-free and operate on runtime-owned executable artifacts and 
 Two contract-shaped surfaces live in the engine package rather than `.Core`, deliberately:
 
 - **`IRuntimeCoalescingSessionAccessor` + `IRuntimeCoalescingDrainScopeFactory`** (namespace
-  `Elsa.Workflows.Runtime.Core.Contracts`) expose the concrete `RuntimeCoalescingSession` engine
+  `Elsa.Workflows.Runtime.Contracts`) expose the concrete `RuntimeCoalescingSession` engine
   working state. Their only consumers are the opt-in coalescing composition in Runtime.Api and its
   tests.
 - **`ActivityRuntimePipelineBuilder` + `WorkflowRuntimePipelineBuilder`** (namespace
-  `Elsa.Workflows.Runtime.Core.Builders`) bake concrete engine middleware and the concrete
+  `Elsa.Workflows.Runtime.Builders`) bake concrete engine middleware and the concrete
   `RuntimeCheckpointCommitter` into their default plans. The declarative slot machinery remains in
   `.Core`, so third-party middleware authors do not need the engine package at compile time.
 
@@ -729,8 +729,8 @@ and the [benchmark results](../../../../docs/reports/elsa-4-architecture-review-
 > `Elsa.Workflows.Runtime` engine package instead of staying in `.Core` with the other contracts:
 > both expose the concrete `RuntimeCoalescingSession` (engine working state) on their signatures, so
 > they cannot stand ahead of the engine, and their only consumers are the opt-in coalescing
-> composition in `Runtime.Api` plus its tests. They keep their `Elsa.Workflows.Runtime.Core.Contracts`
-> namespace. This canonical catalog covers both the contracts and engine-hosted deviations.
+> composition in `Runtime.Api` plus its tests. Their namespace, `Elsa.Workflows.Runtime.Contracts`,
+> follows that package. This canonical catalog covers both the contracts and engine-hosted deviations.
 
 ### `IRuntimeCoalescingSessionAccessor` *(engine — `Elsa.Workflows.Runtime`)*
 - **Kind:** Replacement (one ambient accessor exposes the active coalescing session to the decorators).

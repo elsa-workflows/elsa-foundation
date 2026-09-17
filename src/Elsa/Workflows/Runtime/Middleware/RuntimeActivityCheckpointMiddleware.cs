@@ -1,9 +1,10 @@
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services.Bookmarks;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 
-namespace Elsa.Workflows.Runtime.Core.Middleware;
+namespace Elsa.Workflows.Runtime.Middleware;
 
 /// <summary>
 /// The activity pipeline's <c>Checkpoint</c> slot: persists the checkpoint commits a handler assembled and staged on

@@ -22,7 +22,7 @@ public sealed class EfSchedulerWorkQueueStore(
     IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection
 {
     private const string CursorPurpose = "ef-runtime-scheduler-work-v1";
-    private const int MaxTransitionAttempts = 16;
+    private static readonly EfWriteRetry Transitions = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);
 
     public bool SupportsClaimTransitions => true;
 
@@ -113,7 +113,7 @@ public sealed class EfSchedulerWorkQueueStore(
         var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
         var workflowKey = EfRuntimeOperationalStoreSupport.Encode(workflowExecutionId);
         var workflowHash = EfRuntimeOperationalStoreSupport.Hash(workflowExecutionId);
-        for (var attempt = 0; attempt < MaxTransitionAttempts; attempt++)
+        return await Transitions.RunAsync<RuntimeSchedulerWorkItem?>(context, async () =>
         {
             var row = await context.SchedulerWorkItems.AsNoTracking()
                 .Where(candidate => candidate.ScopeKey == scopeKey && candidate.ScopeKeyHash == scopeHash &&
@@ -129,23 +129,12 @@ public sealed class EfSchedulerWorkQueueStore(
                 await context.SaveChangesAsync(cancellationToken);
                 return item;
             }
-            catch (DbUpdateConcurrencyException)
-            {
-                Detach(row);
-            }
-            catch (OperationCanceledException)
+            catch (Exception exception) when (exception is DbUpdateException or OperationCanceledException)
             {
                 Detach(row);
                 throw;
             }
-            catch (DbUpdateException)
-            {
-                Detach(row);
-                throw;
-            }
-        }
-
-        throw TransitionDidNotSettle("dequeue", workflowExecutionId);
+        }, _ => throw TransitionDidNotSettle("dequeue", workflowExecutionId), cancellationToken);
     }
 
     public async ValueTask<bool> DeleteAsync(
@@ -157,7 +146,7 @@ public sealed class EfSchedulerWorkQueueStore(
         cancellationToken.ThrowIfCancellationRequested();
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
         var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, workflowExecutionId, workItemId);
-        for (var attempt = 0; attempt < MaxTransitionAttempts; attempt++)
+        return await Transitions.RunAsync(context, async () =>
         {
             var row = await context.SchedulerWorkItems.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
             if (row is null)
@@ -169,23 +158,12 @@ public sealed class EfSchedulerWorkQueueStore(
                 await context.SaveChangesAsync(cancellationToken);
                 return true;
             }
-            catch (DbUpdateConcurrencyException)
-            {
-                Detach(row);
-            }
-            catch (OperationCanceledException)
+            catch (Exception exception) when (exception is DbUpdateException or OperationCanceledException)
             {
                 Detach(row);
                 throw;
             }
-            catch (DbUpdateException)
-            {
-                Detach(row);
-                throw;
-            }
-        }
-
-        throw TransitionDidNotSettle("delete", workflowExecutionId, workItemId);
+        }, _ => throw TransitionDidNotSettle("delete", workflowExecutionId, workItemId), cancellationToken);
     }
 
     public async ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(
@@ -220,7 +198,7 @@ public sealed class EfSchedulerWorkQueueStore(
         var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
         var workflowKey = EfRuntimeOperationalStoreSupport.Encode(request.WorkflowExecutionId);
         var workflowHash = EfRuntimeOperationalStoreSupport.Hash(request.WorkflowExecutionId);
-        for (var attempt = 0; attempt < MaxTransitionAttempts; attempt++)
+        return await Transitions.RunAsync<RuntimeSchedulerWorkClaim?>(context, async () =>
         {
             var row = await context.SchedulerWorkItems.AsNoTracking()
                 .Where(candidate => candidate.ScopeKey == scopeKey && candidate.ScopeKeyHash == scopeHash &&
@@ -242,23 +220,12 @@ public sealed class EfSchedulerWorkQueueStore(
                 Detach(updated);
                 return ToClaim(updated, item);
             }
-            catch (DbUpdateConcurrencyException)
-            {
-                Detach(updated);
-            }
-            catch (OperationCanceledException)
+            catch (Exception exception) when (exception is DbUpdateException or OperationCanceledException)
             {
                 Detach(updated);
                 throw;
             }
-            catch (DbUpdateException)
-            {
-                Detach(updated);
-                throw;
-            }
-        }
-
-        throw TransitionDidNotSettle("claim", request.WorkflowExecutionId);
+        }, _ => throw TransitionDidNotSettle("claim", request.WorkflowExecutionId), cancellationToken);
     }
 
     public async ValueTask<RuntimeSchedulerWorkClaimTransitionResult> RenewClaimAsync(
@@ -670,5 +637,5 @@ public sealed class EfSchedulerWorkQueueStore(
     private static InvalidOperationException TransitionDidNotSettle(string transition, string workflowExecutionId, string? workItemId = null) =>
         new($"Scheduler-work {transition} for workflow execution '{workflowExecutionId}'" +
             (workItemId is null ? string.Empty : $" and work item '{workItemId}'") +
-            $" did not settle after {MaxTransitionAttempts} compare-and-swap attempts.");
+            $" did not settle after {Transitions.MaxAttempts} compare-and-swap attempts.");
 }
