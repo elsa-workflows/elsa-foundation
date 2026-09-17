@@ -90,7 +90,7 @@ public sealed class EfRelationalProviderBindingDriftTests
     }
 
     private static Dictionary<string, string> PinnedVersions() =>
-        XDocument.Load(Path.Combine(RepoRoot(), "Directory.Packages.props"))
+        XDocument.Load(Path.Join(RepoRoot(), "Directory.Packages.props"))
             .Descendants("PackageVersion")
             .Where(element => element.Attribute("Include") is not null && element.Attribute("Version") is not null)
             .ToDictionary(
@@ -101,7 +101,7 @@ public sealed class EfRelationalProviderBindingDriftTests
     private static string RepoRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Directory.Packages.props")))
+        while (directory is not null && !File.Exists(Path.Join(directory.FullName, "Directory.Packages.props")))
             directory = directory.Parent;
         return directory?.FullName ?? throw new InvalidOperationException("Directory.Packages.props was not found above the test output directory.");
     }
