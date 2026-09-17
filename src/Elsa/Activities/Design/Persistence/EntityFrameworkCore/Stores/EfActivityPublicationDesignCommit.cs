@@ -71,10 +71,10 @@ public sealed class EfActivityPublicationDesignCommit
         var publication = mutation.Publication;
         try
         {
-            var stored = await InScope(EfActivityDesignStores.ByReference(
+            var stored = await EfActivityDesignStores.InPhysicalIdentityOrder(InScope(EfActivityDesignStores.ByReference(
                     db.ActivityDefinitionVersionPublications.AsNoTracking(),
                     nameof(ActivityDefinitionVersionPublication.DefinitionVersionId),
-                    publication.DefinitionVersionId), publication.TenantId)
+                    publication.DefinitionVersionId), publication.TenantId))
                 .Take(2)
                 .ToListAsync(cancellationToken);
             if (stored.Count != 1 || !SamePublication(stored[0], publication))
@@ -238,10 +238,10 @@ public sealed class EfActivityPublicationDesignCommit
         var draft = await EfActivityDesignStores.ById(Visible(db.ActivityDefinitionDrafts, tracking), mutation.DraftId)
                         .SingleOrDefaultAsync(cancellationToken)
                     ?? throw Conflict($"Activity draft '{mutation.DraftId}' was not found.");
-        var authorings = await EfActivityDesignStores.ByReference(
+        var authorings = await EfActivityDesignStores.InPhysicalIdentityOrder(EfActivityDesignStores.ByReference(
                 Visible(db.ActivityDefinitionAuthoringStates, tracking),
                 nameof(ActivityDefinitionAuthoringState.DefinitionId),
-                mutation.DefinitionId)
+                mutation.DefinitionId))
             .Take(2)
             .ToListAsync(cancellationToken);
         var authoring = authorings.Count switch
@@ -300,10 +300,10 @@ public sealed class EfActivityPublicationDesignCommit
         if (definition is not null && !StringComparer.Ordinal.Equals(definition.ActivityTypeKey, commit.Definition.ActivityTypeKey))
             throw Conflict($"Activity definition '{commit.Definition.Id}' is already bound to another source identity.");
 
-        var authorings = await InScope(EfActivityDesignStores.ByReference(
+        var authorings = await EfActivityDesignStores.InPhysicalIdentityOrder(InScope(EfActivityDesignStores.ByReference(
                     tracking ? db.ActivityDefinitionAuthoringStates : db.ActivityDefinitionAuthoringStates.AsNoTracking(),
                     nameof(ActivityDefinitionAuthoringState.DefinitionId),
-                    commit.Definition.Id), commit.AuthoringState.TenantId)
+                    commit.Definition.Id), commit.AuthoringState.TenantId))
             .Take(2)
             .ToListAsync(cancellationToken);
         if (authorings.Count > 1)

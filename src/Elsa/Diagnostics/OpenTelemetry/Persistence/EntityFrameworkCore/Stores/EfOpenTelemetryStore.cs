@@ -528,9 +528,11 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
             .OrderByDescending(x => x.Sequence)
             .ThenByDescending(x => x.TraceKey)
             .Skip(traceCapacity);
+        // Distinct erases the retention order, so the bounded key read orders its own result.
         var projectedKeys = await expired
             .Select(x => x.TraceKey)
             .Distinct()
+            .OrderBy(x => x)
             .Take(MaximumAffectedSummaryKeys + 1)
             .ToListAsync(ct);
         if (projectedKeys.Count > MaximumAffectedSummaryKeys)
