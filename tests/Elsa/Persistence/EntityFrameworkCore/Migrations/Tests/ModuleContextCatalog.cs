@@ -52,10 +52,11 @@ internal static class ModuleContextCatalog
     public static string HistoryTable(Type context) =>
         EfMigrationsHistory.TableName(context.Name[..^(ProviderOf(context).Length + "DbContext".Length)]);
 
-    public static DbContext Create(Type context, string connectionString)
+    public static DbContext Create(Type context, string connectionString, Action<DbContextOptionsBuilder>? configure = null)
     {
         var builder = (DbContextOptionsBuilder)Activator.CreateInstance(typeof(DbContextOptionsBuilder<>).MakeGenericType(context))!;
         EfRelationalProviderBinding.Use(builder, ProviderOf(context), connectionString, HistoryTable(context), context.Assembly.GetName().Name);
+        configure?.Invoke(builder);
         return (DbContext)Activator.CreateInstance(context, builder.Options)!;
     }
 

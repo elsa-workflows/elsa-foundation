@@ -3,6 +3,7 @@ using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Core.Options;
 using Elsa.Diagnostics.Persistence.Extensions;
+using Elsa.Diagnostics.Persistence.Observability;
 using Elsa.Diagnostics.StructuredLogs.Storage;
 using Elsa.Diagnostics.StructuredLogs;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Entities;
@@ -12,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Persistence.EntityFramework;
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
@@ -431,6 +433,64 @@ public sealed class StructuredLogsEntityFrameworkCoreTests
         Assert.Contains(record!.GetIndexes(), index => index.IsUnique && index.Properties.Any(property => property.Name == nameof(StructuredLogRecord.ReplayToken)));
     }
 
+    /// <summary>
+    /// A shell with durable structured logs logs while it activates, before its Prepare-phase migrator has created
+    /// the tables and before the host starts the capture drain. Those entries are rejected without touching the
+    /// database and counted; everything logged once the schema exists and the drain runs is persisted. The failure at
+    /// the first log line used to be cached by the sink for the life of the process, so nothing was ever persisted.
+    /// </summary>
+    [Fact]
+    public async Task Logging_before_migrations_does_not_stop_capture_once_the_schema_exists_and_the_drain_runs()
+    {
+        var directory = Path.Join(Path.GetTempPath(), "elsa-structured-logs-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+            // As in the Workbench, EF logs only warnings and errors, so a failed query against a missing table is captured.
+            services.AddLogging(logging => logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning));
+            new StructuredLogsFeature().ConfigureServices(services);
+            new StructuredLogsEntityFrameworkCoreFeature
+            {
+                Provider = "Sqlite",
+                ConnectionString = $"Data Source={Path.Join(directory, "structured-logs.db")};Pooling=False"
+            }.ConfigureServices(services);
+            services.AddDiagnosticsPersistenceObservability();
+            await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+            var logger = provider.GetRequiredService<ILoggerFactory>().CreateLogger("Shell.Activation");
+            var store = provider.GetRequiredService<EfStructuredLogStore>();
+
+            logger.LogInformation("before-migration");
+            await provider.GetRequiredService<EfModuleMigrator<StructuredLogsDbContext>>().InitializeAsync();
+            store.Start();
+            logger.LogInformation("after-migration");
+
+            Assert.Equal(["after-migration"], await WaitForPersistedMessagesAsync(store, "after-migration"));
+            var losses = provider.GetRequiredService<DiagnosticsPersistenceCounters>().Snapshot().Losses;
+            Assert.Equal(1, losses[DiagnosticsPersistenceLossReason.WriteBeforeStart]);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Append_before_the_drain_starts_is_rejected_and_counted_without_provider_io()
+    {
+        var counters = new DiagnosticsPersistenceCounters();
+        await using var store = new EfStructuredLogStore(
+            new ThrowingScopeFactory(new IOException("the store must not open a session before it starts")),
+            Options.Create(new StructuredLogsOptions()),
+            new("tenant", "scope", "stream"),
+            counters);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.AppendAsync(Entry("early", LogLevel.Information, "source-a")).AsTask());
+
+        Assert.Equal(1, counters.Snapshot().Losses[DiagnosticsPersistenceLossReason.WriteBeforeStart]);
+    }
+
     private static StructuredLogEntry Entry(string message, LogLevel level, string source) => new()
     {
         Message = message,
@@ -464,6 +524,18 @@ public sealed class StructuredLogsEntityFrameworkCoreTests
         services.AddSingleton<EfStructuredLogStore>();
         services.AddDiagnosticsPersistenceLifecycle<EfStructuredLogStore>();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+    }
+
+    private static async Task<string[]> WaitForPersistedMessagesAsync(EfStructuredLogStore store, string expected)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (true)
+        {
+            var messages = (await store.GetRecentAsync(StructuredLogFilter.None)).Select(entry => entry.Message).ToArray();
+            if (messages.Contains(expected) || DateTime.UtcNow >= deadline)
+                return messages;
+            await Task.Delay(25);
+        }
     }
 
     private static async Task<IReadOnlyList<StructuredLogRecord>> ReadRecordsAsync(ServiceProvider provider)

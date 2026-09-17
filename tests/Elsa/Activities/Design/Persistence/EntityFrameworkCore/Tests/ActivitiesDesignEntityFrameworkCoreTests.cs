@@ -1265,6 +1265,41 @@ public sealed class ActivitiesDesignEntityFrameworkCoreTests
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => store.ExecuteAsync(new UpdateActivityDraftPresentationRequest("draft", 3, "nope", DateTimeOffset.UtcNow)));
     }
 
+    /// <summary>
+    /// JSON-converted properties are compared by content. Without a value comparer EF compares them by reference, so
+    /// an in-place change to a loaded collection is not detected and SaveChanges silently writes nothing. The comparer
+    /// must not go the other way either: a value loaded and left alone is not a change.
+    /// </summary>
+    [Fact]
+    public async Task Sqlite_in_place_mutation_of_a_json_converted_collection_is_saved()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<ActivitiesDesignSqliteDbContext>().UseSqlite(connection).Options;
+        await using (var seed = new ActivitiesDesignSqliteDbContext(options))
+        {
+            await seed.Database.EnsureCreatedAsync();
+            var layout = Layout("draft", "tenant-a", 1);
+            layout.Records.Add(LayoutRecord("node-1", 10));
+            seed.ActivityDefinitionDraftLayouts.Add(layout);
+            await seed.SaveChangesAsync();
+        }
+
+        await using (var db = new ActivitiesDesignSqliteDbContext(options))
+        {
+            var layout = await db.ActivityDefinitionDraftLayouts.SingleAsync();
+            Assert.False(db.ChangeTracker.HasChanges());
+
+            layout.Records.Add(LayoutRecord("node-2", 20));
+            await db.SaveChangesAsync();
+        }
+
+        await using var read = new ActivitiesDesignSqliteDbContext(options);
+        var records = (await read.ActivityDefinitionDraftLayouts.AsNoTracking().SingleAsync()).Records;
+        Assert.Equal(["node-1", "node-2"], records.Select(record => record.NodeId));
+        Assert.Equal([10, 20], records.Select(record => record.Data.GetProperty("x").GetInt32()));
+    }
+
     [Fact]
     public async Task Sqlite_id_only_draft_mutations_admit_only_the_authoritative_scope()
     {
@@ -2190,6 +2225,9 @@ public sealed class ActivitiesDesignEntityFrameworkCoreTests
 
     private static ActivityDefinitionDraftLayout Layout(string draftId, string tenant, long revision) =>
         new() { Id = $"layout-{draftId}", DraftId = draftId, TenantId = tenant, Revision = revision, Records = [] };
+
+    private static ActivityLayoutRecord LayoutRecord(string nodeId, int x) =>
+        new(nodeId, JsonDocument.Parse($$"""{"x":{{x}}}""").RootElement.Clone());
 
     private static ActivityDefinitionVersionPublication Publication(string definitionId, string versionId, string? tenant, string provider) =>
         new() { Id = $"publication-{versionId}", TenantId = tenant, DefinitionVersionId = versionId, DefinitionId = definitionId, Version = "1.0.0", ActivityTypeKey = "Acme.Test", Contract = new("1", [], [], []), Provider = new(provider, "1", JsonDocument.Parse("{}").RootElement.Clone()), TemplateId = "template", TemplateHash = "hash", SourceReferenceId = "source", ProviderFingerprint = "fingerprint", DirectDependencyCount = 0, ClosedTemplateCount = 0, RuntimeRequirements = [], PublishedAt = DateTimeOffset.UtcNow };

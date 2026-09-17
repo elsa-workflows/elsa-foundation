@@ -9,25 +9,25 @@ namespace Elsa.Diagnostics.StructuredLogs.Storage;
 /// only after durable commit. Durable SSE payload and order come from store read-after pages; concurrent
 /// processes may assign equal display sequences.
 /// </summary>
+/// <remarks>
+/// <see cref="Emit"/> never reads from the store. Capture starts before a durable store is ready (a shell logs
+/// while activating, before its migrations run), so any store read here would fail, and the provider's own logging
+/// of that failure would re-enter this sink. A store that owns durable positions assigns the committed sequence in
+/// its append path, as <c>EfStructuredLogStore</c> does; an entry the store rejects is its to account for, and a
+/// rejection never affects later emits.
+/// </remarks>
 public sealed class StructuredLogSink : IStructuredLogSink
 {
     private readonly IStructuredLogStore _store;
     private readonly IStructuredLogLivePublisher _publisher;
-    private readonly Lazy<SequenceCounter> _counter;
     private readonly object _publicationGate = new();
     private Task _publicationTail = Task.CompletedTask;
+    private long _sequence;
 
     public StructuredLogSink(IStructuredLogStore store, IStructuredLogLivePublisher publisher)
     {
         _store = store;
         _publisher = publisher;
-        // ExecutionAndPublication guarantees seeding runs exactly once and every Emit — including
-        // concurrent first emits — observes the seeded value before stamping a sequence. Emit is
-        // synchronous (it sits on the logging hot path), so the one-time seed blocks on the async
-        // store query; for the in-memory store this completes synchronously.
-        _counter = new(
-            () => new SequenceCounter { Value = _store.GetHighWaterMarkAsync().GetAwaiter().GetResult() },
-            LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <inheritdoc />
@@ -35,8 +35,7 @@ public sealed class StructuredLogSink : IStructuredLogSink
     {
         ArgumentNullException.ThrowIfNull(entry);
 
-        var counter = _counter.Value;
-        var stamped = entry with { Sequence = Interlocked.Increment(ref counter.Value) };
+        var stamped = entry with { Sequence = Interlocked.Increment(ref _sequence) };
         lock (_publicationGate)
         {
             Task<StructuredLogEntry> commit;
@@ -68,10 +67,5 @@ public sealed class StructuredLogSink : IStructuredLogSink
             // Capture must never throw into or recursively log through the host logging path. Durable
             // adapters own retry/drop diagnostics and complete failed or shed appends without publication.
         }
-    }
-
-    private sealed class SequenceCounter
-    {
-        public long Value;
     }
 }

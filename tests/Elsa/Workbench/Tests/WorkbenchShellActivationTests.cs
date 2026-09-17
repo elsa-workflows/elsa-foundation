@@ -13,12 +13,6 @@ namespace Elsa.Workbench.Tests;
 /// </summary>
 public sealed class WorkbenchShellActivationTests
 {
-    /// <summary>
-    /// Supplied by packages in the Nuplane directory feed (<c>packages/</c>), which is empty in a checkout. CShells
-    /// activates the shell without them and logs a warning, which is also how it treats a misspelled feature name.
-    /// </summary>
-    private static readonly string[] FeedSuppliedFeatures = ["SampleNuplaneActivities", "WeatherForecastSample"];
-
     /// <summary>Capabilities every stock composition must run, not merely list.</summary>
     private static readonly string[] RequiredFeatures =
     [
@@ -107,7 +101,10 @@ public sealed class WorkbenchShellActivationTests
         var catalog = (await workbench.ReadFeatureCatalogAsync()).ToDictionary(feature => feature.Id, StringComparer.Ordinal);
         bool Runs(string feature) => catalog.TryGetValue(feature, out var entry) && entry.Runs;
 
-        var notRunning = shell.ListedFeatures().Except(FeedSuppliedFeatures).Where(feature => !Runs(feature)).Order().ToList();
+        // CShells activates a shell that lists a feature missing from the runtime catalog and only logs a warning, which
+        // is also how it treats a misspelled name, so every listed feature must run. The stock shells list no feature
+        // that only a Nuplane feed package supplies, because the feed is empty in a checkout.
+        var notRunning = shell.ListedFeatures().Where(feature => !Runs(feature)).Order().ToList();
         Assert.True(notRunning.Count == 0, $"{shell.Name} lists features the host does not run: {string.Join(", ", notRunning)}.");
 
         var missing = RequiredFeatures.Where(feature => !Runs(feature)).ToList();

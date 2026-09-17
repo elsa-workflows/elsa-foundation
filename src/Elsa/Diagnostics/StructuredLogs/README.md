@@ -7,7 +7,7 @@ Feature name (manifest / appsettings key): **`DiagnosticsStructuredLogs`**.
 ## What this feature provides
 
 - **Three decomposed roles** behind separate contracts so a durable backend can replace just the history store:
-  - **`StructuredLogSink`** → `IStructuredLogSink` — assigns display-only `Sequence` metadata (seeded from the store's lifetime high-water), submits entries to the store without blocking capture, and publishes process-local wake hints after commitment.
+  - **`StructuredLogSink`** → `IStructuredLogSink` — assigns process-local display-only `Sequence` metadata without reading the store, submits entries to the store without blocking capture, and publishes process-local wake hints after commitment. A durable store assigns the committed sequence from its own lifetime high-water in its append path. Capture starts before a durable store is ready, and an entry the store rejects then is dropped without affecting later entries.
   - **`InMemoryStructuredLogStore`** → `IStructuredLogStore` — a bounded ring buffer holding recent history. Registered with `TryAddSingleton` so a persistence feature can override it.
   - **`InMemoryStructuredLogLiveFeed`** → `IStructuredLogLiveFeed` + `IStructuredLogLivePublisher` — an independent bounded channel per subscriber. For SSE it is only a wake hint; durable storage remains the payload and ordering authority.
 - **`LocalStructuredLogSourceProvider`** → `IStructuredLogSourceProvider` — exposes the single local host as the only known source and stamps every captured entry with its source id.

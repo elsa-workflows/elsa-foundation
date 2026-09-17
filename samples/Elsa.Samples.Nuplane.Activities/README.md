@@ -10,7 +10,9 @@ dotnet pack samples/Elsa.Samples.Nuplane.Activities/Elsa.Samples.Nuplane.Activit
   -o src/Apps/Elsa.Workbench/packages
 ```
 
-Enable the feature on a shell:
+Enable the feature on a shell by adding it to the shell's `Features` section. The stock Workbench `shells.json` does
+not list it, because the `packages/` feed is empty in a checkout and a listed feature that no package supplies only
+produces a startup warning:
 
 ```json
 "SampleNuplaneActivities": {}

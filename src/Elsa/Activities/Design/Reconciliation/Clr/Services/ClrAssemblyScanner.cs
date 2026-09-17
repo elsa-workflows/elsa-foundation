@@ -831,8 +831,17 @@ public sealed class ClrAssemblyScanner(
             if (byName.TryGetValue(name, out var existing))
             {
                 // A later source (AppDomain or framework closure) offers the same simple-name as an
-                // already-registered path. First-wins is intentional, but the drop must not be silent:
-                // divergent copies of the same assembly can otherwise mask a version the author shipped.
+                // already-registered path. First-wins is intentional. Another copy of the same identity is the
+                // normal layout of one package (a bin-root copy beside its runtimes/<rid>/lib asset) and hides
+                // nothing. A divergent copy can mask a version the author shipped, so that drop must not be silent.
+                if (HaveSameIdentity(existing, path))
+                {
+                    logger.LogDebug(
+                        "Assembly '{AssemblyName}' has an identical copy at '{SkippedPath}'; keeping '{KeptPath}' for reflection-only resolution.",
+                        name, path, existing);
+                    return;
+                }
+
                 logger.LogWarning(
                     "Duplicate assembly name '{AssemblyName}' during reflection-only resolver setup; keeping '{KeptPath}' and skipping '{SkippedPath}'.",
                     name, existing, path);
@@ -862,6 +871,28 @@ public sealed class ClrAssemblyScanner(
             Add(dll);
 
         return byName.Values;
+    }
+
+    /// <summary>
+    /// Whether two files carry the same assembly identity: simple name, version, culture, and public key token. Reads
+    /// metadata only, without loading either assembly. A file whose identity cannot be read is treated as divergent so
+    /// the caller still warns about it.
+    /// </summary>
+    private static bool HaveSameIdentity(string firstPath, string secondPath)
+    {
+        try
+        {
+            var first = AssemblyName.GetAssemblyName(firstPath);
+            var second = AssemblyName.GetAssemblyName(secondPath);
+            return string.Equals(first.Name, second.Name, StringComparison.OrdinalIgnoreCase) &&
+                   first.Version == second.Version &&
+                   string.Equals(first.CultureName ?? string.Empty, second.CultureName ?? string.Empty, StringComparison.OrdinalIgnoreCase) &&
+                   (first.GetPublicKeyToken() ?? []).AsSpan().SequenceEqual(second.GetPublicKeyToken() ?? []);
+        }
+        catch (Exception exception) when (exception is IOException or BadImageFormatException or ArgumentException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            return false;
+        }
     }
 
     private static IReadOnlyList<string> CollectInvariantFrameworkPaths()

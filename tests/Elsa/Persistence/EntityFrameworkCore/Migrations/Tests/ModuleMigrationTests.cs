@@ -5,6 +5,7 @@ using Elsa.Activities.Design.Persistence.EntityFrameworkCore.DependencyInjection
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -30,6 +31,26 @@ public sealed class ModuleMigrationTests : IDisposable
             using var context = ModuleContextCatalog.Create(type, PlaceholderConnection(provider));
             Assert.True(context.Database.GetMigrations().Any(), $"{type.Name} has no migrations. Run tools/ef/generate-module-migrations.sh.");
             Assert.False(context.Database.HasPendingModelChanges(), $"{type.Name} has model changes without a migration. Run tools/ef/generate-module-migrations.sh.");
+        }
+    }
+
+    /// <summary>
+    /// A value-converted collection without a value comparer is compared by reference, so EF never sees an in-place
+    /// change and silently skips the write; EF reports it only as warning 10620. Every module model must build with
+    /// that warning raised as an error.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public void Every_module_context_gives_converted_collections_a_value_comparer(string provider)
+    {
+        foreach (var type in ModuleContextCatalog.Contexts(provider))
+        {
+            using var context = ModuleContextCatalog.Create(
+                type,
+                PlaceholderConnection(provider),
+                options => options.ConfigureWarnings(warnings => warnings.Throw(CoreEventId.CollectionWithoutComparer)));
+            var failure = Record.Exception(() => context.Model);
+            Assert.True(failure is null, $"{type.Name}: {failure?.Message}");
         }
     }
 
