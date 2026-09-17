@@ -15,7 +15,7 @@ public sealed class ActivityResultConversionPlanLinker(ValueConversionPlanResolv
     {
         ArgumentNullException.ThrowIfNull(root);
 
-        var nodesById = Flatten(root).ToDictionary(node => node.ExecutableNodeId, StringComparer.Ordinal);
+        var nodesById = root.DescendantsAndSelf().ToDictionary(node => node.ExecutableNodeId, StringComparer.Ordinal);
         return LinkNode(root, nodesById);
     }
 
@@ -128,17 +128,5 @@ public sealed class ActivityResultConversionPlanLinker(ValueConversionPlanResolv
                 bindingContext);
 
         return (projection.Type, projection.EffectiveSourceRepresentation);
-    }
-
-    private static IEnumerable<ExecutableNode> Flatten(ExecutableNode root)
-    {
-        var pending = new Stack<ExecutableNode>();
-        pending.Push(root);
-        while (pending.TryPop(out var node))
-        {
-            yield return node;
-            foreach (var child in node.ChildSlots.SelectMany(slot => slot.Activities).Reverse())
-                pending.Push(child);
-        }
     }
 }

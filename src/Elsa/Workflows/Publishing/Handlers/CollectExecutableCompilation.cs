@@ -115,7 +115,7 @@ public sealed class CollectExecutableCompilation : IEventHandler<ExecutableCompi
         ExecutableNode rootActivity,
         IReadOnlyCollection<ExecutableCompilationContribution> contributions)
     {
-        var nodes = Flatten(rootActivity).ToDictionary(node => node.ExecutableNodeId, StringComparer.Ordinal);
+        var nodes = rootActivity.DescendantsAndSelf().ToDictionary(node => node.ExecutableNodeId, StringComparer.Ordinal);
         var metadata = nodes.ToDictionary(
             item => item.Key,
             item => item.Value.Metadata.ToDictionary(
@@ -210,21 +210,6 @@ public sealed class CollectExecutableCompilation : IEventHandler<ExecutableCompi
     {
         var owners = new[] { firstOwner, secondOwner }.Order(StringComparer.Ordinal).ToArray();
         return new ArgumentException($"{message} from owners '{owners[0]}' and '{owners[1]}'.");
-    }
-
-    private static IEnumerable<ExecutableNode> Flatten(ExecutableNode root)
-    {
-        var stack = new Stack<ExecutableNode>();
-        stack.Push(root);
-
-        while (stack.Count > 0)
-        {
-            var node = stack.Pop();
-            yield return node;
-
-            foreach (var child in node.ChildSlots.SelectMany(slot => slot.Activities).Reverse())
-                stack.Push(child);
-        }
     }
 
     private static string SourceIdentity(IExecutableCompilationSource source) =>

@@ -291,7 +291,7 @@ public sealed class ActivityTemplateCompiler(
         if (compilation.ExecutableRoot is not null)
         {
             var declared = compilation.RuntimeRequirements.Distinct().OrderBy(x => x.ConsumerKey, StringComparer.Ordinal).ThenBy(x => x.SchemaVersion, StringComparer.Ordinal);
-            var requiredByNodes = Flatten(compilation.ExecutableRoot)
+            var requiredByNodes = compilation.ExecutableRoot.DescendantsAndSelf()
                 .Select(x => new RuntimeRequirement(x.Descriptor.ConsumerKey, x.Descriptor.SchemaVersion))
                 .Distinct()
                 .OrderBy(x => x.ConsumerKey, StringComparer.Ordinal)
@@ -691,18 +691,6 @@ public sealed class ActivityTemplateCompiler(
         if (measurements.LayoutBytes < 0) invalid.Add(nameof(measurements.LayoutBytes));
         if (measurements.EstimatedDurableBoundarySlots < 0) invalid.Add(nameof(measurements.EstimatedDurableBoundarySlots));
         return invalid.ToArray();
-    }
-
-    private static IEnumerable<ExecutableNode> Flatten(ExecutableNode root)
-    {
-        var pending = new Stack<ExecutableNode>();
-        pending.Push(root);
-        while (pending.TryPop(out var node))
-        {
-            yield return node;
-            foreach (var child in node.ChildSlots.SelectMany(x => x.Activities).Reverse())
-                pending.Push(child);
-        }
     }
 
     private static ActivityInvocationOrigin ToInvocationOrigin(IReadOnlyList<ActivityNodeOrigin> origin) => new(

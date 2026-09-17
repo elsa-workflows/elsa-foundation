@@ -199,6 +199,28 @@ public sealed class ExecutableNode
     public WorkflowIntrinsicKind? IntrinsicKind { get; }
     public RuntimeVariableReference? IntrinsicVariable { get; }
 
+    /// <summary>
+    /// This node and every node below it, in document order: each node before its children, and child slots and
+    /// the activities inside them left to right as authored.
+    /// </summary>
+    /// <remarks>
+    /// The one walk over an executable graph. Order is observable to its callers — <see cref="WorkflowExecutable.Nodes"/>
+    /// exposes it, and compilation reports the first offending node it meets — so it is fixed here rather than left to
+    /// each caller's own stack loop, where a missing reversal silently yields siblings right to left.
+    /// </remarks>
+    public IEnumerable<ExecutableNode> DescendantsAndSelf()
+    {
+        var pending = new Stack<ExecutableNode>();
+        pending.Push(this);
+        while (pending.TryPop(out var node))
+        {
+            yield return node;
+            // A stack pops the last push first, so children go in reversed to come out left to right.
+            foreach (var child in node.ChildSlots.SelectMany(slot => slot.Activities).Reverse())
+                pending.Push(child);
+        }
+    }
+
     // ADR 0047 D3: in-memory-only routing-structure memo. Private, so it is invisible to System.Text.Json —
     // it never touches the persisted executable schema or the ADR 0038 content hash (resolution #2:
     // "recomputed on materialization"). Keyed by structure type because a node reconstructs exactly one

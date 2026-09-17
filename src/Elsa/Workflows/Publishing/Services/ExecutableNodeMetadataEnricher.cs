@@ -26,7 +26,7 @@ public sealed class ExecutableNodeMetadataEnricher(IInlineEventPublisher eventPu
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(rootActivity);
 
-        var metadata = Flatten(rootActivity).ToDictionary(
+        var metadata = rootActivity.DescendantsAndSelf().ToDictionary(
             node => node.ExecutableNodeId,
             node => node.Metadata.ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal),
             StringComparer.Ordinal);
@@ -79,18 +79,4 @@ public sealed class ExecutableNodeMetadataEnricher(IInlineEventPublisher eventPu
             node.IntrinsicKind,
             node.IntrinsicVariable);
 
-    private static IEnumerable<ExecutableNode> Flatten(ExecutableNode root)
-    {
-        var stack = new Stack<ExecutableNode>();
-        stack.Push(root);
-
-        while (stack.Count > 0)
-        {
-            var node = stack.Pop();
-            yield return node;
-
-            foreach (var child in node.ChildSlots.SelectMany(slot => slot.Activities).Reverse())
-                stack.Push(child);
-        }
-    }
 }

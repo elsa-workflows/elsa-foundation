@@ -186,7 +186,7 @@ public sealed class WorkflowExecutableCompiler(
                     BindBoundaryRootToAuthoredNode: !isWorkflowRoot), cancellationToken);
                 placedActivities.Add(activity.NodeId, placement.Root);
                 placedLayoutSegments.AddRange(placement.LayoutSidecar.BoundarySegments);
-                foreach (var nodeId in Flatten(placement.Root).Select(x => x.ExecutableNodeId))
+                foreach (var nodeId in placement.Root.DescendantsAndSelf().Select(x => x.ExecutableNodeId))
                     placedNodeIds.Add(nodeId);
                 foreach (var target in placement.ResumeTargets)
                 {
@@ -234,7 +234,7 @@ public sealed class WorkflowExecutableCompiler(
                 if (!resumeTargets.TryAdd(target.Key, target.Value))
                     throw new ArgumentException($"Resume target '{target.Key}' collides with an ordinary workflow activity resume target.");
 
-            var executableNodes = Flatten(compiledRoot).ToArray();
+            var executableNodes = compiledRoot.DescendantsAndSelf().ToArray();
             var runtimeRequirements = executableNodes
                 .Select(x => new RuntimeRequirement(x.Descriptor.ConsumerKey, x.Descriptor.SchemaVersion))
                 .Distinct()
@@ -336,7 +336,7 @@ public sealed class WorkflowExecutableCompiler(
     /// </summary>
     private static void ValidatePinnedActivityContracts(ExecutableNode root)
     {
-        foreach (var node in Flatten(root))
+        foreach (var node in root.DescendantsAndSelf())
         {
             if (node.IntrinsicKind is not null ||
                 node.ActivityContract is not null ||
@@ -358,18 +358,6 @@ public sealed class WorkflowExecutableCompiler(
             throw new ArgumentException(
                 $"VF-ACT-001: Executable CLR activity node '{node.ExecutableNodeId}' (activity type '{node.ActivityType}', type alias '{typeAlias ?? "<unknown>"}') compiled without a pinned activity contract. " +
                 "The type alias must resolve to a registered CLR activity type that declares a typed result; publication is refused instead of deferring the failure to runtime dispatch.");
-        }
-    }
-
-    private static IEnumerable<ExecutableNode> Flatten(ExecutableNode root)
-    {
-        var stack = new Stack<ExecutableNode>();
-        stack.Push(root);
-        while (stack.TryPop(out var node))
-        {
-            yield return node;
-            foreach (var child in node.ChildSlots.SelectMany(x => x.Activities).Reverse())
-                stack.Push(child);
         }
     }
 

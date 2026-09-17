@@ -101,7 +101,7 @@ public sealed class WorkflowExecutable
         ArgumentNullException.ThrowIfNull(compatibilityMetadata);
         ArgumentNullException.ThrowIfNull(incidentStrategy);
 
-        var nodeSnapshot = Flatten(rootActivity).ToArray();
+        var nodeSnapshot = rootActivity.DescendantsAndSelf().ToArray();
 
         Identity = identity;
         RootActivity = rootActivity;
@@ -184,21 +184,6 @@ public sealed class WorkflowExecutable
             throw new ArgumentException($"The workflow variable declaration '{duplicateKey}' is duplicated.", nameof(workflowVariables));
 
         return Array.AsReadOnly(snapshot);
-    }
-
-    private static IEnumerable<ExecutableNode> Flatten(ExecutableNode rootActivity)
-    {
-        var stack = new Stack<ExecutableNode>();
-        stack.Push(rootActivity);
-
-        while (stack.Count > 0)
-        {
-            var node = stack.Pop();
-            yield return node;
-
-            foreach (var child in node.ChildSlots.SelectMany(slot => slot.Activities))
-                stack.Push(child);
-        }
     }
 
     private static IReadOnlyCollection<WorkflowExecutableDependency> SnapshotDependencies(
