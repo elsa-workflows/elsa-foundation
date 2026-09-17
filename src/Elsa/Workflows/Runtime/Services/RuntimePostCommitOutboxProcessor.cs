@@ -198,12 +198,13 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 effectiveStatus,
                 failureMessage,
                 recordedAt,
+                exception,
                 cancellationToken);
 
             if (recordingException is not null)
                 throw new OutboxProcessingException(item.OutboxItemId, item.Intent.IntentId, exception, recordingException);
 
-            LogDeliveryFailure(item, classification, effectiveStatus, recordedAt);
+            LogDeliveryFailure(item, exception, classification, effectiveStatus, recordedAt);
 
             return new RuntimePostCommitOutboxProcessedItem(
                 item.OutboxItemId,
@@ -212,7 +213,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 failureMessage);
         }
 
-        await RecordDeliveryResultAsync(item, claim, RuntimePostCommitOutboxStatus.Delivered, null, recordedAt: null, cancellationToken);
+        await RecordDeliveryResultAsync(item, claim, RuntimePostCommitOutboxStatus.Delivered, null, recordedAt: null, deliveryFailure: null, cancellationToken);
         LogDelivered(item);
 
         return new RuntimePostCommitOutboxProcessedItem(
@@ -228,11 +229,12 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         RuntimePostCommitOutboxStatus status,
         string? failureMessage,
         DateTimeOffset recordedAt,
+        Exception deliveryFailure,
         CancellationToken cancellationToken)
     {
         try
         {
-            await RecordDeliveryResultAsync(item, claim, status, failureMessage, recordedAt, cancellationToken);
+            await RecordDeliveryResultAsync(item, claim, status, failureMessage, recordedAt, deliveryFailure, cancellationToken);
             return null;
         }
         catch (OperationCanceledException)
@@ -251,6 +253,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         RuntimePostCommitOutboxStatus status,
         string? failureMessage,
         DateTimeOffset? recordedAt,
+        Exception? deliveryFailure,
         CancellationToken cancellationToken)
     {
         var result = new RuntimePostCommitOutboxDeliveryResult(
@@ -271,7 +274,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                         dispatchFailure?.FollowUpOutboxItem),
                     cancellationToken);
                 if (dispatchFailure is not null)
-                    LogDeliveryFailureProjection(item, dispatchFailure, result.RecordedAt);
+                    LogDeliveryFailureProjection(item, dispatchFailure, result.RecordedAt, deliveryFailure);
             }
             else if (dispatchFailure is not null)
             {
@@ -352,15 +355,21 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             : RuntimePostCommitOutboxStatus.FailedRetryable;
     }
 
+    /// <remarks>
+    /// Every failure event carries the delivery exception, so the cause and its stack trace reach the log; the structured
+    /// fields stay identifiers and classifications. The persisted <c>LastFailureMessage</c> and every durable dispatch
+    /// and incident projection stay free of exception text.
+    /// </remarks>
     private void LogDeliveryFailure(
         RuntimePostCommitOutboxItem item,
+        Exception exception,
         RuntimePostCommitDeliveryException? classification,
         RuntimePostCommitOutboxStatus effectiveStatus,
         DateTimeOffset recordedAt)
     {
         if (item.RetryPolicy.RetryUntilAcknowledged)
         {
-            LogRetryUntilAcknowledged(item, recordedAt);
+            LogRetryUntilAcknowledged(item, exception, recordedAt);
             return;
         }
 
@@ -370,6 +379,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         var failureKind = classification?.Kind.ToString() ?? PostCommitFailureKind.Transient.ToString();
         _logger.LogWarning(
             new EventId(68101, "RuntimePostCommitDeliveryAttemptFailed"),
+            exception,
             "Runtime post-commit delivery attempt failed. OutboxItemId={OutboxItemId} IntentId={IntentId} IntentKind={IntentKind} DispatchId={DispatchId} DeliveryAttemptCount={DeliveryAttemptCount} FailureCode={FailureCode} FailureKind={FailureKind} EffectiveStatus={EffectiveStatus} RecordedAt={RecordedAt}",
             item.OutboxItemId,
             item.Intent.IntentId,
@@ -385,6 +395,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         {
             _logger.LogWarning(
                 new EventId(68103, "RuntimePostCommitDeliveryFailedFinal"),
+                exception,
                 "Runtime post-commit delivery became final. OutboxItemId={OutboxItemId} IntentId={IntentId} IntentKind={IntentKind} DispatchId={DispatchId} DeliveryAttemptCount={DeliveryAttemptCount} FailureCode={FailureCode} FailureKind={FailureKind} EffectiveStatus={EffectiveStatus} RecordedAt={RecordedAt}",
                 item.OutboxItemId,
                 item.Intent.IntentId,
@@ -401,6 +412,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         var nextAvailableAt = recordedAt.Add(item.RetryPolicy.Delay!.Value);
         _logger.LogWarning(
             new EventId(68102, "RuntimePostCommitRetryScheduled"),
+            exception,
             "Runtime post-commit delivery retry scheduled. OutboxItemId={OutboxItemId} IntentId={IntentId} IntentKind={IntentKind} DispatchId={DispatchId} DeliveryAttemptCount={DeliveryAttemptCount} FailureCode={FailureCode} FailureKind={FailureKind} EffectiveStatus={EffectiveStatus} NextAvailableAt={NextAvailableAt}",
             item.OutboxItemId,
             item.Intent.IntentId,
@@ -430,11 +442,13 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
     private void LogDeliveryFailureProjection(
         RuntimePostCommitOutboxItem item,
         PostCommitFailureProjection projection,
-        DateTimeOffset recordedAt)
+        DateTimeOffset recordedAt,
+        Exception? deliveryFailure)
     {
         var dispatch = projection.WorkflowDispatch;
         _logger.LogWarning(
             new EventId(68105, "WorkflowDispatchDeliveryIncidentRecorded"),
+            deliveryFailure,
             "Workflow dispatch delivery incident recorded. OutboxItemId={OutboxItemId} IntentId={IntentId} IntentKind={IntentKind} DispatchId={DispatchId} DeliveryGeneration={DeliveryGeneration} DeliveryAttemptCount={DeliveryAttemptCount} DeliveryIncidentId={DeliveryIncidentId} DeliveryDeadLetterId={DeliveryDeadLetterId} EffectiveStatus={EffectiveStatus} RecordedAt={RecordedAt}",
             item.OutboxItemId,
             item.Intent.IntentId,
@@ -463,7 +477,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         }
     }
 
-    private void LogRetryUntilAcknowledged(RuntimePostCommitOutboxItem item, DateTimeOffset recordedAt)
+    private void LogRetryUntilAcknowledged(RuntimePostCommitOutboxItem item, Exception exception, DateTimeOffset recordedAt)
     {
         if (!item.RetryPolicy.RetryUntilAcknowledged)
             return;
@@ -473,6 +487,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         var nextAvailableAt = recordedAt.Add(item.RetryPolicy.Delay!.Value);
         _logger.LogWarning(
             new EventId(67901, "RuntimePostCommitRetryDeferred"),
+            exception,
             "Runtime post-commit intent retry deferred. OutboxItemId={OutboxItemId} IntentId={IntentId} IntentKind={IntentKind} DispatchId={DispatchId} DeliveryAttemptCount={DeliveryAttemptCount} NextAvailableAt={NextAvailableAt}",
             item.OutboxItemId,
             item.Intent.IntentId,

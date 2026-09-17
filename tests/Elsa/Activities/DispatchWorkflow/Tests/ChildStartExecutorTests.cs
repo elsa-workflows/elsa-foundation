@@ -290,6 +290,42 @@ public sealed class ChildStartExecutorTests
         Assert.IsType<InvalidOperationException>(exception.InnerException);
     }
 
+    /// <summary>Start failures keyed by shape, so each case is discovered as its own test.</summary>
+    private static readonly IReadOnlyDictionary<string, Func<Exception>> StartFailures = new Dictionary<string, Func<Exception>>
+    {
+        ["checkpoint rule violation"] = () => new RuntimeCheckpointCommitValidationException("rule-secret"),
+        // The shape a child's run hands back: its drain aggregates the observer failures the refused commit caused.
+        ["violation aggregated by the drain"] = () => new AggregateException(new InvalidOperationException("other"), new RuntimeCheckpointCommitValidationException("rule-secret")),
+        ["violation wrapped as an inner exception"] = () => new InvalidOperationException("wrapper", new RuntimeCheckpointCommitValidationException("rule-secret")),
+        ["infrastructure failure"] = () => new InvalidOperationException("provider-secret"),
+        ["aggregated infrastructure failures"] = () => new AggregateException(new InvalidOperationException("provider-secret"))
+    };
+
+    /// <summary>
+    /// A checkpoint rule violation is refused identically on every delivery, so it is permanent; an infrastructure
+    /// failure may clear, so it stays transient. Either way the classification keeps the fixed safe code and summary.
+    /// </summary>
+    [Theory]
+    [InlineData("checkpoint rule violation", PostCommitFailureKind.Permanent)]
+    [InlineData("violation aggregated by the drain", PostCommitFailureKind.Permanent)]
+    [InlineData("violation wrapped as an inner exception", PostCommitFailureKind.Permanent)]
+    [InlineData("infrastructure failure", PostCommitFailureKind.Transient)]
+    [InlineData("aggregated infrastructure failures", PostCommitFailureKind.Transient)]
+    public async Task StartFailure_IsPermanentOnlyWhenACheckpointRuleWasViolated(string failureShape, PostCommitFailureKind expectedKind)
+    {
+        var failure = StartFailures[failureShape]();
+        var executor = new ChildStartExecutor(new ThrowingStartDispatcher(failure));
+
+        var exception = await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(
+            () => executor.HandleAsync(NewOutboxItem().Intent).AsTask());
+
+        Assert.Equal(expectedKind, exception.Kind);
+        Assert.Equal("child-start-delivery-failed", exception.Code);
+        Assert.Equal("The child workflow could not be started.", exception.SafeSummary);
+        Assert.DoesNotContain("secret", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Same(failure, exception.InnerException);
+    }
+
     [Fact]
     public async Task AdmissionStoreException_IsClassifiedWithoutLeakingDetails()
     {

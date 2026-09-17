@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Core.Services.Coalescing;
@@ -204,7 +205,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         RuntimeCheckpointCommitValidator.Validate(bookmark);
 
         await store.CommitAsync(cleanup, new(RuntimeCheckpointPersistenceMode.Deferred));
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() =>
             store.CommitAsync(bookmark, new(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
 
         Assert.Equal("Bookmark 'bookmark-1' cannot be both changed and deleted by activity-scope cleanup in one checkpoint commit.", exception.Message);

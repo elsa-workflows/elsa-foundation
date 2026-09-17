@@ -109,7 +109,7 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
             ExpectedFence = lease.ToFence()
         };
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() =>
             backend.Store.CommitAsync(commit, Immediate()).AsTask().WaitAsync(TimeSpan.FromSeconds(30)));
 
         Assert.Equal("Checkpoint operational changes cannot overwrite the reserved execution-ownership state.", exception.Message);
@@ -123,11 +123,22 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
         Func<RuntimeCheckpointCommit, string> Message,
         Func<RuntimeCheckpointCommitContractBackend, Task> AssertUnchanged);
 
+    /// <summary>
+    /// A rejection that stays an <see cref="InvalidOperationException"/>: its rule can also report a lost race, also guards
+    /// writes that are not checkpoint commits, or is raised by a store rather than by a shared rule function.
+    /// </summary>
     private static ConflictCase Conflict(
         Func<RuntimeCheckpointCommitContractBackend, Task<RuntimeCheckpointCommit>> arrange,
         string message,
         Func<RuntimeCheckpointCommitContractBackend, Task> assertUnchanged) =>
         new(arrange, typeof(InvalidOperationException), _ => message, assertUnchanged);
+
+    /// <summary>A rule violation no later attempt can change: the shared rule refuses it with the checkpoint validation type.</summary>
+    private static ConflictCase Violation(
+        Func<RuntimeCheckpointCommitContractBackend, Task<RuntimeCheckpointCommit>> arrange,
+        string message,
+        Func<RuntimeCheckpointCommitContractBackend, Task> assertUnchanged) =>
+        new(arrange, typeof(RuntimeCheckpointCommitValidationException), _ => message, assertUnchanged);
 
     private static RuntimeCheckpointCommit StatefulCommit(
         RuntimeCheckpointStateChangeSet? stateChanges = null,
@@ -171,7 +182,7 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
             "Incident 'incident-a' has a committed resolution outcome and lifecycle effect that cannot be changed.",
             async backend => Assert.Equal("Acme.First", (await backend.Incidents.FindAsync(WorkflowId, "incident-a"))!.ResolutionOutcome!.ActionKind)),
 
-        ["incident-append-is-create-only"] = Conflict(
+        ["incident-append-is-create-only"] = Violation(
             async backend =>
             {
                 await backend.Incidents.SaveAsync(Incident("incident-a"));
@@ -193,7 +204,7 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
             $"Workflow dispatch '{DispatchId}' cannot transition from 'Started' to 'Pending'.",
             async backend => Assert.Equal(WorkflowDispatchStatus.Started, (await backend.Dispatches.FindAsync(DispatchId))!.Status)),
 
-        ["dispatch-cancellation-must-be-permitted"] = Conflict(
+        ["dispatch-cancellation-must-be-permitted"] = Violation(
             async backend =>
             {
                 await backend.Dispatches.SaveAsync(PendingDispatch(WorkflowId, DispatchActivityId));
@@ -203,7 +214,7 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
             $"Workflow dispatch '{DispatchId}' does not permit parent cancellation propagation.",
             async backend => Assert.Equal(WorkflowDispatchStatus.Pending, (await backend.Dispatches.FindAsync(DispatchId))!.Status)),
 
-        ["alteration-job-must-belong-to-the-checkpoint-workflow"] = Conflict(
+        ["alteration-job-must-belong-to-the-checkpoint-workflow"] = Violation(
             async backend =>
             {
                 var job = await backend.ClaimAlterationJobAsync(OtherWorkflowId);

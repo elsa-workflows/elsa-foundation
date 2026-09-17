@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
@@ -147,7 +148,7 @@ public sealed class RuntimeActivityExecutionInspectionTests
             new ImmediateRuntimeCheckpointPersistencePolicy(), writer, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
         var commit = InspectionCommit(operation, Projection(projectionWorkflowExecutionId, "ae-1", "authored-a", sequence: 1));
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => committer.CommitAsync(commit).AsTask());
+        var exception = await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() => committer.CommitAsync(commit).AsTask());
 
         Assert.Equal(expectedMessage, exception.Message);
         Assert.Null(await store.FindAsync(projectionWorkflowExecutionId, "ae-1"));

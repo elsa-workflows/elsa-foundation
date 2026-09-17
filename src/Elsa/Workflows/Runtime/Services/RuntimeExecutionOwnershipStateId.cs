@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
@@ -25,6 +26,6 @@ public static class RuntimeExecutionOwnershipStateId
     {
         ArgumentNullException.ThrowIfNull(changes);
         if (changes.Any(change => StringComparer.Ordinal.Equals(change.State.OperationalStateId, For(change.State.WorkflowExecutionId))))
-            throw new InvalidOperationException("Checkpoint operational changes cannot overwrite the reserved execution-ownership state.");
+            throw new RuntimeCheckpointCommitValidationException("Checkpoint operational changes cannot overwrite the reserved execution-ownership state.");
     }
 }

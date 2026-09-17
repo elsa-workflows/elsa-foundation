@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services.Coalescing;
 
@@ -24,6 +25,11 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// <see cref="RuntimeExecutionFenceValidator"/>, <see cref="ConsumedSchedulerWorkItem.IsFencedBy"/>,
 /// <see cref="RuntimePostCommitOutboxItem.IsEquivalentPendingItem"/>, <see cref="WorkflowTestScopeAdmission"/>, and
 /// <c>WorkflowAlterationTerminalEvidence</c>. Provider storage limits and capability checks stay in the provider.
+/// </para>
+/// <para>
+/// Every rule violation this validator refuses is a <see cref="RuntimeCheckpointCommitValidationException"/>, so a
+/// post-commit handler can tell a commit that will never be accepted from an infrastructure failure. Only a malformed
+/// argument, such as a blank identifier, is an <see cref="ArgumentException"/> instead.
 /// </para>
 /// </remarks>
 public static class RuntimeCheckpointCommitValidator
@@ -55,8 +61,8 @@ public static class RuntimeCheckpointCommitValidator
         ValidateChanges(commit, changes.ActivityExecutions, "Activity execution", state => state.Execution.WorkflowExecutionId, UpsertOnly);
         foreach (var change in changes.ActivityExecutions)
         {
-            change.State.EnsureValueFlowCompatible();
-            change.State.EnsureSupersessionCompatible();
+            RequireModelRule(change.State.EnsureValueFlowCompatible);
+            RequireModelRule(change.State.EnsureSupersessionCompatible);
             RequireMatchingProvenance(change.State.ExecutionScopeId, change.State.Attempt, change.State.Provenance, "Activity execution");
         }
 
@@ -81,19 +87,19 @@ public static class RuntimeCheckpointCommitValidator
         foreach (var request in changes.WorkflowDispatchCancellations)
         {
             if (!StringComparer.Ordinal.Equals(request.ParentWorkflowExecutionId, commit.WorkflowExecutionId))
-                throw new InvalidOperationException($"Workflow dispatch cancellation request '{request.DispatchId}' must be committed by its parent workflow execution.");
+                throw new RuntimeCheckpointCommitValidationException($"Workflow dispatch cancellation request '{request.DispatchId}' must be committed by its parent workflow execution.");
         }
 
         foreach (var consumed in changes.ConsumedSchedulerWorkItems)
         {
             RequireWorkflow(consumed.WorkflowExecutionId, commit, "Consumed scheduler work item");
             if (consumed.FencingToken <= 0)
-                throw new InvalidOperationException($"Consumed scheduler work item '{consumed.WorkItemId}' requires a positive fencing token.");
+                throw new RuntimeCheckpointCommitValidationException($"Consumed scheduler work item '{consumed.WorkItemId}' requires a positive fencing token.");
         }
 
         if (changes.AlterationJobTerminalChange is { } alteration &&
             !StringComparer.Ordinal.Equals(alteration.CheckpointCommitId, commit.CommitId))
-            throw new InvalidOperationException("Workflow alteration terminal evidence must reference its checkpoint commit ID.");
+            throw new RuntimeCheckpointCommitValidationException("Workflow alteration terminal evidence must reference its checkpoint commit ID.");
     }
 
     private static void ValidatePostCommitOutbox(RuntimeCheckpointCommit commit)
@@ -105,9 +111,9 @@ public static class RuntimeCheckpointCommitValidator
         foreach (var change in outbox)
         {
             if (change.State.Status != RuntimePostCommitOutboxStatus.Pending)
-                throw new InvalidOperationException("Only pending post-commit outbox items can be saved as pending.");
+                throw new RuntimeCheckpointCommitValidationException("Only pending post-commit outbox items can be saved as pending.");
             if (seen.TryGetValue(change.StateId, out var duplicate) && !duplicate.IsEquivalentPendingItem(change.State))
-                throw new InvalidOperationException($"Post-commit outbox item '{change.StateId}' occurs more than once with conflicting content.");
+                throw new RuntimeCheckpointCommitValidationException($"Post-commit outbox item '{change.StateId}' occurs more than once with conflicting content.");
             RequireDeliverableFromThisCheckpoint(commit, change.State);
             seen[change.StateId] = change.State;
         }
@@ -123,17 +129,17 @@ public static class RuntimeCheckpointCommitValidator
         {
             var id = RuntimePostCommitOutboxIdentity.CreateLogicalValue(commit.CommitId, intent.IntentId);
             if (intents.TryGetValue(id, out var duplicate) && !duplicate.IsEquivalentTo(intent))
-                throw new InvalidOperationException($"Post-commit intent '{id}' occurs more than once with conflicting content.");
+                throw new RuntimeCheckpointCommitValidationException($"Post-commit intent '{id}' occurs more than once with conflicting content.");
             intents[id] = intent;
         }
 
         if (!seen.Keys.ToHashSet(StringComparer.Ordinal).SetEquals(intents.Keys))
-            throw new InvalidOperationException("A checkpoint with post-commit intents must include their pending outbox state changes in the same atomic unit.");
+            throw new RuntimeCheckpointCommitValidationException("A checkpoint with post-commit intents must include their pending outbox state changes in the same atomic unit.");
 
         foreach (var change in outbox)
         {
             if (!intents[change.StateId].IsEquivalentTo(change.State.Intent))
-                throw new InvalidOperationException($"Post-commit outbox item '{change.StateId}' does not match its checkpoint intent.");
+                throw new RuntimeCheckpointCommitValidationException($"Post-commit outbox item '{change.StateId}' does not match its checkpoint intent.");
         }
     }
 
@@ -154,7 +160,7 @@ public static class RuntimeCheckpointCommitValidator
             StringComparer.Ordinal.Equals(change.State.ParentWorkflowExecutionId, target) &&
             StringComparer.Ordinal.Equals(change.State.ChildWorkflowExecutionId, commit.WorkflowExecutionId));
         if (!linked)
-            throw new InvalidOperationException(
+            throw new RuntimeCheckpointCommitValidationException(
                 $"Post-commit outbox item '{item.OutboxItemId}' targets workflow execution '{target}', which is neither the checkpoint workflow execution '{commit.WorkflowExecutionId}' nor the parent of a terminal workflow dispatch for it in this commit.");
     }
 
@@ -166,13 +172,13 @@ public static class RuntimeCheckpointCommitValidator
             RequireWorkflow(cleanup.WorkflowExecutionId, commit, "Activity-scope cleanup");
             ArgumentException.ThrowIfNullOrWhiteSpace(cleanup.ExecutionScopeId);
             if (!cleanup.ActivityExecutionIds.Contains(cleanup.ExecutionScopeId, StringComparer.Ordinal))
-                throw new InvalidOperationException("Activity scope cleanup must include its outer execution scope.");
+                throw new RuntimeCheckpointCommitValidationException("Activity scope cleanup must include its outer execution scope.");
 
             foreach (var bookmarkId in cleanup.BookmarkIds)
             {
                 ArgumentException.ThrowIfNullOrWhiteSpace(bookmarkId);
                 if (changes.Bookmarks.Any(change => StringComparer.Ordinal.Equals(change.StateId, bookmarkId)))
-                    throw new InvalidOperationException($"Bookmark '{bookmarkId}' cannot be both changed and deleted by activity-scope cleanup in one checkpoint commit.");
+                    throw new RuntimeCheckpointCommitValidationException($"Bookmark '{bookmarkId}' cannot be both changed and deleted by activity-scope cleanup in one checkpoint commit.");
             }
 
             foreach (var timerId in cleanup.TimerIds)
@@ -182,7 +188,7 @@ public static class RuntimeCheckpointCommitValidator
             {
                 ArgumentException.ThrowIfNullOrWhiteSpace(workItemId);
                 if (changes.ConsumedSchedulerWorkItems.Any(item => StringComparer.Ordinal.Equals(item.WorkItemId, workItemId)))
-                    throw new InvalidOperationException($"Scheduler work item '{workItemId}' cannot be both consumed and deleted by activity-scope cleanup in one checkpoint commit.");
+                    throw new RuntimeCheckpointCommitValidationException($"Scheduler work item '{workItemId}' cannot be both consumed and deleted by activity-scope cleanup in one checkpoint commit.");
             }
         }
     }
@@ -197,7 +203,7 @@ public static class RuntimeCheckpointCommitValidator
         {
             WorkflowDispatchLifecycle.ValidateCheckpointOwnership(commit.WorkflowExecutionId, change.State);
             if (seen.TryGetValue(change.StateId, out var duplicate) && !WorkflowDispatchLifecycle.RecordsEqual(duplicate, change.State))
-                throw new InvalidOperationException($"Workflow dispatch '{change.StateId}' occurs more than once with conflicting state.");
+                throw new RuntimeCheckpointCommitValidationException($"Workflow dispatch '{change.StateId}' occurs more than once with conflicting state.");
             seen[change.StateId] = change.State;
         }
     }
@@ -229,20 +235,36 @@ public static class RuntimeCheckpointCommitValidator
                 continue;
 
             var allowed = string.Join(" or ", allowedOperations.Select(operation => $"'{operation}'"));
-            throw new InvalidOperationException($"A checkpoint commit can only carry {kind.ToLowerInvariant()} {allowed} changes, not '{change.Operation}'.");
+            throw new RuntimeCheckpointCommitValidationException($"A checkpoint commit can only carry {kind.ToLowerInvariant()} {allowed} changes, not '{change.Operation}'.");
+        }
+    }
+
+    /// <summary>
+    /// Applies a rule the model owns. Those rules also guard paths that are not commits, where they keep their own exception
+    /// type; inside a commit their refusal is a checkpoint rule violation like any other, with the same message.
+    /// </summary>
+    private static void RequireModelRule(Action rule)
+    {
+        try
+        {
+            rule();
+        }
+        catch (InvalidOperationException exception) when (exception is not RuntimeCheckpointCommitValidationException)
+        {
+            throw new RuntimeCheckpointCommitValidationException(exception.Message, exception);
         }
     }
 
     private static void RequireStateId(string stateId, string modelId, string kind, string modelMember)
     {
         if (!StringComparer.Ordinal.Equals(stateId, modelId))
-            throw new InvalidOperationException($"{kind} state change StateId must match {modelMember}.");
+            throw new RuntimeCheckpointCommitValidationException($"{kind} state change StateId must match {modelMember}.");
     }
 
     private static void RequireWorkflow(string workflowExecutionId, RuntimeCheckpointCommit commit, string subject)
     {
         if (!StringComparer.Ordinal.Equals(workflowExecutionId, commit.WorkflowExecutionId))
-            throw new InvalidOperationException($"{subject} WorkflowExecutionId '{workflowExecutionId}' must match the checkpoint workflow execution ID '{commit.WorkflowExecutionId}'.");
+            throw new RuntimeCheckpointCommitValidationException($"{subject} WorkflowExecutionId '{workflowExecutionId}' must match the checkpoint workflow execution ID '{commit.WorkflowExecutionId}'.");
     }
 
     private static void RequireUnique(IEnumerable<string> ids, Func<string, string> message)
@@ -251,7 +273,7 @@ public static class RuntimeCheckpointCommitValidator
         foreach (var id in ids)
         {
             if (!seen.Add(id))
-                throw new InvalidOperationException(message(id));
+                throw new RuntimeCheckpointCommitValidationException(message(id));
         }
     }
 
@@ -263,8 +285,8 @@ public static class RuntimeCheckpointCommitValidator
     {
         if (executionScopeId is not null && provenance.ExecutionScopeId is not null &&
             !StringComparer.Ordinal.Equals(executionScopeId, provenance.ExecutionScopeId))
-            throw new InvalidOperationException($"{kind} ExecutionScopeId must match its scheduling provenance when both are present.");
+            throw new RuntimeCheckpointCommitValidationException($"{kind} ExecutionScopeId must match its scheduling provenance when both are present.");
         if (attempt is not null && provenance.Attempt is not null && attempt != provenance.Attempt)
-            throw new InvalidOperationException($"{kind} Attempt must match its scheduling provenance when both are present.");
+            throw new RuntimeCheckpointCommitValidationException($"{kind} Attempt must match its scheduling provenance when both are present.");
     }
 }

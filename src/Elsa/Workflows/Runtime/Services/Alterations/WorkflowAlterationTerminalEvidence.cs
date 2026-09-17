@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
 
@@ -24,7 +25,7 @@ public static class WorkflowAlterationTerminalEvidence
 
         if (checkpointWorkflowExecutionId is not null &&
             !StringComparer.Ordinal.Equals(job.WorkflowExecutionId, checkpointWorkflowExecutionId))
-            throw new InvalidOperationException(
+            throw new RuntimeCheckpointCommitValidationException(
                 $"Alteration job '{change.JobId}' belongs to workflow '{job.WorkflowExecutionId}', not '{checkpointWorkflowExecutionId}'.");
 
         if (IsTerminal(job.Status))

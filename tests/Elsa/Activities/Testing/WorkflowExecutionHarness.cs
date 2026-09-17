@@ -299,11 +299,16 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     /// Throws when the command is not accepted, matching <see cref="RunAsync(WorkflowExecutable)"/> — a start the
     /// value-flow guard refuses surfaces as a rejection naming the offending input, not a silent no-op.
     /// </remarks>
+    /// <param name="partition">
+    /// The durable partition to pin, <see cref="Partition"/> when omitted. A partition-keyed durable store only finds what
+    /// was published into the same persistence scope, so a harness over such a store pins the partition it published in.
+    /// </param>
     public async Task<WorkflowExecutionStartDispatchResult> StartPublishedAsync(
         WorkflowExecutableSourceReference reference,
         string workflowExecutionId,
         string? correlationId = null,
-        string? tenantId = null)
+        string? tenantId = null,
+        WorkflowExecutionPartition? partition = null)
     {
         EnsureActivityTypesRegistered();
         var authority = new WorkflowExecutionAuthoritySnapshot(
@@ -328,7 +333,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
                 parentWorkflowExecutionId: null,
                 correlationId: correlationId,
                 tenantId: tenantId,
-                partition: Partition,
+                partition: partition ?? Partition,
                 authority: authority));
 
         if (start.CommandDispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted)

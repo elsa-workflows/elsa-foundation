@@ -82,13 +82,12 @@ public sealed class RuntimePostCommitOutboxProcessorTests
     {
         var store = new InMemoryRuntimeCheckpointCommitStore();
         var logger = new RecordingLogger<RuntimePostCommitOutboxProcessor>();
-        var dispatcher = new RecordingDispatcher(
-            failOnIntentId: "intent-1",
-            failure: new RuntimePostCommitDeliveryException(
-                PostCommitFailureKind.Permanent,
-                "child-start-delivery-failed",
-                "The child workflow could not be started.",
-                new InvalidOperationException("provider-secret stack-secret")));
+        var failure = new RuntimePostCommitDeliveryException(
+            PostCommitFailureKind.Permanent,
+            "child-start-delivery-failed",
+            "The child workflow could not be started.",
+            new InvalidOperationException("provider-secret stack-secret"));
+        var dispatcher = new RecordingDispatcher(failOnIntentId: "intent-1", failure: failure);
         var processor = new RuntimePostCommitOutboxProcessor(
             store,
             dispatcher,
@@ -113,16 +112,16 @@ public sealed class RuntimePostCommitOutboxProcessorTests
             logger.Entries,
             attempt =>
             {
-                Assert.Equal("RuntimePostCommitDeliveryAttemptFailed", attempt.EventId.Name);
-                AssertPayloadSafe(attempt);
+                Assert.Equal(new EventId(68101, "RuntimePostCommitDeliveryAttemptFailed"), attempt.EventId);
+                AssertCarriesFailure(attempt, failure);
             },
             final =>
             {
-                Assert.Equal("RuntimePostCommitDeliveryFailedFinal", final.EventId.Name);
+                Assert.Equal(new EventId(68103, "RuntimePostCommitDeliveryFailedFinal"), final.EventId);
                 Assert.Equal("child-start-delivery-failed", final.Fields["FailureCode"]);
                 Assert.Equal(1, final.Fields["DeliveryAttemptCount"]);
                 Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, final.Fields["EffectiveStatus"]);
-                AssertPayloadSafe(final);
+                AssertCarriesFailure(final, failure);
             });
     }
 
@@ -131,13 +130,12 @@ public sealed class RuntimePostCommitOutboxProcessorTests
     {
         var store = new InMemoryRuntimeCheckpointCommitStore();
         var logger = new RecordingLogger<RuntimePostCommitOutboxProcessor>();
-        var dispatcher = new RecordingDispatcher(
-            failOnIntentId: "intent-1",
-            failure: new RuntimePostCommitDeliveryException(
-                PostCommitFailureKind.Transient,
-                "child-start-delivery-failed",
-                "The child workflow could not be started.",
-                new InvalidOperationException("provider-secret stack-secret")));
+        var failure = new RuntimePostCommitDeliveryException(
+            PostCommitFailureKind.Transient,
+            "child-start-delivery-failed",
+            "The child workflow could not be started.",
+            new InvalidOperationException("provider-secret stack-secret"));
+        var dispatcher = new RecordingDispatcher(failOnIntentId: "intent-1", failure: failure);
         var processor = new RuntimePostCommitOutboxProcessor(
             store,
             dispatcher,
@@ -164,14 +162,14 @@ public sealed class RuntimePostCommitOutboxProcessorTests
             logger.Entries,
             attempt =>
             {
-                Assert.Equal("RuntimePostCommitDeliveryAttemptFailed", attempt.EventId.Name);
-                AssertPayloadSafe(attempt);
+                Assert.Equal(new EventId(68101, "RuntimePostCommitDeliveryAttemptFailed"), attempt.EventId);
+                AssertCarriesFailure(attempt, failure);
             },
             scheduled =>
             {
-                Assert.Equal("RuntimePostCommitRetryScheduled", scheduled.EventId.Name);
+                Assert.Equal(new EventId(68102, "RuntimePostCommitRetryScheduled"), scheduled.EventId);
                 Assert.Equal(_now.AddSeconds(10), scheduled.Fields["NextAvailableAt"]);
-                AssertPayloadSafe(scheduled);
+                AssertCarriesFailure(scheduled, failure);
             });
     }
 
@@ -206,9 +204,8 @@ public sealed class RuntimePostCommitOutboxProcessorTests
     {
         var store = new InMemoryRuntimeCheckpointCommitStore();
         var logger = new RecordingLogger<RuntimePostCommitOutboxProcessor>();
-        var dispatcher = new RecordingDispatcher(
-            failOnIntentId: "intent-resume",
-            failure: new InvalidOperationException("exception-secret stack-secret"));
+        var failure = new InvalidOperationException("exception-secret stack-secret");
+        var dispatcher = new RecordingDispatcher(failOnIntentId: "intent-resume", failure: failure);
         var processor = new RuntimePostCommitOutboxProcessor(
             store,
             dispatcher,
@@ -237,7 +234,9 @@ public sealed class RuntimePostCommitOutboxProcessorTests
 
         var warning = Assert.Single(logger.Entries);
         Assert.Equal(LogLevel.Warning, warning.Level);
-        Assert.Null(warning.Exception);
+        Assert.Equal(new EventId(67901, "RuntimePostCommitRetryDeferred"), warning.EventId);
+        // The cause reaches the log as the entry's exception; the persisted failure message above stays exception-free.
+        Assert.Same(failure, warning.Exception);
         Assert.Equal("outbox-resume", warning.Fields["OutboxItemId"]);
         Assert.Equal("intent-resume", warning.Fields["IntentId"]);
         Assert.Equal("Elsa.Activities.DispatchWorkflow.ResumeParent", warning.Fields["IntentKind"]);
@@ -672,9 +671,13 @@ public sealed class RuntimePostCommitOutboxProcessorTests
             throw exception;
     }
 
-    private static void AssertPayloadSafe(LogEntry entry)
+    /// <summary>
+    /// A delivery-failure event carries the delivery exception itself, so its message and stack trace reach the log, while
+    /// its structured fields stay identifiers and classifications with no exception text or intent payload.
+    /// </summary>
+    private static void AssertCarriesFailure(LogEntry entry, Exception failure)
     {
-        Assert.Null(entry.Exception);
+        Assert.Same(failure, entry.Exception);
         var serialized = string.Join(" ", entry.Fields.Select(pair => $"{pair.Key}={pair.Value}"));
         Assert.DoesNotContain("provider-secret", serialized, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("stack-secret", serialized, StringComparison.OrdinalIgnoreCase);

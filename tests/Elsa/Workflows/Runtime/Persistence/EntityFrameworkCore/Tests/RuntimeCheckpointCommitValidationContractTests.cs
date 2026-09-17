@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -59,8 +60,9 @@ public sealed class RuntimeCheckpointCommitValidationContractTests
 
     private sealed record InvalidCase(Func<RuntimeCheckpointCommit> Build, Type ExceptionType, string Message);
 
+    /// <summary>A structural rule violation: the validator refuses it with the checkpoint validation type.</summary>
     private static InvalidCase Invalid(Func<RuntimeCheckpointCommit> build, string message) =>
-        new(build, typeof(InvalidOperationException), message);
+        new(build, typeof(RuntimeCheckpointCommitValidationException), message);
 
     private static Func<RuntimeCheckpointCommit> Mutated(Action<CommitParts> mutate) => () =>
     {

@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Runtime.ExceptionServices;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
@@ -52,7 +53,7 @@ public sealed class EfRuntimeCheckpointIncidentParticipantTests
         }
 
         await using var replayTransaction = await fixture.Context.Database.BeginTransactionAsync();
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() =>
             StageAsync(fixture.Context, Change(RuntimeStateChangeOperation.Append, incident), "tenant-a", "workflow-a"));
         await replayTransaction.RollbackAsync();
         Assert.Equal("first", (await fixture.Store.FindAsync("workflow-a", "incident-a"))!.Message);

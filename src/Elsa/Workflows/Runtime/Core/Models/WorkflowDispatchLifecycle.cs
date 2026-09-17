@@ -1,5 +1,6 @@
 using System.Globalization;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -138,16 +139,16 @@ public static class WorkflowDispatchLifecycle
     {
         ArgumentNullException.ThrowIfNull(request);
         if (current is null)
-            throw new InvalidOperationException($"Workflow dispatch '{request.DispatchId}' was not found for parent cancellation.");
+            throw new RuntimeCheckpointCommitValidationException($"Workflow dispatch '{request.DispatchId}' was not found for parent cancellation.");
         if (!StringComparer.Ordinal.Equals(current.ParentWorkflowExecutionId, request.ParentWorkflowExecutionId) ||
             !StringComparer.Ordinal.Equals(current.ParentActivityExecutionId, request.ParentActivityExecutionId) ||
             !StringComparer.Ordinal.Equals(current.ChildWorkflowExecutionId, request.ChildWorkflowExecutionId))
         {
-            throw new InvalidOperationException(
+            throw new RuntimeCheckpointCommitValidationException(
                 $"Workflow dispatch cancellation request '{request.DispatchId}' conflicts with the persisted dispatch identity.");
         }
         if (!IsCancellationPropagationEnabled(current))
-            throw new InvalidOperationException($"Workflow dispatch '{request.DispatchId}' does not permit parent cancellation propagation.");
+            throw new RuntimeCheckpointCommitValidationException($"Workflow dispatch '{request.DispatchId}' does not permit parent cancellation propagation.");
 
         return current.Status switch
         {
@@ -358,7 +359,7 @@ public static class WorkflowDispatchLifecycle
         if (!StringComparer.Ordinal.Equals(workflowExecutionId, ownerExecutionId))
         {
             var ownerKind = record.Status == WorkflowDispatchStatus.Pending ? "parent" : "child";
-            throw new InvalidOperationException(
+            throw new RuntimeCheckpointCommitValidationException(
                 $"Workflow dispatch '{record.DispatchId}' status '{record.Status}' must be committed by its {ownerKind} workflow execution.");
         }
     }
