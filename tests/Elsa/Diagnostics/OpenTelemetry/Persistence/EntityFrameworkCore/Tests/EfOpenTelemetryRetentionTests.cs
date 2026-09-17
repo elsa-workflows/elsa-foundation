@@ -1,5 +1,6 @@
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
+using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Diagnostics.Persistence.Draining;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -8,6 +9,10 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class EfOpenTelemetryRetentionTests
 {
+    // Batch issuance has to sit inside the one-hour replay window around the store's clock, so a test that pins
+    // issuance times pins the clock with them.
+    private static readonly DateTimeOffset ReplayWindowNow = TelemetryTestData.Now.AddMinutes(30);
+
     [Fact]
     public async Task Retention_keeps_exact_newest_rows_for_each_signal_and_catalog()
     {
@@ -245,10 +250,197 @@ public sealed class EfOpenTelemetryRetentionTests
         Assert.Equal(0, (await fixture.Store.GetDiagnosticsAsync()).TraceCount);
     }
 
-    private static async Task<OpenTelemetryEntityFrameworkCoreFixture> CreateFixtureAsync(OpenTelemetryDiagnosticsOptions options)
+    [Fact]
+    public async Task Signal_retention_deletes_every_row_below_the_boundary_and_keeps_the_boundary_row()
+    {
+        await using var fixture = await CreateFixtureAsync(new OpenTelemetryDiagnosticsOptions
+        {
+            TraceCapacity = 3,
+            SpanCapacity = 3,
+            MetricPointCapacity = 3,
+            LogRecordCapacity = 3,
+            ResourceCapacity = 10,
+            MetricInstrumentCapacity = 10,
+            MaxQuerySize = 20
+        }, new FixedTimeProvider(ReplayWindowNow));
+        var resource = TelemetryTestData.Resource("resource-boundary", "orders");
+        var instrument = TelemetryTestData.Instrument("instrument-boundary", resource.Id, "requests");
+
+        // Five rows against a capacity of three, so the retained set has a boundary row (the third newest, the
+        // oldest survivor) with two rows strictly below it. Three rows would only prove the count, not the edge.
+        for (var index = 1; index <= 5; index++)
+            await WriteAllSignalsAsync(fixture, index, resource, instrument);
+
+        await fixture.EfStore.ApplyPendingRetentionAsync();
+
+        Assert.Equal(["trace-3", "trace-4", "trace-5"], await fixture.WithDbAsync(db => db.Traces.OrderBy(x => x.Sequence).Select(x => x.TraceId).ToArrayAsync()));
+        Assert.Equal(["span-record-3", "span-record-4", "span-record-5"], await fixture.WithDbAsync(db => db.Spans.OrderBy(x => x.Sequence).Select(x => x.Id).ToArrayAsync()));
+        Assert.Equal(["point-3", "point-4", "point-5"], await fixture.WithDbAsync(db => db.MetricPoints.OrderBy(x => x.Sequence).Select(x => x.Id).ToArrayAsync()));
+        Assert.Equal(["log-3", "log-4", "log-5"], await fixture.WithDbAsync(db => db.Logs.OrderBy(x => x.Sequence).Select(x => x.Id).ToArrayAsync()));
+    }
+
+    [Fact]
+    public async Task Catalog_retention_deletes_every_row_below_the_boundary_and_keeps_the_boundary_row()
+    {
+        await using var fixture = await CreateFixtureAsync(new OpenTelemetryDiagnosticsOptions
+        {
+            ResourceCapacity = 3,
+            MetricInstrumentCapacity = 3,
+            MaxQuerySize = 20
+        }, new FixedTimeProvider(ReplayWindowNow));
+
+        // Instrument recency is the batch issuance time, resource recency is the observation time, so both
+        // orderings are pinned by giving each of the five writes its own second.
+        for (var index = 1; index <= 5; index++)
+        {
+            var time = TelemetryTestData.Now.AddSeconds(index);
+            await fixture.EfStore.WriteAsync(
+                new DiagnosticsDrainBatchId(Guid.NewGuid(), time),
+                new([TelemetryTestData.Resource($"resource-{index}", "orders", time)], [], [],
+                    [TelemetryTestData.Instrument($"instrument-{index}", $"resource-{index}", "requests")], [], []));
+        }
+
+        await fixture.EfStore.ApplyPendingRetentionAsync();
+
+        Assert.Equal(["resource-3", "resource-4", "resource-5"], await fixture.WithDbAsync(db => db.Resources.OrderBy(x => x.LastSeenTicks).Select(x => x.Id).ToArrayAsync()));
+        Assert.Equal(["instrument-3", "instrument-4", "instrument-5"], await fixture.WithDbAsync(db => db.Instruments.OrderBy(x => x.LastSeenTicks).Select(x => x.Id).ToArrayAsync()));
+    }
+
+    [Fact]
+    public async Task Retention_leaves_a_second_scopes_rows_untouched()
+    {
+        await using var fixture = await CreateFixtureAsync(new OpenTelemetryDiagnosticsOptions
+        {
+            TraceCapacity = 1,
+            SpanCapacity = 1,
+            MetricPointCapacity = 1,
+            LogRecordCapacity = 1,
+            ResourceCapacity = 1,
+            MetricInstrumentCapacity = 1,
+            MaxQuerySize = 20
+        }, new FixedTimeProvider(ReplayWindowNow));
+        var other = new EfOpenTelemetryBinding("other-tenant", "other-scope", "opentelemetry").ScopeKey;
+        Assert.NotEqual(EfOpenTelemetryBinding.Default.ScopeKey, other);
+        await fixture.WithDbAsync(async db =>
+        {
+            SeedScope(db, other, rows: 3);
+            await db.SaveChangesAsync();
+        });
+
+        // A distinct resource and instrument per write, so the catalog trims have something to delete too.
+        for (var index = 1; index <= 3; index++)
+        {
+            var resource = TelemetryTestData.Resource($"resource-{index}", "orders", TelemetryTestData.Now.AddSeconds(index));
+            await WriteAllSignalsAsync(fixture, index, resource, TelemetryTestData.Instrument($"instrument-{index}", resource.Id, "requests"));
+        }
+
+        await fixture.EfStore.ApplyPendingRetentionAsync();
+
+        // The bound scope is trimmed to its capacity of one in every signal and catalog table. Its own ledger
+        // rows are inside the append-idempotency window and stay; the seeded ones are outside it, so only the
+        // ScopeKey clause in the ledger delete keeps them.
+        Assert.Equal((1, 1, 1, 1, 1, 1, 3), await CountsAsync(fixture, EfOpenTelemetryBinding.Default.ScopeKey));
+        Assert.Equal((3, 3, 3, 3, 3, 3, 2), await CountsAsync(fixture, other));
+    }
+
+    /// <summary>Writes one capture carrying every signal kind, issued and timestamped at second <paramref name="index"/>.</summary>
+    private static ValueTask WriteAllSignalsAsync(
+        OpenTelemetryEntityFrameworkCoreFixture fixture,
+        int index,
+        TelemetryResource resource,
+        MetricInstrument instrument)
+    {
+        var time = TelemetryTestData.Now.AddSeconds(index);
+        var trace = TelemetryTestData.Trace($"trace-{index}", resource.Id, time, spanCount: 1);
+        return fixture.EfStore.WriteAsync(
+            new DiagnosticsDrainBatchId(Guid.NewGuid(), time),
+            new([resource], [trace],
+                [TelemetryTestData.Span($"span-record-{index}", trace.TraceId, $"span-{index}", resource.Id, time)],
+                [instrument],
+                [TelemetryTestData.Point($"point-{index}", instrument.Id, resource.Id, time)],
+                [TelemetryTestData.Log($"log-{index}", resource.Id, trace.TraceId, index.ToString()) with { Timestamp = time }]));
+    }
+
+    private static Task<(int Traces, int Spans, int Points, int Logs, int Resources, int Instruments, int Ledger)> CountsAsync(
+        OpenTelemetryEntityFrameworkCoreFixture fixture,
+        string scopeKey) =>
+        fixture.WithDbAsync(async db => (
+            await db.Traces.CountAsync(x => x.ScopeKey == scopeKey),
+            await db.Spans.CountAsync(x => x.ScopeKey == scopeKey),
+            await db.MetricPoints.CountAsync(x => x.ScopeKey == scopeKey),
+            await db.Logs.CountAsync(x => x.ScopeKey == scopeKey),
+            await db.Resources.CountAsync(x => x.ScopeKey == scopeKey),
+            await db.Instruments.CountAsync(x => x.ScopeKey == scopeKey),
+            await db.CaptureLedger.CountAsync(x => x.ScopeKey == scopeKey)));
+
+    /// <summary>
+    /// Seeds rows the bound store never writes, so any delete that drops its ScopeKey clause shows up as a loss here.
+    /// The search and order keys are opaque to retention, which only ever orders and filters on them, so the
+    /// projections are literal rather than recomputed through the (internal) key algorithm.
+    /// </summary>
+    private static void SeedScope(OpenTelemetryDbContext db, string scopeKey, int rows)
+    {
+        // Two hours back puts the ledger rows outside the one-hour append-idempotency window, so they are inside
+        // the cutoff predicate and only the scope clause keeps them.
+        var issuedAt = TelemetryTestData.Now.AddHours(-2);
+        for (var index = 0; index < rows; index++)
+        {
+            var name = $"foreign-{index}";
+            var ticks = TelemetryTestData.Now.AddSeconds(index).UtcTicks;
+            db.Traces.Add(new OpenTelemetryTraceEntity
+            {
+                ScopeKey = scopeKey, Sequence = index, Id = name, IdSearchKey = name, IdOrderKey = name,
+                TraceId = name, TraceIdSearchKey = name, TraceKey = name, PayloadJson = "{}",
+                StartTimeTicks = ticks, EndTimeTicks = ticks, SpanCount = 1
+            });
+            db.Spans.Add(new OpenTelemetrySpanEntity
+            {
+                ScopeKey = scopeKey, Sequence = index, Id = name, IdSearchKey = name, IdOrderKey = name,
+                TraceId = name, TraceIdSearchKey = name, TraceKey = name,
+                SpanId = name, SpanIdSearchKey = name, SpanIdOrderKey = name,
+                ResourceId = name, ResourceIdSearchKey = name, Name = name, NameSearchKey = name,
+                PayloadJson = "{}", StartTimeTicks = ticks, EndTimeTicks = ticks
+            });
+            db.MetricPoints.Add(new OpenTelemetryMetricPointEntity
+            {
+                ScopeKey = scopeKey, Sequence = index, Id = name, IdSearchKey = name, IdOrderKey = name,
+                InstrumentId = name, InstrumentIdSearchKey = name, InstrumentName = name, InstrumentNameSearchKey = name,
+                ResourceId = name, ResourceIdSearchKey = name, PayloadJson = "{}", TimestampTicks = ticks
+            });
+            db.Logs.Add(new OpenTelemetryLogEntity
+            {
+                ScopeKey = scopeKey, Sequence = index, Id = name, IdSearchKey = name, IdOrderKey = name,
+                ResourceId = name, ResourceIdSearchKey = name,
+                SeverityText = "Information", SeveritySearchKey = "INFORMATION", Body = name, BodySearchKey = name,
+                PayloadJson = "{}", TimestampTicks = ticks
+            });
+            db.Resources.Add(new OpenTelemetryResourceEntity
+            {
+                ScopeKey = scopeKey, Id = name, IdSearchKey = name, IdOrderKey = name,
+                ServiceName = name, ServiceNameSearchKey = name, ServiceNameKey = name,
+                LastSeenTicks = ticks, PayloadJson = "{}"
+            });
+            db.Instruments.Add(new OpenTelemetryMetricInstrumentEntity
+            {
+                ScopeKey = scopeKey, Id = name, IdSearchKey = name, IdOrderKey = name,
+                ResourceId = name, ResourceIdSearchKey = name, Name = name, NameSearchKey = name,
+                LastSeenTicks = ticks, PayloadJson = "{}"
+            });
+            if (index < 2)
+                db.CaptureLedger.Add(new OpenTelemetryCaptureLedgerEntity
+                {
+                    ScopeKey = scopeKey, BatchId = Guid.NewGuid(), Fingerprint = name,
+                    IssuedAtTicks = issuedAt.UtcTicks, Status = 1
+                });
+        }
+    }
+
+    private static async Task<OpenTelemetryEntityFrameworkCoreFixture> CreateFixtureAsync(
+        OpenTelemetryDiagnosticsOptions options,
+        TimeProvider? timeProvider = null)
     {
         var fixture = new OpenTelemetryEntityFrameworkCoreFixture();
-        await fixture.InitializeAsync(options);
+        await fixture.InitializeAsync(options, timeProvider);
         return fixture;
     }
 
