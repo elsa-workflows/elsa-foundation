@@ -18,7 +18,7 @@ The fix gives the delivery-record contract an outcome to return, adds a `Superse
 
 **Primary Dependencies**: Entity Framework Core, Npgsql (provider tests only), xunit 2.9.3, Xunit.SkippableFact, Testcontainers (provider tests only)
 
-**Storage**: Runtime operational state via EF Core. Durable store `EfRuntimePostCommitOutboxStore` over `BookmarkStateDbContext`; in-memory store `InMemoryRuntimeCheckpointCommitStore`; coalescing overlay decorator over either. **No schema change** — the fix reads existing columns (`Status`, `DeliveryFencingToken`) and adds no persisted state.
+**Storage**: Runtime operational state via EF Core. Durable store `EfRuntimePostCommitOutboxStore` over `RuntimeDbContext`; in-memory store `InMemoryRuntimeCheckpointCommitStore`; coalescing overlay decorator over either. **No schema change** — the fix reads existing columns (`Status`, `DeliveryFencingToken`) and adds no persisted state.
 
 **Testing**: xunit only, `Assert.*` idiom. FluentAssertions and other fluent assertion libraries are constitutionally excluded and must not be introduced.
 

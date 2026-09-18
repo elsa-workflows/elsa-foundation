@@ -59,7 +59,7 @@ Every file is generated with `--idempotent`, which means:
 - It is **safe to re-run**: each migration in it is wrapped in a check against that module's own
   migrations-history table, so a migration already recorded there is skipped rather than re-applied.
 - It **records what it applied** into that same per-module `__EFMigrationsHistory_*` table — Runtime's is
-  `__EFMigrationsHistory_ElsaRuntime`, Activities Design's is `__EFMigrationsHistory_activities_design`,
+  `__EFMigrationsHistory_ElsaRuntime`, Activities Design's is `__EFMigrationsHistory_ElsaActivitiesDesign`,
   and each script names its own in its first statement. That is the table a host started with
   `Elsa:Persistence:EntityFramework:Migrate:Policy=Validate` reads when it decides whether the database is
   up to date, so applying the script and starting the host in `Validate` agree by construction.

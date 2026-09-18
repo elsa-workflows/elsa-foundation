@@ -234,10 +234,3 @@ public sealed class ActivitiesDesignEntityFrameworkCoreOptions
     /// <summary>Reuse contexts from a pool instead of constructing one per scope.</summary>
     public bool Pooling { get; set; }
 }
-
-public static class ActivitiesDesignEfModule
-{
-    public const string DefaultConnectionName = EfConnectionDefaults.ConnectionName;
-    public const string DefaultSqliteConnectionString = EfConnectionDefaults.SqliteConnectionString;
-    public const string HistoryTableName = "__EFMigrationsHistory_activities_design";
-}

@@ -1,9 +1,10 @@
+using Elsa.Persistence.EntityFramework;
+
 namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
 
 public static class EfOpenTelemetryModule
 {
-    public const string ModuleName = "ElsaOpenTelemetry";
-    public const string HistoryTableName = "__EFMigrationsHistory_ElsaOpenTelemetry";
+    public const string HistoryModuleName = "ElsaOpenTelemetry";
     public const string ResourceTable = "elsa_otel_resources";
     public const string TraceTable = "elsa_otel_traces";
     public const string SpanTable = "elsa_otel_spans";
@@ -15,4 +16,6 @@ public static class EfOpenTelemetryModule
     public const string MembershipTable = "elsa_otel_trace_summary_memberships";
     public const string DefaultConnectionName = "ElsaOpenTelemetry";
     public const string DefaultSqliteConnectionString = "Data Source=elsa-opentelemetry.db";
+
+    public static string HistoryTableName => EfMigrationsHistory.TableName(HistoryModuleName);
 }
