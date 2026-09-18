@@ -173,6 +173,25 @@ public sealed class WorkflowExecutableModelTests
         Assert.Equal("tenant-a", retired.TenantId);
     }
 
+    /// <summary>
+    /// Every tree walk over an executable goes through <see cref="ExecutableNode.DescendantsAndSelf"/>, and
+    /// <see cref="WorkflowExecutable.Nodes"/> exposes its order. A stack walk that forgets to reverse children still
+    /// visits every node exactly once, so only the sequence gives it away; the tree has siblings within a slot, across
+    /// two slots, and below a sibling that is not last.
+    /// </summary>
+    [Fact]
+    public void Nodes_FollowDocumentOrder_ParentFirst_SlotsAndSiblingsLeftToRight()
+    {
+        var root = NewSlottedNode(
+            "root",
+            new ExecutableChildSlot("First", [NewNode("first-a", [NewNode("first-a-child")]), NewNode("first-b")]),
+            new ExecutableChildSlot("Second", [NewNode("second-a")]));
+        string[] documentOrder = ["root", "first-a", "first-a-child", "first-b", "second-a"];
+
+        Assert.Equal(documentOrder, root.DescendantsAndSelf().Select(node => node.ExecutableNodeId));
+        Assert.Equal(documentOrder, NewExecutable(root).Nodes.Select(node => node.ExecutableNodeId));
+    }
+
     private static WorkflowExecutable NewExecutable(
         string rootNodeId,
         IReadOnlyCollection<ExecutableNode>? children = null,
@@ -181,13 +200,7 @@ public sealed class WorkflowExecutableModelTests
     {
         var root = NewNode(rootNodeId, children);
         return inputContract is null && dependencies is null
-            ? new WorkflowExecutable(
-                NewIdentity(),
-                root,
-                new Dictionary<string, WorkflowExecutableResumeTarget>(),
-                DateTimeOffset.UnixEpoch,
-                new Dictionary<string, string>(),
-                IncidentStrategyBuiltIns.FaultReference)
+            ? NewExecutable(root)
             : new WorkflowExecutable(
                 NewIdentity(),
                 root,
@@ -199,7 +212,19 @@ public sealed class WorkflowExecutableModelTests
                 IncidentStrategyBuiltIns.FaultReference);
     }
 
+    private static WorkflowExecutable NewExecutable(ExecutableNode root) =>
+        new(
+            NewIdentity(),
+            root,
+            new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            DateTimeOffset.UnixEpoch,
+            new Dictionary<string, string>(),
+            IncidentStrategyBuiltIns.FaultReference);
+
     private static ExecutableNode NewNode(string nodeId, IReadOnlyCollection<ExecutableNode>? children = null) =>
+        NewSlottedNode(nodeId, children is null ? [] : [new ExecutableChildSlot("Body", children)]);
+
+    private static ExecutableNode NewSlottedNode(string nodeId, params ExecutableChildSlot[] childSlots) =>
         new(
             nodeId,
             $"authored-{nodeId}",
@@ -212,7 +237,7 @@ public sealed class WorkflowExecutableModelTests
             new Dictionary<string, RuntimeInputBinding>(),
             new Dictionary<string, RuntimeOutputCapture>(),
             new Dictionary<string, string>(),
-            children is null ? null : [new ExecutableChildSlot("Body", children)]);
+            childSlots);
 
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact", "definition", "version", "1", "hash");

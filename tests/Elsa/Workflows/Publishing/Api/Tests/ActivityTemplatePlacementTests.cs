@@ -104,7 +104,7 @@ public sealed class ActivityTemplatePlacementTests
         Assert.Equal("graph", placement.Root.Metadata["activity.templateNodeId"]);
         Assert.NotEqual(placement.Root.AuthoredActivityId, placement.Root.Metadata["activity.templateNodeId"]);
         Assert.All(
-            Flatten(placement.Root).Where(x => !ReferenceEquals(x, placement.Root)),
+            placement.Root.DescendantsAndSelf().Where(x => !ReferenceEquals(x, placement.Root)),
             x => Assert.Equal(x.AuthoredActivityId, x.Metadata["activity.templateNodeId"]));
         Assert.Equal(graphRoot.ExecutableNodeId, placement.Root.Descriptor.Payload.GetProperty("entryNodeId").GetString());
         Assert.Equal(4, placement.LayoutSidecar.BoundarySegments.Count);
@@ -193,7 +193,7 @@ public sealed class ActivityTemplatePlacementTests
 
         Assert.Equal(first.Root.ExecutableNodeId, repeated.Root.ExecutableNodeId);
         Assert.NotEqual(first.Root.ExecutableNodeId, moved.Root.ExecutableNodeId);
-        Assert.All(Flatten(first.Root), x => Assert.Matches("^node-[0-9a-f]{64}$", x.ExecutableNodeId));
+        Assert.All(first.Root.DescendantsAndSelf(), x => Assert.Matches("^node-[0-9a-f]{64}$", x.ExecutableNodeId));
     }
 
     [Fact]
@@ -297,7 +297,7 @@ public sealed class ActivityTemplatePlacementTests
             new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>());
 
         var result = await placer.PlaceAsync(request);
-        Assert.Equal(depth, Flatten(result.Root).Count());
+        Assert.Equal(depth, result.Root.DescendantsAndSelf().Count());
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => placer.PlaceAsync(request, cancellation.Token).AsTask());
@@ -512,20 +512,6 @@ public sealed class ActivityTemplatePlacementTests
         0,
         0,
         0);
-
-    private static IReadOnlyList<ExecutableNode> Flatten(ExecutableNode root)
-    {
-        var result = new List<ExecutableNode>();
-        var stack = new Stack<ExecutableNode>();
-        stack.Push(root);
-        while (stack.TryPop(out var node))
-        {
-            result.Add(node);
-            foreach (var child in node.ChildSlots.SelectMany(x => x.Activities).Reverse())
-                stack.Push(child);
-        }
-        return result;
-    }
 
     private sealed class ConstantHasher : IActivityPlacementHasher
     {

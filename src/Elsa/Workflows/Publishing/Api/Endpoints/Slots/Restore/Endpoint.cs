@@ -6,6 +6,7 @@ using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using NativeEndpoints;
 
@@ -32,7 +33,7 @@ public sealed class Endpoint(
         {
             slot = await restorer.RestoreAsync(request.DefinitionId, request.SlotName, cancellationToken);
         }
-        catch (InvalidOperationException exception) when (PublicationSlotViews.IsMissingSlot(exception))
+        catch (PublicationSlotNotFoundException exception)
         {
             throw new EntityNotFoundException(exception.Message);
         }

@@ -667,7 +667,7 @@ public sealed class ExecutableNodeCompiler(
         // activities) contribute nothing, so the map stays empty for them.
         var resumeTargets = new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal);
 
-        foreach (var node in FlattenExecutableNodes(root))
+        foreach (var node in root.DescendantsAndSelf())
         {
             if (precompiledNodeIds?.Contains(node.ExecutableNodeId) == true)
                 continue;
@@ -766,17 +766,5 @@ public sealed class ExecutableNodeCompiler(
                 contractArguments[1] == transitionArguments[1] &&
                 contractArguments[1] == contextArguments[0] &&
                 contractArguments[2] == contextArguments[1]);
-    }
-
-    private static IEnumerable<ExecutableNode> FlattenExecutableNodes(ExecutableNode root)
-    {
-        var stack = new Stack<ExecutableNode>();
-        stack.Push(root);
-        while (stack.TryPop(out var node))
-        {
-            yield return node;
-            foreach (var child in node.ChildSlots.SelectMany(x => x.Activities).Reverse())
-                stack.Push(child);
-        }
     }
 }

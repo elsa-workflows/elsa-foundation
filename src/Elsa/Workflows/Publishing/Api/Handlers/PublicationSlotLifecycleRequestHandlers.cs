@@ -3,6 +3,7 @@ using Elsa.Primitives.Identity;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Exceptions;
 using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -42,7 +43,7 @@ public sealed class UnpublishPublicationSlotRequestHandler(
     public async Task<WorkflowActivationSlot> Handle(UnpublishPublicationSlot request, CancellationToken cancellationToken)
     {
         var slot = await activationAuthority.FindAsync(request.WorkflowDefinitionId, request.SlotName, cancellationToken)
-            ?? throw new InvalidOperationException($"Publication slot '{request.SlotName}' does not exist.");
+            ?? throw new PublicationSlotNotFoundException($"Publication slot '{request.SlotName}' does not exist.");
         if (slot.ActiveActivationId is not { } publicationId)
             return slot;
 
@@ -55,7 +56,7 @@ public sealed class UnpublishPublicationSlotRequestHandler(
             throw new PublicationActivationException(ForeignActivationFailure(slot, publicationId));
 
         var executable = await executableStore.FindAsync(publication.ArtifactId, cancellationToken)
-            ?? throw new InvalidOperationException(
+            ?? throw new PublicationSlotNotFoundException(
                 $"Executable artifact '{publication.ArtifactId}' is unavailable, so publication '{publicationId}' cannot be unpublished.");
 
         var deactivation = await activationCoordinator.DeactivateAsync(
@@ -122,7 +123,7 @@ public sealed class RestorePublicationSlotRequestHandler(
     public async Task<WorkflowActivationSlot> Handle(RestorePublicationSlot request, CancellationToken cancellationToken)
     {
         var slot = await activationAuthority.FindAsync(request.WorkflowDefinitionId, request.SlotName, cancellationToken)
-            ?? throw new InvalidOperationException($"Publication slot '{request.SlotName}' does not exist.");
+            ?? throw new PublicationSlotNotFoundException($"Publication slot '{request.SlotName}' does not exist.");
         if (slot.ActiveActivationId is not null)
             return slot;
 
@@ -131,9 +132,9 @@ public sealed class RestorePublicationSlotRequestHandler(
             .OrderByDescending(publication => publication.RetiredAt ?? publication.CreatedAt)
             .ThenByDescending(publication => publication.PublicationId, StringComparer.Ordinal)
             .FirstOrDefault()
-            ?? throw new InvalidOperationException($"Publication slot '{request.SlotName}' has no retired publication to restore.");
+            ?? throw new PublicationSlotNotFoundException($"Publication slot '{request.SlotName}' has no retired publication to restore.");
         var executable = await executableStore.FindAsync(prior.ArtifactId, cancellationToken)
-            ?? throw new InvalidOperationException($"Executable artifact '{prior.ArtifactId}' is unavailable for restore.");
+            ?? throw new PublicationSlotNotFoundException($"Executable artifact '{prior.ArtifactId}' is unavailable for restore.");
 
         var priorReference = prior.SourceReferenceId is { } priorReferenceId
             ? await sourceReferenceStore.FindAsync(priorReferenceId, cancellationToken)
@@ -153,7 +154,7 @@ public sealed class RestorePublicationSlotRequestHandler(
             Failure = null
         };
         var reference = priorReference is null
-            ? throw new InvalidOperationException($"Publication '{prior.PublicationId}' has no source reference to restore.")
+            ? throw new PublicationSlotNotFoundException($"Publication '{prior.PublicationId}' has no source reference to restore.")
             : priorReference with
             {
                 SourceReferenceId = sourceReferenceId,

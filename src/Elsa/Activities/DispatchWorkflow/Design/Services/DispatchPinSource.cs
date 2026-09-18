@@ -37,7 +37,7 @@ public sealed class DispatchPinSource(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
-        var dispatchNodes = Flatten(context.RootActivity)
+        var dispatchNodes = context.RootActivity.DescendantsAndSelf()
             .Where(node => StringComparer.Ordinal.Equals(node.ActivityType, DispatchWorkflowConstants.ActivityType))
             .ToArray();
         if (dispatchNodes.Length == 0)
@@ -144,20 +144,5 @@ public sealed class DispatchPinSource(
                 .Select(property => new KeyValuePair<string, JsonElement>(property.Name, property.Value.Clone()))
                 .ToArray(),
             true);
-    }
-
-    private static IEnumerable<ExecutableNode> Flatten(ExecutableNode root)
-    {
-        var stack = new Stack<ExecutableNode>();
-        stack.Push(root);
-
-        while (stack.Count > 0)
-        {
-            var node = stack.Pop();
-            yield return node;
-
-            foreach (var child in node.ChildSlots.SelectMany(slot => slot.Activities).Reverse())
-                stack.Push(child);
-        }
     }
 }
