@@ -4,7 +4,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
-using Elsa.Workflows.Runtime.Services.WorkHandlers;
 using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -161,21 +160,21 @@ public sealed class CheckpointRuleViolationWorkflowFaulter
             !StringComparer.Ordinal.Equals(envelope.WorkflowExecutionId, workflowExecutionId))
             return null;
 
-        // A payload this runtime cannot read cannot stand in for the execution, and letting its exception out would report
-        // a deserialization failure in place of the refusal the drain called this to handle. The refusal then travels the
-        // way it did before, through the start's own delivery result. Narrowed to the payload's own validation the way
-        // WorkflowStartSchedulerWorkHandler narrows it, so an unrelated ArgumentException still surfaces as itself rather
-        // than being misread as a malformed payload, and logged either way because turning the recovery off for a child
-        // is not something to do quietly.
+        // A payload this runtime cannot read cannot stand in for the execution, and nothing about failing to read it may
+        // escape: this runs on the way out of a refused drain, so an exception here would be reported in place of the
+        // refusal it was called to handle, and the child would be neither faulted nor reported. The refusal then travels
+        // the way it did before, through the start's own delivery result.
+        //
+        // Deliberately not narrowed to a ParamName whitelist. The payload's constructor rejects `testScope` and
+        // `startAuthority` as well as the six names the start work handler lists, so a whitelist that drifts from it
+        // turns a merely invalid payload into an escaping exception, which is the outcome this is here to prevent. The
+        // cause is logged with the exception instead, so nothing is hidden by catching broadly.
         WorkflowExecutionStartCommandPayload? payload;
         try
         {
             payload = payloadElement.Deserialize<WorkflowExecutionStartCommandPayload>();
         }
-        catch (Exception exception) when (
-            exception is JsonException or NotSupportedException ||
-            exception is ArgumentException argument &&
-            WorkflowStartSchedulerWorkHandler.IsStartPayloadValidationException(argument))
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             _logger.LogWarning(
                 exception,

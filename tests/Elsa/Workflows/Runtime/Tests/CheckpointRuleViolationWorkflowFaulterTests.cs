@@ -251,8 +251,12 @@ public sealed class CheckpointRuleViolationWorkflowFaulterTests
     /// it parses but the payload's own validation refuses.
     /// </summary>
     [Theory]
+    // Unparseable.
     [InlineData("{\"PinnedExecutable\":\"not-an-identity\"}")]
+    // Parseable, rejected by the payload's own validation.
     [InlineData("{\"RequestedArtifactId\":\"artifact-1\"}")]
+    // Rejected on a parameter outside the start work handler's whitelist, which a narrowed catch would let escape.
+    [InlineData("{\"PinnedExecutable\":{\"ArtifactId\":\"artifact-1\",\"DefinitionId\":\"definition-1\",\"DefinitionVersionId\":\"version-1\",\"ArtifactVersion\":\"1.0.0\",\"ArtifactHash\":\"sha256:test\"},\"RequestedArtifactId\":\"artifact-1\",\"RunKind\":2,\"TestScope\":{\"ScopeId\":\"scope-child\",\"ExpiresAt\":\"2026-09-17T10:00:00+00:00\",\"TenantId\":\"tenant-child\",\"Partition\":{\"Value\":\"partition-child\"}}}")]
     public async Task A_refused_first_commit_with_an_unreadable_start_payload_is_left_alone(string payloadJson)
     {
         await _faulter.FaultIfCheckpointRuleViolatedAsync(

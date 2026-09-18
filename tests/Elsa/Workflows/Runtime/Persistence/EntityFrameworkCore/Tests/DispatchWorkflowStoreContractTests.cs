@@ -339,8 +339,17 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// Whether this is the outage the case armed, in either shape the processor produces: raw when the delivery itself
+    /// succeeded, or carried on <see cref="OutboxProcessingException.DeliveryResultRecordingException"/> when it did not.
+    /// That one is not on the inner-exception chain, which holds the delivery failure instead.
+    /// </summary>
     private static bool IsScriptedRecordingOutage(Exception exception)
     {
+        if (exception is OutboxProcessingException outbox &&
+            outbox.DeliveryResultRecordingException is ScriptedRecordingOutageException)
+            return true;
+
         for (var candidate = exception; candidate is not null; candidate = candidate.InnerException)
         {
             if (candidate is ScriptedRecordingOutageException)

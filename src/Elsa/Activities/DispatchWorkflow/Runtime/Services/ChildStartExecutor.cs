@@ -44,6 +44,11 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
     {
     }
 
+    /// <param name="workflowExecutionStateStore">
+    /// Reads the child a duplicate start may already have reached. Composition always supplies it; without it a duplicate
+    /// can only be recognised once its dispatch is terminal, so a legitimate one spends its delivery budget before the
+    /// claim completion's child-evidence rule resolves it as delivered. That degrades latency and logs, not the outcome.
+    /// </param>
     public ChildStartExecutor(
         IWorkflowStartDispatcher workflowStartDispatcher,
         IOptions<DispatchWorkflowOptions> options,
@@ -290,8 +295,8 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
 
     /// <summary>
     /// Whether a child can be seen for this dispatch: either the dispatch already carries the child's own outcome, or the
-    /// child execution exists. A child that cannot be read counts as not seen, which keeps the start retryable rather than
-    /// resolving it on a reading nothing stands behind.
+    /// child execution exists. A child that cannot be read is not seen either, and fails the delivery transiently with the
+    /// cause attached rather than resolving anything on a reading nothing stands behind.
     /// </summary>
     private async ValueTask<bool> HasChildAsync(WorkflowDispatchStartPayload payload, CancellationToken cancellationToken)
     {
@@ -304,9 +309,15 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
         {
             return await _workflowExecutionStateStore.FindAsync(payload.ChildWorkflowExecutionId, cancellationToken) is not null;
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (OperationCanceledException)
         {
-            return false;
+            throw;
+        }
+        catch (Exception exception)
+        {
+            // Same verdict as not finding the child, but carrying the cause: this is the reading the delivery failure is
+            // logged with, and a store that cannot be read is worth telling apart from a child that is genuinely absent.
+            throw DeliveryFailure(PostCommitFailureKind.Transient, exception);
         }
     }
 
