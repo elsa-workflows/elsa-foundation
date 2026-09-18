@@ -1054,6 +1054,136 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         }
     }
 
+    /// <summary>
+    /// The aggregate delete now takes one read per child type rather than one per child, so this carries several
+    /// children in every registry at once: with a single child per registry a batched read and a per-child read are
+    /// indistinguishable. Both linked roles must still have their own registry entry removed and their own revision
+    /// bumped, and the user's own revision must remain the externally visible fence.
+    /// </summary>
+    [Fact]
+    public async Task Aggregate_delete_removes_several_children_per_registry_in_one_pass()
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await using var scope = await EfIdentityScope.OpenAsync(databasePath, "tenant-a");
+            var user = User("tenant-a", "user-batch", "Batch Me", "batch@example.test");
+            var first = Role("tenant-a", "role-batch-one", "Batch Role One");
+            var second = Role("tenant-a", "role-batch-two", "Batch Role Two");
+            var users = new EfUserStore(scope.Context, scope.Access, emailUniquenessPolicy: IdentityEmailUniquenessPolicy.Unique);
+            await users.SaveAsync(user);
+            await scope.Roles.SaveAsync(first);
+            await scope.Roles.SaveAsync(second);
+            var relationships = new EfIdentityAuthorityRelationshipCoordinator(
+                scope.Context, new EfIdentityAtomicWrite(scope.Context), scope.Access);
+
+            var version = 1L;
+            foreach (var role in new[] { first, second })
+                version = Assert.IsType<long>((await relationships.AddUserRoleAsync(
+                    "tenant-a", user.Id, role.Id, version,
+                    new UserRoleEntity { TenantId = "caller", UserId = "caller", RoleId = "caller" })).Version);
+            version = Assert.IsType<long>((await relationships.AddUserClaimsAsync(
+                "tenant-a", user.Id, version,
+                [
+                    new UserClaimEntity { TenantId = "caller", UserId = "caller", ClaimType = "type", ClaimValue = "one" },
+                    new UserClaimEntity { TenantId = "caller", UserId = "caller", ClaimType = "type", ClaimValue = "two" },
+                    new UserClaimEntity { TenantId = "caller", UserId = "caller", ClaimType = "other", ClaimValue = "three" }
+                ])).Version);
+            foreach (var subject in new[] { "batch-subject-one", "batch-subject-two" })
+                version = Assert.IsType<long>((await relationships.SaveExternalIdentityAsync(
+                    ExternalEntity("tenant-a", user.Id, "google", subject),
+                    expectedNewOwnerVersion: version, expectedLoginVersion: null,
+                    enforceLoginVersion: false, EfExternalLoginOwnershipPolicy.CreateOrSameOwner,
+                    returnOwnerResult: true)).Version);
+            foreach (var name in new[] { "Recovery", "Refresh" })
+                version = Assert.IsType<long>((await relationships.SaveUserTokenAsync(
+                    "tenant-a", user.Id, version,
+                    new UserTokenEntity { TenantId = "caller", UserId = "caller", LoginProvider = "Identity", Name = name, Value = "value-" + name })).Version);
+            Assert.Equal(EfIdentityWriteStatus.Updated, (await relationships.SaveTenantMembershipAsync(
+                TenantMembershipEntity("tenant-a", user.Id, first.Id),
+                expectedMembershipVersion: null, enforceMembershipVersion: false)).Status);
+
+            var registries = await scope.Context.Users.AsNoTracking()
+                .Where(row => row.TenantId == user.TenantId && row.UserId == user.Id)
+                .Select(row => new { row.Revision, row.ClaimIdsJson, row.LoginIdsJson, row.TokenIdsJson, row.RoleLinkIdsJson })
+                .SingleAsync();
+            // Guards the test itself: with one child per registry the batching is untested.
+            Assert.Equal((3, 2, 2, 2), (
+                Count(registries.ClaimIdsJson), Count(registries.LoginIdsJson),
+                Count(registries.TokenIdsJson), Count(registries.RoleLinkIdsJson)));
+            var rolesBefore = await scope.Context.Roles.AsNoTracking()
+                .OrderBy(row => row.RoleId).Select(row => row.Revision).ToArrayAsync();
+
+            var coordinator = new EfIdentityAuthorityAggregateCoordinator(scope.Context, scope.Access);
+            var result = await coordinator.DeleteUserAsync("tenant-a", user.Id, registries.Revision);
+
+            Assert.Equal(EfIdentityWriteStatus.Deleted, result.Status);
+            Assert.Empty(scope.Context.ChangeTracker.Entries());
+            await using var reopened = await EfIdentityScope.OpenAsync(databasePath, "tenant-a");
+            Assert.Null(await reopened.Users.FindAsync("tenant-a", user.Id));
+            Assert.Equal((0, 0, 0, 0, 0), (
+                await reopened.Context.UserClaims.CountAsync(),
+                await reopened.Context.ExternalIdentities.CountAsync(),
+                await reopened.Context.UserTokens.CountAsync(),
+                await reopened.Context.TenantMemberships.CountAsync(),
+                await reopened.Context.UserRoles.CountAsync()));
+            var rolesAfter = await reopened.Context.Roles.AsNoTracking()
+                .OrderBy(row => row.RoleId).Select(row => new { row.Revision, row.UserLinkIdsJson }).ToArrayAsync();
+            Assert.Equal(["[]", "[]"], rolesAfter.Select(row => row.UserLinkIdsJson));
+            Assert.Equal(rolesBefore.Select(revision => revision + 1), rolesAfter.Select(row => row.Revision));
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
+    /// <summary>
+    /// A child the registry names but the database no longer holds is the reason this path loads rows instead of
+    /// deleting by predicate: the failure has to name the child. Batching the read must not turn it into a silent
+    /// delete miss.
+    /// </summary>
+    [Fact]
+    public async Task Aggregate_delete_still_names_a_registered_child_that_no_longer_exists()
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await using var scope = await EfIdentityScope.OpenAsync(databasePath, "tenant-a");
+            var user = User("tenant-a", "user-missing-child", "Missing Child", "missing@example.test");
+            var users = new EfUserStore(scope.Context, scope.Access, emailUniquenessPolicy: IdentityEmailUniquenessPolicy.Unique);
+            await users.SaveAsync(user);
+            var relationships = new EfIdentityAuthorityRelationshipCoordinator(
+                scope.Context, new EfIdentityAtomicWrite(scope.Context), scope.Access);
+            var claims = await relationships.AddUserClaimsAsync(
+                "tenant-a", user.Id, expectedUserVersion: 1,
+                [
+                    new UserClaimEntity { TenantId = "caller", UserId = "caller", ClaimType = "type", ClaimValue = "kept" },
+                    new UserClaimEntity { TenantId = "caller", UserId = "caller", ClaimType = "type", ClaimValue = "vanished" }
+                ]);
+            var version = Assert.IsType<long>(claims.Version);
+
+            // Delete one claim row behind the coordinator's back, leaving the user's registry naming it.
+            var vanished = await scope.Context.UserClaims.SingleAsync(row => row.ClaimValue == "vanished");
+            scope.Context.UserClaims.Remove(vanished);
+            await scope.Context.SaveChangesAsync();
+            scope.Context.ChangeTracker.Clear();
+
+            var coordinator = new EfIdentityAuthorityAggregateCoordinator(scope.Context, scope.Access);
+            var failure = await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(
+                () => coordinator.DeleteUserAsync("tenant-a", user.Id, version));
+
+            Assert.Contains($"user claim/{vanished.Id}", failure.Message, StringComparison.Ordinal);
+            await using var reopened = await EfIdentityScope.OpenAsync(databasePath, "tenant-a");
+            Assert.NotNull(await reopened.Users.FindAsync("tenant-a", user.Id));
+            Assert.Equal(1, await reopened.Context.UserClaims.CountAsync());
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
     [Fact]
     public async Task Aggregate_delete_rollback_restores_relationships_and_reservations()
     {
@@ -2310,6 +2440,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         Assert.Equal(expected.System, actual.System);
         Assert.Equal(expected.Permissions.Order(StringComparer.Ordinal), actual.Permissions.Order(StringComparer.Ordinal));
     }
+
+    private static int Count(string? json) => System.Text.Json.JsonSerializer.Deserialize<string[]>(json ?? "[]")!.Length;
 
     private static string TemporaryDatabasePath() =>
         Path.Join(Path.GetTempPath(), $"elsa-identity-authority-{Guid.NewGuid():N}.db");
