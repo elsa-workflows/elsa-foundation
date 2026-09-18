@@ -47,3 +47,19 @@ as one unit. It constructs fresh instances of the configured contexts, shares on
 transaction between them, commits or rolls back once, and refuses contexts that name different providers
 or connection strings. Module atomic writers join it through their transaction-factory seam
 (`EfSharedTransaction.BeginOperationAsync`); a writer that rolls back makes the owner rollback-only.
+
+## Ordinal string collation
+
+`EfOrdinalCollation` is a pinned decision, not an extension point: one binary collation per provider
+(`Latin1_General_100_BIN2`, `C`, `utf8mb4_0900_bin`, and nothing on SQLite, whose default already is
+`BINARY`). A module declares which of its columns are compared or ordered ordinally and calls
+`EfOrdinalCollation.Apply` from each provider-derived context; a provider nobody has decided for is
+refused rather than left on the server's linguistic default.
+
+On MySQL it also sets the provider's own `MySQL:Collation` annotation, because Oracle's provider reads that
+out of a migration's target model and ignores the relational column collation.
+
+It is applied **per column**, never through `modelBuilder.UseCollation`, for two reasons: modules can
+share one database, so a database-wide collation is one module setting its neighbours' comparison
+semantics, and a model-level declaration did not survive migration generation at all
+([#1837](https://github.com/elsa-workflows/elsa-foundation/issues/1837)).

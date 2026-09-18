@@ -155,6 +155,31 @@ public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbCo
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);
 
+    /// <summary>
+    /// The string columns this module compares or orders in SQL beyond the ones a key or an index already
+    /// covers. <c>EfActivityDesignStores.ByReference</c> checks a reference's raw value next to its hash, so
+    /// both sides of that pair are ordinal; the management projections page by <c>SortKey</c> then
+    /// <c>ResourceId</c> with <c>string.Compare</c>, so those are cursor keys. Payload, layout, diagnostics,
+    /// <c>SearchText</c>, <c>DisplayName</c>, <c>Category</c> and <c>Description</c> are deliberately absent:
+    /// they are searched with <c>Contains</c>, and a binary collation would silently narrow those matches.
+    /// </summary>
+    private static readonly string[] OrdinallyComparedColumns =
+    [
+        .. IdentitySourceNames,
+        .. IdentitySourceNames.Select(name => name + "IdentityHash"),
+        "Id", "IdIdentityHash", "TenantId", "TenantScopeKey", "TenantKey",
+        "Scope", "ScopeIdentityHash",
+        "ActivityTypeKey", "SemVerSortKey", "Version",
+        "SortKey", "RetentionKey", "IdempotencyKeyHash",
+        "ActorId", "ActorIdentityHash", "IdempotencyKey", "IdempotencyIdentityHash",
+        "OperationKind", "OperationKey", "OperationKindIdentityHash", "OperationKeyIdentityHash",
+        "ProviderKey", "HeadProviderKey", "RecommendationProviderKey"
+    ];
+
+    /// <summary>Binds this module's ordinal columns to <paramref name="providerName"/>'s binary collation, per column.</summary>
+    protected static void ApplyOrdinalCollation(ModelBuilder modelBuilder, string providerName) =>
+        EfOrdinalCollation.Apply(modelBuilder, providerName, OrdinallyComparedColumns);
+
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         StampWriteMetadata();

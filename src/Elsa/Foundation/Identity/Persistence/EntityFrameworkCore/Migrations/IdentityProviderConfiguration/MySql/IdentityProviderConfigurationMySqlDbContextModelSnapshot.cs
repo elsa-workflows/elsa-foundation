@@ -15,7 +15,6 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .UseCollation("utf8mb4_0900_bin")
                 .HasAnnotation("ProductVersion", "10.0.10")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
@@ -25,7 +24,9 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<bool>("Enabled")
                         .HasColumnType("tinyint(1)");
@@ -43,12 +44,15 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                     b.Property<string>("Provider")
                         .IsRequired()
                         .HasMaxLength(1600)
-                        .HasColumnType("varchar(1600)");
+                        .HasColumnType("varchar(1600)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("ProviderLookupKey")
                         .IsRequired()
                         .HasMaxLength(1600)
                         .HasColumnType("varchar(1600)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<long>("Revision")
@@ -82,25 +86,28 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(1600)
-                        .HasColumnType("varchar(1600)");
+                        .HasColumnType("varchar(1600)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantLookupKey")
                         .HasMaxLength(1600)
                         .HasColumnType("varchar(1600)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("Id");
 
                     b.ToTable("identity_global_provider_configurations", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 
             modelBuilder.Entity("Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities.TenantProviderConfigurationEntity", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<bool>("Enabled")
                         .HasColumnType("tinyint(1)");
@@ -118,12 +125,15 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                     b.Property<string>("Provider")
                         .IsRequired()
                         .HasMaxLength(1600)
-                        .HasColumnType("varchar(1600)");
+                        .HasColumnType("varchar(1600)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("ProviderLookupKey")
                         .IsRequired()
                         .HasMaxLength(1600)
                         .HasColumnType("varchar(1600)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<long>("Revision")
@@ -158,19 +168,20 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                     b.Property<string>("TenantId")
                         .IsRequired()
                         .HasMaxLength(1600)
-                        .HasColumnType("varchar(1600)");
+                        .HasColumnType("varchar(1600)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(1600)
                         .HasColumnType("varchar(1600)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("Id");
 
                     b.ToTable("identity_provider_configurations", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 #pragma warning restore 612, 618
         }

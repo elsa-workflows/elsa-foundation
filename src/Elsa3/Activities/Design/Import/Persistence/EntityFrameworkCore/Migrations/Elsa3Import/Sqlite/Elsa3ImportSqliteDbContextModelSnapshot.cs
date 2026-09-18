@@ -20,29 +20,24 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Migrati
                 {
                     b.Property<string>("TenantKey")
                         .HasMaxLength(66)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("UserIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("HandleHash")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("ContentLength")
                         .HasColumnType("INTEGER");
@@ -56,25 +51,21 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Migrati
                     b.Property<string>("Handle")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("TenantKey", "UserIdHash", "HandleHash");
 
@@ -85,25 +76,21 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Migrati
                 {
                     b.Property<string>("TenantKey")
                         .HasMaxLength(66)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("BindingIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("BindingId")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("CreatedAtOffsetMinutes")
                         .HasColumnType("INTEGER");
@@ -114,43 +101,36 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Migrati
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SourceDefinitionId")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SourceKind")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TargetDefinitionId")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TargetDefinitionIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TargetDocumentKind")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("TenantKey", "BindingIdHash");
 
@@ -161,24 +141,20 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Migrati
                 {
                     b.Property<string>("TenantKey")
                         .HasMaxLength(66)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("UserIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ReceiptIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("CommitAttemptId")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("CompletedAtUtcTicks")
                         .HasColumnType("INTEGER");
@@ -186,42 +162,35 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Migrati
                     b.Property<string>("ContentHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IdempotencyKey")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ReceiptId")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("TenantKey", "UserIdHash", "ReceiptIdHash");
 

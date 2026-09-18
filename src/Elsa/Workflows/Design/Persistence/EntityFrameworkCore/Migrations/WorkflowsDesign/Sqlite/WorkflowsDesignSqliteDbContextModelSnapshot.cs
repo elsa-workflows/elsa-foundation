@@ -21,13 +21,11 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(65)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IdLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
@@ -36,29 +34,24 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .HasColumnType("TEXT");
 
                     b.Property<string>("DeletedReason")
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DescriptionSearchKey")
                         .HasMaxLength(1792)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Id")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IdSearchKey")
                         .IsRequired()
                         .HasMaxLength(896)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<bool>("IsSourceOwned")
                         .HasColumnType("INTEGER");
@@ -70,18 +63,15 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("NameSearchKey")
                         .HasMaxLength(1792)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
 
@@ -96,50 +86,42 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(65)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IdLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Id")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("SourceVersionId")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("StateSource")
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowDefinitionId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowDefinitionIdLookupHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
 
@@ -152,26 +134,22 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(65)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IdLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivityPresentationJson")
                         .IsRequired()
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Id")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .IsConcurrencyToken()
@@ -179,25 +157,21 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
 
                     b.Property<string>("RecordsJson")
                         .IsRequired()
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowDefinitionDraftId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowDefinitionDraftIdLookupHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
 
@@ -211,13 +185,11 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(65)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IdLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
@@ -225,19 +197,16 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DefinitionIdLookupHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Id")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .IsConcurrencyToken()
@@ -246,30 +215,25 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     b.Property<string>("SemVerSortKey")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset?>("SourceCreatedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("SourceDraftId")
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("StateSource")
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Version")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
 
@@ -284,26 +248,22 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(65)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IdLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivityPresentationJson")
                         .IsRequired()
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Id")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .IsConcurrencyToken()
@@ -311,25 +271,21 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
 
                     b.Property<string>("RecordsJson")
                         .IsRequired()
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowDefinitionVersionId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowDefinitionVersionIdLookupHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
 
@@ -343,18 +299,15 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(65)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("OperationKindLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("OperationKeyLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
@@ -362,37 +315,31 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     b.Property<string>("OperationKey")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("OperationKind")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("RequestFingerprint")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ResultFingerprint")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ResultJson")
                         .IsRequired()
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .UseCollation("BINARY");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("ScopeKey", "OperationKindLookupHash", "OperationKeyLookupHash");
 

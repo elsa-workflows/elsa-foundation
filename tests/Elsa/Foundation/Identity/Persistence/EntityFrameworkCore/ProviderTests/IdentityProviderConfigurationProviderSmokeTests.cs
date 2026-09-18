@@ -3,6 +3,7 @@ using Elsa.Foundation.Identity.Core.Ownership;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Data.Common;
@@ -136,7 +137,10 @@ internal static class IdentityProviderProviderSmoke
             Assert.True(await reader.ReadAsync());
             var ddl = reader.GetString(1);
             Assert.Contains($"DEFAULT CHARSET={IdentityProviderConfigurationMySqlDbContext.CharacterSet}", ddl, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains(IdentityProviderConfigurationMySqlDbContext.Collation, ddl, StringComparison.OrdinalIgnoreCase);
+            // #1837: the table keeps the server's default collation and the lookup keys carry the binary
+            // one per column, so this module imposes nothing on a neighbour sharing the database.
+            Assert.DoesNotContain($"COLLATE={EfOrdinalCollation.MySql}", ddl, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains($"COLLATE {EfOrdinalCollation.MySql}", ddl, StringComparison.OrdinalIgnoreCase);
         }
     }
 

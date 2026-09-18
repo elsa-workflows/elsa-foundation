@@ -10,7 +10,11 @@ public sealed class IdentityProviderConfigurationSqliteDbContext(DbContextOption
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.Sqlite;
     protected override string ExpectedProviderNameValue => ExpectedProviderName;
 
-    protected override void ConfigureProvider(ModelBuilder modelBuilder) => ConfigureText(modelBuilder, "TEXT");
+    protected override void ConfigureProvider(ModelBuilder modelBuilder)
+    {
+        ConfigureText(modelBuilder, "TEXT");
+        ApplyOrdinalCollation(modelBuilder, ExpectedProviderName);
+    }
 
     private static void ConfigureText(ModelBuilder modelBuilder, string type)
     {
@@ -39,17 +43,12 @@ public sealed class IdentityProviderConfigurationSqlServerDbContext(DbContextOpt
     {
         ConfigureEntity(modelBuilder.Entity<TenantProviderConfigurationEntity>());
         ConfigureEntity(modelBuilder.Entity<GlobalProviderConfigurationEntity>());
+        ApplyOrdinalCollation(modelBuilder, ExpectedProviderName);
     }
 
     private static void ConfigureEntity<TEntity>(EntityTypeBuilder<TEntity> entity)
-        where TEntity : ProviderConfigurationEntity
-    {
+        where TEntity : ProviderConfigurationEntity =>
         entity.Property(record => record.SettingsJson).HasColumnType("nvarchar(max)");
-        entity.Property(record => record.TenantId).UseCollation("Latin1_General_BIN2");
-        entity.Property(record => record.TenantLookupKey).UseCollation("Latin1_General_BIN2");
-        entity.Property(record => record.Provider).UseCollation("Latin1_General_BIN2");
-        entity.Property(record => record.ProviderLookupKey).UseCollation("Latin1_General_BIN2");
-    }
 }
 
 public sealed class IdentityProviderConfigurationPostgreSqlDbContext(DbContextOptions<IdentityProviderConfigurationPostgreSqlDbContext> options)
@@ -63,26 +62,21 @@ public sealed class IdentityProviderConfigurationPostgreSqlDbContext(DbContextOp
         modelBuilder.Model.RemoveAnnotation("Npgsql:ValueGenerationStrategy");
         ConfigureEntity(modelBuilder.Entity<TenantProviderConfigurationEntity>());
         ConfigureEntity(modelBuilder.Entity<GlobalProviderConfigurationEntity>());
+        ApplyOrdinalCollation(modelBuilder, ExpectedProviderName);
     }
 
     private static void ConfigureEntity<TEntity>(EntityTypeBuilder<TEntity> entity)
-        where TEntity : ProviderConfigurationEntity
-    {
+        where TEntity : ProviderConfigurationEntity =>
         entity.Property(record => record.SettingsJson).HasColumnType("text");
-        entity.Property(record => record.TenantLookupKey).UseCollation("C");
-        entity.Property(record => record.ProviderLookupKey).UseCollation("C");
-    }
 }
 
 public sealed class IdentityProviderConfigurationMySqlDbContext(DbContextOptions<IdentityProviderConfigurationMySqlDbContext> options)
     : IdentityProviderConfigurationDbContext(options)
 {
     private const string CharacterSetAnnotation = "MySQL:Charset";
-    private const string CollationAnnotation = "MySQL:Collation";
 
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.MySql;
     public const string CharacterSet = "utf8mb4";
-    public const string Collation = "utf8mb4_0900_bin";
     protected override string ExpectedProviderNameValue => ExpectedProviderName;
 
     protected override void ConfigureProvider(ModelBuilder modelBuilder)
@@ -91,19 +85,12 @@ public sealed class IdentityProviderConfigurationMySqlDbContext(DbContextOptions
         // the shipped module provider-neutral while ensuring generated DDL does not inherit an
         // incompatible database default charset.
         modelBuilder.Model.SetAnnotation(CharacterSetAnnotation, CharacterSet);
-        modelBuilder.UseCollation(Collation);
         ConfigureEntity(modelBuilder.Entity<TenantProviderConfigurationEntity>());
         ConfigureEntity(modelBuilder.Entity<GlobalProviderConfigurationEntity>());
+        ApplyOrdinalCollation(modelBuilder, ExpectedProviderName);
     }
 
     private static void ConfigureEntity<TEntity>(EntityTypeBuilder<TEntity> entity)
-        where TEntity : ProviderConfigurationEntity
-    {
-        entity.Metadata.SetAnnotation(CollationAnnotation, Collation);
+        where TEntity : ProviderConfigurationEntity =>
         entity.Property(record => record.SettingsJson).HasColumnType("longtext");
-        // NO PAD keeps trailing spaces distinct in canonical projections. IDs are still the
-        // authoritative binary identity, so this collation is a defensive provider projection.
-        entity.Property(record => record.TenantLookupKey).Metadata.SetAnnotation(CollationAnnotation, Collation);
-        entity.Property(record => record.ProviderLookupKey).Metadata.SetAnnotation(CollationAnnotation, Collation);
-    }
 }

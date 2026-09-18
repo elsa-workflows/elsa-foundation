@@ -41,8 +41,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .HasColumnType("datetimeoffset");
 
                     b.Property<string>("DeletedReason")
-                        .HasColumnType("nvarchar(max)")
-                        .UseCollation("Latin1_General_100_BIN2");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Description")
                         .HasMaxLength(256)
@@ -126,8 +125,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("StateSource")
-                        .HasColumnType("nvarchar(max)")
-                        .UseCollation("Latin1_General_100_BIN2");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
@@ -167,8 +165,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
 
                     b.Property<string>("ActivityPresentationJson")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)")
-                        .UseCollation("Latin1_General_100_BIN2");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
@@ -184,8 +181,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
 
                     b.Property<string>("RecordsJson")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)")
-                        .UseCollation("Latin1_General_100_BIN2");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
@@ -258,12 +254,10 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .HasColumnType("datetimeoffset");
 
                     b.Property<string>("SourceDraftId")
-                        .HasColumnType("nvarchar(max)")
-                        .UseCollation("Latin1_General_100_BIN2");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("StateSource")
-                        .HasColumnType("nvarchar(max)")
-                        .UseCollation("Latin1_General_100_BIN2");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
@@ -299,8 +293,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
 
                     b.Property<string>("ActivityPresentationJson")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)")
-                        .UseCollation("Latin1_General_100_BIN2");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
@@ -316,8 +309,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
 
                     b.Property<string>("RecordsJson")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)")
-                        .UseCollation("Latin1_General_100_BIN2");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
@@ -390,8 +382,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
 
                     b.Property<string>("ResultJson")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)")
-                        .UseCollation("Latin1_General_100_BIN2");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TenantId")
                         .IsRequired()

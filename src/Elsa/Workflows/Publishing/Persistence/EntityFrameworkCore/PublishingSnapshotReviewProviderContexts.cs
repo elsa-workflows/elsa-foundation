@@ -7,7 +7,11 @@ public sealed class PublishingSnapshotReviewSqliteDbContext(DbContextOptions<Pub
     : PublishingSnapshotReviewDbContext(options)
 {
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.Sqlite;
-    protected override void ConfigureProvider(ModelBuilder modelBuilder) => PublishingSnapshotReviewProviderModel.ConfigureDateTime(modelBuilder, "INTEGER");
+    protected override void ConfigureProvider(ModelBuilder modelBuilder)
+    {
+        PublishingSnapshotReviewProviderModel.ConfigureDateTime(modelBuilder, "INTEGER");
+        ApplyOrdinalCollation(modelBuilder, ExpectedProviderName);
+    }
 }
 
 public sealed class PublishingSnapshotReviewSqlServerDbContext(DbContextOptions<PublishingSnapshotReviewSqlServerDbContext> options)
@@ -17,7 +21,7 @@ public sealed class PublishingSnapshotReviewSqlServerDbContext(DbContextOptions<
     protected override void ConfigureProvider(ModelBuilder modelBuilder)
     {
         PublishingSnapshotReviewProviderModel.ConfigureDateTime(modelBuilder, "bigint");
-        PublishingSnapshotReviewProviderModel.ConfigureSqlServerCollation(modelBuilder, "Latin1_General_BIN2");
+        ApplyOrdinalCollation(modelBuilder, ExpectedProviderName);
     }
 }
 
@@ -29,6 +33,7 @@ public sealed class PublishingSnapshotReviewPostgreSqlDbContext(DbContextOptions
     {
         modelBuilder.Model.RemoveAnnotation("Npgsql:ValueGenerationStrategy");
         PublishingSnapshotReviewProviderModel.ConfigureDateTime(modelBuilder, "bigint");
+        ApplyOrdinalCollation(modelBuilder, ExpectedProviderName);
     }
 }
 
@@ -36,17 +41,14 @@ public sealed class PublishingSnapshotReviewMySqlDbContext(DbContextOptions<Publ
     : PublishingSnapshotReviewDbContext(options)
 {
     private const string CharacterSetAnnotation = "MySQL:Charset";
-    private const string CollationAnnotation = "MySQL:Collation";
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.MySql;
     public const string CharacterSet = "utf8mb4";
-    public const string Collation = "utf8mb4_0900_bin";
 
     protected override void ConfigureProvider(ModelBuilder modelBuilder)
     {
         modelBuilder.Model.SetAnnotation(CharacterSetAnnotation, CharacterSet);
-        modelBuilder.UseCollation(Collation);
-        PublishingSnapshotReviewProviderModel.ConfigureMySqlCollation(modelBuilder, Collation, CollationAnnotation);
         PublishingSnapshotReviewProviderModel.ConfigureDateTime(modelBuilder, "bigint");
+        ApplyOrdinalCollation(modelBuilder, ExpectedProviderName);
     }
 }
 
@@ -54,50 +56,4 @@ file static class PublishingSnapshotReviewProviderModel
 {
     public static void ConfigureDateTime(ModelBuilder modelBuilder, string type) =>
         modelBuilder.Entity<PublicationSnapshotReviewEntity>().Property(row => row.ExpiresAt).HasColumnType(type);
-
-    public static void ConfigureSqlServerCollation(ModelBuilder modelBuilder, string collation)
-    {
-        ConfigureStringCollation<PublicationSnapshotReviewEntity>(modelBuilder, collation,
-            nameof(PublicationSnapshotReviewEntity.PreflightToken), nameof(PublicationSnapshotReviewEntity.DefinitionId), nameof(PublicationSnapshotReviewEntity.SlotName), nameof(PublicationSnapshotReviewEntity.TenantId));
-        ConfigureStringCollation<PublicationPolicyEntity>(modelBuilder, collation,
-            nameof(PublicationPolicyEntity.PolicyKey), nameof(PublicationPolicyEntity.WorkflowDefinitionId), nameof(PublicationPolicyEntity.TenantId), nameof(PublicationPolicyEntity.DefaultSlotName));
-        ConfigureStringCollation<PublicationProjectionIntentEntity>(modelBuilder, collation,
-            nameof(PublicationProjectionIntentEntity.IntentId), nameof(PublicationProjectionIntentEntity.PublicationId), nameof(PublicationProjectionIntentEntity.ProjectionKind), nameof(PublicationProjectionIntentEntity.TenantId));
-        ConfigureStringCollation<PublicationRecordEntity>(modelBuilder, collation,
-            nameof(PublicationRecordEntity.Id), nameof(PublicationRecordEntity.PublicationId), nameof(PublicationRecordEntity.PublicationIdHash),
-            nameof(PublicationRecordEntity.SlotId), nameof(PublicationRecordEntity.SlotIdHash), nameof(PublicationRecordEntity.TenantId),
-            nameof(PublicationRecordEntity.TenantIdHash));
-        ConfigureStringCollation<ActivityPublicationReceiptEntity>(modelBuilder, collation,
-            nameof(ActivityPublicationReceiptEntity.Id), nameof(ActivityPublicationReceiptEntity.ReceiptKeyHash), nameof(ActivityPublicationReceiptEntity.IdempotencyKey),
-            nameof(ActivityPublicationReceiptEntity.ReceiptTenantId), nameof(ActivityPublicationReceiptEntity.TenantId), nameof(ActivityPublicationReceiptEntity.TenantIdHash));
-        ConfigureStringCollation<ActivityDraftTestRunEntity>(modelBuilder, collation,
-            nameof(ActivityDraftTestRunEntity.Id), nameof(ActivityDraftTestRunEntity.TestRunId), nameof(ActivityDraftTestRunEntity.TestRunIdHash),
-            nameof(ActivityDraftTestRunEntity.TenantId), nameof(ActivityDraftTestRunEntity.TenantIdHash));
-    }
-
-    public static void ConfigureMySqlCollation(ModelBuilder modelBuilder, string collation, string annotation)
-    {
-        foreach (var entity in new[]
-        {
-            modelBuilder.Entity<PublicationSnapshotReviewEntity>().Metadata,
-            modelBuilder.Entity<PublicationPolicyEntity>().Metadata,
-            modelBuilder.Entity<PublicationProjectionIntentEntity>().Metadata,
-            modelBuilder.Entity<PublicationRecordEntity>().Metadata,
-            modelBuilder.Entity<ActivityPublicationReceiptEntity>().Metadata,
-            modelBuilder.Entity<ActivityDraftTestRunEntity>().Metadata
-        })
-        {
-            entity.SetAnnotation(annotation, collation);
-            foreach (var property in entity.GetProperties().Where(property => property.ClrType == typeof(string)))
-                property.SetAnnotation(annotation, collation);
-        }
-    }
-
-    private static void ConfigureStringCollation<TEntity>(ModelBuilder modelBuilder, string collation, params string[] properties)
-        where TEntity : class
-    {
-        var entity = modelBuilder.Entity<TEntity>();
-        foreach (var property in properties)
-            entity.Property(property).UseCollation(collation);
-    }
 }

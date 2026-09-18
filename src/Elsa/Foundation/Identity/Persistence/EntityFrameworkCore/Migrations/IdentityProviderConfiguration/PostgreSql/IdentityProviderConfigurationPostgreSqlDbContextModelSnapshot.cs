@@ -22,7 +22,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<bool>("Enabled")
                         .HasColumnType("boolean");
@@ -40,7 +41,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                     b.Property<string>("Provider")
                         .IsRequired()
                         .HasMaxLength(1600)
-                        .HasColumnType("character varying(1600)");
+                        .HasColumnType("character varying(1600)")
+                        .UseCollation("C");
 
                     b.Property<string>("ProviderLookupKey")
                         .IsRequired()
@@ -79,7 +81,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(1600)
-                        .HasColumnType("character varying(1600)");
+                        .HasColumnType("character varying(1600)")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantLookupKey")
                         .HasMaxLength(1600)
@@ -95,7 +98,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<bool>("Enabled")
                         .HasColumnType("boolean");
@@ -113,7 +117,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                     b.Property<string>("Provider")
                         .IsRequired()
                         .HasMaxLength(1600)
-                        .HasColumnType("character varying(1600)");
+                        .HasColumnType("character varying(1600)")
+                        .UseCollation("C");
 
                     b.Property<string>("ProviderLookupKey")
                         .IsRequired()
@@ -153,7 +158,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                     b.Property<string>("TenantId")
                         .IsRequired()
                         .HasMaxLength(1600)
-                        .HasColumnType("character varying(1600)");
+                        .HasColumnType("character varying(1600)")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()

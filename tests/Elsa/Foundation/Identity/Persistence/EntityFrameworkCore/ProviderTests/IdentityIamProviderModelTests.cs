@@ -151,13 +151,17 @@ public sealed class IdentityIamProviderModelTests
         AssertUniqueIndex(designTimeModel, "identity_mutation_receipts", "MutationReceiptId");
 
         if (provider == "MySql")
-        {
             Assert.Equal(IdentityIamMySqlDbContext.CharacterSet, designTimeModel.FindAnnotation("MySQL:Charset")?.Value);
-            Assert.Equal(IdentityIamMySqlDbContext.Collation, designTimeModel.GetCollation());
-            Assert.All(
-                designTimeModel.GetEntityTypes(),
-                entity => Assert.Equal(IdentityIamMySqlDbContext.Collation, entity.FindAnnotation("MySQL:Collation")?.Value));
-        }
+
+        // #1837: the collation is a per-column declaration on the lookup keys, never a model-wide one.
+        // Reservation uniqueness is the reason: a case-insensitive default would let two rows that
+        // differ only in case collide. OrdinalCollationMigrationTests proves it reaches the schema.
+        Assert.Null(designTimeModel.GetCollation());
+        Assert.All(designTimeModel.GetEntityTypes(), entity => Assert.Null(entity.FindAnnotation(RelationalAnnotationNames.Collation)?.Value));
+        var expected = EfOrdinalCollation.ForProvider(EfRelationalProviderBinding.ExpectedProviderName(provider));
+        var users = designTimeModel.GetEntityTypes().Single(entity => entity.GetTableName() == "identity_users");
+        Assert.Equal(expected, users.FindProperty("NormalizedEmailKey")!.GetCollation());
+        Assert.Null(users.FindProperty("PasswordHash")!.GetCollation());
     }
 
     private static bool IsAuthorityEntity(IEntityType entity) =>

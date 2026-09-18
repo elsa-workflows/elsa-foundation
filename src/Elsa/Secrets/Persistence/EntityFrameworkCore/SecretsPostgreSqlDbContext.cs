@@ -19,5 +19,6 @@ public sealed class SecretsPostgreSqlDbContext(DbContextOptions<SecretsPostgreSq
             entity.Property(record => record.Payload).HasColumnType("jsonb");
             entity.Property(record => record.ConcurrencyToken).HasColumnType("bytea");
         });
+        ApplyOrdinalCollation(modelBuilder, ExpectedProviderName);
     }
 }

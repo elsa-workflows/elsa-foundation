@@ -30,6 +30,22 @@ public abstract class SecretsDbContext : DbContext
     /// <summary>Provider-specific column types (json vs jsonb, blob vs varbinary vs bytea).</summary>
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);
 
+    /// <summary>
+    /// The string columns this module compares in SQL beyond the ones its key and list index already cover:
+    /// the lookup projections a filtered read matches exactly, and the two ordinal-normalized search keys
+    /// the name search runs <c>Contains</c> against. <c>Payload</c> is absent; it is deserialized in .NET.
+    /// </summary>
+    private static readonly string[] OrdinallyComparedColumns =
+    [
+        "TenantId", "NormalizedName", "Status",
+        "TypeNameLookupKey", "StoreNameLookupKey", "ScopeLookupKey",
+        "NameSearchKey", "DisplayNameSearchKey"
+    ];
+
+    /// <summary>Binds this module's ordinal columns to <paramref name="providerName"/>'s binary collation, per column.</summary>
+    protected static void ApplyOrdinalCollation(ModelBuilder modelBuilder, string providerName) =>
+        EfOrdinalCollation.Apply(modelBuilder, providerName, OrdinallyComparedColumns);
+
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         StampConcurrencyTokens();

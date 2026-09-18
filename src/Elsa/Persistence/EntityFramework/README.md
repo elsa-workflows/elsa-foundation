@@ -25,6 +25,7 @@ until its migration slice proves four-provider parity and performs the explicit 
 | `EfMigratePolicy` | `AutoMigrate` vs `Validate` (fail if pending), chosen by the operator through `EfMigrateOptions` |
 | `EfDatabaseMigrator.ApplyAsync` | Guard, then `MigrateAsync` (EF 9+ takes the database lock) or fail closed |
 | `EfRelationalProviderBinding` | Invoke host-supplied `UseSqlite` / `UseSqlServer` / `UseNpgsql` / `UseMySQL` without this package referencing those engines; `Select` matches a provider name to what a module registers for that dialect |
+| `EfOrdinalCollation` | The one binary collation per provider, applied **per column** to the string columns a module compares or orders, so SQL comparison and ordering agree with `StringComparer.Ordinal` |
 | `EfSchema` | Resolve and validate the optional database schema a module's tables and history table live in |
 | `EfSchemaMigrationsAssembly` | Put migrations scaffolded without a schema into the configured one, so one migration set applies anywhere |
 | `EfConnectionDefaults.ResolveConnectionString` | Explicit connection string, then a named `ConnectionStrings` entry (refused when missing or blank), then the module's default entry, then the SQLite file |
@@ -66,6 +67,50 @@ Three rules apply when you write or review a store:
    deadlock or lock timeout surfaces to the caller. That is a legitimate choice for some contracts,
    but make it a choice: it is the difference between a lost race, which is the caller's to resolve,
    and a provider conflict, which is not.
+## Ordinal string columns (`EfOrdinalCollation`)
+
+A module that compares or orders a string column the way .NET compares strings needs the database to
+agree. A server whose default collation is linguistic — SQL Server's `*_CI_AS` family, PostgreSQL's
+`en_US.UTF-8` — orders `'a'` before `'B'` and treats `'A'` and `'a'` as equal. An exact-value check
+then stops being exact, a uniqueness reservation stops separating two rows that differ only in case,
+and a keyset page built from an ordinal cursor can skip or repeat rows.
+
+| Provider | Collation |
+|---|---|
+| SQL Server | `Latin1_General_100_BIN2` |
+| PostgreSQL | `C` |
+| MySQL | `utf8mb4_0900_bin` |
+| SQLite | none — `BINARY` is its only TEXT collation and already its default |
+
+A module declares it once, in its shared context:
+
+```csharp
+private static readonly string[] OrdinallyComparedColumns = ["Id", "TenantId", "SortKey"];
+
+protected static void ApplyOrdinalCollation(ModelBuilder modelBuilder, string providerName) =>
+    EfOrdinalCollation.Apply(modelBuilder, providerName, OrdinallyComparedColumns);
+```
+
+and each provider-derived context calls it with its own `ExpectedProviderName`. `Apply` collates every
+string column a key or an index is built on, plus the names in the list — the lookup projections,
+identity columns and cursor keys nothing indexes. Content columns are left alone on purpose: giving a
+payload or a description a binary collation is a silent behaviour change for anything that searches it.
+
+**MySQL needs both channels.** Oracle's `MySql.EntityFrameworkCore` reads its own `MySQL:Collation`
+annotation out of a migration's *target model* — the `.Designer.cs` beside the migration — and ignores the
+relational column collation entirely. `Apply` therefore sets both on MySQL. A module that set only the
+relational one generated a migration whose every file read correctly and produced columns on
+`utf8mb4_0900_ai_ci`; `OrdinalCollationProviderTests` reads `information_schema` on a real MySQL so that
+cannot happen quietly again.
+
+**Per column, never at model level.** `modelBuilder.UseCollation(...)` declares a collation for the whole
+database, and modules can share one, so that is one module setting its neighbours' comparison semantics.
+It is also how [#1837](https://github.com/elsa-workflows/elsa-foundation/issues/1837) went unnoticed:
+Activities Design declared `Latin1_General_100_BIN2` and `C` at model level and its generated SQL Server
+and PostgreSQL migrations contained no collation at all, so every one of those columns inherited the
+server's default. `OrdinalCollationMigrationTests` therefore asserts against the generated migration
+rather than the model, and `OrdinalCollationProviderTests` proves the ordering on a real SQL Server and a
+real PostgreSQL whose databases are deliberately created with a linguistic default.
 
 ## Putting Elsa in its own schema (operator setting)
 
