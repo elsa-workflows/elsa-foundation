@@ -20,4 +20,8 @@
   <ItemGroup>
     <ProjectReference Include="../../../../../../../src/Elsa/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- One case table for the ContentAuthorityIsValid marker, shared with the module's SQLite suite. -->
+    <Compile Include="../Tests/ActivityAuthorityValidityContract.cs" Link="ActivityAuthorityValidityContract.cs" />
+  </ItemGroup>
 </Project>
