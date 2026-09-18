@@ -21,7 +21,7 @@ internal static class ModuleContextCatalog
     public static readonly string[] Providers = ["Sqlite", "SqlServer", "PostgreSql", "MySql"];
 
     // One anchor per module assembly; a module that gains a context is found without further edits.
-    private static readonly Assembly[] Modules =
+    internal static readonly Assembly[] Modules =
     [
         typeof(ActivitiesDesignDbContext).Assembly,
         typeof(OpenTelemetryDbContext).Assembly,
@@ -35,6 +35,31 @@ internal static class ModuleContextCatalog
         typeof(RuntimeDbContext).Assembly,
         typeof(Elsa3ImportDbContext).Assembly
     ];
+
+
+    /// <summary>
+    /// Every first-party module's declared migrations-history table, read from the module class itself
+    /// rather than derived, so these are the names a deployed host actually uses. Keyed on the member and
+    /// not on the type name: <c>EfOpenTelemetryModule</c> puts its <c>Ef</c> in front, so a name filter
+    /// silently skips it.
+    /// </summary>
+    public static IReadOnlyList<(Assembly Assembly, string Module, string Table)> DeclaredHistoryTables() => Modules
+        .SelectMany(assembly => assembly.GetTypes())
+        .Where(type => type is { IsAbstract: true, IsSealed: true, IsPublic: true })
+        .Select(type => (Type: type, Member: (MemberInfo?)type.GetProperty("HistoryTableName", BindingFlags.Public | BindingFlags.Static)
+                                             ?? type.GetField("HistoryTableName", BindingFlags.Public | BindingFlags.Static)))
+        .Where(candidate => candidate.Member is not null)
+        .Select(candidate => (
+            candidate.Type.Assembly,
+            Module: candidate.Type.Name,
+            Table: (string)(candidate.Member switch
+            {
+                PropertyInfo property => property.GetValue(null),
+                FieldInfo field => field.GetValue(null),
+                _ => null
+            })!))
+        .OrderBy(row => row.Module, StringComparer.Ordinal)
+        .ToArray();
 
     public static IReadOnlyList<Type> Contexts(string provider) => Modules
         .SelectMany(assembly => assembly.GetTypes())
