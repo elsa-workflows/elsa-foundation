@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
-using Elsa.Activities.For.Exceptions;
+using Elsa.Activities.ControlFlow.Exceptions;
+using Elsa.Activities.ControlFlow.Loops;
 using Elsa.Activities.For.Internal;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
@@ -86,7 +87,7 @@ public sealed class For : StructuralActivity, IRuntimeStructuralActivity, IRunti
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
         var range = ResolveRange();
-        var navigator = ForNavigator.From(runtimeContext.ExecutableNode);
+        var navigator = LoopNavigator.From(runtimeContext.ExecutableNode, LoopKind.For);
 
         if (!range.HasFirst || navigator.Body is null)
         {
@@ -102,10 +103,10 @@ public sealed class For : StructuralActivity, IRuntimeStructuralActivity, IRunti
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        var navigator = ForNavigator.From(runtimeContext.ExecutableNode);
+        var navigator = LoopNavigator.From(runtimeContext.ExecutableNode, LoopKind.For);
 
         if (!navigator.IsBody(context.CompletedChildExecutableNodeId))
-            throw new ForExecutionException($"Completed child executable node '{context.CompletedChildExecutableNodeId}' is not the For body.");
+            throw new ControlFlowExecutionException($"Completed child executable node '{context.CompletedChildExecutableNodeId}' is not the For body.");
 
         if (context.OutcomeNames.Contains(BreakOutcome, StringComparer.Ordinal))
         {
@@ -177,7 +178,7 @@ public sealed class For : StructuralActivity, IRuntimeStructuralActivity, IRunti
     {
         if (context.CompletedChildIterationId is not { } iterationId
             || !int.TryParse(iterationId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index))
-            throw new ForExecutionException(
+            throw new ControlFlowExecutionException(
                 $"For body completion '{context.CompletedChildActivityExecutionId}' carried no parseable iteration index (IterationId '{context.CompletedChildIterationId}').");
 
         return index;
@@ -188,6 +189,6 @@ public sealed class For : StructuralActivity, IRuntimeStructuralActivity, IRunti
         if (context is IRuntimeActivityExecutionContext runtimeContext)
             return runtimeContext;
 
-        throw new ForExecutionException("For requires an Elsa runtime activity execution context.");
+        throw new ControlFlowExecutionException("For requires an Elsa runtime activity execution context.");
     }
 }

@@ -63,6 +63,6 @@ and computes the next index, so it is safe under the runtime's stateless re-cons
 activities.
 
 The runtime activity class (`Activities/For.cs`) references only the runtime contract surface. The
-design-side `ForStructureHandler` (`Internal/`) references `Elsa.Workflows.Design.Core`. The activity
-module bridges both `.Core` sub-domains; `Elsa.Workflows.Runtime.*` never references
-`Elsa.Workflows.Design.*` (Elsa §E2.2).
+design-side `LoopStructureHandler` (`../Loops/`, shared by the four loops) references
+`Elsa.Workflows.Design.Core`. The activity module bridges both `.Core` sub-domains;
+`Elsa.Workflows.Runtime.*` never references `Elsa.Workflows.Design.*` (Elsa §E2.2).

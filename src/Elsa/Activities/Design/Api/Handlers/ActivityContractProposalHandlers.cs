@@ -229,9 +229,9 @@ public sealed class ActivityContractProposalService(
     }
 
     private static void Apply<T>(List<T> members, string referenceKey, ActivityContractProposalOperation operation, T? replacement)
-        where T : class
+        where T : class, IActivityContractMember
     {
-        var index = members.FindIndex(x => StringComparer.Ordinal.Equals(ReferenceKey(x), referenceKey));
+        var index = members.FindIndex(x => StringComparer.Ordinal.Equals(x.ReferenceKey, referenceKey));
         if ((operation == ActivityContractProposalOperation.Add && index >= 0) ||
             (operation != ActivityContractProposalOperation.Add && index < 0) ||
             (operation != ActivityContractProposalOperation.Remove && replacement is null))
@@ -243,14 +243,6 @@ public sealed class ActivityContractProposalService(
         else
             members.Add(replacement!);
     }
-
-    private static string ReferenceKey<T>(T member) => member switch
-    {
-        ActivityInputContract input => input.ReferenceKey,
-        ActivityOutputContract output => output.ReferenceKey,
-        ActivityOutcomeContract outcome => outcome.ReferenceKey,
-        _ => throw InvalidProviderProposal()
-    };
 
     private static ActivityOutputContract ToDomain(ActivityOutputContractView output) => new(
         output.ReferenceKey,

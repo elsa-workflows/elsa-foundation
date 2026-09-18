@@ -34,6 +34,6 @@ An unbound or null `Condition` resolves to `false` (the default of `bool`), mirr
 with no condition wired up never runs its body and completes immediately.
 
 The runtime activity class (`Activities/While.cs`) references only the runtime contract surface. The
-design-side `WhileStructureHandler` (`Internal/`) references `Elsa.Workflows.Design.Core`. The activity
-module bridges both `.Core` sub-domains; `Elsa.Workflows.Runtime.*` never references
-`Elsa.Workflows.Design.*` (Elsa §E2.2).
+design-side `LoopStructureHandler` (`../Loops/`, shared by the four loops) references
+`Elsa.Workflows.Design.Core`. The activity module bridges both `.Core` sub-domains;
+`Elsa.Workflows.Runtime.*` never references `Elsa.Workflows.Design.*` (Elsa §E2.2).

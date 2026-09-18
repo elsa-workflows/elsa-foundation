@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Elsa.Activities.Parallel.Exceptions;
+using Elsa.Activities.ControlFlow.Exceptions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -150,7 +150,7 @@ public sealed class ParallelActivityTests : IDisposable
     {
         var context = NewContext();
 
-        await Assert.ThrowsAsync<ParallelExecutionException>(() => ((ParallelActivity)context.Activity)
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => ((ParallelActivity)context.Activity)
             .OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-x", "node-other", [ActivityOutcomes.Done]))
             .AsTask());
     }
@@ -201,7 +201,7 @@ public sealed class ParallelActivityTests : IDisposable
     {
         var context = NewContext();
 
-        await Assert.ThrowsAsync<ParallelExecutionException>(() => ((ParallelActivity)context.Activity)
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => ((ParallelActivity)context.Activity)
             .OnChildFaultedAsync(new ActivityChildFaultedContext(context, "actexec-x", "node-other", "incident-1"))
             .AsTask());
     }

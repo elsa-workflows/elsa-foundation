@@ -1,5 +1,5 @@
-using Elsa.Activities.Do.Exceptions;
-using Elsa.Activities.Do.Internal;
+using Elsa.Activities.ControlFlow.Exceptions;
+using Elsa.Activities.ControlFlow.Loops;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
@@ -76,7 +76,7 @@ public sealed class Do : StructuralActivity, IRuntimeStructuralActivity, IRuntim
     {
         // Post-test loop: schedule the body unconditionally before the first condition check, so it runs
         // at least once even when the condition is false on entry.
-        var navigator = DoNavigator.From(runtimeContext.ExecutableNode);
+        var navigator = LoopNavigator.From(runtimeContext.ExecutableNode, LoopKind.Do);
 
         if (navigator.Body is not { } body)
         {
@@ -92,12 +92,12 @@ public sealed class Do : StructuralActivity, IRuntimeStructuralActivity, IRuntim
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        var navigator = DoNavigator.From(runtimeContext.ExecutableNode);
+        var navigator = LoopNavigator.From(runtimeContext.ExecutableNode, LoopKind.Do);
 
         // #381: validate the completed child is actually this loop's body (mirroring For/ForEach/If/
         // Switch/Parallel) so a stray callback fails diagnosably instead of silently rescheduling.
         if (!navigator.IsBody(context.CompletedChildExecutableNodeId))
-            throw new DoExecutionException($"Completed child executable node '{context.CompletedChildExecutableNodeId}' is not the Do body.");
+            throw new ControlFlowExecutionException($"Completed child executable node '{context.CompletedChildExecutableNodeId}' is not the Do body.");
 
         // A body Break outcome ends the loop early without re-checking the condition.
         if (context.OutcomeNames.Contains(BreakOutcome, StringComparer.Ordinal))
@@ -159,6 +159,6 @@ public sealed class Do : StructuralActivity, IRuntimeStructuralActivity, IRuntim
         if (context is IRuntimeActivityExecutionContext runtimeContext)
             return runtimeContext;
 
-        throw new DoExecutionException("Do requires an Elsa runtime activity execution context.");
+        throw new ControlFlowExecutionException("Do requires an Elsa runtime activity execution context.");
     }
 }

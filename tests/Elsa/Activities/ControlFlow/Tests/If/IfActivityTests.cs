@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Elsa.Activities.If.Exceptions;
+using Elsa.Activities.ControlFlow.Exceptions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Models;
@@ -108,7 +108,7 @@ public sealed class IfActivityTests : IDisposable
     {
         var context = NewContext(NewIfNode(then: NewNode("node-then"), @else: NewNode("node-else")), condition: true);
 
-        await Assert.ThrowsAsync<IfExecutionException>(() => new IfActivity()
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => new IfActivity()
             .OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-x", "node-x", [ActivityOutcomes.Done]))
             .AsTask());
     }
@@ -127,7 +127,7 @@ public sealed class IfActivityTests : IDisposable
             structure: NewIfStructure(then: "declared-but-missing", @else: null));
         var context = NewContext(node, condition: true);
 
-        await Assert.ThrowsAsync<IfExecutionException>(() => ExecuteAsync(context).AsTask());
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => ExecuteAsync(context).AsTask());
     }
 
     public void Dispose() => _serviceProvider.Dispose();

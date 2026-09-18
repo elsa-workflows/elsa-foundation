@@ -258,17 +258,47 @@ internal static class StructuralParentEvaluationSupport
     }
 
     /// <summary>
-    /// What a structural parent-evaluation commit takes from its source work item: the parent's pinned identity,
-    /// the checkpoint/commit metadata the handler assembled (each handler records its own key set), and the
-    /// command metadata the derived child-schedule and upward-completion work items inherit.
+    /// What a structural parent-evaluation commit takes from its source work item: the evaluated parent's command
+    /// payload (its pinned identity), the checkpoint/commit metadata, and the command metadata the derived
+    /// child-schedule and upward-completion work items inherit.
     /// </summary>
     internal sealed record ParentEvaluationCommitSource(
         RuntimeSchedulerWorkItem WorkItem,
-        WorkflowExecutableIdentity PinnedExecutable,
-        string ExecutableNodeId,
-        string ActivityExecutionId,
+        IActivityCommandPayload Payload,
         IReadOnlyDictionary<string, string> Metadata,
         IReadOnlyDictionary<string, string> DerivedCommandMetadata);
+
+    /// <summary>
+    /// Builds a <see cref="ParentEvaluationCommitSource"/> with the checkpoint metadata every parent evaluation
+    /// records. <paramref name="evaluationMetadata"/> holds the keys only one evaluation records, such as the
+    /// notifying child and notification code.
+    /// </summary>
+    public static ParentEvaluationCommitSource NewCommitSource(
+        RuntimeSchedulerWorkItem workItem,
+        IActivityCommandPayload payload,
+        string checkpointReason,
+        IReadOnlyDictionary<string, string> derivedCommandMetadata,
+        IReadOnlyDictionary<string, string>? evaluationMetadata = null)
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+            [RuntimeMetadataKeys.CommandId] = workItem.CommandId,
+            [RuntimeMetadataKeys.CheckpointReason] = checkpointReason,
+            [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory,
+            [RuntimeMetadataKeys.ActivityExecutionId] = payload.ActivityExecutionId,
+            [RuntimeMetadataKeys.ExecutableNodeId] = payload.ExecutableNodeId
+        };
+        if (evaluationMetadata is not null)
+        {
+            foreach (var item in evaluationMetadata)
+                metadata[item.Key] = item.Value;
+        }
+        metadata[RuntimeMetadataKeys.ExecutableArtifactId] = payload.PinnedExecutable.ArtifactId;
+        metadata[RuntimeMetadataKeys.ExecutableArtifactVersion] = payload.PinnedExecutable.ArtifactVersion;
+        metadata[RuntimeMetadataKeys.ExecutableArtifactHash] = payload.PinnedExecutable.ArtifactHash;
+        return new ParentEvaluationCommitSource(workItem, payload, metadata, derivedCommandMetadata);
+    }
 
     /// <summary>
     /// Commits a structural parent that stays running after evaluating a child: persists the parent (and any
@@ -291,7 +321,7 @@ internal static class StructuralParentEvaluationSupport
         CancellationToken cancellationToken)
     {
         var occurredAt = timeProvider.GetUtcNow();
-        var (workItem, activityExecutionId, metadata) = (source.WorkItem, source.ActivityExecutionId, source.Metadata);
+        var (workItem, activityExecutionId, metadata) = (source.WorkItem, source.Payload.ActivityExecutionId, source.Metadata);
         var checkpointId = $"checkpoint:{workItem.WorkItemId}:activity-inspection-captured:{activityExecutionId}";
         IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>> inspectionChanges = inspectionAccumulator is null
             ? []
@@ -305,7 +335,7 @@ internal static class StructuralParentEvaluationSupport
                     Metadata: metadata)
             ];
         var childWorkItems = SchedulerWorkItems.NewChildActivityScheduleWorkItems(
-            timeProvider, idGenerator, workItem, source.PinnedExecutable, activityExecutionId, scheduleRequests, source.DerivedCommandMetadata).ToArray();
+            timeProvider, idGenerator, workItem, source.Payload.PinnedExecutable, activityExecutionId, scheduleRequests, source.DerivedCommandMetadata).ToArray();
         var cancellationChanges = await BuildSubtreeCancellationChangesAsync(
             inspectionAccumulator, subtreeCancellations, checkpointId, occurredAt, metadata, cancellationToken);
         var commit = new RuntimeCheckpointCommit(
@@ -402,14 +432,14 @@ internal static class StructuralParentEvaluationSupport
         CancellationToken cancellationToken)
     {
         var occurredAt = timeProvider.GetUtcNow();
-        var (workItem, activityExecutionId, metadata) = (source.WorkItem, source.ActivityExecutionId, source.Metadata);
+        var (workItem, activityExecutionId, metadata) = (source.WorkItem, source.Payload.ActivityExecutionId, source.Metadata);
         var checkpointId = $"checkpoint:{workItem.WorkItemId}:parent-activity-completed:{activityExecutionId}";
         var inspection = inspectionAccumulator is null
             ? null
             : await inspectionAccumulator.BuildProjectionAsync(
                 completedParentState, checkpointId, occurredAt, outcomeNames: outcomeNames, valueSnapshots: valueSnapshots, metadata: metadata, cancellationToken: cancellationToken);
         var completionWorkItem = SchedulerWorkItems.NewCompletionWorkItem(
-            timeProvider, workItem, source.PinnedExecutable, source.ExecutableNodeId, activityExecutionId, completedParentState, commandMetadata: source.DerivedCommandMetadata);
+            timeProvider, workItem, source.Payload.PinnedExecutable, source.Payload.ExecutableNodeId, activityExecutionId, completedParentState, commandMetadata: source.DerivedCommandMetadata);
         var cancellationChanges = await BuildSubtreeCancellationChangesAsync(
             inspectionAccumulator, subtreeCancellations, checkpointId, occurredAt, metadata, cancellationToken);
         var commit = new RuntimeCheckpointCommit(

@@ -180,6 +180,11 @@ public sealed class ChildParentNotificationExecutionTests
 
         run.AssertWorkflowCompleted();
         AssertConsumerClaimedAndCompletedBy(harness, run, RuntimeNotifyParentCommandPayload.NotifyParentReason);
+        AssertConsumerCompletionCheckpointMetadata(harness, run, RuntimeNotifyParentCommandPayload.NotifyParentReason, new Dictionary<string, string>
+        {
+            [RuntimeMetadataKeys.NotifyingChildActivityExecutionId] = "actexec-child",
+            [RuntimeMetadataKeys.ParentNotificationCode] = "complete"
+        });
     }
 
     [Fact]
@@ -191,6 +196,7 @@ public sealed class ChildParentNotificationExecutionTests
 
         run.AssertWorkflowCompleted();
         AssertConsumerClaimedAndCompletedBy(harness, run, RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason);
+        AssertConsumerCompletionCheckpointMetadata(harness, run, RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason, new Dictionary<string, string>());
     }
 
     // The claim checkpoint and the completed parent's metadata are persisted, so they must address the parent the
@@ -209,6 +215,35 @@ public sealed class ChildParentNotificationExecutionTests
         Assert.Equal("node-consumer", claim.Metadata[RuntimeMetadataKeys.ExecutableNodeId]);
         Assert.Equal(["actexec-consumer"], claim.ActivityExecutionIds);
         Assert.Equal(run.WorkflowState!.PinnedExecutable.ArtifactHash, claim.Metadata[RuntimeMetadataKeys.ExecutableArtifactHash]);
+    }
+
+    // Both evaluations share one builder for the completed parent's checkpoint metadata; only the notification
+    // evaluation adds keys of its own. A key the builder silently dropped would leave every other assertion green.
+    private static void AssertConsumerCompletionCheckpointMetadata(
+        WorkflowExecutionHarness harness,
+        WorkflowExecutionRun run,
+        string reason,
+        IReadOnlyDictionary<string, string> evaluationMetadata)
+    {
+        var consumer = run.AssertCompleted("node-consumer");
+        var evaluatingWorkItemId = consumer.Metadata[RuntimeMetadataKeys.InvokeSchedulerWorkItemId];
+        var checkpoint = Assert.Single(
+            harness.Services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits(),
+            record => record.Commit.Checkpoint.CheckpointId == $"checkpoint:{evaluatingWorkItemId}:parent-activity-completed:actexec-consumer").Commit.Checkpoint;
+        var pinned = run.WorkflowState!.PinnedExecutable;
+        var expected = new Dictionary<string, string>(evaluationMetadata)
+        {
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = evaluatingWorkItemId,
+            [RuntimeMetadataKeys.CommandId] = checkpoint.Metadata[RuntimeMetadataKeys.CommandId],
+            [RuntimeMetadataKeys.CheckpointReason] = reason,
+            [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory,
+            [RuntimeMetadataKeys.ActivityExecutionId] = "actexec-consumer",
+            [RuntimeMetadataKeys.ExecutableNodeId] = "node-consumer",
+            [RuntimeMetadataKeys.ExecutableArtifactId] = pinned.ArtifactId,
+            [RuntimeMetadataKeys.ExecutableArtifactVersion] = pinned.ArtifactVersion,
+            [RuntimeMetadataKeys.ExecutableArtifactHash] = pinned.ArtifactHash
+        };
+        Assert.Equal<IReadOnlyDictionary<string, string>>(expected, checkpoint.Metadata);
     }
 
     private static WorkflowExecutionHarness NewHarness(

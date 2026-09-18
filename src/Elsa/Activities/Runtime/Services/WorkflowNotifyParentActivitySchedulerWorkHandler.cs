@@ -432,26 +432,16 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
         RuntimeSchedulerWorkItem notifyWorkItem,
         RuntimeNotifyParentCommandPayload notifyPayload,
         string checkpointReason) =>
-        new(
+        StructuralParentEvaluationSupport.NewCommitSource(
             notifyWorkItem,
-            notifyPayload.PinnedExecutable,
-            notifyPayload.ExecutableNodeId,
-            notifyPayload.ActivityExecutionId,
-            Metadata: new Dictionary<string, string>
+            notifyPayload,
+            checkpointReason,
+            derivedCommandMetadata: notifyWorkItem.CommandMetadata,
+            evaluationMetadata: new Dictionary<string, string>
             {
-                [RuntimeMetadataKeys.SchedulerWorkItemId] = notifyWorkItem.WorkItemId,
-                [RuntimeMetadataKeys.CommandId] = notifyWorkItem.CommandId,
-                [RuntimeMetadataKeys.CheckpointReason] = checkpointReason,
-                [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory,
-                [RuntimeMetadataKeys.ActivityExecutionId] = notifyPayload.ActivityExecutionId,
-                [RuntimeMetadataKeys.ExecutableNodeId] = notifyPayload.ExecutableNodeId,
                 [RuntimeMetadataKeys.NotifyingChildActivityExecutionId] = notifyPayload.NotifyingChildActivityExecutionId,
-                [RuntimeMetadataKeys.ParentNotificationCode] = notifyPayload.Code,
-                [RuntimeMetadataKeys.ExecutableArtifactId] = notifyPayload.PinnedExecutable.ArtifactId,
-                [RuntimeMetadataKeys.ExecutableArtifactVersion] = notifyPayload.PinnedExecutable.ArtifactVersion,
-                [RuntimeMetadataKeys.ExecutableArtifactHash] = notifyPayload.PinnedExecutable.ArtifactHash
-            },
-            DerivedCommandMetadata: notifyWorkItem.CommandMetadata);
+                [RuntimeMetadataKeys.ParentNotificationCode] = notifyPayload.Code
+            });
 
     private static readonly string[] PayloadValidationParamNames =
     [

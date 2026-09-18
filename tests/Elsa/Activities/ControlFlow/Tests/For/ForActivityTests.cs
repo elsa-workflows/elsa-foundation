@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Elsa.Activities.For.Exceptions;
+using Elsa.Activities.ControlFlow.Exceptions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Models;
@@ -61,7 +61,7 @@ public sealed class ForActivityTests : IDisposable
     {
         var context = NewContext(start: 0, end: 5, step: 0);
 
-        await Assert.ThrowsAsync<ForExecutionException>(() => ExecuteAsync(context).AsTask());
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => ExecuteAsync(context).AsTask());
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public sealed class ForActivityTests : IDisposable
     {
         var context = NewContext(start: 0, end: 3, step: 1);
 
-        await Assert.ThrowsAsync<ForExecutionException>(() => new ForActivity()
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => new ForActivity()
             .OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-body", "node-body", [ActivityOutcomes.Done]))
             .AsTask());
     }
@@ -131,7 +131,7 @@ public sealed class ForActivityTests : IDisposable
     {
         var context = NewContext(start: 0, end: 3, step: 1);
 
-        await Assert.ThrowsAsync<ForExecutionException>(() => new ForActivity()
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => new ForActivity()
             .OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-x", "node-x", [ActivityOutcomes.Done], completedChildIterationId: "0"))
             .AsTask());
     }

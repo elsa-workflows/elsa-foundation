@@ -194,7 +194,7 @@ public sealed class ActivityDefinitionManagementProjectionServiceTests
     private static ActivityDefinitionManagementProjectionService Service(ProjectionStore store, Context context) => new(
         store,
         context,
-        new HmacActivityManagementCursorCodec(Options.Create(new ActivityDependencyCursorOptions
+        new HmacActivityManagementCursorCodec(Options.Create(new ActivityTokenSigningOptions
         {
             SigningKey = "activity-management-tests-signing-key"
         })));

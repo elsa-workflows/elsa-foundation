@@ -1,7 +1,7 @@
 using System.Text.Json;
+using Elsa.Activities.ControlFlow.Exceptions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Activities.Do.Exceptions;
 using Elsa.Expressions.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -117,7 +117,7 @@ public sealed class DoActivityTests : IDisposable
         // For/ForEach/If/Switch/Parallel) instead of silently rescheduling the body or completing.
         var context = NewContext(NewDoNode(body: NewNode("node-body")), condition: true);
 
-        await Assert.ThrowsAsync<DoExecutionException>(() => ((IRuntimeActivityChildCompletionHandler)context.Activity)
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => ((IRuntimeActivityChildCompletionHandler)context.Activity)
             .OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-x", "node-x", [ActivityOutcomes.Done]))
             .AsTask());
     }
@@ -143,7 +143,7 @@ public sealed class DoActivityTests : IDisposable
     {
         var context = new NonRuntimeActivityExecutionContext(new DoActivity());
 
-        await Assert.ThrowsAsync<DoExecutionException>(() => new DoActivity()
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => new DoActivity()
             .OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-x", "node-x", [ActivityOutcomes.Done]))
             .AsTask());
     }
@@ -159,7 +159,7 @@ public sealed class DoActivityTests : IDisposable
             structure: NewDoStructure(body: "declared-but-missing"));
         var context = NewContext(node, condition: true);
 
-        await Assert.ThrowsAsync<DoExecutionException>(() => ExecuteAsync(context).AsTask());
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => ExecuteAsync(context).AsTask());
     }
 
     public void Dispose() => _serviceProvider.Dispose();

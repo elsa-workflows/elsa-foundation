@@ -1,7 +1,7 @@
 using System.Text.Json;
+using Elsa.Activities.ControlFlow.Exceptions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Activities.Switch.Exceptions;
 using Elsa.Expressions.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -124,7 +124,7 @@ public sealed class SwitchActivityTests : IDisposable
             cases: [("a", NewNode("node-a"))],
             @default: NewNode("node-default")), value: "a");
 
-        await Assert.ThrowsAsync<SwitchExecutionException>(() => new SwitchActivity()
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => new SwitchActivity()
             .OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-x", "node-x", [ActivityOutcomes.Done]))
             .AsTask());
     }
@@ -143,7 +143,7 @@ public sealed class SwitchActivityTests : IDisposable
             structure: NewSwitchStructure(cases: [("a", "declared-but-missing")], @default: null));
         var context = NewContext(node, value: "a");
 
-        await Assert.ThrowsAsync<SwitchExecutionException>(() => ExecuteAsync(context).AsTask());
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => ExecuteAsync(context).AsTask());
     }
 
     [Fact]
@@ -156,14 +156,14 @@ public sealed class SwitchActivityTests : IDisposable
             structure: NewSwitchStructure(cases: [("a", "node-a"), ("a", "node-a")], @default: null));
         var context = NewContext(node, value: "a");
 
-        await Assert.ThrowsAsync<SwitchExecutionException>(() => ExecuteAsync(context).AsTask());
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => ExecuteAsync(context).AsTask());
     }
 
     [Fact]
     public async Task Execute_Throws_WhenTwoCasesShareTheSameBranchNodeId()
     {
         // Distinct case keys both reference branch node 'shared': the navigator must reject this with a
-        // SwitchExecutionException rather than a raw ArgumentException from its node-id lookup.
+        // ControlFlowExecutionException rather than a raw ArgumentException from its node-id lookup.
         var node = NewNode(
             "node-switch",
             activityType: "switch",
@@ -175,7 +175,7 @@ public sealed class SwitchActivityTests : IDisposable
             structure: NewSwitchStructure(cases: [("a", "shared"), ("b", "shared")], @default: null));
         var context = NewContext(node, value: "a");
 
-        await Assert.ThrowsAsync<SwitchExecutionException>(() => ExecuteAsync(context).AsTask());
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => ExecuteAsync(context).AsTask());
     }
 
     public void Dispose() => _serviceProvider.Dispose();

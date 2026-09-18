@@ -818,24 +818,11 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         RuntimeSchedulerWorkItem parentCompletionWorkItem,
         RuntimeCompleteActivityCommandPayload parentCompletionPayload,
         string checkpointReason) =>
-        new(
+        StructuralParentEvaluationSupport.NewCommitSource(
             parentCompletionWorkItem,
-            parentCompletionPayload.PinnedExecutable,
-            parentCompletionPayload.ExecutableNodeId,
-            parentCompletionPayload.ActivityExecutionId,
-            Metadata: new Dictionary<string, string>
-            {
-                [RuntimeMetadataKeys.SchedulerWorkItemId] = parentCompletionWorkItem.WorkItemId,
-                [RuntimeMetadataKeys.CommandId] = parentCompletionWorkItem.CommandId,
-                [RuntimeMetadataKeys.CheckpointReason] = checkpointReason,
-                [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory,
-                [RuntimeMetadataKeys.ActivityExecutionId] = parentCompletionPayload.ActivityExecutionId,
-                [RuntimeMetadataKeys.ExecutableNodeId] = parentCompletionPayload.ExecutableNodeId,
-                [RuntimeMetadataKeys.ExecutableArtifactId] = parentCompletionPayload.PinnedExecutable.ArtifactId,
-                [RuntimeMetadataKeys.ExecutableArtifactVersion] = parentCompletionPayload.PinnedExecutable.ArtifactVersion,
-                [RuntimeMetadataKeys.ExecutableArtifactHash] = parentCompletionPayload.PinnedExecutable.ArtifactHash
-            },
-            DerivedCommandMetadata: WithoutFaultEvaluationMetadata(parentCompletionWorkItem.CommandMetadata));
+            parentCompletionPayload,
+            checkpointReason,
+            derivedCommandMetadata: WithoutFaultEvaluationMetadata(parentCompletionWorkItem.CommandMetadata));
 
     private static ActivityFaultIncidentRecordRequest NewFaultIncidentRecordRequest(
         RuntimeCheckpointCommitter checkpointCommitter,

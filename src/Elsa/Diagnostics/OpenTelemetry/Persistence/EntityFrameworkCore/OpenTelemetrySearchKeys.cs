@@ -1,13 +1,14 @@
-using System.Buffers.Binary;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
 
 /// <summary>
-/// Stable Unicode ordinal-ignore-case projections used by every EF query.  The table is copied into
-/// this module deliberately: changing an unrelated feature must never change this storage contract.
+/// Stable Unicode ordinal-ignore-case projections used by every EF query. The mapping table is shared, but this
+/// storage contract is pinned here: <see cref="MappingFingerprint"/> is checked when the type initializes, so a
+/// change to the shared table made for another feature fails loudly instead of silently changing persisted keys.
 /// </summary>
 internal static class OpenTelemetrySearchKeys
 {
@@ -25,16 +26,7 @@ internal static class OpenTelemetrySearchKeys
 
     static OpenTelemetrySearchKeys()
     {
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        Span<byte> pair = stackalloc byte[8];
-        var mappings = UnicodeOrdinalCasingData.SimpleUppercaseMappings;
-        for (var i = 0; i < mappings.Length; i += 2)
-        {
-            BinaryPrimitives.WriteInt32BigEndian(pair, mappings[i]);
-            BinaryPrimitives.WriteInt32BigEndian(pair[4..], mappings[i + 1]);
-            hash.AppendData(pair);
-        }
-        var actual = Convert.ToHexStringLower(hash.GetHashAndReset());
+        var actual = UnicodeOrdinalCasingTable.ComputeMappingFingerprint();
         if (!string.Equals(actual, MappingFingerprint, StringComparison.Ordinal))
             throw new InvalidOperationException($"OpenTelemetry Unicode projection data has fingerprint '{actual}'.");
     }
@@ -48,7 +40,7 @@ internal static class OpenTelemetrySearchKeys
         {
             var scalar = char.ConvertToUtf32(value, i);
             i += scalar > char.MaxValue ? 2 : 1;
-            result.Append('|').Append(MapScalar(scalar).ToString("X6", CultureInfo.InvariantCulture));
+            result.Append('|').Append(UnicodeOrdinalCasingTable.ToSimpleUppercase(scalar).ToString("X6", CultureInfo.InvariantCulture));
         }
         return result.ToString();
     }
@@ -86,26 +78,6 @@ internal static class OpenTelemetrySearchKeys
         Span<byte> bytes = stackalloc byte[32];
         SHA256.HashData(Encoding.UTF8.GetBytes(value), bytes);
         return Convert.ToHexStringLower(bytes);
-    }
-
-    private static int MapScalar(int scalar)
-    {
-        var mappings = UnicodeOrdinalCasingData.SimpleUppercaseMappings;
-        var low = 0;
-        var high = mappings.Length / 2 - 1;
-        while (low <= high)
-        {
-            var middle = low + (high - low) / 2;
-            var index = middle * 2;
-            var candidate = mappings[index];
-            if (candidate == scalar)
-                return mappings[index + 1];
-            if (candidate < scalar)
-                low = middle + 1;
-            else
-                high = middle - 1;
-        }
-        return scalar;
     }
 
     private static void Validate(string value, string parameterName)

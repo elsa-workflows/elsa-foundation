@@ -10,10 +10,10 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
 
 ## Cross-domain contributions
 
-- `ForEachStructureHandler` implements `IActivityStructureHandler` (`Elsa.Workflows.Design.Core`). It
-  projects the single body slot from the authored structure, compiles the executable structure (the body
-  node id), and round-trips both through publishing so the runtime resolves the body without re-reading
-  the design document. `ForEach` is not a container scope, so it declares no container-scoped variables
+- `LoopStructureHandler` (`../Loops/`, registered once per loop activity) implements
+  `IActivityStructureHandler` (`Elsa.Workflows.Design.Core`). It projects the single body slot from the
+  authored structure, compiles the executable structure (the body node id), and round-trips both through
+  publishing so the runtime resolves the body without re-reading the design document. `ForEach` is not a container scope, so it declares no container-scoped variables
   (`SupportsScopedVariables` defaults to `false`); its per-iteration item/index are loop-owned and live
   in a per-pass iteration scope, not a container scope.
 

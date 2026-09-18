@@ -1,4 +1,4 @@
-using Elsa.Activities.If.Exceptions;
+using Elsa.Activities.ControlFlow.Exceptions;
 using Elsa.Activities.If.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using IfActivity = Elsa.Activities.If.Activities.If;
@@ -45,7 +45,7 @@ internal sealed class IfNavigator
 
     public ExecutableNode? Select(bool condition) => condition ? Then : Else;
 
-    private static IfExecutionException Fail(string message, Exception? inner) =>
+    private static ControlFlowExecutionException Fail(string message, Exception? inner) =>
         inner is null ? new(message) : new(message, inner);
 }
 

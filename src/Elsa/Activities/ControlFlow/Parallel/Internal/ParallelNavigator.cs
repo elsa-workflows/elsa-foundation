@@ -1,4 +1,4 @@
-using Elsa.Activities.Parallel.Exceptions;
+using Elsa.Activities.ControlFlow.Exceptions;
 using Elsa.Activities.Parallel.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using ParallelActivity = Elsa.Activities.Parallel.Activities.Parallel;
@@ -25,7 +25,7 @@ internal sealed class ParallelNavigator
         foreach (var branch in branches.Where(branch => branch.Node is not null))
         {
             if (!branchesByNodeId.TryAdd(branch.Node!.ExecutableNodeId, branch))
-                throw new ParallelExecutionException($"Parallel structure references branch node '{branch.Node.ExecutableNodeId}' from more than one branch.");
+                throw new ControlFlowExecutionException($"Parallel structure references branch node '{branch.Node.ExecutableNodeId}' from more than one branch.");
         }
 
         _branchesByNodeId = branchesByNodeId;
@@ -63,7 +63,7 @@ internal sealed class ParallelNavigator
             .GroupBy(branch => branch.Name, StringComparer.Ordinal)
             .FirstOrDefault(group => group.Count() > 1)?.Key;
         if (duplicateName is not null)
-            throw new ParallelExecutionException($"Parallel executable node '{executableNode.ExecutableNodeId}' structure contains duplicate branch '{duplicateName}'.");
+            throw new ControlFlowExecutionException($"Parallel executable node '{executableNode.ExecutableNodeId}' structure contains duplicate branch '{duplicateName}'.");
 
         var branches = structure.Branches
             .Select(branch => new ParallelBranch(branch.Name, MatchBranch(
@@ -94,7 +94,7 @@ internal sealed class ParallelNavigator
             executableNode, "Parallel", slotName, "branch", $"{branchName} branch", structureNodeId, slotChild, Fail);
     }
 
-    private static ParallelExecutionException Fail(string message, Exception? inner) =>
+    private static ControlFlowExecutionException Fail(string message, Exception? inner) =>
         inner is null ? new(message) : new(message, inner);
 
     private sealed record ParallelBranch(string Name, ExecutableNode? Node);

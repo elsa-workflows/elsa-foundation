@@ -1,4 +1,4 @@
-using Elsa.Activities.For.Exceptions;
+using Elsa.Activities.ControlFlow.Exceptions;
 using Elsa.Activities.For.Internal;
 using Xunit;
 
@@ -77,7 +77,7 @@ public sealed class ForRangeTests
     [Fact]
     public void Create_Throws_OnZeroStep()
     {
-        Assert.Throws<ForExecutionException>(() => ForRange.Create(start: 0, end: 5, step: 0));
+        Assert.Throws<ControlFlowExecutionException>(() => ForRange.Create(start: 0, end: 5, step: 0));
     }
 
     [Fact]
