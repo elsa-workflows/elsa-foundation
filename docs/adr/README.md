@@ -84,3 +84,4 @@ Numbers are not unique: the folder holds two independent sequences (an early Ext
 | 0071 | [First-party REST APIs use endpoint classes over Minimal APIs](0071-first-party-rest-apis-use-endpoint-classes.md) | Accepted |
 | 0072 | [EF-first relational persistence with provider-derived contexts](0072-ef-first-relational-persistence-with-provider-derived-contexts.md) | Superseded |
 | 0073 | [EF Core is the only first-party persistence family](0073-ef-core-is-the-only-first-party-persistence-family.md) | Accepted |
+| 0074 | [First-party EF stores retry in bounded application loops, not EF's retrying execution strategy](0074-first-party-ef-stores-retry-in-bounded-application-loops.md) | Accepted |
