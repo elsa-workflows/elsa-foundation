@@ -17,6 +17,7 @@ namespace Elsa.Workflows.Runtime.Attention;
     DisplayName = "Workflow Runtime Attention",
     Description = "Contributes complete workflow failure and incident conditions to Attention.",
     DependsOn = new object[] { "AttentionApi", "WorkflowsRuntimeApi" })]
+[RuntimeDefaultRegistration]
 public sealed class WorkflowsRuntimeAttentionFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)

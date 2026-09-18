@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
@@ -30,6 +31,7 @@ internal sealed record InMemoryUnsealedCaptureCleanup(
     DateTimeOffset CompletedAt);
 
 /// <summary>In-memory conformance implementation for plan admission, capture, leasing, cancellation, and reconciliation.</summary>
+[RuntimeDefaultRegistration]
 public sealed class InMemoryWorkflowAlterationStore(InMemoryWorkflowAlterationStoreState? state = null) : IWorkflowAlterationStore
 {
     private const int UnsealedCleanupPageSize = 100;

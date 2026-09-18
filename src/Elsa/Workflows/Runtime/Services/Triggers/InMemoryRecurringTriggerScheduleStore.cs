@@ -9,6 +9,7 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 /// schedule until the workflow is republished. Compose a durable persistence provider (the Runtime EF Core module)
 /// to make recurring schedules survive restarts.
 /// </summary>
+[RuntimeDefaultRegistration]
 public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerScheduleStore
 {
     private readonly object _syncRoot = new();

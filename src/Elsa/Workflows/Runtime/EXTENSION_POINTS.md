@@ -517,7 +517,7 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Kind:** Additive, versioned strategy extension. A published executable pins one exact
   `IncidentStrategyReference` (`Alias`, `Version`); Runtime never re-reads Design options or the host's current
   default while executing it.
-- **Register:** call `services.AddIncidentStrategy<TStrategy>(descriptor)`, or annotate the concrete strategy with
+- **Register:** call Runtime's `services.AddIncidentStrategy<TStrategy>(descriptor)`, or annotate the concrete strategy with
   `[IncidentStrategy(alias, version, ...)]` and call `AddIncidentStrategy<TStrategy>()`. Strategy implementations
   are scoped. Alias comparison is ordinal case-insensitive, version comparison is exact, duplicate identities
   fail, and custom aliases must be dotted. Discovery reads descriptors without constructing strategies.

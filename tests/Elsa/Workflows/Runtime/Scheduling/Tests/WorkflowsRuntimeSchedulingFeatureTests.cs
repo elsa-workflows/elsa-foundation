@@ -1,7 +1,6 @@
 using CShells.Features;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Scheduling.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;

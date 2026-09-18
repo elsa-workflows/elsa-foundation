@@ -86,8 +86,6 @@ public sealed class RecurringTriggerScheduleStoreBackend
         descriptor.ImplementationFactory?.Method.ReturnType is { } returnType && typeof(IRecurringTriggerScheduleStore).IsAssignableFrom(returnType);
 
     private static bool IsRuntimeDefault(ServiceDescriptor descriptor) =>
-        descriptor.ImplementationType is { } implementationType &&
-        implementationType.FullName == "Elsa.Workflows.Runtime.Services.Triggers.InMemoryRecurringTriggerScheduleStore" &&
-        implementationType.Assembly.GetName().Name == "Elsa.Workflows.Runtime" ||
+        RuntimeCoreRegistrationOwnership.IsDefault(descriptor.ImplementationType) ||
         RuntimeCoreRegistrationOwnership.IsCoreFactory(descriptor);
 }

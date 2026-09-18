@@ -6,7 +6,6 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
 using ParallelActivity = Elsa.Activities.Parallel.Activities.Parallel;
 

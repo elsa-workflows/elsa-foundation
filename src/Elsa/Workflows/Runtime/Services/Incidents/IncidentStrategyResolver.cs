@@ -1,8 +1,9 @@
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Workflows.Runtime.Core.Services.Strategies;
+namespace Elsa.Workflows.Runtime.Services.Incidents;
 
 /// <summary>Scoped implementation resolver; discovery remains descriptor-only through <see cref="IIncidentStrategyCatalog"/>.</summary>
 public sealed class IncidentStrategyResolver : IIncidentStrategyResolver

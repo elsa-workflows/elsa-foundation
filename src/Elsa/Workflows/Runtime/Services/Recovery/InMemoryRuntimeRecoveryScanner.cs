@@ -1,11 +1,11 @@
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.Services.Recovery;
 
+[RuntimeDefaultRegistration]
 public sealed class InMemoryRuntimeRecoveryScanner : IRuntimeRecoveryPagedScanner
 {
     private readonly IExecutionLivenessStateStore _operationalStateStore;

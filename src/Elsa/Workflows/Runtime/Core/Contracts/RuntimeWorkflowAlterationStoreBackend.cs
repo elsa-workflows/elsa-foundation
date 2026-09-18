@@ -25,7 +25,7 @@ public sealed class RuntimeWorkflowAlterationStoreBackend
     {
         ArgumentNullException.ThrowIfNull(services);
         if (services.Any(descriptor => descriptor.ServiceType == typeof(IWorkflowAlterationStore) &&
-                                       descriptor.ImplementationType?.FullName != "Elsa.Workflows.Runtime.Services.Alterations.InMemoryWorkflowAlterationStore"))
+                                       !RuntimeCoreRegistrationOwnership.IsDefault(descriptor.ImplementationType)))
             throw new InvalidOperationException("An explicit workflow alteration store registration is already present; the selected backend refuses to replace it implicitly.");
     }
     public void EnsureOwnsRegisteredContracts(IServiceCollection services)

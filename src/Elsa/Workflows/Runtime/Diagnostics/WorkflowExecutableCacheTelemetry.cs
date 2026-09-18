@@ -1,6 +1,6 @@
 using System.Diagnostics.Metrics;
 
-namespace Elsa.Workflows.Runtime.Core.Diagnostics;
+namespace Elsa.Workflows.Runtime.Diagnostics;
 
 /// <summary>Stable, bounded diagnostics vocabulary for workflow executable caching.</summary>
 public static class WorkflowExecutableCacheTelemetry

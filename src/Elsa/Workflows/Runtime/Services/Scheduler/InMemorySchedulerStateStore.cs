@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Services.Scheduler;
 
+[RuntimeDefaultRegistration]
 public sealed class InMemorySchedulerStateStore() : InMemoryKeyedStateStore<string, SchedulerState>(StringComparer.Ordinal), ISchedulerStateStore
 {
     public ValueTask<SchedulerState> SaveAsync(SchedulerState state, CancellationToken cancellationToken = default)

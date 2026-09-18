@@ -107,11 +107,8 @@ public sealed class WorkflowSchedulerPoisonStoreBackend
         var implementationType = descriptor.ImplementationType ??
                                  descriptor.ImplementationInstance?.GetType() ??
                                  descriptor.ImplementationFactory?.Method.ReturnType;
-        if (implementationType is not null && implementationType.Name is "InMemoryWorkflowSchedulerPoisonStore")
-            return true;
-
-        return descriptor.ImplementationFactory?.Method.DeclaringType?.FullName?.Contains(
-            "RuntimeCoreServiceCollectionExtensions", StringComparison.Ordinal) == true;
+        return RuntimeCoreRegistrationOwnership.IsDefault(implementationType) ||
+               RuntimeCoreRegistrationOwnership.IsCoreFactory(descriptor);
     }
 
     private static bool IsOwnedBySibling(IServiceCollection services, ServiceDescriptor descriptor) =>

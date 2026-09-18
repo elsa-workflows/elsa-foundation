@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Elsa.Architecture.Tests;
 
-public sealed class ArchitectureGuardTests
+public sealed partial class ArchitectureGuardTests
 {
     private static readonly string[] AllowedCorePackageReferences =
     [

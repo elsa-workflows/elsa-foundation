@@ -10,7 +10,6 @@ using Elsa.Serialization.SystemText;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;

@@ -1,7 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Models;
 using System.Text.Json;
 
-namespace Elsa.Workflows.Runtime.Core.Services;
+namespace Elsa.Workflows.Runtime.Services.Values;
 
 /// <summary>
 /// One named workflow output as projected for the read surface: the payload when the capture policy exposes it,

@@ -1,8 +1,8 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Diagnostics;
 
-namespace Elsa.Workflows.Runtime.Core.Services;
+namespace Elsa.Workflows.Runtime.Services.Executables;
 
 /// <summary>
 /// Decorates a durable executable store with bounded process-local caching of immutable artifacts.

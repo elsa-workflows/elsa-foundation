@@ -8,6 +8,7 @@ namespace Elsa.Workflows.Runtime.Services.Dispatch;
 /// Applies the operation scope selected by the host before delegating to the shared atomic in-memory
 /// dispatch/outbox owner. Durable providers enforce the same check inside their access-bound transaction.
 /// </summary>
+[RuntimeDefaultRegistration]
 public sealed class ScopedWorkflowDispatchRedriveStore(
     InMemoryRuntimeCheckpointCommitStore atomicStore,
     IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowDispatchRedriveStore

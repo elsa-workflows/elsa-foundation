@@ -1,7 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Runtime.Core.Services.Strategies;
+namespace Elsa.Workflows.Runtime.Services.Incidents;
 
 internal static class IncidentStrategyIdentity
 {

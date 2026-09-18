@@ -1,10 +1,11 @@
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services.Recovery;
 
 namespace Elsa.Workflows.Runtime.Services.Executions;
 
+[RuntimeDefaultRegistration]
 public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStore<InMemoryExecutionLivenessStateStore.ExecutionLivenessStateKey, ExecutionLivenessState>, IExecutionLivenessStateStore, IRuntimeRecoveryLivenessPageSource
 {
     private readonly SemaphoreSlim _ownershipAtomicGate = new(1, 1);

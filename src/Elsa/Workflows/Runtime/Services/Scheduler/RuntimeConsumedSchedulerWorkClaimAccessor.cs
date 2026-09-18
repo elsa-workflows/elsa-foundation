@@ -1,7 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Runtime.Core.Services;
+namespace Elsa.Workflows.Runtime.Services.Scheduler;
 
 /// <summary>
 /// Default single-frame scoped implementation of <see cref="IRuntimeConsumedSchedulerWorkClaimAccessor"/>. A drain

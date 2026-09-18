@@ -12,7 +12,6 @@ using Elsa.Serialization.SystemText;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
 using ForEachActivity = Elsa.Activities.ForEach.Activities.ForEach;
 

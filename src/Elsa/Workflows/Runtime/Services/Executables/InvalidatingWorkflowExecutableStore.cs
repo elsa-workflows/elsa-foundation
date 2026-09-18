@@ -1,8 +1,8 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Diagnostics;
 
-namespace Elsa.Workflows.Runtime.Core.Services;
+namespace Elsa.Workflows.Runtime.Services.Executables;
 
 /// <summary>
 /// Preserves direct reads while invalidating shared-cache entries after provider-authoritative mutations.
