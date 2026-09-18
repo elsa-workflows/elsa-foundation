@@ -42,7 +42,7 @@ public sealed class RuntimeExecutionOwnershipTests
     }
 
     private static RuntimeStateChange<ExecutionLivenessState> Change(ExecutionLivenessState state) =>
-        new(state.OperationalStateId, RuntimeStateChangeOperation.Upsert, state, new Dictionary<string, string>());
+        new(state.ExecutionLivenessStateId, RuntimeStateChangeOperation.Upsert, state, new Dictionary<string, string>());
 
     [Fact]
     public async Task AcquireAsync_IssuesStrictlyIncreasingFencingTokens()
@@ -99,7 +99,7 @@ public sealed class RuntimeExecutionOwnershipTests
     {
         var store = new InMemoryExecutionLivenessStateStore();
         await store.SaveAsync(new ExecutionLivenessState(
-            operationalStateId: $"ownership:{WorkflowExecutionId}",
+            executionLivenessStateId: $"ownership:{WorkflowExecutionId}",
             workflowExecutionId: WorkflowExecutionId,
             executionLease: new RuntimeExecutionLease(
                 leaseId: "lease-corrupt",

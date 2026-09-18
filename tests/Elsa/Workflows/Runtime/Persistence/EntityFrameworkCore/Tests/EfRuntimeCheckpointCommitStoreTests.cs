@@ -1278,7 +1278,7 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         {
             StateChanges = new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [],
                 [new RuntimeStateChange<ExecutionLivenessState>(
-                    state.OperationalStateId, operation, state, new Dictionary<string, string>())])
+                    state.ExecutionLivenessStateId, operation, state, new Dictionary<string, string>())])
         };
     }
 

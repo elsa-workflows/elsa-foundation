@@ -29,7 +29,7 @@ public sealed class RuntimeExecutionLivenessStateStoreTests
 
     private ExecutionLivenessState NewExecutionLivenessState(string operationalStateId, string workflowExecutionId, string ownerId) =>
         new(
-            operationalStateId: operationalStateId,
+            executionLivenessStateId: operationalStateId,
             workflowExecutionId: workflowExecutionId,
             executionLease: new RuntimeExecutionLease(
                 leaseId: $"lease-{ownerId}",

@@ -87,7 +87,7 @@ public static class RuntimeRecoveryCandidateSelector
         var canRequeue = !string.IsNullOrWhiteSpace(lastCheckpointId);
         var candidate = new RuntimeRecoveryCandidate(
             workflowExecutionId: state.WorkflowExecutionId,
-            operationalStateId: state.OperationalStateId,
+            operationalStateId: state.ExecutionLivenessStateId,
             lastCheckpointId: lastCheckpointId,
             reason: reason,
             detectedAt: request.Now,

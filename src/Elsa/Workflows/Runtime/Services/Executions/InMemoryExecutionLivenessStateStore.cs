@@ -15,7 +15,7 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.WorkflowExecutionId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(state.OperationalStateId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(state.ExecutionLivenessStateId);
         cancellationToken.ThrowIfCancellationRequested();
 
         if (!IsOwnershipState(state))
@@ -131,7 +131,7 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
         cancellationToken.ThrowIfCancellationRequested();
 
         var states = Snapshot(key => key.WorkflowExecutionId == query.WorkflowExecutionId)
-            .OrderBy(state => state.OperationalStateId, StringComparer.Ordinal)
+            .OrderBy(state => state.ExecutionLivenessStateId, StringComparer.Ordinal)
             .ToArray();
         return new(CreatePage(query, states));
     }
@@ -169,13 +169,13 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
     private static ExecutionLivenessStateKey Key(ExecutionLivenessState state)
     {
         ValidateState(state);
-        return new(state.WorkflowExecutionId, state.OperationalStateId);
+        return new(state.WorkflowExecutionId, state.ExecutionLivenessStateId);
     }
 
     private static void ValidateState(ExecutionLivenessState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        ValidateIdentity(state.WorkflowExecutionId, state.OperationalStateId);
+        ValidateIdentity(state.WorkflowExecutionId, state.ExecutionLivenessStateId);
     }
 
     private static void ValidateIdentity(string workflowExecutionId, string operationalStateId)
@@ -186,7 +186,7 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
 
     private static bool IsOwnershipState(ExecutionLivenessState state) =>
         StringComparer.Ordinal.Equals(
-            state.OperationalStateId,
+            state.ExecutionLivenessStateId,
             RuntimeExecutionOwnershipStateId.For(state.WorkflowExecutionId));
 
     private static RuntimeStorePage<ExecutionLivenessState> CreatePage(
@@ -264,14 +264,14 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
         var comparison = StringComparer.Ordinal.Compare(state.WorkflowExecutionId, cursor.WorkflowExecutionId);
         return comparison != 0
             ? comparison
-            : StringComparer.Ordinal.Compare(state.OperationalStateId, cursor.OperationalStateId);
+            : StringComparer.Ordinal.Compare(state.ExecutionLivenessStateId, cursor.OperationalStateId);
     }
 
     private static string EncodeGlobalCursor(ExecutionLivenessState state)
     {
         var payload = JsonSerializer.SerializeToUtf8Bytes(new GlobalPageCursor(
             state.WorkflowExecutionId,
-            state.OperationalStateId));
+            state.ExecutionLivenessStateId));
         return Convert.ToBase64String(payload)
             .TrimEnd('=')
             .Replace('+', '-')
@@ -283,7 +283,7 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
         var payload = JsonSerializer.SerializeToUtf8Bytes(new RecoveryPageCursor(
             selection.EligibleAt,
             selection.State.WorkflowExecutionId,
-            selection.State.OperationalStateId));
+            selection.State.ExecutionLivenessStateId));
         return Convert.ToBase64String(payload)
             .TrimEnd('=')
             .Replace('+', '-')
@@ -351,7 +351,7 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
         comparison = StringComparer.Ordinal.Compare(state.WorkflowExecutionId, cursor.WorkflowExecutionId);
         return comparison != 0
             ? comparison
-            : StringComparer.Ordinal.Compare(state.OperationalStateId, cursor.OperationalStateId);
+            : StringComparer.Ordinal.Compare(state.ExecutionLivenessStateId, cursor.OperationalStateId);
     }
 
     private static int ParseOffset(string? continuationToken)
@@ -387,7 +387,7 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
             comparison = StringComparer.Ordinal.Compare(x.State.WorkflowExecutionId, y.State.WorkflowExecutionId);
             return comparison != 0
                 ? comparison
-                : StringComparer.Ordinal.Compare(x.State.OperationalStateId, y.State.OperationalStateId);
+                : StringComparer.Ordinal.Compare(x.State.ExecutionLivenessStateId, y.State.ExecutionLivenessStateId);
         }
     }
 
@@ -402,7 +402,7 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
             var comparison = StringComparer.Ordinal.Compare(x.WorkflowExecutionId, y.WorkflowExecutionId);
             return comparison != 0
                 ? comparison
-                : StringComparer.Ordinal.Compare(x.OperationalStateId, y.OperationalStateId);
+                : StringComparer.Ordinal.Compare(x.ExecutionLivenessStateId, y.ExecutionLivenessStateId);
         }
     }
 }

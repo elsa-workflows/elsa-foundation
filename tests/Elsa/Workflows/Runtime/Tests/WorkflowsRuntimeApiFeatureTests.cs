@@ -826,7 +826,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
                         StateId: "operational-1",
                         Operation: RuntimeStateChangeOperation.Upsert,
                         State: new ExecutionLivenessState(
-                            operationalStateId: "operational-1",
+                            executionLivenessStateId: "operational-1",
                             workflowExecutionId: "wfexec-1",
                             executionLease: new RuntimeExecutionLease(
                                 leaseId: "lease-1",

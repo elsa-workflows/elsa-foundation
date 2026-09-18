@@ -186,10 +186,10 @@ public sealed class EfDurableValueAndSchedulerStateTests
 
             await tenantA.Liveness.SaveAsync(stateB);
             var first = await tenantA.Liveness.ListPageAsync(new ExecutionLivenessStatePageQuery("workflow-a", 1));
-            Assert.Equal("state-a", first.Items.Single().OperationalStateId);
+            Assert.Equal("state-a", first.Items.Single().ExecutionLivenessStateId);
             Assert.NotNull(first.NextContinuationToken);
             var second = await tenantA.Liveness.ListPageAsync(new ExecutionLivenessStatePageQuery("workflow-a", 1, first.NextContinuationToken));
-            Assert.Equal("state-z", second.Items.Single().OperationalStateId);
+            Assert.Equal("state-z", second.Items.Single().ExecutionLivenessStateId);
 
             var all = await tenantA.Liveness.ListAllPageAsync(new RuntimeStorePageRequest(1));
             Assert.Equal("workflow-a", all.Items.Single().WorkflowExecutionId);

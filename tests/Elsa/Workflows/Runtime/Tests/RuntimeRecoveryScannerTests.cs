@@ -463,7 +463,7 @@ public sealed class RuntimeRecoveryScannerTests
         bool includeHeartbeat = true,
         InterruptedExecutionState? interruptedExecution = null) =>
         new(
-            operationalStateId: operationalStateId,
+            executionLivenessStateId: operationalStateId,
             workflowExecutionId: workflowExecutionId,
             executionLease: includeLease
                 ? new RuntimeExecutionLease(

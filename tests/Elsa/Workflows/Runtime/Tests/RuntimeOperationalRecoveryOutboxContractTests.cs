@@ -13,7 +13,7 @@ public sealed class RuntimeOperationalRecoveryOutboxContractTests
     public void OperationalState_SeparatesLeaseHeartbeatDrainAndInterruptionFromDomainRetry()
     {
         var state = new ExecutionLivenessState(
-            operationalStateId: "operational-1",
+            executionLivenessStateId: "operational-1",
             workflowExecutionId: "wfexec-1",
             executionLease: new RuntimeExecutionLease(
                 leaseId: "lease-1",
@@ -140,7 +140,7 @@ public sealed class RuntimeOperationalRecoveryOutboxContractTests
             fencingToken: 7);
 
         var exception = Assert.Throws<ArgumentException>(() => new ExecutionLivenessState(
-            operationalStateId: "operational-1",
+            executionLivenessStateId: "operational-1",
             workflowExecutionId: "wfexec-1",
             executionLease: lease,
             heartbeat: null,

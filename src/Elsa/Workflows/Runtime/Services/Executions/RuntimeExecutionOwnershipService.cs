@@ -212,7 +212,7 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
         };
 
         return new ExecutionLivenessState(
-            operationalStateId: RuntimeExecutionOwnershipStateId.For(workflowExecutionId),
+            executionLivenessStateId: RuntimeExecutionOwnershipStateId.For(workflowExecutionId),
             workflowExecutionId: workflowExecutionId,
             executionLease: executionLease,
             heartbeat: heartbeat,
