@@ -174,11 +174,32 @@ public sealed class EfReusableActivityImportCommand(
         var workflowVersions = new EfWorkflowDefinitionVersionStore(workflows, payloadSerializer, workflowDefinitions, accessContextAccessor);
         var preflight = new Preflight();
 
+        // One read per collection instead of one per item. Each lookup keeps the identity the single-item read used
+        // — the hashed identity inside the tenant partition, or the Design stores' own by-id route — so an identity
+        // absent from a batch means exactly what `existing is null` meant before, and a drifted row still fails
+        // closed under its own identity. Nothing is written during preflight, so the batches see the same rows the
+        // sequential reads would have seen.
+        var bindingRows = await LoadBindingsAsync(import, plan.Bindings.Select(binding => binding.Id), tenantId, cancellationToken);
+        var definitionRows = await LoadActivityDefinitionsAsync(activities, plan.Definitions.Select(definition => definition.Id), tenantId, cancellationToken);
+        var takenActivityTypeKeys = await LoadTakenActivityTypeKeysAsync(activities, plan.Definitions.Select(definition => definition.ActivityTypeKey), tenantId, cancellationToken);
+        var workflowDefinitionRows = await LoadWorkflowDefinitionsAsync(workflowDefinitions, plan.WorkflowDefinitions.Select(definition => definition.Id), cancellationToken);
+        var authoringRows = await LoadAuthoringStatesAsync(activities, plan.Authoring.Select(authoring => authoring.DefinitionId), tenantId, cancellationToken);
+        var workflowVersionRows = await LoadWorkflowVersionsAsync(workflowVersions, plan.WorkflowVersions.Select(version => version.Id), cancellationToken);
+
+        // The authoring comparison reads the current and proposed head versions. The current head is only known once
+        // the authoring rows are loaded, so both sets join the plan's own version ids in one activity-version read.
+        var versionRows = await LoadActivityVersionsAsync(
+            activities,
+            plan.Versions.Select(version => version.Id)
+                .Concat(authoringRows.Values.Select(row => row.HeadVersionId).Where(id => id is not null).Select(id => id!))
+                .Concat(plan.Authoring.Select(authoring => authoring.HeadVersionId).Where(id => id is not null).Select(id => id!)),
+            tenantId,
+            cancellationToken);
+
         var existingBindings = new HashSet<string>(StringComparer.Ordinal);
         foreach (var binding in plan.Bindings)
         {
-            var existing = await ReadAsync($"{DefinitionBindingKind}/{binding.Id}", () => LoadBindingAsync(import, binding.Id, tenantId, cancellationToken));
-            if (existing is null)
+            if (bindingRows.GetValueOrDefault(binding.Id) is not { } existing)
             {
                 preflight.NewBindings.Add(binding);
                 continue;
@@ -191,10 +212,9 @@ public sealed class EfReusableActivityImportCommand(
 
         foreach (var definition in plan.Definitions)
         {
-            var existing = await ReadAsync($"{ActivityDefinitionKind}/{definition.Id}", () => LoadActivityDefinitionAsync(activities, definition.Id, tenantId, cancellationToken));
-            if (existing is null)
+            if (definitionRows.GetValueOrDefault(definition.Id) is not { } existing)
             {
-                if (await ReadAsync($"{ActivityDefinitionKind}/{definition.Id}", () => ActivityTypeKeyTakenAsync(activities, definition, tenantId, cancellationToken)))
+                if (takenActivityTypeKeys.Contains(definition.ActivityTypeKey))
                     throw Collision($"Elsa 3 activity definition identity '{definition.Id}' is already owned by a different resource.", scoped);
                 preflight.NewDefinitions.Add(definition);
                 preflight.Created.Add((ActivityDefinitionKind, definition.Id));
@@ -208,8 +228,7 @@ public sealed class EfReusableActivityImportCommand(
 
         foreach (var definition in plan.WorkflowDefinitions)
         {
-            var existing = await ReadAsync($"{WorkflowDefinitionKind}/{definition.Id}", () => workflowDefinitions.FindByIdAsync(definition.Id, cancellationToken));
-            if (existing is null)
+            if (workflowDefinitionRows.GetValueOrDefault(definition.Id) is not { } existing)
             {
                 preflight.NewWorkflowDefinitions.Add(definition);
                 preflight.Created.Add((WorkflowDefinitionKind, definition.Id));
@@ -222,8 +241,7 @@ public sealed class EfReusableActivityImportCommand(
 
         foreach (var version in plan.Versions)
         {
-            var existing = await ReadAsync($"{ActivityVersionKind}/{version.Id}", () => LoadActivityVersionAsync(activities, version.Id, tenantId, cancellationToken));
-            if (existing is null)
+            if (versionRows.GetValueOrDefault(version.Id) is not { } existing)
             {
                 preflight.NewVersions.Add(version);
                 preflight.Created.Add((ActivityVersionKind, version.Id));
@@ -244,22 +262,20 @@ public sealed class EfReusableActivityImportCommand(
 
         foreach (var authoring in plan.Authoring)
         {
-            var existing = await ReadAsync($"activityDefinitionAuthoringState/{authoring.Id}", () => LoadAuthoringAsync(activities, authoring.DefinitionId, tenantId, cancellationToken));
-            if (existing is null)
+            if (authoringRows.GetValueOrDefault(authoring.DefinitionId) is not { } existing)
             {
                 preflight.NewAuthoring.Add(authoring);
                 continue;
             }
 
-            var update = await ResolveAuthoringUpdateAsync(activities, existing, authoring, plan, tenantId, cancellationToken);
+            var update = ResolveAuthoringUpdate(existing, authoring, plan, versionRows);
             if (update is not null)
                 preflight.AuthoringUpdates.Add(update);
         }
 
         foreach (var version in plan.WorkflowVersions)
         {
-            var existing = await ReadAsync($"{WorkflowVersionKind}/{version.Id}", () => workflowVersions.FindByIdAsync(version.Id, cancellationToken));
-            if (existing is null)
+            if (workflowVersionRows.GetValueOrDefault(version.Id) is not { } existing)
             {
                 preflight.NewWorkflowVersions.Add(version);
                 preflight.Created.Add((WorkflowVersionKind, version.Id));
@@ -428,13 +444,16 @@ public sealed class EfReusableActivityImportCommand(
             throw new InvalidOperationException($"The Elsa 3 import authoring operation reported {result.Status} instead of a commit.");
     }
 
-    private async Task<AuthoringUpdate?> ResolveAuthoringUpdateAsync(
-        ActivitiesDesignDbContext activities,
+    /// <summary>
+    /// Decides whether one authoring row moves its head version. The head versions it compares come from the
+    /// activity-version batch the preflight already loaded, so this makes no read of its own; a head version that is
+    /// neither persisted nor carried by the plan is the same collision it always was.
+    /// </summary>
+    private static AuthoringUpdate? ResolveAuthoringUpdate(
         ActivityDefinitionAuthoringState current,
         ActivityDefinitionAuthoringState next,
         ImportPlan plan,
-        string tenantId,
-        CancellationToken cancellationToken)
+        Dictionary<string, ActivityDefinitionVersion> versions)
     {
         if (!StringComparer.Ordinal.Equals(current.Id, next.Id) ||
             !StringComparer.Ordinal.Equals(current.DefinitionId, next.DefinitionId) ||
@@ -447,10 +466,10 @@ public sealed class EfReusableActivityImportCommand(
             return null;
         if (current.HeadVersionId is not null)
         {
-            var currentHead = await ReadAsync($"{ActivityVersionKind}/{current.HeadVersionId}", () => LoadActivityVersionAsync(activities, current.HeadVersionId, tenantId, cancellationToken))
+            var currentHead = versions.GetValueOrDefault(current.HeadVersionId)
                               ?? throw new ReusableActivityImportCollisionException(
                                   $"Elsa 3 activity authoring identity '{next.Id}' refers to missing head version '{current.HeadVersionId}'.");
-            var nextHead = await ReadAsync($"{ActivityVersionKind}/{next.HeadVersionId}", () => LoadActivityVersionAsync(activities, next.HeadVersionId, tenantId, cancellationToken))
+            var nextHead = versions.GetValueOrDefault(next.HeadVersionId)
                            ?? plan.Versions.FirstOrDefault(version => StringComparer.Ordinal.Equals(version.Id, next.HeadVersionId))
                            ?? throw new ReusableActivityImportCollisionException(
                                $"Elsa 3 activity authoring identity '{next.Id}' refers to a head version that is not available for comparison.");
@@ -788,17 +807,178 @@ public sealed class EfReusableActivityImportCommand(
         }
     }
 
-    private static Task<ActivityDefinition?> LoadActivityDefinitionAsync(ActivitiesDesignDbContext db, string id, string tenantId, CancellationToken cancellationToken) =>
-        FindScopedAsync(db.ActivityDefinitions.AsNoTracking(), "Id", id, row => row.Id, tenantId, ActivityDefinitionKind, cancellationToken);
-
-    private static Task<ActivityDefinitionVersion?> LoadActivityVersionAsync(ActivitiesDesignDbContext db, string id, string tenantId, CancellationToken cancellationToken) =>
-        FindScopedAsync(db.ActivityDefinitionVersions.AsNoTracking(), "Id", id, row => row.Id, tenantId, ActivityVersionKind, cancellationToken);
-
-    private static Task<ActivityDefinitionAuthoringState?> LoadAuthoringAsync(ActivitiesDesignDbContext db, string definitionId, string tenantId, CancellationToken cancellationToken) =>
-        FindScopedAsync(db.ActivityDefinitionAuthoringStates.AsNoTracking(), "DefinitionId", definitionId, row => row.DefinitionId, tenantId, "activityDefinitionAuthoringState", cancellationToken);
-
     private static Task<ActivityDefinitionAuthoringState?> LoadTrackedAuthoringAsync(ActivitiesDesignDbContext db, string definitionId, string tenantId, CancellationToken cancellationToken) =>
         FindScopedAsync(db.ActivityDefinitionAuthoringStates, "DefinitionId", definitionId, row => row.DefinitionId, tenantId, "activityDefinitionAuthoringState", cancellationToken);
+
+    private static Task<Dictionary<string, ActivityDefinition>> LoadActivityDefinitionsAsync(ActivitiesDesignDbContext db, IEnumerable<string> ids, string tenantId, CancellationToken cancellationToken) =>
+        FindScopedManyAsync(db.ActivityDefinitions.AsNoTracking(), "Id", ids, row => row.Id, tenantId, ActivityDefinitionKind, cancellationToken);
+
+    private static Task<Dictionary<string, ActivityDefinitionVersion>> LoadActivityVersionsAsync(ActivitiesDesignDbContext db, IEnumerable<string> ids, string tenantId, CancellationToken cancellationToken) =>
+        FindScopedManyAsync(db.ActivityDefinitionVersions.AsNoTracking(), "Id", ids, row => row.Id, tenantId, ActivityVersionKind, cancellationToken);
+
+    private static Task<Dictionary<string, ActivityDefinitionAuthoringState>> LoadAuthoringStatesAsync(ActivitiesDesignDbContext db, IEnumerable<string> definitionIds, string tenantId, CancellationToken cancellationToken) =>
+        FindScopedManyAsync(db.ActivityDefinitionAuthoringStates.AsNoTracking(), "DefinitionId", definitionIds, row => row.DefinitionId, tenantId, "activityDefinitionAuthoringState", cancellationToken);
+
+    /// <summary>
+    /// The activity type keys already owned in this tenant among the ones the plan wants. The single-item form asked
+    /// the provider one <c>Any</c> per new definition; the set answers the same question for all of them at once, and
+    /// is still consulted only for definitions that turned out to be new.
+    /// </summary>
+    private static async Task<HashSet<string>> LoadTakenActivityTypeKeysAsync(
+        ActivitiesDesignDbContext db,
+        IEnumerable<string> activityTypeKeys,
+        string tenantId,
+        CancellationToken cancellationToken)
+    {
+        var wanted = activityTypeKeys.Distinct(StringComparer.Ordinal).ToArray();
+        var taken = new HashSet<string>(StringComparer.Ordinal);
+        if (wanted.Length == 0)
+            return taken;
+
+        var tenantKey = ActivitiesDesignDbContext.NormalizeTenantKey(tenantId);
+        foreach (var chunk in wanted.Chunk(ProviderSafeIdBatchSize))
+        {
+            var rows = await ReadAsync(ActivityDefinitionKind, () => db.ActivityDefinitions.AsNoTracking()
+                .Where(row => EF.Property<string>(row, "TenantScopeKey") == tenantKey && chunk.Contains(row.ActivityTypeKey))
+                .Select(row => row.ActivityTypeKey)
+                .ToListAsync(cancellationToken));
+            foreach (var row in rows)
+                taken.Add(row);
+        }
+
+        return taken;
+    }
+
+    /// <summary>
+    /// Reads the import ledger's definition bindings by hashed identity inside the tenant partition. One hash
+    /// resolving to more than one row is refused, and each returned row is decoded under the binding identity that
+    /// asked for it, so a drifted row fails closed instead of being reported as a different binding.
+    /// </summary>
+    private static async Task<Dictionary<string, ReusableActivityImportDefinitionBinding>> LoadBindingsAsync(
+        Elsa3ImportDbContext db,
+        IEnumerable<string> bindingIds,
+        string tenantId,
+        CancellationToken cancellationToken)
+    {
+        var wanted = bindingIds.Distinct(StringComparer.Ordinal).ToArray();
+        var found = new Dictionary<string, ReusableActivityImportDefinitionBinding>(StringComparer.Ordinal);
+        if (wanted.Length == 0)
+            return found;
+
+        var tenantKey = Elsa3ImportRecordCodec.TenantKey(tenantId);
+        var byHash = wanted.ToLookup(Elsa3ImportRecordCodec.Hash, StringComparer.Ordinal);
+        foreach (var chunk in byHash.Select(group => group.Key).Chunk(ProviderSafeIdBatchSize))
+        {
+            var rows = await ReadAsync(DefinitionBindingKind, () => db.DefinitionBindings.AsNoTracking()
+                .Where(row => row.TenantKey == tenantKey && chunk.Contains(row.BindingIdHash))
+                .ToListAsync(cancellationToken));
+            foreach (var group in rows.GroupBy(row => row.BindingIdHash, StringComparer.Ordinal))
+            {
+                var candidates = byHash[group.Key].ToArray();
+                Read($"{DefinitionBindingKind}/{candidates[0]}", () =>
+                {
+                    if (group.Count() > 1)
+                        throw new InvalidDataException("The Elsa 3 import definition binding identity resolves to more than one row.");
+                    foreach (var candidate in candidates)
+                        found[candidate] = Elsa3ImportRecordCodec.ReadBinding(group.Single(), candidate, tenantId);
+                    return candidates.Length;
+                });
+            }
+        }
+
+        return found;
+    }
+
+    private static async Task<Dictionary<string, WorkflowDefinition>> LoadWorkflowDefinitionsAsync(
+        EfWorkflowDefinitionStore store,
+        IEnumerable<string> ids,
+        CancellationToken cancellationToken)
+    {
+        var wanted = ids.Distinct(StringComparer.Ordinal).ToArray();
+        var found = new Dictionary<string, WorkflowDefinition>(StringComparer.Ordinal);
+        foreach (var chunk in wanted.Chunk(ProviderSafeIdBatchSize))
+        {
+            var rows = await ReadAsync(WorkflowDefinitionKind, () => store.ListAsync(new() { Ids = chunk }, cancellationToken));
+            foreach (var row in rows)
+                found[row.Id] = row;
+        }
+
+        return found;
+    }
+
+    private static async Task<Dictionary<string, WorkflowDefinitionVersion>> LoadWorkflowVersionsAsync(
+        EfWorkflowDefinitionVersionStore store,
+        IEnumerable<string> ids,
+        CancellationToken cancellationToken)
+    {
+        var wanted = ids.Distinct(StringComparer.Ordinal).ToArray();
+        var rows = await ReadAsync(WorkflowVersionKind, () => store.FindByIdsAsync(wanted, cancellationToken));
+        return rows.ToDictionary(row => row.Id, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Identities per query. Well under every supported provider's host-parameter ceiling, so a plan larger than one
+    /// batch simply issues another query rather than failing on a provider limit.
+    /// </summary>
+    private const int ProviderSafeIdBatchSize = 200;
+
+    /// <summary>
+    /// Reads many Activities Design rows in one query per chunk, the batched sibling of <see cref="FindScopedAsync{TRow}"/>.
+    /// Every check the single read makes is made here per row: the lookup is by hashed identity inside the tenant
+    /// partition, one hash resolving to more than one row is refused, and the exact residual and tenant comparison
+    /// still decides whether the row is the one that was asked for. An identity missing from the result therefore
+    /// means exactly what <c>null</c> means for the single read, and a drifted row still fails closed under its own
+    /// identity rather than being re-inserted or silently skipped.
+    /// </summary>
+    private static async Task<Dictionary<string, TRow>> FindScopedManyAsync<TRow>(
+        IQueryable<TRow> rows,
+        string identityProperty,
+        IEnumerable<string> identities,
+        Func<TRow, string> residual,
+        string tenantId,
+        string kind,
+        CancellationToken cancellationToken)
+        where TRow : Elsa.Primitives.Entities.TenantEntity
+    {
+        var wanted = identities.Distinct(StringComparer.Ordinal).ToArray();
+        var found = new Dictionary<string, TRow>(StringComparer.Ordinal);
+        if (wanted.Length == 0)
+            return found;
+
+        var tenantKey = ActivitiesDesignDbContext.NormalizeTenantKey(tenantId);
+        var hashProperty = identityProperty + "IdentityHash";
+        var byHash = wanted.ToLookup(ActivitiesDesignDbContext.ComputeIdentityHash, StringComparer.Ordinal);
+        foreach (var chunk in byHash.Select(group => group.Key).Chunk(ProviderSafeIdBatchSize))
+        {
+            // The batch query is a whole-collection read, so a provider failure here names the collection rather
+            // than an item. Everything that can name one item is checked per row below, under that item's identity.
+            var matches = await ReadAsync(kind, () => rows
+                .Where(row => EF.Property<string>(row, "TenantScopeKey") == tenantKey &&
+                              chunk.Contains(EF.Property<string>(row, hashProperty)))
+                .Select(row => new HashedRow<TRow>(row, EF.Property<string>(row, hashProperty)))
+                .ToListAsync(cancellationToken));
+
+            foreach (var group in matches.GroupBy(match => match.Hash, StringComparer.Ordinal))
+            {
+                var candidates = byHash[group.Key].ToArray();
+                Read($"{kind}/{candidates[0]}", () =>
+                {
+                    if (group.Count() > 1)
+                        throw new InvalidDataException($"The {kind} identity resolves to more than one row.");
+                    var row = group.Single().Row;
+                    var identity = Array.Find(candidates, candidate => StringComparer.Ordinal.Equals(residual(row), candidate));
+                    if (identity is null || !StringComparer.Ordinal.Equals(row.TenantId, tenantId))
+                        throw new InvalidDataException($"The {kind} row does not match its hashed identity and tenant partition.");
+                    found[identity] = row;
+                    return identity;
+                });
+            }
+        }
+
+        return found;
+    }
+
+    private sealed record HashedRow<TRow>(TRow Row, string Hash);
 
     /// <summary>
     /// Reads one Activities Design row in exactly the tenant partition by its hashed identity. The lookup ends
@@ -829,27 +1009,17 @@ public sealed class EfReusableActivityImportCommand(
         return row;
     }
 
-    private static Task<bool> ActivityTypeKeyTakenAsync(ActivitiesDesignDbContext db, ActivityDefinition definition, string tenantId, CancellationToken cancellationToken) =>
-        db.ActivityDefinitions.AsNoTracking()
-            .Where(row => EF.Property<string>(row, "TenantScopeKey") == ActivitiesDesignDbContext.NormalizeTenantKey(tenantId) &&
-                          row.ActivityTypeKey == definition.ActivityTypeKey)
-            .AnyAsync(cancellationToken);
-
-    private static async Task<ReusableActivityImportDefinitionBinding?> LoadBindingAsync(Elsa3ImportDbContext db, string bindingId, string tenantId, CancellationToken cancellationToken)
+    /// <summary>The synchronous sibling of <see cref="ReadAsync{T}"/>, for a check made on an already-loaded row.</summary>
+    private static T Read<T>(string identity, Func<T> read)
     {
-        var tenantKey = Elsa3ImportRecordCodec.TenantKey(tenantId);
-        var bindingIdHash = Elsa3ImportRecordCodec.Hash(bindingId);
-        var rows = await db.DefinitionBindings.AsNoTracking()
-            .Where(row => row.TenantKey == tenantKey && row.BindingIdHash == bindingIdHash)
-            .OrderBy(row => row.TenantKey).ThenBy(row => row.BindingIdHash)
-            .Take(2)
-            .ToListAsync(cancellationToken);
-        return rows.Count switch
+        try
         {
-            0 => null,
-            1 => Elsa3ImportRecordCodec.ReadBinding(rows[0], bindingId, tenantId),
-            _ => throw new InvalidDataException("The Elsa 3 import definition binding identity resolves to more than one row.")
-        };
+            return read();
+        }
+        catch (Exception exception) when (exception is not (ReusableActivityImportCollisionException or ReusableActivityImportPersistenceException))
+        {
+            throw new ReusableActivityImportPersistenceException("load", identity, exception);
+        }
     }
 
     private static async Task<T> ReadAsync<T>(string identity, Func<Task<T>> read)
