@@ -25,7 +25,7 @@ public static class RuntimeExecutionOwnershipStateId
     public static void EnsureNotWritten(IEnumerable<RuntimeStateChange<ExecutionLivenessState>> changes)
     {
         ArgumentNullException.ThrowIfNull(changes);
-        if (changes.Any(change => StringComparer.Ordinal.Equals(change.State.OperationalStateId, For(change.State.WorkflowExecutionId))))
+        if (changes.Any(change => StringComparer.Ordinal.Equals(change.State.ExecutionLivenessStateId, For(change.State.WorkflowExecutionId))))
             throw new RuntimeCheckpointCommitValidationException("Checkpoint operational changes cannot overwrite the reserved execution-ownership state.");
     }
 }

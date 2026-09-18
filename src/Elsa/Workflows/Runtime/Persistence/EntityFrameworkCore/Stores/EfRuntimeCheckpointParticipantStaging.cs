@@ -294,13 +294,13 @@ internal static class EfRuntimeCheckpointParticipantStaging
         ArgumentNullException.ThrowIfNull(change);
         ArgumentException.ThrowIfNullOrWhiteSpace(scope);
         EfRuntimeOperationalStoreSupport.ValidateIdentity(change.State.WorkflowExecutionId, nameof(change.State.WorkflowExecutionId));
-        EfRuntimeOperationalStoreSupport.ValidateIdentity(change.State.OperationalStateId, nameof(change.State.OperationalStateId));
+        EfRuntimeOperationalStoreSupport.ValidateIdentity(change.State.ExecutionLivenessStateId, nameof(change.State.ExecutionLivenessStateId));
         cancellationToken.ThrowIfCancellationRequested();
         if (context.Database.CurrentTransaction is null)
             throw new InvalidOperationException("Operational checkpoint changes require a caller-owned EF transaction.");
 
         var state = change.State;
-        return (change, EfRuntimeOperationalStoreSupport.CompositeId(scope, state.WorkflowExecutionId, state.OperationalStateId));
+        return (change, EfRuntimeOperationalStoreSupport.CompositeId(scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId));
     }
 
     private static void StageOperational(
@@ -317,14 +317,14 @@ internal static class EfRuntimeCheckpointParticipantStaging
             return;
         }
 
-        _ = EfExecutionLivenessStateStore.Read(row, scope, state.WorkflowExecutionId, state.OperationalStateId);
+        _ = EfExecutionLivenessStateStore.Read(row, scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId);
         switch (change.Operation)
         {
             case RuntimeStateChangeOperation.Delete:
                 context.ExecutionLivenessStates.Remove(row);
                 break;
             case RuntimeStateChangeOperation.Append:
-                throw new InvalidOperationException($"Operational state '{state.OperationalStateId}' already exists for create-only append.");
+                throw new InvalidOperationException($"Operational state '{state.ExecutionLivenessStateId}' already exists for create-only append.");
             case RuntimeStateChangeOperation.Upsert:
                 EfExecutionLivenessStateStore.Copy(row, state, scope, checked(row.Revision + 1));
                 break;

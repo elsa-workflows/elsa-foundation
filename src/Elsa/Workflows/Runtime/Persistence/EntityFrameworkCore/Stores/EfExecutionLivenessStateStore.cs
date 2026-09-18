@@ -23,12 +23,12 @@ public sealed class EfExecutionLivenessStateStore(
         ValidateState(state);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
-        var entity = await LoadAsync(scope, state.WorkflowExecutionId, state.OperationalStateId, tracking: true, cancellationToken);
+        var entity = await LoadAsync(scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId, tracking: true, cancellationToken);
         if (entity is null)
             context.ExecutionLivenessStates.Add(ToEntity(state, scope, 1));
         else
         {
-            _ = Read(entity, scope, state.WorkflowExecutionId, state.OperationalStateId);
+            _ = Read(entity, scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId);
             Copy(entity, state, scope, checked(entity.Revision + 1));
         }
 
@@ -60,7 +60,7 @@ public sealed class EfExecutionLivenessStateStore(
         cancellationToken.ThrowIfCancellationRequested();
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
         context.ChangeTracker.Clear();
-        var entity = await LoadAsync(scope, state.WorkflowExecutionId, state.OperationalStateId, tracking: true, cancellationToken);
+        var entity = await LoadAsync(scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId, tracking: true, cancellationToken);
 
         if (expectedRevision == 0)
         {
@@ -72,7 +72,7 @@ public sealed class EfExecutionLivenessStateStore(
         {
             if (entity is null)
                 return new(ExecutionLivenessStateWriteStatus.NotFound);
-            _ = Read(entity, scope, state.WorkflowExecutionId, state.OperationalStateId);
+            _ = Read(entity, scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId);
             if (entity.Revision != expectedRevision)
                 return new ExecutionLivenessStateWriteResult(ExecutionLivenessStateWriteStatus.RevisionConflict, entity.Revision);
             Copy(entity, state, scope, checked(expectedRevision + 1));
@@ -145,7 +145,7 @@ public sealed class EfExecutionLivenessStateStore(
         if (hasMore)
             rows = rows[..query.Limit];
         var items = rows.Select(row => Read(row, scope, query.WorkflowExecutionId)).ToArray();
-        var next = hasMore ? EncodeIdentityCursor(scope, query.WorkflowExecutionId, items[^1].OperationalStateId, WorkflowCursorPurpose) : null;
+        var next = hasMore ? EncodeIdentityCursor(scope, query.WorkflowExecutionId, items[^1].ExecutionLivenessStateId, WorkflowCursorPurpose) : null;
         return new RuntimeStorePage<ExecutionLivenessState>(query, items, next);
     }
 
@@ -210,7 +210,7 @@ public sealed class EfExecutionLivenessStateStore(
                     if (eligibleAt is null || cursor is not null && Compare(eligibleAt.Value, state, cursor) <= 0)
                         continue;
                     usefulCount++;
-                    var identity = Identity(state.WorkflowExecutionId, state.OperationalStateId);
+                    var identity = Identity(state.WorkflowExecutionId, state.ExecutionLivenessStateId);
                     if (!rows.ContainsKey(identity))
                         rows.Add(identity, row);
                 }
@@ -231,7 +231,7 @@ public sealed class EfExecutionLivenessStateStore(
             .Where(item => item.EligibleAt is not null && (cursor is null || Compare(item.EligibleAt.Value, item.State, cursor) > 0))
             .OrderBy(item => item.EligibleAt)
             .ThenBy(item => item.State.WorkflowExecutionId, StringComparer.Ordinal)
-            .ThenBy(item => item.State.OperationalStateId, StringComparer.Ordinal)
+            .ThenBy(item => item.State.ExecutionLivenessStateId, StringComparer.Ordinal)
             .ToArray();
         var hasMore = ordered.Length > query.Limit;
         var items = ordered.Take(query.Limit).Select(item => item.State).ToArray();
@@ -438,10 +438,10 @@ public sealed class EfExecutionLivenessStateStore(
         var heartbeat = state.Heartbeat;
         return new ExecutionLivenessStateEntity
         {
-            Id = EfRuntimeOperationalStoreSupport.CompositeId(scope, state.WorkflowExecutionId, state.OperationalStateId),
+            Id = EfRuntimeOperationalStoreSupport.CompositeId(scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId),
             ScopeKey = EfRuntimeOperationalStoreSupport.Encode(scope), ScopeKeyHash = EfRuntimeOperationalStoreSupport.Hash(scope),
             WorkflowExecutionId = EfRuntimeOperationalStoreSupport.Encode(state.WorkflowExecutionId), WorkflowExecutionIdHash = EfRuntimeOperationalStoreSupport.Hash(state.WorkflowExecutionId), WorkflowExecutionIdOrderKey = EfRuntimeOperationalStoreSupport.Order(state.WorkflowExecutionId),
-            OperationalStateId = EfRuntimeOperationalStoreSupport.Encode(state.OperationalStateId), OperationalStateIdHash = EfRuntimeOperationalStoreSupport.Hash(state.OperationalStateId), OperationalStateIdOrderKey = EfRuntimeOperationalStoreSupport.Order(state.OperationalStateId),
+            OperationalStateId = EfRuntimeOperationalStoreSupport.Encode(state.ExecutionLivenessStateId), OperationalStateIdHash = EfRuntimeOperationalStoreSupport.Hash(state.ExecutionLivenessStateId), OperationalStateIdOrderKey = EfRuntimeOperationalStoreSupport.Order(state.ExecutionLivenessStateId),
             InterruptedStatus = state.InterruptedExecution is { } interrupted ? (int)interrupted.Status : null,
             InterruptedAtUtcTicks = state.InterruptedExecution?.InterruptedAt.UtcTicks,
             LeaseOwnerId = lease is null ? null : EfRuntimeOperationalStoreSupport.Encode(lease.OwnerId),
@@ -478,11 +478,11 @@ public sealed class EfExecutionLivenessStateStore(
         var lease = state.ExecutionLease;
         var heartbeat = state.Heartbeat;
         var valid = (expectedWorkflow is null || state.WorkflowExecutionId == expectedWorkflow) &&
-                    (expectedOperational is null || state.OperationalStateId == expectedOperational) &&
-                    row.Id == EfRuntimeOperationalStoreSupport.CompositeId(scope, state.WorkflowExecutionId, state.OperationalStateId) &&
+                    (expectedOperational is null || state.ExecutionLivenessStateId == expectedOperational) &&
+                    row.Id == EfRuntimeOperationalStoreSupport.CompositeId(scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId) &&
                     row.SchemaVersion == RuntimeOperationalStateEfModule.SchemaVersion &&
                     row.WorkflowExecutionId == EfRuntimeOperationalStoreSupport.Encode(state.WorkflowExecutionId) && row.WorkflowExecutionIdHash == EfRuntimeOperationalStoreSupport.Hash(state.WorkflowExecutionId) && row.WorkflowExecutionIdOrderKey == EfRuntimeOperationalStoreSupport.Order(state.WorkflowExecutionId) &&
-                    row.OperationalStateId == EfRuntimeOperationalStoreSupport.Encode(state.OperationalStateId) && row.OperationalStateIdHash == EfRuntimeOperationalStoreSupport.Hash(state.OperationalStateId) && row.OperationalStateIdOrderKey == EfRuntimeOperationalStoreSupport.Order(state.OperationalStateId) &&
+                    row.OperationalStateId == EfRuntimeOperationalStoreSupport.Encode(state.ExecutionLivenessStateId) && row.OperationalStateIdHash == EfRuntimeOperationalStoreSupport.Hash(state.ExecutionLivenessStateId) && row.OperationalStateIdOrderKey == EfRuntimeOperationalStoreSupport.Order(state.ExecutionLivenessStateId) &&
                     row.InterruptedStatus == (state.InterruptedExecution is { } interrupted ? (int)interrupted.Status : null) && row.InterruptedAtUtcTicks == state.InterruptedExecution?.InterruptedAt.UtcTicks &&
                     row.LeaseOwnerId == (lease is null ? null : EfRuntimeOperationalStoreSupport.Encode(lease.OwnerId)) && row.LeaseAcquiredAtUtcTicks == lease?.AcquiredAt.UtcTicks && row.LeaseExpiresAtUtcTicks == lease?.ExpiresAt.UtcTicks &&
                     row.HeartbeatOwnerId == (heartbeat is null ? null : EfRuntimeOperationalStoreSupport.Encode(heartbeat.OwnerId)) && row.HeartbeatRecordedAtUtcTicks == heartbeat?.RecordedAt.UtcTicks && row.HasOperationalOwner == (lease is not null || heartbeat is not null);
@@ -495,7 +495,7 @@ public sealed class EfExecutionLivenessStateStore(
     {
         ArgumentNullException.ThrowIfNull(state);
         ValidateIdentity(state.WorkflowExecutionId, nameof(state.WorkflowExecutionId));
-        ValidateIdentity(state.OperationalStateId, nameof(state.OperationalStateId));
+        ValidateIdentity(state.ExecutionLivenessStateId, nameof(state.ExecutionLivenessStateId));
         if (state.ExecutionLease is { } lease) ValidateIdentity(lease.OwnerId, nameof(lease.OwnerId));
         if (state.Heartbeat is { } heartbeat) ValidateIdentity(heartbeat.OwnerId, nameof(heartbeat.OwnerId));
     }
@@ -533,7 +533,7 @@ public sealed class EfExecutionLivenessStateStore(
 
     private string EncodeGlobalCursor(string scope, ExecutionLivenessState state)
     {
-        var token = continuationCodec.Encode(GlobalCursorPurpose, JsonSerializer.SerializeToUtf8Bytes(new GlobalCursor(scope, state.WorkflowExecutionId, state.OperationalStateId)));
+        var token = continuationCodec.Encode(GlobalCursorPurpose, JsonSerializer.SerializeToUtf8Bytes(new GlobalCursor(scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId)));
         return RuntimeStorePageRequest.ValidateContinuationToken(token, nameof(token))!;
     }
 
@@ -562,7 +562,7 @@ public sealed class EfExecutionLivenessStateStore(
 
     private string EncodeRecoveryCursor(string binding, DateTimeOffset eligibleAt, ExecutionLivenessState state)
     {
-        var token = continuationCodec.Encode(RecoveryCursorPurpose, JsonSerializer.SerializeToUtf8Bytes(new RecoveryCursor(binding, eligibleAt.UtcTicks, state.WorkflowExecutionId, state.OperationalStateId)));
+        var token = continuationCodec.Encode(RecoveryCursorPurpose, JsonSerializer.SerializeToUtf8Bytes(new RecoveryCursor(binding, eligibleAt.UtcTicks, state.WorkflowExecutionId, state.ExecutionLivenessStateId)));
         return RuntimeStorePageRequest.ValidateContinuationToken(token, nameof(token))!;
     }
 
@@ -586,7 +586,7 @@ public sealed class EfExecutionLivenessStateStore(
         var result = eligibleAt.UtcTicks.CompareTo(cursor.EligibleAtUtcTicks);
         if (result != 0) return result;
         result = StringComparer.Ordinal.Compare(state.WorkflowExecutionId, cursor.WorkflowExecutionId);
-        return result != 0 ? result : StringComparer.Ordinal.Compare(state.OperationalStateId, cursor.OperationalStateId);
+        return result != 0 ? result : StringComparer.Ordinal.Compare(state.ExecutionLivenessStateId, cursor.OperationalStateId);
     }
 
     private sealed record IdentityCursor(string Scope, string WorkflowExecutionId, string Last);

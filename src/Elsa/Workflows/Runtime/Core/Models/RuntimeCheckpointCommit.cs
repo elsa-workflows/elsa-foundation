@@ -107,7 +107,7 @@ public sealed class RuntimeCheckpointStateChangeSet
         ValidateStateIdMatches(activityExecutionInspections, state => state.ActivityExecutionId, "Activity execution inspection state change StateId must match ActivityExecutionInspectionProjection.ActivityExecutionId.", nameof(activityExecutionInspections));
         ValidateStateIdMatches(durableValues, state => state.DurableValueId, "Durable value state change StateId must match DurableValueState.DurableValueId.", nameof(durableValues));
         ValidateStateIdMatches(incidents, state => state.IncidentId, "Incident state change StateId must match IncidentState.IncidentId.", nameof(incidents));
-        ValidateStateIdMatches(operational, state => state.OperationalStateId, "Operational state change StateId must match ExecutionLivenessState.OperationalStateId.", nameof(operational));
+        ValidateStateIdMatches(operational, state => state.ExecutionLivenessStateId, "Execution liveness state change StateId must match ExecutionLivenessState.ExecutionLivenessStateId.", nameof(operational));
         ValidateStateIdMatches(postCommitOutbox, state => state.OutboxItemId, "Post-commit outbox state change StateId must match RuntimePostCommitOutboxItem.OutboxItemId.", nameof(postCommitOutbox));
         ValidateStateIdMatches(workflowDispatches, state => state.DispatchId, "Workflow dispatch state change StateId must match WorkflowDispatchRecord.DispatchId.", nameof(workflowDispatches));
 

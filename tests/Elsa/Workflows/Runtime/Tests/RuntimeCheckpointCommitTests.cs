@@ -116,7 +116,7 @@ public sealed class RuntimeCheckpointCommitTests
             resolvedAt: null,
             metadata: new Dictionary<string, string>());
         _operationalState = new ExecutionLivenessState(
-            operationalStateId: "operational-1",
+            executionLivenessStateId: "operational-1",
             workflowExecutionId: "wfexec-1",
             executionLease: new RuntimeExecutionLease(
                 leaseId: "lease-1",
@@ -1025,7 +1025,7 @@ public sealed class RuntimeCheckpointCommitTests
 
         var exception = Assert.Throws<ArgumentException>(() => NewStateChanges(operational: invalidOperational));
 
-        Assert.Contains("ExecutionLivenessState.OperationalStateId", exception.Message);
+        Assert.Contains("ExecutionLivenessState.ExecutionLivenessStateId", exception.Message);
     }
 
     private static RuntimeExecutionOwnershipService NewOwnershipService(
@@ -1156,7 +1156,7 @@ public sealed class RuntimeCheckpointCommitTests
             operational: operational ??
             [
                 new RuntimeStateChange<ExecutionLivenessState>(
-                    StateId: _operationalState.OperationalStateId,
+                    StateId: _operationalState.ExecutionLivenessStateId,
                     Operation: RuntimeStateChangeOperation.Upsert,
                     State: _operationalState,
                     Metadata: new Dictionary<string, string>())
@@ -1247,7 +1247,7 @@ public sealed class RuntimeCheckpointCommitTests
             StateId: stateId,
             Operation: operation,
             State: new ExecutionLivenessState(
-                operationalStateId: operationalStateId,
+                executionLivenessStateId: operationalStateId,
                 workflowExecutionId: workflowExecutionId,
                 executionLease: new RuntimeExecutionLease(
                     leaseId: _operationalState.ExecutionLease!.LeaseId,

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
@@ -6,7 +8,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 public sealed class ExecutionLivenessState
 {
     public ExecutionLivenessState(
-        string operationalStateId,
+        string executionLivenessStateId,
         string workflowExecutionId,
         RuntimeExecutionLease? executionLease,
         RuntimeHeartbeat? heartbeat,
@@ -15,7 +17,7 @@ public sealed class ExecutionLivenessState
         IReadOnlyCollection<string>? pendingPostCommitIntentIds = null,
         IReadOnlyDictionary<string, string>? metadata = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(operationalStateId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(executionLivenessStateId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
         ValidateWorkflowExecutionId(workflowExecutionId, executionLease?.WorkflowExecutionId, nameof(executionLease));
@@ -25,7 +27,7 @@ public sealed class ExecutionLivenessState
         if (pendingPostCommitIntentIds?.Any(string.IsNullOrWhiteSpace) == true)
             throw new ArgumentException("Pending post-commit intent IDs cannot be empty.", nameof(pendingPostCommitIntentIds));
 
-        OperationalStateId = operationalStateId;
+        ExecutionLivenessStateId = executionLivenessStateId;
         WorkflowExecutionId = workflowExecutionId;
         ExecutionLease = executionLease;
         Heartbeat = heartbeat;
@@ -35,9 +37,13 @@ public sealed class ExecutionLivenessState
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
     }
 
-    // Persisted JSON key: the `operationalStateId` property name predates a later rename of this type
-    // (ExecutionLivenessState was OperationalState). The member name is intentionally left unchanged to keep the wire key stable.
-    public string OperationalStateId { get; }
+    /// <summary>
+    /// This state's own identity. The wire key stays <c>operationalStateId</c>: it predates the rename of this type
+    /// from <c>OperationalState</c> and every persisted record carries it, so member and key are pinned apart
+    /// deliberately rather than left to drift.
+    /// </summary>
+    [JsonPropertyName("operationalStateId")]
+    public string ExecutionLivenessStateId { get; }
     public string WorkflowExecutionId { get; }
     public RuntimeExecutionLease? ExecutionLease { get; }
     public RuntimeHeartbeat? Heartbeat { get; }
@@ -49,7 +55,7 @@ public sealed class ExecutionLivenessState
     private static void ValidateWorkflowExecutionId(string expected, string? actual, string parameterName)
     {
         if (actual is not null && !StringComparer.Ordinal.Equals(expected, actual))
-            throw new ArgumentException("Operational child state must belong to the same workflow execution.", parameterName);
+            throw new ArgumentException("Execution liveness child state must belong to the same workflow execution.", parameterName);
     }
 }
 

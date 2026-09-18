@@ -10,6 +10,25 @@ public sealed class RuntimeCheckpointSerializationTests
     private static readonly WorkflowExecutableIdentity Executable =
         new("artifact-depth", "definition-depth", "version-depth", "1.0.0", "sha256:depth");
 
+    /// <summary>
+    /// The member is <c>ExecutionLivenessStateId</c>, but every persisted record was written with the key
+    /// <c>operationalStateId</c>, from before the type was renamed out of "operational state". The key is pinned by
+    /// an attribute, so renaming the member again cannot silently orphan stored rows.
+    /// </summary>
+    [Fact]
+    public void Execution_liveness_state_keeps_its_original_wire_key()
+    {
+        var state = new ExecutionLivenessState("liveness-1", "wfexec-1", null, null, null, null);
+
+        var json = JsonSerializer.Serialize(state, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var node = JsonNode.Parse(json)!.AsObject();
+
+        Assert.True(node.ContainsKey("operationalStateId"), $"expected the persisted key to survive the rename, got: {json}");
+        Assert.False(node.ContainsKey("executionLivenessStateId"));
+        Assert.Equal("liveness-1", node["operationalStateId"]!.GetValue<string>());
+        Assert.Equal("liveness-1", JsonSerializer.Deserialize<ExecutionLivenessState>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web))!.ExecutionLivenessStateId);
+    }
+
     [Fact]
     public void Dispatch_depth_round_trips_through_start_command_checkpoint_and_state()
     {
