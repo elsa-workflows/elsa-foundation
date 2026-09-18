@@ -18,6 +18,8 @@ public abstract class IdentityProviderConfigurationDbContext(DbContextOptions op
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // The host's optional schema; nothing changes when none is configured.
+        modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new TenantProviderConfigurationEntityConfiguration());
         modelBuilder.ApplyConfiguration(new GlobalProviderConfigurationEntityConfiguration());
         ConfigureProvider(modelBuilder);

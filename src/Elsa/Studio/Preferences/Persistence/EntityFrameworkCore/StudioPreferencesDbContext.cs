@@ -1,6 +1,7 @@
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Configuration;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Studio.Preferences.Persistence.EntityFrameworkCore;
 
@@ -14,6 +15,8 @@ public abstract class StudioPreferencesDbContext(DbContextOptions options) : DbC
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // The host's optional schema; nothing changes when none is configured.
+        modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new StudioPreferenceRecordConfiguration());
         ConfigureProvider(modelBuilder);
     }

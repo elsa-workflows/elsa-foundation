@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Persistence.EntityFramework;
 
@@ -18,13 +19,14 @@ public sealed record EfModuleBinding(
     public T Select<T>(string provider, T sqlite, T sqlServer, T postgreSql, T mySql) =>
         EfRelationalProviderBinding.Select(provider, Owner, sqlite, sqlServer, postgreSql, mySql);
 
-    /// <summary>Binds the named provider to the connection resolved for this module.</summary>
+    /// <summary>Binds the named provider to the connection and schema resolved for this module.</summary>
     public void Apply(
         DbContextOptionsBuilder builder,
         IServiceProvider services,
         string provider,
         string? connectionString,
-        string? connectionName) =>
+        string? connectionName,
+        string? schema = null) =>
         EfRelationalProviderBinding.Use(
             builder,
             provider,
@@ -37,5 +39,29 @@ public sealed record EfModuleBinding(
                 DefaultConnectionName,
                 DefaultSqliteConnectionString),
             HistoryTableName,
-            MigrationsAssembly);
+            MigrationsAssembly,
+            EfSchema.Resolve(services, Owner, provider, schema));
+
+    /// <summary>
+    /// Registers one module's provider-derived context, pooled or not.
+    /// </summary>
+    /// <remarks>
+    /// Pooling reuses context instances across scopes, so it is safe only while a context carries nothing but its
+    /// options: a context that captured a request's access context or scope would hand it to the next request.
+    /// Every first-party module context is constructed from <see cref="DbContextOptions{TContext}"/> alone, which
+    /// <c>ModuleContextPoolingTests</c> keeps true, so the option is offered on all of them.
+    /// </remarks>
+    public void AddContext<TContext>(
+        IServiceCollection services,
+        bool pooled,
+        Action<IServiceProvider, DbContextOptionsBuilder> configure)
+        where TContext : DbContext
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configure);
+        if (pooled)
+            services.AddDbContextPool<TContext>(configure);
+        else
+            services.AddDbContext<TContext>(configure);
+    }
 }

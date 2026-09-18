@@ -28,7 +28,7 @@ public sealed class ModuleMigrationTests : IDisposable
         foreach (var type in contexts)
         {
             // Building the model never opens this placeholder connection.
-            using var context = ModuleContextCatalog.Create(type, PlaceholderConnection(provider));
+            using var context = ModuleContextCatalog.Create(type, ModuleContextCatalog.PlaceholderConnection(provider));
             Assert.True(context.Database.GetMigrations().Any(), $"{type.Name} has no migrations. Run tools/ef/generate-module-migrations.sh.");
             Assert.False(context.Database.HasPendingModelChanges(), $"{type.Name} has model changes without a migration. Run tools/ef/generate-module-migrations.sh.");
         }
@@ -47,7 +47,7 @@ public sealed class ModuleMigrationTests : IDisposable
         {
             using var context = ModuleContextCatalog.Create(
                 type,
-                PlaceholderConnection(provider),
+                ModuleContextCatalog.PlaceholderConnection(provider),
                 options => options.ConfigureWarnings(warnings => warnings.Throw(CoreEventId.CollectionWithoutComparer)));
             var failure = Record.Exception(() => context.Model);
             Assert.True(failure is null, $"{type.Name}: {failure?.Message}");
@@ -155,13 +155,4 @@ public sealed class ModuleMigrationTests : IDisposable
             Count = await scope.ServiceProvider.GetRequiredService<ActivitiesDesignDbContext>().ActivityDefinitions.CountAsync(cancellationToken);
         }
     }
-
-    private static string PlaceholderConnection(string provider) => provider switch
-    {
-        "Sqlite" => "Data Source=:memory:",
-        "SqlServer" => "Server=localhost;Database=elsa;TrustServerCertificate=True",
-        "PostgreSql" => "Host=localhost;Database=elsa",
-        "MySql" => "Server=localhost;Database=elsa",
-        _ => throw new ArgumentOutOfRangeException(nameof(provider))
-    };
 }

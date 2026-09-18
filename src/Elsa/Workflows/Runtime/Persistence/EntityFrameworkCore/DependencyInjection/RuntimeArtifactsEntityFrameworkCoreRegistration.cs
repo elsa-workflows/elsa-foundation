@@ -97,13 +97,13 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             if (existingScopeBackend?.Name == WorkflowTestScopeStoreBackend.EntityFramework)
                 existingScopeBackend.EnsureOwnsRegisteredContracts(services);
             var existingOperationalBackend = RuntimeOperationalStateStoreBackend.Find(services);
-            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName);
+            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling);
             var commitExistingBackendRemoval = existingBackend?.PrepareRemoveOwnedArtifacts(services);
             services.AddOptions<RuntimeRecoveryContinuationOptions>()
                 .Configure(options => options.AllowEphemeralDevelopmentKey = false);
             services.TryAddSingleton<IRuntimeRecoveryContinuationCodec, HmacRuntimeRecoveryContinuationCodec>();
             services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateRuntimeRecoveryContinuationCodecStartupTask>());
-            var configured = new RuntimeArtifactsEntityFrameworkCoreOptions { Provider = options.Provider, ConnectionString = options.ConnectionString, ConnectionName = options.ConnectionName, WorkflowExecutableCache = cacheOptions };
+            var configured = new RuntimeArtifactsEntityFrameworkCoreOptions { Provider = options.Provider, ConnectionString = options.ConnectionString, ConnectionName = options.ConnectionName, Schema = options.Schema, Pooling = options.Pooling, WorkflowExecutableCache = cacheOptions };
             var optionsStart = services.Count;
             services.AddSingleton(configured);
             var ownedInfrastructure = new List<ServiceDescriptor> { services[optionsStart] };
@@ -153,7 +153,7 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                 ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
                     .Where(operationalBackend!.Owns));
             else
-                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName));
+                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName, configured.Schema, configured.Pooling));
             services.RemoveAll<EfWorkflowExecutableStore>();
             services.RemoveAll<EfExecutableActivityTemplateStore>();
             services.RemoveAll<EfWorkflowExecutableSourceReferenceStore>();
@@ -274,6 +274,16 @@ public sealed class RuntimeArtifactsEntityFrameworkCoreOptions
     public string Provider { get; set; } = "Sqlite";
     public string? ConnectionString { get; set; }
     public string? ConnectionName { get; set; }
+
+    /// <summary>
+    /// Optional database schema for this module's tables and its own migrations history table. Falls back to
+    /// <see cref="EfSchema.ConfigurationKey"/>, then to the provider's own default. Ignored on SQLite and refused
+    /// on MySQL, where a schema is a database.
+    /// </summary>
+    public string? Schema { get; set; }
+
+    /// <summary>Reuse contexts from a pool instead of constructing one per scope.</summary>
+    public bool Pooling { get; set; }
 
     /// <summary>
     /// Bounded shell-local cache of immutable workflow executables, isolated by persistence scope. Null (this

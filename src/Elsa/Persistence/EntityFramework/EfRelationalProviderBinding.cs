@@ -1,4 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using System.Linq.Expressions;
 using System.Reflection;
 
@@ -17,7 +20,7 @@ public static class EfRelationalProviderBinding
     /// named after its package, so <see cref="PackageId"/> also names the assembly to load. Binding and validation
     /// resolve through the same descriptor, so a validated provider is one that will configure.
     /// </summary>
-    private sealed record ProviderEngine(string ExtensionTypeName, string MethodName, string PackageId)
+    private sealed record ProviderEngine(string ExtensionTypeName, string MethodName, string PackageId, bool SupportsSchemas = true)
     {
         public string AssemblyQualifiedTypeName => $"{ExtensionTypeName}, {PackageId}";
     }
@@ -25,7 +28,9 @@ public static class EfRelationalProviderBinding
     private static readonly ProviderEngine SqliteEngine = new(
         "Microsoft.EntityFrameworkCore.SqliteDbContextOptionsBuilderExtensions",
         "UseSqlite",
-        "Microsoft.EntityFrameworkCore.Sqlite");
+        "Microsoft.EntityFrameworkCore.Sqlite",
+        // SQLite has no schemas: a qualified name there addresses an attached database file, not a namespace.
+        SupportsSchemas: false);
 
     private static readonly ProviderEngine SqlServerEngine = new(
         "Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions",
@@ -42,28 +47,38 @@ public static class EfRelationalProviderBinding
         "UseMySQL",
         "MySql.EntityFrameworkCore");
 
-    public static void UseSqlite(DbContextOptionsBuilder builder, string connectionString, string historyTableName, string? migrationsAssembly = null) =>
-        Use(builder, SqliteEngine, connectionString, historyTableName, migrationsAssembly);
+    public static void UseSqlite(DbContextOptionsBuilder builder, string connectionString, string historyTableName, string? migrationsAssembly = null, string? schema = null) =>
+        Use(builder, SqliteEngine, connectionString, historyTableName, migrationsAssembly, schema);
 
-    public static void UseSqlServer(DbContextOptionsBuilder builder, string connectionString, string historyTableName, string? migrationsAssembly = null) =>
-        Use(builder, SqlServerEngine, connectionString, historyTableName, migrationsAssembly);
+    public static void UseSqlServer(DbContextOptionsBuilder builder, string connectionString, string historyTableName, string? migrationsAssembly = null, string? schema = null) =>
+        Use(builder, SqlServerEngine, connectionString, historyTableName, migrationsAssembly, schema);
 
-    public static void UseNpgsql(DbContextOptionsBuilder builder, string connectionString, string historyTableName, string? migrationsAssembly = null) =>
-        Use(builder, PostgreSqlEngine, connectionString, historyTableName, migrationsAssembly);
+    public static void UseNpgsql(DbContextOptionsBuilder builder, string connectionString, string historyTableName, string? migrationsAssembly = null, string? schema = null) =>
+        Use(builder, PostgreSqlEngine, connectionString, historyTableName, migrationsAssembly, schema);
 
-    public static void UseMySql(DbContextOptionsBuilder builder, string connectionString, string historyTableName, string? migrationsAssembly = null) =>
-        Use(builder, MySqlEngine, connectionString, historyTableName, migrationsAssembly);
+    public static void UseMySql(DbContextOptionsBuilder builder, string connectionString, string historyTableName, string? migrationsAssembly = null, string? schema = null) =>
+        Use(builder, MySqlEngine, connectionString, historyTableName, migrationsAssembly, schema);
 
-    public static void Use(DbContextOptionsBuilder builder, string provider, string connectionString, string historyTableName, string? migrationsAssembly = null)
+    /// <summary>
+    /// Binds <paramref name="provider"/>, putting the module's tables and its own migrations history table in
+    /// <paramref name="schema"/> when one is given. A schema is ignored on SQLite, which has none.
+    /// </summary>
+    public static void Use(
+        DbContextOptionsBuilder builder,
+        string provider,
+        string connectionString,
+        string historyTableName,
+        string? migrationsAssembly = null,
+        string? schema = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         ArgumentException.ThrowIfNullOrWhiteSpace(historyTableName);
-        Use(builder, EngineFor(provider), connectionString, historyTableName, migrationsAssembly);
+        Use(builder, EngineFor(provider), connectionString, historyTableName, migrationsAssembly, schema);
     }
 
     /// <summary>
-    /// Resolves what <see cref="Use(DbContextOptionsBuilder,string,string,string,string?)"/> would reflect over for
+    /// Resolves what <see cref="Use(DbContextOptionsBuilder,string,string,string,string?,string?)"/> would reflect over for
     /// <paramref name="provider"/> — the engine assembly, its <c>Use*</c> overload, and the two relational options
     /// methods the binding calls — without configuring a context or opening a connection. Returns <c>null</c> when
     /// the provider binds, and otherwise a message naming the missing assembly or method and the package to add.
@@ -131,13 +146,31 @@ public static class EfRelationalProviderBinding
         ProviderEngine engine,
         string connectionString,
         string historyTableName,
-        string? migrationsAssembly)
+        string? migrationsAssembly,
+        string? schema)
     {
+        if (!engine.SupportsSchemas || string.IsNullOrWhiteSpace(schema))
+            schema = null;
+
         var method = ResolveExtensionMethod(engine);
         var actionType = method.GetParameters()[2].ParameterType;
         var optionsBuilderType = actionType.GenericTypeArguments[0];
-        var configure = BuildRelationalConfigure(actionType, optionsBuilderType, historyTableName, migrationsAssembly);
+        var configure = BuildRelationalConfigure(actionType, optionsBuilderType, historyTableName, migrationsAssembly, schema);
         method.Invoke(null, [builder, connectionString, configure]);
+
+        if (schema is null)
+            return;
+
+        // The context reads this back in OnModelCreating; the replacement puts the scaffolded, schema-less
+        // migration operations in the same schema.
+        ((IDbContextOptionsBuilderInfrastructure)builder).AddOrUpdateExtension(new EfSchemaOptionsExtension(schema));
+        builder.ReplaceService<IMigrationsAssembly, EfSchemaMigrationsAssembly>();
+        // Migrations are scaffolded against a schema-less context on purpose, so that one migration set applies
+        // into whatever schema a host picks. The model snapshot they carry therefore differs from the running
+        // model by exactly the default schema, and EF reads that difference as un-migrated model drift and
+        // refuses to migrate. Real drift is still caught where the schema is not in play: the model-versus-
+        // migrations test in CI, and `tools/ef/module-migrate.sh pending`.
+        builder.ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
     }
 
     private static MethodInfo ResolveExtensionMethod(ProviderEngine engine)
@@ -163,14 +196,17 @@ public static class EfRelationalProviderBinding
         Type actionType,
         Type optionsBuilderType,
         string historyTableName,
-        string? migrationsAssembly)
+        string? migrationsAssembly,
+        string? schema)
     {
         var parameter = Expression.Parameter(optionsBuilderType, "relational");
+        // The module's own history table goes in the module's own schema, so the history a validate reads is the
+        // history the tables beside it were created from.
         Expression body = Expression.Call(
             parameter,
             ResolveMigrationsHistoryTable(optionsBuilderType),
             Expression.Constant(historyTableName),
-            Expression.Constant(null, typeof(string)));
+            Expression.Constant(schema, typeof(string)));
 
         if (!string.IsNullOrWhiteSpace(migrationsAssembly))
             body = Expression.Call(body, ResolveMigrationsAssembly(optionsBuilderType), Expression.Constant(migrationsAssembly));

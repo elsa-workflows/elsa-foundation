@@ -85,7 +85,8 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
 
     private static void AddContext<T>(IServiceCollection services, WorkflowsDesignEntityFrameworkCoreOptions options) where T : WorkflowsDesignDbContext
     {
-        services.AddDbContext<T>((provider, builder) => Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName));
+        Binding.AddContext<T>(services, options.Pooling, (provider, builder) =>
+            Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName, options.Schema));
         services.AddScoped<WorkflowsDesignDbContext>(sp => sp.GetRequiredService<T>());
     }
 
@@ -143,4 +144,14 @@ public sealed class WorkflowsDesignEntityFrameworkCoreOptions
     public string Provider { get; set; } = "Sqlite";
     public string? ConnectionString { get; set; }
     public string? ConnectionName { get; set; }
+
+    /// <summary>
+    /// Optional database schema for this module's tables and its own migrations history table. Falls back to
+    /// <see cref="EfSchema.ConfigurationKey"/>, then to the provider's own default. Ignored on SQLite and refused
+    /// on MySQL, where a schema is a database.
+    /// </summary>
+    public string? Schema { get; set; }
+
+    /// <summary>Reuse contexts from a pool instead of constructing one per scope.</summary>
+    public bool Pooling { get; set; }
 }

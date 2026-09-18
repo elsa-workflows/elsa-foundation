@@ -1,6 +1,7 @@
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Configuration;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore;
 
@@ -12,6 +13,8 @@ public abstract class StructuredLogsDbContext(DbContextOptions options) : DbCont
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // The host's optional schema; nothing changes when none is configured.
+        modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new StructuredLogRecordConfiguration());
         modelBuilder.ApplyConfiguration(new StructuredLogStreamStateConfiguration());
         modelBuilder.ApplyConfiguration(new StructuredLogAppendOperationConfiguration());

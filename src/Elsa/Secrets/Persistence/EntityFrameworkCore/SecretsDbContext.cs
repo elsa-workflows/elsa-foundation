@@ -2,6 +2,7 @@ using System.Linq;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Configuration;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore;
 
@@ -20,6 +21,8 @@ public abstract class SecretsDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // The host's optional schema; nothing changes when none is configured.
+        modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new SecretRecordConfiguration());
         ConfigureProvider(modelBuilder);
     }

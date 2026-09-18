@@ -121,43 +121,57 @@ internal static class BookmarkStateEfContextRegistration
         IServiceCollection services,
         string provider,
         string? connectionString,
-        string? connectionName)
+        string? connectionName,
+        string? schema = null,
+        bool pooling = false)
     {
-        var currentIdentity = EffectiveIdentity(provider, connectionString, connectionName);
-        foreach (var (owner, existingProvider, existingConnectionString, existingConnectionName) in services
+        var currentIdentity = EffectiveIdentity(provider, connectionString, connectionName, schema, pooling);
+        foreach (var registration in services
                      .Select(descriptor => descriptor.ImplementationInstance)
                      .Select(RegisteredConnection)
-                     .OfType<(string, string, string?, string?)>())
+                     .OfType<RegisteredContextOptions>())
         {
-            if (!string.Equals(EffectiveIdentity(existingProvider, existingConnectionString, existingConnectionName), currentIdentity, StringComparison.Ordinal))
+            if (!string.Equals(EffectiveIdentity(registration), currentIdentity, StringComparison.Ordinal))
                 throw new InvalidOperationException(
-                    $"Combined Runtime bookmarks and artifact EF persistence requires compatible provider options; {owner} is already registered differently.");
+                    $"Combined Runtime bookmarks and artifact EF persistence requires compatible provider options; {registration.Owner} is already registered differently.");
         }
     }
 
-    private static (string Owner, string Provider, string? ConnectionString, string? ConnectionName)? RegisteredConnection(object? instance) => instance switch
+    /// <summary>What one participant asked the shared Runtime context to be bound to.</summary>
+    private sealed record RegisteredContextOptions(string Owner, string Provider, string? ConnectionString, string? ConnectionName, string? Schema, bool Pooling);
+
+    private static RegisteredContextOptions? RegisteredConnection(object? instance) => instance switch
     {
-        RuntimeBookmarksEntityFrameworkCoreOptions options => ("Runtime bookmarks", options.Provider, options.ConnectionString, options.ConnectionName),
-        RuntimeArtifactsEntityFrameworkCoreOptions options => ("Runtime artifacts", options.Provider, options.ConnectionString, options.ConnectionName),
-        RuntimeActivityExecutionEntityFrameworkCoreOptions options => ("Runtime activity executions", options.Provider, options.ConnectionString, options.ConnectionName),
-        RuntimeWorkflowExecutionEntityFrameworkCoreOptions options => ("Runtime workflow executions", options.Provider, options.ConnectionString, options.ConnectionName),
-        RuntimeWorkflowAlterationEntityFrameworkCoreOptions options => ("Runtime alterations", options.Provider, options.ConnectionString, options.ConnectionName),
-        RuntimeWorkflowTestScopeEntityFrameworkCoreOptions options => ("Runtime test scopes", options.Provider, options.ConnectionString, options.ConnectionName),
-        RuntimeOperationalStateEntityFrameworkCoreOptions options => ("Runtime operational state", options.Provider, options.ConnectionString, options.ConnectionName),
-        RuntimeDurableTimerEntityFrameworkCoreOptions options => ("Runtime durable timers", options.Provider, options.ConnectionString, options.ConnectionName),
-        RuntimeSchedulerWorkQueueEntityFrameworkCoreOptions options => ("Runtime scheduler work", options.Provider, options.ConnectionString, options.ConnectionName),
-        RuntimeSchedulerPoisonEntityFrameworkCoreOptions options => ("Runtime scheduler poison", options.Provider, options.ConnectionString, options.ConnectionName),
+        RuntimeBookmarksEntityFrameworkCoreOptions options => new("Runtime bookmarks", options.Provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling),
+        RuntimeArtifactsEntityFrameworkCoreOptions options => new("Runtime artifacts", options.Provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling),
+        RuntimeActivityExecutionEntityFrameworkCoreOptions options => new("Runtime activity executions", options.Provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling),
+        RuntimeWorkflowExecutionEntityFrameworkCoreOptions options => new("Runtime workflow executions", options.Provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling),
+        RuntimeWorkflowAlterationEntityFrameworkCoreOptions options => new("Runtime alterations", options.Provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling),
+        RuntimeWorkflowTestScopeEntityFrameworkCoreOptions options => new("Runtime test scopes", options.Provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling),
+        RuntimeOperationalStateEntityFrameworkCoreOptions options => new("Runtime operational state", options.Provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling),
+        RuntimeDurableTimerEntityFrameworkCoreOptions options => new("Runtime durable timers", options.Provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling),
+        RuntimeSchedulerWorkQueueEntityFrameworkCoreOptions options => new("Runtime scheduler work", options.Provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling),
+        RuntimeSchedulerPoisonEntityFrameworkCoreOptions options => new("Runtime scheduler poison", options.Provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling),
         _ => null
     };
 
-    private static string EffectiveIdentity(string provider, string? connectionString, string? connectionName)
+    private static string EffectiveIdentity(RegisteredContextOptions options) =>
+        EffectiveIdentity(options.Provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling);
+
+    /// <summary>
+    /// What two participants have to agree on to share one context. Schema and pooling join the connection here
+    /// because they are equally part of what the shared registration builds, and whichever participant registers
+    /// first would otherwise decide them for the rest in silence.
+    /// </summary>
+    private static string EffectiveIdentity(string provider, string? connectionString, string? connectionName, string? schema, bool pooling)
     {
         var normalizedProvider = EfRelationalProviderBinding.Normalize(provider);
+        var suffix = $":schema:{schema?.Trim() ?? ""}:pooled:{pooling}";
         if (!string.IsNullOrWhiteSpace(connectionString))
-            return $"{normalizedProvider}:connection:{connectionString}";
+            return $"{normalizedProvider}:connection:{connectionString}{suffix}";
         if (!string.IsNullOrWhiteSpace(connectionName))
-            return $"{normalizedProvider}:name:{connectionName}";
-        return $"{normalizedProvider}:default";
+            return $"{normalizedProvider}:name:{connectionName}{suffix}";
+        return $"{normalizedProvider}:default{suffix}";
     }
 
     /// <summary>
@@ -168,26 +182,27 @@ internal static class BookmarkStateEfContextRegistration
         IServiceCollection services,
         string provider,
         string? connectionString,
-        string? connectionName)
+        string? connectionName,
+        string? schema = null,
+        bool pooling = false)
     {
-        var addContext = Binding.Select<Func<IServiceCollection, string, string?, string?, IReadOnlyCollection<ServiceDescriptor>>>(
+        var addContext = Binding.Select<Func<IServiceCollection, RegisteredContextOptions, IReadOnlyCollection<ServiceDescriptor>>>(
             provider,
             AddContext<BookmarkStateSqliteDbContext>,
             AddContext<BookmarkStateSqlServerDbContext>,
             AddContext<BookmarkStatePostgreSqlDbContext>,
             AddContext<BookmarkStateMySqlDbContext>);
-        return addContext(services, provider, connectionString, connectionName);
+        return addContext(services, new RegisteredContextOptions("Runtime", provider, connectionString, connectionName, schema, pooling));
     }
 
     private static IReadOnlyCollection<ServiceDescriptor> AddContext<TContext>(
         IServiceCollection services,
-        string provider,
-        string? connectionString,
-        string? connectionName)
+        RegisteredContextOptions options)
         where TContext : BookmarkStateDbContext
     {
         var start = services.Count;
-        services.AddDbContext<TContext>((serviceProvider, builder) => Binding.Apply(builder, serviceProvider, provider, connectionString, connectionName));
+        Binding.AddContext<TContext>(services, options.Pooling, (serviceProvider, builder) =>
+            Binding.Apply(builder, serviceProvider, options.Provider, options.ConnectionString, options.ConnectionName, options.Schema));
         services.TryAddScoped<BookmarkStateDbContext>(serviceProvider => serviceProvider.GetRequiredService<TContext>());
         return services.Skip(start).ToArray();
     }

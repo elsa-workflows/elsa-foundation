@@ -113,6 +113,7 @@ can override it. Standard .NET double-underscore (`__`) env keys override any co
 | `CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword` | Password for the `admin` account that `shells.Production.json` seeds. The overlay blanks it, and a seed username without a password fails default shell activation (`/health/ready` returns `503 shell_activation_failed`). | `Password123!` |
 | `CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey` | Base64 PKCS#8 RSA private key that signs access tokens; whitespace in the value is ignored. The overlay turns off OpenIddict development mode, so without a usable key the default shell fails activation (`/health/ready` returns `503 shell_activation_failed`). See [identity configuration](reference/identity-configuration.md#foundationidentityopeniddict). | a demo key committed in the compose files |
 | `ConnectionStrings__Elsa` | The one relational connection every EF module falls back to. Overrides the mounted `shells.json` without editing it. | *(commented out)* |
+| `Elsa__Persistence__EntityFramework__Schema` | Optional database schema for every EF module's tables and history tables, for a deployment that shares a database with an application owning the default schema. Applied on SQL Server and PostgreSQL, ignored on SQLite, **refused on MySQL** — see below. | *(unset: the provider's own default)* |
 
 `Cors:AllowedOrigins` defaults (in `appsettings.json`) are localhost dev values for running the
 server outside Docker; the compose file adds the Studio container origin.
@@ -134,6 +135,16 @@ server outside Docker; the compose file adds the Studio container origin.
 - Each EF module sets `"Provider": "PostgreSql"` and falls back to the one `ConnectionStrings:Elsa`
   connection, which `docker-compose.yml` supplies as `ConnectionStrings__Elsa`. A module can override
   its own connection with a top-level `ConnectionString` property on its feature section.
+
+- The stack leaves `Elsa__Persistence__EntityFramework__Schema` unset, so Elsa's tables land in the
+  provider's default schema (`public` on PostgreSQL). Setting it puts every module's tables, and every
+  module's own `__EFMigrationsHistory_<Module>` table, in that schema instead; EF creates the schema on
+  the first migration. A single module can override it with a `Schema` property on its feature section.
+  **On MySQL the setting is refused**, because a MySQL schema *is* a database rather than a namespace
+  inside one: name the database in the connection string (`Database=elsa`) instead. The refusal is
+  deliberate — `MySql.EntityFrameworkCore` also emits `CREATE DATABASE IF NOT EXISTS …` with no
+  statement terminator before its `CREATE TABLE` when a schema is set, so the first migration would fail
+  against the server anyway.
 
 - Every EF module migrates its own schema at shell activation. That is the `AutoMigrate` default; a
   deployment whose pipeline applies migrations out of process (`tools/ef/module-migrate.sh`) sets

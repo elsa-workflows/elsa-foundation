@@ -56,7 +56,7 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
             var operationalBackend = RuntimeOperationalStateStoreBackend.Find(services);
 
             BookmarkStateEfContextRegistration.EnsureRecoveryContinuationSigningKeyCompatible(services, options.RecoveryContinuationSigningKey, "Runtime activity executions");
-            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName);
+            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling);
             EnsureContext(services, provider, bookmarksBackend?.Name == BookmarkStateStoreBackend.EntityFramework ? bookmarksBackend.Owns : null,
                 artifactsBackend?.Name == RuntimeArtifactStoreBackend.EntityFramework ? artifactsBackend.Owns : null,
                 workflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework ? workflowBackend.Owns : null,
@@ -89,6 +89,8 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
                 Provider = options.Provider,
                 ConnectionString = options.ConnectionString,
                 ConnectionName = options.ConnectionName,
+                Schema = options.Schema,
+                Pooling = options.Pooling,
                 HierarchyCursorSigningKey = options.HierarchyCursorSigningKey,
                 RecoveryContinuationSigningKey = options.RecoveryContinuationSigningKey
             };
@@ -110,7 +112,7 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
             else if (operationalBackend?.Name == RuntimeOperationalStateStoreBackend.EntityFramework)
                 ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(operationalBackend.Owns));
             else
-                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName));
+                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName, configured.Schema, configured.Pooling));
 
             services.RemoveAll<EfActivityExecutionStateStore>();
             services.RemoveAll<EfActivityExecutionInspectionStore>();
@@ -207,6 +209,16 @@ public sealed class RuntimeActivityExecutionEntityFrameworkCoreOptions
     public string Provider { get; set; } = "Sqlite";
     public string? ConnectionString { get; set; }
     public string? ConnectionName { get; set; }
+
+    /// <summary>
+    /// Optional database schema for this module's tables and its own migrations history table. Falls back to
+    /// <see cref="EfSchema.ConfigurationKey"/>, then to the provider's own default. Ignored on SQLite and refused
+    /// on MySQL, where a schema is a database.
+    /// </summary>
+    public string? Schema { get; set; }
+
+    /// <summary>Reuse contexts from a pool instead of constructing one per scope.</summary>
+    public bool Pooling { get; set; }
     public string? HierarchyCursorSigningKey { get; set; }
     public string? RecoveryContinuationSigningKey { get; set; }
 }

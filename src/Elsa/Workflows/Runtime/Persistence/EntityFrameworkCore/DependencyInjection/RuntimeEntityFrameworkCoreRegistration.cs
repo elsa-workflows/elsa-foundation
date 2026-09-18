@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 
@@ -55,6 +56,8 @@ public static class RuntimeEntityFrameworkCoreRegistration
                 Provider = options.Provider,
                 ConnectionString = options.ConnectionString,
                 ConnectionName = options.ConnectionName,
+                Schema = options.Schema,
+                Pooling = options.Pooling,
                 RecoveryContinuationSigningKey = options.RecoveryContinuationSigningKey
             };
             services.AddRuntimeOperationalStateEntityFrameworkCore(operational);
@@ -63,6 +66,8 @@ public static class RuntimeEntityFrameworkCoreRegistration
                 Provider = options.Provider,
                 ConnectionString = options.ConnectionString,
                 ConnectionName = options.ConnectionName,
+                Schema = options.Schema,
+                Pooling = options.Pooling,
                 WorkflowExecutableCache = executableCache
             });
             services.AddRuntimeWorkflowExecutionEntityFrameworkCore(new()
@@ -70,6 +75,8 @@ public static class RuntimeEntityFrameworkCoreRegistration
                 Provider = options.Provider,
                 ConnectionString = options.ConnectionString,
                 ConnectionName = options.ConnectionName,
+                Schema = options.Schema,
+                Pooling = options.Pooling,
                 RecoveryContinuationSigningKey = options.RecoveryContinuationSigningKey
             });
             services.AddRuntimeActivityExecutionEntityFrameworkCore(new()
@@ -77,6 +84,8 @@ public static class RuntimeEntityFrameworkCoreRegistration
                 Provider = options.Provider,
                 ConnectionString = options.ConnectionString,
                 ConnectionName = options.ConnectionName,
+                Schema = options.Schema,
+                Pooling = options.Pooling,
                 HierarchyCursorSigningKey = options.HierarchyCursorSigningKey,
                 RecoveryContinuationSigningKey = options.RecoveryContinuationSigningKey
             });
@@ -84,13 +93,17 @@ public static class RuntimeEntityFrameworkCoreRegistration
             {
                 Provider = options.Provider,
                 ConnectionString = options.ConnectionString,
-                ConnectionName = options.ConnectionName
+                ConnectionName = options.ConnectionName,
+                Schema = options.Schema,
+                Pooling = options.Pooling
             });
             services.AddRuntimeWorkflowAlterationEntityFrameworkCore(new()
             {
                 Provider = options.Provider,
                 ConnectionString = options.ConnectionString,
                 ConnectionName = options.ConnectionName,
+                Schema = options.Schema,
+                Pooling = options.Pooling,
                 RecoveryContinuationSigningKey = options.RecoveryContinuationSigningKey
             });
             services.AddRuntimeWorkflowTestScopeEntityFrameworkCore(new()
@@ -98,6 +111,8 @@ public static class RuntimeEntityFrameworkCoreRegistration
                 Provider = options.Provider,
                 ConnectionString = options.ConnectionString,
                 ConnectionName = options.ConnectionName,
+                Schema = options.Schema,
+                Pooling = options.Pooling,
                 RecoveryContinuationSigningKey = options.RecoveryContinuationSigningKey
             });
             services.AddRuntimeSchedulerWorkQueueEntityFrameworkCore(new()
@@ -105,19 +120,25 @@ public static class RuntimeEntityFrameworkCoreRegistration
                 Provider = options.Provider,
                 ConnectionString = options.ConnectionString,
                 ConnectionName = options.ConnectionName,
+                Schema = options.Schema,
+                Pooling = options.Pooling,
                 RecoveryContinuationSigningKey = options.RecoveryContinuationSigningKey
             });
             services.AddRuntimeSchedulerPoisonEntityFrameworkCore(new()
             {
                 Provider = options.Provider,
                 ConnectionString = options.ConnectionString,
-                ConnectionName = options.ConnectionName
+                ConnectionName = options.ConnectionName,
+                Schema = options.Schema,
+                Pooling = options.Pooling
             });
             services.AddRuntimeDurableTimerEntityFrameworkCore(new()
             {
                 Provider = options.Provider,
                 ConnectionString = options.ConnectionString,
                 ConnectionName = options.ConnectionName,
+                Schema = options.Schema,
+                Pooling = options.Pooling,
                 RecoveryContinuationSigningKey = options.RecoveryContinuationSigningKey
             });
             services.AddRuntimeWorkflowDispatchEntityFrameworkCore();
@@ -176,6 +197,16 @@ public sealed class RuntimeEntityFrameworkCoreOptions
     public string Provider { get; set; } = "Sqlite";
     public string? ConnectionString { get; set; }
     public string? ConnectionName { get; set; }
+
+    /// <summary>
+    /// Optional database schema for this module's tables and its own migrations history table. Falls back to
+    /// <see cref="EfSchema.ConfigurationKey"/>, then to the provider's own default. Ignored on SQLite and refused
+    /// on MySQL, where a schema is a database.
+    /// </summary>
+    public string? Schema { get; set; }
+
+    /// <summary>Reuse contexts from a pool instead of constructing one per scope.</summary>
+    public bool Pooling { get; set; }
     public string? HierarchyCursorSigningKey { get; set; }
     public string? RecoveryContinuationSigningKey { get; set; }
 

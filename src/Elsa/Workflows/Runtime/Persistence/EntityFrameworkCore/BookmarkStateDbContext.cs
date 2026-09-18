@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Configuration;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
@@ -40,6 +41,8 @@ public abstract class BookmarkStateDbContext(DbContextOptions options) : DbConte
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // The host's optional schema; nothing changes when none is configured.
+        modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new BookmarkStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutableEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutableCoordinationEntityConfiguration());

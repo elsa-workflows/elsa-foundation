@@ -38,7 +38,7 @@ public static class ActivitiesDesignEntityFrameworkCoreRegistration
             AddContext<ActivitiesDesignSqlServerDbContext>,
             AddContext<ActivitiesDesignPostgreSqlDbContext>,
             AddContext<ActivitiesDesignMySqlDbContext>);
-        var configuration = ActivitiesDesignPersistenceBackend.Fingerprint(provider, options.ConnectionString, options.ConnectionName);
+        var configuration = ActivitiesDesignPersistenceBackend.Fingerprint(provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling.ToString());
         var snapshot = services.ToArray();
         // A replaced backend may keep declarations outside the service collection, such as a shared
         // storage catalog. Snapshotting them through the neutral seam keeps a failed switch all-or-nothing.
@@ -81,7 +81,9 @@ public static class ActivitiesDesignEntityFrameworkCoreRegistration
             {
                 Provider = options.Provider,
                 ConnectionString = options.ConnectionString,
-                ConnectionName = options.ConnectionName
+                ConnectionName = options.ConnectionName,
+                Schema = options.Schema,
+                Pooling = options.Pooling
             };
             var registrationStart = services.Count;
             services.AddSingleton(configured);
@@ -210,7 +212,8 @@ public static class ActivitiesDesignEntityFrameworkCoreRegistration
     private static void AddContext<TContext>(IServiceCollection services, ActivitiesDesignEntityFrameworkCoreOptions options)
         where TContext : ActivitiesDesignDbContext
     {
-        services.AddDbContext<TContext>((provider, builder) => Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName));
+        Binding.AddContext<TContext>(services, options.Pooling, (provider, builder) =>
+            Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName, options.Schema));
         services.AddScoped<ActivitiesDesignDbContext>(provider => provider.GetRequiredService<TContext>());
     }
 }
@@ -220,6 +223,16 @@ public sealed class ActivitiesDesignEntityFrameworkCoreOptions
     public string Provider { get; set; } = "Sqlite";
     public string? ConnectionString { get; set; }
     public string? ConnectionName { get; set; }
+
+    /// <summary>
+    /// Optional database schema for this module's tables and its own migrations history table. Falls back to
+    /// <see cref="EfSchema.ConfigurationKey"/>, then to the provider's own default. Ignored on SQLite and refused
+    /// on MySQL, where a schema is a database.
+    /// </summary>
+    public string? Schema { get; set; }
+
+    /// <summary>Reuse contexts from a pool instead of constructing one per scope.</summary>
+    public bool Pooling { get; set; }
 }
 
 public static class ActivitiesDesignEfModule

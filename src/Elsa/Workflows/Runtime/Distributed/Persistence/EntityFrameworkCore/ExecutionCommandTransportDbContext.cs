@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Configuration;
 using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
 
@@ -12,6 +13,8 @@ public abstract class ExecutionCommandTransportDbContext(DbContextOptions option
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // The host's optional schema; nothing changes when none is configured.
+        modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new ExecutionCommandStreamHeadEntityConfiguration());
         modelBuilder.ApplyConfiguration(new ExecutionCommandTransportItemEntityConfiguration());
         ConfigureProvider(modelBuilder);

@@ -22,9 +22,11 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
             {
                 Provider = options.Provider,
                 ConnectionString = options.ConnectionString,
-                ConnectionName = options.ConnectionName
+                ConnectionName = options.ConnectionName,
+                Schema = options.Schema,
+                Pooling = options.Pooling
             };
-            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName);
+            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling);
 
             var existingBackend = BookmarkStateStoreBackend.Find(services);
             existingBackend?.EnsureOwnsRegisteredContract(services);
@@ -152,7 +154,7 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
                     ownedArtifacts.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
                         .Where(operationalBackend.Owns));
                 else
-                    ownedArtifacts.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName));
+                    ownedArtifacts.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName, configured.Schema, configured.Pooling));
             }
 
             var descriptorState = ServiceDescriptor.Scoped<IBookmarkStateStore>(provider => provider.GetRequiredService<EfBookmarkStateStore>());
@@ -205,4 +207,14 @@ public sealed class RuntimeBookmarksEntityFrameworkCoreOptions
     public string Provider { get; set; } = "Sqlite";
     public string? ConnectionString { get; set; }
     public string? ConnectionName { get; set; }
+
+    /// <summary>
+    /// Optional database schema for this module's tables and its own migrations history table. Falls back to
+    /// <see cref="EfSchema.ConfigurationKey"/>, then to the provider's own default. Ignored on SQLite and refused
+    /// on MySQL, where a schema is a database.
+    /// </summary>
+    public string? Schema { get; set; }
+
+    /// <summary>Reuse contexts from a pool instead of constructing one per scope.</summary>
+    public bool Pooling { get; set; }
 }

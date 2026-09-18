@@ -12,6 +12,7 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 
@@ -62,6 +63,8 @@ public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbCo
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // The host's optional schema; nothing changes when none is configured.
+        modelBuilder.HasElsaDefaultSchema(this);
         ConfigureEntity<ActivityDefinition>(modelBuilder, "elsa_activity_definitions");
         ConfigureEntity<ActivityDefinitionVersion>(modelBuilder, "elsa_activity_definition_versions_v2");
         ConfigureEntity<ActivityAvailabilitySettingsRecord>(modelBuilder, "elsa_activity_availability_settings");

@@ -138,7 +138,7 @@ public sealed class RuntimeEntityFrameworkCoreStandaloneTests
     }
 
     public static TheoryData<string> ConflictingOptions =>
-        ["connection string", "connection name", "provider", "recovery key", "hierarchy key", "cache capacity", "cache disabled"];
+        ["connection string", "connection name", "provider", "recovery key", "hierarchy key", "cache capacity", "cache disabled", "schema", "pooling"];
 
     [Theory]
     [MemberData(nameof(ConflictingOptions))]
@@ -156,6 +156,10 @@ public sealed class RuntimeEntityFrameworkCoreStandaloneTests
             case "hierarchy key": conflicting.HierarchyCursorSigningKey = "ef-runtime-standalone-other-hierarchy-key-32"; break;
             case "cache capacity": conflicting.WorkflowExecutableCacheCapacity = 7; break;
             case "cache disabled": conflicting.CacheWorkflowExecutables = false; break;
+            // Runtime's participants share one context, so a second one asking for another schema or for pooling
+            // would be silently ignored in favour of whichever registered first.
+            case "schema": conflicting.Schema = "elsa_alt"; break;
+            case "pooling": conflicting.Pooling = true; break;
         }
 
         Assert.Throws<InvalidOperationException>(() => services.AddRuntimeEntityFrameworkCore(conflicting));

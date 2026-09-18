@@ -17,6 +17,10 @@ filter="${1:-.*}"
 tooling="tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj"
 configuration="${ELSA_EF_CONFIGURATION:-Release}"
 
+# A schema belongs to a deployment, not to a migration: scaffolding with one bakes it into the model
+# snapshot and no host could choose another. Applying and scripting still honour ELSA_EF_SCHEMA.
+unset ELSA_EF_SCHEMA
+
 dotnet tool restore >/dev/null
 
 module_project() {
