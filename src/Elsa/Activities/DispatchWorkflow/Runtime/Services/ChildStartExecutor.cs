@@ -20,6 +20,7 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
     private readonly IWorkflowStartDispatcher _workflowStartDispatcher;
     private readonly int _maxNestingDepth;
     private readonly IWorkflowDispatchStore? _workflowDispatchStore;
+    private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly TimeProvider _timeProvider;
 
     public ChildStartExecutor(IWorkflowStartDispatcher workflowStartDispatcher)
@@ -37,16 +38,23 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
     public ChildStartExecutor(
         IWorkflowStartDispatcher workflowStartDispatcher,
         IWorkflowDispatchStore? workflowDispatchStore,
-        TimeProvider timeProvider)
-        : this(workflowStartDispatcher, Options.Create(new DispatchWorkflowOptions()), workflowDispatchStore, timeProvider)
+        TimeProvider timeProvider,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null)
+        : this(workflowStartDispatcher, Options.Create(new DispatchWorkflowOptions()), workflowDispatchStore, timeProvider, workflowExecutionStateStore)
     {
     }
 
+    /// <param name="workflowExecutionStateStore">
+    /// Reads the child a duplicate start may already have reached. Composition always supplies it; without it a duplicate
+    /// can only be recognised once its dispatch is terminal, so a legitimate one spends its delivery budget before the
+    /// claim completion's child-evidence rule resolves it as delivered. That degrades latency and logs, not the outcome.
+    /// </param>
     public ChildStartExecutor(
         IWorkflowStartDispatcher workflowStartDispatcher,
         IOptions<DispatchWorkflowOptions> options,
         IWorkflowDispatchStore? workflowDispatchStore,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null)
     {
         ArgumentNullException.ThrowIfNull(workflowStartDispatcher);
         ArgumentNullException.ThrowIfNull(options);
@@ -55,6 +63,7 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
         _workflowStartDispatcher = workflowStartDispatcher;
         _maxNestingDepth = options.Value.MaxNestingDepth;
         _workflowDispatchStore = workflowDispatchStore;
+        _workflowExecutionStateStore = workflowExecutionStateStore;
         _timeProvider = timeProvider;
     }
 
@@ -217,6 +226,22 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
                 $"A checkpoint rule refused a commit of child workflow execution '{payload.ChildWorkflowExecutionId}' before it reached an outcome: {faulted.Reason}"));
         }
 
+        // A duplicate answer has two producers that mean opposite things. The start dispatcher answers Duplicate after
+        // reading the child's durable state, which IS proof the child exists. An agent answers it from a process-local,
+        // bounded idempotency cache, which proves only that the key was seen there. The case that matters is the second
+        // one: a start whose refusal could not be recorded consumed its key before the refusal was reported, so claim
+        // expiry redelivers into a Duplicate carrying none of it, and counting that as delivered left a waiting parent
+        // waiting forever (#1799).
+        //
+        // The producers are told apart by the only thing that decides it, which is whether a child can be seen. When none
+        // can, this is a failed delivery: it retries, and its own budget dead-letters it into DispatchFailed, which is how
+        // the parent gets an answer. Transient rather than permanent, because the answer and the evidence are different
+        // things. Every attempt in this process is answered Duplicate out of the same cache, but the evidence is re-read
+        // each time, so a child whose start is still queued for redrive is still found before the budget runs out.
+        if (result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Duplicate &&
+            !await HasChildAsync(payload, cancellationToken))
+            throw DeliveryFailure(PostCommitFailureKind.Transient);
+
         if (result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Deferred &&
             !HasDurableDistributedForwardingEvidence(result.CommandDispatch.Metadata))
             throw DeliveryFailure(PostCommitFailureKind.Transient);
@@ -265,6 +290,35 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
             if (latest is not null && (latest.Status == WorkflowDispatchStatus.Started || IsTerminal(latest.Status)))
                 return;
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Whether a child can be seen for this dispatch: either the dispatch already carries the child's own outcome, or the
+    /// child execution exists. Neither read resolves anything on a reading nothing stands behind. An execution store that
+    /// cannot be read fails the delivery transiently carrying its cause; a dispatch store that cannot be read is simply
+    /// not an outcome, because that read is shared with two callers for which a refusal must stay the reported failure.
+    /// </summary>
+    private async ValueTask<bool> HasChildAsync(WorkflowDispatchStartPayload payload, CancellationToken cancellationToken)
+    {
+        if (await HasChildOutcomeAsync(payload.DispatchId, cancellationToken))
+            return true;
+        if (_workflowExecutionStateStore is null)
+            return false;
+
+        try
+        {
+            return await _workflowExecutionStateStore.FindAsync(payload.ChildWorkflowExecutionId, cancellationToken) is not null;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            // Same verdict as not finding the child, but carrying the cause: this is the reading the delivery failure is
+            // logged with, and a store that cannot be read is worth telling apart from a child that is genuinely absent.
+            throw DeliveryFailure(PostCommitFailureKind.Transient, exception);
         }
     }
 

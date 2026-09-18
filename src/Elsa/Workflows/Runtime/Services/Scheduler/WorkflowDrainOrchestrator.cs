@@ -106,13 +106,16 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
                 // #1780: a commit a checkpoint rule refused is refused again on every redelivery, so the execution is
                 // faulted instead of left non-terminal. This runs while the lease is still held, so the fault commit is
                 // fenced like the drain's own. The drain's result or failure is reported unchanged; only a fault commit
-                // that itself fails is added to it, because then the execution was not faulted.
+                // that itself fails is added to it, because then the execution was not faulted. The envelope goes with
+                // it for #1799: a refused FIRST commit leaves no state to fault, and for a dispatched child the command
+                // is the only place its identity still exists.
                 try
                 {
                     await _checkpointRuleViolationFaulter.FaultIfCheckpointRuleViolatedAsync(
                         request.WorkflowExecutionId,
                         result,
                         drainFailure,
+                        envelope,
                         drainCancellation.Token);
                 }
                 catch (Exception exception)

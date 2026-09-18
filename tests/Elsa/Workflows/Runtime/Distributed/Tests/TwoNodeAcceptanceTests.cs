@@ -445,7 +445,11 @@ public abstract class TwoNodeAcceptanceTests
             workflowDispatchStore: persistence.DispatchStore,
             workflowExecutionStateStore: persistence.WorkflowExecutionStore);
 
-        return new ChildStartExecutor(startDispatcher, persistence.DispatchStore, new FakeTimeProvider(_now.AddSeconds(1)));
+        return new ChildStartExecutor(
+            startDispatcher,
+            persistence.DispatchStore,
+            new FakeTimeProvider(_now.AddSeconds(1)),
+            persistence.WorkflowExecutionStore);
     }
 
     private async ValueTask CommitChildInFreshPersistenceAsync(

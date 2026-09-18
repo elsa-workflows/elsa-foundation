@@ -4,7 +4,7 @@
 
 - Shell feature: `ActivitiesDispatchWorkflowRuntime`.
 - Depends on `WorkflowsRuntimeResumption`.
-- Contributes `ChildStartExecutor` for the stable `Elsa.Activities.DispatchWorkflow.StartChild` post-commit intent kind with a finite host-configured total-attempt count and positive retry delay. Explicit rejection is permanent; infrastructure unavailability and non-forwarded deferral are transient.
+- Contributes `ChildStartExecutor` for the stable `Elsa.Activities.DispatchWorkflow.StartChild` post-commit intent kind with a finite host-configured total-attempt count and positive retry delay. Explicit rejection is permanent; infrastructure unavailability, non-forwarded deferral, and a duplicate answer with no child to show for it are transient, so the duplicate dead-letters through the ordinary delivery budget.
 - Contributes `ChildCancelExecutor` for the stable `Elsa.Activities.DispatchWorkflow.CancelChild` kind with an unbounded, positive-backoff retry policy.
 - Contributes `ParentResumeExecutor` for the stable `Elsa.Activities.DispatchWorkflow.ResumeParent` kind with an unbounded, positive-backoff retry policy. The aggregate dispatcher owns `DispatchAsync`; contributed handlers own `HandleAsync`, and each registration is the sole source of its kind and retry policy.
 

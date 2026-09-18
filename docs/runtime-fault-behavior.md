@@ -245,12 +245,24 @@ intent is queued exactly as for a child's business fault.
 What the drain reports is unchanged: a refused handler commit still returns `AcceptedButFaulted`, and a
 refused observer commit still throws. The in-process actor marks that `AcceptedButFaulted` result with
 `runtime.dispatch.checkpointRuleViolation`. Only a fault commit that itself fails is added to the failure, so
-a workflow that could not be faulted is never reported as handled. A workflow with no accepted state
-has nothing to fault and is left alone. For a dispatched child that means its first commit was refused and
-no child exists, so `ChildStartExecutor` fails the start permanently: the dispatch reaches
-`DispatchFailed` with its dead letter and delivery incident, and a waiting parent resumes through
-`DispatchFailed`. Any other failure, such as a lost lease, a concurrency conflict,
-or an infrastructure fault, faults nothing here, because a retry can still succeed.
+a workflow that could not be faulted is never reported as handled.
+
+A workflow with no accepted state has nothing to fault out of the store, which is the refused **first**
+commit. For a root start that is where it stops: the refusal is reported to its caller, and a durable
+execution that never ran would add nothing. For a dispatched child the refusal has nowhere else to go, so
+the child is faulted into existence from its start command, which still carries its whole identity: pinned
+executable, parent, correlation, tenant, partition, run kind, nesting depth, authority and test scope, which
+is exactly the set a dispatch is matched on. The commit is the same terminal shape a child with accepted
+state gets, so the ordinary enrichers move its dispatch to `Faulted` and queue the parent-resume intent just
+as for a child's business fault, and nothing new has to know about refusals. That is what carries a refusal
+home when the start was forwarded through distributed placement and acknowledged before the child ran, where
+the delivery result the local path relies on never reaches the parent (#1799).
+
+When a rule refuses the child's content it refuses this commit too. Then the fault commit's failure is
+reported as above, `ChildStartExecutor` fails the start permanently, and the dispatch reaches
+`DispatchFailed` with its dead letter and delivery incident, so a waiting parent resumes through
+`DispatchFailed` rather than through the child's outcome. Any other failure, such as a lost lease, a
+concurrency conflict, or an infrastructure fault, faults nothing here, because a retry can still succeed.
 
 ## The observer chain
 
@@ -321,7 +333,7 @@ Changing the catalog default only affects workflows published afterwards.
 | poison records become blocking critical incidents with a `WaitForIntervention` outcome, idempotently and best-effort | `src/Elsa/Workflows/Runtime/Services/Incidents/PoisonedSchedulerWorkIncidentObserver.cs` |
 | observer order, and the defaults table | `src/Elsa/Workflows/Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs` |
 | quiescence is the orchestrator's aggregate stop reason, and observers are notified after the drain | `src/Elsa/Workflows/Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs` (`DrainSchedulerAndPostCommitWorkAsync`, `NotifyObserversAsync`) |
-| a checkpoint rule refusal faults the workflow under the drain's lease, with a commit built from its last accepted state | `WorkflowDrainOrchestrator.DrainAsync`, `src/Elsa/Workflows/Runtime/Services/Incidents/CheckpointRuleViolationWorkflowFaulter.cs`, `WorkflowSchedulerDrainer.DispatchAsync` (`checkpointRuleViolation`) |
+| a checkpoint rule refusal faults the workflow under the drain's lease, with a commit built from its last accepted state, or from the start command when a dispatched child's first commit was refused | `WorkflowDrainOrchestrator.DrainAsync`, `src/Elsa/Workflows/Runtime/Services/Incidents/CheckpointRuleViolationWorkflowFaulter.cs`, `WorkflowSchedulerDrainer.DispatchAsync` (`checkpointRuleViolation`) |
 
 Behavioral guards worth reading alongside the code:
 
