@@ -37,6 +37,7 @@ on:
       - Elsa.Server.slnx
       - NuGet.config
       - src/**
+      - extensions/**
 
 permissions:
   contents: read

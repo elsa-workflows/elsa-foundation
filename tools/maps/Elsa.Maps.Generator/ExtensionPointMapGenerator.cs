@@ -41,7 +41,7 @@ public static partial class ExtensionPointMapGenerator
 
         var catalogPaths = new List<string>();
         if (hasRootIndex) catalogPaths.Add("EXTENSION_POINTS.md");
-        catalogPaths.AddRange(repo.ListFiles("src/EXTENSION_POINTS.md", "src/*/EXTENSION_POINTS.md"));
+        catalogPaths.AddRange(repo.ListFiles(RepoLayout.CatalogPathspecs));
 
         var catalogs = catalogPaths
             .Distinct(StringComparer.Ordinal)
@@ -50,7 +50,7 @@ public static partial class ExtensionPointMapGenerator
             .ToArray();
 
         var discoveredSource = catalogs
-            .Where(catalog => catalog.RelativePath.StartsWith("src/", StringComparison.Ordinal))
+            .Where(catalog => RepoLayout.IsModulePath(catalog.RelativePath))
             .Select(catalog => catalog.RelativePath)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)

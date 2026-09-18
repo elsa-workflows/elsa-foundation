@@ -44,12 +44,12 @@ public static partial class FeatureScanner
 
     private static Regex BuildProbe(string pattern) => new(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    /// <summary>Scans every <c>src</c> source file for feature classes, ordered by domain, project, class.</summary>
+    /// <summary>Scans every module source file for feature classes, ordered by domain, project, class.</summary>
     public static IReadOnlyList<FeatureFacts> Scan(RepoContext repo, IReadOnlyList<ProjectFacts> projects)
     {
         var sourceProjects = projects.Where(project => project.Kind == "source").ToArray();
 
-        return repo.ListFiles("src/*.cs")
+        return repo.ListFiles(RepoLayout.SourceFilePathspecs)
             .SelectMany(relativePath => ScanFile(repo, sourceProjects, relativePath))
             .OrderBy(feature => feature.Domain, StringComparer.Ordinal)
             .ThenBy(feature => feature.Project, StringComparer.Ordinal)

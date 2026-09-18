@@ -24,7 +24,7 @@ public static partial class CoreMapsGenerator
     /// <summary>Generates the v1 layer and returns the repo-relative paths written.</summary>
     public static IReadOnlyList<string> Generate(RepoContext repo)
     {
-        var projectPaths = repo.ListFiles("src/*.csproj", "tests/*.csproj");
+        var projectPaths = repo.ListFiles(RepoLayout.ProjectPathspecs);
         var packages = PackageVersions.Load(repo);
 
         var projects = projectPaths.Select(path => ReadProject(repo, path)).ToArray();
@@ -73,7 +73,7 @@ public static partial class CoreMapsGenerator
         return new ProjectRow(
             name,
             relativePath,
-            relativePath.StartsWith("tests/", StringComparison.Ordinal) ? "test" : "source",
+            RepoLayout.Kind(relativePath),
             DomainGroup(name),
             references);
     }
@@ -102,7 +102,7 @@ public static partial class CoreMapsGenerator
     {
         var rows = new List<FeatureRow>();
 
-        foreach (var relativePath in repo.ListFiles("src/*.cs"))
+        foreach (var relativePath in repo.ListFiles(RepoLayout.SourceFilePathspecs))
         {
             var text = File.ReadAllText(repo.Absolute(relativePath));
             if (!text.Contains("FeatureBase", StringComparison.Ordinal) &&

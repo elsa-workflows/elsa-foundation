@@ -27,12 +27,12 @@ public static partial class ProjectGraph
 
     /// <summary>Reads every source and test project, in ordinal path order.</summary>
     public static IReadOnlyList<ProjectFacts> Read(RepoContext repo) =>
-        repo.ListFiles("src/*.csproj", "tests/*.csproj").Select(relativePath => Read(repo, relativePath)).ToArray();
+        repo.ListFiles(RepoLayout.ProjectPathspecs).Select(relativePath => Read(repo, relativePath)).ToArray();
 
     private static ProjectFacts Read(RepoContext repo, string relativePath)
     {
         var name = Path.GetFileNameWithoutExtension(relativePath);
-        var kind = relativePath.StartsWith("tests/", StringComparison.Ordinal) ? "test" : "source";
+        var kind = RepoLayout.Kind(relativePath);
         var domain = DomainGroup(name);
 
         return new ProjectFacts(
