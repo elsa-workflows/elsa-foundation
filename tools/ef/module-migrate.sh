@@ -8,6 +8,10 @@
 #   bash tools/ef/module-migrate.sh script <Sqlite|SqlServer|PostgreSql|MySql> <output-dir> [context-regex]
 #   bash tools/ef/module-migrate.sh script-check <Sqlite|SqlServer|PostgreSql|MySql> <output-dir> [context-regex]
 #
+# ELSA_EF_SCHEMA applies and scripts into the schema a host configured, the same one
+# Elsa:Persistence:EntityFramework:Schema names. SQLite ignores it and MySQL refuses it. The schema itself
+# needs no setting up: EF's migrations-history script creates it on both providers that take one.
+#
 # pending needs no database: it fails when a module model changed without a regenerated migration.
 # apply runs `dotnet ef database update` per module context against one database; every module records its
 # own history table, which is the one a host started with

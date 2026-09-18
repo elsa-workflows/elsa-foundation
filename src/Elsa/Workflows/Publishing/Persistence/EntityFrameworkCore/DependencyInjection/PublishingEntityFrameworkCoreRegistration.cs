@@ -193,7 +193,9 @@ public static class PublishingEntityFrameworkCoreRegistration
         {
             Provider = options.Provider,
             ConnectionString = options.ConnectionString,
-            ConnectionName = options.ConnectionName
+            ConnectionName = options.ConnectionName,
+            Schema = options.Schema,
+            Pooling = options.Pooling
         };
         var optionsDescriptor = ServiceDescriptor.Singleton(configured);
         services.Add(optionsDescriptor);
@@ -248,14 +250,16 @@ public static class PublishingEntityFrameworkCoreRegistration
         where TContext : PublishingSnapshotReviewDbContext
     {
         var start = services.Count;
-        services.AddDbContext<TContext>((provider, builder) => Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName));
+        Binding.AddContext<TContext>(services, options.Pooling, (provider, builder) =>
+            Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName, options.Schema));
         services.AddScoped<PublishingSnapshotReviewDbContext>(provider => provider.GetRequiredService<TContext>());
         return services.Skip(start).ToArray();
     }
 
     private static bool OptionsEqual(PublishingEntityFrameworkCoreOptions left, PublishingEntityFrameworkCoreOptions right) =>
         StringComparer.Ordinal.Equals(EfRelationalProviderBinding.Normalize(left.Provider), EfRelationalProviderBinding.Normalize(right.Provider)) &&
-        left.ConnectionString == right.ConnectionString && left.ConnectionName == right.ConnectionName;
+        left.ConnectionString == right.ConnectionString && left.ConnectionName == right.ConnectionName &&
+        left.Schema == right.Schema && left.Pooling == right.Pooling;
 
     private sealed record LedgerFamily(string Name, IReadOnlyCollection<Type> Contracts, Action<IServiceCollection> Register);
 }
@@ -265,4 +269,14 @@ public sealed class PublishingEntityFrameworkCoreOptions
     public string Provider { get; set; } = "Sqlite";
     public string? ConnectionString { get; set; }
     public string? ConnectionName { get; set; }
+
+    /// <summary>
+    /// Optional database schema for this module's tables and its own migrations history table. Falls back to
+    /// <see cref="EfSchema.ConfigurationKey"/>, then to the provider's own default. Ignored on SQLite and refused
+    /// on MySQL, where a schema is a database.
+    /// </summary>
+    public string? Schema { get; set; }
+
+    /// <summary>Reuse contexts from a pool instead of constructing one per scope.</summary>
+    public bool Pooling { get; set; }
 }

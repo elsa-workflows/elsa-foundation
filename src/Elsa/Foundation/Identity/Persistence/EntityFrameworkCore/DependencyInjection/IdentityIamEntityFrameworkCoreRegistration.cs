@@ -52,7 +52,7 @@ public static class IdentityIamEntityFrameworkCoreRegistration
             AddContext<IdentityIamSqlServerDbContext>,
             AddContext<IdentityIamPostgreSqlDbContext>,
             AddContext<IdentityIamMySqlDbContext>);
-        var registration = new IdentityIamEfRegistration(provider, options.ConnectionString, options.ConnectionName);
+        var registration = new IdentityIamEfRegistration(provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling);
         var existingRegistration = services.Select(descriptor => descriptor.ImplementationInstance)
             .OfType<IdentityIamEfRegistration>()
             .SingleOrDefault();
@@ -211,12 +211,12 @@ public static class IdentityIamEntityFrameworkCoreRegistration
         IdentityIamEntityFrameworkCoreOptions options)
         where TContext : IdentityIamDbContext
     {
-        services.AddDbContext<TContext>((provider, builder) =>
-            Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName));
+        Binding.AddContext<TContext>(services, options.Pooling, (provider, builder) =>
+            Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName, options.Schema));
         services.AddScoped<IdentityIamDbContext>(provider => provider.GetRequiredService<TContext>());
     }
 
-    private sealed record IdentityIamEfRegistration(string Provider, string? ConnectionString, string? ConnectionName);
+    private sealed record IdentityIamEfRegistration(string Provider, string? ConnectionString, string? ConnectionName, string? Schema, bool Pooling);
 }
 
 public sealed class IdentityIamEntityFrameworkCoreOptions
@@ -224,4 +224,14 @@ public sealed class IdentityIamEntityFrameworkCoreOptions
     public string Provider { get; set; } = "Sqlite";
     public string? ConnectionString { get; set; }
     public string? ConnectionName { get; set; }
+
+    /// <summary>
+    /// Optional database schema for this module's tables and its own migrations history table. Falls back to
+    /// <see cref="EfSchema.ConfigurationKey"/>, then to the provider's own default. Ignored on SQLite and refused
+    /// on MySQL, where a schema is a database.
+    /// </summary>
+    public string? Schema { get; set; }
+
+    /// <summary>Reuse contexts from a pool instead of constructing one per scope.</summary>
+    public bool Pooling { get; set; }
 }

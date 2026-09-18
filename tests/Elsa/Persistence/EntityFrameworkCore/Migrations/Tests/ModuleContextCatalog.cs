@@ -52,27 +52,37 @@ internal static class ModuleContextCatalog
     public static string HistoryTable(Type context) =>
         EfMigrationsHistory.TableName(context.Name[..^(ProviderOf(context).Length + "DbContext".Length)]);
 
-    public static DbContext Create(Type context, string connectionString, Action<DbContextOptionsBuilder>? configure = null)
+    /// <summary>A connection string the provider parses but nothing ever opens; building a model needs no database.</summary>
+    public static string PlaceholderConnection(string provider) => provider switch
+    {
+        "Sqlite" => "Data Source=:memory:",
+        "SqlServer" => "Server=localhost;Database=elsa;TrustServerCertificate=True",
+        "PostgreSql" => "Host=localhost;Database=elsa",
+        "MySql" => "Server=localhost;Database=elsa",
+        _ => throw new ArgumentOutOfRangeException(nameof(provider))
+    };
+
+    public static DbContext Create(Type context, string connectionString, Action<DbContextOptionsBuilder>? configure = null, string? schema = null)
     {
         var builder = (DbContextOptionsBuilder)Activator.CreateInstance(typeof(DbContextOptionsBuilder<>).MakeGenericType(context))!;
-        EfRelationalProviderBinding.Use(builder, ProviderOf(context), connectionString, HistoryTable(context), context.Assembly.GetName().Name);
+        EfRelationalProviderBinding.Use(builder, ProviderOf(context), connectionString, HistoryTable(context), context.Assembly.GetName().Name, schema);
         configure?.Invoke(builder);
         return (DbContext)Activator.CreateInstance(context, builder.Options)!;
     }
 
     /// <summary>Applies every module's migrations to one database, then proves each is current and isolated.</summary>
-    public static async Task InstallAllAsync(string provider, string connectionString)
+    public static async Task InstallAllAsync(string provider, string connectionString, string? schema = null)
     {
         var contexts = Contexts(provider);
         foreach (var type in contexts)
         {
-            await using var context = Create(type, connectionString);
+            await using var context = Create(type, connectionString, schema: schema);
             await EfDatabaseMigrator.ApplyAsync(context, EfRelationalProviderBinding.ExpectedProviderName(provider), EfMigratePolicy.AutoMigrate);
         }
 
         foreach (var type in contexts)
         {
-            await using var context = Create(type, connectionString);
+            await using var context = Create(type, connectionString, schema: schema);
             await EfDatabaseMigrator.ApplyAsync(context, EfRelationalProviderBinding.ExpectedProviderName(provider), EfMigratePolicy.Validate);
             var applied = (await context.Database.GetAppliedMigrationsAsync()).ToArray();
             if (!applied.SequenceEqual(context.Database.GetMigrations()))

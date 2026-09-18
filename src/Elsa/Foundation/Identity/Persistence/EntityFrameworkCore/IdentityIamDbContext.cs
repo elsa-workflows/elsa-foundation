@@ -31,6 +31,8 @@ public abstract class IdentityIamDbContext(DbContextOptions options) : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // The host's optional schema; nothing changes when none is configured.
+        modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new ApplicationEntityConfiguration());
         modelBuilder.ApplyConfiguration(new CredentialEntityConfiguration());
         modelBuilder.ApplyConfiguration(new UserEntityConfiguration());

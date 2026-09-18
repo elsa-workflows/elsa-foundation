@@ -49,7 +49,7 @@ public static class RuntimeDurableTimerEntityFrameworkCoreRegistration
             else
                 DurableTimerStoreBackend.EnsureNoUnownedRegistrations(services);
 
-            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName);
+            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling);
             BookmarkStateEfContextRegistration.EnsureRecoveryContinuationSigningKeyCompatible(
                 services,
                 options.RecoveryContinuationSigningKey,
@@ -73,6 +73,8 @@ public static class RuntimeDurableTimerEntityFrameworkCoreRegistration
                 Provider = options.Provider,
                 ConnectionString = options.ConnectionString,
                 ConnectionName = options.ConnectionName,
+                Schema = options.Schema,
+                Pooling = options.Pooling,
                 RecoveryContinuationSigningKey = options.RecoveryContinuationSigningKey
             };
             services.AddOptions<RuntimeRecoveryContinuationOptions>().Configure(configuredOptions =>
@@ -89,7 +91,7 @@ public static class RuntimeDurableTimerEntityFrameworkCoreRegistration
             services.Add(optionsDescriptor);
             owned.Add(optionsDescriptor);
             if (BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Count == 0)
-                owned.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName));
+                owned.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName, configured.Schema, configured.Pooling));
             foreach (var descriptor in BookmarkStateEfContextRegistration.ContextRegistrations(services, provider))
                 if (!owned.Contains(descriptor))
                     owned.Add(descriptor);
@@ -149,5 +151,15 @@ public sealed class RuntimeDurableTimerEntityFrameworkCoreOptions
     public string Provider { get; set; } = "Sqlite";
     public string? ConnectionString { get; set; }
     public string? ConnectionName { get; set; }
+
+    /// <summary>
+    /// Optional database schema for this module's tables and its own migrations history table. Falls back to
+    /// <see cref="EfSchema.ConfigurationKey"/>, then to the provider's own default. Ignored on SQLite and refused
+    /// on MySQL, where a schema is a database.
+    /// </summary>
+    public string? Schema { get; set; }
+
+    /// <summary>Reuse contexts from a pool instead of constructing one per scope.</summary>
+    public bool Pooling { get; set; }
     public string? RecoveryContinuationSigningKey { get; set; }
 }

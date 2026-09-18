@@ -25,6 +25,8 @@ until its migration slice proves four-provider parity and performs the explicit 
 | `EfMigratePolicy` | `AutoMigrate` vs `Validate` (fail if pending), chosen by the operator through `EfMigrateOptions` |
 | `EfDatabaseMigrator.ApplyAsync` | Guard, then `MigrateAsync` (EF 9+ takes the database lock) or fail closed |
 | `EfRelationalProviderBinding` | Invoke host-supplied `UseSqlite` / `UseSqlServer` / `UseNpgsql` / `UseMySQL` without this package referencing those engines; `Select` matches a provider name to what a module registers for that dialect |
+| `EfSchema` | Resolve and validate the optional database schema a module's tables and history table live in |
+| `EfSchemaMigrationsAssembly` | Put migrations scaffolded without a schema into the configured one, so one migration set applies anywhere |
 | `EfConnectionDefaults.ResolveConnectionString` | Explicit connection string, then a named `ConnectionStrings` entry (refused when missing or blank), then the module's default entry, then the SQLite file |
 | `EfModuleBinding` | A module's owner name, history table, migrations assembly and connection defaults; selects its per-dialect registration and binds its context |
 | `EfSharedTransaction` | Own one connection and one transaction for several module contexts that must commit together; refuse split targets and provider mismatches |
@@ -32,6 +34,73 @@ until its migration slice proves four-provider parity and performs the explicit 
 | `EfProviderBindingValidator` | Fail a host closed at startup, in the CShells `Prepare` phase ahead of every module migrator, when a configured module's provider engine is missing or no longer exposes what the reflection binding calls |
 | `EfWriteRetry` | The one bounded retry loop for compare-and-swap and race-prone store writes: the store supplies budget (`DefaultMaxAttempts` unless pinned), the `EfWriteConflict` kinds or predicate it retries, backoff, and exhaustion outcome; a transient conflict inside a caller's open transaction is rethrown, never retried |
 | `UnicodeOrdinalCasingTable` | The pinned Unicode simple-uppercase mappings that Secrets and OpenTelemetry project persisted ordinal-ignore-case search keys from; each consumer pins `ComputeMappingFingerprint()` in its algorithm id, so the table is never edited in place |
+
+## Putting Elsa in its own schema (operator setting)
+
+An Elsa deployment that shares a database with an application which owns the default schema puts every
+module's tables, and every module's own `__EFMigrationsHistory_<Module>` table, in a schema of its own:
+
+```jsonc
+// appsettings.Production.json
+{
+  "Elsa": { "Persistence": { "EntityFramework": { "Schema": "elsa" } } }
+}
+```
+
+```bash
+export Elsa__Persistence__EntityFramework__Schema=elsa
+```
+
+A module that splits onto its own database can override it on its own feature (`Schema`), which wins over
+the host-wide key. Unset means what every deployment has today: the provider's own default schema.
+
+- **SQL Server and PostgreSQL** apply it, and create it: on both, EF's own migrations-history script creates
+  the schema before it creates `__EFMigrationsHistory_<Module>` inside it, which is the first thing a migrate
+  does. Nothing has to exist beforehand but the database.
+- **SQLite** ignores it. SQLite has no schemas, and a qualified name there addresses an attached database
+  file. One appsettings file can therefore name a schema and still run the SQLite developer shell.
+- **MySQL refuses it.** A MySQL schema *is* a database, so the setting would mean something different there
+  from what it means everywhere else, and `MySql.EntityFrameworkCore`'s history repository writes
+  `CREATE DATABASE IF NOT EXISTS …` with no statement terminator in front of its `CREATE TABLE`, which the
+  server rejects on the first migration. A MySQL host names the database in its connection string instead
+  (`Database=elsa`), which says the same thing in MySQL's own terms; the error says so.
+
+The value must be a plain identifier — ASCII letters, digits, `_` or `$`, up to 64 characters. A name that
+would need escaping is refused rather than escaped, because it is a configuration mistake rather than a schema.
+
+Migrations are deliberately scaffolded against a schema-less context, so one migration set applies into
+whatever schema a host picks: `EfSchemaMigrationsAssembly` fills the schema into every operation as the
+migration is read, because EF's SQL generator reads a schema off each operation and `HasDefaultSchema` never
+reaches migration DDL. Two consequences are worth knowing:
+
+- A migration that runs **raw SQL** cannot be redirected, so a configured schema refuses it by name rather
+  than applying it to the wrong schema.
+- The model snapshot a migration carries differs from a schema-configured model by exactly that default
+  schema, which EF reads as un-migrated model drift. A schema-configured context therefore suppresses
+  `RelationalEventId.PendingModelChangesWarning`. Real drift is still caught where the schema is not in
+  play: the model-versus-migrations test in CI, and `tools/ef/module-migrate.sh pending`.
+
+Applying migrations **out of process** into a schema works through the same path: set
+`ELSA_EF_SCHEMA` beside `ELSA_EF_CONNECTION` for `tools/ef/module-migrate.sh`. Scripting
+(`script` / `script-check`) honours it too, so the artifact a DBA reviews is the schema-qualified one.
+Never set it while *generating* migrations; `tools/ef/generate-module-migrations.sh` clears it for that reason.
+
+## Pooled contexts (operator setting)
+
+Every module feature also takes `Pooling`, which registers its context through `AddDbContextPool` instead of
+`AddDbContext`, so instances are reused across scopes rather than constructed per scope. It is off by default.
+
+Pooling is safe on **every** first-party module context, and that is a property of how they are written
+rather than a case-by-case judgement: each one is constructed from its `DbContextOptions<TContext>` alone and
+keeps no instance state, so there is nothing for a reused instance to carry from one request into the next.
+Per-request state in EF persistence lives in the stores and commands that take a context — `IPersistenceAccessContextAccessor`,
+persistence scopes — and those stay scoped whether or not the context is pooled.
+`ModuleSchemaTests.Every_module_context_is_constructed_from_its_options_alone` keeps that true: a module
+context that starts taking a service, or holding a field, fails it rather than quietly corrupting under pooling.
+
+The Runtime module's features share one context, so schema and pooling join the provider and connection in
+what its participants must agree on; a second feature that asks for a different one is refused at composition
+rather than silently ignored.
 
 ## Choosing the policy (operator setting)
 

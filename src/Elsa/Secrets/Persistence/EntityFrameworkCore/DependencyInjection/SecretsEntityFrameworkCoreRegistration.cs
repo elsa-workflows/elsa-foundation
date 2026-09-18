@@ -57,7 +57,8 @@ public static class SecretsEntityFrameworkCoreRegistration
     private static void AddContext<TContext>(IServiceCollection services, SecretsEntityFrameworkCoreOptions options)
         where TContext : SecretsDbContext
     {
-        services.AddDbContext<TContext>((provider, builder) => Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName));
+        Binding.AddContext<TContext>(services, options.Pooling, (provider, builder) =>
+            Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName, options.Schema));
         services.AddScoped<SecretsDbContext>(provider => provider.GetRequiredService<TContext>());
     }
 
@@ -78,5 +79,15 @@ public sealed class SecretsEntityFrameworkCoreOptions
     public string Provider { get; set; } = "Sqlite";
     public string? ConnectionString { get; set; }
     public string? ConnectionName { get; set; }
+
+    /// <summary>
+    /// Optional database schema for this module's tables and its own migrations history table. Falls back to
+    /// <see cref="EfSchema.ConfigurationKey"/>, then to the provider's own default. Ignored on SQLite and refused
+    /// on MySQL, where a schema is a database.
+    /// </summary>
+    public string? Schema { get; set; }
+
+    /// <summary>Reuse contexts from a pool instead of constructing one per scope.</summary>
+    public bool Pooling { get; set; }
     public EfMigratePolicy MigratePolicy { get; set; } = EfMigratePolicy.AutoMigrate;
 }

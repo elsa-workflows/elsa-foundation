@@ -22,6 +22,16 @@ reads `EfMigrateOptions`, bound from `Elsa:Persistence:EntityFramework:Migrate:P
 (`EfMigrateOptions.SectionName`). A host that needs the policy decided in code can still
 `services.Configure<EfMigrateOptions>(…)` after composing the module.
 
+## Schema and pooling
+
+Neither is an extension point: a module opts in by passing its `Schema` and `Pooling` options through
+`EfModuleBinding.Apply` and `EfModuleBinding.AddContext`, and the shared layer decides what that means per
+provider. `EfSchema.Resolve` reads the module setting, then `Elsa:Persistence:EntityFramework:Schema`;
+SQLite ignores a schema and MySQL refuses one. A module context applies what it was bound to with
+`modelBuilder.HasElsaDefaultSchema(this)` as the first line of `OnModelCreating`, and
+`EfSchemaMigrationsAssembly` puts its scaffolded migrations in the same schema. See the package README for
+the operator-facing description of both settings.
+
 ## Provider binding validation
 
 `EfRelationalProviderBinding` reaches each engine's `Use*` extension by type and method name, so nothing in a

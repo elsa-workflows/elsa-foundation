@@ -18,6 +18,16 @@ public sealed class RuntimeWorkflowAlterationEntityFrameworkCoreOptions
     public string Provider { get; set; } = "Sqlite";
     public string? ConnectionString { get; set; }
     public string? ConnectionName { get; set; }
+
+    /// <summary>
+    /// Optional database schema for this module's tables and its own migrations history table. Falls back to
+    /// <see cref="EfSchema.ConfigurationKey"/>, then to the provider's own default. Ignored on SQLite and refused
+    /// on MySQL, where a schema is a database.
+    /// </summary>
+    public string? Schema { get; set; }
+
+    /// <summary>Reuse contexts from a pool instead of constructing one per scope.</summary>
+    public bool Pooling { get; set; }
     public string? RecoveryContinuationSigningKey { get; set; }
 }
 
@@ -64,7 +74,7 @@ public static class RuntimeWorkflowAlterationEntityFrameworkCoreRegistration
                 operationalBackend?.Name == RuntimeOperationalStateStoreBackend.EntityFramework ? operationalBackend.Owns : null
             };
             BookmarkStateEfContextRegistration.EnsureRecoveryContinuationSigningKeyCompatible(services, options.RecoveryContinuationSigningKey, "Runtime alterations");
-            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName);
+            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling);
             BookmarkStateEfContextRegistration.EnsureContextIsAvailable(services, provider, "Runtime alterations", owners);
             var remove = existing?.PrepareRemoveOwnedArtifacts(services);
             if (existing is not null && existing.Name != RuntimeWorkflowAlterationStoreBackend.EntityFramework)
@@ -75,6 +85,8 @@ public static class RuntimeWorkflowAlterationEntityFrameworkCoreRegistration
                 Provider = options.Provider,
                 ConnectionString = options.ConnectionString,
                 ConnectionName = options.ConnectionName,
+                Schema = options.Schema,
+                Pooling = options.Pooling,
                 RecoveryContinuationSigningKey = options.RecoveryContinuationSigningKey
             });
             services.AddOptions<RuntimeRecoveryContinuationOptions>().Configure(x => { if (!string.IsNullOrWhiteSpace(options.RecoveryContinuationSigningKey)) x.SigningKey = options.RecoveryContinuationSigningKey; x.AllowEphemeralDevelopmentKey = false; }); services.TryAddSingleton<IRuntimeRecoveryContinuationCodec, HmacRuntimeRecoveryContinuationCodec>(); services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateRuntimeRecoveryContinuationCodecStartupTask>());
@@ -97,7 +109,7 @@ public static class RuntimeWorkflowAlterationEntityFrameworkCoreRegistration
             else if (operationalBackend?.Name == RuntimeOperationalStateStoreBackend.EntityFramework)
                 owned.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(operationalBackend.Owns));
             else
-                owned.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, options.ConnectionString, options.ConnectionName));
+                owned.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling));
 
             services.AddScoped<EfWorkflowAlterationStore>();
             var concrete = services.Last();

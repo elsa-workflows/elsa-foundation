@@ -61,6 +61,8 @@ public static class EfOpenTelemetryRegistration
             Provider = options.Provider,
             ConnectionString = options.ConnectionString,
             ConnectionName = options.ConnectionName,
+            Schema = options.Schema,
+            Pooling = options.Pooling,
             TenantId = options.TenantId,
             ScopeId = options.ScopeId,
             SourceId = options.SourceId
@@ -80,7 +82,8 @@ public static class EfOpenTelemetryRegistration
     private static void AddContext<TContext>(IServiceCollection services, OpenTelemetryEntityFrameworkCoreOptions options)
         where TContext : EfOpenTelemetryDbContext
     {
-        services.AddDbContext<TContext>((provider, builder) => Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName));
+        Binding.AddContext<TContext>(services, options.Pooling, (provider, builder) =>
+            Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName, options.Schema));
         services.AddScoped<OpenTelemetryDbContext>(provider => provider.GetRequiredService<TContext>());
         services.AddScoped<EfOpenTelemetryDbContext>(provider => (EfOpenTelemetryDbContext)provider.GetRequiredService<TContext>());
     }

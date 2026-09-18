@@ -5,6 +5,7 @@ using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Primitives.Entities;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 
@@ -19,6 +20,8 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // The host's optional schema; nothing changes when none is configured.
+        modelBuilder.HasElsaDefaultSchema(this);
         DesignEntityConfigurations.ConfigureDefinition(modelBuilder.Entity<WorkflowDefinition>());
         DesignEntityConfigurations.ConfigureVersion(modelBuilder.Entity<WorkflowDefinitionVersion>());
         DesignEntityConfigurations.ConfigureDraft(modelBuilder.Entity<WorkflowDefinitionDraft>());

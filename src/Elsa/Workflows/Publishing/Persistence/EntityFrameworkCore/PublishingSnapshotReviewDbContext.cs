@@ -1,6 +1,7 @@
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Configuration;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 
@@ -19,6 +20,8 @@ public abstract class PublishingSnapshotReviewDbContext(DbContextOptions options
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // The host's optional schema; nothing changes when none is configured.
+        modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new PublicationSnapshotReviewEntityConfiguration());
         modelBuilder.ApplyConfiguration(new PublicationPolicyEntityConfiguration());
         modelBuilder.ApplyConfiguration(new PublicationProjectionIntentEntityConfiguration());

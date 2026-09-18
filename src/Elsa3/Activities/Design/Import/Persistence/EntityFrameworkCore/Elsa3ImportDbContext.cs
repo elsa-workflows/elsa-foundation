@@ -2,6 +2,7 @@ using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore;
 
@@ -17,6 +18,8 @@ public abstract class Elsa3ImportDbContext(DbContextOptions options) : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // The host's optional schema; nothing changes when none is configured.
+        modelBuilder.HasElsaDefaultSchema(this);
         ConfigureCollection(modelBuilder.Entity<Elsa3ImportCollectionRecord>());
         ConfigureReceipt(modelBuilder.Entity<Elsa3ImportReceiptRecord>());
         ConfigureDefinitionBinding(modelBuilder.Entity<Elsa3ImportDefinitionBindingRecord>());

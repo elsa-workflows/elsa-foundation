@@ -10,6 +10,9 @@ namespace Elsa.EntityFrameworkCore.Tooling;
 /// Generating migrations never opens the connection, so a placeholder connection string is enough;
 /// out-of-process apply passes the real one through <c>ELSA_EF_CONNECTION</c>. The history table is the
 /// module's own, so an out-of-process apply records exactly what a runtime validate reads.
+/// <c>ELSA_EF_SCHEMA</c> applies and scripts into the schema a host configured, so a DBA reviews the SQL the
+/// host would run. It must stay unset while migrations are generated, or the schema is baked into the model
+/// snapshot and the host can no longer choose it; <c>tools/ef/generate-module-migrations.sh</c> clears it.
 /// </summary>
 public abstract class ModuleDesignTimeFactory<TContext>(string historyTable) : IDesignTimeDbContextFactory<TContext>
     where TContext : DbContext
@@ -28,8 +31,9 @@ public abstract class ModuleDesignTimeFactory<TContext>(string historyTable) : I
     {
         var (_, provider, placeholder) = Resolve();
         var connection = Environment.GetEnvironmentVariable("ELSA_EF_CONNECTION") is { Length: > 0 } configured ? configured : placeholder;
+        var schema = EfSchema.Normalize(typeof(TContext).Name, provider, Environment.GetEnvironmentVariable("ELSA_EF_SCHEMA"));
         var builder = new DbContextOptionsBuilder<TContext>();
-        EfRelationalProviderBinding.Use(builder, provider, connection, historyTable, typeof(TContext).Assembly.GetName().Name);
+        EfRelationalProviderBinding.Use(builder, provider, connection, historyTable, typeof(TContext).Assembly.GetName().Name, schema);
         return (TContext)Activator.CreateInstance(typeof(TContext), builder.Options)!;
     }
 

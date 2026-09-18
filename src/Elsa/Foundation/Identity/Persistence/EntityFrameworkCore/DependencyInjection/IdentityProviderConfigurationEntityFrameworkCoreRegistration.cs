@@ -34,7 +34,7 @@ public static class IdentityProviderConfigurationEntityFrameworkCoreRegistration
             AddContext<IdentityProviderConfigurationSqlServerDbContext>,
             AddContext<IdentityProviderConfigurationPostgreSqlDbContext>,
             AddContext<IdentityProviderConfigurationMySqlDbContext>);
-        var registration = new IdentityProviderConfigurationEfRegistration(provider, options.ConnectionString, options.ConnectionName);
+        var registration = new IdentityProviderConfigurationEfRegistration(provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling);
         var existing = services.Select(descriptor => descriptor.ImplementationInstance)
             .OfType<IdentityProviderConfigurationEfRegistration>()
             .SingleOrDefault();
@@ -90,11 +90,12 @@ public static class IdentityProviderConfigurationEntityFrameworkCoreRegistration
         IdentityProviderConfigurationEntityFrameworkCoreOptions options)
         where TContext : IdentityProviderConfigurationDbContext
     {
-        services.AddDbContext<TContext>((provider, builder) => Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName));
+        Binding.AddContext<TContext>(services, options.Pooling, (provider, builder) =>
+            Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName, options.Schema));
         services.AddScoped<IdentityProviderConfigurationDbContext>(provider => provider.GetRequiredService<TContext>());
     }
 
-    private sealed record IdentityProviderConfigurationEfRegistration(string Provider, string? ConnectionString, string? ConnectionName);
+    private sealed record IdentityProviderConfigurationEfRegistration(string Provider, string? ConnectionString, string? ConnectionName, string? Schema, bool Pooling);
 }
 
 public sealed class IdentityProviderConfigurationEntityFrameworkCoreOptions
@@ -102,4 +103,14 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreOptions
     public string Provider { get; set; } = "Sqlite";
     public string? ConnectionString { get; set; }
     public string? ConnectionName { get; set; }
+
+    /// <summary>
+    /// Optional database schema for this module's tables and its own migrations history table. Falls back to
+    /// <see cref="EfSchema.ConfigurationKey"/>, then to the provider's own default. Ignored on SQLite and refused
+    /// on MySQL, where a schema is a database.
+    /// </summary>
+    public string? Schema { get; set; }
+
+    /// <summary>Reuse contexts from a pool instead of constructing one per scope.</summary>
+    public bool Pooling { get; set; }
 }

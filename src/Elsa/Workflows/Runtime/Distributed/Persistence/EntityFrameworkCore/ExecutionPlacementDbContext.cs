@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Configuration;
 using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
 
@@ -11,6 +12,8 @@ public abstract class ExecutionPlacementDbContext(DbContextOptions options) : Db
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // The host's optional schema; nothing changes when none is configured.
+        modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new ExecutionPlacementLeaseEntityConfiguration());
         ConfigureProvider(modelBuilder);
     }

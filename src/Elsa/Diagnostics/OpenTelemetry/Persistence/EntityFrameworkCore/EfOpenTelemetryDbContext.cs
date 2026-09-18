@@ -1,5 +1,6 @@
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
 
@@ -17,6 +18,8 @@ public abstract class OpenTelemetryDbContext(DbContextOptions options) : DbConte
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // The host's optional schema; nothing changes when none is configured.
+        modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.Entity<OpenTelemetryResourceEntity>(entity =>
         {
             entity.ToTable(EfOpenTelemetryModule.ResourceTable);
