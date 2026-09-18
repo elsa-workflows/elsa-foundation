@@ -680,72 +680,114 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
 
     private async Task MergeSummariesAsync(OpenTelemetryDbContext db, OpenTelemetryBatch batch, IReadOnlyDictionary<string, string> services, CancellationToken ct)
     {
-        foreach (var group in batch.Traces.GroupBy(x => OpenTelemetrySearchKeys.TraceKey(x.TraceId), StringComparer.Ordinal))
+        foreach (var chunk in batch.Traces
+                     .GroupBy(x => OpenTelemetrySearchKeys.TraceKey(x.TraceId), StringComparer.Ordinal)
+                     .Chunk(ProviderSafeKeyBatchSize))
         {
-            var existing = await db.TraceSummaries.SingleOrDefaultAsync(x => x.ScopeKey == binding.ScopeKey && x.TraceKey == group.Key, ct);
-            var records = new List<TelemetryTrace>();
-            if (existing is not null)
-                records.Add(ToTrace(existing));
-            records.AddRange(group);
-            var merged = MergeTraceRecords(records);
-            var row = existing ?? new OpenTelemetryTraceSummaryEntity { ScopeKey = binding.ScopeKey, TraceKey = group.Key, Version = Guid.NewGuid() };
-            var retainedServices = existing is null
-                ? []
-                : ValidatePersistedMemberships(existing.ServiceMembershipJson, nameof(existing.ServiceMembershipJson));
-            if (existing is not null)
-                _ = ValidatePersistedMemberships(existing.WorkflowMembershipJson, nameof(existing.WorkflowMembershipJson));
-            var serviceNames = CanonicalSummaryElements(
-                retainedServices.Concat(merged.ResourceIds.Select(id => ResolveService(services, id)).OfType<string>()),
-                nameof(OpenTelemetryTraceSummaryEntity.ServiceMembershipJson));
-            ApplySummary(row, merged, serviceNames);
-            if (existing is null)
-                db.TraceSummaries.Add(row);
-            var memberships = await db.TraceSummaryMemberships.Where(x => x.ScopeKey == binding.ScopeKey && x.TraceKey == group.Key).ToListAsync(ct);
-            db.TraceSummaryMemberships.RemoveRange(memberships);
+            var keys = chunk.Select(group => group.Key).ToArray();
+            var existingByKey = await LoadSummariesAsync(db, keys, ct);
+            await DeleteMembershipsAsync(db, keys, ct);
+            foreach (var group in chunk)
+            {
+                existingByKey.TryGetValue(group.Key, out var existing);
+                var records = new List<TelemetryTrace>();
+                if (existing is not null)
+                    records.Add(ToTrace(existing));
+                records.AddRange(group);
+                var merged = MergeTraceRecords(records);
+                var row = existing ?? new OpenTelemetryTraceSummaryEntity { ScopeKey = binding.ScopeKey, TraceKey = group.Key, Version = Guid.NewGuid() };
+                var retainedServices = existing is null
+                    ? []
+                    : ValidatePersistedMemberships(existing.ServiceMembershipJson, nameof(existing.ServiceMembershipJson));
+                if (existing is not null)
+                    _ = ValidatePersistedMemberships(existing.WorkflowMembershipJson, nameof(existing.WorkflowMembershipJson));
+                var serviceNames = CanonicalSummaryElements(
+                    retainedServices.Concat(merged.ResourceIds.Select(id => ResolveService(services, id)).OfType<string>()),
+                    nameof(OpenTelemetryTraceSummaryEntity.ServiceMembershipJson));
+                ApplySummary(row, merged, serviceNames);
+                if (existing is null)
+                    db.TraceSummaries.Add(row);
+                AddMemberships(db, group.Key, merged, serviceNames);
+            }
             await db.SaveChangesAsync(ct);
-            foreach (var value in merged.ResourceIds)
-                AddMembership(db, group.Key, OpenTelemetryTraceSummaryMembershipKind.Resource, value);
-            foreach (var value in merged.WorkflowInstanceIds)
-                AddMembership(db, group.Key, OpenTelemetryTraceSummaryMembershipKind.WorkflowInstance, value);
-            foreach (var value in serviceNames)
-                AddMembership(db, group.Key, OpenTelemetryTraceSummaryMembershipKind.Service, value);
         }
     }
 
+    /// <summary>
+    /// Rebuilds the summary and membership rows for the trace keys retention touched, a chunk of keys at a time.
+    /// </summary>
+    /// <remarks>
+    /// The key set is bounded only by <see cref="MaximumAffectedSummaryKeys"/>, so reading per key put an
+    /// unbounded number of round trips inside one Serializable transaction. Each chunk now costs one trace read,
+    /// one summary read, one resource read and one membership delete, whatever the number of keys in it. The raw
+    /// trace table has already been trimmed to its capacity when this runs, so the chunk read materializes at
+    /// most that many rows in total, not per key.
+    /// </remarks>
     private async Task RecomputeSummariesAsync(OpenTelemetryDbContext db, IEnumerable<string> keys, CancellationToken ct)
     {
-        foreach (var key in keys.Distinct(StringComparer.Ordinal))
+        foreach (var chunk in keys.Distinct(StringComparer.Ordinal).Chunk(ProviderSafeKeyBatchSize))
         {
-            var records = await db.Traces.AsNoTracking().Where(x => x.ScopeKey == binding.ScopeKey && x.TraceKey == key).OrderBy(x => x.Sequence).ToListAsync(ct);
-            var summary = await db.TraceSummaries.SingleOrDefaultAsync(x => x.ScopeKey == binding.ScopeKey && x.TraceKey == key, ct);
-            var memberships = await db.TraceSummaryMemberships.Where(x => x.ScopeKey == binding.ScopeKey && x.TraceKey == key).ToListAsync(ct);
-            if (records.Count == 0)
+            // One ordered read for the chunk. Grouping preserves the per-key Sequence order the merge relies on.
+            var recordsByKey = (await db.Traces.AsNoTracking()
+                    .Where(x => x.ScopeKey == binding.ScopeKey && chunk.Contains(x.TraceKey))
+                    .OrderBy(x => x.Sequence)
+                    .ToListAsync(ct))
+                .GroupBy(x => x.TraceKey, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+            var summariesByKey = await LoadSummariesAsync(db, chunk, ct);
+            var mergedByKey = chunk
+                .Where(recordsByKey.ContainsKey)
+                .ToDictionary(key => key, key => MergeTraceRecords(recordsByKey[key].Select(ToTraceRecord)), StringComparer.Ordinal);
+            var servicesByResourceKey = (await LoadBySearchKeysAsync(
+                    mergedByKey.Values.SelectMany(merged => merged.ResourceIds).Select(OpenTelemetrySearchKeys.ResourceId),
+                    ids => db.Resources.AsNoTracking()
+                        .Where(x => x.ScopeKey == binding.ScopeKey && ids.Contains(x.IdSearchKey))
+                        .ToListAsync(ct)))
+                .ToLookup(x => x.IdSearchKey, x => x.ServiceName, StringComparer.Ordinal);
+            await DeleteMembershipsAsync(db, chunk, ct);
+
+            foreach (var key in chunk)
             {
-                if (summary is not null)
-                    db.TraceSummaries.Remove(summary);
-                db.TraceSummaryMemberships.RemoveRange(memberships);
-                continue;
+                if (!mergedByKey.TryGetValue(key, out var merged))
+                {
+                    // Every raw trace naming this key is gone, so the summary goes with its memberships.
+                    if (summariesByKey.TryGetValue(key, out var orphan))
+                        db.TraceSummaries.Remove(orphan);
+                    continue;
+                }
+                if (!summariesByKey.TryGetValue(key, out var summary))
+                {
+                    summary = new OpenTelemetryTraceSummaryEntity { ScopeKey = binding.ScopeKey, TraceKey = key };
+                    db.TraceSummaries.Add(summary);
+                }
+                var serviceNames = CanonicalSummaryElements(
+                    merged.ResourceIds.Select(OpenTelemetrySearchKeys.ResourceId).SelectMany(id => servicesByResourceKey[id]),
+                    nameof(OpenTelemetryTraceSummaryEntity.ServiceMembershipJson));
+                ApplySummary(summary, merged, serviceNames);
+                AddMemberships(db, key, merged, serviceNames);
             }
-            var merged = MergeTraceRecords(records.Select(ToTraceRecord));
-            if (summary is null)
-            { summary = new OpenTelemetryTraceSummaryEntity { ScopeKey = binding.ScopeKey, TraceKey = key }; db.TraceSummaries.Add(summary); }
-            var resources = await LoadBySearchKeysAsync(
-                merged.ResourceIds.Select(OpenTelemetrySearchKeys.ResourceId),
-                ids => db.Resources.AsNoTracking()
-                    .Where(x => x.ScopeKey == binding.ScopeKey && ids.Contains(x.IdSearchKey))
-                    .ToListAsync(ct));
-            var serviceNames = CanonicalSummaryElements(resources.Select(x => x.ServiceName), nameof(OpenTelemetryTraceSummaryEntity.ServiceMembershipJson));
-            ApplySummary(summary, merged, serviceNames);
-            db.TraceSummaryMemberships.RemoveRange(memberships);
             await db.SaveChangesAsync(ct);
-            foreach (var value in merged.ResourceIds)
-                AddMembership(db, key, OpenTelemetryTraceSummaryMembershipKind.Resource, value);
-            foreach (var value in merged.WorkflowInstanceIds)
-                AddMembership(db, key, OpenTelemetryTraceSummaryMembershipKind.WorkflowInstance, value);
-            foreach (var value in serviceNames)
-                AddMembership(db, key, OpenTelemetryTraceSummaryMembershipKind.Service, value);
         }
     }
+
+    private async Task<Dictionary<string, OpenTelemetryTraceSummaryEntity>> LoadSummariesAsync(
+        OpenTelemetryDbContext db,
+        string[] keys,
+        CancellationToken ct) =>
+        (await db.TraceSummaries.Where(x => x.ScopeKey == binding.ScopeKey && keys.Contains(x.TraceKey)).ToListAsync(ct))
+        .ToDictionary(x => x.TraceKey, StringComparer.Ordinal);
+
+    /// <summary>Clears the membership rows of a whole chunk of trace keys in one statement.</summary>
+    /// <remarks>
+    /// Memberships carry no concurrency token, and the summary row that owns them keeps its own tracked
+    /// <c>Version</c> check, so nothing is bypassed by deleting them set-based. `ExecuteDelete` applies
+    /// immediately and leaves the change tracker alone, which is why every caller stages its replacement rows
+    /// after calling this, exactly where the per-key `SaveChanges` used to sit.
+    /// </remarks>
+    private Task<int> DeleteMembershipsAsync(OpenTelemetryDbContext db, string[] keys, CancellationToken ct) =>
+        db.TraceSummaryMemberships
+            .Where(x => x.ScopeKey == binding.ScopeKey && keys.Contains(x.TraceKey))
+            .ExecuteDeleteAsync(ct);
 
     private static TelemetryTrace NormalizeSummary(TelemetryTrace trace)
     {
@@ -826,6 +868,16 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         row.ServiceMembershipJson = Serialize(serviceNames);
         row.WorkflowMembershipJson = Serialize(trace.WorkflowInstanceIds);
         row.Version = Guid.NewGuid();
+    }
+
+    private void AddMemberships(OpenTelemetryDbContext db, string traceKey, TelemetryTrace trace, IReadOnlyCollection<string> serviceNames)
+    {
+        foreach (var value in trace.ResourceIds)
+            AddMembership(db, traceKey, OpenTelemetryTraceSummaryMembershipKind.Resource, value);
+        foreach (var value in trace.WorkflowInstanceIds)
+            AddMembership(db, traceKey, OpenTelemetryTraceSummaryMembershipKind.WorkflowInstance, value);
+        foreach (var value in serviceNames)
+            AddMembership(db, traceKey, OpenTelemetryTraceSummaryMembershipKind.Service, value);
     }
 
     private void AddMembership(OpenTelemetryDbContext db, string traceKey, OpenTelemetryTraceSummaryMembershipKind kind, string value)
