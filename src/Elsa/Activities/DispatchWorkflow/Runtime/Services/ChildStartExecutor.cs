@@ -20,6 +20,7 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
     private readonly IWorkflowStartDispatcher _workflowStartDispatcher;
     private readonly int _maxNestingDepth;
     private readonly IWorkflowDispatchStore? _workflowDispatchStore;
+    private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly TimeProvider _timeProvider;
 
     public ChildStartExecutor(IWorkflowStartDispatcher workflowStartDispatcher)
@@ -37,8 +38,9 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
     public ChildStartExecutor(
         IWorkflowStartDispatcher workflowStartDispatcher,
         IWorkflowDispatchStore? workflowDispatchStore,
-        TimeProvider timeProvider)
-        : this(workflowStartDispatcher, Options.Create(new DispatchWorkflowOptions()), workflowDispatchStore, timeProvider)
+        TimeProvider timeProvider,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null)
+        : this(workflowStartDispatcher, Options.Create(new DispatchWorkflowOptions()), workflowDispatchStore, timeProvider, workflowExecutionStateStore)
     {
     }
 
@@ -46,7 +48,8 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
         IWorkflowStartDispatcher workflowStartDispatcher,
         IOptions<DispatchWorkflowOptions> options,
         IWorkflowDispatchStore? workflowDispatchStore,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null)
     {
         ArgumentNullException.ThrowIfNull(workflowStartDispatcher);
         ArgumentNullException.ThrowIfNull(options);
@@ -55,6 +58,7 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
         _workflowStartDispatcher = workflowStartDispatcher;
         _maxNestingDepth = options.Value.MaxNestingDepth;
         _workflowDispatchStore = workflowDispatchStore;
+        _workflowExecutionStateStore = workflowExecutionStateStore;
         _timeProvider = timeProvider;
     }
 
@@ -217,20 +221,16 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
                 $"A checkpoint rule refused a commit of child workflow execution '{payload.ChildWorkflowExecutionId}' before it reached an outcome: {faulted.Reason}"));
         }
 
-        // A duplicate is not proof that a child exists. An agent answers Duplicate from a process-local, bounded
-        // idempotency cache, so it means only that this key was already seen there, never that the run it belonged to
-        // reached a child. The case that matters is a start whose refusal could not be recorded: the key was consumed
-        // before the refusal was reported, the claim expires, and the redelivery is answered Duplicate with the refusal
-        // already lost. Counting that as delivered leaves a waiting parent waiting forever (#1799).
+        // A duplicate answer has two producers that mean opposite things. The start dispatcher answers Duplicate after
+        // reading the child's durable state, which IS proof the child exists. An agent answers it from a process-local,
+        // bounded idempotency cache, which proves only that the key was seen there. The case that matters is the second
+        // one: a start whose refusal could not be recorded consumed its key before the refusal was reported, so claim
+        // expiry redelivers into a Duplicate carrying none of it, and counting that as delivered left a waiting parent
+        // waiting forever (#1799).
         //
-        // So the start fails here, and the claim completion decides. Its child-evidence rule reads the child in the same
-        // transaction that would record the failure and overrules it whenever a matching child exists, which is what
-        // keeps a live child from being marked failed and what repairs a dispatch still sitting at Pending. Permanent,
-        // not transient: every retry in this process is answered Duplicate from the same cache, so retrying only spends
-        // the budget before reaching the same verdict.
-        if (result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Duplicate &&
-            !await HasChildOutcomeAsync(payload.DispatchId, cancellationToken))
-            throw DeliveryFailure(PostCommitFailureKind.Permanent);
+        // The producers are told apart by the only thing that decides it, which is whether a child exists.
+        if (result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Duplicate)
+            await EnsureDuplicateStartReachedItsChildAsync(payload, cancellationToken);
 
         if (result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Deferred &&
             !HasDurableDistributedForwardingEvidence(result.CommandDispatch.Metadata))
@@ -281,6 +281,40 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
                 return;
             throw;
         }
+    }
+
+    /// <summary>
+    /// Returns when a duplicate start really reached a child, and fails the delivery when it did not. Permanent once the
+    /// child is proven absent: every retry in this process is answered Duplicate out of the same cache, so retrying only
+    /// spends the budget before reaching the same verdict, and the claim completion's child-evidence rule still overrules
+    /// a final failure inside its own transaction if a child turns up after all. Transient while nothing can be proven
+    /// either way, because absence of evidence is not evidence of absence and a later attempt can still settle it.
+    /// </summary>
+    private async ValueTask EnsureDuplicateStartReachedItsChildAsync(
+        WorkflowDispatchStartPayload payload,
+        CancellationToken cancellationToken)
+    {
+        if (await HasChildOutcomeAsync(payload.DispatchId, cancellationToken))
+            return;
+        if (_workflowExecutionStateStore is null)
+            throw DeliveryFailure(PostCommitFailureKind.Transient);
+
+        WorkflowExecutionState? child;
+        try
+        {
+            child = await _workflowExecutionStateStore.FindAsync(payload.ChildWorkflowExecutionId, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw DeliveryFailure(PostCommitFailureKind.Transient, exception);
+        }
+
+        if (child is null)
+            throw DeliveryFailure(PostCommitFailureKind.Permanent);
     }
 
     /// <summary>Whether the dispatch already carries the child's own terminal outcome, as opposed to a delivery failure.</summary>

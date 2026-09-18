@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Dispatch;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.Options;
 using Xunit;
 using Microsoft.Extensions.Time.Testing;
@@ -372,11 +373,16 @@ public sealed class ChildStartExecutorTests
     private static async Task<(ChildStartExecutor Executor, InMemoryWorkflowDispatchStore DispatchStore)> NewStartAsync(
         WorkflowExecutionCommandDispatchStatus status,
         bool childReachesAnOutcome,
-        IReadOnlyDictionary<string, string>? metadata = null)
+        IReadOnlyDictionary<string, string>? metadata = null,
+        bool childExecutionExists = false,
+        bool withExecutionStateStore = true)
     {
         var dispatchStore = new InMemoryWorkflowDispatchStore();
         var pending = NewDispatchRecord();
         await dispatchStore.SaveAsync(pending);
+        var executionStore = new InMemoryWorkflowExecutionStateStore();
+        if (childExecutionExists)
+            await executionStore.SaveAsync(NewChildExecutionState());
         var startDispatcher = new StubStartDispatcher(
             status,
             metadata,
@@ -390,21 +396,41 @@ public sealed class ChildStartExecutorTests
         var executor = new ChildStartExecutor(
             startDispatcher,
             dispatchStore,
-            new FakeTimeProvider(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1)));
+            new FakeTimeProvider(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1)),
+            withExecutionStateStore ? executionStore : null);
         return (executor, dispatchStore);
     }
 
+    /// <summary>A live child that has not reached an outcome: the evidence that a duplicate start really did start it.</summary>
+    private static WorkflowExecutionState NewChildExecutionState() =>
+        new(
+            WorkflowExecutionId: NewIdentity().ChildWorkflowExecutionId,
+            PinnedExecutable: DispatchWorkflowRuntimeTestFixture.ChildIdentity,
+            Status: WorkflowExecutionStatus.Running,
+            SubStatus: null,
+            CreatedAt: DispatchWorkflowRuntimeTestFixture.Now,
+            StartedAt: DispatchWorkflowRuntimeTestFixture.Now,
+            UpdatedAt: DispatchWorkflowRuntimeTestFixture.Now,
+            CompletedAt: null,
+            CorrelationId: null,
+            ParentWorkflowExecutionId: "parent-handler",
+            TenantId: null,
+            SystemMetadata: new Dictionary<string, string>());
+
     /// <summary>
-    /// #1799. An agent answers Duplicate out of a process-local, bounded idempotency cache, so it proves only that the key
-    /// was seen there. The case that matters is a start whose refusal could not be recorded: the key was consumed before
-    /// the refusal was reported, and claim expiry redelivers into a Duplicate that carries none of it. Counting that as
-    /// delivered leaves a waiting parent waiting forever, so the start fails and the claim completion's child-evidence
-    /// rule decides.
+    /// #1799. `Duplicate` has two producers that mean opposite things. The start dispatcher answers it after reading the
+    /// child's durable state, which proves the child exists; an agent answers it out of a process-local, bounded
+    /// idempotency cache, which proves only that the key was seen there. A start whose refusal could not be recorded
+    /// consumed its key before the refusal was reported, so claim expiry redelivers into the second kind and counting it
+    /// as delivered left a waiting parent waiting forever. A duplicate that reached no child therefore fails permanently:
+    /// every retry in this process is answered out of the same cache.
     /// </summary>
     [Fact]
-    public async Task DuplicateStartWithoutAChildOutcome_FailsPermanently()
+    public async Task DuplicateStartThatReachedNoChild_FailsPermanently()
     {
-        var (executor, _) = await NewStartAsync(WorkflowExecutionCommandDispatchStatus.Duplicate, childReachesAnOutcome: false);
+        var (executor, dispatchStore) = await NewStartAsync(
+            WorkflowExecutionCommandDispatchStatus.Duplicate,
+            childReachesAnOutcome: false);
 
         var exception = await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(
             () => executor.HandleAsync(NewOutboxItem().Intent).AsTask());
@@ -412,17 +438,58 @@ public sealed class ChildStartExecutorTests
         Assert.Equal(PostCommitFailureKind.Permanent, exception.Kind);
         Assert.Equal("The child workflow could not be started.", exception.SafeSummary);
         Assert.Null(exception.InnerException);
+
+        // The dispatch stays admitted, which is the state the final delivery failure's DispatchFailed projection expects.
+        Assert.Equal(WorkflowDispatchStatus.Started, (await dispatchStore.FindAsync(NewIdentity().DispatchId))?.Status);
     }
 
-    /// <summary>The other direction: a duplicate whose child reached an outcome really did start, so it stays delivered.</summary>
+    /// <summary>
+    /// The direction that must not be broken: a live child that has not reached any outcome yet is still proof that this
+    /// start was delivered. This is what the start dispatcher answers `Duplicate` for after reading the child's state, and
+    /// failing it would mark a running child's start as failed.
+    /// </summary>
+    [Fact]
+    public async Task DuplicateStartWhoseChildIsAlive_IsDelivered()
+    {
+        var (executor, dispatchStore) = await NewStartAsync(
+            WorkflowExecutionCommandDispatchStatus.Duplicate,
+            childReachesAnOutcome: false,
+            childExecutionExists: true);
+
+        await executor.HandleAsync(NewOutboxItem().Intent);
+
+        Assert.Equal(WorkflowDispatchStatus.Started, (await dispatchStore.FindAsync(NewIdentity().DispatchId))?.Status);
+    }
+
+    /// <summary>A duplicate whose child reached an outcome really did start, so it stays delivered.</summary>
     [Fact]
     public async Task DuplicateStartWhoseChildReachedAnOutcome_IsDelivered()
     {
-        var (executor, dispatchStore) = await NewStartAsync(WorkflowExecutionCommandDispatchStatus.Duplicate, childReachesAnOutcome: true);
+        var (executor, dispatchStore) = await NewStartAsync(
+            WorkflowExecutionCommandDispatchStatus.Duplicate,
+            childReachesAnOutcome: true);
 
         await executor.HandleAsync(NewOutboxItem().Intent);
 
         Assert.Equal(WorkflowDispatchStatus.Faulted, (await dispatchStore.FindAsync(NewIdentity().DispatchId))?.Status);
+    }
+
+    /// <summary>
+    /// Absence of evidence is not evidence of absence: with no execution-state store nothing can prove the child is
+    /// missing, so the start stays retryable rather than dead-lettering a child that may well be alive.
+    /// </summary>
+    [Fact]
+    public async Task DuplicateStartWhoseChildCannotBeRead_FailsTransiently()
+    {
+        var (executor, _) = await NewStartAsync(
+            WorkflowExecutionCommandDispatchStatus.Duplicate,
+            childReachesAnOutcome: false,
+            withExecutionStateStore: false);
+
+        var exception = await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(
+            () => executor.HandleAsync(NewOutboxItem().Intent).AsTask());
+
+        Assert.Equal(PostCommitFailureKind.Transient, exception.Kind);
     }
 
     [Fact]

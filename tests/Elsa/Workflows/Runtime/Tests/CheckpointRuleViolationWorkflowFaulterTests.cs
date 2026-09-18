@@ -1,8 +1,10 @@
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Dispatch;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Microsoft.Extensions.Time.Testing;
@@ -20,11 +22,16 @@ public sealed class CheckpointRuleViolationWorkflowFaulterTests
     private const string ParentWorkflowExecutionId = "wfexec-parent";
     private static readonly WorkflowExecutableIdentity PinnedExecutable =
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
+    private static readonly WorkflowExecutableSourceProvenance PinnedSource =
+        new("source-child", "definition", "definition-1", "version-1", "definition-1", "version-1", "1.0.0", "publication-child", "slot-child");
+    private static readonly WorkflowTestScope TestScope =
+        new("scope-child", Now.AddHours(1), "tenant-child", new WorkflowExecutionPartition("partition-child"));
     private static readonly DateTimeOffset Now = new(2026, 9, 17, 9, 0, 0, TimeSpan.Zero);
     private static readonly RuntimeCheckpointCommitValidationException Refusal = new("The checkpoint broke a rule.");
     private readonly InMemoryWorkflowExecutionStateStore _executions = new();
     private readonly InMemoryIncidentStateStore _incidents = new();
     private readonly InMemoryRuntimeCheckpointCommitStore _store;
+    private readonly InMemoryWorkflowDispatchStore _dispatches = new();
     private readonly CheckpointRuleViolationWorkflowFaulter _faulter;
 
     public CheckpointRuleViolationWorkflowFaulterTests()
@@ -33,12 +40,17 @@ public sealed class CheckpointRuleViolationWorkflowFaulterTests
             _executions,
             incidentStateStore: _incidents,
             rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
-        _faulter = new CheckpointRuleViolationWorkflowFaulter(
+        _faulter = NewFaulter(_dispatches);
+    }
+
+    private CheckpointRuleViolationWorkflowFaulter NewFaulter(IWorkflowDispatchStore? dispatchStore) =>
+        new(
             _executions,
             new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), _store, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             DefaultRuntimeFaultCapturePolicy.CreateDefault(),
-            new FakeTimeProvider(Now));
-    }
+            new FakeTimeProvider(Now),
+            logger: null,
+            dispatchStore);
 
     public static TheoryData<RuntimeSchedulerDrainResult?, Exception?> Violations => new()
     {
@@ -181,10 +193,104 @@ public sealed class CheckpointRuleViolationWorkflowFaulterTests
         Assert.Equal(new WorkflowExecutionPartition("partition-child"), execution.Partition);
         Assert.Equal(3, execution.DispatchNestingDepth);
         Assert.Equal("system-child", execution.Authority?.SystemIdentity);
+        Assert.Equal(PinnedSource, execution.PinnedSource);
 
         var incident = Assert.Single(await _incidents.ListBlockingAsync(WorkflowExecutionId));
         Assert.Equal(CheckpointRuleViolationWorkflowFaulter.IncidentId(WorkflowExecutionId), incident.IncidentId);
         Assert.Equal(CheckpointRuleViolationWorkflowFaulter.IncidentFailureType, incident.FailureType);
+    }
+
+    /// <summary>
+    /// A TestRun child carries a test scope, and the durable child-evidence rule compares it strictly. A synthesized child
+    /// that dropped it would make that rule throw inside the claim completion, so the start could never complete at all.
+    /// </summary>
+    [Fact]
+    public async Task A_synthesized_test_run_start_keeps_its_test_scope()
+    {
+        await _faulter.FaultIfCheckpointRuleViolatedAsync(
+            WorkflowExecutionId,
+            DrainResult(checkpointRuleViolation: true),
+            null,
+            StartEnvelope(ParentWorkflowExecutionId, testRun: true));
+
+        var execution = await _executions.FindAsync(WorkflowExecutionId);
+        Assert.Equal(WorkflowExecutionStatus.Faulted, execution?.Status);
+        Assert.Equal(WorkflowRunKind.TestRun, execution?.RunKind);
+        Assert.Equal(TestScope.ScopeId, execution?.TestScope?.ScopeId);
+        Assert.Equal(TestScope.ExpiresAt, execution?.TestScope?.ExpiresAt);
+    }
+
+    /// <summary>
+    /// Synthesis is worth doing only because the ordinary enrichers then project the child's dispatch, and that projection
+    /// needs the dispatch store's additive query capability. Without it a synthesized child would be a terminal execution
+    /// nothing can act on, and the durable child-evidence rule would read it as a delivered start, so the refusal keeps the
+    /// route it already had.
+    /// </summary>
+    [Fact]
+    public async Task A_refused_first_commit_is_left_alone_when_its_dispatch_cannot_be_projected()
+    {
+        await NewFaulter(new NonQueryableWorkflowDispatchStore()).FaultIfCheckpointRuleViolatedAsync(
+            WorkflowExecutionId,
+            DrainResult(checkpointRuleViolation: true),
+            null,
+            StartEnvelope(ParentWorkflowExecutionId));
+
+        Assert.Empty(_store.ListCommits());
+        Assert.Null(await _executions.FindAsync(WorkflowExecutionId));
+    }
+
+    /// <summary>A payload this runtime cannot read cannot stand in for the execution, and must not escape as a JSON failure.</summary>
+    [Fact]
+    public async Task A_refused_first_commit_with_an_unreadable_start_payload_is_left_alone()
+    {
+        var command = new WorkflowExecutionCommand(
+            CommandId: "command-start",
+            WorkflowExecutionId: WorkflowExecutionId,
+            Kind: WorkflowExecutionCommandKind.Start,
+            EnqueuedAt: Now,
+            Payload: JsonSerializer.SerializeToElement(new { PinnedExecutable = "not-an-identity" }),
+            Metadata: new Dictionary<string, string>());
+        var envelope = new WorkflowExecutionCommandEnvelope(
+            envelopeId: "envelope-start",
+            workflowExecutionId: WorkflowExecutionId,
+            command: command,
+            idempotencyKey: "idem-start",
+            deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
+            enqueuedAt: Now);
+
+        await _faulter.FaultIfCheckpointRuleViolatedAsync(
+            WorkflowExecutionId,
+            DrainResult(checkpointRuleViolation: true),
+            null,
+            envelope);
+
+        Assert.Empty(_store.ListCommits());
+        Assert.Null(await _executions.FindAsync(WorkflowExecutionId));
+    }
+
+    /// <summary>
+    /// A forwarded start reaches the owning node through the durable transport, which re-serializes the whole envelope with
+    /// web options while the payload inside it was written with default ones. If that round trip ever re-cased the payload,
+    /// the synthesized child would silently stop being produced on exactly the path #1799 is about.
+    /// </summary>
+    [Fact]
+    public async Task A_start_that_round_tripped_through_the_command_transport_still_synthesizes_its_child()
+    {
+        var transportOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var forwarded = JsonSerializer.Deserialize<WorkflowExecutionCommandEnvelope>(
+            JsonSerializer.Serialize(StartEnvelope(ParentWorkflowExecutionId), transportOptions),
+            transportOptions);
+
+        await _faulter.FaultIfCheckpointRuleViolatedAsync(
+            WorkflowExecutionId,
+            DrainResult(checkpointRuleViolation: true),
+            null,
+            forwarded);
+
+        var execution = await _executions.FindAsync(WorkflowExecutionId);
+        Assert.Equal(WorkflowExecutionStatus.Faulted, execution?.Status);
+        Assert.Equal(ParentWorkflowExecutionId, execution?.ParentWorkflowExecutionId);
+        Assert.Equal(3, execution?.DispatchNestingDepth);
     }
 
     /// <summary>Only this execution's own start can stand in for it; anything else leaves the refusal alone.</summary>
@@ -208,7 +314,8 @@ public sealed class CheckpointRuleViolationWorkflowFaulterTests
     private static WorkflowExecutionCommandEnvelope StartEnvelope(
         string? parentWorkflowExecutionId,
         WorkflowExecutionCommandKind kind = WorkflowExecutionCommandKind.Start,
-        string? workflowExecutionId = null)
+        string? workflowExecutionId = null,
+        bool testRun = false)
     {
         var executionId = workflowExecutionId ?? WorkflowExecutionId;
         var payload = new WorkflowExecutionStartCommandPayload(
@@ -218,15 +325,16 @@ public sealed class CheckpointRuleViolationWorkflowFaulterTests
             inputs: null,
             stimulusInput: null,
             triggerNodeId: null,
-            runKind: WorkflowRunKind.PublishedRun,
-            pinnedSource: null,
+            runKind: testRun ? WorkflowRunKind.TestRun : WorkflowRunKind.PublishedRun,
+            pinnedSource: PinnedSource,
             parentWorkflowExecutionId: parentWorkflowExecutionId,
             correlationId: "correlation-child",
             tenantId: "tenant-child",
             partition: new WorkflowExecutionPartition("partition-child"),
             authority: new WorkflowExecutionAuthoritySnapshot("system-child", "root-child"),
             startAuthority: null,
-            dispatchNestingDepth: 3);
+            dispatchNestingDepth: 3,
+            testScope: testRun ? TestScope : null);
         var command = new WorkflowExecutionCommand(
             CommandId: "command-start",
             WorkflowExecutionId: executionId,
@@ -241,6 +349,19 @@ public sealed class CheckpointRuleViolationWorkflowFaulterTests
             idempotencyKey: "idem-start",
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
             enqueuedAt: Now);
+    }
+
+    /// <summary>A dispatch store that never adopted the additive query capability, so no terminal projection can run.</summary>
+    private sealed class NonQueryableWorkflowDispatchStore : IWorkflowDispatchStore
+    {
+        public ValueTask<WorkflowDispatchRecord> SaveAsync(WorkflowDispatchRecord record, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(record);
+
+        public ValueTask<WorkflowDispatchRecord?> FindAsync(string dispatchId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<WorkflowDispatchRecord?>(null);
+
+        public ValueTask<IReadOnlyCollection<WorkflowDispatchRecord>> ListAsync(string parentWorkflowExecutionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<WorkflowDispatchRecord>>([]);
     }
 
     private ValueTask<WorkflowExecutionState> SaveExecutionAsync(WorkflowExecutionStatus status) =>

@@ -249,7 +249,9 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, claimed.Status);
         Assert.Equal(WorkflowDispatchStatus.Started, Assert.Single(await ListDispatchesAsync()).Status);
 
-        // Past the processor's one-minute claim visibility timeout, so the same deterministic start is redelivered.
+        // Past the processor's one-minute claim visibility timeout, so the same deterministic start is redelivered. It
+        // also clears the execution ownership lease, which happens to be the same duration; that is harmless only
+        // because the jump lands between sweeps, with no drain holding a lease.
         _clock.Advance(TimeSpan.FromSeconds(61));
         _outboxFailures += (await _harness.SweepAsync()).OutboxFailedCount;
 
@@ -313,9 +315,10 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
             {
                 _outboxFailures += (await _harness.SweepAsync()).OutboxFailedCount;
             }
-            catch (OutboxProcessingException)
+            catch (OutboxProcessingException) when (_recordingFailure.IsExpected)
             {
-                // The delivery failure could not be recorded, so the claimed item stays Delivering until claim expiry.
+                // Only the case that armed the outage absorbs this. Every other case must still fail loudly, because a
+                // recording failure it did not ask for is a defect rather than the scenario.
                 _recordingFailure.Observe();
             }
 
@@ -498,7 +501,9 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
 
     /// <summary>
     /// Wraps whichever store the backend registered so a scripted completion failure models the process failing to record
-    /// a delivery result. Implements the whole outbox contract family because the processor resolves one service and casts.
+    /// a delivery result. Only <see cref="IRuntimePostCommitOutboxStore"/> is redirected, and the decorator implements the
+    /// three contracts the processor reaches by casting that one resolution. The backend's other contracts keep resolving
+    /// to the undecorated store, which is what a caller that does not go through the processor should see.
     /// </summary>
     private static void DecorateOutboxStore(IServiceCollection services, ScriptedRecordingFailure failure)
     {
@@ -516,8 +521,12 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
     {
         private int _armed;
         private int _failures;
+        private bool _expected;
 
         public int Failures => _failures;
+
+        /// <summary>Whether a case asked for a recording outage, so only that case absorbs one.</summary>
+        public bool IsExpected => _expected;
 
         /// <summary>The outbox item id of the most recently claimed child-start intent.</summary>
         public string? LastClaimedStartItemId { get; private set; }
@@ -531,13 +540,23 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
             }
         }
 
-        public void FailNextCompletion() => Interlocked.Exchange(ref _armed, 1);
+        public void FailNextCompletion()
+        {
+            _expected = true;
+            Interlocked.Exchange(ref _armed, 1);
+        }
 
         /// <summary>Records that the sweep surfaced the recording failure, so the driver can move past claim expiry.</summary>
         public void Observe() => Interlocked.CompareExchange(ref _failures, 1, 0);
 
-        public void ThrowIfArmed()
+        /// <summary>
+        /// Fires only for the child start. A sweep claims every deliverable intent kind, so an arm spent on whichever
+        /// item happened to complete first would abandon the rest of the batch and leave the case testing nothing.
+        /// </summary>
+        public void ThrowIfArmed(RuntimePostCommitOutboxClaim claim)
         {
+            if (!StringComparer.Ordinal.Equals(claim.Item.Intent.Kind, DispatchWorkflowConstants.StartChildIntentKind))
+                return;
             if (Interlocked.Exchange(ref _armed, 0) == 1)
                 throw new InvalidOperationException("A test outage refuses to record the delivery result.");
         }
@@ -577,7 +596,7 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
             RuntimePostCommitOutboxClaimCompletion completion,
             CancellationToken cancellationToken = default)
         {
-            failure.ThrowIfArmed();
+            failure.ThrowIfArmed(completion.Claim);
             return ((IRuntimePostCommitOutboxClaimCompletionStore)inner).CompleteClaimAsync(completion, cancellationToken);
         }
     }
