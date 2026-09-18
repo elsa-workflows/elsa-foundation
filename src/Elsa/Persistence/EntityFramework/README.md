@@ -32,8 +32,40 @@ until its migration slice proves four-provider parity and performs the explicit 
 | `EfSharedTransaction` | Own one connection and one transaction for several module contexts that must commit together; refuse split targets and provider mismatches |
 | `EfRelationalExceptionClassifier` | Classify unique-key violations and transient write conflicts by provider error code without referencing provider engines; `IsSaveConflict` recognizes a race SaveChanges reported even when the provider's execution strategy wrapped it in `InvalidOperationException` (SQL Server, PostgreSQL) |
 | `EfProviderBindingValidator` | Fail a host closed at startup, in the CShells `Prepare` phase ahead of every module migrator, when a configured module's provider engine is missing or no longer exposes what the reflection binding calls |
-| `EfWriteRetry` | The one bounded retry loop for compare-and-swap and race-prone store writes: the store supplies budget (`DefaultMaxAttempts` unless pinned), the `EfWriteConflict` kinds or predicate it retries, backoff, and exhaustion outcome; a transient conflict inside a caller's open transaction is rethrown, never retried |
+| `EfWriteRetry` | The one bounded retry loop for compare-and-swap and race-prone store writes: the store supplies budget (`DefaultMaxAttempts` unless pinned), the `EfWriteConflict` kinds or predicate it retries, backoff, and exhaustion outcome; a transient conflict inside a caller's open transaction is rethrown, never retried. See [Retry policy](#retry-policy) |
 | `UnicodeOrdinalCasingTable` | The pinned Unicode simple-uppercase mappings that Secrets and OpenTelemetry project persisted ordinal-ignore-case search keys from; each consumer pins `ComputeMappingFingerprint()` in its algorithm id, so the table is never edited in place |
+
+## Retry policy
+
+Accepted [ADR 0074](../../../../docs/adr/0074-first-party-ef-stores-retry-in-bounded-application-loops.md):
+**first-party EF stores retry in bounded application loops, and no context enables EF's retrying
+execution strategy.** `EnableRetryOnFailure` and `Database.CreateExecutionStrategy` appear nowhere in
+this repository, and that is deliberate, not an oversight. The reasons are recorded in the ADR;
+the short form is that nine of the thirteen Elsa `DbContext` types own transactions a retrying
+strategy forbids, SQLite has no retrying strategy to enable and is the provider the container-free
+suites use, and `EfRelationalProviderBinding` has no per-provider seam for the option. The ADR names the
+conditions under which that is revisited.
+
+Three rules apply when you write or review a store:
+
+1. **Retry through `EfWriteRetry`, not a hand-rolled loop.** Declare the budget, the
+   `EfWriteConflict` kinds or the predicate, any backoff, and what exhaustion means for the store's
+   contract. `EfWriteRetry` refuses to retry a transient conflict while a transaction the caller owns
+   is still open on the context, because the provider may already have rolled it back; the caller
+   retries its whole unit instead.
+
+2. **Classify with `IsSaveConflict`, which walks the exception chain.** Do not match on the type of
+   the outermost exception. The *non-retrying* default execution strategies of SQL Server and
+   PostgreSQL raise a transient error, deadlock included, as an `InvalidOperationException` wrapping
+   the `DbUpdateException`, and a store's own persistence boundary may wrap that again. A store that
+   keys on the outer type looks correct on SQLite, where nothing wraps, and silently stops retrying
+   on the two providers where it matters. This is what #1801 and #1816 had to retrofit into ten
+   stores; write it in from the start.
+
+3. **Include `Transient` deliberately.** A predicate of `Concurrency | UniqueKey` alone means a
+   deadlock or lock timeout surfaces to the caller. That is a legitimate choice for some contracts,
+   but make it a choice: it is the difference between a lost race, which is the caller's to resolve,
+   and a provider conflict, which is not.
 
 ## Putting Elsa in its own schema (operator setting)
 
