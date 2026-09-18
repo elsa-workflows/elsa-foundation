@@ -181,58 +181,54 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 var membershipIds = ReadRegistry(user.TenantMembershipIdsJson, "tenant memberships");
                 EnsureAggregateRelationshipCapacity(claimIds, loginIds, roleLinkIds, tokenIds, membershipIds);
 
+                var claimRows = await EfIdentityChildRows.LoadAsync(claimIds, context.UserClaims, x => x.Id, token);
                 foreach (var childId in claimIds)
                 {
-                    var claim = RequireRegistered(
-                        await context.UserClaims.SingleOrDefaultAsync(x => x.Id == childId, token),
-                        "user claim",
-                        childId);
+                    var claim = RequireRegistered(claimRows.GetValueOrDefault(childId), "user claim", childId);
                     EfIdentityStoreSupport.EnsureUserClaimIdentity(claim, tenantId, userId);
                     context.UserClaims.Remove(claim);
                 }
 
+                var loginRows = await EfIdentityChildRows.LoadAsync(loginIds, context.ExternalIdentities, x => x.Id, token);
                 foreach (var childId in loginIds)
                 {
-                    var login = RequireRegistered(
-                        await context.ExternalIdentities.SingleOrDefaultAsync(x => x.Id == childId, token),
-                        "external login",
-                        childId);
+                    var login = RequireRegistered(loginRows.GetValueOrDefault(childId), "external login", childId);
                     EfIdentityStoreSupport.EnsureExternalIdentity(login, tenantId, login.Provider, login.ProviderSubject, userId);
                     context.ExternalIdentities.Remove(login);
                 }
 
+                var tokenRows = await EfIdentityChildRows.LoadAsync(tokenIds, context.UserTokens, x => x.Id, token);
                 foreach (var childId in tokenIds)
                 {
-                    var tokenRow = RequireRegistered(
-                        await context.UserTokens.SingleOrDefaultAsync(x => x.Id == childId, token),
-                        "user token",
-                        childId);
+                    var tokenRow = RequireRegistered(tokenRows.GetValueOrDefault(childId), "user token", childId);
                     EfIdentityStoreSupport.EnsureUserTokenIdentity(tokenRow, tenantId, userId);
                     context.UserTokens.Remove(tokenRow);
                 }
 
+                var membershipRows = await EfIdentityChildRows.LoadAsync(membershipIds, context.TenantMemberships, x => x.Id, token);
                 foreach (var childId in membershipIds)
                 {
-                    var membership = RequireRegistered(
-                        await context.TenantMemberships.SingleOrDefaultAsync(x => x.Id == childId, token),
-                        "tenant membership",
-                        childId);
+                    var membership = RequireRegistered(membershipRows.GetValueOrDefault(childId), "tenant membership", childId);
                     EfIdentityStoreSupport.EnsureTenantMembershipIdentity(membership, tenantId, userId);
                     context.TenantMemberships.Remove(membership);
                 }
 
+                var linkRows = await EfIdentityChildRows.LoadAsync(roleLinkIds, context.UserRoles, x => x.Id, token);
+                // Two links pointing at the same role used to read that role twice. The distinct set is loaded
+                // once, and both links still mutate the one tracked instance, so the cumulative registry edit and
+                // the two Revision bumps are unchanged.
+                var roleRows = await EfIdentityChildRows.LoadAsync(
+                    LinkedRecordIds(roleLinkIds, linkRows, tenantId, link => link.RoleId),
+                    context.Roles,
+                    x => x.Id,
+                    token);
                 foreach (var childId in roleLinkIds)
                 {
-                    var link = RequireRegistered(
-                        await context.UserRoles.SingleOrDefaultAsync(x => x.Id == childId, token),
-                        "user-role link",
-                        childId);
+                    var link = RequireRegistered(linkRows.GetValueOrDefault(childId), "user-role link", childId);
                     EfIdentityStoreSupport.EnsureUserRoleIdentity(link, tenantId, userId, link.RoleId);
 
                     var role = RequireRegistered(
-                        await context.Roles.SingleOrDefaultAsync(
-                            x => x.Id == EfIdentityStoreSupport.RecordId(tenantId, link.RoleId),
-                            token),
+                        roleRows.GetValueOrDefault(EfIdentityStoreSupport.RecordId(tenantId, link.RoleId)),
                         "linked role",
                         link.RoleId);
                     EfIdentityStoreSupport.EnsureRoleIdentity(role, tenantId, link.RoleId);
@@ -294,28 +290,28 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 var roleLinkIds = ReadRegistry(role.UserLinkIdsJson, "user-role links");
                 EnsureAggregateRelationshipCapacity(claimIds, roleLinkIds);
 
+                var claimRows = await EfIdentityChildRows.LoadAsync(claimIds, context.RoleClaims, x => x.Id, token);
                 foreach (var childId in claimIds)
                 {
-                    var claim = RequireRegistered(
-                        await context.RoleClaims.SingleOrDefaultAsync(x => x.Id == childId, token),
-                        "role claim",
-                        childId);
+                    var claim = RequireRegistered(claimRows.GetValueOrDefault(childId), "role claim", childId);
                     EfIdentityStoreSupport.EnsureRoleClaimIdentity(claim, tenantId, roleId);
                     context.RoleClaims.Remove(claim);
                 }
 
+                var linkRows = await EfIdentityChildRows.LoadAsync(roleLinkIds, context.UserRoles, x => x.Id, token);
+                // As on the user path, two links naming the same user resolve to one tracked row.
+                var userRows = await EfIdentityChildRows.LoadAsync(
+                    LinkedRecordIds(roleLinkIds, linkRows, tenantId, link => link.UserId),
+                    context.Users,
+                    x => x.Id,
+                    token);
                 foreach (var childId in roleLinkIds)
                 {
-                    var link = RequireRegistered(
-                        await context.UserRoles.SingleOrDefaultAsync(x => x.Id == childId, token),
-                        "user-role link",
-                        childId);
+                    var link = RequireRegistered(linkRows.GetValueOrDefault(childId), "user-role link", childId);
                     EfIdentityStoreSupport.EnsureUserRoleIdentity(link, tenantId, link.UserId, roleId);
 
                     var user = RequireRegistered(
-                        await context.Users.SingleOrDefaultAsync(
-                            x => x.Id == EfIdentityStoreSupport.RecordId(tenantId, link.UserId),
-                            token),
+                        userRows.GetValueOrDefault(EfIdentityStoreSupport.RecordId(tenantId, link.UserId)),
                         "linked user",
                         link.UserId);
                     EfIdentityStoreSupport.EnsureUserIdentity(user, tenantId, link.UserId);
@@ -549,6 +545,22 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
         if (count > EfIdentityStoreSupport.MaximumMaterializedListEntries)
             throw new IdentityEntityFrameworkAdmissionException($"The Identity aggregate relationship registry exceeds the {EfIdentityStoreSupport.MaximumMaterializedListEntries}-entry limit.");
     }
+
+    /// <summary>
+    /// The record ids of the rows a set of links points at, for the links that were actually loaded. A link the
+    /// batch did not return is left out, because the loop below it raises that as its own missing-child failure
+    /// before it ever looks at what the link pointed at.
+    /// </summary>
+    private static string[] LinkedRecordIds(
+        IReadOnlyList<string> linkIds,
+        IReadOnlyDictionary<string, UserRoleEntity> links,
+        string tenantId,
+        Func<UserRoleEntity, string> target) =>
+        linkIds
+            .Select(links.GetValueOrDefault)
+            .OfType<UserRoleEntity>()
+            .Select(link => EfIdentityStoreSupport.RecordId(tenantId, target(link)))
+            .ToArray();
 
     private static T RequireRegistered<T>(T? entity, string kind, string id) where T : class
     {

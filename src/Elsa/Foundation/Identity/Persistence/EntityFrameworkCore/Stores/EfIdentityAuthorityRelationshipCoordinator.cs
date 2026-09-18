@@ -127,12 +127,20 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
                 return Conflict(user.Id);
             var beforeCount = RelationshipCount(user);
             var ids = Registry(user, registry);
+            // Both branches below read the same row by the same id, so the whole submitted set is loaded once.
+            // The rows stay tracked and an id the load does not return is still an absent row, which is what the
+            // add-or-update decision turns on.
+            var existingClaims = await EfIdentityChildRows.LoadAsync(
+                canonicalClaims.Select(claim => claim.Id).ToArray(),
+                context.UserClaims,
+                x => x.Id,
+                token);
             foreach (var claim in canonicalClaims)
             {
                 var id = claim.Id;
+                var existing = existingClaims.GetValueOrDefault(id);
                 if (delete || replacementId == id)
                 {
-                    var existing = await context.UserClaims.SingleOrDefaultAsync(x => x.Id == id, token);
                     if (existing is not null)
                     {
                         EfIdentityStoreSupport.EnsureUserClaimIdentity(existing, tenantId, userId);
@@ -142,7 +150,6 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
                 }
                 else
                 {
-                    var existing = await context.UserClaims.SingleOrDefaultAsync(x => x.Id == id, token);
                     if (existing is null)
                     {
                         Prepare(claim, tenantId, userId);
