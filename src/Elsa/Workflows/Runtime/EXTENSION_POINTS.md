@@ -73,6 +73,13 @@ adapters validate and translate the selected context at their own persistence bo
 - **Usage:** `RuntimeCheckpointStateChangeSet.WorkflowDispatches` is applied atomically with activity state and post-commit outbox work. The built-in in-memory and EF Core providers project it through their workflow-dispatch stores.
 - **Safety:** operational records contain safe input descriptors, never raw child input values. Raw values exist only in the protected child-start intent payload required for delivery.
 
+### `IWorkflowDispatchQueryStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Additive query capability over the configured `IWorkflowDispatchStore`.
+- **Signature:** `QueryAsync(WorkflowDispatchQuery query, ...)`, notably by child workflow execution ID.
+- **Usage:** `WorkflowDispatchCheckpointEnricher` uses it to mirror a child's terminal checkpoint onto every dispatch waiting on that child, which is what queues the parent-resume intent. `CheckpointRuleViolationWorkflowFaulter` also requires it before faulting a refused first commit into existence: without the projection the synthesized child would be a terminal execution nothing acts on, and the durable child-evidence rule would read it as a delivered start.
+- **Safety:** a store that does not adopt it still checkpoints, but projects no terminal dispatch, so a waited child's parent is resumed by neither route. Both built-in providers implement it.
+- **Default implementations:** `InMemoryWorkflowDispatchStore` and the EF module's scoped `EfWorkflowDispatchStore`.
+
 ### `IWorkflowDispatchAdmissionStore` / `IWorkflowDispatchCancellationStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Additive provider capabilities over the configured `IWorkflowDispatchStore`.
 - **Signature:** `TryAdmitAsync(dispatchId, admittedAt, ...)` conditionally advances Pending to Started; `ApplyCancellationAsync(request, ...)` resolves a replay-stable parent cancellation request against current admission state.

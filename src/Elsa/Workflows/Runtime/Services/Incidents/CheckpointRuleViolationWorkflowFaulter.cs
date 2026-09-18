@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.WorkHandlers;
 using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -151,7 +152,7 @@ public sealed class CheckpointRuleViolationWorkflowFaulter
             : null;
     }
 
-    private static WorkflowExecutionState? ReadDispatchedStart(
+    private WorkflowExecutionState? ReadDispatchedStart(
         WorkflowExecutionCommandEnvelope? envelope,
         string workflowExecutionId,
         DateTimeOffset occurredAt)
@@ -160,16 +161,26 @@ public sealed class CheckpointRuleViolationWorkflowFaulter
             !StringComparer.Ordinal.Equals(envelope.WorkflowExecutionId, workflowExecutionId))
             return null;
 
-        // A payload this runtime cannot read cannot stand in for the execution, and letting its exception out would
-        // report a deserialization failure in place of the refusal the drain called this to handle. The refusal then
-        // travels the way it did before, through the start's own delivery result.
+        // A payload this runtime cannot read cannot stand in for the execution, and letting its exception out would report
+        // a deserialization failure in place of the refusal the drain called this to handle. The refusal then travels the
+        // way it did before, through the start's own delivery result. Narrowed to the payload's own validation the way
+        // WorkflowStartSchedulerWorkHandler narrows it, so an unrelated ArgumentException still surfaces as itself rather
+        // than being misread as a malformed payload, and logged either way because turning the recovery off for a child
+        // is not something to do quietly.
         WorkflowExecutionStartCommandPayload? payload;
         try
         {
             payload = payloadElement.Deserialize<WorkflowExecutionStartCommandPayload>();
         }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
+        catch (Exception exception) when (
+            exception is JsonException or NotSupportedException ||
+            exception is ArgumentException argument &&
+            WorkflowStartSchedulerWorkHandler.IsStartPayloadValidationException(argument))
         {
+            _logger.LogWarning(
+                exception,
+                "Workflow execution {WorkflowExecutionId} could not be faulted from its start command because the command payload could not be read; its refusal stays with the start's delivery result",
+                workflowExecutionId);
             return null;
         }
 

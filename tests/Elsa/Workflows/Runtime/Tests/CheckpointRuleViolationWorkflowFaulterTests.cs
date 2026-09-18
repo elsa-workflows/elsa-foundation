@@ -85,6 +85,7 @@ public sealed class CheckpointRuleViolationWorkflowFaulterTests
         Assert.Equal(IncidentStatus.Blocking, incident.Status);
         Assert.Equal(IncidentResolutionActionKinds.FaultWorkflow, incident.ResolutionOutcome?.ActionKind);
         Assert.Contains(Refusal.Message, incident.Message, StringComparison.Ordinal);
+        Assert.Contains("last accepted checkpoint", incident.Message, StringComparison.Ordinal);
         Assert.Null(changes.Scheduler);
         Assert.Empty(changes.ActivityExecutions);
         Assert.Empty(changes.ActivityExecutionInspections);
@@ -198,6 +199,11 @@ public sealed class CheckpointRuleViolationWorkflowFaulterTests
         var incident = Assert.Single(await _incidents.ListBlockingAsync(WorkflowExecutionId));
         Assert.Equal(CheckpointRuleViolationWorkflowFaulter.IncidentId(WorkflowExecutionId), incident.IncidentId);
         Assert.Equal(CheckpointRuleViolationWorkflowFaulter.IncidentFailureType, incident.FailureType);
+
+        // A child synthesized from its start command never reached a checkpoint, and the operator-facing text must not
+        // claim one. The other arm of that message is asserted by the accepted-state case above.
+        Assert.Contains("without ever reaching a checkpoint", incident.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("last accepted checkpoint", incident.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -239,30 +245,21 @@ public sealed class CheckpointRuleViolationWorkflowFaulterTests
         Assert.Null(await _executions.FindAsync(WorkflowExecutionId));
     }
 
-    /// <summary>A payload this runtime cannot read cannot stand in for the execution, and must not escape as a JSON failure.</summary>
-    [Fact]
-    public async Task A_refused_first_commit_with_an_unreadable_start_payload_is_left_alone()
+    /// <summary>
+    /// A payload this runtime cannot read cannot stand in for the execution, and must not escape as a deserialization
+    /// failure in place of the refusal. Both shapes the payload rejects are covered: one the reader cannot parse, and one
+    /// it parses but the payload's own validation refuses.
+    /// </summary>
+    [Theory]
+    [InlineData("{\"PinnedExecutable\":\"not-an-identity\"}")]
+    [InlineData("{\"RequestedArtifactId\":\"artifact-1\"}")]
+    public async Task A_refused_first_commit_with_an_unreadable_start_payload_is_left_alone(string payloadJson)
     {
-        var command = new WorkflowExecutionCommand(
-            CommandId: "command-start",
-            WorkflowExecutionId: WorkflowExecutionId,
-            Kind: WorkflowExecutionCommandKind.Start,
-            EnqueuedAt: Now,
-            Payload: JsonSerializer.SerializeToElement(new { PinnedExecutable = "not-an-identity" }),
-            Metadata: new Dictionary<string, string>());
-        var envelope = new WorkflowExecutionCommandEnvelope(
-            envelopeId: "envelope-start",
-            workflowExecutionId: WorkflowExecutionId,
-            command: command,
-            idempotencyKey: "idem-start",
-            deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
-            enqueuedAt: Now);
-
         await _faulter.FaultIfCheckpointRuleViolatedAsync(
             WorkflowExecutionId,
             DrainResult(checkpointRuleViolation: true),
             null,
-            envelope);
+            StartEnvelope(ParentWorkflowExecutionId, payloadElement: JsonDocument.Parse(payloadJson).RootElement));
 
         Assert.Empty(_store.ListCommits());
         Assert.Null(await _executions.FindAsync(WorkflowExecutionId));
@@ -270,8 +267,10 @@ public sealed class CheckpointRuleViolationWorkflowFaulterTests
 
     /// <summary>
     /// A forwarded start reaches the owning node through the durable transport, which re-serializes the whole envelope with
-    /// web options while the payload inside it was written with default ones. If that round trip ever re-cased the payload,
-    /// the synthesized child would silently stop being produced on exactly the path #1799 is about.
+    /// web options while the payload inside it was written with default ones. This pins that the envelope survives that
+    /// round trip intact, carrying a payload the faulter can still read, on exactly the path #1799 is about. It does not
+    /// pin the producer's own options: the reader is case-sensitive, so a producer that switched to web options would break
+    /// synthesis in a way only a test built from the real producer would catch.
     /// </summary>
     [Fact]
     public async Task A_start_that_round_tripped_through_the_command_transport_still_synthesizes_its_child()
@@ -315,7 +314,8 @@ public sealed class CheckpointRuleViolationWorkflowFaulterTests
         string? parentWorkflowExecutionId,
         WorkflowExecutionCommandKind kind = WorkflowExecutionCommandKind.Start,
         string? workflowExecutionId = null,
-        bool testRun = false)
+        bool testRun = false,
+        JsonElement? payloadElement = null)
     {
         var executionId = workflowExecutionId ?? WorkflowExecutionId;
         var payload = new WorkflowExecutionStartCommandPayload(
@@ -340,7 +340,7 @@ public sealed class CheckpointRuleViolationWorkflowFaulterTests
             WorkflowExecutionId: executionId,
             Kind: kind,
             EnqueuedAt: Now,
-            Payload: JsonSerializer.SerializeToElement(payload),
+            Payload: payloadElement ?? JsonSerializer.SerializeToElement(payload),
             Metadata: new Dictionary<string, string>());
         return new WorkflowExecutionCommandEnvelope(
             envelopeId: "envelope-start",

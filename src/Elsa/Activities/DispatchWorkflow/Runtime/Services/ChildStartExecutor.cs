@@ -228,9 +228,14 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
         // expiry redelivers into a Duplicate carrying none of it, and counting that as delivered left a waiting parent
         // waiting forever (#1799).
         //
-        // The producers are told apart by the only thing that decides it, which is whether a child exists.
-        if (result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Duplicate)
-            await EnsureDuplicateStartReachedItsChildAsync(payload, cancellationToken);
+        // The producers are told apart by the only thing that decides it, which is whether a child can be seen. When none
+        // can, this is a failed delivery: it retries, and its own budget dead-letters it into DispatchFailed, which is how
+        // the parent gets an answer. Transient rather than permanent, because the answer and the evidence are different
+        // things. Every attempt in this process is answered Duplicate out of the same cache, but the evidence is re-read
+        // each time, so a child whose start is still queued for redrive is still found before the budget runs out.
+        if (result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Duplicate &&
+            !await HasChildAsync(payload, cancellationToken))
+            throw DeliveryFailure(PostCommitFailureKind.Transient);
 
         if (result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Deferred &&
             !HasDurableDistributedForwardingEvidence(result.CommandDispatch.Metadata))
@@ -284,37 +289,25 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
     }
 
     /// <summary>
-    /// Returns when a duplicate start really reached a child, and fails the delivery when it did not. Permanent once the
-    /// child is proven absent: every retry in this process is answered Duplicate out of the same cache, so retrying only
-    /// spends the budget before reaching the same verdict, and the claim completion's child-evidence rule still overrules
-    /// a final failure inside its own transaction if a child turns up after all. Transient while nothing can be proven
-    /// either way, because absence of evidence is not evidence of absence and a later attempt can still settle it.
+    /// Whether a child can be seen for this dispatch: either the dispatch already carries the child's own outcome, or the
+    /// child execution exists. A child that cannot be read counts as not seen, which keeps the start retryable rather than
+    /// resolving it on a reading nothing stands behind.
     /// </summary>
-    private async ValueTask EnsureDuplicateStartReachedItsChildAsync(
-        WorkflowDispatchStartPayload payload,
-        CancellationToken cancellationToken)
+    private async ValueTask<bool> HasChildAsync(WorkflowDispatchStartPayload payload, CancellationToken cancellationToken)
     {
         if (await HasChildOutcomeAsync(payload.DispatchId, cancellationToken))
-            return;
+            return true;
         if (_workflowExecutionStateStore is null)
-            throw DeliveryFailure(PostCommitFailureKind.Transient);
+            return false;
 
-        WorkflowExecutionState? child;
         try
         {
-            child = await _workflowExecutionStateStore.FindAsync(payload.ChildWorkflowExecutionId, cancellationToken);
+            return await _workflowExecutionStateStore.FindAsync(payload.ChildWorkflowExecutionId, cancellationToken) is not null;
         }
-        catch (OperationCanceledException)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            throw;
+            return false;
         }
-        catch (Exception exception)
-        {
-            throw DeliveryFailure(PostCommitFailureKind.Transient, exception);
-        }
-
-        if (child is null)
-            throw DeliveryFailure(PostCommitFailureKind.Permanent);
     }
 
     /// <summary>Whether the dispatch already carries the child's own terminal outcome, as opposed to a delivery failure.</summary>

@@ -229,14 +229,20 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// #1799 path 1. A rule refuses the child's first commit, so the start must fail. Recording that failure fails, which
-    /// leaves the claimed outbox item Delivering; claim expiry then redelivers the same deterministic start. The refusal
-    /// must survive that redelivery: the dispatch must still reach DispatchFailed and the parent must still resume.
+    /// #1799 path 1. The child's first commit fails, so no child exists, and the agent consumes the start's idempotency
+    /// key on its way to reporting that. Recording the delivery result then fails, which leaves the claimed outbox item
+    /// Delivering, and claim expiry redelivers the same deterministic start into a Duplicate answered out of that cache,
+    /// carrying nothing about the failure. Counting that as delivered left the parent waiting forever.
     /// </summary>
+    /// <remarks>
+    /// The first commit fails as infrastructure rather than as a rule refusal, which is what makes the agent report the
+    /// fault instead of throwing it and so consume the key. A refusal takes the other route: the runtime faults the child
+    /// into existence from its start command, and the parent resumes on the child's own outcome instead.
+    /// </remarks>
     [Fact]
-    public async Task A_refused_first_start_whose_recording_fails_still_fails_after_claim_expiry()
+    public async Task A_failed_first_start_whose_recording_fails_still_fails_after_claim_expiry()
     {
-        _childCommitFailure.RefuseFirst();
+        _childCommitFailure.FailTransientlyFromTheFirstCommit();
         _recordingFailure.FailNextCompletion();
 
         // Sweep until the delivery failure could not be recorded, which strands the claim.
@@ -253,23 +259,23 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
         // also clears the execution ownership lease, which happens to be the same duration; that is harmless only
         // because the jump lands between sweeps, with no drain holding a lease.
         _clock.Advance(TimeSpan.FromSeconds(61));
-        _outboxFailures += (await _harness.SweepAsync()).OutboxFailedCount;
 
         // The agent answers Duplicate because it consumed the key before the refusal was reported, so nothing about the
-        // redelivery itself carries the refusal. The start fails all the same, because no child exists to prove otherwise.
-        var redelivered = Assert.IsType<RuntimePostCommitOutboxItem>(await FindStartOutboxItemAsync());
+        // redelivery itself carries the refusal. No child ever appears to prove otherwise, so the start spends its
+        // delivery budget and dead-letters, which is what resumes the parent instead of leaving it waiting forever.
+        var parent = await SweepUntilAsync(run => run.WorkflowState?.Status.IsTerminal() == true, "reach a terminal status");
+
+        parent.AssertWorkflowCompleted();
+        parent.AssertOutcomes(DispatchNodeId, DispatchWorkflowOutcomes.DispatchFailed);
+        parent.AssertCompleted(AfterDispatchNodeId);
         var dispatch = Assert.Single(await ListDispatchesAsync());
-        Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, redelivered.Status);
         Assert.Equal(WorkflowDispatchStatus.DispatchFailed, dispatch.Status);
         Assert.NotNull(WorkflowDispatchLifecycle.ReadDeliveryDeadLetterId(dispatch));
         Assert.NotNull(WorkflowDispatchLifecycle.ReadDeliveryIncidentId(dispatch));
         Assert.Null((await _harness.ReadRunAsync(dispatch.ChildWorkflowExecutionId)).WorkflowState);
-
-        // Which is the point: the parent resumes instead of waiting forever.
-        var parent = await SweepUntilAsync(run => run.WorkflowState?.Status.IsTerminal() == true, "reach a terminal status");
-        parent.AssertWorkflowCompleted();
-        parent.AssertOutcomes(DispatchNodeId, DispatchWorkflowOutcomes.DispatchFailed);
-        parent.AssertCompleted(AfterDispatchNodeId);
+        Assert.Equal(
+            RuntimePostCommitOutboxStatus.FailedFinal,
+            Assert.IsType<RuntimePostCommitOutboxItem>(await FindStartOutboxItemAsync()).Status);
     }
 
     private async Task<RuntimePostCommitOutboxItem?> FindStartOutboxItemAsync()
@@ -315,10 +321,12 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
             {
                 _outboxFailures += (await _harness.SweepAsync()).OutboxFailedCount;
             }
-            catch (OutboxProcessingException) when (_recordingFailure.IsExpected)
+            catch (Exception exception) when (_recordingFailure.IsExpected && IsScriptedRecordingOutage(exception))
             {
-                // Only the case that armed the outage absorbs this. Every other case must still fail loudly, because a
-                // recording failure it did not ask for is a defect rather than the scenario.
+                // Only the case that armed the outage absorbs it, and only this exact outage. Anything else must still
+                // fail loudly, because a failure the case did not ask for is a defect rather than the scenario. The
+                // processor wraps a recording failure in OutboxProcessingException when the delivery itself failed, and
+                // lets it out raw when the delivery succeeded, so both shapes are unwrapped here.
                 _recordingFailure.Observe();
             }
 
@@ -329,6 +337,17 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
                 throw new TimeoutException($"The parent did not {expectation} within {TerminalTimeout}. {await DescribeAsync(run)}");
             await Task.Delay(TimeSpan.FromMilliseconds(100));
         }
+    }
+
+    private static bool IsScriptedRecordingOutage(Exception exception)
+    {
+        for (var candidate = exception; candidate is not null; candidate = candidate.InnerException)
+        {
+            if (candidate is ScriptedRecordingOutageException)
+                return true;
+        }
+
+        return false;
     }
 
     private async Task<string> DescribeAsync(WorkflowExecutionRun parent)
@@ -484,6 +503,19 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
 
         public void FailTransientlyOnce() => (_failure, _remaining) = (() => new InvalidOperationException("A transient checkpoint store outage."), 1);
 
+        /// <summary>
+        /// Fails every commit carrying the child's state with an ordinary infrastructure fault, so the child never reaches
+        /// any state. Deliberately not a rule refusal: that leaves the checkpoint-rule faulter dormant, so the drain
+        /// returns its fault rather than throwing it, and the agent consumes the start's idempotency key on the way out.
+        /// </summary>
+        public void FailTransientlyFromTheFirstCommit()
+        {
+            _failure = () => new InvalidOperationException("A transient checkpoint store outage.");
+            _remaining = int.MaxValue;
+            _includingTheFault = true;
+            _firstCommit = true;
+        }
+
         public ValueTask<RuntimeCheckpointCommit> EnrichAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)
         {
             var endsChild = commit.StateChanges.WorkflowExecution?.State is { } state &&
@@ -516,6 +548,10 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
             provider => new FailingRecordingOutboxStore((IRuntimePostCommitOutboxStore)factory(provider), failure),
             descriptor.Lifetime));
     }
+
+    /// <summary>The scripted outage, as its own type so a sweep absorbs only this and never a real failure.</summary>
+    private sealed class ScriptedRecordingOutageException()
+        : InvalidOperationException("A test outage refuses to record the delivery result.");
 
     private sealed class ScriptedRecordingFailure
     {
@@ -558,7 +594,7 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
             if (!StringComparer.Ordinal.Equals(claim.Item.Intent.Kind, DispatchWorkflowConstants.StartChildIntentKind))
                 return;
             if (Interlocked.Exchange(ref _armed, 0) == 1)
-                throw new InvalidOperationException("A test outage refuses to record the delivery result.");
+                throw new ScriptedRecordingOutageException();
         }
     }
 
