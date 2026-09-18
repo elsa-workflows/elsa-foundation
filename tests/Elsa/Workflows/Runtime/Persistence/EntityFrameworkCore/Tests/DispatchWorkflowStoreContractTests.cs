@@ -151,6 +151,37 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// #1799. A rule refuses the child's first commit, so no child state is accepted and there is nothing in the store to
+    /// fault. The child is faulted into existence from its start command instead, which gives its dispatch the child's own
+    /// outcome through the ordinary enrichers. That is what carries a refusal home when the start was forwarded to another
+    /// node and acknowledged before the child ran, where the delivery result the local path relies on never reaches the
+    /// parent. The start really ran, so it stays delivered.
+    /// </summary>
+    [Fact]
+    public async Task A_child_whose_first_checkpoint_a_rule_refuses_is_faulted_into_existence_and_its_parent_resumes()
+    {
+        _childCommitFailure.RefuseFirstButNotTheFault();
+
+        var parent = await RunParentAsync(childFaults: false);
+
+        parent.AssertWorkflowCompleted();
+        parent.AssertOutcomes(DispatchNodeId, DispatchWorkflowOutcomes.Faulted);
+        parent.AssertCompleted(AfterDispatchNodeId);
+        var dispatch = Assert.Single(await ListDispatchesAsync());
+        Assert.Equal(WorkflowDispatchStatus.Faulted, dispatch.Status);
+
+        var child = (await _harness.ReadRunAsync(dispatch.ChildWorkflowExecutionId)).WorkflowState;
+        Assert.Equal(WorkflowExecutionStatus.Faulted, child?.Status);
+        Assert.Equal(ParentWorkflowExecutionId, child?.ParentWorkflowExecutionId);
+        var incident = Assert.Single(
+            await ListBlockingIncidentsAsync(dispatch.ChildWorkflowExecutionId),
+            candidate => candidate.FailureType == CheckpointRuleViolationWorkflowFaulter.IncidentFailureType);
+        Assert.Contains(ScriptedChildCommitFailure.RefusalMessage, incident.Message, StringComparison.Ordinal);
+        Assert.Equal(0, _outboxFailures);
+        Assert.True(_childCommitFailure.Failures > 0);
+    }
+
+    /// <summary>
     /// The direction that could pass for success: a failure that is not a rule refusal must not fault the child. A healthy
     /// child whose terminal commit fails transiently during its start, after admission, is retried by the domain retry
     /// policy, completes, and its start stays delivered.
@@ -437,6 +468,14 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
         public void RefuseFirst()
         {
             RefuseIncludingTheFault();
+            _firstCommit = true;
+        }
+
+        /// <summary>Refuses every commit carrying the child's state, but lets through the fault the runtime commits for a
+        /// refusal, which carries none of that content.</summary>
+        public void RefuseFirstButNotTheFault()
+        {
+            Refuse();
             _firstCommit = true;
         }
 

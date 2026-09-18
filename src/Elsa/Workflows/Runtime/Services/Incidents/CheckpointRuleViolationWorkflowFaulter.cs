@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -30,9 +31,20 @@ namespace Elsa.Workflows.Runtime.Services.Incidents;
 /// resumes through the same child-faulted path.
 /// </para>
 /// <para>
-/// An execution with no accepted state has nothing to fault, and one that is already terminal already has its outcome;
-/// both are left alone. When the fault commit itself fails, that failure is thrown, so an execution that could not be
-/// faulted is never reported as handled.
+/// An execution that is already terminal already has its outcome and is left alone. An execution with no accepted state
+/// has nothing to fault out of the store, but a refused FIRST commit is exactly that case, and walking away from it is
+/// what left a waiting parent waiting forever once the refusal had no other way home (#1799): a start forwarded through
+/// distributed placement is acknowledged before the child runs, so the owning node's refusal never reaches the parent's
+/// dispatch. A dispatched child is therefore faulted into existence from its start command, which still carries the
+/// execution's whole identity. That is deliberately the same terminal shape a child with accepted state gets, so the
+/// ordinary enrichers project the dispatch and the parent-resume intent exactly as they do for a child's business fault,
+/// and nothing new has to know about refusals. Only a start that declares a parent is synthesized this way; a root start
+/// reports its refusal to its caller and gains nothing from a durable execution that never ran.
+/// </para>
+/// <para>
+/// When the fault commit itself fails, that failure is thrown, so an execution that could not be faulted is never
+/// reported as handled. A rule that refuses the child's content refuses this commit too, which leaves the start failing
+/// as before.
 /// </para>
 /// </remarks>
 public sealed class CheckpointRuleViolationWorkflowFaulter
@@ -81,6 +93,19 @@ public sealed class CheckpointRuleViolationWorkflowFaulter
         string workflowExecutionId,
         RuntimeSchedulerDrainResult? drainResult,
         Exception? drainFailure,
+        CancellationToken cancellationToken = default) =>
+        await FaultIfCheckpointRuleViolatedAsync(workflowExecutionId, drainResult, drainFailure, envelope: null, cancellationToken);
+
+    /// <inheritdoc cref="FaultIfCheckpointRuleViolatedAsync(string,RuntimeSchedulerDrainResult?,Exception?,CancellationToken)"/>
+    /// <param name="envelope">
+    /// The command the drain ran, so a start whose first commit was refused can be faulted into existence from it. Without
+    /// it such a refusal is left alone, which is the behavior of every caller that has no command to offer.
+    /// </param>
+    public async ValueTask FaultIfCheckpointRuleViolatedAsync(
+        string workflowExecutionId,
+        RuntimeSchedulerDrainResult? drainResult,
+        Exception? drainFailure,
+        WorkflowExecutionCommandEnvelope? envelope,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
@@ -91,17 +116,63 @@ public sealed class CheckpointRuleViolationWorkflowFaulter
         if (violation is null)
             return;
 
-        var workflow = await _workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken);
-        if (workflow is null || workflow.Status.IsTerminal())
+        var occurredAt = _timeProvider.GetUtcNow();
+        var stored = await _workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken);
+        if (stored is { } workflow && workflow.Status.IsTerminal())
             return;
 
-        await _checkpointCommitter.CommitAsync(NewFaultCommit(workflow, violation, _timeProvider.GetUtcNow()), cancellationToken);
+        var faultable = stored ?? ReadDispatchedStart(envelope, workflowExecutionId, occurredAt);
+        if (faultable is null)
+            return;
+
+        await _checkpointCommitter.CommitAsync(NewFaultCommit(faultable, violation, occurredAt), cancellationToken);
         _logger.LogWarning(
             drainFailure,
             "Workflow execution {WorkflowExecutionId} was faulted because a checkpoint rule refused one of its commits; incident {IncidentId} records the refusal: {Violation}",
             workflowExecutionId,
             IncidentId(workflowExecutionId),
             violation);
+    }
+
+    /// <summary>
+    /// The execution a refused first commit would have created, read back from the start command that carried it. Only a
+    /// start that declares a parent qualifies: it is the case whose refusal has nowhere else to go, and the payload carries
+    /// every field a dispatch is matched on, so the synthesized child cannot drift from the dispatch that is waiting on it.
+    /// </summary>
+    private static WorkflowExecutionState? ReadDispatchedStart(
+        WorkflowExecutionCommandEnvelope? envelope,
+        string workflowExecutionId,
+        DateTimeOffset occurredAt)
+    {
+        if (envelope?.Command is not { Kind: WorkflowExecutionCommandKind.Start, Payload: { } payloadElement } ||
+            !StringComparer.Ordinal.Equals(envelope.WorkflowExecutionId, workflowExecutionId))
+            return null;
+
+        var payload = payloadElement.Deserialize<WorkflowExecutionStartCommandPayload>();
+        if (payload?.ParentWorkflowExecutionId is null)
+            return null;
+
+        return new WorkflowExecutionState(
+            workflowExecutionId,
+            payload.PinnedExecutable,
+            WorkflowExecutionStatus.Running,
+            SubStatus: null,
+            CreatedAt: occurredAt,
+            StartedAt: occurredAt,
+            UpdatedAt: occurredAt,
+            CompletedAt: null,
+            payload.CorrelationId,
+            payload.ParentWorkflowExecutionId,
+            payload.TenantId,
+            new Dictionary<string, string>())
+        {
+            RunKind = payload.RunKind,
+            PinnedSource = payload.PinnedSource,
+            Partition = payload.Partition,
+            Authority = payload.Authority,
+            DispatchNestingDepth = payload.DispatchNestingDepth,
+            TestScope = payload.TestScope
+        };
     }
 
     private static RuntimeCheckpointCommit NewFaultCommit(WorkflowExecutionState workflow, string violation, DateTimeOffset occurredAt)
