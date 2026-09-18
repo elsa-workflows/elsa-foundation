@@ -484,6 +484,10 @@ public sealed class ChildStartExecutorTests
 
         Assert.Equal(PostCommitFailureKind.Transient, exception.Kind);
 
+        // A store that could not be read carries its cause, so the delivery failure is logged with the reason the child
+        // could not be seen rather than only the generic summary. A child that is simply absent has no cause to carry.
+        Assert.Equal(childExecutionStoreThrows ? "A test outage hides the child." : null, exception.InnerException?.Message);
+
         // The dispatch stays admitted, which is the state the exhausted delivery's DispatchFailed projection expects.
         Assert.Equal(WorkflowDispatchStatus.Started, (await dispatchStore.FindAsync(NewIdentity().DispatchId))?.Status);
     }

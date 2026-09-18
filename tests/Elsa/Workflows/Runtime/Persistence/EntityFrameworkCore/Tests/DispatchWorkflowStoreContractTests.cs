@@ -324,9 +324,7 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
             catch (Exception exception) when (_recordingFailure.IsExpected && IsScriptedRecordingOutage(exception))
             {
                 // Only the case that armed the outage absorbs it, and only this exact outage. Anything else must still
-                // fail loudly, because a failure the case did not ask for is a defect rather than the scenario. The
-                // processor wraps a recording failure in OutboxProcessingException when the delivery itself failed, and
-                // lets it out raw when the delivery succeeded, so both shapes are unwrapped here.
+                // fail loudly, because a failure the case did not ask for is a defect rather than the scenario.
                 _recordingFailure.Observe();
             }
 
@@ -340,24 +338,12 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Whether this is the outage the case armed, in either shape the processor produces: raw when the delivery itself
-    /// succeeded, or carried on <see cref="OutboxProcessingException.DeliveryResultRecordingException"/> when it did not.
-    /// That one is not on the inner-exception chain, which holds the delivery failure instead.
+    /// Whether this is the outage the case armed. Only the raw shape is absorbed: the armed case arms a completion whose
+    /// delivery succeeded, so the processor lets the recording failure out as itself. It deliberately does not absorb an
+    /// <see cref="OutboxProcessingException"/>, which the processor raises when the delivery ALSO failed and whose inner
+    /// exception is that delivery failure, because absorbing it would swallow a failure no case asked for.
     /// </summary>
-    private static bool IsScriptedRecordingOutage(Exception exception)
-    {
-        if (exception is OutboxProcessingException outbox &&
-            outbox.DeliveryResultRecordingException is ScriptedRecordingOutageException)
-            return true;
-
-        for (var candidate = exception; candidate is not null; candidate = candidate.InnerException)
-        {
-            if (candidate is ScriptedRecordingOutageException)
-                return true;
-        }
-
-        return false;
-    }
+    private static bool IsScriptedRecordingOutage(Exception exception) => exception is ScriptedRecordingOutageException;
 
     private async Task<string> DescribeAsync(WorkflowExecutionRun parent)
     {

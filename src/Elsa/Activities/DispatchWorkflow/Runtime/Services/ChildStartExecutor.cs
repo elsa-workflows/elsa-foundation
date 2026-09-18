@@ -295,8 +295,9 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
 
     /// <summary>
     /// Whether a child can be seen for this dispatch: either the dispatch already carries the child's own outcome, or the
-    /// child execution exists. A child that cannot be read is not seen either, and fails the delivery transiently with the
-    /// cause attached rather than resolving anything on a reading nothing stands behind.
+    /// child execution exists. Neither read resolves anything on a reading nothing stands behind. An execution store that
+    /// cannot be read fails the delivery transiently carrying its cause; a dispatch store that cannot be read is simply
+    /// not an outcome, because that read is shared with two callers for which a refusal must stay the reported failure.
     /// </summary>
     private async ValueTask<bool> HasChildAsync(WorkflowDispatchStartPayload payload, CancellationToken cancellationToken)
     {
