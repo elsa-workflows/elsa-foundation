@@ -22,6 +22,14 @@ reads `EfMigrateOptions`, bound from `Elsa:Persistence:EntityFramework:Migrate:P
 (`EfMigrateOptions.SectionName`). A host that needs the policy decided in code can still
 `services.Configure<EfMigrateOptions>(…)` after composing the module.
 
+## Provider binding validation
+
+`EfRelationalProviderBinding` reaches each engine's `Use*` extension by type and method name, so nothing in a
+compile notices a missing or mismatched provider package. `AddEfModuleMigrations<TContext>` therefore records the
+provider each module context is configured for, and `EfProviderBindingValidator` probes all of them in the CShells
+`Prepare` phase ahead of every migrator (and as the first `IHostedService` on a plain host). There is no extension
+point here: a module opts in by registering its migrations, and the validator reads what that registration recorded.
+
 ## Shared transactions
 
 `EfSharedTransaction` is the owner a cross-module write uses when several module contexts must commit

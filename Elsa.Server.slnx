@@ -403,6 +403,7 @@
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/" />
   <Folder Name="/tests/Elsa/Persistence/EntityFramework/">
+    <Project Path="tests/Elsa/Persistence/EntityFramework/BindingDriftTests/Elsa.Persistence.EntityFramework.BindingDriftTests.csproj" />
     <Project Path="tests/Elsa/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/EntityFrameworkCore/" />

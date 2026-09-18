@@ -87,7 +87,8 @@ public sealed class ModuleMigrationTests : IDisposable
         services.AddEfModuleMigrations<ActivitiesDesignDbContext>("Sqlite");
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
 
-        var initializer = Assert.Single(provider.GetServices<IShellInitializer>());
+        // The binding validator initializes alongside the migrator; repeat registration still keeps one migrator.
+        var initializer = Assert.Single(provider.GetServices<IShellInitializer>().OfType<EfModuleMigrator<ActivitiesDesignDbContext>>());
         await initializer.InitializeAsync();
 
         await using var scope = provider.CreateAsyncScope();
