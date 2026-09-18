@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 internal static class EfRuntimeCheckpointRunHealthParticipantStaging
 {
     public static async ValueTask StageWorkflowRunHealthAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         string workflowExecutionId,
         RuntimeStateChange<WorkflowExecutionState>? workflowChange,
         IReadOnlyCollection<RuntimeStateChange<IncidentState>> incidentChanges,
@@ -174,7 +174,7 @@ internal static class EfRuntimeCheckpointRunHealthParticipantStaging
     }
 
     private static async ValueTask<long> CountNewIncidentsAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         string workflowExecutionId,
         IReadOnlyCollection<RuntimeStateChange<IncidentState>> changes,
         string scope,

@@ -19,7 +19,7 @@ internal sealed class ActivityPublicationScope : IAsyncDisposable
     public ActivityPublicationScope(
         PublishingSnapshotReviewDbContext publishing,
         ActivitiesDesignDbContext design,
-        BookmarkStateDbContext runtime,
+        RuntimeDbContext runtime,
         TestAccess access)
     {
         Publishing = publishing;
@@ -40,7 +40,7 @@ internal sealed class ActivityPublicationScope : IAsyncDisposable
 
     public PublishingSnapshotReviewDbContext Publishing { get; }
     public ActivitiesDesignDbContext Design { get; }
-    public BookmarkStateDbContext Runtime { get; }
+    public RuntimeDbContext Runtime { get; }
     public EfActivityDesignStores DesignStores { get; }
     public EfExecutableActivityTemplateStore Templates { get; }
     public EfWorkflowExecutableSourceReferenceStore SourceReferences { get; }

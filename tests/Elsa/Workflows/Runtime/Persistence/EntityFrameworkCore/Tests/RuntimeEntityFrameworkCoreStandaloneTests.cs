@@ -123,7 +123,7 @@ public sealed class RuntimeEntityFrameworkCoreStandaloneTests
         Assert.Equal(WorkflowTriggerBindingStoreBackend.EntityFramework, WorkflowTriggerBindingStoreBackend.Find(services)?.Name);
         Assert.Equal(RecurringTriggerScheduleStoreBackend.EntityFramework, RecurringTriggerScheduleStoreBackend.Find(services)?.Name);
         Assert.Equal(WorkflowActivationAuthorityBackend.EntityFramework, WorkflowActivationAuthorityBackend.Find(services)?.Name);
-        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(RuntimeDbContext));
     }
 
     [Fact]
@@ -177,7 +177,7 @@ public sealed class RuntimeEntityFrameworkCoreStandaloneTests
         Assert.Throws<InvalidOperationException>(() => services.AddRuntimeEntityFrameworkCore(Options()));
 
         Assert.Equal(before, services);
-        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(RuntimeDbContext));
         Assert.NotEqual(RuntimeOperationalStateStoreBackend.EntityFramework, RuntimeOperationalStateStoreBackend.Find(services)?.Name);
         Assert.Null(RuntimeCheckpointCommitStoreBackend.Find(services));
     }
@@ -377,7 +377,7 @@ public sealed class RuntimeEntityFrameworkCoreStandaloneTests
     {
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
-        return scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>().Database.GetConnectionString();
+        return scope.ServiceProvider.GetRequiredService<RuntimeDbContext>().Database.GetConnectionString();
     }
 
     private static WorkflowExecutable Executable(string artifactId) => new(
@@ -408,13 +408,13 @@ public sealed class RuntimeEntityFrameworkCoreStandaloneTests
         public async Task CreateSchemaAsync(IServiceProvider provider)
         {
             await using var scope = provider.CreateAsyncScope();
-            await scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>().Database.EnsureCreatedAsync();
+            await scope.ServiceProvider.GetRequiredService<RuntimeDbContext>().Database.EnsureCreatedAsync();
         }
 
         public async Task DeleteExecutableRowsAsync(IServiceProvider provider)
         {
             await using var scope = provider.CreateAsyncScope();
-            var context = scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>();
+            var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
             Assert.Equal(1, await context.WorkflowExecutables.ExecuteDeleteAsync());
             await context.WorkflowExecutableCoordinations.ExecuteDeleteAsync();
         }

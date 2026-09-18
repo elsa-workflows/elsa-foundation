@@ -17,8 +17,8 @@ public sealed class RuntimeWorkflowTestScopeCleanupPostgreSqlSmokeTests(RuntimeB
     [SkippableFact]
     public Task PostgreSql_test_scope_cleanup_model_and_transaction() => RuntimeWorkflowTestScopeCleanupProviderSmoke.RunAsync(
         fixture,
-        connection => new BookmarkStatePostgreSqlDbContext(new DbContextOptionsBuilder<BookmarkStatePostgreSqlDbContext>().UseNpgsql(connection).Options),
-        BookmarkStatePostgreSqlDbContext.ExpectedProviderName);
+        connection => new RuntimePostgreSqlDbContext(new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).Options),
+        RuntimePostgreSqlDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
@@ -27,8 +27,8 @@ public sealed class RuntimeWorkflowTestScopeCleanupSqlServerSmokeTests(RuntimeBo
     [SkippableFact]
     public Task SqlServer_test_scope_cleanup_model_and_transaction() => RuntimeWorkflowTestScopeCleanupProviderSmoke.RunAsync(
         fixture,
-        connection => new BookmarkStateSqlServerDbContext(new DbContextOptionsBuilder<BookmarkStateSqlServerDbContext>().UseSqlServer(connection).Options),
-        BookmarkStateSqlServerDbContext.ExpectedProviderName);
+        connection => new RuntimeSqlServerDbContext(new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(connection).Options),
+        RuntimeSqlServerDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
@@ -37,8 +37,8 @@ public sealed class RuntimeWorkflowTestScopeCleanupMySqlSmokeTests(RuntimeBookma
     [SkippableFact]
     public Task MySql_test_scope_cleanup_model_and_transaction() => RuntimeWorkflowTestScopeCleanupProviderSmoke.RunAsync(
         fixture,
-        connection => new BookmarkStateMySqlDbContext(new DbContextOptionsBuilder<BookmarkStateMySqlDbContext>().UseMySQL(connection).Options),
-        BookmarkStateMySqlDbContext.ExpectedProviderName);
+        connection => new RuntimeMySqlDbContext(new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(connection).Options),
+        RuntimeMySqlDbContext.ExpectedProviderName);
 }
 
 internal static class RuntimeWorkflowTestScopeCleanupProviderSmoke
@@ -47,7 +47,7 @@ internal static class RuntimeWorkflowTestScopeCleanupProviderSmoke
 
     public static async Task RunAsync(
         RuntimeBookmarksProviderFixture fixture,
-        Func<string, BookmarkStateDbContext> createContext,
+        Func<string, RuntimeDbContext> createContext,
         string expectedProvider)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");

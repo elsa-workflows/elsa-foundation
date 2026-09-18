@@ -263,18 +263,18 @@ public sealed class EfWorkflowDispatchTestScopedAdmissionTests
             var connectionString = $"Data Source=file:test-scoped-admission-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
             var keeper = new SqliteConnection(connectionString);
             await keeper.OpenAsync();
-            await using var schema = new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(keeper).Options);
+            await using var schema = new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(keeper).Options);
             await schema.Database.EnsureCreatedAsync();
             return new TestDatabase(keeper);
         }
 
-        public BookmarkStateSqliteDbContext Open(params IInterceptor[] interceptors)
+        public RuntimeSqliteDbContext Open(params IInterceptor[] interceptors)
         {
-            var builder = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(keeper);
+            var builder = new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(keeper);
             if (interceptors.Length > 0)
                 builder.AddInterceptors(interceptors);
-            return new BookmarkStateSqliteDbContext(builder.Options);
+            return new RuntimeSqliteDbContext(builder.Options);
         }
 
         public ValueTask DisposeAsync() => keeper.DisposeAsync();

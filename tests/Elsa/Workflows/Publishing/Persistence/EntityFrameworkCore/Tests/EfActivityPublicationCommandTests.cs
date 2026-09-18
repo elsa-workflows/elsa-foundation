@@ -36,7 +36,7 @@ public sealed class EfActivityPublicationCommandTests : IAsyncLifetime
     {
         publishing = await SqliteTestDatabase.CreateAsync<PublishingSnapshotReviewSqliteDbContext>(options => new(options));
         design = await SqliteTestDatabase.CreateAsync<ActivitiesDesignSqliteDbContext>(options => new(options));
-        runtime = await SqliteTestDatabase.CreateAsync<BookmarkStateSqliteDbContext>(options => new(options));
+        runtime = await SqliteTestDatabase.CreateAsync<RuntimeSqliteDbContext>(options => new(options));
         await SeedAsync("definition-1", "draft-1");
     }
 
@@ -384,7 +384,7 @@ public sealed class EfActivityPublicationCommandTests : IAsyncLifetime
         new(
             publishing.Open<PublishingSnapshotReviewSqliteDbContext>(options => new(options), publishingInterceptors ?? []),
             design.Open<ActivitiesDesignSqliteDbContext>(options => new(options), designInterceptors ?? []),
-            runtime.Open<BookmarkStateSqliteDbContext>(options => new(options)),
+            runtime.Open<RuntimeSqliteDbContext>(options => new(options)),
             TestAccess.Scoped(scope));
 
     private static async Task<RuntimeRows> RuntimeRowsAsync(ActivityPublicationScope scope)

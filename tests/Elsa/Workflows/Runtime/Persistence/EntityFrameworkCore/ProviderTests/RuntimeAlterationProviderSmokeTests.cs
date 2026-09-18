@@ -23,8 +23,8 @@ public sealed class RuntimeAlterationPostgreSqlSmokeTests(RuntimeBookmarksPostgr
     public Task PostgreSql_runtime_alteration_and_test_scope_smoke() =>
         RuntimeAlterationProviderSmoke.RunAsync(
             fixture,
-            c => new BookmarkStatePostgreSqlDbContext(new DbContextOptionsBuilder<BookmarkStatePostgreSqlDbContext>().UseNpgsql(c).Options),
-            BookmarkStatePostgreSqlDbContext.ExpectedProviderName,
+            c => new RuntimePostgreSqlDbContext(new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(c).Options),
+            RuntimePostgreSqlDbContext.ExpectedProviderName,
             "PostgreSql");
 }
 
@@ -35,8 +35,8 @@ public sealed class RuntimeAlterationSqlServerSmokeTests(RuntimeBookmarksSqlServ
     public Task SqlServer_runtime_alteration_and_test_scope_smoke() =>
         RuntimeAlterationProviderSmoke.RunAsync(
             fixture,
-            c => new BookmarkStateSqlServerDbContext(new DbContextOptionsBuilder<BookmarkStateSqlServerDbContext>().UseSqlServer(c).Options),
-            BookmarkStateSqlServerDbContext.ExpectedProviderName,
+            c => new RuntimeSqlServerDbContext(new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(c).Options),
+            RuntimeSqlServerDbContext.ExpectedProviderName,
             "SqlServer");
 }
 
@@ -47,8 +47,8 @@ public sealed class RuntimeAlterationMySqlSmokeTests(RuntimeBookmarksMySqlFixtur
     public Task MySql_runtime_alteration_and_test_scope_smoke() =>
         RuntimeAlterationProviderSmoke.RunAsync(
             fixture,
-            c => new BookmarkStateMySqlDbContext(new DbContextOptionsBuilder<BookmarkStateMySqlDbContext>().UseMySQL(c).Options),
-            BookmarkStateMySqlDbContext.ExpectedProviderName,
+            c => new RuntimeMySqlDbContext(new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(c).Options),
+            RuntimeMySqlDbContext.ExpectedProviderName,
             "MySql");
 }
 
@@ -58,7 +58,7 @@ internal static class RuntimeAlterationProviderSmoke
 
     public static async Task RunAsync(
         RuntimeBookmarksProviderFixture fixture,
-        Func<string, BookmarkStateDbContext> createContext,
+        Func<string, RuntimeDbContext> createContext,
         string expectedProvider,
         string providerName)
     {
@@ -209,7 +209,7 @@ internal static class RuntimeAlterationProviderSmoke
     }
 
     private static async Task RollbackIsInvisibleAfterRestartAsync(
-        Func<string, BookmarkStateDbContext> createContext,
+        Func<string, RuntimeDbContext> createContext,
         string connectionString,
         IRuntimeRecoveryContinuationCodec codec,
         string scope,
@@ -236,7 +236,7 @@ internal static class RuntimeAlterationProviderSmoke
     }
 
     private static async Task OptimisticConcurrencyIsProviderCompatibleAsync(
-        Func<string, BookmarkStateDbContext> createContext,
+        Func<string, RuntimeDbContext> createContext,
         string connectionString,
         IRuntimeRecoveryContinuationCodec codec,
         string scope,

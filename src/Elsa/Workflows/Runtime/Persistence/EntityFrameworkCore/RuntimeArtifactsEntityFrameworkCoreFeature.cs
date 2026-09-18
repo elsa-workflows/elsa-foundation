@@ -70,6 +70,6 @@ public class RuntimeArtifactsEntityFrameworkCoreFeature : IShellFeature
             ConnectionString = ConnectionString,
             ConnectionName = ConnectionName, Schema = Schema, Pooling = Pooling
         });
-        services.AddEfModuleMigrations<BookmarkStateDbContext>(Provider ?? "Sqlite");
+        services.AddEfModuleMigrations<RuntimeDbContext>(Provider ?? "Sqlite");
     }
 }

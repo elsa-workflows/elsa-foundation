@@ -12,7 +12,7 @@ using System.Data.Common;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 public sealed class EfWorkflowExecutableSourceReferenceStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor access,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowExecutableSourceReferenceStore
 {
@@ -63,7 +63,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
     }
 
     /// <summary>The context this store reads and stages through.</summary>
-    internal BookmarkStateDbContext Context => context;
+    internal RuntimeDbContext Context => context;
 
     /// <summary>
     /// Stages a create-only source reference in the caller's open transaction without saving. A live reference

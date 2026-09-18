@@ -214,7 +214,7 @@ public sealed class EfRuntimeCheckpointIncidentParticipantTests
     };
 
     private static async Task StageAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         RuntimeStateChange<IncidentState> change,
         string scope,
         string workflowExecutionId)
@@ -241,8 +241,8 @@ public sealed class EfRuntimeCheckpointIncidentParticipantTests
             var connectionString = $"Data Source=file:ef-r19-incident-participant-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
             var keeper = new SqliteConnection(connectionString);
             await keeper.OpenAsync();
-            await using var context = new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(keeper).Options);
+            await using var context = new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(keeper).Options);
             await context.Database.EnsureCreatedAsync();
             return new TestDatabase(keeper, connectionString);
         }
@@ -254,15 +254,15 @@ public sealed class EfRuntimeCheckpointIncidentParticipantTests
     private sealed class TestFixture : IAsyncDisposable
     {
         private readonly SqliteConnection connection;
-        public BookmarkStateSqliteDbContext Context { get; }
+        public RuntimeSqliteDbContext Context { get; }
         public EfIncidentStateStore Store { get; }
 
         public TestFixture(string connectionString, string scope)
         {
             connection = new SqliteConnection(connectionString);
             connection.Open();
-            Context = new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            Context = new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
             Store = new(Context, new FixedAccessor(scope));
         }
 

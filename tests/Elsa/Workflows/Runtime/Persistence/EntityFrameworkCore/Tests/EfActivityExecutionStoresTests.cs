@@ -71,7 +71,7 @@ public sealed class EfActivityExecutionStoresTests
             await using (var connection = new SqliteConnection($"Data Source={path}"))
             {
                 await connection.OpenAsync();
-                await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+                await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
                 await context.Database.EnsureCreatedAsync();
                 var accessor = new Accessor(scope);
                 var continuationCodec = new HmacRuntimeRecoveryContinuationCodec(Microsoft.Extensions.Options.Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "ef-runtime-restart-signing-key-32-bytes" }));
@@ -88,7 +88,7 @@ public sealed class EfActivityExecutionStoresTests
             await using (var connection = new SqliteConnection($"Data Source={path}"))
             {
                 await connection.OpenAsync();
-                await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+                await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
                 var accessor = new Accessor(scope);
                 var continuationCodec = new HmacRuntimeRecoveryContinuationCodec(Microsoft.Extensions.Options.Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "ef-runtime-restart-signing-key-32-bytes" }));
                 var hierarchyCodec = new HmacActivityExecutionHierarchyCursorCodec(Microsoft.Extensions.Options.Options.Create(new ActivityExecutionHierarchyCursorOptions { SigningKey = "ef-runtime-restart-signing-key-32-bytes" }));
@@ -118,7 +118,7 @@ public sealed class EfActivityExecutionStoresTests
             await using (var connection = new SqliteConnection($"Data Source={path}"))
             {
                 await connection.OpenAsync();
-                await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+                await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
                 await context.Database.EnsureCreatedAsync();
             }
 
@@ -149,7 +149,7 @@ public sealed class EfActivityExecutionStoresTests
             await using (var connection = new SqliteConnection($"Data Source={path}"))
             {
                 await connection.OpenAsync();
-                await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+                await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
                 await context.Database.EnsureCreatedAsync();
             }
 
@@ -546,7 +546,7 @@ public sealed class EfActivityExecutionStoresTests
         services.AddRuntimeBookmarksEntityFrameworkCore(new RuntimeBookmarksEntityFrameworkCoreOptions { Provider = "sqlite", ConnectionString = options.ConnectionString });
         services.AddRuntimeArtifactsEntityFrameworkCore(new RuntimeArtifactsEntityFrameworkCoreOptions { Provider = "SQLite", ConnectionString = options.ConnectionString });
 
-        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(RuntimeSqliteDbContext));
         Assert.Equal(RuntimeActivityExecutionStoreBackend.EntityFramework, RuntimeActivityExecutionStoreBackend.Find(services)!.Name);
         using var provider = services.BuildServiceProvider(validateScopes: true);
         using var scope = provider.CreateScope();
@@ -578,12 +578,12 @@ public sealed class EfActivityExecutionStoresTests
         activityBackend.RemoveOwnedArtifacts(services);
 
         Assert.Equal(WorkflowExecutionStateStoreBackend.EntityFramework, WorkflowExecutionStateStoreBackend.Find(services)!.Name);
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(RuntimeDbContext));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(RuntimeSqliteDbContext));
         using var provider = services.BuildServiceProvider(validateScopes: true);
         using var scope = provider.CreateScope();
         Assert.IsType<EfWorkflowExecutionStateStore>(scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
-        Assert.IsType<BookmarkStateSqliteDbContext>(scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
+        Assert.IsType<RuntimeSqliteDbContext>(scope.ServiceProvider.GetRequiredService<RuntimeDbContext>());
     }
 
     [Fact]
@@ -693,14 +693,14 @@ public sealed class EfActivityExecutionStoresTests
     private static IActivityExecutionHierarchyCursorCodec HierarchyCodec() =>
         new HmacActivityExecutionHierarchyCursorCodec(Microsoft.Extensions.Options.Options.Create(new ActivityExecutionHierarchyCursorOptions { SigningKey = "ef-r07-r09-race-hierarchy-signing-key-32-bytes" }));
 
-    private static async Task<Exception?[]> RunCreateRaceAsync(string path, string tableName, Func<BookmarkStateDbContext, Task> save)
+    private static async Task<Exception?[]> RunCreateRaceAsync(string path, string tableName, Func<RuntimeDbContext, Task> save)
     {
         var barrier = new ConcurrentCreateBarrier(tableName);
         await using var firstConnection = new SqliteConnection($"Data Source={path}");
         await using var secondConnection = new SqliteConnection($"Data Source={path}");
         await Task.WhenAll(firstConnection.OpenAsync(), secondConnection.OpenAsync());
-        await using var firstContext = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(firstConnection).AddInterceptors(barrier).Options);
-        await using var secondContext = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(secondConnection).AddInterceptors(barrier).Options);
+        await using var firstContext = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(firstConnection).AddInterceptors(barrier).Options);
+        await using var secondContext = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(secondConnection).AddInterceptors(barrier).Options);
         return await Task.WhenAll(CaptureAsync(() => save(firstContext)), CaptureAsync(() => save(secondContext)));
     }
 
@@ -708,14 +708,14 @@ public sealed class EfActivityExecutionStoresTests
         string path,
         string scope,
         string identity,
-        Func<BookmarkStateDbContext, TStore> createStore,
+        Func<RuntimeDbContext, TStore> createStore,
         Func<TStore, Task> read,
-        Func<BookmarkStateDbContext, Task> save)
+        Func<RuntimeDbContext, Task> save)
     {
         await using (var readConnection = new SqliteConnection($"Data Source={path}"))
         {
             await readConnection.OpenAsync();
-            await using var readContext = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(readConnection).AddInterceptors(new ThrowingReaderInterceptor()).Options);
+            await using var readContext = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(readConnection).AddInterceptors(new ThrowingReaderInterceptor()).Options);
             var exception = await Assert.ThrowsAsync<RuntimeActivityExecutionEntityFrameworkPersistenceException>(() => read(createStore(readContext)));
             Assert.Equal("reading", exception.Operation);
             Assert.False(string.IsNullOrWhiteSpace(exception.Identity));
@@ -724,7 +724,7 @@ public sealed class EfActivityExecutionStoresTests
         await using (var saveConnection = new SqliteConnection($"Data Source={path}"))
         {
             await saveConnection.OpenAsync();
-            await using var saveContext = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(saveConnection).AddInterceptors(new ThrowingSaveInterceptor()).Options);
+            await using var saveContext = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(saveConnection).AddInterceptors(new ThrowingSaveInterceptor()).Options);
             var exception = await Assert.ThrowsAsync<RuntimeActivityExecutionEntityFrameworkPersistenceException>(() => save(saveContext));
             Assert.Equal("saving", exception.Operation);
             Assert.Equal(identity == "hierarchy" ? "root" : "activity", exception.Identity);
@@ -803,15 +803,15 @@ public sealed class EfActivityExecutionStoresTests
     private sealed class Fixture : IAsyncDisposable
     {
         private readonly SqliteConnection connection;
-        private readonly BookmarkStateDbContext context;
+        private readonly RuntimeDbContext context;
         private readonly Accessor accessor;
         public EfActivityExecutionStateStore State { get; }
         public EfActivityExecutionInspectionStore Inspection { get; }
         public EfActivityExecutionHierarchyStore Hierarchy { get; }
-        public BookmarkStateDbContext Context => context;
+        public RuntimeDbContext Context => context;
         public IActivityExecutionHierarchyCursorCodec HierarchyCursorCodec { get; }
 
-        private Fixture(SqliteConnection connection, BookmarkStateDbContext context, Accessor accessor)
+        private Fixture(SqliteConnection connection, RuntimeDbContext context, Accessor accessor)
         {
             this.connection = connection;
             this.context = context;
@@ -826,7 +826,7 @@ public sealed class EfActivityExecutionStoresTests
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
-            var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
             await context.Database.EnsureCreatedAsync();
             return new Fixture(connection, context, new Accessor(scope));
         }
@@ -834,7 +834,7 @@ public sealed class EfActivityExecutionStoresTests
         public async Task<Fixture> ReopenAsync(string scope)
         {
             await context.DisposeAsync();
-            var reopened = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            var reopened = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
             return new Fixture(connection, reopened, new Accessor(scope));
         }
 

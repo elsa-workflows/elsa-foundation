@@ -19,7 +19,7 @@ public sealed class RuntimeEntityFrameworkCoreDispatchWorkflowTests : DispatchWo
                 RecoveryContinuationSigningKey = "ef-runtime-dispatch-recovery-signing-key-32",
                 HierarchyCursorSigningKey = "ef-runtime-dispatch-hierarchy-signing-key-32"
             })
-            .AddEfModuleMigrations<BookmarkStateDbContext>("Sqlite");
+            .AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
 
     public override async Task DisposeAsync()
     {

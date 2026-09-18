@@ -42,6 +42,6 @@ public class RuntimeWorkflowExecutionEntityFrameworkCoreFeature : IShellFeature
     {
         ArgumentNullException.ThrowIfNull(services);
         services.AddRuntimeWorkflowExecutionEntityFrameworkCore(new RuntimeWorkflowExecutionEntityFrameworkCoreOptions { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName, Schema = Schema, Pooling = Pooling, RecoveryContinuationSigningKey = RecoveryContinuationSigningKey });
-        services.AddEfModuleMigrations<BookmarkStateDbContext>(Provider);
+        services.AddEfModuleMigrations<RuntimeDbContext>(Provider);
     }
 }

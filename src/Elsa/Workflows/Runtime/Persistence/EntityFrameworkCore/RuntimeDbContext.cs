@@ -5,8 +5,13 @@ using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
-/// <summary>Provider-neutral model for R01 bookmark state and stimulus lookup.</summary>
-public abstract class BookmarkStateDbContext(DbContextOptions options) : DbContext(options)
+/// <summary>
+/// Provider-neutral model for every Runtime table: bookmarks and stimulus lookup, workflow and activity
+/// execution state, scheduler work, durable timers, the post-commit outbox, dispatch, alterations, test
+/// scopes, trigger bindings and activation slots. One context, so one migration set and one history table
+/// (<see cref="RuntimeEfModule.HistoryModuleName"/>) covers the whole Runtime module.
+/// </summary>
+public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(options)
 {
     public DbSet<BookmarkStateEntity> Bookmarks => Set<BookmarkStateEntity>();
     public DbSet<WorkflowExecutableEntity> WorkflowExecutables => Set<WorkflowExecutableEntity>();

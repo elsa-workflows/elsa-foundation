@@ -20,7 +20,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 internal static class EfRuntimeCheckpointParticipantStaging
 {
     public static async ValueTask StageWorkflowExecutionAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         RuntimeStateChange<WorkflowExecutionState> change,
         string scope,
         DateTimeOffset occurredAt,
@@ -54,7 +54,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
     }
 
     public static async ValueTask StageSchedulerAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         RuntimeStateChange<SchedulerState> change,
         string scope,
         CancellationToken cancellationToken)
@@ -91,7 +91,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
     /// transaction creation, and commit remain the caller's responsibility.
     /// </remarks>
     public static async ValueTask StageBookmarksAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         IReadOnlyCollection<RuntimeStateChange<BookmarkState>> changes,
         string scope,
         CancellationToken cancellationToken)
@@ -120,7 +120,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
     }
 
     private static (RuntimeStateChange<BookmarkState> Change, string Id) ValidatedBookmark(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         RuntimeStateChange<BookmarkState> change,
         string scope,
         CancellationToken cancellationToken)
@@ -141,7 +141,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
     }
 
     private static void StageBookmark(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         RuntimeStateChange<BookmarkState> change,
         string scope,
         string id,
@@ -176,7 +176,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
     /// tracking state. SaveChanges, transaction creation, and commit remain the caller's responsibility.
     /// </remarks>
     public static async ValueTask StageDurableValuesAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> changes,
         string scope,
         CancellationToken cancellationToken)
@@ -205,7 +205,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
     }
 
     private static (RuntimeStateChange<DurableValueState> Change, string Id) ValidatedDurableValue(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         RuntimeStateChange<DurableValueState> change,
         string scope,
         CancellationToken cancellationToken)
@@ -229,7 +229,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
     }
 
     private static void StageDurableValue(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         RuntimeStateChange<DurableValueState> change,
         string scope,
         string id,
@@ -257,7 +257,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
 
     /// <summary>Stages execution-liveness state without committing or clearing sibling checkpoint writes.</summary>
     public static async ValueTask StageOperationalAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         IReadOnlyCollection<RuntimeStateChange<ExecutionLivenessState>> changes,
         string scope,
         CancellationToken cancellationToken)
@@ -286,7 +286,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
     }
 
     private static (RuntimeStateChange<ExecutionLivenessState> Change, string Id) ValidatedOperational(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         RuntimeStateChange<ExecutionLivenessState> change,
         string scope,
         CancellationToken cancellationToken)
@@ -304,7 +304,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
     }
 
     private static void StageOperational(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         RuntimeStateChange<ExecutionLivenessState> change,
         string scope,
         ExecutionLivenessStateEntity? row)
@@ -344,7 +344,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
     /// caller to stage sibling participants and the immutable checkpoint marker on the same context safely.
     /// </remarks>
     public static async ValueTask StageConsumedSchedulerWorkAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         ConsumedSchedulerWorkItem consumed,
         string scope,
         CancellationToken cancellationToken)
@@ -409,7 +409,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
     }
 
     public static async ValueTask StageExecutionFenceAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         string scope,
         string workflowExecutionId,
         RuntimeExecutionFence expected,

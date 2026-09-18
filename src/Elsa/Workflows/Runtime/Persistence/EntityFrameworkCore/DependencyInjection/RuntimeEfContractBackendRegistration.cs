@@ -16,11 +16,11 @@ internal static class RuntimeEfContractBackendRegistration
         operational.EnsureOwnsRegisteredContracts(services);
 
         var contextDescriptors = services
-            .Where(descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext))
+            .Where(descriptor => descriptor.ServiceType == typeof(RuntimeDbContext))
             .ToArray();
         if (contextDescriptors.Length != 1)
             throw new InvalidOperationException(
-                $"{owner} requires exactly one shared BookmarkStateDbContext registration owned by Runtime EF persistence.");
+                $"{owner} requires exactly one shared RuntimeDbContext registration owned by Runtime EF persistence.");
 
         var context = contextDescriptors[0];
         var ownsContext =
@@ -37,6 +37,6 @@ internal static class RuntimeEfContractBackendRegistration
 
         if (!ownsContext)
             throw new InvalidOperationException(
-                $"{owner} refuses to reuse an unowned BookmarkStateDbContext registration.");
+                $"{owner} refuses to reuse an unowned RuntimeDbContext registration.");
     }
 }

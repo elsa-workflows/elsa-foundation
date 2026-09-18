@@ -2,7 +2,7 @@
 
 #nullable disable
 
-namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.BookmarkState.PostgreSql
+namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runtime.PostgreSql
 {
     /// <inheritdoc />
     public partial class Initial : Migration

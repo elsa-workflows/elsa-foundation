@@ -25,14 +25,14 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests;
 internal sealed record PublishingNativeProvider(
     Func<string, IInterceptor[], PublishingSnapshotReviewDbContext> Publishing,
     Func<string, IInterceptor[], ActivitiesDesignDbContext> Design,
-    Func<string, IInterceptor[], BookmarkStateDbContext> Runtime,
+    Func<string, IInterceptor[], RuntimeDbContext> Runtime,
     Func<string, IInterceptor[], WorkflowsDesignDbContext> WorkflowDesign,
     Func<string, string, Task>? CreateDesignDatabase = null)
 {
     public static PublishingNativeProvider PostgreSql { get; } = new(
         (connection, interceptors) => new PublishingSnapshotReviewPostgreSqlDbContext(Options<PublishingSnapshotReviewPostgreSqlDbContext>(builder => builder.UseNpgsql(connection), interceptors)),
         (connection, interceptors) => new ActivitiesDesignPostgreSqlDbContext(Options<ActivitiesDesignPostgreSqlDbContext>(builder => builder.UseNpgsql(connection), interceptors)),
-        (connection, interceptors) => new BookmarkStatePostgreSqlDbContext(Options<BookmarkStatePostgreSqlDbContext>(builder => builder.UseNpgsql(connection), interceptors)),
+        (connection, interceptors) => new RuntimePostgreSqlDbContext(Options<RuntimePostgreSqlDbContext>(builder => builder.UseNpgsql(connection), interceptors)),
         (connection, interceptors) => new WorkflowsDesignPostgreSqlDbContext(Options<WorkflowsDesignPostgreSqlDbContext>(builder => builder.UseNpgsql(connection), interceptors)),
         async (serverConnection, database) =>
         {
@@ -46,13 +46,13 @@ internal sealed record PublishingNativeProvider(
     public static PublishingNativeProvider SqlServer { get; } = new(
         (connection, interceptors) => new PublishingSnapshotReviewSqlServerDbContext(Options<PublishingSnapshotReviewSqlServerDbContext>(builder => builder.UseSqlServer(connection), interceptors)),
         (connection, interceptors) => new ActivitiesDesignSqlServerDbContext(Options<ActivitiesDesignSqlServerDbContext>(builder => builder.UseSqlServer(connection), interceptors)),
-        (connection, interceptors) => new BookmarkStateSqlServerDbContext(Options<BookmarkStateSqlServerDbContext>(builder => builder.UseSqlServer(connection), interceptors)),
+        (connection, interceptors) => new RuntimeSqlServerDbContext(Options<RuntimeSqlServerDbContext>(builder => builder.UseSqlServer(connection), interceptors)),
         (connection, interceptors) => new WorkflowsDesignSqlServerDbContext(Options<WorkflowsDesignSqlServerDbContext>(builder => builder.UseSqlServer(connection), interceptors)));
 
     public static PublishingNativeProvider MySql { get; } = new(
         (connection, interceptors) => new PublishingSnapshotReviewMySqlDbContext(Options<PublishingSnapshotReviewMySqlDbContext>(builder => builder.UseMySQL(connection), interceptors)),
         (connection, interceptors) => new ActivitiesDesignMySqlDbContext(Options<ActivitiesDesignMySqlDbContext>(builder => builder.UseMySQL(connection), interceptors)),
-        (connection, interceptors) => new BookmarkStateMySqlDbContext(Options<BookmarkStateMySqlDbContext>(builder => builder.UseMySQL(connection), interceptors)),
+        (connection, interceptors) => new RuntimeMySqlDbContext(Options<RuntimeMySqlDbContext>(builder => builder.UseMySQL(connection), interceptors)),
         (connection, interceptors) => new WorkflowsDesignMySqlDbContext(Options<WorkflowsDesignMySqlDbContext>(builder => builder.UseMySQL(connection), interceptors)));
 
     private static DbContextOptions<TContext> Options<TContext>(Action<DbContextOptionsBuilder<TContext>> use, IInterceptor[] interceptors)

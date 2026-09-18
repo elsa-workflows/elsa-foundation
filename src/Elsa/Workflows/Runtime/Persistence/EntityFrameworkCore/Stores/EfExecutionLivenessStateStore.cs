@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>Opt-in EF Core execution-liveness store with provider-neutral CAS and recovery paging (R16).</summary>
 public sealed class EfExecutionLivenessStateStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IExecutionLivenessStateStore, IRuntimeRecoveryLivenessPageSource
 {

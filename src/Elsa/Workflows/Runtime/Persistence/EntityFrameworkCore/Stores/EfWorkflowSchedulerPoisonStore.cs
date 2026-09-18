@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// row revision as an optimistic compare-and-swap token and never fall back to an unconditional update.
 /// </remarks>
 public sealed class EfWorkflowSchedulerPoisonStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowSchedulerPoisonStore
 {
     private static readonly EfWriteRetry Records = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey);

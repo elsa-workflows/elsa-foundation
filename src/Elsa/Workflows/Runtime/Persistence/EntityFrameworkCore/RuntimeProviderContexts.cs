@@ -3,31 +3,31 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
-public sealed class BookmarkStateSqliteDbContext(DbContextOptions<BookmarkStateSqliteDbContext> options) : BookmarkStateDbContext(options)
+public sealed class RuntimeSqliteDbContext(DbContextOptions<RuntimeSqliteDbContext> options) : RuntimeDbContext(options)
 {
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.Sqlite;
-    protected override void ConfigureProvider(ModelBuilder modelBuilder) => BookmarkStateProviderModel.ConfigureText(modelBuilder, "TEXT");
+    protected override void ConfigureProvider(ModelBuilder modelBuilder) => RuntimeProviderModel.ConfigureText(modelBuilder, "TEXT");
 }
 
-public sealed class BookmarkStateSqlServerDbContext(DbContextOptions<BookmarkStateSqlServerDbContext> options) : BookmarkStateDbContext(options)
+public sealed class RuntimeSqlServerDbContext(DbContextOptions<RuntimeSqlServerDbContext> options) : RuntimeDbContext(options)
 {
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.SqlServer;
-    protected override void ConfigureProvider(ModelBuilder modelBuilder) => BookmarkStateProviderModel.ConfigureText(modelBuilder, "nvarchar(max)");
+    protected override void ConfigureProvider(ModelBuilder modelBuilder) => RuntimeProviderModel.ConfigureText(modelBuilder, "nvarchar(max)");
 }
 
-public sealed class BookmarkStatePostgreSqlDbContext(DbContextOptions<BookmarkStatePostgreSqlDbContext> options) : BookmarkStateDbContext(options)
+public sealed class RuntimePostgreSqlDbContext(DbContextOptions<RuntimePostgreSqlDbContext> options) : RuntimeDbContext(options)
 {
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.PostgreSql;
-    protected override void ConfigureProvider(ModelBuilder modelBuilder) => BookmarkStateProviderModel.ConfigureText(modelBuilder, "text");
+    protected override void ConfigureProvider(ModelBuilder modelBuilder) => RuntimeProviderModel.ConfigureText(modelBuilder, "text");
 }
 
-public sealed class BookmarkStateMySqlDbContext(DbContextOptions<BookmarkStateMySqlDbContext> options) : BookmarkStateDbContext(options)
+public sealed class RuntimeMySqlDbContext(DbContextOptions<RuntimeMySqlDbContext> options) : RuntimeDbContext(options)
 {
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.MySql;
-    protected override void ConfigureProvider(ModelBuilder modelBuilder) => BookmarkStateProviderModel.ConfigureText(modelBuilder, "longtext");
+    protected override void ConfigureProvider(ModelBuilder modelBuilder) => RuntimeProviderModel.ConfigureText(modelBuilder, "longtext");
 }
 
-file static class BookmarkStateProviderModel
+file static class RuntimeProviderModel
 {
     public static void ConfigureText(ModelBuilder modelBuilder, string type)
     {

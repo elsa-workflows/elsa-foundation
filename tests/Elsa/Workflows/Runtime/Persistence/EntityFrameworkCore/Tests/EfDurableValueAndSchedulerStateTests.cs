@@ -348,7 +348,7 @@ public sealed class EfDurableValueAndSchedulerStateTests
         });
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>();
+        var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
         await context.Database.OpenConnectionAsync();
         await context.Database.EnsureCreatedAsync();
         Assert.IsType<EfExecutionLivenessStateStore>(scope.ServiceProvider.GetRequiredService<IExecutionLivenessStateStore>());
@@ -389,9 +389,9 @@ public sealed class EfDurableValueAndSchedulerStateTests
             RecoveryContinuationSigningKey = signingKey
         });
 
-        Assert.Single(services, x => x.ServiceType == typeof(BookmarkStateSqliteDbContext));
-        Assert.Single(services, x => x.ServiceType == typeof(BookmarkStateDbContext));
-        Assert.Single(services, x => x.ServiceType == typeof(DbContextOptions<BookmarkStateSqliteDbContext>));
+        Assert.Single(services, x => x.ServiceType == typeof(RuntimeSqliteDbContext));
+        Assert.Single(services, x => x.ServiceType == typeof(RuntimeDbContext));
+        Assert.Single(services, x => x.ServiceType == typeof(DbContextOptions<RuntimeSqliteDbContext>));
     }
 
     [Fact]
@@ -411,9 +411,9 @@ public sealed class EfDurableValueAndSchedulerStateTests
             RecoveryContinuationSigningKey = signingKey
         });
 
-        Assert.Single(services, x => x.ServiceType == typeof(BookmarkStateSqliteDbContext));
-        Assert.Single(services, x => x.ServiceType == typeof(BookmarkStateDbContext));
-        Assert.Single(services, x => x.ServiceType == typeof(DbContextOptions<BookmarkStateSqliteDbContext>));
+        Assert.Single(services, x => x.ServiceType == typeof(RuntimeSqliteDbContext));
+        Assert.Single(services, x => x.ServiceType == typeof(RuntimeDbContext));
+        Assert.Single(services, x => x.ServiceType == typeof(DbContextOptions<RuntimeSqliteDbContext>));
     }
 
     private static DurableValueState Value(string durableValueId, string workflowExecutionId) =>
@@ -456,7 +456,7 @@ public sealed class EfDurableValueAndSchedulerStateTests
             var connectionString = $"Data Source=file:runtime-operational-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
             var keeper = new SqliteConnection(connectionString);
             await keeper.OpenAsync();
-            await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(keeper).Options);
+            await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(keeper).Options);
             await context.Database.EnsureCreatedAsync();
             return new TestDatabase(keeper, connectionString);
         }
@@ -468,7 +468,7 @@ public sealed class EfDurableValueAndSchedulerStateTests
     private sealed class TestFixture : IAsyncDisposable
     {
         private readonly SqliteConnection _connection;
-        public BookmarkStateSqliteDbContext Context { get; }
+        public RuntimeSqliteDbContext Context { get; }
         public EfDurableValueStateStore Values { get; }
         public EfSchedulerStateStore Scheduler { get; }
         public EfExecutionLivenessStateStore Liveness { get; }
@@ -479,7 +479,7 @@ public sealed class EfDurableValueAndSchedulerStateTests
         {
             _connection = new SqliteConnection(connectionString);
             _connection.Open();
-            Context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(_connection).Options);
+            Context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(_connection).Options);
             var accessor = new Accessor(scope);
             Values = new EfDurableValueStateStore(Context, accessor, new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) })));
             Scheduler = new EfSchedulerStateStore(Context, accessor);

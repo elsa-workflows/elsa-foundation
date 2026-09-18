@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// The broader checkpoint composition and dispatch completion/redrive surfaces remain owned by their respective slices.
 /// </remarks>
 public sealed class EfWorkflowDispatchStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowDispatchStore,
     IWorkflowDispatchQueryStore,
     IWorkflowDispatchDeleteStore,
@@ -23,7 +23,7 @@ public sealed class EfWorkflowDispatchStore(
     IWorkflowDispatchCancellationStore
 {
     private static readonly EfWriteRetry Transitions = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);
-    private readonly BookmarkStateDbContext _context = context ?? throw new ArgumentNullException(nameof(context));
+    private readonly RuntimeDbContext _context = context ?? throw new ArgumentNullException(nameof(context));
     private readonly IPersistenceAccessContextAccessor _access = accessContextAccessor ?? throw new ArgumentNullException(nameof(accessContextAccessor));
 
     public async ValueTask<WorkflowDispatchRecord> SaveAsync(WorkflowDispatchRecord record, CancellationToken cancellationToken = default)

@@ -37,5 +37,5 @@ public sealed class RuntimeWorkflowAlterationEntityFrameworkCoreFeature : IShell
     [ManifestSetting(DisplayName = "Recovery continuation signing key", Description = "At least 32 UTF-8 bytes shared by nodes consuming durable pages.", Category = "Security", Secret = true)]
     public string? RecoveryContinuationSigningKey { get; set; }
     public void ConfigureServices(IServiceCollection services) => services.AddRuntimeWorkflowAlterationEntityFrameworkCore(new() { Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName, Schema = Schema, Pooling = Pooling, RecoveryContinuationSigningKey = RecoveryContinuationSigningKey })
-        .AddEfModuleMigrations<BookmarkStateDbContext>(Provider);
+        .AddEfModuleMigrations<RuntimeDbContext>(Provider);
 }

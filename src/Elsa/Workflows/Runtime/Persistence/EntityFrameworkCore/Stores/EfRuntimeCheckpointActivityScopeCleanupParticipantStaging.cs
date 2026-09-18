@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 internal static class EfRuntimeCheckpointActivityScopeCleanupParticipantStaging
 {
     public static async ValueTask StageAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         IReadOnlyCollection<ActivityScopeCleanupRequest> cleanups,
         string scope,
         CancellationToken cancellationToken)

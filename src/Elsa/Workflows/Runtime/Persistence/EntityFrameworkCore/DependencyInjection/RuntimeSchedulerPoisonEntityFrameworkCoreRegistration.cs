@@ -34,7 +34,7 @@ public static class RuntimeSchedulerPoisonEntityFrameworkCoreRegistration
                     .SingleOrDefault();
                 if (prior is null || !OptionsEqual(prior, options))
                     throw new InvalidOperationException("Runtime scheduler-poison EF persistence is already registered with different provider options.");
-                BookmarkStateEfContextRegistration.EnsureContextIsAvailable(
+                RuntimeEfContextRegistration.EnsureContextIsAvailable(
                     services,
                     provider,
                     "Runtime scheduler poison",
@@ -50,7 +50,7 @@ public static class RuntimeSchedulerPoisonEntityFrameworkCoreRegistration
             else
                 WorkflowSchedulerPoisonStoreBackend.EnsureNoUnownedRegistrations(services);
 
-            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling);
+            RuntimeEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling);
 
             var commitExistingRemoval = existing?.PrepareRemoveOwnedArtifacts(services);
             foreach (var descriptor in WorkflowSchedulerPoisonStoreBackend.CaptureSurfaceRegistrations(services).ToArray())
@@ -59,7 +59,7 @@ public static class RuntimeSchedulerPoisonEntityFrameworkCoreRegistration
             var operational = RuntimeOperationalStateStoreBackend.Find(services);
             if (operational?.Name == RuntimeOperationalStateStoreBackend.EntityFramework)
                 operational.EnsureOwnsRegisteredContracts(services);
-            BookmarkStateEfContextRegistration.EnsureContextIsAvailable(
+            RuntimeEfContextRegistration.EnsureContextIsAvailable(
                 services,
                 provider,
                 "Runtime scheduler poison",
@@ -77,9 +77,9 @@ public static class RuntimeSchedulerPoisonEntityFrameworkCoreRegistration
             var optionsDescriptor = ServiceDescriptor.Singleton(configured);
             services.Add(optionsDescriptor);
             owned.Add(optionsDescriptor);
-            if (BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Count == 0)
-                owned.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName, configured.Schema, configured.Pooling));
-            foreach (var descriptor in BookmarkStateEfContextRegistration.ContextRegistrations(services, provider))
+            if (RuntimeEfContextRegistration.ContextRegistrations(services, provider).Count == 0)
+                owned.AddRange(RuntimeEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName, configured.Schema, configured.Pooling));
+            foreach (var descriptor in RuntimeEfContextRegistration.ContextRegistrations(services, provider))
                 if (!owned.Contains(descriptor))
                     owned.Add(descriptor);
 

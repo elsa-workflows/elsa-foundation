@@ -179,7 +179,7 @@ public sealed class EfRuntimeCheckpointDurableValueParticipantTests
             new Dictionary<string, string>());
 
     private static async Task StageAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         RuntimeStateChange<DurableValueState> change,
         string scope)
     {
@@ -238,8 +238,8 @@ public sealed class EfRuntimeCheckpointDurableValueParticipantTests
             var connectionString = $"Data Source=file:ef-r19-durable-value-participant-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
             var keeper = new SqliteConnection(connectionString);
             await keeper.OpenAsync();
-            await using var context = new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(keeper).Options);
+            await using var context = new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(keeper).Options);
             await context.Database.EnsureCreatedAsync();
             return new TestDatabase(keeper, connectionString);
         }
@@ -251,15 +251,15 @@ public sealed class EfRuntimeCheckpointDurableValueParticipantTests
     private sealed class TestFixture : IAsyncDisposable
     {
         private readonly SqliteConnection connection;
-        public BookmarkStateSqliteDbContext Context { get; }
+        public RuntimeSqliteDbContext Context { get; }
         public EfDurableValueStateStore Store { get; }
 
         public TestFixture(string connectionString, string scope)
         {
             connection = new SqliteConnection(connectionString);
             connection.Open();
-            Context = new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            Context = new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
             Store = new EfDurableValueStateStore(
                 Context,
                 new FixedAccessor(scope),

@@ -16,8 +16,8 @@ public sealed class RuntimeWorkflowActivationAuthorityPostgreSqlSmokeTests(Runti
         RuntimeWorkflowActivationAuthorityProviderSmoke.RunAsync(
             fixture,
             "PostgreSql",
-            connection => new BookmarkStatePostgreSqlDbContext(new DbContextOptionsBuilder<BookmarkStatePostgreSqlDbContext>().UseNpgsql(connection).Options),
-            BookmarkStatePostgreSqlDbContext.ExpectedProviderName);
+            connection => new RuntimePostgreSqlDbContext(new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).Options),
+            RuntimePostgreSqlDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
@@ -28,8 +28,8 @@ public sealed class RuntimeWorkflowActivationAuthoritySqlServerSmokeTests(Runtim
         RuntimeWorkflowActivationAuthorityProviderSmoke.RunAsync(
             fixture,
             "SqlServer",
-            connection => new BookmarkStateSqlServerDbContext(new DbContextOptionsBuilder<BookmarkStateSqlServerDbContext>().UseSqlServer(connection).Options),
-            BookmarkStateSqlServerDbContext.ExpectedProviderName);
+            connection => new RuntimeSqlServerDbContext(new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(connection).Options),
+            RuntimeSqlServerDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
@@ -40,8 +40,8 @@ public sealed class RuntimeWorkflowActivationAuthorityMySqlSmokeTests(RuntimeBoo
         RuntimeWorkflowActivationAuthorityProviderSmoke.RunAsync(
             fixture,
             "MySql",
-            connection => new BookmarkStateMySqlDbContext(new DbContextOptionsBuilder<BookmarkStateMySqlDbContext>().UseMySQL(connection).Options),
-            BookmarkStateMySqlDbContext.ExpectedProviderName);
+            connection => new RuntimeMySqlDbContext(new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(connection).Options),
+            RuntimeMySqlDbContext.ExpectedProviderName);
 }
 
 internal static class RuntimeWorkflowActivationAuthorityProviderSmoke
@@ -52,7 +52,7 @@ internal static class RuntimeWorkflowActivationAuthorityProviderSmoke
     public static async Task RunAsync(
         RuntimeBookmarksProviderFixture fixture,
         string providerName,
-        Func<string, BookmarkStateDbContext> createContext,
+        Func<string, RuntimeDbContext> createContext,
         string expectedProviderName)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? $"Docker/{providerName} is unavailable.");

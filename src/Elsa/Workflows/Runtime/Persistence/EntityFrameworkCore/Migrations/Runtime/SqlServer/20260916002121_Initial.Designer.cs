@@ -8,9 +8,9 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.BookmarkState.SqlServer
+namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runtime.SqlServer
 {
-    [DbContext(typeof(BookmarkStateSqlServerDbContext))]
+    [DbContext(typeof(RuntimeSqlServerDbContext))]
     [Migration("20260916002121_Initial")]
     partial class Initial
     {

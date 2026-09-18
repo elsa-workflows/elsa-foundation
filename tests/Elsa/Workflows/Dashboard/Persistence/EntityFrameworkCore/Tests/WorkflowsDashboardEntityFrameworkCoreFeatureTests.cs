@@ -65,7 +65,7 @@ public sealed class WorkflowsDashboardEntityFrameworkCoreFeatureTests : IDisposa
         await using var scope = shell.ServiceProvider.CreateAsyncScope();
         Assert.IsType<EfWorkflowRunHealthDataSource>(scope.ServiceProvider.GetRequiredService<IWorkflowRunHealthDataSource>());
         Assert.IsType<EfWorkflowPortfolioDataSource>(scope.ServiceProvider.GetRequiredService<IWorkflowPortfolioDataSource>());
-        Assert.Empty(await scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>().Database.GetPendingMigrationsAsync());
+        Assert.Empty(await scope.ServiceProvider.GetRequiredService<RuntimeDbContext>().Database.GetPendingMigrationsAsync());
         Assert.Empty(await scope.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>().Database.GetPendingMigrationsAsync());
     }
 

@@ -100,6 +100,6 @@ public class RuntimeEntityFrameworkCoreFeature : IShellFeature
         // configured here effective in either feature order.
         if (!string.IsNullOrWhiteSpace(HierarchyCursorSigningKey))
             services.PostConfigure<ActivityExecutionHierarchyCursorOptions>(options => options.SigningKey = HierarchyCursorSigningKey);
-        services.AddEfModuleMigrations<BookmarkStateDbContext>(Provider);
+        services.AddEfModuleMigrations<RuntimeDbContext>(Provider);
     }
 }

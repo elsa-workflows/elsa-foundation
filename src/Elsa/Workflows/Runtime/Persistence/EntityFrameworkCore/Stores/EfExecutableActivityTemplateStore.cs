@@ -12,7 +12,7 @@ using System.Data.Common;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 public sealed class EfExecutableActivityTemplateStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IExecutableActivityTemplateStore
 {
@@ -54,7 +54,7 @@ public sealed class EfExecutableActivityTemplateStore(
     }
 
     /// <summary>The context this store reads and stages through.</summary>
-    internal BookmarkStateDbContext Context => context;
+    internal RuntimeDbContext Context => context;
 
     /// <summary>
     /// Stages the template and its hash claim in the caller's open transaction without saving. An identical

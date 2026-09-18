@@ -50,5 +50,5 @@ public sealed class RuntimeOperationalStateEntityFrameworkCoreFeature : IShellFe
         Pooling = Pooling,
         RecoveryContinuationSigningKey = RecoveryContinuationSigningKey
     })
-        .AddEfModuleMigrations<BookmarkStateDbContext>(Provider);
+        .AddEfModuleMigrations<RuntimeDbContext>(Provider);
 }

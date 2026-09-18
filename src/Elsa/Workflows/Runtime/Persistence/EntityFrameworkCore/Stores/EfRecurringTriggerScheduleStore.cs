@@ -16,7 +16,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// and every mutation advances the row revision so due-occurrence claims use provider CAS.
 /// </remarks>
 public sealed class EfRecurringTriggerScheduleStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IRecurringTriggerScheduleStore
 {

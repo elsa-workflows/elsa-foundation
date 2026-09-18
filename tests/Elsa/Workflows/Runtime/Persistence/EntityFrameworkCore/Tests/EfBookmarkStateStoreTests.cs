@@ -62,8 +62,8 @@ public sealed class EfBookmarkStateStoreTests
             await command.ExecuteNonQueryAsync();
         }
 
-        await using var context = new BookmarkStateSqliteDbContext(
-            new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+        await using var context = new RuntimeSqliteDbContext(
+            new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
         var store = new EfBookmarkStateStore(context, new Accessor("tenant-a"));
 
         await store.SaveAsync(State("r01-workflow", "r01-bookmark", "Event", "r01-hash"));
@@ -292,7 +292,7 @@ public sealed class EfBookmarkStateStoreTests
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
-        var context = new FaultingBookmarkStateDbContext(new DbContextOptionsBuilder<FaultingBookmarkStateDbContext>().UseSqlite(connection).Options);
+        var context = new FaultingRuntimeDbContext(new DbContextOptionsBuilder<FaultingRuntimeDbContext>().UseSqlite(connection).Options);
         await using (context)
         {
             await context.Database.EnsureCreatedAsync();
@@ -524,7 +524,7 @@ public sealed class EfBookmarkStateStoreTests
 
         await using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
-        Assert.IsType<BookmarkStateSqliteDbContext>(scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
+        Assert.IsType<RuntimeSqliteDbContext>(scope.ServiceProvider.GetRequiredService<RuntimeDbContext>());
         Assert.IsType<EfBookmarkStateStore>(scope.ServiceProvider.GetRequiredService<IBookmarkStateStore>());
     }
 
@@ -606,7 +606,7 @@ public sealed class EfBookmarkStateStoreTests
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
         var exception = Assert.Throws<InvalidOperationException>(() =>
-            scope.ServiceProvider.GetRequiredService<BookmarkStateSqliteDbContext>());
+            scope.ServiceProvider.GetRequiredService<RuntimeSqliteDbContext>());
         Assert.Contains("not found or was empty", exception.Message, StringComparison.Ordinal);
     }
 
@@ -632,7 +632,7 @@ public sealed class EfBookmarkStateStoreTests
         Assert.Throws<InvalidOperationException>(() => explicitInMemory.AddRuntimeBookmarksEntityFrameworkCore(options));
 
         var customContext = new ServiceCollection();
-        customContext.AddScoped<BookmarkStateSqliteDbContext>(_ => throw new NotSupportedException());
+        customContext.AddScoped<RuntimeSqliteDbContext>(_ => throw new NotSupportedException());
         Assert.Throws<InvalidOperationException>(() => customContext.AddRuntimeBookmarksEntityFrameworkCore(options));
         Assert.DoesNotContain(customContext, descriptor =>
             descriptor.ImplementationInstance is RuntimeBookmarksEntityFrameworkCoreOptions);
@@ -696,21 +696,21 @@ public sealed class EfBookmarkStateStoreTests
         switch (registration)
         {
             case "context-type":
-                services.AddScoped<BookmarkStateSqliteDbContext>();
+                services.AddScoped<RuntimeSqliteDbContext>();
                 break;
             case "context-instance":
-                services.AddSingleton<BookmarkStateSqliteDbContext>(new BookmarkStateSqliteDbContext(
-                    new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().Options));
+                services.AddSingleton<RuntimeSqliteDbContext>(new RuntimeSqliteDbContext(
+                    new DbContextOptionsBuilder<RuntimeSqliteDbContext>().Options));
                 break;
             case "context-factory":
-                services.AddScoped<BookmarkStateSqliteDbContext>(_ => throw new NotSupportedException());
+                services.AddScoped<RuntimeSqliteDbContext>(_ => throw new NotSupportedException());
                 break;
             case "options":
-                services.AddSingleton<DbContextOptions<BookmarkStateSqliteDbContext>>(
-                    new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().Options);
+                services.AddSingleton<DbContextOptions<RuntimeSqliteDbContext>>(
+                    new DbContextOptionsBuilder<RuntimeSqliteDbContext>().Options);
                 break;
             case "base-context":
-                services.AddScoped<BookmarkStateDbContext>(_ => throw new NotSupportedException());
+                services.AddScoped<RuntimeDbContext>(_ => throw new NotSupportedException());
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(registration), registration, null);
@@ -775,9 +775,9 @@ public sealed class EfBookmarkStateStoreTests
 
             using var provider = services.BuildServiceProvider();
             using var scope = provider.CreateScope();
-            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(RuntimeDbContext));
             Assert.Equal(RuntimeEfModule.DefaultSqliteConnectionString,
-                scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>().Database.GetConnectionString());
+                scope.ServiceProvider.GetRequiredService<RuntimeDbContext>().Database.GetConnectionString());
         }
     }
 
@@ -812,10 +812,10 @@ public sealed class EfBookmarkStateStoreTests
 
             await using var provider = services.BuildServiceProvider();
             using var scope = provider.CreateScope();
-            Assert.IsAssignableFrom<BookmarkStateDbContext>(scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
-            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
-            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(DbContextOptions<BookmarkStateSqliteDbContext>));
-            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+            Assert.IsAssignableFrom<RuntimeDbContext>(scope.ServiceProvider.GetRequiredService<RuntimeDbContext>());
+            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(RuntimeSqliteDbContext));
+            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(DbContextOptions<RuntimeSqliteDbContext>));
+            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(RuntimeDbContext));
         }
     }
 
@@ -849,7 +849,7 @@ public sealed class EfBookmarkStateStoreTests
         using (var scope = provider.CreateScope())
         {
             Assert.IsType<EfBookmarkStateStore>(scope.ServiceProvider.GetRequiredService<IBookmarkStateStore>());
-            Assert.IsType<BookmarkStateSqliteDbContext>(scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
+            Assert.IsType<RuntimeSqliteDbContext>(scope.ServiceProvider.GetRequiredService<RuntimeDbContext>());
         }
 
         services.AddRuntimeArtifactsEntityFrameworkCore(artifactOptions);
@@ -858,7 +858,7 @@ public sealed class EfBookmarkStateStoreTests
         using var restoredScope = restoredProvider.CreateScope();
         Assert.IsType<EfWorkflowExecutableStore>(restoredScope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>());
         Assert.IsType<EfBookmarkStateStore>(restoredScope.ServiceProvider.GetRequiredService<IBookmarkStateStore>());
-        Assert.IsType<BookmarkStateSqliteDbContext>(restoredScope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
+        Assert.IsType<RuntimeSqliteDbContext>(restoredScope.ServiceProvider.GetRequiredService<RuntimeDbContext>());
         Assert.IsType<CustomRegistration>(restoredScope.ServiceProvider.GetRequiredService<CustomRegistration>());
     }
 
@@ -892,7 +892,7 @@ public sealed class EfBookmarkStateStoreTests
         using (var scope = provider.CreateScope())
         {
             Assert.IsType<EfWorkflowExecutableStore>(scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>());
-            Assert.IsType<BookmarkStateSqliteDbContext>(scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
+            Assert.IsType<RuntimeSqliteDbContext>(scope.ServiceProvider.GetRequiredService<RuntimeDbContext>());
         }
 
         services.AddRuntimeBookmarksEntityFrameworkCore(options);
@@ -901,7 +901,7 @@ public sealed class EfBookmarkStateStoreTests
         using var restoredScope = restoredProvider.CreateScope();
         Assert.IsType<EfWorkflowExecutableStore>(restoredScope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>());
         Assert.IsType<EfBookmarkStateStore>(restoredScope.ServiceProvider.GetRequiredService<IBookmarkStateStore>());
-        Assert.IsType<BookmarkStateSqliteDbContext>(restoredScope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
+        Assert.IsType<RuntimeSqliteDbContext>(restoredScope.ServiceProvider.GetRequiredService<RuntimeDbContext>());
         Assert.IsType<CustomRegistration>(restoredScope.ServiceProvider.GetRequiredService<CustomRegistration>());
     }
 
@@ -960,7 +960,7 @@ public sealed class EfBookmarkStateStoreTests
         else
             services.AddRuntimeArtifactsEntityFrameworkCore(artifacts);
 
-        services.AddScoped<BookmarkStateSqliteDbContext>(_ => throw new NotSupportedException());
+        services.AddScoped<RuntimeSqliteDbContext>(_ => throw new NotSupportedException());
         var before = services.ToArray();
 
         var exception = first == "bookmarks-first"
@@ -972,9 +972,9 @@ public sealed class EfBookmarkStateStoreTests
     }
 
     private static bool IsSharedContextDescriptor(ServiceDescriptor descriptor) =>
-        descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext) ||
-        descriptor.ServiceType == typeof(BookmarkStateDbContext) ||
-        descriptor.ServiceType == typeof(DbContextOptions<BookmarkStateSqliteDbContext>);
+        descriptor.ServiceType == typeof(RuntimeSqliteDbContext) ||
+        descriptor.ServiceType == typeof(RuntimeDbContext) ||
+        descriptor.ServiceType == typeof(DbContextOptions<RuntimeSqliteDbContext>);
 
     private static async Task<Exception?> Capture(ValueTask<BookmarkState> operation)
     {
@@ -1036,10 +1036,10 @@ public sealed class EfBookmarkStateStoreTests
     {
         private readonly SqliteConnection connection;
         private readonly string scope;
-        public BookmarkStateSqliteDbContext Context { get; }
+        public RuntimeSqliteDbContext Context { get; }
         public EfBookmarkStateStore Store { get; }
 
-        private Fixture(SqliteConnection connection, string scope, BookmarkStateSqliteDbContext context)
+        private Fixture(SqliteConnection connection, string scope, RuntimeSqliteDbContext context)
         {
             this.connection = connection;
             this.scope = scope;
@@ -1051,7 +1051,7 @@ public sealed class EfBookmarkStateStoreTests
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
-            var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
             await context.Database.EnsureCreatedAsync();
             return new Fixture(connection, scope, context);
         }
@@ -1059,7 +1059,7 @@ public sealed class EfBookmarkStateStoreTests
         public async Task<Fixture> ReopenAsync(string requestedScope)
         {
             await Context.DisposeAsync();
-            var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
             return new Fixture(connection, requestedScope, context);
         }
 
@@ -1079,7 +1079,7 @@ public sealed class EfBookmarkStateStoreTests
         public PersistenceAccessContext Current { get; }
     }
 
-    private sealed class FaultingBookmarkStateDbContext(DbContextOptions<FaultingBookmarkStateDbContext> options) : BookmarkStateDbContext(options)
+    private sealed class FaultingRuntimeDbContext(DbContextOptions<FaultingRuntimeDbContext> options) : RuntimeDbContext(options)
     {
         public bool FailNextSave { get; set; }
 
@@ -1113,11 +1113,11 @@ public sealed class EfBookmarkStateStoreTests
 
         public FileFixture Open(IInterceptor? interceptor = null)
         {
-            var options = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>()
+            var options = new DbContextOptionsBuilder<RuntimeSqliteDbContext>()
                 .UseSqlite($"Data Source={Path}")
                 .AddInterceptors(interceptor is null ? [] : [interceptor])
                 .Options;
-            var context = new BookmarkStateSqliteDbContext(options);
+            var context = new RuntimeSqliteDbContext(options);
             return new FileFixture(context, new EfBookmarkStateStore(context, new Accessor("tenant-a")));
         }
 
@@ -1128,9 +1128,9 @@ public sealed class EfBookmarkStateStoreTests
         }
     }
 
-    private sealed class FileFixture(BookmarkStateSqliteDbContext context, EfBookmarkStateStore store) : IAsyncDisposable
+    private sealed class FileFixture(RuntimeSqliteDbContext context, EfBookmarkStateStore store) : IAsyncDisposable
     {
-        public BookmarkStateSqliteDbContext Context { get; } = context;
+        public RuntimeSqliteDbContext Context { get; } = context;
         public EfBookmarkStateStore Store { get; } = store;
         public ValueTask DisposeAsync() => Context.DisposeAsync();
     }
@@ -1210,10 +1210,10 @@ public sealed class EfBookmarkStateStoreTests
     private sealed class FailingProviderFixture : IAsyncDisposable
     {
         private readonly SqliteConnection connection;
-        private readonly BookmarkStateSqliteDbContext context;
+        private readonly RuntimeSqliteDbContext context;
         public EfBookmarkStateStore Store { get; }
 
-        private FailingProviderFixture(SqliteConnection connection, BookmarkStateSqliteDbContext context)
+        private FailingProviderFixture(SqliteConnection connection, RuntimeSqliteDbContext context)
         {
             this.connection = connection;
             this.context = context;
@@ -1224,7 +1224,7 @@ public sealed class EfBookmarkStateStoreTests
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
-            var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>()
+            var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>()
                 .UseSqlite(connection)
                 .AddInterceptors(interceptor)
                 .Options);

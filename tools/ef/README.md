@@ -52,7 +52,7 @@ bash tools/ef/module-migrate.sh script MySql db/migrations
 **Layout: `<output-dir>/<Module>/<Provider>.sql`** — one file per module context and provider, under the
 same `<Module>/<Provider>` split the compiled migrations use (`Migrations/<Module>/<Provider>/`), so a
 reviewer reads the same tree in both places. `<Module>` is the context name without its provider suffix
-(`BookmarkStateSqlServerDbContext` → `BookmarkState/SqlServer.sql`).
+(`RuntimeSqlServerDbContext` → `Runtime/SqlServer.sql`).
 
 Every file is generated with `--idempotent`, which means:
 

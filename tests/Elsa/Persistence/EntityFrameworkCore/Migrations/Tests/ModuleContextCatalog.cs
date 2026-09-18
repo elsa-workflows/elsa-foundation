@@ -32,7 +32,7 @@ internal static class ModuleContextCatalog
         typeof(WorkflowsDesignDbContext).Assembly,
         typeof(PublishingSnapshotReviewDbContext).Assembly,
         typeof(ExecutionPlacementDbContext).Assembly,
-        typeof(BookmarkStateDbContext).Assembly,
+        typeof(RuntimeDbContext).Assembly,
         typeof(Elsa3ImportDbContext).Assembly
     ];
 

@@ -76,8 +76,8 @@ public sealed class RuntimeEntityFrameworkCoreFeatureTests : IDisposable
         Assert.Equal(RecoverySigningKey, recovery.SigningKey);
         Assert.False(recovery.AllowEphemeralDevelopmentKey);
         Assert.Equal(HierarchySigningKey, provider.GetRequiredService<IOptions<ActivityExecutionHierarchyCursorOptions>>().Value.SigningKey);
-        Assert.Single(provider.GetServices<IShellInitializer>().OfType<EfModuleMigrator<BookmarkStateDbContext>>());
-        Assert.Equal(EfProviderNames.Sqlite, provider.GetRequiredService<EfModuleMigration<BookmarkStateDbContext>>().ExpectedProviderName);
+        Assert.Single(provider.GetServices<IShellInitializer>().OfType<EfModuleMigrator<RuntimeDbContext>>());
+        Assert.Equal(EfProviderNames.Sqlite, provider.GetRequiredService<EfModuleMigration<RuntimeDbContext>>().ExpectedProviderName);
     }
 
     /// <summary>
@@ -111,7 +111,7 @@ public sealed class RuntimeEntityFrameworkCoreFeatureTests : IDisposable
         var shell = await host.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
 
         await using var scope = shell.ServiceProvider.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>();
+        var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
         Assert.NotEmpty(await context.Database.GetAppliedMigrationsAsync());
         Assert.Empty(await context.Database.GetPendingMigrationsAsync());
         Assert.Equal(1, await CountTablesAsync(RuntimeEfModule.HistoryTableName));

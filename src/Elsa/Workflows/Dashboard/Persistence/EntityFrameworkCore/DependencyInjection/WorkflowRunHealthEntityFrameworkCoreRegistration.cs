@@ -16,7 +16,7 @@ public static class WorkflowRunHealthEntityFrameworkCoreRegistration
         if (RuntimeOperationalStateStoreBackend.Find(services)?.Name != RuntimeOperationalStateStoreBackend.EntityFramework ||
             WorkflowExecutionStateStoreBackend.Find(services)?.Name != WorkflowExecutionStateStoreBackend.EntityFramework ||
             RuntimeCheckpointCommitStoreBackend.Find(services)?.Name != RuntimeCheckpointCommitStoreBackend.EntityFramework ||
-            !services.Any(descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext)))
+            !services.Any(descriptor => descriptor.ServiceType == typeof(RuntimeDbContext)))
             throw new InvalidOperationException(
                 "Dashboard run-health EF persistence requires EF-owned Runtime operational, workflow-execution, and checkpoint contracts. Register the complete EF persistence composition first.");
 

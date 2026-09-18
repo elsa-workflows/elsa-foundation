@@ -408,8 +408,8 @@ internal sealed class RuntimeCheckpointCommitContractBackend : IAsyncDisposable
     {
         var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
-        var context = new BookmarkStateSqliteDbContext(
-            new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+        var context = new RuntimeSqliteDbContext(
+            new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
         await context.Database.EnsureCreatedAsync();
         var access = new FixedAccessor(Tenant);
         var codec = new HmacRuntimeRecoveryContinuationCodec(

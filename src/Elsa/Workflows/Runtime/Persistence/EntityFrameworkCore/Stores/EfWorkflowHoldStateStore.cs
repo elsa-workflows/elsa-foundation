@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// the provider-neutral semantics without moving administrative state into workflow continuation documents.
 /// </remarks>
 public sealed class EfWorkflowHoldStateStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowHoldStateStore
 {
     private const int ProviderPageSize = RuntimeStorePageRequest.MaximumLimit;

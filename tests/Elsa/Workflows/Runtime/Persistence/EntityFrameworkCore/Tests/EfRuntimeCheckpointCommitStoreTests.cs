@@ -1107,7 +1107,7 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         services.AddRuntimeCheckpointCommitEntityFrameworkCore();
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>();
+        var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
         await context.Database.EnsureCreatedAsync();
 
         var writer = scope.ServiceProvider.GetRequiredService<IRuntimeCheckpointCommitStore>();
@@ -1391,7 +1391,7 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         null, [], [], 0, 0, new Dictionary<string, string>());
 
     private static async Task SeedCleanupResourcesAsync(
-        BookmarkStateDbContext context, FixedAccessor access)
+        RuntimeDbContext context, FixedAccessor access)
     {
         await new EfBookmarkStateStore(context, access).SaveAsync(
             CheckpointBookmark("bookmark-cleanup", "scope-cleanup"));
@@ -1533,18 +1533,18 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
-            await using var context = new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            await using var context = new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
             await context.Database.EnsureCreatedAsync();
             return new TestDatabase(connection);
         }
 
-        public BookmarkStateSqliteDbContext Open(string scope, params IInterceptor[] interceptors)
+        public RuntimeSqliteDbContext Open(string scope, params IInterceptor[] interceptors)
         {
-            var builder = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(Connection);
+            var builder = new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(Connection);
             if (interceptors.Length > 0)
                 builder.AddInterceptors(interceptors);
-            return new BookmarkStateSqliteDbContext(builder.Options);
+            return new RuntimeSqliteDbContext(builder.Options);
         }
 
         public ValueTask DisposeAsync() => Connection.DisposeAsync();

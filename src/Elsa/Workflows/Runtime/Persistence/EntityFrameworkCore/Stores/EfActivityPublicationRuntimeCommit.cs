@@ -26,7 +26,7 @@ public sealed class EfActivityPublicationRuntimeCommit
     private static readonly EfWriteRetry Commits = new(
         EfWriteRetry.DefaultMaxAttempts,
         exception => EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey | EfWriteConflict.Transient));
-    private readonly BookmarkStateDbContext context;
+    private readonly RuntimeDbContext context;
     private readonly EfExecutableActivityTemplateStore templates;
     private readonly EfWorkflowExecutableSourceReferenceStore sourceReferences;
 

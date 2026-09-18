@@ -10,7 +10,7 @@ internal static class EfRuntimeCheckpointTestScopeParticipantStaging
 {
     /// <param name="admitted">The scope records this checkpoint already read and touched, by scope ID.</param>
     public static async ValueTask AssertOpenAndStageAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         WorkflowTestScope expected,
         DateTimeOffset occurredAt,
         string accessScope,

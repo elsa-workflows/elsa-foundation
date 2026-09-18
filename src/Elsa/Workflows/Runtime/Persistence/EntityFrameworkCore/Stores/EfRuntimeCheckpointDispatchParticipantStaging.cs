@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 internal static class EfRuntimeCheckpointDispatchParticipantStaging
 {
     public static async ValueTask StageAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         RuntimeCheckpointCommit commit,
         string scope,
         Dictionary<string, WorkflowTestScopeRecord> touchedTestScopes,
@@ -65,7 +65,7 @@ internal static class EfRuntimeCheckpointDispatchParticipantStaging
     }
 
     private static Task<WorkflowDispatchEntity?> LoadAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         string scope,
         string dispatchId,
         CancellationToken cancellationToken)

@@ -37,8 +37,8 @@ public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
             else
                 RuntimeOperationalStateStoreBackend.EnsureNoUnownedRegistrations(services);
 
-            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling);
-            BookmarkStateEfContextRegistration.EnsureRecoveryContinuationSigningKeyCompatible(services, options.RecoveryContinuationSigningKey, "Runtime operational state");
+            RuntimeEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling);
+            RuntimeEfContextRegistration.EnsureRecoveryContinuationSigningKeyCompatible(services, options.RecoveryContinuationSigningKey, "Runtime operational state");
             var commitExistingRemoval = existing?.PrepareRemoveOwnedArtifacts(services);
 
             var artifacts = RuntimeArtifactStoreBackend.Find(services);
@@ -47,7 +47,7 @@ public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
             var bookmarks = BookmarkStateStoreBackend.Find(services);
             var alterations = RuntimeWorkflowAlterationStoreBackend.Find(services);
             var scopes = WorkflowTestScopeStoreBackend.Find(services);
-            BookmarkStateEfContextRegistration.EnsureContextIsAvailable(
+            RuntimeEfContextRegistration.EnsureContextIsAvailable(
                 services,
                 provider,
                 "Runtime operational state",
@@ -80,8 +80,8 @@ public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
             var optionsDescriptor = ServiceDescriptor.Singleton(configured);
             services.Add(optionsDescriptor);
             owned.Add(optionsDescriptor);
-            if (BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Count == 0)
-                owned.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName, configured.Schema, configured.Pooling));
+            if (RuntimeEfContextRegistration.ContextRegistrations(services, provider).Count == 0)
+                owned.AddRange(RuntimeEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName, configured.Schema, configured.Pooling));
 
             var durableContract = ServiceDescriptor.Scoped<IDurableValueStateStore>(provider => provider.GetRequiredService<EfDurableValueStateStore>());
             var schedulerContract = ServiceDescriptor.Scoped<ISchedulerStateStore>(provider => provider.GetRequiredService<EfSchedulerStateStore>());

@@ -55,8 +55,8 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
                 scopeBackend.EnsureOwnsRegisteredContracts(services);
             var operationalBackend = RuntimeOperationalStateStoreBackend.Find(services);
 
-            BookmarkStateEfContextRegistration.EnsureRecoveryContinuationSigningKeyCompatible(services, options.RecoveryContinuationSigningKey, "Runtime activity executions");
-            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling);
+            RuntimeEfContextRegistration.EnsureRecoveryContinuationSigningKeyCompatible(services, options.RecoveryContinuationSigningKey, "Runtime activity executions");
+            RuntimeEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling);
             EnsureContext(services, provider, bookmarksBackend?.Name == BookmarkStateStoreBackend.EntityFramework ? bookmarksBackend.Owns : null,
                 artifactsBackend?.Name == RuntimeArtifactStoreBackend.EntityFramework ? artifactsBackend.Owns : null,
                 workflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework ? workflowBackend.Owns : null,
@@ -100,19 +100,19 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
             var ownsBookmarkContext = bookmarksBackend?.Name == BookmarkStateStoreBackend.EntityFramework;
             var ownsArtifactContext = artifactsBackend?.Name == RuntimeArtifactStoreBackend.EntityFramework;
             if (ownsBookmarkContext)
-                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(bookmarksBackend!.Owns));
+                ownedInfrastructure.AddRange(RuntimeEfContextRegistration.ContextRegistrations(services, provider).Where(bookmarksBackend!.Owns));
             else if (ownsArtifactContext)
-                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(artifactsBackend!.Owns));
+                ownedInfrastructure.AddRange(RuntimeEfContextRegistration.ContextRegistrations(services, provider).Where(artifactsBackend!.Owns));
             else if (workflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework)
-                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(workflowBackend.Owns));
+                ownedInfrastructure.AddRange(RuntimeEfContextRegistration.ContextRegistrations(services, provider).Where(workflowBackend.Owns));
             else if (alterationBackend?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework)
-                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(alterationBackend.Owns));
+                ownedInfrastructure.AddRange(RuntimeEfContextRegistration.ContextRegistrations(services, provider).Where(alterationBackend.Owns));
             else if (scopeBackend?.Name == WorkflowTestScopeStoreBackend.EntityFramework)
-                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(scopeBackend.Owns));
+                ownedInfrastructure.AddRange(RuntimeEfContextRegistration.ContextRegistrations(services, provider).Where(scopeBackend.Owns));
             else if (operationalBackend?.Name == RuntimeOperationalStateStoreBackend.EntityFramework)
-                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(operationalBackend.Owns));
+                ownedInfrastructure.AddRange(RuntimeEfContextRegistration.ContextRegistrations(services, provider).Where(operationalBackend.Owns));
             else
-                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName, configured.Schema, configured.Pooling));
+                ownedInfrastructure.AddRange(RuntimeEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName, configured.Schema, configured.Pooling));
 
             services.RemoveAll<EfActivityExecutionStateStore>();
             services.RemoveAll<EfActivityExecutionInspectionStore>();
@@ -183,11 +183,11 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
         Func<ServiceDescriptor, bool>? alterationOwner = alteration is null ? null : alteration.Owns;
         Func<ServiceDescriptor, bool>? scopeOwner = scope is null ? null : scope.Owns;
         Func<ServiceDescriptor, bool>? operationalOwner = operational is null ? null : operational.Owns;
-        BookmarkStateEfContextRegistration.EnsureContextIsAvailable(services, provider, owner, backend.Owns, bookmarksOwner, artifactsOwner, workflowOwner, alterationOwner, scopeOwner, operationalOwner);
+        RuntimeEfContextRegistration.EnsureContextIsAvailable(services, provider, owner, backend.Owns, bookmarksOwner, artifactsOwner, workflowOwner, alterationOwner, scopeOwner, operationalOwner);
     }
 
     private static void EnsureContext(IServiceCollection services, string provider, Func<ServiceDescriptor, bool>? bookmarksOwner, Func<ServiceDescriptor, bool>? artifactsOwner, Func<ServiceDescriptor, bool>? workflowOwner, Func<ServiceDescriptor, bool>? alterationOwner, Func<ServiceDescriptor, bool>? scopeOwner, Func<ServiceDescriptor, bool>? operationalOwner, string owner) =>
-        BookmarkStateEfContextRegistration.EnsureContextIsAvailable(services, provider, owner, bookmarksOwner, artifactsOwner, workflowOwner, alterationOwner, scopeOwner, operationalOwner);
+        RuntimeEfContextRegistration.EnsureContextIsAvailable(services, provider, owner, bookmarksOwner, artifactsOwner, workflowOwner, alterationOwner, scopeOwner, operationalOwner);
 
     private static void RemoveOwnedArtifacts(IServiceCollection services, IReadOnlyCollection<ServiceDescriptor> ownedInfrastructure)
     {

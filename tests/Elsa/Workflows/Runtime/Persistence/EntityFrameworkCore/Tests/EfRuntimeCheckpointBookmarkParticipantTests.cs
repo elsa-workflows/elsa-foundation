@@ -176,7 +176,7 @@ public sealed class EfRuntimeCheckpointBookmarkParticipantTests
             CreatedAt,
             CreatedAt.AddHours(1));
 
-    private static async Task StageAsync(BookmarkStateDbContext context, RuntimeStateChange<BookmarkState> change, string scope)
+    private static async Task StageAsync(RuntimeDbContext context, RuntimeStateChange<BookmarkState> change, string scope)
     {
         var type = typeof(EfRuntimeCheckpointCommitStore).Assembly.GetType(
             "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointParticipantStaging")!;
@@ -233,8 +233,8 @@ public sealed class EfRuntimeCheckpointBookmarkParticipantTests
             var connectionString = $"Data Source=file:ef-r19-bookmark-participant-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
             var keeper = new SqliteConnection(connectionString);
             await keeper.OpenAsync();
-            await using var context = new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(keeper).Options);
+            await using var context = new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(keeper).Options);
             await context.Database.EnsureCreatedAsync();
             return new TestDatabase(keeper, connectionString);
         }
@@ -246,15 +246,15 @@ public sealed class EfRuntimeCheckpointBookmarkParticipantTests
     private sealed class TestFixture : IAsyncDisposable
     {
         private readonly SqliteConnection connection;
-        public BookmarkStateSqliteDbContext Context { get; }
+        public RuntimeSqliteDbContext Context { get; }
         public EfBookmarkStateStore Store { get; }
 
         public TestFixture(string connectionString, string scope)
         {
             connection = new SqliteConnection(connectionString);
             connection.Open();
-            Context = new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            Context = new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
             Store = new EfBookmarkStateStore(Context, new FixedAccessor(scope));
         }
 

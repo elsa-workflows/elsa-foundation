@@ -196,7 +196,7 @@ public sealed class EfWorkflowSchedulerPoisonStoreTests
             Assert.Equal(RuntimeOperationalStateStoreBackend.EntityFramework, RuntimeOperationalStateStoreBackend.Find(services)!.Name);
             await using var provider = services.BuildServiceProvider();
             await using var scope = provider.CreateAsyncScope();
-            var context = scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>();
+            var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
             await context.Database.EnsureCreatedAsync();
             Assert.IsType<EfWorkflowSchedulerPoisonStore>(scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>());
         }
@@ -281,8 +281,8 @@ public sealed class EfWorkflowSchedulerPoisonStoreTests
             var connectionString = $"Data Source=file:ef-r23-poison-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
             var keeper = new SqliteConnection(connectionString);
             await keeper.OpenAsync();
-            await using var context = new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(keeper).Options);
+            await using var context = new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(keeper).Options);
             await context.Database.EnsureCreatedAsync();
             return new TestDatabase(keeper, connectionString);
         }
@@ -295,17 +295,17 @@ public sealed class EfWorkflowSchedulerPoisonStoreTests
     private sealed class Fixture : IAsyncDisposable
     {
         private readonly SqliteConnection connection;
-        public readonly BookmarkStateSqliteDbContext Context;
+        public readonly RuntimeSqliteDbContext Context;
         public readonly EfWorkflowSchedulerPoisonStore Store;
 
         public Fixture(string connectionString, string scope, params IInterceptor[] interceptors)
         {
             connection = new SqliteConnection(connectionString);
             connection.Open();
-            var options = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection);
+            var options = new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection);
             if (interceptors.Length > 0)
                 options.AddInterceptors(interceptors);
-            Context = new BookmarkStateSqliteDbContext(options.Options);
+            Context = new RuntimeSqliteDbContext(options.Options);
             Store = new EfWorkflowSchedulerPoisonStore(Context, new FixedAccessor(scope));
         }
 

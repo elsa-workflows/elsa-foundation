@@ -33,10 +33,10 @@ public static class WorkflowPortfolioEntityFrameworkCoreRegistration
                 "Dashboard workflow portfolio EF persistence requires the EF-owned Runtime artifact/source-reference backend. Register Runtime artifacts EF persistence first.");
 
         runtimeBackend.EnsureOwnsRegisteredContracts(services);
-        var runtimeContext = services.SingleOrDefault(descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+        var runtimeContext = services.SingleOrDefault(descriptor => descriptor.ServiceType == typeof(RuntimeDbContext));
         if (runtimeContext is null || !runtimeBackend.Owns(runtimeContext))
             throw new InvalidOperationException(
-                "Dashboard workflow portfolio EF persistence requires the Runtime artifact backend to own the shared BookmarkStateDbContext.");
+                "Dashboard workflow portfolio EF persistence requires the Runtime artifact backend to own the shared RuntimeDbContext.");
 
         services.RemoveAll<IWorkflowPortfolioDataSource>();
         services.AddScoped<EfWorkflowPortfolioDataSource>();

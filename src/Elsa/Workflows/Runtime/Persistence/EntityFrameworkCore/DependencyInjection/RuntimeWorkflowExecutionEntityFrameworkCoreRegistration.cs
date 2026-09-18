@@ -26,7 +26,7 @@ public static class RuntimeWorkflowExecutionEntityFrameworkCoreRegistration
                 existing.EnsureOwnsRegisteredContract(services);
                 var prior = services.Select(x => x.ImplementationInstance).OfType<RuntimeWorkflowExecutionEntityFrameworkCoreOptions>().SingleOrDefault();
                 if (prior is null || !OptionsEqual(prior, options)) throw new InvalidOperationException("Runtime workflow execution EF persistence is already registered with different provider options.");
-                BookmarkStateEfContextRegistration.EnsureContextIsAvailable(services, provider, "Runtime workflow executions", existing.Owns,
+                RuntimeEfContextRegistration.EnsureContextIsAvailable(services, provider, "Runtime workflow executions", existing.Owns,
                     RuntimeArtifactStoreBackend.Find(services) is { } repeatArtifacts ? repeatArtifacts.Owns : null,
                     RuntimeActivityExecutionStoreBackend.Find(services) is { } repeatActivity ? repeatActivity.Owns : null,
                     BookmarkStateStoreBackend.Find(services) is { } repeatBookmarks ? repeatBookmarks.Owns : null,
@@ -40,27 +40,27 @@ public static class RuntimeWorkflowExecutionEntityFrameworkCoreRegistration
                 var explicitStore = services.Where(x => x.ServiceType == typeof(IWorkflowExecutionStateStore)).ToArray();
                 if (explicitStore.Any(x => x.ImplementationType != typeof(Elsa.Workflows.Runtime.Services.Executions.InMemoryWorkflowExecutionStateStore))) throw new InvalidOperationException("Runtime workflow execution EF persistence refuses to replace an unowned execution-state store.");
             }
-            BookmarkStateEfContextRegistration.EnsureRecoveryContinuationSigningKeyCompatible(services, options.RecoveryContinuationSigningKey, "Runtime workflow executions");
-            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling);
+            RuntimeEfContextRegistration.EnsureRecoveryContinuationSigningKeyCompatible(services, options.RecoveryContinuationSigningKey, "Runtime workflow executions");
+            RuntimeEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling);
             var commitExistingRemoval = existing?.PrepareRemoveOwnedArtifacts(services);
             var artifacts = RuntimeArtifactStoreBackend.Find(services); var activity = RuntimeActivityExecutionStoreBackend.Find(services); var bookmarks = BookmarkStateStoreBackend.Find(services); var alterations = RuntimeWorkflowAlterationStoreBackend.Find(services); var scopes = WorkflowTestScopeStoreBackend.Find(services); var operational = RuntimeOperationalStateStoreBackend.Find(services);
             if (artifacts?.Name == RuntimeArtifactStoreBackend.EntityFramework) artifacts.EnsureOwnsRegisteredContracts(services);
             if (activity?.Name == RuntimeActivityExecutionStoreBackend.EntityFramework) activity.EnsureOwnsRegisteredContracts(services);
             if (bookmarks?.Name == BookmarkStateStoreBackend.EntityFramework) bookmarks.EnsureOwnsRegisteredAuxiliaryContracts(services);
-            BookmarkStateEfContextRegistration.EnsureContextIsAvailable(services, provider, "Runtime workflow executions", artifacts?.Name == RuntimeArtifactStoreBackend.EntityFramework ? artifacts.Owns : null, activity?.Name == RuntimeActivityExecutionStoreBackend.EntityFramework ? activity.Owns : null, bookmarks?.Name == BookmarkStateStoreBackend.EntityFramework ? bookmarks.Owns : null, alterations?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework ? alterations.Owns : null, scopes?.Name == WorkflowTestScopeStoreBackend.EntityFramework ? scopes.Owns : null, operational?.Name == RuntimeOperationalStateStoreBackend.EntityFramework ? operational.Owns : null);
+            RuntimeEfContextRegistration.EnsureContextIsAvailable(services, provider, "Runtime workflow executions", artifacts?.Name == RuntimeArtifactStoreBackend.EntityFramework ? artifacts.Owns : null, activity?.Name == RuntimeActivityExecutionStoreBackend.EntityFramework ? activity.Owns : null, bookmarks?.Name == BookmarkStateStoreBackend.EntityFramework ? bookmarks.Owns : null, alterations?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework ? alterations.Owns : null, scopes?.Name == WorkflowTestScopeStoreBackend.EntityFramework ? scopes.Owns : null, operational?.Name == RuntimeOperationalStateStoreBackend.EntityFramework ? operational.Owns : null);
             var configured = new RuntimeWorkflowExecutionEntityFrameworkCoreOptions { Provider = options.Provider, ConnectionString = options.ConnectionString, ConnectionName = options.ConnectionName, Schema = options.Schema, Pooling = options.Pooling, RecoveryContinuationSigningKey = options.RecoveryContinuationSigningKey };
             services.AddOptions<RuntimeRecoveryContinuationOptions>().Configure(x => { if (!string.IsNullOrWhiteSpace(options.RecoveryContinuationSigningKey)) x.SigningKey = options.RecoveryContinuationSigningKey; x.AllowEphemeralDevelopmentKey = false; });
             services.TryAddSingleton<IRuntimeRecoveryContinuationCodec, HmacRuntimeRecoveryContinuationCodec>();
             services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateRuntimeRecoveryContinuationCodecStartupTask>());
             services.AddSingleton(configured);
             var owned = new List<ServiceDescriptor> { services.Last() };
-            if (artifacts?.Name == RuntimeArtifactStoreBackend.EntityFramework) owned.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(artifacts.Owns));
-            else if (activity?.Name == RuntimeActivityExecutionStoreBackend.EntityFramework) owned.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(activity.Owns));
-            else if (bookmarks?.Name == BookmarkStateStoreBackend.EntityFramework) owned.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(bookmarks.Owns));
-            else if (alterations?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework) owned.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(alterations.Owns));
-            else if (scopes?.Name == WorkflowTestScopeStoreBackend.EntityFramework) owned.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(scopes.Owns));
-            else if (operational?.Name == RuntimeOperationalStateStoreBackend.EntityFramework) owned.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(operational.Owns));
-            else owned.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName, configured.Schema, configured.Pooling));
+            if (artifacts?.Name == RuntimeArtifactStoreBackend.EntityFramework) owned.AddRange(RuntimeEfContextRegistration.ContextRegistrations(services, provider).Where(artifacts.Owns));
+            else if (activity?.Name == RuntimeActivityExecutionStoreBackend.EntityFramework) owned.AddRange(RuntimeEfContextRegistration.ContextRegistrations(services, provider).Where(activity.Owns));
+            else if (bookmarks?.Name == BookmarkStateStoreBackend.EntityFramework) owned.AddRange(RuntimeEfContextRegistration.ContextRegistrations(services, provider).Where(bookmarks.Owns));
+            else if (alterations?.Name == RuntimeWorkflowAlterationStoreBackend.EntityFramework) owned.AddRange(RuntimeEfContextRegistration.ContextRegistrations(services, provider).Where(alterations.Owns));
+            else if (scopes?.Name == WorkflowTestScopeStoreBackend.EntityFramework) owned.AddRange(RuntimeEfContextRegistration.ContextRegistrations(services, provider).Where(scopes.Owns));
+            else if (operational?.Name == RuntimeOperationalStateStoreBackend.EntityFramework) owned.AddRange(RuntimeEfContextRegistration.ContextRegistrations(services, provider).Where(operational.Owns));
+            else owned.AddRange(RuntimeEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName, configured.Schema, configured.Pooling));
             services.AddScoped<EfWorkflowExecutionStateStore>(); var concrete = services.Last(); owned.Add(concrete);
             services.RemoveAll<IWorkflowExecutionStateStore>();
             var contract = ServiceDescriptor.Scoped<IWorkflowExecutionStateStore>(p => p.GetRequiredService<EfWorkflowExecutionStateStore>()); services.Add(contract);

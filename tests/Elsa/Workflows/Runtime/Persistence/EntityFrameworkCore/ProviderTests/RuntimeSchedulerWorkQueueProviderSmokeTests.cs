@@ -16,8 +16,8 @@ public sealed class RuntimeSchedulerWorkQueuePostgreSqlSmokeTests(RuntimeBookmar
     [SkippableFact]
     public Task PostgreSql_scheduler_work_queue_smoke() => RuntimeSchedulerWorkQueueProviderSmoke.RunAsync(
         fixture,
-        connection => new BookmarkStatePostgreSqlDbContext(new DbContextOptionsBuilder<BookmarkStatePostgreSqlDbContext>().UseNpgsql(connection).Options),
-        BookmarkStatePostgreSqlDbContext.ExpectedProviderName);
+        connection => new RuntimePostgreSqlDbContext(new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).Options),
+        RuntimePostgreSqlDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
@@ -26,8 +26,8 @@ public sealed class RuntimeSchedulerWorkQueueSqlServerSmokeTests(RuntimeBookmark
     [SkippableFact]
     public Task SqlServer_scheduler_work_queue_smoke() => RuntimeSchedulerWorkQueueProviderSmoke.RunAsync(
         fixture,
-        connection => new BookmarkStateSqlServerDbContext(new DbContextOptionsBuilder<BookmarkStateSqlServerDbContext>().UseSqlServer(connection).Options),
-        BookmarkStateSqlServerDbContext.ExpectedProviderName);
+        connection => new RuntimeSqlServerDbContext(new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(connection).Options),
+        RuntimeSqlServerDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
@@ -36,8 +36,8 @@ public sealed class RuntimeSchedulerWorkQueueMySqlSmokeTests(RuntimeBookmarksMyS
     [SkippableFact]
     public Task MySql_scheduler_work_queue_smoke() => RuntimeSchedulerWorkQueueProviderSmoke.RunAsync(
         fixture,
-        connection => new BookmarkStateMySqlDbContext(new DbContextOptionsBuilder<BookmarkStateMySqlDbContext>().UseMySQL(connection).Options),
-        BookmarkStateMySqlDbContext.ExpectedProviderName);
+        connection => new RuntimeMySqlDbContext(new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(connection).Options),
+        RuntimeMySqlDbContext.ExpectedProviderName);
 }
 
 internal static class RuntimeSchedulerWorkQueueProviderSmoke
@@ -46,7 +46,7 @@ internal static class RuntimeSchedulerWorkQueueProviderSmoke
 
     public static async Task RunAsync(
         RuntimeBookmarksProviderFixture fixture,
-        Func<string, BookmarkStateDbContext> createContext,
+        Func<string, RuntimeDbContext> createContext,
         string expectedProvider)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
@@ -104,7 +104,7 @@ internal static class RuntimeSchedulerWorkQueueProviderSmoke
         }
     }
 
-    private static EfSchedulerWorkQueueStore Store(BookmarkStateDbContext context, string scope) =>
+    private static EfSchedulerWorkQueueStore Store(RuntimeDbContext context, string scope) =>
         new(context, new FixedAccessor(scope), new HmacRuntimeRecoveryContinuationCodec(
             Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = SigningKey })));
 

@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 internal static class EfRuntimeCheckpointAlterationJobParticipantStaging
 {
     public static async ValueTask StageAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         WorkflowAlterationJobTerminalChange change,
         string scope,
         string expectedWorkflowExecutionId,
