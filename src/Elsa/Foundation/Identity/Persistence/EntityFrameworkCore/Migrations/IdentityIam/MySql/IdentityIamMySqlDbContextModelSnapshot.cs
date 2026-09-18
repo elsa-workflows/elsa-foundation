@@ -15,7 +15,6 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .UseCollation("utf8mb4_0900_bin")
                 .HasAnnotation("ProductVersion", "10.0.10")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
@@ -25,7 +24,9 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("AllowedGrantTypesJson")
                         .IsRequired()
@@ -33,11 +34,15 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("ApplicationId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("ClientId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("DisplayName")
                         .IsRequired()
@@ -56,7 +61,9 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<int>("Type")
                         .HasColumnType("int");
@@ -64,15 +71,15 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                     b.HasKey("Id");
 
                     b.ToTable("identity_applications", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 
             modelBuilder.Entity("Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities.ClaimMappingEntity", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("GrantPermissionsJson")
                         .IsRequired()
@@ -95,13 +102,17 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("Provider")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("ProviderLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -109,7 +120,9 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("RuleId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<byte[]>("RuleIdOrderKey")
                         .IsRequired()
@@ -120,20 +133,26 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<bool>("StopOnMatch")
                         .HasColumnType("tinyint(1)");
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("Id");
 
@@ -141,23 +160,27 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasDatabaseName("ix_identity_claim_mappings_provider");
 
                     b.ToTable("identity_claim_mappings", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 
             modelBuilder.Entity("Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities.CredentialEntity", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("CredentialId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("CredentialLookupKey")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("ExpiresAt")
                         .HasMaxLength(35)
@@ -183,41 +206,51 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("SubjectId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<int>("SubjectType")
                         .HasColumnType("int");
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("Id");
 
                     b.ToTable("identity_credentials", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 
             modelBuilder.Entity("Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities.EmailReservationEntity", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("NormalizedEmail")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("NormalizedEmailKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -225,17 +258,23 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("Id");
 
@@ -244,15 +283,15 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasDatabaseName("ux_identity_email_reservations_key");
 
                     b.ToTable("identity_email_reservations", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 
             modelBuilder.Entity("Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities.ExternalIdentityEntity", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<byte[]>("ExternalOrderKey")
                         .IsRequired()
@@ -273,7 +312,9 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("Provider")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("ProviderDisplayName")
                         .HasColumnType("longtext");
@@ -282,17 +323,23 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("ProviderSubject")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("ProviderSubjectLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -300,23 +347,31 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("UserLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("Id");
 
@@ -331,15 +386,15 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasDatabaseName("ix_identity_external_logins_user");
 
                     b.ToTable("identity_external_logins", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 
             modelBuilder.Entity("Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities.MutationReceiptEntity", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("AuthoritativeId")
                         .HasColumnType("longtext");
@@ -359,15 +414,21 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("MutationReceiptId")
                         .IsRequired()
-                        .HasColumnType("varchar(255)");
+                        .HasColumnType("varchar(255)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("OperationId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("RequestFingerprint")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -389,21 +450,23 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasDatabaseName("ux_identity_mutation_receipts_id");
 
                     b.ToTable("identity_mutation_receipts", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 
             modelBuilder.Entity("Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities.RoleClaimEntity", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("ClaimKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("ClaimType")
                         .IsRequired()
@@ -418,23 +481,31 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("RoleId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("RoleLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("Id");
 
@@ -446,15 +517,15 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasDatabaseName("ix_identity_role_claims_role");
 
                     b.ToTable("identity_role_claims", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 
             modelBuilder.Entity("Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities.RoleEntity", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("ClaimIdsJson")
                         .IsRequired()
@@ -471,12 +542,16 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasColumnType("longtext");
 
                     b.Property<string>("NormalizedName")
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("NormalizedNameKey")
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("PermissionsJson")
                         .IsRequired()
@@ -488,7 +563,9 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("RoleId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<byte[]>("RoleIdOrderKey")
                         .IsRequired()
@@ -500,13 +577,17 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("UserLinkIdsJson")
                         .IsRequired()
@@ -524,25 +605,29 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasDatabaseName("ix_identity_roles_page");
 
                     b.ToTable("identity_roles", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 
             modelBuilder.Entity("Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities.RoleNameReservationEntity", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("NormalizedRoleName")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("NormalizedRoleNameKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -550,17 +635,23 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("RoleId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("Id");
 
@@ -569,15 +660,15 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasDatabaseName("ux_identity_role_name_reservations_key");
 
                     b.ToTable("identity_role_name_reservations", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 
             modelBuilder.Entity("Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities.TenantMembershipEntity", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("DirectPermissionsJson")
                         .IsRequired()
@@ -596,23 +687,31 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("UserLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("Id");
 
@@ -621,21 +720,23 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasDatabaseName("ux_identity_tenant_memberships_key");
 
                     b.ToTable("identity_tenant_memberships", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 
             modelBuilder.Entity("Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities.UserClaimEntity", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("ClaimKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("ClaimType")
                         .IsRequired()
@@ -650,23 +751,31 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("UserLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("Id");
 
@@ -681,15 +790,15 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasDatabaseName("ix_identity_user_claims_user");
 
                     b.ToTable("identity_user_claims", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 
             modelBuilder.Entity("Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities.UserEntity", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("int");
@@ -726,20 +835,28 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasColumnType("longtext");
 
                     b.Property<string>("NormalizedEmail")
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("NormalizedEmailKey")
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("NormalizedUserName")
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("NormalizedUserNameKey")
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<int>("Ownership")
                         .HasColumnType("int");
@@ -773,13 +890,17 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantMembershipIdsJson")
                         .IsRequired()
@@ -794,7 +915,9 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<byte[]>("UserIdOrderKey")
                         .IsRequired()
@@ -817,25 +940,29 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasDatabaseName("ix_identity_users_page");
 
                     b.ToTable("identity_users", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 
             modelBuilder.Entity("Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities.UserNameReservationEntity", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("NormalizedUserName")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("NormalizedUserNameKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -843,17 +970,23 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("Id");
 
@@ -862,15 +995,15 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasDatabaseName("ux_identity_user_name_reservations_key");
 
                     b.ToTable("identity_user_name_reservations", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 
             modelBuilder.Entity("Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities.UserRoleEntity", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -878,33 +1011,45 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("RoleId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("RoleLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("UserLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("Id");
 
@@ -919,15 +1064,15 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasDatabaseName("ux_identity_user_roles_pair");
 
                     b.ToTable("identity_user_roles", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 
             modelBuilder.Entity("Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities.UserTokenEntity", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("LoginProvider")
                         .IsRequired()
@@ -943,29 +1088,39 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TokenKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("UserLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("Value")
                         .HasColumnType("longtext");
@@ -977,8 +1132,6 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasDatabaseName("ux_identity_user_tokens_key");
 
                     b.ToTable("identity_user_tokens", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 #pragma warning restore 612, 618
         }

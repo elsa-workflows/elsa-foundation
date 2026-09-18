@@ -33,12 +33,32 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);
 
-    protected static void ConfigureOrdinalCollation(ModelBuilder modelBuilder, string collation)
-    {
-        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
-        foreach (var property in entityType.GetProperties().Where(property => property.ClrType == typeof(string)))
-            property.SetCollation(collation);
-    }
+    /// <summary>
+    /// The string columns this module compares or orders in SQL beyond the ones a key or an index already
+    /// covers: lookup hashes, the identity columns beside them, the ordinal-normalized search projections
+    /// the definition list filters with <c>Contains</c>, and the sort keys. The serialized columns
+    /// (<c>StateSource</c>, <c>RecordsJson</c>, <c>ActivityPresentationJson</c>, <c>ResultJson</c>,
+    /// <c>DeletedReason</c>) are absent because nothing compares them in SQL; they are read and
+    /// deserialized in .NET.
+    /// </summary>
+    private static readonly string[] OrdinallyComparedColumns =
+    [
+        "Id", "IdLookupHash", "TenantId", "ScopeKey",
+        "IdSearchKey", "NameSearchKey", "DescriptionSearchKey",
+        // Name and Description are filtered with ==; substring search goes through the search keys above.
+        "Name", "Description",
+        "DefinitionId", "DefinitionIdLookupHash",
+        "WorkflowDefinitionId", "WorkflowDefinitionIdLookupHash",
+        "WorkflowDefinitionDraftId", "WorkflowDefinitionDraftIdLookupHash",
+        "WorkflowDefinitionVersionId", "WorkflowDefinitionVersionIdLookupHash",
+        "SourceVersionId", "Version", "SemVerSortKey",
+        "OperationKind", "OperationKey", "OperationKindLookupHash", "OperationKeyLookupHash",
+        "RequestFingerprint", "ResultFingerprint"
+    ];
+
+    /// <summary>Binds this module's ordinal columns to <paramref name="providerName"/>'s binary collation, per column.</summary>
+    protected static void ApplyOrdinalCollation(ModelBuilder modelBuilder, string providerName) =>
+        EfOrdinalCollation.Apply(modelBuilder, providerName, OrdinallyComparedColumns);
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {

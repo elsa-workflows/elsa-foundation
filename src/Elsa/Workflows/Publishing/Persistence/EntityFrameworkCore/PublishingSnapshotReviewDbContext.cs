@@ -32,4 +32,31 @@ public abstract class PublishingSnapshotReviewDbContext(DbContextOptions options
     }
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);
+
+    /// <summary>
+    /// The string columns this module compares or orders in SQL beyond the ones a key or an index already
+    /// covers: the tenant and resource hashes, the identity material stored beside them, and the bounded
+    /// status/action discriminators every filter matches on. <c>Content</c> and the failure-message
+    /// columns are absent: the first is deserialized in .NET, and the second pair is free text nothing
+    /// compares.
+    /// </summary>
+    private static readonly string[] OrdinallyComparedColumns =
+    [
+        "Id", "TenantId", "TenantIdHash", "SchemaVersion", "Status",
+        "PreflightToken", "Incarnation", "CandidateHash", "DefinitionId",
+        "Action", "RequestedAction", "PolicySource", "DefaultAction",
+        "SlotName", "RequestedSlotName", "DefaultSlotName",
+        "RequestedExpectedPublicationId", "ActivePublicationId",
+        "PolicyKey", "PolicyKeyHash",
+        "WorkflowDefinitionId", "WorkflowDefinitionIdHash", "WorkflowDefinitionVersionId",
+        "PublicationId", "PublicationIdHash", "SlotId", "SlotIdHash",
+        "ArtifactId", "SourceReferenceId",
+        "IntentId", "IntentIdHash", "ProjectionKind", "ProjectionKindHash", "Operation",
+        "ReceiptKeyHash", "IdempotencyKey", "ReceiptTenantId",
+        "TestRunId", "TestRunIdHash"
+    ];
+
+    /// <summary>Binds this module's ordinal columns to <paramref name="providerName"/>'s binary collation, per column.</summary>
+    protected static void ApplyOrdinalCollation(ModelBuilder modelBuilder, string providerName) =>
+        EfOrdinalCollation.Apply(modelBuilder, providerName, OrdinallyComparedColumns);
 }

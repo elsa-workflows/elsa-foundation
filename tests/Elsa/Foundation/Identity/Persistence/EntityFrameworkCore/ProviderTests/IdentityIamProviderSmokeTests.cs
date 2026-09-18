@@ -452,7 +452,10 @@ internal static class IdentityIamProviderSmoke
                 Assert.True(await reader.ReadAsync());
                 var ddl = reader.GetString(1);
                 Assert.Contains($"DEFAULT CHARSET={IdentityIamMySqlDbContext.CharacterSet}", ddl, StringComparison.OrdinalIgnoreCase);
-                Assert.Contains(IdentityIamMySqlDbContext.Collation, ddl, StringComparison.OrdinalIgnoreCase);
+                // #1837: the table keeps the server's default collation and the lookup keys carry the
+                // binary one per column, so this module imposes nothing on a neighbour sharing the database.
+                Assert.DoesNotContain($"COLLATE={EfOrdinalCollation.MySql}", ddl, StringComparison.OrdinalIgnoreCase);
+                Assert.Contains($"COLLATE {EfOrdinalCollation.MySql}", ddl, StringComparison.OrdinalIgnoreCase);
             }
         }
         finally

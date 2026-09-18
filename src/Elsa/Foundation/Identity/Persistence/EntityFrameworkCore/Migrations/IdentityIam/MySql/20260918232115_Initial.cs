@@ -1,0 +1,544 @@
+﻿using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
+
+namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.IdentityIam.MySql
+{
+    /// <inheritdoc />
+    public partial class Initial : Migration
+    {
+        /// <inheritdoc />
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.AlterDatabase()
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "identity_applications",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    ApplicationId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    ClientId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    DisplayName = table.Column<string>(type: "longtext", nullable: false),
+                    Type = table.Column<int>(type: "int", nullable: false),
+                    Ownership = table.Column<int>(type: "int", nullable: false),
+                    AllowedGrantTypesJson = table.Column<string>(type: "longtext", nullable: false),
+                    ScopesJson = table.Column<string>(type: "longtext", nullable: false),
+                    Revision = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_identity_applications", x => x.Id);
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "identity_claim_mappings",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    Provider = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    ProviderLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    RuleId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    RuleLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    RuleIdOrderKey = table.Column<byte[]>(type: "varbinary(802)", maxLength: 802, nullable: false),
+                    MatchClaimType = table.Column<string>(type: "longtext", nullable: false),
+                    MatchValue = table.Column<string>(type: "longtext", nullable: false),
+                    GrantRolesJson = table.Column<string>(type: "longtext", nullable: false),
+                    GrantPermissionsJson = table.Column<string>(type: "longtext", nullable: false),
+                    Order = table.Column<int>(type: "int", nullable: false),
+                    StopOnMatch = table.Column<bool>(type: "tinyint(1)", nullable: false),
+                    Revision = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_identity_claim_mappings", x => x.Id);
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "identity_credentials",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantLookupKey = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    CredentialId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    CredentialLookupKey = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    SubjectType = table.Column<int>(type: "int", nullable: false),
+                    SubjectId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    Kind = table.Column<int>(type: "int", nullable: false),
+                    HashedSecret = table.Column<string>(type: "longtext", nullable: false),
+                    HashAlgorithm = table.Column<string>(type: "longtext", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    ExpiresAt = table.Column<string>(type: "varchar(35)", maxLength: 35, nullable: true),
+                    Revision = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_identity_credentials", x => x.Id);
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "identity_email_reservations",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    NormalizedEmail = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    NormalizedEmailKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    UserId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    Revision = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_identity_email_reservations", x => x.Id);
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "identity_external_logins",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    Provider = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    ProviderDisplayName = table.Column<string>(type: "longtext", nullable: true),
+                    ProviderLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    ProviderSubject = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    ProviderSubjectLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    ExternalOrderKey = table.Column<byte[]>(type: "varbinary(1604)", maxLength: 1604, nullable: false),
+                    UserId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    UserLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    LinkedAt = table.Column<string>(type: "varchar(35)", maxLength: 35, nullable: false),
+                    LastSeenAt = table.Column<string>(type: "varchar(35)", maxLength: 35, nullable: true),
+                    LinkPolicy = table.Column<int>(type: "int", nullable: false),
+                    Revision = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_identity_external_logins", x => x.Id);
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "identity_mutation_receipts",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    MutationReceiptId = table.Column<string>(type: "varchar(255)", nullable: false, collation: "utf8mb4_0900_bin"),
+                    OperationId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    RequestFingerprint = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    Version = table.Column<long>(type: "bigint", nullable: true),
+                    Message = table.Column<string>(type: "longtext", nullable: false),
+                    AuthoritativeId = table.Column<string>(type: "longtext", nullable: true),
+                    FailedUnitId = table.Column<string>(type: "longtext", nullable: true),
+                    CreatedAt = table.Column<long>(type: "bigint", nullable: false),
+                    ExpiresAt = table.Column<long>(type: "bigint", nullable: false),
+                    Revision = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_identity_mutation_receipts", x => x.Id);
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "identity_role_claims",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    RoleId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    RoleLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    ClaimType = table.Column<string>(type: "longtext", nullable: false),
+                    ClaimValue = table.Column<string>(type: "longtext", nullable: true),
+                    ClaimKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    Revision = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_identity_role_claims", x => x.Id);
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "identity_role_name_reservations",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    NormalizedRoleName = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    NormalizedRoleNameKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    RoleId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    Revision = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_identity_role_name_reservations", x => x.Id);
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "identity_roles",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    RoleId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    RoleIdOrderKey = table.Column<byte[]>(type: "varbinary(802)", maxLength: 802, nullable: false),
+                    Name = table.Column<string>(type: "longtext", nullable: false),
+                    NormalizedName = table.Column<string>(type: "longtext", nullable: true, collation: "utf8mb4_0900_bin"),
+                    NormalizedNameKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: true, collation: "utf8mb4_0900_bin"),
+                    Description = table.Column<string>(type: "longtext", nullable: true),
+                    PermissionsJson = table.Column<string>(type: "longtext", nullable: false),
+                    System = table.Column<bool>(type: "tinyint(1)", nullable: false),
+                    ClaimIdsJson = table.Column<string>(type: "longtext", nullable: false),
+                    UserLinkIdsJson = table.Column<string>(type: "longtext", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "longtext", nullable: true),
+                    Revision = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_identity_roles", x => x.Id);
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "identity_tenant_memberships",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    UserId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    UserLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    RoleIdsJson = table.Column<string>(type: "longtext", nullable: false),
+                    DirectPermissionsJson = table.Column<string>(type: "longtext", nullable: false),
+                    Revision = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_identity_tenant_memberships", x => x.Id);
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "identity_user_claims",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    UserId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    UserLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    ClaimType = table.Column<string>(type: "longtext", nullable: false),
+                    ClaimValue = table.Column<string>(type: "longtext", nullable: true),
+                    ClaimKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    Revision = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_identity_user_claims", x => x.Id);
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "identity_user_name_reservations",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    NormalizedUserName = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    NormalizedUserNameKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    UserId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    Revision = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_identity_user_name_reservations", x => x.Id);
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "identity_user_roles",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    UserId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    UserLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    RoleId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    RoleLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    Revision = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_identity_user_roles", x => x.Id);
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "identity_user_tokens",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    UserId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    UserLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    LoginProvider = table.Column<string>(type: "longtext", nullable: false),
+                    Name = table.Column<string>(type: "longtext", nullable: false),
+                    TokenKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    Value = table.Column<string>(type: "longtext", nullable: true),
+                    Revision = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_identity_user_tokens", x => x.Id);
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "identity_users",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    UserId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    UserIdOrderKey = table.Column<byte[]>(type: "varbinary(802)", maxLength: 802, nullable: false),
+                    UserName = table.Column<string>(type: "longtext", nullable: false),
+                    NormalizedUserName = table.Column<string>(type: "longtext", nullable: true, collation: "utf8mb4_0900_bin"),
+                    NormalizedUserNameKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: true, collation: "utf8mb4_0900_bin"),
+                    Email = table.Column<string>(type: "longtext", nullable: true),
+                    NormalizedEmail = table.Column<string>(type: "longtext", nullable: true, collation: "utf8mb4_0900_bin"),
+                    NormalizedEmailKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: true, collation: "utf8mb4_0900_bin"),
+                    DisplayName = table.Column<string>(type: "longtext", nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    Ownership = table.Column<int>(type: "int", nullable: false),
+                    RoleIdsJson = table.Column<string>(type: "longtext", nullable: false),
+                    DirectPermissionsJson = table.Column<string>(type: "longtext", nullable: false),
+                    ClaimIdsJson = table.Column<string>(type: "longtext", nullable: false),
+                    LoginIdsJson = table.Column<string>(type: "longtext", nullable: false),
+                    RoleLinkIdsJson = table.Column<string>(type: "longtext", nullable: false),
+                    TokenIdsJson = table.Column<string>(type: "longtext", nullable: false),
+                    TenantMembershipIdsJson = table.Column<string>(type: "longtext", nullable: false),
+                    EmailConfirmed = table.Column<bool>(type: "tinyint(1)", nullable: false),
+                    PasswordHash = table.Column<string>(type: "longtext", nullable: true),
+                    SecurityStamp = table.Column<string>(type: "longtext", nullable: true),
+                    ConcurrencyStamp = table.Column<string>(type: "longtext", nullable: true),
+                    PhoneNumber = table.Column<string>(type: "longtext", nullable: true),
+                    PhoneNumberConfirmed = table.Column<bool>(type: "tinyint(1)", nullable: false),
+                    TwoFactorEnabled = table.Column<bool>(type: "tinyint(1)", nullable: false),
+                    LockoutEnd = table.Column<string>(type: "varchar(35)", maxLength: 35, nullable: true),
+                    LockoutEnabled = table.Column<bool>(type: "tinyint(1)", nullable: false),
+                    AccessFailedCount = table.Column<int>(type: "int", nullable: false),
+                    Revision = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_identity_users", x => x.Id);
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_identity_claim_mappings_provider",
+                table: "identity_claim_mappings",
+                columns: new[] { "TenantLookupKey", "ProviderLookupKey", "Order", "RuleIdOrderKey", "Id" });
+
+            migrationBuilder.CreateIndex(
+                name: "ux_identity_email_reservations_key",
+                table: "identity_email_reservations",
+                columns: new[] { "TenantLookupKey", "NormalizedEmailKey" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_identity_external_logins_user",
+                table: "identity_external_logins",
+                columns: new[] { "TenantLookupKey", "UserLookupKey", "Id" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_identity_external_logins_user_page",
+                table: "identity_external_logins",
+                columns: new[] { "UserLookupKey", "ExternalOrderKey" });
+
+            migrationBuilder.CreateIndex(
+                name: "ux_identity_external_logins_subject",
+                table: "identity_external_logins",
+                columns: new[] { "TenantLookupKey", "ProviderLookupKey", "ProviderSubjectLookupKey" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_identity_mutation_receipts_expiry",
+                table: "identity_mutation_receipts",
+                column: "ExpiresAt");
+
+            migrationBuilder.CreateIndex(
+                name: "ux_identity_mutation_receipts_id",
+                table: "identity_mutation_receipts",
+                column: "MutationReceiptId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_identity_role_claims_role",
+                table: "identity_role_claims",
+                columns: new[] { "TenantLookupKey", "RoleLookupKey", "Id" });
+
+            migrationBuilder.CreateIndex(
+                name: "ux_identity_role_claims_claim",
+                table: "identity_role_claims",
+                columns: new[] { "TenantLookupKey", "RoleLookupKey", "ClaimKey" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ux_identity_role_name_reservations_key",
+                table: "identity_role_name_reservations",
+                columns: new[] { "TenantLookupKey", "NormalizedRoleNameKey" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_identity_roles_name",
+                table: "identity_roles",
+                columns: new[] { "TenantLookupKey", "NormalizedNameKey" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_identity_roles_page",
+                table: "identity_roles",
+                columns: new[] { "TenantLookupKey", "RoleIdOrderKey", "Id" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_identity_roles_tenant",
+                table: "identity_roles",
+                column: "TenantLookupKey");
+
+            migrationBuilder.CreateIndex(
+                name: "ux_identity_tenant_memberships_key",
+                table: "identity_tenant_memberships",
+                columns: new[] { "TenantLookupKey", "UserLookupKey" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_identity_user_claims_claim",
+                table: "identity_user_claims",
+                columns: new[] { "TenantLookupKey", "ClaimKey", "Id" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_identity_user_claims_user",
+                table: "identity_user_claims",
+                columns: new[] { "TenantLookupKey", "UserLookupKey", "Id" });
+
+            migrationBuilder.CreateIndex(
+                name: "ux_identity_user_claims_claim",
+                table: "identity_user_claims",
+                columns: new[] { "TenantLookupKey", "UserLookupKey", "ClaimKey" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ux_identity_user_name_reservations_key",
+                table: "identity_user_name_reservations",
+                columns: new[] { "TenantLookupKey", "NormalizedUserNameKey" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_identity_user_roles_role",
+                table: "identity_user_roles",
+                columns: new[] { "TenantLookupKey", "RoleLookupKey", "Id" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_identity_user_roles_user",
+                table: "identity_user_roles",
+                columns: new[] { "TenantLookupKey", "UserLookupKey", "Id" });
+
+            migrationBuilder.CreateIndex(
+                name: "ux_identity_user_roles_pair",
+                table: "identity_user_roles",
+                columns: new[] { "TenantLookupKey", "UserLookupKey", "RoleLookupKey" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ux_identity_user_tokens_key",
+                table: "identity_user_tokens",
+                columns: new[] { "TenantLookupKey", "UserLookupKey", "TokenKey" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_identity_users_email",
+                table: "identity_users",
+                columns: new[] { "TenantLookupKey", "NormalizedEmailKey" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_identity_users_name",
+                table: "identity_users",
+                columns: new[] { "TenantLookupKey", "NormalizedUserNameKey" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_identity_users_page",
+                table: "identity_users",
+                columns: new[] { "TenantLookupKey", "UserIdOrderKey", "Id" });
+        }
+
+        /// <inheritdoc />
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.DropTable(
+                name: "identity_applications");
+
+            migrationBuilder.DropTable(
+                name: "identity_claim_mappings");
+
+            migrationBuilder.DropTable(
+                name: "identity_credentials");
+
+            migrationBuilder.DropTable(
+                name: "identity_email_reservations");
+
+            migrationBuilder.DropTable(
+                name: "identity_external_logins");
+
+            migrationBuilder.DropTable(
+                name: "identity_mutation_receipts");
+
+            migrationBuilder.DropTable(
+                name: "identity_role_claims");
+
+            migrationBuilder.DropTable(
+                name: "identity_role_name_reservations");
+
+            migrationBuilder.DropTable(
+                name: "identity_roles");
+
+            migrationBuilder.DropTable(
+                name: "identity_tenant_memberships");
+
+            migrationBuilder.DropTable(
+                name: "identity_user_claims");
+
+            migrationBuilder.DropTable(
+                name: "identity_user_name_reservations");
+
+            migrationBuilder.DropTable(
+                name: "identity_user_roles");
+
+            migrationBuilder.DropTable(
+                name: "identity_user_tokens");
+
+            migrationBuilder.DropTable(
+                name: "identity_users");
+        }
+    }
+}

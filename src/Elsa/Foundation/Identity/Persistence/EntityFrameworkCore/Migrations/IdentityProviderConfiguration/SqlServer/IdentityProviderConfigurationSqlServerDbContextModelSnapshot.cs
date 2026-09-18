@@ -25,7 +25,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<bool>("Enabled")
                         .HasColumnType("bit");
@@ -44,13 +45,13 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .IsRequired()
                         .HasMaxLength(1600)
                         .HasColumnType("nvarchar(1600)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("ProviderLookupKey")
                         .IsRequired()
                         .HasMaxLength(1600)
                         .HasColumnType("nvarchar(1600)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -84,12 +85,12 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                     b.Property<string>("TenantId")
                         .HasMaxLength(1600)
                         .HasColumnType("nvarchar(1600)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("TenantLookupKey")
                         .HasMaxLength(1600)
                         .HasColumnType("nvarchar(1600)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("Id");
 
@@ -100,7 +101,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<bool>("Enabled")
                         .HasColumnType("bit");
@@ -119,13 +121,13 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .IsRequired()
                         .HasMaxLength(1600)
                         .HasColumnType("nvarchar(1600)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("ProviderLookupKey")
                         .IsRequired()
                         .HasMaxLength(1600)
                         .HasColumnType("nvarchar(1600)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -160,13 +162,13 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .IsRequired()
                         .HasMaxLength(1600)
                         .HasColumnType("nvarchar(1600)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(1600)
                         .HasColumnType("nvarchar(1600)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("Id");
 

@@ -24,9 +24,11 @@ public sealed class SqlServerEfSecretRepositoryTests(SqlServerContainerFixture f
         using var context = new SecretsSqlServerDbContext(options);
         var entity = context.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(SecretRecord))!;
 
-        Assert.Equal("Latin1_General_BIN2", entity.FindProperty(nameof(SecretRecord.TypeNameLookupKey))!.GetCollation());
-        Assert.Equal("Latin1_General_BIN2", entity.FindProperty(nameof(SecretRecord.StoreNameLookupKey))!.GetCollation());
-        Assert.Equal("Latin1_General_BIN2", entity.FindProperty(nameof(SecretRecord.ScopeLookupKey))!.GetCollation());
+        Assert.Equal(EfOrdinalCollation.SqlServer, entity.FindProperty(nameof(SecretRecord.TypeNameLookupKey))!.GetCollation());
+        Assert.Equal(EfOrdinalCollation.SqlServer, entity.FindProperty(nameof(SecretRecord.StoreNameLookupKey))!.GetCollation());
+        Assert.Equal(EfOrdinalCollation.SqlServer, entity.FindProperty(nameof(SecretRecord.ScopeLookupKey))!.GetCollation());
+        // #1837 unified SQL Server on the 100 series; Payload is content, so it stays on the default.
+        Assert.Null(entity.FindProperty(nameof(SecretRecord.Payload))!.GetCollation());
     }
 
     [Fact]

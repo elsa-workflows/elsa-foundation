@@ -45,8 +45,7 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Migrati
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .UseCollation("C");
+                        .HasColumnType("text");
 
                     b.Property<long>("ContentLength")
                         .HasColumnType("bigint");
@@ -195,8 +194,7 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Migrati
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .UseCollation("C");
+                        .HasColumnType("text");
 
                     b.Property<string>("IdempotencyKey")
                         .IsRequired()

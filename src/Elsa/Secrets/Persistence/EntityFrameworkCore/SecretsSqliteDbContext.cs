@@ -21,5 +21,6 @@ public sealed class SecretsSqliteDbContext(DbContextOptions<SecretsSqliteDbConte
                     value => value.HasValue ? new DateTimeOffset(value.Value, TimeSpan.Zero) : null)
                 .HasColumnType("INTEGER");
         });
+        ApplyOrdinalCollation(modelBuilder, ExpectedProviderName);
     }
 }

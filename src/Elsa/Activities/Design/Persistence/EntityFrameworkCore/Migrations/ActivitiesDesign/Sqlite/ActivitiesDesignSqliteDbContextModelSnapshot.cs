@@ -15,9 +15,7 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder
-                .UseCollation("BINARY")
-                .HasAnnotation("ProductVersion", "10.0.10");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
 
             modelBuilder.Entity("Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition", b =>
                 {

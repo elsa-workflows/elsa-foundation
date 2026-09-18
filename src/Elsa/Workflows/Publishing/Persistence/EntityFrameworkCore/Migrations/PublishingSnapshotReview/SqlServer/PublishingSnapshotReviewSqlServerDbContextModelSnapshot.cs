@@ -26,7 +26,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("Id")
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("Content")
                         .IsRequired()
@@ -45,35 +45,37 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
+                        .HasColumnType("nvarchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
+                        .HasColumnType("nvarchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(1200)
                         .HasColumnType("nvarchar(1200)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("TenantIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("TestRunId")
                         .IsRequired()
                         .HasMaxLength(1200)
                         .HasColumnType("nvarchar(1200)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("TestRunIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<byte[]>("TestRunIdOrderKey")
                         .IsRequired()
@@ -97,7 +99,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("Id")
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("Content")
                         .IsRequired()
@@ -107,39 +109,41 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .IsRequired()
                         .HasMaxLength(1200)
                         .HasColumnType("nvarchar(1200)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("ReceiptKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("ReceiptTenantId")
                         .HasMaxLength(1200)
                         .HasColumnType("nvarchar(1200)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
+                        .HasColumnType("nvarchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
+                        .HasColumnType("nvarchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(1200)
                         .HasColumnType("nvarchar(1200)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("TenantIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("Id");
 
@@ -154,29 +158,32 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("DefaultAction")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
+                        .HasColumnType("nvarchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("DefaultSlotName")
                         .IsRequired()
                         .HasMaxLength(1200)
                         .HasColumnType("nvarchar(1200)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("PolicyKey")
                         .IsRequired()
                         .HasMaxLength(1244)
                         .HasColumnType("nvarchar(1244)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("PolicyKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -185,12 +192,13 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("TenantId")
                         .HasMaxLength(1200)
                         .HasColumnType("nvarchar(1200)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("TenantIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<int>("UpdatedAtOffsetMinutes")
                         .HasColumnType("int");
@@ -201,11 +209,12 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("WorkflowDefinitionId")
                         .HasMaxLength(1200)
                         .HasColumnType("nvarchar(1200)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("WorkflowDefinitionIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("Id");
 
@@ -220,7 +229,8 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<int>("AttemptCount")
                         .HasColumnType("int");
@@ -229,12 +239,13 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .IsRequired()
                         .HasMaxLength(1200)
                         .HasColumnType("nvarchar(1200)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("IntentIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<byte[]>("IntentIdOrderKey")
                         .IsRequired()
@@ -258,29 +269,32 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("Operation")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
+                        .HasColumnType("nvarchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("ProjectionKind")
                         .IsRequired()
                         .HasMaxLength(1200)
                         .HasColumnType("nvarchar(1200)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("ProjectionKindHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("PublicationId")
                         .IsRequired()
                         .HasMaxLength(1200)
                         .HasColumnType("nvarchar(1200)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("PublicationIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -289,17 +303,19 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
+                        .HasColumnType("nvarchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(1200)
                         .HasColumnType("nvarchar(1200)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("TenantIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("Id");
 
@@ -318,7 +334,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("Id")
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<int?>("ActivatedAtOffsetMinutes")
                         .HasColumnType("int");
@@ -329,7 +345,8 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("ArtifactId")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("nvarchar(1200)");
+                        .HasColumnType("nvarchar(1200)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<int>("CreatedAtOffsetMinutes")
                         .HasColumnType("int");
@@ -350,13 +367,13 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .IsRequired()
                         .HasMaxLength(1200)
                         .HasColumnType("nvarchar(1200)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("PublicationIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<int?>("RetiredAtOffsetMinutes")
                         .HasColumnType("int");
@@ -372,48 +389,53 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .IsRequired()
                         .HasMaxLength(1200)
                         .HasColumnType("nvarchar(1200)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("SlotIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("SlotName")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("nvarchar(1200)");
+                        .HasColumnType("nvarchar(1200)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("SourceReferenceId")
                         .HasMaxLength(1200)
-                        .HasColumnType("nvarchar(1200)");
+                        .HasColumnType("nvarchar(1200)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
+                        .HasColumnType("nvarchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(1200)
                         .HasColumnType("nvarchar(1200)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("TenantIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("WorkflowDefinitionId")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("nvarchar(1200)");
+                        .HasColumnType("nvarchar(1200)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("WorkflowDefinitionVersionId")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("nvarchar(1200)");
+                        .HasColumnType("nvarchar(1200)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("Id");
 
@@ -432,27 +454,30 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("PreflightToken")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("Action")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
+                        .HasColumnType("nvarchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("ActivePublicationId")
                         .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("CandidateHash")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<long>("ExpiresAt")
                         .HasColumnType("bigint");
@@ -460,7 +485,8 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("Incarnation")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
+                        .HasColumnType("nvarchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<long?>("PolicyRevision")
                         .HasColumnType("bigint");
@@ -468,25 +494,29 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("PolicySource")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
+                        .HasColumnType("nvarchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("RequestedAction")
                         .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
+                        .HasColumnType("nvarchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("RequestedExpectedPublicationId")
                         .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("RequestedSlotName")
                         .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("SlotName")
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<long>("SlotRevision")
                         .HasColumnType("bigint");
@@ -494,7 +524,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("TenantId")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("PreflightToken");
 

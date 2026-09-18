@@ -22,7 +22,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("AllowedGrantTypesJson")
                         .IsRequired()
@@ -30,11 +31,13 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("ApplicationId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("ClientId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("DisplayName")
                         .IsRequired()
@@ -53,7 +56,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<int>("Type")
                         .HasColumnType("integer");
@@ -67,7 +71,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("GrantPermissionsJson")
                         .IsRequired()
@@ -90,13 +95,15 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("Provider")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("ProviderLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -104,7 +111,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("RuleId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("RuleIdOrderKey")
                         .IsRequired()
@@ -115,20 +123,23 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<bool>("StopOnMatch")
                         .HasColumnType("boolean");
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.HasKey("Id");
 
@@ -142,15 +153,18 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("CredentialId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("CredentialLookupKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("ExpiresAt")
                         .HasMaxLength(35)
@@ -176,18 +190,21 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("SubjectId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<int>("SubjectType")
                         .HasColumnType("integer");
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.HasKey("Id");
 
@@ -198,17 +215,20 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("NormalizedEmail")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("NormalizedEmailKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -216,17 +236,20 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.HasKey("Id");
 
@@ -241,7 +264,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("ExternalOrderKey")
                         .IsRequired()
@@ -262,7 +286,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("Provider")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("ProviderDisplayName")
                         .HasColumnType("text");
@@ -271,17 +296,20 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("ProviderSubject")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("ProviderSubjectLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -289,23 +317,27 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("UserLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.HasKey("Id");
 
@@ -326,7 +358,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("AuthoritativeId")
                         .HasColumnType("text");
@@ -346,15 +379,18 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("MutationReceiptId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("OperationId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("RequestFingerprint")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -382,13 +418,15 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("ClaimKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("ClaimType")
                         .IsRequired()
@@ -403,23 +441,27 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("RoleId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("RoleLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.HasKey("Id");
 
@@ -437,7 +479,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("ClaimIdsJson")
                         .IsRequired()
@@ -454,12 +497,14 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasColumnType("text");
 
                     b.Property<string>("NormalizedName")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("NormalizedNameKey")
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("PermissionsJson")
                         .IsRequired()
@@ -471,7 +516,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("RoleId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("RoleIdOrderKey")
                         .IsRequired()
@@ -483,13 +529,15 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("UserLinkIdsJson")
                         .IsRequired()
@@ -513,17 +561,20 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("NormalizedRoleName")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("NormalizedRoleNameKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -531,17 +582,20 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("RoleId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.HasKey("Id");
 
@@ -556,7 +610,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("DirectPermissionsJson")
                         .IsRequired()
@@ -575,23 +630,27 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("UserLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.HasKey("Id");
 
@@ -606,13 +665,15 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("ClaimKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("ClaimType")
                         .IsRequired()
@@ -627,23 +688,27 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("UserLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.HasKey("Id");
 
@@ -664,7 +729,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("integer");
@@ -701,20 +767,24 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasColumnType("text");
 
                     b.Property<string>("NormalizedEmail")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("NormalizedEmailKey")
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("NormalizedUserName")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("NormalizedUserNameKey")
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<int>("Ownership")
                         .HasColumnType("integer");
@@ -748,13 +818,15 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantMembershipIdsJson")
                         .IsRequired()
@@ -769,7 +841,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("UserIdOrderKey")
                         .IsRequired()
@@ -798,17 +871,20 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("NormalizedUserName")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("NormalizedUserNameKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -816,17 +892,20 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.HasKey("Id");
 
@@ -841,7 +920,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -849,33 +929,39 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("RoleId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("RoleLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("UserLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.HasKey("Id");
 
@@ -896,7 +982,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("LoginProvider")
                         .IsRequired()
@@ -912,29 +999,34 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.Property<string>("TenantId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("TokenKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("UserLookupKey")
                         .IsRequired()
                         .HasMaxLength(64)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("Value")
                         .HasColumnType("text");
