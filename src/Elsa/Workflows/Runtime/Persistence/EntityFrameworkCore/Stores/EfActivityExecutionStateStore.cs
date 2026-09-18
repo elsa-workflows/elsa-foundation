@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>EF adapter for split activity execution state.</summary>
 public sealed class EfActivityExecutionStateStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IActivityExecutionStateStore
 {

@@ -236,7 +236,7 @@ public sealed class EfRuntimeCheckpointInspectionParticipantTests
     };
 
     private static async Task StageAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         RuntimeStateChange<ActivityExecutionInspectionProjection> change,
         string scope,
         string workflowExecutionId)
@@ -276,8 +276,8 @@ public sealed class EfRuntimeCheckpointInspectionParticipantTests
             var connectionString = $"Data Source=file:ef-r19-inspection-participant-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
             var keeper = new SqliteConnection(connectionString);
             await keeper.OpenAsync();
-            await using var context = new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(keeper).Options);
+            await using var context = new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(keeper).Options);
             await context.Database.EnsureCreatedAsync();
             return new TestDatabase(keeper, connectionString);
         }
@@ -289,7 +289,7 @@ public sealed class EfRuntimeCheckpointInspectionParticipantTests
     private sealed class TestFixture : IAsyncDisposable
     {
         private readonly SqliteConnection connection;
-        public BookmarkStateSqliteDbContext Context { get; }
+        public RuntimeSqliteDbContext Context { get; }
         public EfActivityExecutionInspectionStore Inspection { get; }
         public EfActivityExecutionHierarchyStore Hierarchy { get; }
 
@@ -297,8 +297,8 @@ public sealed class EfRuntimeCheckpointInspectionParticipantTests
         {
             connection = new SqliteConnection(connectionString);
             connection.Open();
-            Context = new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            Context = new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
             var accessor = new FixedAccessor(scope);
             Inspection = new(Context, accessor, RecoveryCodec());
             Hierarchy = new(Context, accessor, HierarchyCodec());

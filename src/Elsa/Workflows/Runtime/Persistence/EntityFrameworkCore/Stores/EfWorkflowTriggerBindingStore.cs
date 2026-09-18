@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>Concrete opt-in EF adapter for the durable workflow trigger-binding index.</summary>
 public sealed class EfWorkflowTriggerBindingStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowTriggerBindingStore
 {
     private const string ProjectionKind = "triggerBindings";

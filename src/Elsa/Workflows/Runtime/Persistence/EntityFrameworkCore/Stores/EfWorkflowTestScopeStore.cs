@@ -11,13 +11,13 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>EF lifecycle and admission store for immutable workflow test scopes (R13).</summary>
 public sealed class EfWorkflowTestScopeStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowTestScopeStore, IWorkflowTestScopeAdmissionStore
 {
     private const string CursorPurpose = "ef-runtime-test-scope-v1";
     private static readonly EfWriteRetry Transitions = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);
-    private readonly BookmarkStateDbContext _context = context ?? throw new ArgumentNullException(nameof(context));
+    private readonly RuntimeDbContext _context = context ?? throw new ArgumentNullException(nameof(context));
     private readonly IPersistenceAccessContextAccessor _access = accessContextAccessor ?? throw new ArgumentNullException(nameof(accessContextAccessor));
     private readonly IRuntimeRecoveryContinuationCodec _codec = continuationCodec ?? throw new ArgumentNullException(nameof(continuationCodec));
 

@@ -1158,7 +1158,7 @@ public sealed class EfRuntimeArtifactScopeTests
             var connectionString = $"Data Source=runtime-artifacts-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
             var connection = new SqliteConnection(connectionString);
             await connection.OpenAsync();
-            await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
             await context.Database.EnsureCreatedAsync();
             return new Database(connection, connectionString);
         }
@@ -1175,7 +1175,7 @@ public sealed class EfRuntimeArtifactScopeTests
                 command.CommandText = "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;";
                 await command.ExecuteNonQueryAsync();
             }
-            await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
             await context.Database.EnsureCreatedAsync();
             return new Database(connection, connectionString, databasePath);
         }
@@ -1189,10 +1189,10 @@ public sealed class EfRuntimeArtifactScopeTests
             try
             {
                 fixtureConnection.Open();
-                var options = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(fixtureConnection);
+                var options = new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(fixtureConnection);
                 foreach (var interceptor in interceptors)
                     options.AddInterceptors(interceptor);
-                var context = new BookmarkStateSqliteDbContext(options.Options);
+                var context = new RuntimeSqliteDbContext(options.Options);
                 var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions
                 {
                     SigningKey = "ef-runtime-test-recovery-signing-key-32-bytes",
@@ -1226,9 +1226,9 @@ public sealed class EfRuntimeArtifactScopeTests
         }
     }
 
-    private sealed class Fixture(BookmarkStateSqliteDbContext context, EfWorkflowExecutableSourceReferenceStore store, EfWorkflowExecutableStore executable, EfExecutableActivityTemplateStore template, SqliteConnection connection) : IAsyncDisposable
+    private sealed class Fixture(RuntimeSqliteDbContext context, EfWorkflowExecutableSourceReferenceStore store, EfWorkflowExecutableStore executable, EfExecutableActivityTemplateStore template, SqliteConnection connection) : IAsyncDisposable
     {
-        public BookmarkStateSqliteDbContext Context { get; } = context;
+        public RuntimeSqliteDbContext Context { get; } = context;
         public EfWorkflowExecutableSourceReferenceStore Store { get; } = store;
         public EfWorkflowExecutableStore Executable { get; } = executable;
         public EfExecutableActivityTemplateStore Template { get; } = template;

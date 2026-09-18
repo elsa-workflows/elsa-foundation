@@ -17,7 +17,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// a renewal remains consumable by its original claimant.
 /// </remarks>
 public sealed class EfSchedulerWorkQueueStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection
 {

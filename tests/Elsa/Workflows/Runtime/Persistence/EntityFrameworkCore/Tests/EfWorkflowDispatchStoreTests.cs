@@ -434,14 +434,14 @@ public sealed class EfWorkflowDispatchStoreTests
             throw new InvalidOperationException("The foreign registration must not be resolved.");
     }
 
-    private static async Task StageSiblingRevisionAsync(BookmarkStateSqliteDbContext context, string dispatchId)
+    private static async Task StageSiblingRevisionAsync(RuntimeSqliteDbContext context, string dispatchId)
     {
         var row = await context.WorkflowDispatches.SingleAsync(x =>
             x.DispatchId == EfRelationalIdentity.Encode(dispatchId));
         row.Revision++;
     }
 
-    private static Task<long> ReadRevisionAsync(BookmarkStateSqliteDbContext context, string dispatchId) =>
+    private static Task<long> ReadRevisionAsync(RuntimeSqliteDbContext context, string dispatchId) =>
         context.WorkflowDispatches.AsNoTracking()
             .Where(x => x.DispatchId == EfRelationalIdentity.Encode(dispatchId))
             .Select(x => x.Revision)
@@ -547,17 +547,17 @@ public sealed class EfWorkflowDispatchStoreTests
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
-            await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
             await context.Database.EnsureCreatedAsync();
             return new TestDatabase(connection);
         }
 
-        public BookmarkStateSqliteDbContext Open(string scope = "tenant-a", params IInterceptor[] interceptors)
+        public RuntimeSqliteDbContext Open(string scope = "tenant-a", params IInterceptor[] interceptors)
         {
-            var builder = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection);
+            var builder = new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection);
             if (interceptors.Length > 0)
                 builder.AddInterceptors(interceptors);
-            return new BookmarkStateSqliteDbContext(builder.Options);
+            return new RuntimeSqliteDbContext(builder.Options);
         }
 
         public ValueTask DisposeAsync() => connection.DisposeAsync();

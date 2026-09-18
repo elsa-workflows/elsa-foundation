@@ -245,7 +245,7 @@ public sealed class EfRecurringTriggerScheduleStoreTests
         using var provider = services.BuildServiceProvider(validateScopes: true);
         using var scope = provider.CreateScope();
         Assert.IsType<EfRecurringTriggerScheduleStore>(scope.ServiceProvider.GetRequiredService<IRecurringTriggerScheduleStore>());
-        Assert.IsType<BookmarkStateSqliteDbContext>(scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
+        Assert.IsType<RuntimeSqliteDbContext>(scope.ServiceProvider.GetRequiredService<RuntimeDbContext>());
     }
 
     [Fact]
@@ -317,10 +317,10 @@ public sealed class EfRecurringTriggerScheduleStoreTests
         .AddWorkflowRuntime()
         .AddRuntimeOperationalStateEntityFrameworkCore(new RuntimeOperationalStateEntityFrameworkCoreOptions { Provider = "Sqlite", ConnectionString = "Data Source=:memory:", RecoveryContinuationSigningKey = new string('k', 32) });
 
-    private static BookmarkStateSqliteDbContext Context(SqliteConnection connection) =>
-        new(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+    private static RuntimeSqliteDbContext Context(SqliteConnection connection) =>
+        new(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
 
-    private static EfRecurringTriggerScheduleStore Store(BookmarkStateDbContext context, string scope) =>
+    private static EfRecurringTriggerScheduleStore Store(RuntimeDbContext context, string scope) =>
         new(context, new Accessor(scope), new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) })));
 
     private static RecurringTriggerSchedule Schedule(string artifact, string node, DateTimeOffset next, string? activation = null, string? slot = null) =>
@@ -337,14 +337,14 @@ public sealed class EfRecurringTriggerScheduleStoreTests
         public static readonly RecurringTriggerSchedule Standalone = Schedule("artifact-a", "standalone", Now);
         private readonly SqliteConnection connection;
 
-        private SeededSchedules(SqliteConnection connection, BookmarkStateSqliteDbContext context)
+        private SeededSchedules(SqliteConnection connection, RuntimeSqliteDbContext context)
         {
             this.connection = connection;
             Context = context;
             Store = EfRecurringTriggerScheduleStoreTests.Store(context, "tenant-a");
         }
 
-        public BookmarkStateSqliteDbContext Context { get; }
+        public RuntimeSqliteDbContext Context { get; }
 
         public EfRecurringTriggerScheduleStore Store { get; }
 
@@ -363,7 +363,7 @@ public sealed class EfRecurringTriggerScheduleStoreTests
                 await store.SaveAsync(Standalone);
                 await store.PrepareActivationAsync(ActivationId, [Schedule("artifact-b", "prepared", Now, ActivationId, "slot-a")]);
             }
-            return new SeededSchedules(connection, new(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>()
+            return new SeededSchedules(connection, new(new DbContextOptionsBuilder<RuntimeSqliteDbContext>()
                 .UseSqlite(connection).AddInterceptors(saves).Options));
         }
 

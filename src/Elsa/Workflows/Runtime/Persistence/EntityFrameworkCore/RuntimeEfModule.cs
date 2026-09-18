@@ -3,7 +3,7 @@ using Elsa.Persistence.EntityFramework;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
 /// <summary>
-/// Every Runtime EF participant shares one <see cref="BookmarkStateDbContext"/>, so they share one migration
+/// Every Runtime EF participant shares one <see cref="RuntimeDbContext"/>, so they share one migration
 /// set, one history table and one connection, whichever participant registers the context first.
 /// </summary>
 public static class RuntimeEfModule

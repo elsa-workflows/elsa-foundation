@@ -20,18 +20,18 @@ public sealed class EfWorkflowRunHealthDataSourcePostgreSqlSmokeTests(RuntimeBoo
 {
     [SkippableFact]
     public Task PostgreSql_run_health_model_and_query_smoke() =>
-        WorkflowRunHealthProviderSmoke.RunAsync(fixture, connection => new BookmarkStatePostgreSqlDbContext(
-            new DbContextOptionsBuilder<BookmarkStatePostgreSqlDbContext>().UseNpgsql(connection).Options),
-            BookmarkStatePostgreSqlDbContext.ExpectedProviderName);
+        WorkflowRunHealthProviderSmoke.RunAsync(fixture, connection => new RuntimePostgreSqlDbContext(
+            new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).Options),
+            RuntimePostgreSqlDbContext.ExpectedProviderName);
 
     [SkippableFact]
     public Task PostgreSql_portfolio_design_and_runtime_query_smoke() =>
         WorkflowPortfolioProviderSmoke.RunAsync(fixture,
             connection => new WorkflowsDesignPostgreSqlDbContext(
                 new DbContextOptionsBuilder<WorkflowsDesignPostgreSqlDbContext>().UseNpgsql(connection).Options),
-            connection => new BookmarkStatePostgreSqlDbContext(
-                new DbContextOptionsBuilder<BookmarkStatePostgreSqlDbContext>().UseNpgsql(connection).Options),
-            BookmarkStatePostgreSqlDbContext.ExpectedProviderName);
+            connection => new RuntimePostgreSqlDbContext(
+                new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).Options),
+            RuntimePostgreSqlDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
@@ -39,18 +39,18 @@ public sealed class EfWorkflowRunHealthDataSourceSqlServerSmokeTests(RuntimeBook
 {
     [SkippableFact]
     public Task SqlServer_run_health_model_and_query_smoke() =>
-        WorkflowRunHealthProviderSmoke.RunAsync(fixture, connection => new BookmarkStateSqlServerDbContext(
-            new DbContextOptionsBuilder<BookmarkStateSqlServerDbContext>().UseSqlServer(connection).Options),
-            BookmarkStateSqlServerDbContext.ExpectedProviderName);
+        WorkflowRunHealthProviderSmoke.RunAsync(fixture, connection => new RuntimeSqlServerDbContext(
+            new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(connection).Options),
+            RuntimeSqlServerDbContext.ExpectedProviderName);
 
     [SkippableFact]
     public Task SqlServer_portfolio_design_and_runtime_query_smoke() =>
         WorkflowPortfolioProviderSmoke.RunAsync(fixture,
             connection => new WorkflowsDesignSqlServerDbContext(
                 new DbContextOptionsBuilder<WorkflowsDesignSqlServerDbContext>().UseSqlServer(connection).Options),
-            connection => new BookmarkStateSqlServerDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqlServerDbContext>().UseSqlServer(connection).Options),
-            BookmarkStateSqlServerDbContext.ExpectedProviderName);
+            connection => new RuntimeSqlServerDbContext(
+                new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(connection).Options),
+            RuntimeSqlServerDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
@@ -58,18 +58,18 @@ public sealed class EfWorkflowRunHealthDataSourceMySqlSmokeTests(RuntimeBookmark
 {
     [SkippableFact]
     public Task MySql_run_health_model_and_query_smoke() =>
-        WorkflowRunHealthProviderSmoke.RunAsync(fixture, connection => new BookmarkStateMySqlDbContext(
-            new DbContextOptionsBuilder<BookmarkStateMySqlDbContext>().UseMySQL(connection).Options),
-            BookmarkStateMySqlDbContext.ExpectedProviderName);
+        WorkflowRunHealthProviderSmoke.RunAsync(fixture, connection => new RuntimeMySqlDbContext(
+            new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(connection).Options),
+            RuntimeMySqlDbContext.ExpectedProviderName);
 
     [SkippableFact]
     public Task MySql_portfolio_design_and_runtime_query_smoke() =>
         WorkflowPortfolioProviderSmoke.RunAsync(fixture,
             connection => new WorkflowsDesignMySqlDbContext(
                 new DbContextOptionsBuilder<WorkflowsDesignMySqlDbContext>().UseMySQL(connection).Options),
-            connection => new BookmarkStateMySqlDbContext(
-                new DbContextOptionsBuilder<BookmarkStateMySqlDbContext>().UseMySQL(connection).Options),
-            BookmarkStateMySqlDbContext.ExpectedProviderName);
+            connection => new RuntimeMySqlDbContext(
+                new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(connection).Options),
+            RuntimeMySqlDbContext.ExpectedProviderName);
 }
 
 internal static class WorkflowRunHealthProviderSmoke
@@ -78,7 +78,7 @@ internal static class WorkflowRunHealthProviderSmoke
 
     public static async Task RunAsync(
         RuntimeBookmarksProviderFixture fixture,
-        Func<string, BookmarkStateDbContext> createContext,
+        Func<string, RuntimeDbContext> createContext,
         string expectedProvider)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");

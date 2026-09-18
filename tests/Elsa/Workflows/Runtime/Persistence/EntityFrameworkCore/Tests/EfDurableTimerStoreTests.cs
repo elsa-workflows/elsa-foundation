@@ -238,7 +238,7 @@ public sealed class EfDurableTimerStoreTests
             Assert.Equal(DurableTimerStoreBackend.EntityFramework, DurableTimerStoreBackend.Find(services)!.Name);
             await using var provider = services.BuildServiceProvider();
             await using var scope = provider.CreateAsyncScope();
-            var context = scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>();
+            var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
             await context.Database.EnsureCreatedAsync();
             var store = scope.ServiceProvider.GetRequiredService<IDurableTimerStore>();
             Assert.IsType<EfDurableTimerStore>(store);
@@ -277,8 +277,8 @@ public sealed class EfDurableTimerStoreTests
             var connectionString = $"Data Source=file:ef-r24-timers-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
             var keeper = new SqliteConnection(connectionString);
             await keeper.OpenAsync();
-            await using var context = new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(keeper).Options);
+            await using var context = new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(keeper).Options);
             await context.Database.EnsureCreatedAsync();
             return new TestDatabase(keeper, connectionString);
         }
@@ -291,15 +291,15 @@ public sealed class EfDurableTimerStoreTests
     private sealed class TestFixture : IAsyncDisposable
     {
         private readonly SqliteConnection connection;
-        public BookmarkStateSqliteDbContext Context { get; }
+        public RuntimeSqliteDbContext Context { get; }
         public EfDurableTimerStore Store { get; }
 
         public TestFixture(string connectionString, string scope)
         {
             connection = new SqliteConnection(connectionString);
             connection.Open();
-            Context = new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            Context = new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
             var accessor = new Accessor(scope);
             var codec = new HmacRuntimeRecoveryContinuationCodec(
                 Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) }));

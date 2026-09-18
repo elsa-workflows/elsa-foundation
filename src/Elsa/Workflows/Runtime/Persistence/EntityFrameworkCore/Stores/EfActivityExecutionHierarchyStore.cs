@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>EF adapter for inspection-derived activity execution hierarchy evidence.</summary>
 public sealed class EfActivityExecutionHierarchyStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IActivityExecutionHierarchyCursorCodec cursorCodec) : IActivityExecutionHierarchyStore
 {

@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 internal static class EfRuntimeCheckpointActivityExecutionParticipantStaging
 {
     public static async ValueTask StageActivityExecutionsAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> changes,
         string scope,
         string expectedWorkflowExecutionId,
@@ -46,7 +46,7 @@ internal static class EfRuntimeCheckpointActivityExecutionParticipantStaging
     }
 
     private static (RuntimeStateChange<ActivityExecutionState> Change, string Id) Validated(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         RuntimeStateChange<ActivityExecutionState> change,
         string scope,
         string expectedWorkflowExecutionId,
@@ -73,7 +73,7 @@ internal static class EfRuntimeCheckpointActivityExecutionParticipantStaging
     }
 
     private static void Stage(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         RuntimeStateChange<ActivityExecutionState> change,
         string scope,
         string id,

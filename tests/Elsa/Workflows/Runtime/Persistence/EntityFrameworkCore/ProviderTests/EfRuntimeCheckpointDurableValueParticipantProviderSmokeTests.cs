@@ -21,8 +21,8 @@ public sealed class RuntimeCheckpointDurableValueParticipantPostgreSqlSmokeTests
     public Task PostgreSql_checkpoint_durable_value_participant_smoke() =>
         RuntimeCheckpointDurableValueParticipantProviderSmoke.RunAsync(
             fixture,
-            connection => new BookmarkStatePostgreSqlDbContext(new DbContextOptionsBuilder<BookmarkStatePostgreSqlDbContext>().UseNpgsql(connection).Options),
-            BookmarkStatePostgreSqlDbContext.ExpectedProviderName);
+            connection => new RuntimePostgreSqlDbContext(new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).Options),
+            RuntimePostgreSqlDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
@@ -32,8 +32,8 @@ public sealed class RuntimeCheckpointDurableValueParticipantSqlServerSmokeTests(
     public Task SqlServer_checkpoint_durable_value_participant_smoke() =>
         RuntimeCheckpointDurableValueParticipantProviderSmoke.RunAsync(
             fixture,
-            connection => new BookmarkStateSqlServerDbContext(new DbContextOptionsBuilder<BookmarkStateSqlServerDbContext>().UseSqlServer(connection).Options),
-            BookmarkStateSqlServerDbContext.ExpectedProviderName);
+            connection => new RuntimeSqlServerDbContext(new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(connection).Options),
+            RuntimeSqlServerDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
@@ -43,8 +43,8 @@ public sealed class RuntimeCheckpointDurableValueParticipantMySqlSmokeTests(Runt
     public Task MySql_checkpoint_durable_value_participant_smoke() =>
         RuntimeCheckpointDurableValueParticipantProviderSmoke.RunAsync(
             fixture,
-            connection => new BookmarkStateMySqlDbContext(new DbContextOptionsBuilder<BookmarkStateMySqlDbContext>().UseMySQL(connection).Options),
-            BookmarkStateMySqlDbContext.ExpectedProviderName);
+            connection => new RuntimeMySqlDbContext(new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(connection).Options),
+            RuntimeMySqlDbContext.ExpectedProviderName);
 }
 
 internal static class RuntimeCheckpointDurableValueParticipantProviderSmoke
@@ -53,7 +53,7 @@ internal static class RuntimeCheckpointDurableValueParticipantProviderSmoke
 
     public static async Task RunAsync(
         RuntimeBookmarksProviderFixture fixture,
-        Func<string, BookmarkStateDbContext> createContext,
+        Func<string, RuntimeDbContext> createContext,
         string expectedProvider)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
@@ -125,7 +125,7 @@ internal static class RuntimeCheckpointDurableValueParticipantProviderSmoke
         Assert.Equal("winner", (await Store(conflictVerification, conflictScope).FindAsync("workflow-c", "value-c"))!.InlineValue!.Value.GetString());
     }
 
-    private static EfDurableValueStateStore Store(BookmarkStateDbContext context, string scope) =>
+    private static EfDurableValueStateStore Store(RuntimeDbContext context, string scope) =>
         new(context, new FixedAccessor(scope), new HmacRuntimeRecoveryContinuationCodec(
             Microsoft.Extensions.Options.Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "r19-durable-value-provider-smoke-signing-key" })));
 
@@ -136,7 +136,7 @@ internal static class RuntimeCheckpointDurableValueParticipantProviderSmoke
         new(durableValueId, workflowExecutionId, durableValueId, new RuntimeValueTypeDescriptor("json", null, null), DurableValueLifecycle.Result, DurableValueStorage.Inline,
             JsonDocument.Parse(JsonSerializer.Serialize(value)).RootElement, null, null, CapturedAt, new Dictionary<string, string>());
 
-    private static async Task StageAsync(BookmarkStateDbContext context, RuntimeStateChange<DurableValueState> change, string scope)
+    private static async Task StageAsync(RuntimeDbContext context, RuntimeStateChange<DurableValueState> change, string scope)
     {
         var type = typeof(EfRuntimeCheckpointCommitStore).Assembly.GetType(
             "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointParticipantStaging")!;

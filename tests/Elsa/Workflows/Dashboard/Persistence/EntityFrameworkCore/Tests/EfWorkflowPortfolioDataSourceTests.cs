@@ -31,14 +31,14 @@ public sealed class EfWorkflowPortfolioDataSourceTests : IAsyncLifetime
     private string designPath = null!;
     private string runtimePath = null!;
     private WorkflowsDesignSqliteDbContext design = null!;
-    private BookmarkStateSqliteDbContext runtime = null!;
+    private RuntimeSqliteDbContext runtime = null!;
 
     public async Task InitializeAsync()
     {
         designPath = Path.Combine(Path.GetTempPath(), $"elsa-dashboard-design-{Guid.NewGuid():N}.db");
         runtimePath = Path.Combine(Path.GetTempPath(), $"elsa-dashboard-runtime-{Guid.NewGuid():N}.db");
         design = new(new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>().UseSqlite($"Data Source={designPath}").Options);
-        runtime = new(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite($"Data Source={runtimePath}").Options);
+        runtime = new(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite($"Data Source={runtimePath}").Options);
         await design.Database.EnsureCreatedAsync();
         await runtime.Database.EnsureCreatedAsync();
     }
@@ -103,7 +103,7 @@ public sealed class EfWorkflowPortfolioDataSourceTests : IAsyncLifetime
         await design.DisposeAsync();
         await runtime.DisposeAsync();
         design = new(new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>().UseSqlite($"Data Source={designPath}").Options);
-        runtime = new(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite($"Data Source={runtimePath}").Options);
+        runtime = new(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite($"Data Source={runtimePath}").Options);
 
         var counts = await Source().QueryBaseCountsAsync(Tenant, AsOf);
 

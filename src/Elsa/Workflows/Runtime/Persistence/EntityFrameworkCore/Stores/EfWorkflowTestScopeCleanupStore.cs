@@ -16,7 +16,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// cancellation outbox upserts are staged on the caller's shared context and committed as one transaction.
 /// </remarks>
 public sealed class EfWorkflowTestScopeCleanupStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowTestScopeCleanupStore
 {
@@ -30,7 +30,7 @@ public sealed class EfWorkflowTestScopeCleanupStore(
     private const int ProviderPageSize = WorkflowDispatchQuery.MaximumTake;
     private static readonly Encoding StrictUtf8 = new UTF8Encoding(false, true);
 
-    private readonly BookmarkStateDbContext _context = context ?? throw new ArgumentNullException(nameof(context));
+    private readonly RuntimeDbContext _context = context ?? throw new ArgumentNullException(nameof(context));
     private readonly IPersistenceAccessContextAccessor _access = accessContextAccessor ?? throw new ArgumentNullException(nameof(accessContextAccessor));
     private readonly IRuntimeRecoveryContinuationCodec _codec = continuationCodec ?? throw new ArgumentNullException(nameof(continuationCodec));
 

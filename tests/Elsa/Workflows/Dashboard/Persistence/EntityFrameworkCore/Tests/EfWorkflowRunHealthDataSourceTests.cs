@@ -222,22 +222,22 @@ public sealed class EfWorkflowRunHealthDataSourceTests
             var connectionString = $"Data Source=file:ef-r25-health-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
             var keeper = new SqliteConnection(connectionString);
             await keeper.OpenAsync();
-            await using var context = new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(keeper).Options);
+            await using var context = new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(keeper).Options);
             await context.Database.EnsureCreatedAsync();
             return new(keeper, connectionString);
         }
 
         public Fixture Open() => new(
-            new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connectionString).Options));
+            new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connectionString).Options));
 
         public async ValueTask DisposeAsync() => await keeper.DisposeAsync();
     }
 
-    private sealed class Fixture(BookmarkStateSqliteDbContext context) : IAsyncDisposable
+    private sealed class Fixture(RuntimeSqliteDbContext context) : IAsyncDisposable
     {
-        public BookmarkStateSqliteDbContext Context { get; } = context;
+        public RuntimeSqliteDbContext Context { get; } = context;
         public ValueTask DisposeAsync() => Context.DisposeAsync();
     }
 

@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// tenant's incident by knowing its IDs.
 /// </remarks>
 public sealed class EfIncidentStateStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IIncidentStateStore
 {
     private const int ProviderPageSize = RuntimeStorePageRequest.MaximumLimit;

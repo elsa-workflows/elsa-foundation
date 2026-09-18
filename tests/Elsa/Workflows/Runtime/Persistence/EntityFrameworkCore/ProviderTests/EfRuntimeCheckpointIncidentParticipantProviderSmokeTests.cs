@@ -19,8 +19,8 @@ public sealed class RuntimeCheckpointIncidentParticipantPostgreSqlSmokeTests(Run
     public Task PostgreSql_checkpoint_incident_participant_smoke() =>
         RuntimeCheckpointIncidentParticipantProviderSmoke.RunAsync(
             fixture,
-            connection => new BookmarkStatePostgreSqlDbContext(new DbContextOptionsBuilder<BookmarkStatePostgreSqlDbContext>().UseNpgsql(connection).Options),
-            BookmarkStatePostgreSqlDbContext.ExpectedProviderName);
+            connection => new RuntimePostgreSqlDbContext(new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).Options),
+            RuntimePostgreSqlDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
@@ -30,8 +30,8 @@ public sealed class RuntimeCheckpointIncidentParticipantSqlServerSmokeTests(Runt
     public Task SqlServer_checkpoint_incident_participant_smoke() =>
         RuntimeCheckpointIncidentParticipantProviderSmoke.RunAsync(
             fixture,
-            connection => new BookmarkStateSqlServerDbContext(new DbContextOptionsBuilder<BookmarkStateSqlServerDbContext>().UseSqlServer(connection).Options),
-            BookmarkStateSqlServerDbContext.ExpectedProviderName);
+            connection => new RuntimeSqlServerDbContext(new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(connection).Options),
+            RuntimeSqlServerDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
@@ -41,8 +41,8 @@ public sealed class RuntimeCheckpointIncidentParticipantMySqlSmokeTests(RuntimeB
     public Task MySql_checkpoint_incident_participant_smoke() =>
         RuntimeCheckpointIncidentParticipantProviderSmoke.RunAsync(
             fixture,
-            connection => new BookmarkStateMySqlDbContext(new DbContextOptionsBuilder<BookmarkStateMySqlDbContext>().UseMySQL(connection).Options),
-            BookmarkStateMySqlDbContext.ExpectedProviderName);
+            connection => new RuntimeMySqlDbContext(new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(connection).Options),
+            RuntimeMySqlDbContext.ExpectedProviderName);
 }
 
 internal static class RuntimeCheckpointIncidentParticipantProviderSmoke
@@ -51,7 +51,7 @@ internal static class RuntimeCheckpointIncidentParticipantProviderSmoke
 
     public static async Task RunAsync(
         RuntimeBookmarksProviderFixture fixture,
-        Func<string, BookmarkStateDbContext> createContext,
+        Func<string, RuntimeDbContext> createContext,
         string expectedProvider)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
@@ -123,7 +123,7 @@ internal static class RuntimeCheckpointIncidentParticipantProviderSmoke
         Assert.Equal("winner", (await Store(conflictVerification, conflictScope).FindAsync("workflow-a", "incident-a"))!.Message);
     }
 
-    private static EfIncidentStateStore Store(BookmarkStateDbContext context, string scope) =>
+    private static EfIncidentStateStore Store(RuntimeDbContext context, string scope) =>
         new(context, new FixedAccessor(scope));
 
     private static RuntimeStateChange<IncidentState> Change(RuntimeStateChangeOperation operation, IncidentState state) =>
@@ -134,7 +134,7 @@ internal static class RuntimeCheckpointIncidentParticipantProviderSmoke
         "TestFailure", message, CapturedAt, null, new Dictionary<string, string>());
 
     private static async Task StageAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         RuntimeStateChange<IncidentState> change,
         string scope,
         string workflowExecutionId)

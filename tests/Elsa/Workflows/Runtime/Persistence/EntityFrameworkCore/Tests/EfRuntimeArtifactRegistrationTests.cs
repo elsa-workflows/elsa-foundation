@@ -175,7 +175,7 @@ public sealed class EfRuntimeArtifactRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddWorkflowRuntime();
-        services.AddScoped<BookmarkStateSqliteDbContext>(_ => throw new NotSupportedException());
+        services.AddScoped<RuntimeSqliteDbContext>(_ => throw new NotSupportedException());
         var before = services.ToArray();
 
         Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(new()));
@@ -189,7 +189,7 @@ public sealed class EfRuntimeArtifactRegistrationTests
     public void Artifact_registration_rejects_an_unowned_provider_context()
     {
         var services = new ServiceCollection();
-        services.AddScoped<BookmarkStateSqliteDbContext>(_ => throw new NotSupportedException());
+        services.AddScoped<RuntimeSqliteDbContext>(_ => throw new NotSupportedException());
 
         Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(new()));
     }
@@ -273,21 +273,21 @@ public sealed class EfRuntimeArtifactRegistrationTests
         switch (registration)
         {
             case "context-type":
-                services.AddScoped<BookmarkStateSqliteDbContext>();
+                services.AddScoped<RuntimeSqliteDbContext>();
                 break;
             case "context-instance":
-                services.AddSingleton<BookmarkStateSqliteDbContext>(new BookmarkStateSqliteDbContext(
-                    new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().Options));
+                services.AddSingleton<RuntimeSqliteDbContext>(new RuntimeSqliteDbContext(
+                    new DbContextOptionsBuilder<RuntimeSqliteDbContext>().Options));
                 break;
             case "context-factory":
-                services.AddScoped<BookmarkStateSqliteDbContext>(_ => throw new NotSupportedException());
+                services.AddScoped<RuntimeSqliteDbContext>(_ => throw new NotSupportedException());
                 break;
             case "options":
-                services.AddSingleton<DbContextOptions<BookmarkStateSqliteDbContext>>(
-                    new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().Options);
+                services.AddSingleton<DbContextOptions<RuntimeSqliteDbContext>>(
+                    new DbContextOptionsBuilder<RuntimeSqliteDbContext>().Options);
                 break;
             case "base-context":
-                services.AddScoped<BookmarkStateDbContext>(_ => throw new NotSupportedException());
+                services.AddScoped<RuntimeDbContext>(_ => throw new NotSupportedException());
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(registration), registration, null);
@@ -311,7 +311,7 @@ public sealed class EfRuntimeArtifactRegistrationTests
         using var scope = provider.CreateScope();
         var serviceProvider = scope.ServiceProvider;
 
-        Assert.IsType<BookmarkStateSqliteDbContext>(serviceProvider.GetRequiredService<BookmarkStateDbContext>());
+        Assert.IsType<RuntimeSqliteDbContext>(serviceProvider.GetRequiredService<RuntimeDbContext>());
 
         var executableStore = serviceProvider.GetRequiredService<IWorkflowExecutableStore>();
         var templateStore = serviceProvider.GetRequiredService<IExecutableActivityTemplateStore>();

@@ -16,7 +16,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// can compose every participant, but completion never hides a partial dispatch write.
 /// </remarks>
 public sealed class EfRuntimePostCommitOutboxStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IRuntimePostCommitOutboxStore,
     IPostCommitOutboxLookupStore,
     IRuntimePostCommitOutboxClaimStore,

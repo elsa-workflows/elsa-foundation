@@ -13,7 +13,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>Concrete EF adapter for durable workflow execution state (R10).</summary>
 public sealed class EfWorkflowExecutionStateStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowExecutionStateStore
 {

@@ -55,5 +55,5 @@ public class RuntimeBookmarksEntityFrameworkCoreFeature : IShellFeature
             ConnectionString = ConnectionString,
             ConnectionName = ConnectionName, Schema = Schema, Pooling = Pooling
         })
-        .AddEfModuleMigrations<BookmarkStateDbContext>(Provider);
+        .AddEfModuleMigrations<RuntimeDbContext>(Provider);
 }

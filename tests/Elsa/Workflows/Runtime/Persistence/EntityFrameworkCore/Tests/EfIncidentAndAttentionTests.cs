@@ -288,7 +288,7 @@ public sealed class EfIncidentAndAttentionTests
             var connectionString = $"Data Source=file:elsa-ef-attention-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
             var connection = new SqliteConnection(connectionString);
             await connection.OpenAsync();
-            await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
             await context.Database.EnsureCreatedAsync();
             return new(connection, connectionString);
         }
@@ -300,7 +300,7 @@ public sealed class EfIncidentAndAttentionTests
     private sealed class Fixture : IAsyncDisposable
     {
         private readonly SqliteConnection _connection;
-        public readonly BookmarkStateSqliteDbContext Context;
+        public readonly RuntimeSqliteDbContext Context;
         public readonly EfWorkflowExecutionStateStore Executions;
         public readonly EfIncidentStateStore Incidents;
         public readonly EfWorkflowRuntimeAttentionQuery Attention;
@@ -309,7 +309,7 @@ public sealed class EfIncidentAndAttentionTests
         {
             _connection = new SqliteConnection(connectionString);
             _connection.Open();
-            Context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(_connection).Options);
+            Context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(_connection).Options);
             var accessor = new FixedAccessor(PersistenceAccessContext.Scoped(new PersistenceScope(scope)));
             var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) }));
             Executions = new(Context, accessor, codec);

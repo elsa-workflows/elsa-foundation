@@ -33,7 +33,7 @@ public sealed class EfWorkflowTriggerBindingStoreTests
         using var scope = provider.CreateScope();
         Assert.IsType<EfWorkflowTriggerBindingStore>(scope.ServiceProvider.GetRequiredService<IWorkflowTriggerBindingStore>());
         Assert.IsType<WorkflowTriggerBindingStoreBackend>(provider.GetRequiredService<WorkflowTriggerBindingStoreBackend>());
-        Assert.IsType<BookmarkStateSqliteDbContext>(scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
+        Assert.IsType<RuntimeSqliteDbContext>(scope.ServiceProvider.GetRequiredService<RuntimeDbContext>());
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public sealed class EfWorkflowTriggerBindingStoreTests
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
-        await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
         await context.Database.EnsureCreatedAsync();
         var property = context.Model.FindEntityType(typeof(WorkflowTriggerBindingEntity))!.FindProperty(nameof(WorkflowTriggerBindingEntity.Revision))!;
         Assert.True(property.IsConcurrencyToken);
@@ -102,7 +102,7 @@ public sealed class EfWorkflowTriggerBindingStoreTests
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
-        await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
         await context.Database.EnsureCreatedAsync();
         var store = new EfWorkflowTriggerBindingStore(context, new Accessor("tenant-a"));
         var first = Binding("a", "activation-a", "hash-a");
@@ -127,7 +127,7 @@ public sealed class EfWorkflowTriggerBindingStoreTests
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
-        await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
         await context.Database.EnsureCreatedAsync();
         var store = new EfWorkflowTriggerBindingStore(context, new Accessor("tenant-a"));
         var binding = Binding("saved-first", "activation-saved-first", "saved-first-hash");
@@ -161,7 +161,7 @@ public sealed class EfWorkflowTriggerBindingStoreTests
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
-        await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
         await context.Database.EnsureCreatedAsync();
         var store = new EfWorkflowTriggerBindingStore(context, new Accessor("tenant-a"));
         await store.SaveAsync(Binding("a", null, "hash-a"));
@@ -182,7 +182,7 @@ public sealed class EfWorkflowTriggerBindingStoreTests
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
-        await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
         await context.Database.EnsureCreatedAsync();
         var store = new EfWorkflowTriggerBindingStore(context, new Accessor("tenant-a"));
         var binding = Binding("a", "activation-a", "hash-a");
@@ -200,7 +200,7 @@ public sealed class EfWorkflowTriggerBindingStoreTests
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
-        await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
         await context.Database.EnsureCreatedAsync();
         var store = new EfWorkflowTriggerBindingStore(context, new Accessor("tenant-a"));
         await store.PrepareActivationAsync("activation-corrupt-row", [Binding("corrupt-row", "activation-corrupt-row", "corrupt-row-hash")]);
@@ -218,7 +218,7 @@ public sealed class EfWorkflowTriggerBindingStoreTests
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
-        await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
         await context.Database.EnsureCreatedAsync();
         var store = new EfWorkflowTriggerBindingStore(context, new Accessor("tenant-a"));
         await store.PrepareActivationAsync("activation-corrupt-state", [Binding("corrupt-state", "activation-corrupt-state", "corrupt-state-hash")]);
@@ -236,7 +236,7 @@ public sealed class EfWorkflowTriggerBindingStoreTests
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
-        await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
         await context.Database.EnsureCreatedAsync();
         var store = new EfWorkflowTriggerBindingStore(context, new Accessor("tenant-a"));
         await store.PrepareActivationAsync("old", [Binding("old", "old", "old-hash", "artifact-old")]);
@@ -257,8 +257,8 @@ public sealed class EfWorkflowTriggerBindingStoreTests
         const string connectionString = "Data Source=file:trigger-binding-cas;Mode=Memory;Cache=Shared";
         await using var keeper = new SqliteConnection(connectionString);
         await keeper.OpenAsync();
-        await using var contextA = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connectionString).Options);
-        await using var contextB = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connectionString).Options);
+        await using var contextA = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connectionString).Options);
+        await using var contextB = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connectionString).Options);
         await contextA.Database.EnsureCreatedAsync();
         var binding = Binding("cas", "activation-cas", "cas-hash");
         var storeA = new EfWorkflowTriggerBindingStore(contextA, new Accessor("tenant-a"));
@@ -283,7 +283,7 @@ public sealed class EfWorkflowTriggerBindingStoreTests
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
-        await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
         await context.Database.EnsureCreatedAsync();
         var store = new EfWorkflowTriggerBindingStore(context, new Accessor("tenant-a"));
         await store.SaveAsync(Binding("corrupt-delete", null, "corrupt-delete-hash", "corrupt-delete-artifact"));
@@ -302,7 +302,7 @@ public sealed class EfWorkflowTriggerBindingStoreTests
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
-        await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
         await context.Database.EnsureCreatedAsync();
         var store = new EfWorkflowTriggerBindingStore(context, new Accessor("tenant-a"));
         await store.PrepareActivationAsync("activation-a", [Binding("state", "activation-a", "state-hash")]);
@@ -351,14 +351,14 @@ public sealed class EfWorkflowTriggerBindingStoreTests
     {
         private readonly SqliteConnection connection;
 
-        private PreparedActivation(SqliteConnection connection, BookmarkStateSqliteDbContext context)
+        private PreparedActivation(SqliteConnection connection, RuntimeSqliteDbContext context)
         {
             this.connection = connection;
             Context = context;
             Store = new EfWorkflowTriggerBindingStore(context, new Accessor("tenant-a"));
         }
 
-        public BookmarkStateSqliteDbContext Context { get; }
+        public RuntimeSqliteDbContext Context { get; }
 
         public EfWorkflowTriggerBindingStore Store { get; }
 
@@ -367,12 +367,12 @@ public sealed class EfWorkflowTriggerBindingStoreTests
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
-            await using (var seed = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options))
+            await using (var seed = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options))
             {
                 await seed.Database.EnsureCreatedAsync();
                 await new EfWorkflowTriggerBindingStore(seed, new Accessor("tenant-a")).PrepareActivationAsync("activation-a", [Binding("a", "activation-a", "hash-a")]);
             }
-            return new PreparedActivation(connection, new(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>()
+            return new PreparedActivation(connection, new(new DbContextOptionsBuilder<RuntimeSqliteDbContext>()
                 .UseSqlite(connection).AddInterceptors(saves).Options));
         }
 

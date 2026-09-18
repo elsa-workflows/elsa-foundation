@@ -2,7 +2,7 @@
 
 #nullable disable
 
-namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.BookmarkState.Sqlite
+namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runtime.Sqlite
 {
     /// <inheritdoc />
     public partial class Initial : Migration

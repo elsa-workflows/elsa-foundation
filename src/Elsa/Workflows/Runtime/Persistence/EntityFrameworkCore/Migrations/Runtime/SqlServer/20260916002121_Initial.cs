@@ -2,7 +2,7 @@
 
 #nullable disable
 
-namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.BookmarkState.SqlServer
+namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runtime.SqlServer
 {
     /// <inheritdoc />
     public partial class Initial : Migration

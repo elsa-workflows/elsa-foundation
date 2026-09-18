@@ -101,7 +101,7 @@ public sealed class EfRuntimeCheckpointSchedulerWorkParticipantTests
     }
 
     private static async Task StageConsumeAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         ConsumedSchedulerWorkItem consumed,
         string scope)
     {
@@ -171,8 +171,8 @@ public sealed class EfRuntimeCheckpointSchedulerWorkParticipantTests
             var connectionString = $"Data Source=file:ef-r22-checkpoint-queue-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
             var keeper = new SqliteConnection(connectionString);
             await keeper.OpenAsync();
-            await using var context = new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(keeper).Options);
+            await using var context = new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(keeper).Options);
             await context.Database.EnsureCreatedAsync();
             return new TestDatabase(keeper, connectionString);
         }
@@ -185,15 +185,15 @@ public sealed class EfRuntimeCheckpointSchedulerWorkParticipantTests
     private sealed class TestFixture : IAsyncDisposable
     {
         private readonly SqliteConnection connection;
-        public BookmarkStateSqliteDbContext Context { get; }
+        public RuntimeSqliteDbContext Context { get; }
         public EfSchedulerWorkQueueStore Store { get; }
 
         public TestFixture(string connectionString, string scope)
         {
             connection = new SqliteConnection(connectionString);
             connection.Open();
-            Context = new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            Context = new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
             Store = new EfSchedulerWorkQueueStore(
                 Context,
                 new FixedAccessor(scope),

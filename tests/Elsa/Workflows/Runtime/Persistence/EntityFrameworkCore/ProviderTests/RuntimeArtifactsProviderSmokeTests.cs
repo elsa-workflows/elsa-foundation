@@ -18,9 +18,9 @@ public sealed class RuntimeArtifactsPostgreSqlSmokeTests(RuntimeBookmarksPostgre
 {
     [SkippableFact]
     public Task PostgreSql_runtime_artifacts_model_crud_query_and_concurrency() =>
-        RuntimeArtifactsProviderSmoke.RunAsync(fixture, "PostgreSql", connection => new BookmarkStatePostgreSqlDbContext(
-            new DbContextOptionsBuilder<BookmarkStatePostgreSqlDbContext>().UseNpgsql(connection).Options),
-            BookmarkStatePostgreSqlDbContext.ExpectedProviderName);
+        RuntimeArtifactsProviderSmoke.RunAsync(fixture, "PostgreSql", connection => new RuntimePostgreSqlDbContext(
+            new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).Options),
+            RuntimePostgreSqlDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
@@ -28,9 +28,9 @@ public sealed class RuntimeArtifactsSqlServerSmokeTests(RuntimeBookmarksSqlServe
 {
     [SkippableFact]
     public Task SqlServer_runtime_artifacts_model_crud_query_and_concurrency() =>
-        RuntimeArtifactsProviderSmoke.RunAsync(fixture, "SqlServer", connection => new BookmarkStateSqlServerDbContext(
-            new DbContextOptionsBuilder<BookmarkStateSqlServerDbContext>().UseSqlServer(connection).Options),
-            BookmarkStateSqlServerDbContext.ExpectedProviderName);
+        RuntimeArtifactsProviderSmoke.RunAsync(fixture, "SqlServer", connection => new RuntimeSqlServerDbContext(
+            new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(connection).Options),
+            RuntimeSqlServerDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
@@ -38,9 +38,9 @@ public sealed class RuntimeArtifactsMySqlSmokeTests(RuntimeBookmarksMySqlFixture
 {
     [SkippableFact]
     public Task MySql_runtime_artifacts_model_crud_query_and_concurrency() =>
-        RuntimeArtifactsProviderSmoke.RunAsync(fixture, "MySql", connection => new BookmarkStateMySqlDbContext(
-            new DbContextOptionsBuilder<BookmarkStateMySqlDbContext>().UseMySQL(connection).Options),
-            BookmarkStateMySqlDbContext.ExpectedProviderName);
+        RuntimeArtifactsProviderSmoke.RunAsync(fixture, "MySql", connection => new RuntimeMySqlDbContext(
+            new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(connection).Options),
+            RuntimeMySqlDbContext.ExpectedProviderName);
 }
 
 internal static class RuntimeArtifactsProviderSmoke
@@ -51,7 +51,7 @@ internal static class RuntimeArtifactsProviderSmoke
     public static async Task RunAsync(
         RuntimeBookmarksProviderFixture fixture,
         string providerName,
-        Func<string, BookmarkStateDbContext> createContext,
+        Func<string, RuntimeDbContext> createContext,
         string expectedProviderName)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? $"Docker/{providerName} is unavailable.");

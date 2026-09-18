@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>Concrete EF adapter for the runtime bookmark state and stimulus index contracts.</summary>
 public sealed class EfBookmarkStateStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IBookmarkStateStore, IBookmarkStimulusIndex
 {
     private static readonly JsonSerializerOptions Json = CreateJsonOptions();

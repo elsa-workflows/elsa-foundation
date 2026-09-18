@@ -65,7 +65,7 @@ public sealed class RuntimeEntityFrameworkCoreEndToEndTests : IDisposable
         Assert.Equal(WorkflowExecutionStatus.Completed, await WorkflowStatusAsync(third));
         await using (var scope = third.Services.CreateAsyncScope())
         {
-            var context = scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>();
+            var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
             Assert.Empty(await context.Database.GetPendingMigrationsAsync());
             Assert.NotEmpty(await context.RuntimeCheckpointCommits.AsNoTracking().ToArrayAsync());
         }
@@ -90,11 +90,11 @@ public sealed class RuntimeEntityFrameworkCoreEndToEndTests : IDisposable
                     RecoveryContinuationSigningKey = RecoverySigningKey,
                     HierarchyCursorSigningKey = HierarchySigningKey
                 })
-                .AddEfModuleMigrations<BookmarkStateDbContext>("Sqlite"))
+                .AddEfModuleMigrations<RuntimeDbContext>("Sqlite"))
             .Build(WorkflowExecutionHarness.Identity, WorkflowExecutionHarness.WorkflowExecutionId, [ActivityExecutionId]);
 
         var initializers = harness.Services.GetServices<IShellInitializer>().ToArray();
-        Assert.Contains(initializers, initializer => initializer is EfModuleMigrator<BookmarkStateDbContext>);
+        Assert.Contains(initializers, initializer => initializer is EfModuleMigrator<RuntimeDbContext>);
         foreach (var initializer in initializers)
             await initializer.InitializeAsync();
         harness.InitializeActivityTypes();

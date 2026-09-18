@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>Provider-neutral EF implementation of the R11/R12 alteration plan and job ledger.</summary>
 public sealed class EfWorkflowAlterationStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowAlterationStore
 {
@@ -25,7 +25,7 @@ public sealed class EfWorkflowAlterationStore(
             exception, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey | EfWriteConflict.Transient));
     private const string ActiveCursorPurpose = "ef-runtime-alteration-active-v1";
     private const string JobCursorPurpose = "ef-runtime-alteration-jobs-v1";
-    private readonly BookmarkStateDbContext _context = context ?? throw new ArgumentNullException(nameof(context));
+    private readonly RuntimeDbContext _context = context ?? throw new ArgumentNullException(nameof(context));
     private readonly IPersistenceAccessContextAccessor _access = accessContextAccessor ?? throw new ArgumentNullException(nameof(accessContextAccessor));
     private readonly IRuntimeRecoveryContinuationCodec _codec = continuationCodec ?? throw new ArgumentNullException(nameof(continuationCodec));
     private sealed record UnsealedCleanupIntent(WorkflowAlterationPlanStatus TerminalStatus, WorkflowAlterationSafeFailure? SafeFailure, DateTimeOffset CompletedAt, long DeletedCount);

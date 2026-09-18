@@ -74,14 +74,14 @@ public sealed class EfWorkflowAlterationAndScopeTests
             });
             scopeThenAlteration.AddWorkflowRuntime();
 
-            Assert.Single(scopeThenAlteration, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
-            Assert.Single(scopeThenAlteration, descriptor => descriptor.ServiceType == typeof(DbContextOptions<BookmarkStateSqliteDbContext>));
+            Assert.Single(scopeThenAlteration, descriptor => descriptor.ServiceType == typeof(RuntimeSqliteDbContext));
+            Assert.Single(scopeThenAlteration, descriptor => descriptor.ServiceType == typeof(DbContextOptions<RuntimeSqliteDbContext>));
 
             await using var serviceProvider = scopeThenAlteration.BuildServiceProvider();
             await using var operationScope = serviceProvider.CreateAsyncScope();
             operationScope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(
                 PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
-            var context = operationScope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>();
+            var context = operationScope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
             await context.Database.EnsureCreatedAsync();
             var alterationStore = operationScope.ServiceProvider.GetRequiredService<IWorkflowAlterationStore>();
             var testScopeStore = operationScope.ServiceProvider.GetRequiredService<IWorkflowTestScopeStore>();
@@ -912,14 +912,14 @@ public sealed class EfWorkflowAlterationAndScopeTests
     {
         private readonly SqliteConnection _keeper; private readonly string _cs;
         private Database(SqliteConnection keeper, string cs) { _keeper = keeper; _cs = cs; }
-        public static async Task<Database> CreateAsync() { var cs = $"Data Source=file:alteration-{Guid.NewGuid():N};Mode=Memory;Cache=Shared"; var keeper = new SqliteConnection(cs); await keeper.OpenAsync(); await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(keeper).Options); await context.Database.EnsureCreatedAsync(); return new(keeper, cs); }
+        public static async Task<Database> CreateAsync() { var cs = $"Data Source=file:alteration-{Guid.NewGuid():N};Mode=Memory;Cache=Shared"; var keeper = new SqliteConnection(cs); await keeper.OpenAsync(); await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(keeper).Options); await context.Database.EnsureCreatedAsync(); return new(keeper, cs); }
         public Fixture Open(string scope, IInterceptor? interceptor = null) => Open(PersistenceAccessContext.Scoped(new PersistenceScope(scope)), interceptor);
         public Fixture Open(PersistenceAccessContext access, IInterceptor? interceptor = null) => new(_cs, access, interceptor); public ValueTask DisposeAsync() => _keeper.DisposeAsync();
     }
     private sealed class Fixture : IAsyncDisposable
     {
-        private readonly SqliteConnection _connection; public readonly BookmarkStateSqliteDbContext Context; public readonly EfWorkflowAlterationStore Store; public readonly EfWorkflowTestScopeStore ScopeStore;
-        public Fixture(string cs, PersistenceAccessContext accessContext, IInterceptor? interceptor = null) { _connection = new SqliteConnection(cs); _connection.Open(); var options = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(_connection); if (interceptor is not null) options.AddInterceptors(interceptor); Context = new BookmarkStateSqliteDbContext(options.Options); var access = new Accessor(accessContext); var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) })); Store = new(Context, access, codec); ScopeStore = new(Context, access, codec); }
+        private readonly SqliteConnection _connection; public readonly RuntimeSqliteDbContext Context; public readonly EfWorkflowAlterationStore Store; public readonly EfWorkflowTestScopeStore ScopeStore;
+        public Fixture(string cs, PersistenceAccessContext accessContext, IInterceptor? interceptor = null) { _connection = new SqliteConnection(cs); _connection.Open(); var options = new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(_connection); if (interceptor is not null) options.AddInterceptors(interceptor); Context = new RuntimeSqliteDbContext(options.Options); var access = new Accessor(accessContext); var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) })); Store = new(Context, access, codec); ScopeStore = new(Context, access, codec); }
         public async ValueTask DisposeAsync() { await Context.DisposeAsync(); await _connection.DisposeAsync(); }
     }
     private sealed class Accessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor

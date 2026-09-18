@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// remains available as the default until the surrounding composition is explicitly switched.
 /// </remarks>
 public sealed class EfWorkflowActivationAuthority(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowActivationAuthority
 {
     private const int PageSize = 100;
@@ -23,7 +23,7 @@ public sealed class EfWorkflowActivationAuthority(
         EfWriteRetry.DefaultMaxAttempts,
         exception => EfRelationalExceptionClassifier.IsSaveConflict(
             exception, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey | EfWriteConflict.Transient));
-    private readonly BookmarkStateDbContext context = context ?? throw new ArgumentNullException(nameof(context));
+    private readonly RuntimeDbContext context = context ?? throw new ArgumentNullException(nameof(context));
     private readonly IPersistenceAccessContextAccessor accessContextAccessor = accessContextAccessor ?? throw new ArgumentNullException(nameof(accessContextAccessor));
 
     public async ValueTask<WorkflowActivationSlot?> FindAsync(

@@ -31,7 +31,7 @@ internal static class WorkflowPortfolioProviderSmoke
     public static async Task RunAsync(
         Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeBookmarksProviderFixture fixture,
         Func<string, WorkflowsDesignDbContext> createDesign,
-        Func<string, BookmarkStateDbContext> createRuntime,
+        Func<string, RuntimeDbContext> createRuntime,
         string expectedProvider)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");

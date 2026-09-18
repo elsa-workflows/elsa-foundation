@@ -258,7 +258,7 @@ public sealed class EfSchedulerWorkQueueStoreTests
             Assert.Equal(SchedulerWorkQueueStoreBackend.EntityFramework, SchedulerWorkQueueStoreBackend.Find(services)!.Name);
             await using var provider = services.BuildServiceProvider();
             await using var scope = provider.CreateAsyncScope();
-            var context = scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>();
+            var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
             await context.Database.EnsureCreatedAsync();
             Assert.IsType<EfSchedulerWorkQueueStore>(scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
             Assert.IsType<EfSchedulerWorkQueueStore>(scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkClaimInspection>());
@@ -282,7 +282,7 @@ public sealed class EfSchedulerWorkQueueStoreTests
             var connectionString = $"Data Source=file:ef-r22-queue-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
             var keeper = new SqliteConnection(connectionString);
             await keeper.OpenAsync();
-            await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(keeper).Options);
+            await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(keeper).Options);
             await context.Database.EnsureCreatedAsync();
             return new TestDatabase(keeper, connectionString);
         }
@@ -294,17 +294,17 @@ public sealed class EfSchedulerWorkQueueStoreTests
     private sealed class TestFixture : IAsyncDisposable
     {
         private readonly SqliteConnection connection;
-        public BookmarkStateSqliteDbContext Context { get; }
+        public RuntimeSqliteDbContext Context { get; }
         public EfSchedulerWorkQueueStore Store { get; }
 
         public TestFixture(string connectionString, string scope, SaveChangesInterceptor? interceptor)
         {
             connection = new SqliteConnection(connectionString);
             connection.Open();
-            var options = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection);
+            var options = new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection);
             if (interceptor is not null)
                 options.AddInterceptors(interceptor);
-            Context = new BookmarkStateSqliteDbContext(options.Options);
+            Context = new RuntimeSqliteDbContext(options.Options);
             Store = new EfSchedulerWorkQueueStore(Context, new FixedAccessor(scope), new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) })));
         }
 

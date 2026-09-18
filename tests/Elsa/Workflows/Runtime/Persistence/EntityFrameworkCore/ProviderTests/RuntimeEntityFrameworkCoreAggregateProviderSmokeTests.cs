@@ -22,16 +22,16 @@ public sealed class RuntimeEntityFrameworkCoreAggregatePostgreSqlSmokeTests(Runt
         RuntimeEntityFrameworkCoreAggregateProviderSmoke.RunAsync(
             fixture,
             "PostgreSql",
-            connection => new BookmarkStatePostgreSqlDbContext(new DbContextOptionsBuilder<BookmarkStatePostgreSqlDbContext>().UseNpgsql(connection).Options),
-            BookmarkStatePostgreSqlDbContext.ExpectedProviderName);
+            connection => new RuntimePostgreSqlDbContext(new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).Options),
+            RuntimePostgreSqlDbContext.ExpectedProviderName);
 
     [SkippableFact]
     public Task PostgreSql_fresh_runtime_aggregate_migrates_and_commits_on_an_empty_database() =>
         RuntimeEntityFrameworkCoreAggregateProviderSmoke.RunFreshAsync(
             fixture,
             "PostgreSql",
-            connection => new BookmarkStatePostgreSqlDbContext(new DbContextOptionsBuilder<BookmarkStatePostgreSqlDbContext>().UseNpgsql(connection).Options),
-            BookmarkStatePostgreSqlDbContext.ExpectedProviderName);
+            connection => new RuntimePostgreSqlDbContext(new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).Options),
+            RuntimePostgreSqlDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
@@ -42,16 +42,16 @@ public sealed class RuntimeEntityFrameworkCoreAggregateSqlServerSmokeTests(Runti
         RuntimeEntityFrameworkCoreAggregateProviderSmoke.RunAsync(
             fixture,
             "SqlServer",
-            connection => new BookmarkStateSqlServerDbContext(new DbContextOptionsBuilder<BookmarkStateSqlServerDbContext>().UseSqlServer(connection).Options),
-            BookmarkStateSqlServerDbContext.ExpectedProviderName);
+            connection => new RuntimeSqlServerDbContext(new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(connection).Options),
+            RuntimeSqlServerDbContext.ExpectedProviderName);
 
     [SkippableFact]
     public Task SqlServer_fresh_runtime_aggregate_migrates_and_commits_on_an_empty_database() =>
         RuntimeEntityFrameworkCoreAggregateProviderSmoke.RunFreshAsync(
             fixture,
             "SqlServer",
-            connection => new BookmarkStateSqlServerDbContext(new DbContextOptionsBuilder<BookmarkStateSqlServerDbContext>().UseSqlServer(connection).Options),
-            BookmarkStateSqlServerDbContext.ExpectedProviderName);
+            connection => new RuntimeSqlServerDbContext(new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(connection).Options),
+            RuntimeSqlServerDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
@@ -62,16 +62,16 @@ public sealed class RuntimeEntityFrameworkCoreAggregateMySqlSmokeTests(RuntimeBo
         RuntimeEntityFrameworkCoreAggregateProviderSmoke.RunAsync(
             fixture,
             "MySql",
-            connection => new BookmarkStateMySqlDbContext(new DbContextOptionsBuilder<BookmarkStateMySqlDbContext>().UseMySQL(connection).Options),
-            BookmarkStateMySqlDbContext.ExpectedProviderName);
+            connection => new RuntimeMySqlDbContext(new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(connection).Options),
+            RuntimeMySqlDbContext.ExpectedProviderName);
 
     [SkippableFact]
     public Task MySql_fresh_runtime_aggregate_migrates_and_commits_on_an_empty_database() =>
         RuntimeEntityFrameworkCoreAggregateProviderSmoke.RunFreshAsync(
             fixture,
             "MySql",
-            connection => new BookmarkStateMySqlDbContext(new DbContextOptionsBuilder<BookmarkStateMySqlDbContext>().UseMySQL(connection).Options),
-            BookmarkStateMySqlDbContext.ExpectedProviderName);
+            connection => new RuntimeMySqlDbContext(new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(connection).Options),
+            RuntimeMySqlDbContext.ExpectedProviderName);
 }
 
 internal static class RuntimeEntityFrameworkCoreAggregateProviderSmoke
@@ -82,7 +82,7 @@ internal static class RuntimeEntityFrameworkCoreAggregateProviderSmoke
     public static async Task RunAsync(
         RuntimeBookmarksProviderFixture fixture,
         string providerName,
-        Func<string, BookmarkStateDbContext> createContext,
+        Func<string, RuntimeDbContext> createContext,
         string expectedProviderName)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? $"Docker/{providerName} is unavailable.");
@@ -112,7 +112,7 @@ internal static class RuntimeEntityFrameworkCoreAggregateProviderSmoke
             ValidateScopes = true
         });
         await using var serviceScope = provider.CreateAsyncScope();
-        await using var context = serviceScope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>();
+        await using var context = serviceScope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
         Assert.Equal(expectedProviderName, context.Database.ProviderName);
         var readiness = await serviceScope.ServiceProvider.GetRequiredService<IWorkflowDispatchReadinessAssessor>().AssessAsync();
         Assert.Equal(WorkflowDispatchReadinessGuarantee.DurableReady, readiness.Guarantee);
@@ -145,7 +145,7 @@ internal static class RuntimeEntityFrameworkCoreAggregateProviderSmoke
         }));
         Assert.Equal(beforeServices, invalidServices);
         Assert.Null(RuntimeCheckpointCommitStoreBackend.Find(invalidServices));
-        Assert.DoesNotContain(invalidServices, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+        Assert.DoesNotContain(invalidServices, descriptor => descriptor.ServiceType == typeof(RuntimeDbContext));
     }
 
     /// <summary>
@@ -156,7 +156,7 @@ internal static class RuntimeEntityFrameworkCoreAggregateProviderSmoke
     public static async Task RunFreshAsync(
         RuntimeBookmarksProviderFixture fixture,
         string providerName,
-        Func<string, BookmarkStateDbContext> createContext,
+        Func<string, RuntimeDbContext> createContext,
         string expectedProviderName)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? $"Docker/{providerName} is unavailable.");
@@ -175,7 +175,7 @@ internal static class RuntimeEntityFrameworkCoreAggregateProviderSmoke
             HierarchyCursorSigningKey = HierarchySigningKey,
             RecoveryContinuationSigningKey = RecoverySigningKey
         });
-        services.AddEfModuleMigrations<BookmarkStateDbContext>(providerName);
+        services.AddEfModuleMigrations<RuntimeDbContext>(providerName);
         services.AddSingleton<IWorkflowDispatchDurabilityEvidence>(
             new WorkflowDispatchDurabilityEvidence(WorkflowDispatchDurabilityComponents.Resumption, WorkflowDispatchDurabilityLevel.Durable));
         Assert.Equal(RuntimeCheckpointCommitStoreBackend.EntityFramework, RuntimeCheckpointCommitStoreBackend.Find(services)!.Name);
@@ -187,7 +187,7 @@ internal static class RuntimeEntityFrameworkCoreAggregateProviderSmoke
 
         await using (var scope = provider.CreateAsyncScope())
         {
-            var context = scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>();
+            var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
             Assert.Equal(expectedProviderName, context.Database.ProviderName);
             Assert.NotEmpty(await context.Database.GetAppliedMigrationsAsync());
             Assert.Empty(await context.Database.GetPendingMigrationsAsync());
@@ -209,7 +209,7 @@ internal static class RuntimeEntityFrameworkCoreAggregateProviderSmoke
 
         await using (var verification = provider.CreateAsyncScope())
         {
-            var context = verification.ServiceProvider.GetRequiredService<BookmarkStateDbContext>();
+            var context = verification.ServiceProvider.GetRequiredService<RuntimeDbContext>();
             var inspection = await context.ActivityExecutionInspections.AsNoTracking().SingleAsync();
             Assert.Equal(nameof(ActivityExecutionStatus.Completed), inspection.Status);
             Assert.Equal(4, await context.RuntimeCheckpointCommits.AsNoTracking().CountAsync());

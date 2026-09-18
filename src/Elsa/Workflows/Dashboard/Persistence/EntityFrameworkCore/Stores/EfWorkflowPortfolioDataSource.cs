@@ -30,7 +30,7 @@ namespace Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Stores;
 /// </remarks>
 public sealed class EfWorkflowPortfolioDataSource(
     WorkflowsDesignDbContext designContext,
-    BookmarkStateDbContext runtimeContext,
+    RuntimeDbContext runtimeContext,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IPayloadSerializer payloadSerializer) : IWorkflowPortfolioDataSource
 {

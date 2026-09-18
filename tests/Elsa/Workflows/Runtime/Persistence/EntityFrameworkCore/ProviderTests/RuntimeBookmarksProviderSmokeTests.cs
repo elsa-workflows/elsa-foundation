@@ -17,12 +17,12 @@ public sealed class RuntimeBookmarksPostgreSqlSmokeTests(RuntimeBookmarksPostgre
         RuntimeBookmarksProviderSmoke.RunAsync(
             fixture,
             "PostgreSql",
-            (connection, interceptor) => new BookmarkStatePostgreSqlDbContext(
-                new DbContextOptionsBuilder<BookmarkStatePostgreSqlDbContext>()
+            (connection, interceptor) => new RuntimePostgreSqlDbContext(
+                new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>()
                     .UseNpgsql(connection)
                     .AddInterceptors(interceptor is null ? [] : [interceptor])
                     .Options),
-            BookmarkStatePostgreSqlDbContext.ExpectedProviderName);
+            RuntimePostgreSqlDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
@@ -33,12 +33,12 @@ public sealed class RuntimeBookmarksSqlServerSmokeTests(RuntimeBookmarksSqlServe
         RuntimeBookmarksProviderSmoke.RunAsync(
             fixture,
             "SqlServer",
-            (connection, interceptor) => new BookmarkStateSqlServerDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqlServerDbContext>()
+            (connection, interceptor) => new RuntimeSqlServerDbContext(
+                new DbContextOptionsBuilder<RuntimeSqlServerDbContext>()
                     .UseSqlServer(connection)
                     .AddInterceptors(interceptor is null ? [] : [interceptor])
                     .Options),
-            BookmarkStateSqlServerDbContext.ExpectedProviderName);
+            RuntimeSqlServerDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
@@ -49,12 +49,12 @@ public sealed class RuntimeBookmarksMySqlSmokeTests(RuntimeBookmarksMySqlFixture
         RuntimeBookmarksProviderSmoke.RunAsync(
             fixture,
             "MySql",
-            (connection, interceptor) => new BookmarkStateMySqlDbContext(
-                new DbContextOptionsBuilder<BookmarkStateMySqlDbContext>()
+            (connection, interceptor) => new RuntimeMySqlDbContext(
+                new DbContextOptionsBuilder<RuntimeMySqlDbContext>()
                     .UseMySQL(connection)
                     .AddInterceptors(interceptor is null ? [] : [interceptor])
                     .Options),
-            BookmarkStateMySqlDbContext.ExpectedProviderName);
+            RuntimeMySqlDbContext.ExpectedProviderName);
 }
 
 internal static class RuntimeBookmarksProviderSmoke
@@ -64,7 +64,7 @@ internal static class RuntimeBookmarksProviderSmoke
     public static async Task RunAsync(
         RuntimeBookmarksProviderFixture fixture,
         string providerName,
-        Func<string, IInterceptor?, BookmarkStateDbContext> createContext,
+        Func<string, IInterceptor?, RuntimeDbContext> createContext,
         string expectedProviderName)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? $"Docker/{providerName} is unavailable.");
@@ -136,7 +136,7 @@ internal static class RuntimeBookmarksProviderSmoke
         Assert.Contains(reopened!.StimulusHash, new[] { "left", "right" });
     }
 
-    private static EfBookmarkStateStore Store(BookmarkStateDbContext context, string scope) =>
+    private static EfBookmarkStateStore Store(RuntimeDbContext context, string scope) =>
         new(context, new FixedAccessor(scope));
 
     private static async Task<Exception?> Capture(ValueTask<BookmarkState> operation)

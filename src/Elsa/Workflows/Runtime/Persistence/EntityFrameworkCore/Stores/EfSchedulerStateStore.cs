@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>Opt-in EF Core scheduler-state store (R15).</summary>
 public sealed class EfSchedulerStateStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : ISchedulerStateStore
 {
     private const string Collection = "schedulerState";

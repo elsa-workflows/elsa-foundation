@@ -357,7 +357,7 @@ public sealed class EfRuntimeCheckpointRunHealthParticipantTests
     private static string Order(string value) => Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(value, RuntimeOperationalStateEfModule.IdentityMaximumLength));
 
     private static async Task StageAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         string workflowExecutionId,
         RuntimeStateChange<WorkflowExecutionState>? workflowChange,
         IReadOnlyCollection<RuntimeStateChange<IncidentState>> incidentChanges,
@@ -385,8 +385,8 @@ public sealed class EfRuntimeCheckpointRunHealthParticipantTests
             var connectionString = $"Data Source=file:ef-r19-run-health-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
             var keeper = new SqliteConnection(connectionString);
             await keeper.OpenAsync();
-            await using var context = new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(keeper).Options);
+            await using var context = new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(keeper).Options);
             await context.Database.EnsureCreatedAsync();
             return new TestDatabase(keeper, connectionString);
         }
@@ -398,14 +398,14 @@ public sealed class EfRuntimeCheckpointRunHealthParticipantTests
     private sealed class TestFixture : IAsyncDisposable
     {
         private readonly SqliteConnection connection;
-        public BookmarkStateSqliteDbContext Context { get; }
+        public RuntimeSqliteDbContext Context { get; }
 
         public TestFixture(string connectionString, string scope)
         {
             connection = new SqliteConnection(connectionString);
             connection.Open();
-            Context = new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            Context = new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
         }
 
         public async ValueTask DisposeAsync()

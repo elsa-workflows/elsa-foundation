@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjec
 
 /// <summary>Reports durability for EF-owned checkpoint infrastructure, never for a process-only database.</summary>
 internal sealed class EfRuntimeInfrastructureDurabilityEvidence(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     string component) : IWorkflowDispatchDurabilityEvidence
 {
     public string Component { get; } = component;
@@ -46,7 +46,7 @@ internal static class EfRuntimeInfrastructureDurabilityEvidenceRegistration
     public static ServiceDescriptor AddOwned(IServiceCollection services, string component)
     {
         var descriptor = ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence>(provider =>
-            new EfRuntimeInfrastructureDurabilityEvidence(provider.GetRequiredService<BookmarkStateDbContext>(), component));
+            new EfRuntimeInfrastructureDurabilityEvidence(provider.GetRequiredService<RuntimeDbContext>(), component));
         services.Add(descriptor);
         return descriptor;
     }

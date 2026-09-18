@@ -14,13 +14,13 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 internal sealed class EfRuntimeAlterationCheckpointParticipationGate : IDisposable
 {
     private static readonly AsyncLocal<EfRuntimeAlterationCheckpointParticipationGate?> Active = new();
-    private readonly BookmarkStateDbContext _context;
+    private readonly RuntimeDbContext _context;
     private readonly WorkflowAlterationJobTerminalChange _change;
     private readonly string _scope;
     private bool _participated;
 
     private EfRuntimeAlterationCheckpointParticipationGate(
-        BookmarkStateDbContext context, WorkflowAlterationJobTerminalChange change, string scope)
+        RuntimeDbContext context, WorkflowAlterationJobTerminalChange change, string scope)
     {
         _context = context;
         _change = change;
@@ -28,7 +28,7 @@ internal sealed class EfRuntimeAlterationCheckpointParticipationGate : IDisposab
     }
 
     public static EfRuntimeAlterationCheckpointParticipationGate Begin(
-        BookmarkStateDbContext context, WorkflowAlterationJobTerminalChange change, string scope)
+        RuntimeDbContext context, WorkflowAlterationJobTerminalChange change, string scope)
     {
         if (Active.Value is not null)
             throw new InvalidOperationException("A nested EF alteration checkpoint callback cannot establish an independent atomic boundary.");
@@ -37,7 +37,7 @@ internal sealed class EfRuntimeAlterationCheckpointParticipationGate : IDisposab
         return gate;
     }
 
-    public static void Validate(BookmarkStateDbContext context, RuntimeCheckpointCommit commit, string scope)
+    public static void Validate(RuntimeDbContext context, RuntimeCheckpointCommit commit, string scope)
     {
         var gate = Active.Value;
         if (gate is null)
@@ -56,7 +56,7 @@ internal sealed class EfRuntimeAlterationCheckpointParticipationGate : IDisposab
             throw new InvalidOperationException("The alteration checkpoint callback must use this EF context and matching terminal evidence.");
     }
 
-    public static void MarkDurable(BookmarkStateDbContext context, RuntimeCheckpointCommit commit, string scope)
+    public static void MarkDurable(RuntimeDbContext context, RuntimeCheckpointCommit commit, string scope)
     {
         var gate = Active.Value;
         if (gate is null)
@@ -65,7 +65,7 @@ internal sealed class EfRuntimeAlterationCheckpointParticipationGate : IDisposab
         gate._participated = true;
     }
 
-    public static void RejectIndependentTerminalWrite(BookmarkStateDbContext context)
+    public static void RejectIndependentTerminalWrite(RuntimeDbContext context)
     {
         if (Active.Value is { } gate && ReferenceEquals(gate._context, context))
             throw new InvalidOperationException("An alteration checkpoint callback cannot terminalize its EF job outside the shared checkpoint transaction.");

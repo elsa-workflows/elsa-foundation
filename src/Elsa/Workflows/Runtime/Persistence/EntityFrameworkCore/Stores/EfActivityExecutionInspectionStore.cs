@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>EF adapter for durable activity execution inspection projections and summaries.</summary>
 public sealed class EfActivityExecutionInspectionStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IActivityExecutionInspectionStore, IActivityExecutionInspectionWriter
 {

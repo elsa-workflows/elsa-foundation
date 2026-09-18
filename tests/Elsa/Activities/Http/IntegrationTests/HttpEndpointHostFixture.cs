@@ -113,7 +113,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     RecoveryContinuationSigningKey = "http-endpoint-fixture-recovery-signing-key-32-bytes",
                     HierarchyCursorSigningKey = "http-endpoint-fixture-hierarchy-signing-key-32-bytes"
                 });
-                services.AddEfModuleMigrations<BookmarkStateDbContext>("Sqlite");
+                services.AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
 
                 new WorkflowsRuntimeCheckpointPersistenceFeature
                 {

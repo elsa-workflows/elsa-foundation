@@ -382,7 +382,7 @@ public sealed class EfRuntimePostCommitOutboxStoreTests
             await using var scope = provider.CreateAsyncScope();
             scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(
                 PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
-            var context = scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>();
+            var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
             await context.Database.EnsureCreatedAsync();
 
             var dispatch = scope.ServiceProvider.GetRequiredService<IWorkflowDispatchStore>();
@@ -449,18 +449,18 @@ public sealed class EfRuntimePostCommitOutboxStoreTests
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
-            await using var context = new BookmarkStateSqliteDbContext(
-                new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            await using var context = new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
             await context.Database.EnsureCreatedAsync();
             return new TestDatabase(connection);
         }
 
-        public BookmarkStateSqliteDbContext Open(string scope, params IInterceptor[] interceptors)
+        public RuntimeSqliteDbContext Open(string scope, params IInterceptor[] interceptors)
         {
-            var builder = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection);
+            var builder = new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection);
             if (interceptors.Length > 0)
                 builder.AddInterceptors(interceptors);
-            return new BookmarkStateSqliteDbContext(builder.Options);
+            return new RuntimeSqliteDbContext(builder.Options);
         }
 
         public ValueTask DisposeAsync() => connection.DisposeAsync();

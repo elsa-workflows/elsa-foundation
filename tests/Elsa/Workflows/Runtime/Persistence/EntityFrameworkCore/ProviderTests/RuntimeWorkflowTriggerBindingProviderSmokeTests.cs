@@ -13,26 +13,26 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests;
 public sealed class RuntimeWorkflowTriggerBindingPostgreSqlSmokeTests(RuntimeBookmarksPostgreSqlFixture fixture)
 {
     [SkippableFact]
-    public Task PostgreSql_trigger_binding_smoke() => RuntimeWorkflowTriggerBindingProviderSmoke.RunAsync(fixture, c => new BookmarkStatePostgreSqlDbContext(new DbContextOptionsBuilder<BookmarkStatePostgreSqlDbContext>().UseNpgsql(c).Options), BookmarkStatePostgreSqlDbContext.ExpectedProviderName);
+    public Task PostgreSql_trigger_binding_smoke() => RuntimeWorkflowTriggerBindingProviderSmoke.RunAsync(fixture, c => new RuntimePostgreSqlDbContext(new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(c).Options), RuntimePostgreSqlDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
 public sealed class RuntimeWorkflowTriggerBindingSqlServerSmokeTests(RuntimeBookmarksSqlServerFixture fixture)
 {
     [SkippableFact]
-    public Task SqlServer_trigger_binding_smoke() => RuntimeWorkflowTriggerBindingProviderSmoke.RunAsync(fixture, c => new BookmarkStateSqlServerDbContext(new DbContextOptionsBuilder<BookmarkStateSqlServerDbContext>().UseSqlServer(c).Options), BookmarkStateSqlServerDbContext.ExpectedProviderName);
+    public Task SqlServer_trigger_binding_smoke() => RuntimeWorkflowTriggerBindingProviderSmoke.RunAsync(fixture, c => new RuntimeSqlServerDbContext(new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(c).Options), RuntimeSqlServerDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
 public sealed class RuntimeWorkflowTriggerBindingMySqlSmokeTests(RuntimeBookmarksMySqlFixture fixture)
 {
     [SkippableFact]
-    public Task MySql_trigger_binding_smoke() => RuntimeWorkflowTriggerBindingProviderSmoke.RunAsync(fixture, c => new BookmarkStateMySqlDbContext(new DbContextOptionsBuilder<BookmarkStateMySqlDbContext>().UseMySQL(c).Options), BookmarkStateMySqlDbContext.ExpectedProviderName);
+    public Task MySql_trigger_binding_smoke() => RuntimeWorkflowTriggerBindingProviderSmoke.RunAsync(fixture, c => new RuntimeMySqlDbContext(new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(c).Options), RuntimeMySqlDbContext.ExpectedProviderName);
 }
 
 internal static class RuntimeWorkflowTriggerBindingProviderSmoke
 {
-    public static async Task RunAsync(RuntimeBookmarksProviderFixture fixture, Func<string, BookmarkStateDbContext> createContext, string expectedProvider)
+    public static async Task RunAsync(RuntimeBookmarksProviderFixture fixture, Func<string, RuntimeDbContext> createContext, string expectedProvider)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
         await using var context = createContext(fixture.ConnectionString);

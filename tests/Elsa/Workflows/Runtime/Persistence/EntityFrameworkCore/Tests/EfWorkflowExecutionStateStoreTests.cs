@@ -399,7 +399,7 @@ public sealed class EfWorkflowExecutionStateStoreTests
             var connectionString = $"Data Source=file:elsa-runtime-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
             var connection = new SqliteConnection(connectionString);
             await connection.OpenAsync();
-            await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
             await context.Database.EnsureCreatedAsync();
             return new Database(connection, connectionString);
         }
@@ -409,13 +409,13 @@ public sealed class EfWorkflowExecutionStateStoreTests
     private sealed class Fixture : IAsyncDisposable
     {
         private readonly SqliteConnection _connection;
-        public readonly BookmarkStateSqliteDbContext Context;
+        public readonly RuntimeSqliteDbContext Context;
         public readonly EfWorkflowExecutionStateStore Store;
         public Fixture(string connectionString, string scope, IInterceptor[] interceptors)
         {
             _connection = new SqliteConnection(connectionString);
             _connection.Open();
-            Context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(_connection).AddInterceptors(interceptors).Options);
+            Context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(_connection).AddInterceptors(interceptors).Options);
             Store = new EfWorkflowExecutionStateStore(Context, new Accessor(scope), new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "01234567890123456789012345678901" })));
         }
         public async ValueTask DisposeAsync()

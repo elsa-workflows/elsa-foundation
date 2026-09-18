@@ -27,16 +27,16 @@ public sealed class RuntimePostCommitOutboxContentionPostgreSqlSmokeTests(Runtim
     public Task PostgreSql_claimed_completion_that_lost_its_fence_surfaces_a_stale_claim() =>
         RuntimePostCommitOutboxClaimedCompletionContentionSmoke.RunAsync(fixture, CreateContext);
 
-    private static BookmarkStateDbContext CreateContext(string connectionString) =>
-        new BookmarkStatePostgreSqlDbContext(
-            new DbContextOptionsBuilder<BookmarkStatePostgreSqlDbContext>().UseNpgsql(connectionString).Options);
+    private static RuntimeDbContext CreateContext(string connectionString) =>
+        new RuntimePostgreSqlDbContext(
+            new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connectionString).Options);
 }
 
 internal static class RuntimePostCommitOutboxContentionSmoke
 {
     public static async Task RunAsync(
         RuntimeBookmarksProviderFixture fixture,
-        Func<string, BookmarkStateDbContext> createContext)
+        Func<string, RuntimeDbContext> createContext)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
 
@@ -134,7 +134,7 @@ internal static class RuntimePostCommitOutboxClaimedCompletionContentionSmoke
 {
     public static async Task RunAsync(
         RuntimeBookmarksProviderFixture fixture,
-        Func<string, BookmarkStateDbContext> createContext)
+        Func<string, RuntimeDbContext> createContext)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
 

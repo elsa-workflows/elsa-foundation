@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// another runtime store, uses bounded keyset pages, and keeps only the requested urgency frontier in memory.
 /// </remarks>
 public sealed class EfWorkflowRuntimeAttentionQuery(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
     TimeProvider? timeProvider = null) : IWorkflowRuntimeAttentionQuery
 {

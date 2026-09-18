@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 internal static class EfRuntimeCheckpointOutboxParticipantStaging
 {
     public static async ValueTask StageAsync(
-        BookmarkStateDbContext context,
+        RuntimeDbContext context,
         RuntimeCheckpointCommit commit,
         string scope,
         CancellationToken cancellationToken)

@@ -131,7 +131,7 @@ Under `Validate` a database that is behind fails `EfDatabaseMigrator.ApplyAsync`
 fails activation:
 
 ```
-BookmarkStateSqliteDbContext has pending migrations: 20260911000000_Initial. Apply them out of
+RuntimeSqliteDbContext has pending migrations: 20260911000000_Initial. Apply them out of
 process (tools/ef/module-migrate.sh) or set Elsa:Persistence:EntityFramework:Migrate:Policy to AutoMigrate.
 ```
 

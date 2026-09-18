@@ -20,8 +20,8 @@ public sealed class RuntimeCheckpointBookmarkParticipantPostgreSqlSmokeTests(Run
     public Task PostgreSql_checkpoint_bookmark_participant_smoke() =>
         RuntimeCheckpointBookmarkParticipantProviderSmoke.RunAsync(
             fixture,
-            connection => new BookmarkStatePostgreSqlDbContext(new DbContextOptionsBuilder<BookmarkStatePostgreSqlDbContext>().UseNpgsql(connection).Options),
-            BookmarkStatePostgreSqlDbContext.ExpectedProviderName);
+            connection => new RuntimePostgreSqlDbContext(new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).Options),
+            RuntimePostgreSqlDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
@@ -31,8 +31,8 @@ public sealed class RuntimeCheckpointBookmarkParticipantSqlServerSmokeTests(Runt
     public Task SqlServer_checkpoint_bookmark_participant_smoke() =>
         RuntimeCheckpointBookmarkParticipantProviderSmoke.RunAsync(
             fixture,
-            connection => new BookmarkStateSqlServerDbContext(new DbContextOptionsBuilder<BookmarkStateSqlServerDbContext>().UseSqlServer(connection).Options),
-            BookmarkStateSqlServerDbContext.ExpectedProviderName);
+            connection => new RuntimeSqlServerDbContext(new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(connection).Options),
+            RuntimeSqlServerDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
@@ -42,8 +42,8 @@ public sealed class RuntimeCheckpointBookmarkParticipantMySqlSmokeTests(RuntimeB
     public Task MySql_checkpoint_bookmark_participant_smoke() =>
         RuntimeCheckpointBookmarkParticipantProviderSmoke.RunAsync(
             fixture,
-            connection => new BookmarkStateMySqlDbContext(new DbContextOptionsBuilder<BookmarkStateMySqlDbContext>().UseMySQL(connection).Options),
-            BookmarkStateMySqlDbContext.ExpectedProviderName);
+            connection => new RuntimeMySqlDbContext(new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(connection).Options),
+            RuntimeMySqlDbContext.ExpectedProviderName);
 }
 
 internal static class RuntimeCheckpointBookmarkParticipantProviderSmoke
@@ -52,7 +52,7 @@ internal static class RuntimeCheckpointBookmarkParticipantProviderSmoke
 
     public static async Task RunAsync(
         RuntimeBookmarksProviderFixture fixture,
-        Func<string, BookmarkStateDbContext> createContext,
+        Func<string, RuntimeDbContext> createContext,
         string expectedProvider)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
@@ -125,7 +125,7 @@ internal static class RuntimeCheckpointBookmarkParticipantProviderSmoke
         Assert.Equal("winner", (await Store(conflictVerification, conflictScope).FindAsync("workflow-c", "bookmark-c"))!.Payload!.Value.GetString());
     }
 
-    private static EfBookmarkStateStore Store(BookmarkStateDbContext context, string scope) =>
+    private static EfBookmarkStateStore Store(RuntimeDbContext context, string scope) =>
         new(context, new FixedAccessor(scope));
 
     private static RuntimeStateChange<BookmarkState> Change(RuntimeStateChangeOperation operation, BookmarkState state) =>
@@ -136,7 +136,7 @@ internal static class RuntimeCheckpointBookmarkParticipantProviderSmoke
             JsonDocument.Parse(JsonSerializer.Serialize(payload)).RootElement,
             new Dictionary<string, string> { ["kind"] = "test" }, CreatedAt, CreatedAt.AddHours(1));
 
-    private static async Task StageAsync(BookmarkStateDbContext context, RuntimeStateChange<BookmarkState> change, string scope)
+    private static async Task StageAsync(RuntimeDbContext context, RuntimeStateChange<BookmarkState> change, string scope)
     {
         var type = typeof(EfRuntimeCheckpointCommitStore).Assembly.GetType(
             "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointParticipantStaging")!;

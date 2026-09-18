@@ -11,7 +11,7 @@ using System.Text.Json;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 public sealed class EfWorkflowExecutableStore(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowExecutableStore
 {
     private static readonly EfWriteRetry Coordination = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);

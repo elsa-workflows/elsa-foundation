@@ -31,7 +31,7 @@ public static class RuntimeSchedulerWorkQueueEntityFrameworkCoreRegistration
                     .SingleOrDefault();
                 if (prior is null || !OptionsEqual(prior, options))
                     throw new InvalidOperationException("Runtime scheduler-work EF persistence is already registered with different provider options.");
-                BookmarkStateEfContextRegistration.EnsureContextIsAvailable(
+                RuntimeEfContextRegistration.EnsureContextIsAvailable(
                     services,
                     provider,
                     "Runtime scheduler work",
@@ -47,8 +47,8 @@ public static class RuntimeSchedulerWorkQueueEntityFrameworkCoreRegistration
             else
                 SchedulerWorkQueueStoreBackend.EnsureNoUnownedRegistrations(services);
 
-            BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling);
-            BookmarkStateEfContextRegistration.EnsureRecoveryContinuationSigningKeyCompatible(
+            RuntimeEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, options.Schema, options.Pooling);
+            RuntimeEfContextRegistration.EnsureRecoveryContinuationSigningKeyCompatible(
                 services,
                 options.RecoveryContinuationSigningKey,
                 "Runtime scheduler work");
@@ -59,7 +59,7 @@ public static class RuntimeSchedulerWorkQueueEntityFrameworkCoreRegistration
 
             var operational = RuntimeOperationalStateStoreBackend.Find(services);
             var timers = DurableTimerStoreBackend.Find(services);
-            BookmarkStateEfContextRegistration.EnsureContextIsAvailable(
+            RuntimeEfContextRegistration.EnsureContextIsAvailable(
                 services,
                 provider,
                 "Runtime scheduler work",
@@ -86,8 +86,8 @@ public static class RuntimeSchedulerWorkQueueEntityFrameworkCoreRegistration
             var optionsDescriptor = ServiceDescriptor.Singleton(configured);
             services.Add(optionsDescriptor);
             owned.Add(optionsDescriptor);
-            if (BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Count == 0)
-                owned.AddRange(BookmarkStateEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName, configured.Schema, configured.Pooling));
+            if (RuntimeEfContextRegistration.ContextRegistrations(services, provider).Count == 0)
+                owned.AddRange(RuntimeEfContextRegistration.AddContext(services, provider, configured.ConnectionString, configured.ConnectionName, configured.Schema, configured.Pooling));
             services.AddScoped<EfSchedulerWorkQueueStore>();
             var concrete = services.Last();
             services.AddScoped<IWorkflowSchedulerWorkQueue>(serviceProvider =>

@@ -18,8 +18,8 @@ public sealed class RuntimeRecurringTriggerSchedulePostgreSqlSmokeTests(RuntimeB
     [SkippableFact]
     public Task PostgreSql_recurring_trigger_schedule_model_crud_query_transaction_and_cas() =>
         RuntimeRecurringTriggerScheduleProviderSmoke.RunAsync(fixture, connection =>
-            new BookmarkStatePostgreSqlDbContext(new DbContextOptionsBuilder<BookmarkStatePostgreSqlDbContext>().UseNpgsql(connection).Options),
-            BookmarkStatePostgreSqlDbContext.ExpectedProviderName);
+            new RuntimePostgreSqlDbContext(new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).Options),
+            RuntimePostgreSqlDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
@@ -28,8 +28,8 @@ public sealed class RuntimeRecurringTriggerScheduleSqlServerSmokeTests(RuntimeBo
     [SkippableFact]
     public Task SqlServer_recurring_trigger_schedule_model_crud_query_transaction_and_cas() =>
         RuntimeRecurringTriggerScheduleProviderSmoke.RunAsync(fixture, connection =>
-            new BookmarkStateSqlServerDbContext(new DbContextOptionsBuilder<BookmarkStateSqlServerDbContext>().UseSqlServer(connection).Options),
-            BookmarkStateSqlServerDbContext.ExpectedProviderName);
+            new RuntimeSqlServerDbContext(new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(connection).Options),
+            RuntimeSqlServerDbContext.ExpectedProviderName);
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
@@ -38,8 +38,8 @@ public sealed class RuntimeRecurringTriggerScheduleMySqlSmokeTests(RuntimeBookma
     [SkippableFact]
     public Task MySql_recurring_trigger_schedule_model_crud_query_transaction_and_cas() =>
         RuntimeRecurringTriggerScheduleProviderSmoke.RunAsync(fixture, connection =>
-            new BookmarkStateMySqlDbContext(new DbContextOptionsBuilder<BookmarkStateMySqlDbContext>().UseMySQL(connection).Options),
-            BookmarkStateMySqlDbContext.ExpectedProviderName);
+            new RuntimeMySqlDbContext(new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(connection).Options),
+            RuntimeMySqlDbContext.ExpectedProviderName);
 }
 
 internal static class RuntimeRecurringTriggerScheduleProviderSmoke
@@ -48,7 +48,7 @@ internal static class RuntimeRecurringTriggerScheduleProviderSmoke
 
     public static async Task RunAsync(
         RuntimeBookmarksProviderFixture fixture,
-        Func<string, BookmarkStateDbContext> createContext,
+        Func<string, RuntimeDbContext> createContext,
         string expectedProvider)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
@@ -136,7 +136,7 @@ internal static class RuntimeRecurringTriggerScheduleProviderSmoke
         }
     }
 
-    private static EfRecurringTriggerScheduleStore Store(BookmarkStateDbContext context, string scope) =>
+    private static EfRecurringTriggerScheduleStore Store(RuntimeDbContext context, string scope) =>
         new(context, new FixedAccessor(scope), new HmacRuntimeRecoveryContinuationCodec(
             Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = SigningKey })));
 

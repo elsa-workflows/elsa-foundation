@@ -32,7 +32,7 @@ public sealed class EfWorkflowActivationAuthorityTests
         using var scope = provider.CreateScope();
         Assert.IsType<EfWorkflowActivationAuthority>(scope.ServiceProvider.GetRequiredService<IWorkflowActivationAuthority>());
         Assert.IsType<WorkflowActivationAuthorityBackend>(provider.GetRequiredService<WorkflowActivationAuthorityBackend>());
-        Assert.IsType<BookmarkStateSqliteDbContext>(scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
+        Assert.IsType<RuntimeSqliteDbContext>(scope.ServiceProvider.GetRequiredService<RuntimeDbContext>());
     }
 
     [Fact]
@@ -201,8 +201,8 @@ public sealed class EfWorkflowActivationAuthorityTests
         Assert.Equal(1, reads.Attempts);
     }
 
-    private static BookmarkStateSqliteDbContext NewContext(SqliteConnection connection) =>
-        new(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+    private static RuntimeSqliteDbContext NewContext(SqliteConnection connection) =>
+        new(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
 
     private sealed class Accessor(string scope) : IPersistenceAccessContextAccessor
     {
@@ -212,9 +212,9 @@ public sealed class EfWorkflowActivationAuthorityTests
     private sealed class ActivationDatabase : IAsyncDisposable
     {
         private readonly SqliteConnection connection;
-        private readonly BookmarkStateSqliteDbContext context;
+        private readonly RuntimeSqliteDbContext context;
 
-        private ActivationDatabase(SqliteConnection connection, BookmarkStateSqliteDbContext context)
+        private ActivationDatabase(SqliteConnection connection, RuntimeSqliteDbContext context)
         {
             this.connection = connection;
             this.context = context;
@@ -230,7 +230,7 @@ public sealed class EfWorkflowActivationAuthorityTests
             await connection.OpenAsync();
             await using (var schema = NewContext(connection))
                 await schema.Database.EnsureCreatedAsync();
-            return new ActivationDatabase(connection, new(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>()
+            return new ActivationDatabase(connection, new(new DbContextOptionsBuilder<RuntimeSqliteDbContext>()
                 .UseSqlite(connection).AddInterceptors(interceptor).Options));
         }
 

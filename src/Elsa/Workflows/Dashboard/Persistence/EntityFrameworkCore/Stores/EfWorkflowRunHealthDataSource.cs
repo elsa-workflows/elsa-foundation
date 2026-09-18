@@ -17,7 +17,7 @@ namespace Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Stores;
 /// its authoritative JSON content before it is folded into the result.
 /// </remarks>
 public sealed class EfWorkflowRunHealthDataSource(
-    BookmarkStateDbContext context,
+    RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowRunHealthDataSource
 {
     private const int MaximumBucketCount = 744;

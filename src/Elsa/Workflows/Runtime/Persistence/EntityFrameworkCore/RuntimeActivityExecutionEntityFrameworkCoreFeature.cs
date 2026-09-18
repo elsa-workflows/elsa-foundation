@@ -61,6 +61,6 @@ public class RuntimeActivityExecutionEntityFrameworkCoreFeature : IShellFeature
             HierarchyCursorSigningKey = HierarchyCursorSigningKey,
             RecoveryContinuationSigningKey = RecoveryContinuationSigningKey
         });
-        services.AddEfModuleMigrations<BookmarkStateDbContext>(Provider);
+        services.AddEfModuleMigrations<RuntimeDbContext>(Provider);
     }
 }

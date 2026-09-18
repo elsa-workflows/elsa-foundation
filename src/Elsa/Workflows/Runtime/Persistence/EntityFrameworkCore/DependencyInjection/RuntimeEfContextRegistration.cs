@@ -6,12 +6,12 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 
-internal static class BookmarkStateEfContextRegistration
+internal static class RuntimeEfContextRegistration
 {
     private static readonly EfModuleBinding Binding = new(
         "Runtime",
         RuntimeEfModule.HistoryTableName,
-        typeof(BookmarkStateDbContext).Assembly.GetName().Name,
+        typeof(RuntimeDbContext).Assembly.GetName().Name,
         RuntimeEfModule.DefaultConnectionName,
         RuntimeEfModule.DefaultSqliteConnectionString);
 
@@ -48,7 +48,7 @@ internal static class BookmarkStateEfContextRegistration
         IServiceCollection services,
         Func<ServiceDescriptor, bool>? ownsExistingContext,
         string owner)
-        where TContext : BookmarkStateDbContext
+        where TContext : RuntimeDbContext
     {
         var contextRegistrations = services.Where(IsContextRegistration<TContext>).ToArray();
         if (contextRegistrations.Length > 0 &&
@@ -82,27 +82,27 @@ internal static class BookmarkStateEfContextRegistration
     {
         var ensure = Binding.Select<Action<IServiceCollection, Func<ServiceDescriptor, bool>?, string>>(
             provider,
-            EnsureContextIsAvailable<BookmarkStateSqliteDbContext>,
-            EnsureContextIsAvailable<BookmarkStateSqlServerDbContext>,
-            EnsureContextIsAvailable<BookmarkStatePostgreSqlDbContext>,
-            EnsureContextIsAvailable<BookmarkStateMySqlDbContext>);
+            EnsureContextIsAvailable<RuntimeSqliteDbContext>,
+            EnsureContextIsAvailable<RuntimeSqlServerDbContext>,
+            EnsureContextIsAvailable<RuntimePostgreSqlDbContext>,
+            EnsureContextIsAvailable<RuntimeMySqlDbContext>);
         ensure(services, ownsExistingContext, owner);
     }
 
     public static IReadOnlyCollection<ServiceDescriptor> ContextRegistrations(IServiceCollection services, string provider) =>
         services.Where(Binding.Select<Func<ServiceDescriptor, bool>>(
             provider,
-            IsContextRegistration<BookmarkStateSqliteDbContext>,
-            IsContextRegistration<BookmarkStateSqlServerDbContext>,
-            IsContextRegistration<BookmarkStatePostgreSqlDbContext>,
-            IsContextRegistration<BookmarkStateMySqlDbContext>)).ToArray();
+            IsContextRegistration<RuntimeSqliteDbContext>,
+            IsContextRegistration<RuntimeSqlServerDbContext>,
+            IsContextRegistration<RuntimePostgreSqlDbContext>,
+            IsContextRegistration<RuntimeMySqlDbContext>)).ToArray();
 
     private static bool IsContextRegistration<TContext>(ServiceDescriptor descriptor)
-        where TContext : BookmarkStateDbContext
+        where TContext : RuntimeDbContext
     {
         if (descriptor.ServiceType == typeof(TContext) ||
             descriptor.ServiceType == typeof(DbContextOptions<TContext>) ||
-            descriptor.ServiceType == typeof(BookmarkStateDbContext))
+            descriptor.ServiceType == typeof(RuntimeDbContext))
             return true;
 
         return IsContextType(descriptor.ImplementationType) ||
@@ -111,7 +111,7 @@ internal static class BookmarkStateEfContextRegistration
     }
 
     private static bool IsContextType(Type? type) =>
-        type is not null && typeof(BookmarkStateDbContext).IsAssignableFrom(type);
+        type is not null && typeof(RuntimeDbContext).IsAssignableFrom(type);
 
     /// <summary>
     /// Rejects a participant whose connection differs from one already registered. Participants share one context,
@@ -188,22 +188,22 @@ internal static class BookmarkStateEfContextRegistration
     {
         var addContext = Binding.Select<Func<IServiceCollection, RegisteredContextOptions, IReadOnlyCollection<ServiceDescriptor>>>(
             provider,
-            AddContext<BookmarkStateSqliteDbContext>,
-            AddContext<BookmarkStateSqlServerDbContext>,
-            AddContext<BookmarkStatePostgreSqlDbContext>,
-            AddContext<BookmarkStateMySqlDbContext>);
+            AddContext<RuntimeSqliteDbContext>,
+            AddContext<RuntimeSqlServerDbContext>,
+            AddContext<RuntimePostgreSqlDbContext>,
+            AddContext<RuntimeMySqlDbContext>);
         return addContext(services, new RegisteredContextOptions("Runtime", provider, connectionString, connectionName, schema, pooling));
     }
 
     private static IReadOnlyCollection<ServiceDescriptor> AddContext<TContext>(
         IServiceCollection services,
         RegisteredContextOptions options)
-        where TContext : BookmarkStateDbContext
+        where TContext : RuntimeDbContext
     {
         var start = services.Count;
         Binding.AddContext<TContext>(services, options.Pooling, (serviceProvider, builder) =>
             Binding.Apply(builder, serviceProvider, options.Provider, options.ConnectionString, options.ConnectionName, options.Schema));
-        services.TryAddScoped<BookmarkStateDbContext>(serviceProvider => serviceProvider.GetRequiredService<TContext>());
+        services.TryAddScoped<RuntimeDbContext>(serviceProvider => serviceProvider.GetRequiredService<TContext>());
         return services.Skip(start).ToArray();
     }
 }

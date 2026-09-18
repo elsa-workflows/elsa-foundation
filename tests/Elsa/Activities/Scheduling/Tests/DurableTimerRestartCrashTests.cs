@@ -193,7 +193,7 @@ public sealed class DurableTimerRestartCrashTests
                     RecoveryContinuationSigningKey = RecoveryContinuationSigningKey,
                     HierarchyCursorSigningKey = HierarchyCursorSigningKey
                 });
-                services.AddEfModuleMigrations<BookmarkStateDbContext>("Sqlite");
+                services.AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
                 // Override the runtime clock so due-time computation and the pump sweep share one
                 // controllable timeline.
                 services.RemoveAll<TimeProvider>();
