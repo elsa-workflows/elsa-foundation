@@ -153,8 +153,8 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Elsa3 activities import (JSON source for legacy activity definitions) | [`src/Elsa3/Activities/Design/Import/EXTENSION_POINTS.md`](src/Elsa3/Activities/Design/Import/EXTENSION_POINTS.md) |
-| Elsa3 mapping (workflow definition import boundary) | [`src/Elsa3/Mapping/EXTENSION_POINTS.md`](src/Elsa3/Mapping/EXTENSION_POINTS.md) |
+| Elsa3 activities import (JSON source for legacy activity definitions) | [`extensions/Elsa3/src/Activities/Design/Import/EXTENSION_POINTS.md`](extensions/Elsa3/src/Activities/Design/Import/EXTENSION_POINTS.md) |
+| Elsa3 mapping (workflow definition import boundary) | [`extensions/Elsa3/src/Mapping/EXTENSION_POINTS.md`](extensions/Elsa3/src/Mapping/EXTENSION_POINTS.md) |
 
 ### Diagnostics
 

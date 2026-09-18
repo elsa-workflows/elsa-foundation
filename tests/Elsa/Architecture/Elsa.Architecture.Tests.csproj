@@ -72,9 +72,9 @@
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\ExecutionEvidence\Elsa.Workflows.ExecutionEvidence.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Dashboard\Elsa.Workflows.Dashboard.csproj" />
-    <ProjectReference Include="..\..\..\src\Elsa3\Activities\Design\Import\Elsa3.Activities.Design.Import.csproj" />
-    <ProjectReference Include="..\..\..\src\Elsa3\Mapping\Elsa3.Mapping.csproj" />
-    <ProjectReference Include="..\..\..\src\Elsa3\Models\Elsa3.Models.csproj" />
+    <ProjectReference Include="..\..\..\extensions\Elsa3\src\Activities\Design\Import\Elsa3.Activities.Design.Import.csproj" />
+    <ProjectReference Include="..\..\..\extensions\Elsa3\src\Mapping\Elsa3.Mapping.csproj" />
+    <ProjectReference Include="..\..\..\extensions\Elsa3\src\Models\Elsa3.Models.csproj" />
   </ItemGroup>
 
   <ItemGroup>

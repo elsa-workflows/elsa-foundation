@@ -524,8 +524,7 @@ public sealed partial class ArchitectureGuardTests
             "ActivityImplementationResolver",
         ];
 
-        var sourceRoot = Path.Combine(RepoRoot, "src");
-        var violations = Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
+        var violations = ModuleSourceFiles()
             .Where(file => !IsBuildArtifactFile(file))
             .SelectMany(file =>
             {
@@ -566,7 +565,7 @@ public sealed partial class ArchitectureGuardTests
         // methods elsewhere are untouched.
         var onPrefixedDeclaration = new Regex(@"\b(?:class|record|struct)\s+(On[A-Z]\w*)", RegexOptions.Compiled);
 
-        var violations = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
+        var violations = ModuleSourceFiles()
             .Where(file => !IsBuildArtifactFile(file))
             .SelectMany(file =>
             {
@@ -661,14 +660,37 @@ public sealed partial class ArchitectureGuardTests
         AllowedCorePackageReferences.Contains(packageName) ||
         packageName.EndsWith(".Abstractions", StringComparison.Ordinal);
 
+    /// <summary>
+    /// Every repository root that holds first-party code. Required modules live under <c>src/</c> and
+    /// optional ones under <c>extensions/</c> (#1815), each extension carrying its own <c>tests/</c>.
+    /// </summary>
+    /// <remarks>
+    /// Sweeps built on this must enumerate all of them. A sweep pinned to <c>src/</c> keeps compiling and
+    /// keeps passing once a module moves out; it simply stops looking at that module, which is a silent
+    /// loss of coverage rather than a failure. Moving Elsa 3 dropped seven projects out of the fifteen
+    /// guards below before this was widened.
+    /// </remarks>
+    private static readonly string[] CodeRoots = ["src", "tests", "extensions"];
+
     private static IEnumerable<ProjectInfo> ProjectFiles()
     {
-        foreach (var file in Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.csproj", SearchOption.AllDirectories))
-            yield return ProjectInfo.From(RepoRoot, file);
+        foreach (var root in CodeRoots)
+        {
+            var directory = Path.Combine(RepoRoot, root);
+            if (!Directory.Exists(directory)) continue;
 
-        foreach (var file in Directory.EnumerateFiles(Path.Combine(RepoRoot, "tests"), "*.csproj", SearchOption.AllDirectories))
-            yield return ProjectInfo.From(RepoRoot, file);
+            foreach (var file in Directory.EnumerateFiles(directory, "*.csproj", SearchOption.AllDirectories))
+                yield return ProjectInfo.From(RepoRoot, file);
+        }
     }
+
+    /// <summary>Production source files across every module root, excluding test and build output.</summary>
+    private static IEnumerable<string> ModuleSourceFiles() =>
+        new[] { "src", "extensions" }
+            .Select(root => Path.Combine(RepoRoot, root))
+            .Where(Directory.Exists)
+            .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+            .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}tests{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
 
     private static IEnumerable<SolutionProjectInfo> SolutionProjects()
     {
@@ -1007,11 +1029,14 @@ public sealed partial class ArchitectureGuardTests
         if (project.Name == "Elsa.Primitives")
             return "src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj";
 
-        if (project.Name.StartsWith("Elsa3.", StringComparison.Ordinal) && project.RelativePath.StartsWith("tests/", StringComparison.Ordinal))
-            return $"tests/Elsa3/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";
+        // Elsa 3 import is an optional module, so it lives under extensions/ rather than src/ (#1815).
+        // The name-to-path derivation is unchanged; only the root differs, and the src|tests split now
+        // sits inside the extension rather than at the top of the tree.
+        if (project.Name.StartsWith("Elsa3.", StringComparison.Ordinal) && project.RelativePath.Contains("/tests/", StringComparison.Ordinal))
+            return $"extensions/Elsa3/tests/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";
 
         if (project.Name.StartsWith("Elsa3.", StringComparison.Ordinal))
-            return $"src/Elsa3/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";
+            return $"extensions/Elsa3/src/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";
 
         if (project.Name.StartsWith("Elsa.", StringComparison.Ordinal) && project.RelativePath.StartsWith("src/", StringComparison.Ordinal))
             return $"src/Elsa/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";

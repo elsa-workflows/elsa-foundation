@@ -168,7 +168,7 @@ jobs:
             project: tests/Elsa/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests.csproj
             require: ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX
           - suite: elsa3-import
-            project: tests/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj
+            project: extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj
             require: ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX
           - suite: workflows-design
             project: tests/Elsa/Workflows/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj

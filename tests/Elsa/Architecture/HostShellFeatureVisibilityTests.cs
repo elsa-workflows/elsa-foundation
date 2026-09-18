@@ -37,9 +37,12 @@ public sealed class HostShellFeatureVisibilityTests
     [Fact]
     public void Shell_feature_classes_are_public_so_catalog_discovery_sees_them()
     {
-        var sourceDirectory = Path.Combine(RepoRoot, "src");
-        var declarations = Directory
-            .EnumerateFiles(sourceDirectory, "*.cs", SearchOption.AllDirectories)
+        // Both module roots (#1815): a feature declared by an optional module must be public too, and a
+        // src-only sweep would stop checking it the moment that module moved out.
+        var declarations = new[] { "src", "extensions" }
+            .Select(root => Path.Combine(RepoRoot, root))
+            .Where(Directory.Exists)
+            .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
             .Where(file => !IsGeneratedOutput(file))
             .SelectMany(file => FeatureDeclaration.Matches(File.ReadAllText(file))
                 .Select(match => (

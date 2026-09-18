@@ -12,8 +12,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\src\Elsa3\Mapping\Elsa3.Mapping.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Elsa\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
+    <ProjectReference Include="..\..\..\src\Mapping\Elsa3.Mapping.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
   </ItemGroup>
 
 </Project>

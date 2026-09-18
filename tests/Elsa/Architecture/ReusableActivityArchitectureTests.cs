@@ -58,7 +58,7 @@ public sealed class ReusableActivityArchitectureTests
     [Fact]
     public void Elsa3_import_ef_bridge_references_design_ef_lanes_and_runtime_core_contracts_only() =>
         AssertProjectReferences(
-            "src/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj",
+            "extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj",
             "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
             "Elsa.Persistence.EntityFramework",
             "Elsa.Serialization.Core",
@@ -73,7 +73,7 @@ public sealed class ReusableActivityArchitectureTests
         [
             "src/Elsa/Activities/Graph",
             "src/Elsa/Workflows/Publishing/Persistence/EntityFrameworkCore",
-            "src/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore"
+            "extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore"
         ];
         string[] forbiddenTokens =
         [
@@ -88,7 +88,10 @@ public sealed class ReusableActivityArchitectureTests
             .Where(file => Path.GetExtension(file) is ".cs" or ".csproj")
             .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) &&
                            !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .Concat(Directory.EnumerateFiles(FullPath("src"), "ReusableActivity*.cs", SearchOption.AllDirectories))
+            // Both module roots (#1815). src/ alone would quietly narrow this sweep as optional modules
+            // move out; the Elsa3 exclusion below is what keeps the import boundary exempt, not the root.
+            .Concat(new[] { "src", "extensions" }
+                .SelectMany(root => Directory.EnumerateFiles(FullPath(root), "ReusableActivity*.cs", SearchOption.AllDirectories)))
             .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}Elsa3{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
@@ -107,16 +110,23 @@ public sealed class ReusableActivityArchitectureTests
     [Fact]
     public void Elsa3_reusable_marker_detection_is_confined_to_the_one_way_import_boundary()
     {
-        var hits = Directory.EnumerateFiles(FullPath("src"), "*.cs", SearchOption.AllDirectories)
+        // Both module roots: required modules stay under src/, optional ones live under extensions/ (#1815).
+        // Scanning only src/ here would make the guard vacuous now that Elsa 3 has moved, and would stop it
+        // catching the marker leaking back into core. Test code stays out of scope, as it was when src/ was
+        // the only root and tests/ sat outside it: fixtures legitimately construct the legacy shape, and an
+        // extension carries its own tests/ subtree inside the root being scanned.
+        var hits = new[] { "src", "extensions" }
+            .SelectMany(root => Directory.EnumerateFiles(FullPath(root), "*.cs", SearchOption.AllDirectories))
             .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) &&
-                           !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+                           !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal) &&
+                           !file.Contains($"{Path.DirectorySeparatorChar}tests{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
             .Where(file => File.ReadAllText(file).Contains("UsableAsActivity", StringComparison.Ordinal))
             .Select(file => Path.GetRelativePath(RepoRoot, file).Replace('\\', '/'))
             .Order(StringComparer.Ordinal)
             .ToArray();
 
         Assert.NotEmpty(hits);
-        Assert.All(hits, file => Assert.StartsWith("src/Elsa3/", file, StringComparison.Ordinal));
+        Assert.All(hits, file => Assert.StartsWith("extensions/Elsa3/src/", file, StringComparison.Ordinal));
         Assert.Contains(hits, file => file.EndsWith("Models/Elsa3WorkflowDefinition.cs", StringComparison.Ordinal));
         Assert.Contains(hits, file => file.EndsWith("Services/ReusableActivityCollectionAnalyzer.cs", StringComparison.Ordinal));
     }
