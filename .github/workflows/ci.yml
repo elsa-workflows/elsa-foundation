@@ -82,10 +82,11 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Generate container-free test solution filter
-        # Run the fast unit tests only. Any test project that references
-        # Testcontainers spins up Docker containers, so exclude those by reference --
-        # the shared solution-filter generator parses PackageReference elements rather than
-        # matching comments or other raw text.
+        # Run the fast unit tests only. Any test project that reaches Testcontainers spins up
+        # Docker containers, so exclude those by reference -- the shared solution-filter generator
+        # parses PackageReference elements rather than matching comments or other raw text, and
+        # follows ProjectReference edges so a project that only inherits the package from another
+        # test project is excluded too.
         run: |
           container_roots_file=$(mktemp)
           trap 'rm -f "$container_roots_file"' EXIT
@@ -137,8 +138,13 @@ jobs:
         run: dotnet test Elsa.Server.test.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603
 
   # Every EF test project that starts Testcontainers. The fast "Build & test" lane excludes any
-  # project that references Testcontainers, so without this job these suites would run in no gate at
+  # project that reaches Testcontainers, so without this job these suites would run in no gate at
   # all. One matrix leg per project keeps each family inside the timeout and names the failure.
+  #
+  # A project missing from this matrix is the same hole from the other side: until #1803's ADR 0075
+  # review, the dashboard suite reached Testcontainers only through a ProjectReference, so the
+  # generator classified it container-free, the fast lane ran it without Docker, and its fixtures
+  # self-skipped while that job reported green.
   #
   # `require` arms the suite's own required-provider variable, measured per project rather than
   # assumed: a fixture that reads a different name would otherwise leave the lane silently skipping
@@ -160,6 +166,11 @@ jobs:
             require: ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS
           - suite: runtime-distributed
             project: tests/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj
+            require: ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS
+          # The dashboard smokes take the Runtime ProviderTests' own RuntimeBookmarks*Fixture types by
+          # project reference, so the variable their container support reads is the Runtime one.
+          - suite: dashboard
+            project: tests/Elsa/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests.csproj
             require: ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS
           - suite: activities-design
             project: tests/Elsa/Activities/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj

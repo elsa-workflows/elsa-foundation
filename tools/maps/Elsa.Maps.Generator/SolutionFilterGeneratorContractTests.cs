@@ -20,10 +20,12 @@ public static class SolutionFilterGeneratorContractTests
 
             SolutionFilterGenerator.Generate(repo);
             AssertProjects(root, "Feature.slnf", ["src/Feature/Feature.csproj", "src/Shared/Shared.csproj"]);
-            AssertProjects(root, "Integration.slnf", ["tests/Container.csproj"]);
+            AssertProjects(root, "Integration.slnf", ["tests/Container.csproj", "tests/Transitive.csproj"]);
             Assert(SolutionFilterGenerator.GetRoots(repo, "Integration.slnf")
-                    .SequenceEqual(["tests/Container.csproj"], StringComparer.Ordinal),
-                "Root listing must use parsed PackageReference elements and ignore comment text.");
+                    .SequenceEqual(["tests/Container.csproj", "tests/Transitive.csproj"], StringComparer.Ordinal),
+                "Package selectors must use parsed PackageReference elements, ignore comment text, and follow "
+                + "ProjectReference edges so a project that only reaches the package transitively still counts.");
+            AssertProjects(root, "Fast.slnf", ["tests/Comment.csproj"]);
 
             var first = File.ReadAllBytes(Path.Join(root, "Feature.slnf"));
             SolutionFilterGenerator.Generate(repo);
@@ -94,6 +96,7 @@ public static class SolutionFilterGeneratorContractTests
               <Project Path="src/Shared/Shared.csproj" />
               <Project Path="tests/Comment.csproj" />
               <Project Path="tests/Container.csproj" />
+              <Project Path="tests/Transitive.csproj" />
               <Project Path="samples/Feature/Feature.Sample.csproj" />
             </Solution>
             """);
@@ -104,6 +107,8 @@ public static class SolutionFilterGeneratorContractTests
             "<Project><!-- <PackageReference Include=\"Testcontainers.CommentOnly\" /> --></Project>");
         File.WriteAllText(Path.Join(root, "tests/Container.csproj"),
             "<Project><ItemGroup><PackageReference Include=\"Testcontainers.Real\" /></ItemGroup></Project>");
+        File.WriteAllText(Path.Join(root, "tests/Transitive.csproj"),
+            "<Project><ItemGroup><ProjectReference Include=\"Container.csproj\" /></ItemGroup></Project>");
         File.WriteAllText(Path.Join(root, "samples/Feature/Feature.Sample.csproj"), "<Project />");
         WriteManifest(root, []);
     }
@@ -126,6 +131,12 @@ public static class SolutionFilterGeneratorContractTests
                 outputPath = "Integration.slnf",
                 includeProjectPathPrefixes = new[] { "tests\\" },
                 requirePackageReferencePrefixes = new[] { "Testcontainers." }
+            },
+            new
+            {
+                outputPath = "Fast.slnf",
+                includeProjectPathPrefixes = new[] { "tests\\" },
+                excludeWhenPackageReferencePrefixes = new[] { "Testcontainers." }
             }
         };
         if (duplicateOutput)

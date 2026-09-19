@@ -49,6 +49,14 @@ selected from parsed `PackageReference` elements rather than raw text, and any p
 leaves `Elsa.Server.slnx` must be explicitly allowlisted. Exclusions apply only to roots; required
 transitive dependencies are never removed.
 
+`requirePackageReferencePrefixes` and `excludeWhenPackageReferencePrefixes` both read a project's
+package closure: its own `PackageReference` elements plus every package reachable through the
+`ProjectReference` graph. A test project that takes its container fixtures from another test project
+therefore classifies as a container project even with no `Testcontainers` package of its own. While
+only direct elements counted, the dashboard provider suite reached Testcontainers through a
+`ProjectReference` alone, so it sat in neither the integration filter nor the fast lane's exclusion
+set: the fast lane ran it without Docker, its fixtures self-skipped, and the job reported green.
+
 After changing the manifest, a project name, or a `ProjectReference`, regenerate the committed files:
 
 ```bash
@@ -84,7 +92,8 @@ dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filters-self-tes
 CI runs the same check and asks `dotnet sln` to parse every committed filter. A new matching project
 or changed dependency therefore makes the check fail until the generated profiles are refreshed.
 The fast CI lane also asks the generator for the integration profile's explicit roots, ensuring each
-parsed Testcontainers test belongs to the nightly lane while comment-only mentions remain in fast CI.
+test that reaches Testcontainers -- directly or through a `ProjectReference` -- belongs to the nightly
+lane while comment-only mentions remain in fast CI.
 
 ## Completion gate
 
