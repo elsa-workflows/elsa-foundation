@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using System.Globalization;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
@@ -46,7 +47,7 @@ public sealed class EfActivityPublicationReceiptStore(
             await context.SaveChangesAsync(cancellationToken);
             return true;
         }
-        catch (DbUpdateException)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             context.ChangeTracker.Clear();
             // The unique receipt key is the create-only authority. Report a lost race only when the receipt

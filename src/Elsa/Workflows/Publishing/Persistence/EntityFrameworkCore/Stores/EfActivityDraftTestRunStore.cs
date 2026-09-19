@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities;
@@ -35,7 +36,7 @@ public sealed class EfActivityDraftTestRunStore(
             await context.SaveChangesAsync(cancellationToken);
             return new ActivityDraftTestRunCreateResult(true, receipt);
         }
-        catch (DbUpdateException)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             context.ChangeTracker.Clear();
             var winner = await FindEntityAsync(scope, receipt.TestRunId, cancellationToken)

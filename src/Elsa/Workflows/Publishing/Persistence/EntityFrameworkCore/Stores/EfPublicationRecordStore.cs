@@ -40,7 +40,7 @@ public sealed class EfPublicationRecordStore(
         {
             await context.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             context.ChangeTracker.Clear();
             // The unique identity is the authority for a create race: an identical winner is this same

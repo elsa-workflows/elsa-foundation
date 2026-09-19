@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities;
@@ -29,7 +30,7 @@ public sealed class EfPublicationSnapshotReviewStore(
             await context.SaveChangesAsync(cancellationToken);
             return true;
         }
-        catch (DbUpdateException)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             // A unique-token conflict is the expected create-only idempotency result. Do not hide
             // unrelated database failures: only return false when the token is now present.
