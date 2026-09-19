@@ -343,6 +343,161 @@ public sealed class EfOpenTelemetryRetentionTests
         Assert.Equal((3, 3, 3, 3, 3, 3, 2), await CountsAsync(fixture, other));
     }
 
+    /// <summary>
+    /// One capture, six raw traces over three keys, so a single retention pass overflows by three rows and
+    /// affects two keys at once. The recompute reads and deletes per chunk of keys rather than per key, so this
+    /// pins what a chunk has to leave behind: the key whose every raw row went is gone summary and all, the
+    /// partially retained key is rebuilt from what survived, and the key retention never touched keeps the
+    /// memberships the append path gave it.
+    /// </summary>
+    [Fact]
+    public async Task Trace_retention_recomputes_every_affected_key_and_leaves_an_unaffected_one_alone()
+    {
+        await using var fixture = await CreateFixtureAsync(new OpenTelemetryDiagnosticsOptions
+        {
+            TraceCapacity = 3,
+            MaxQuerySize = 20
+        });
+        var resources = SixResources();
+
+        await fixture.Store.WriteAsync(new(resources,
+        [
+            TraceAt(resources, 1, "trace-a", "workflow-a1"),
+            TraceAt(resources, 2, "trace-b", "workflow-b1"),
+            TraceAt(resources, 3, "trace-a", "workflow-a2"),
+            TraceAt(resources, 4, "trace-c", "workflow-c1"),
+            TraceAt(resources, 5, "trace-b", "workflow-b2"),
+            TraceAt(resources, 6, "trace-c", "workflow-c2")
+        ], [], [], [], []));
+
+        Assert.Equal(3, await fixture.WithDbAsync(db => db.Traces.CountAsync()));
+        Assert.Equal(["trace-b", "trace-c"], await SummaryTraceIdsAsync(fixture));
+        Assert.Equal(
+        [
+            "trace-b|Resource|resource-5",
+            "trace-b|Service|service-5",
+            "trace-b|WorkflowInstance|workflow-b2",
+            "trace-c|Resource|resource-4",
+            "trace-c|Resource|resource-6",
+            "trace-c|Service|service-4",
+            "trace-c|Service|service-6",
+            "trace-c|WorkflowInstance|workflow-c1",
+            "trace-c|WorkflowInstance|workflow-c2"
+        ], await MembershipsAsync(fixture));
+    }
+
+    /// <summary>
+    /// The membership deletes on both the append and the recompute path are set-based and keyed by a chunk of
+    /// trace keys, so the foreign rows here are seeded under the very trace keys the second capture rewrites.
+    /// A delete that lost its ScopeKey clause would take them with it.
+    /// </summary>
+    [Fact]
+    public async Task Summary_recompute_and_merge_leave_a_second_scopes_rows_untouched()
+    {
+        await using var fixture = await CreateFixtureAsync(new OpenTelemetryDiagnosticsOptions
+        {
+            TraceCapacity = 3,
+            MaxQuerySize = 20
+        });
+        var resources = SixResources();
+        var other = new EfOpenTelemetryBinding("other-tenant", "other-scope", "opentelemetry").ScopeKey;
+        Assert.NotEqual(EfOpenTelemetryBinding.Default.ScopeKey, other);
+
+        await fixture.Store.WriteAsync(new(resources.Take(3).ToArray(),
+        [
+            TraceAt(resources, 1, "trace-a", "workflow-a1"),
+            TraceAt(resources, 2, "trace-b", "workflow-b1"),
+            TraceAt(resources, 3, "trace-c", "workflow-c1")
+        ], [], [], [], []));
+
+        // The trace key is a hash the store owns, so the foreign rows borrow the keys the first capture created
+        // rather than recomputing them here.
+        var keys = await fixture.WithDbAsync(db => db.TraceSummaries.Select(x => x.TraceKey).ToArrayAsync());
+        Assert.Equal(3, keys.Length);
+        await fixture.WithDbAsync(async db =>
+        {
+            foreach (var key in keys)
+                SeedForeignSummary(db, other, key);
+            await db.SaveChangesAsync();
+        });
+
+        await fixture.Store.WriteAsync(new(resources.Skip(3).ToArray(),
+        [
+            TraceAt(resources, 4, "trace-a", "workflow-a2"),
+            TraceAt(resources, 5, "trace-b", "workflow-b2"),
+            TraceAt(resources, 6, "trace-c", "workflow-c2")
+        ], [], [], [], []));
+
+        // Every key went through both converted deletes: the append path merging the second capture in, and the
+        // recompute once retention had dropped all three first-capture rows.
+        Assert.Equal(["trace-a", "trace-b", "trace-c"], await SummaryTraceIdsAsync(fixture));
+        Assert.Equal(
+        [
+            "trace-a|Resource|resource-4",
+            "trace-a|Service|service-4",
+            "trace-a|WorkflowInstance|workflow-a2",
+            "trace-b|Resource|resource-5",
+            "trace-b|Service|service-5",
+            "trace-b|WorkflowInstance|workflow-b2",
+            "trace-c|Resource|resource-6",
+            "trace-c|Service|service-6",
+            "trace-c|WorkflowInstance|workflow-c2"
+        ], await MembershipsAsync(fixture));
+        Assert.Equal((3, 3), await fixture.WithDbAsync(async db => (
+            await db.TraceSummaries.CountAsync(x => x.ScopeKey == other),
+            await db.TraceSummaryMemberships.CountAsync(x => x.ScopeKey == other))));
+    }
+
+    private static TelemetryResource[] SixResources() => Enumerable.Range(1, 6)
+        .Select(index => TelemetryTestData.Resource($"resource-{index}", $"service-{index}", TelemetryTestData.Now))
+        .ToArray();
+
+    /// <summary>One raw trace record for <paramref name="traceId"/>, carrying resource and second <paramref name="index"/>.</summary>
+    private static TelemetryTrace TraceAt(TelemetryResource[] resources, int index, string traceId, string workflowInstanceId) =>
+        TelemetryTestData.Trace(traceId, resources[index - 1].Id, TelemetryTestData.Now.AddSeconds(index), SpanStatus.Ok, 1, workflowInstanceId);
+
+    private static Task<string[]> SummaryTraceIdsAsync(OpenTelemetryEntityFrameworkCoreFixture fixture) =>
+        fixture.WithDbAsync(db => db.TraceSummaries
+            .Where(x => x.ScopeKey == EfOpenTelemetryBinding.Default.ScopeKey)
+            .OrderBy(x => x.TraceId)
+            .Select(x => x.TraceId)
+            .ToArrayAsync());
+
+    /// <summary>
+    /// Every membership row of the bound scope, named by the trace id of the summary that owns it. A membership
+    /// left behind by a removed summary names itself an orphan instead, so it fails the comparison rather than
+    /// disappearing from it.
+    /// </summary>
+    private static async Task<string[]> MembershipsAsync(OpenTelemetryEntityFrameworkCoreFixture fixture)
+    {
+        var scopeKey = EfOpenTelemetryBinding.Default.ScopeKey;
+        var (summaries, memberships) = await fixture.WithDbAsync(async db => (
+            await db.TraceSummaries.Where(x => x.ScopeKey == scopeKey).Select(x => new { x.TraceKey, x.TraceId }).ToArrayAsync(),
+            await db.TraceSummaryMemberships.Where(x => x.ScopeKey == scopeKey).Select(x => new { x.TraceKey, x.Kind, x.Value }).ToArrayAsync()));
+        var traceIds = summaries.ToDictionary(x => x.TraceKey, x => x.TraceId, StringComparer.Ordinal);
+        return memberships
+            .Select(x => $"{traceIds.GetValueOrDefault(x.TraceKey, "<orphan>")}|{x.Kind}|{x.Value}")
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    /// <summary>Seeds a foreign-scope summary and membership under a trace key the bound scope also uses.</summary>
+    private static void SeedForeignSummary(OpenTelemetryDbContext db, string scopeKey, string traceKey)
+    {
+        var ticks = TelemetryTestData.Now.UtcTicks;
+        db.TraceSummaries.Add(new OpenTelemetryTraceSummaryEntity
+        {
+            ScopeKey = scopeKey, TraceKey = traceKey, TraceId = "foreign-trace", TraceIdSearchKey = "foreign-trace",
+            StartTimeTicks = ticks, EndTimeTicks = ticks, SpanCount = 1,
+            PayloadJson = "{}", ServiceMembershipJson = "[]", WorkflowMembershipJson = "[]", Version = Guid.NewGuid()
+        });
+        db.TraceSummaryMemberships.Add(new OpenTelemetryTraceSummaryMembershipEntity
+        {
+            ScopeKey = scopeKey, TraceKey = traceKey, Kind = OpenTelemetryTraceSummaryMembershipKind.Resource,
+            Value = "foreign-resource", ValueSearchKey = "foreign-resource", ValueKey = "foreign-resource"
+        });
+    }
+
     /// <summary>Writes one capture carrying every signal kind, issued and timestamped at second <paramref name="index"/>.</summary>
     private static ValueTask WriteAllSignalsAsync(
         OpenTelemetryEntityFrameworkCoreFixture fixture,
