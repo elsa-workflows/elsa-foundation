@@ -78,7 +78,8 @@ public sealed class RuntimePlacementMySqlContainerFixture : IAsyncLifetime
     public const string CollectionName = "runtime-placement-ef-mysql";
     public bool IsAvailable { get; private set; }
     public string? SkipReason { get; private set; }
-    public string ConnectionString => container?.GetConnectionString() ?? throw new InvalidOperationException("MySQL container is not available.");
+    public string ConnectionString => MySqlTestConnection.WithoutSsl(
+        container?.GetConnectionString() ?? throw new InvalidOperationException("MySQL container is not available."));
 
     public async Task InitializeAsync()
     {
