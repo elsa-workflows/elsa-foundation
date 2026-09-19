@@ -28,6 +28,11 @@ public abstract class Elsa3ImportDbContext(DbContextOptions options) : DbContext
         foreach (var property in modelBuilder.Model.GetEntityTypes().SelectMany(entity => entity.GetProperties()))
             property.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
         ConfigureProvider(modelBuilder);
+        // Installed unconditionally, so this context reads a frame whatever wrote it. Nothing here enables an
+        // encoder: with no codec configured these columns are written exactly as they were before.
+        modelBuilder.UseElsaPayloadColumns(
+            this,
+            "ContentJson");
     }
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);

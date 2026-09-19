@@ -79,6 +79,14 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
         modelBuilder.ApplyConfiguration(new RecurringTriggerScheduleEntityConfiguration());
         modelBuilder.ApplyConfiguration(new RecurringTriggerScheduleProjectionStateEntityConfiguration());
         ConfigureProvider(modelBuilder);
+        // Installed unconditionally, so this context reads a frame whatever wrote it. Nothing here enables an
+        // encoder: with no codec configured these columns are written exactly as they were before.
+        modelBuilder.UseElsaPayloadColumns(
+            this,
+            "ContentJson",
+            "PayloadJson",
+            "MetadataJson",
+            "CleanupSafeFailureJson");
     }
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);

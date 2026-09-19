@@ -79,6 +79,7 @@ Oracle container leg is the first of the three conditions ADR 0075 requires to r
 | `EfProviderBindingValidator` | Fail a host closed at startup, in the CShells `Prepare` phase ahead of every module migrator, when a configured module's provider engine is missing or no longer exposes what the reflection binding calls |
 | `EfWriteRetry` | The one bounded retry loop for compare-and-swap and race-prone store writes: the store supplies budget (`DefaultMaxAttempts` unless pinned), the `EfWriteConflict` kinds or predicate it retries, backoff, and exhaustion outcome; a transient conflict inside a caller's open transaction is rethrown, never retried. See [Retry policy](#retry-policy) |
 | `UnicodeOrdinalCasingTable` | The pinned Unicode simple-uppercase mappings that Secrets and OpenTelemetry project persisted ordinal-ignore-case search keys from; each consumer pins `ComputeMappingFingerprint()` in its algorithm id, so the table is never edited in place |
+| `EfPayloadCodec` / `EfPayloadColumns` | Encode a module's payload columns in band (`elsaz1.<codec>.<base64>`), so compressed and uncompressed rows coexist in one column with no schema change; refuses a declaration that is keyed, indexed, length-bounded, or on the excluded `ContentAuthority` family |
 
 ## Retry policy
 
@@ -155,6 +156,45 @@ and PostgreSQL migrations contained no collation at all, so every one of those c
 server's default. `OrdinalCollationMigrationTests` therefore asserts against the generated migration
 rather than the model, and `OrdinalCollationProviderTests` proves the ordering on a real SQL Server and a
 real PostgreSQL whose databases are deliberately created with a linguistic default.
+
+## Payload columns (operator setting, not yet reachable)
+
+A module's payload column holds its lossless JSON document, with every attribute a query needs lifted into a sibling
+projection column. That separation is what makes an encoding possible: nothing in SQL reads a payload column, so its
+stored bytes are the module's business alone.
+
+`modelBuilder.UseElsaPayloadColumns(this, "ContentJson", …)` installs the codec on the named columns. It is called
+**unconditionally**, and with no codec configured it changes nothing about what is written — but the context can then
+*read* a frame written by any other host. That ordering is the point: a database written with compression on cannot be
+read by a build that predates the decoder, so the decoder ships first and a rollback still reads every row.
+
+Marking is in band rather than in a sibling `…CompressionAlgorithm` column, which is what Elsa 3 used. Elsa 3 had two
+payload columns; this tree has about forty across eight wired modules on four providers, so a sibling column would mean
+a migration in every module before a single byte was compressed. In band means **no schema change at all**: a value
+carrying the frame prefix is encoded, and anything else is plaintext, which is what every existing row already is.
+
+Three properties are load bearing and each has a test that goes red without it:
+
+- **Lossless, including lone surrogates.** The payload is UTF-16 code units, not UTF-8, because
+  `System.Text.Encoding` substitutes U+FFFD for a lone surrogate and the runtime deliberately carries those through
+  persistence.
+- **Never larger.** Base64 expands by four thirds, so the encoder compares and writes plaintext whenever the frame
+  would not be shorter. `MinimumLength` only short-circuits that comparison.
+- **Fails closed.** A frame this build cannot read raises rather than substituting a default, which is what Elsa 3's
+  equivalent path does.
+
+`EfPayloadCompressionOptions` rides on `DbContextOptions` through `EfPayloadCompressionOptionsExtension`, the same way
+the schema does and for the same reason: the encoding is baked into a value converter on the model, EF caches one
+model per internal service provider, and two contexts configured differently have to disagree on the extension hash or
+the second silently reuses the first one's model. It also keeps pooling correct, since a pool is keyed by options.
+
+**There is deliberately no configuration key yet.** `UseElsaPayloadCompression` is the only way to set a codec, and
+nothing calls it outside tests. Wiring it to a module feature option and a host-wide key is the next unit of work.
+
+Excluded permanently: the `ContentAuthority` family, which four provider computed columns read in the database, so a
+client-side encoding would make every activity definition evaluate invalid and vanish from paged reads rather than
+error. `SecretRecord.Payload` is excluded pending a security decision, because compressing before encrypting leaks
+length structure.
 
 ## Putting Elsa in its own schema (operator setting)
 
