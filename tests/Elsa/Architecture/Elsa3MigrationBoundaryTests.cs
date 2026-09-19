@@ -47,7 +47,7 @@ public sealed class Elsa3MigrationBoundaryTests
     [Fact]
     public void Elsa3MappingProject_DependsOnAuthoringAndDesignPersistenceButNotRuntimeOrProviderPersistence()
     {
-        var projectPath = Path.Combine(RepoRoot, "src", "Elsa3", "Mapping", "Elsa3.Mapping.csproj");
+        var projectPath = Path.Combine(RepoRoot, "extensions", "Elsa3", "src", "Mapping", "Elsa3.Mapping.csproj");
         var references = XDocument.Load(projectPath)
             .Descendants("ProjectReference")
             .Select(reference => reference.Attribute("Include")?.Value)

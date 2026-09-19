@@ -14,14 +14,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\..\..\src\Elsa3\Activities\Design\Import\Persistence\EntityFrameworkCore\Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\..\src\Elsa3\Mapping\Elsa3.Mapping.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\..\src\Elsa\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\Activities\Design\Import\Persistence\EntityFrameworkCore\Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\Mapping\Elsa3.Mapping.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\..\src\Elsa\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->
-    <Compile Include="..\..\..\..\..\..\..\Elsa\Persistence\EntityFramework\Tests\UnorderedRowLimitGuard.cs" Link="UnorderedRowLimitGuard.cs" />
+    <Compile Include="..\..\..\..\..\..\..\..\..\tests\Elsa\Persistence\EntityFramework\Tests\UnorderedRowLimitGuard.cs" Link="UnorderedRowLimitGuard.cs" />
   </ItemGroup>
 
 </Project>

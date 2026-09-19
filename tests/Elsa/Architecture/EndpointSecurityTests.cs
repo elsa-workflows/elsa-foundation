@@ -41,7 +41,7 @@ public sealed class EndpointSecurityTests
 {
     private static readonly (string Area, string RelativePath)[] CurrentManagementEndpointRoots =
     [
-        ("Elsa 3 Import", "src/Elsa3/Activities/Design/Import/Endpoints"),
+        ("Elsa 3 Import", "extensions/Elsa3/src/Activities/Design/Import/Endpoints"),
         ("BPMN Interchange", "src/Elsa/Activities/Bpmn/Interchange/Endpoints")
     ];
 

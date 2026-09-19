@@ -42,7 +42,44 @@ site already covers `extensions/`, and this is the complete list:
 | `tools/maps/Elsa.Maps.Generator/RepoLayout.cs` | projects, sources and catalogs for every map | the module vanishes from every map |
 | `tools/solution-filters/profiles.json` | solution filter membership | the module drops out of its filter |
 
-Adding a project root to the repository means auditing that list again.
+Some sites name a specific project **by full path** rather than enumerating a directory. Those do not
+fail silently in the same way, but they do have to move with the module, and they are easy to miss:
+
+| Site | What it names |
+|---|---|
+| `.github/workflows/ci.yml`, the `ef-container-suites` matrix | one `.csproj` path per container suite |
+| `tests/Elsa/Architecture/ArchitectureGuardTests.cs` | the name-to-path convention, which has a branch per root |
+| `tests/Elsa/Architecture/EfCoreDependencyGuardTests.cs` | the admitted-EF-path allowlist |
+| `tests/Elsa/Architecture/EndpointSecurityTests.cs` | the directory scanned per endpoint group |
+| `tests/Elsa/Architecture/ReusableActivityArchitectureTests.cs` | project and directory paths, and a path-prefix assertion |
+| `EXTENSION_POINTS.md` | the root index of extension-point catalogs |
+| `tools/solution-filters/profiles.json` | `requiredRootPaths` entries |
+
+This second list was **missing when stage 0 described the first one as complete**; it was found by
+auditing for hardcoded paths while moving the first module. Before moving a module, run a path audit
+rather than trusting either list:
+
+```bash
+git grep -l -E "(src|tests)[/\\]<Module>[/\\]" -- . | grep -v '^docs/maps/'
+```
+
+That catches paths written as strings. It does **not** catch paths assembled from segments, which is
+how `Path.Combine(RepoRoot, "src", "Elsa3", ...)` evaded exactly this audit during the Elsa 3 move and
+broke a guard the first sweep had reported clean. Run the second form too:
+
+```bash
+git grep -n -E '"(src|tests)"\s*,\s*"<Module>"' -- '*.cs' '*.ps1' '*.sh' '*.py'
+```
+
+Then look for guards that scan a **root** instead of naming the module. A test doing
+`EnumerateFiles(FullPath("src"), ...)` keeps passing once the module leaves `src/`, but it is no longer
+looking at anything. Those need widening to both roots rather than re-pointing, or every move quietly
+shrinks what they cover. Two such sweeps were widened during the Elsa 3 move.
+
+Anything under `docs/reports/` or `specs/` that the audit turns up is a point-in-time record and is
+deliberately **not** rewritten: those describe where a file was when the report was written.
+
+Adding a project root to the repository means auditing both lists again.
 
 ## Rules
 
