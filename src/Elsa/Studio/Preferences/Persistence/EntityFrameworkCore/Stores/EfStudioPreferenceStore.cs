@@ -77,8 +77,8 @@ public sealed class EfStudioPreferenceStore(StudioPreferencesDbContext context) 
                     await context.SaveChangesAsync(cancellationToken);
                     return Saved(key.Namespace, write, updatedAt, 1);
                 }
-                catch (DbUpdateException exception) when
-                    (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+                catch (Exception exception) when
+                    (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
                 {
                     context.ChangeTracker.Clear();
                     // A concurrent creator can win between the point read and INSERT.

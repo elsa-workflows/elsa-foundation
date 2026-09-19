@@ -282,8 +282,7 @@ public sealed class EfActivityDesignStores(
         try { return await ReadDefinitionsCoreAsync(query, cancellationToken); }
         catch (OperationCanceledException) { throw; }
         catch (DesignPersistenceException) { throw; }
-        catch (DbUpdateException exception) { throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Provider, "read-definitions", null, exception); }
-        catch (DbException exception) { throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Provider, "read-definitions", null, exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Provider, "read-definitions", null, exception); }
     }
 
     private async Task<ActivityManagementProjectionPage<ActivityDefinitionManagementProjectionRevision>> ReadDefinitionsCoreAsync(ActivityManagementProjectionPageQuery query, CancellationToken cancellationToken = default)
@@ -1226,8 +1225,8 @@ public sealed class EfActivityDesignStores(
         try { await db.SaveChangesAsync(cancellationToken); }
         catch (OperationCanceledException) { db.ChangeTracker.Clear(); throw; }
         catch (DbUpdateConcurrencyException exception) { db.ChangeTracker.Clear(); throw new DbUpdateConcurrencyException(exception.Message, exception); }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception)) { db.ChangeTracker.Clear(); throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Provider, "save-unique", null, exception); }
-        catch (DbUpdateException exception) { db.ChangeTracker.Clear(); throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Provider, "save", null, exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey)) { db.ChangeTracker.Clear(); throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Provider, "save-unique", null, exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { db.ChangeTracker.Clear(); throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Provider, "save", null, exception); }
     }
 
     private static async Task AdvanceConcurrencyFenceAsync<TEntity>(DbSet<TEntity> set, TEntity entity, string message, CancellationToken cancellationToken)
