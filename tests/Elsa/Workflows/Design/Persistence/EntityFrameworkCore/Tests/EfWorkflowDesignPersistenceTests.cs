@@ -904,7 +904,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         await using var secondDb = Create(secondConnection);
         var firstEvents = new CapturingDeferredEventPublisher();
         var secondEvents = new CapturingDeferredEventPublisher();
-        var barrier = new Barrier(2);
+        using var barrier = new Barrier(2);
         var firstWriter = new PreTransactionBarrierAtomicWriter(new EfDesignAtomicWriter(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), barrier);
         var secondWriter = new PreTransactionBarrierAtomicWriter(new EfDesignAtomicWriter(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), barrier);
         var first = new EfCreateDraftCommand(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), firstWriter, new TestIdentity("first"), new TestSerializer(), new TestLockProvider(), deferredEvents: firstEvents);
@@ -945,7 +945,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         await secondConnection.OpenAsync();
         await using var firstDb = Create(firstConnection);
         await using var secondDb = Create(secondConnection);
-        var barrier = new Barrier(2);
+        using var barrier = new Barrier(2);
         var firstWriter = new PreTransactionBarrierAtomicWriter(new EfDesignAtomicWriter(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), barrier);
         var secondWriter = new PreTransactionBarrierAtomicWriter(new EfDesignAtomicWriter(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), barrier);
         var first = new EfAddWorkflowDefinitionVersionCommand(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), firstWriter, new TestSerializer(), new TestIdentity("first"), new TestLockProvider());
