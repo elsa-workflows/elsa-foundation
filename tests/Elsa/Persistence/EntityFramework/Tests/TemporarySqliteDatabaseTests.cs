@@ -12,18 +12,20 @@ namespace Elsa.Persistence.EntityFramework.Tests;
 public sealed class TemporarySqliteDatabaseTests
 {
     [Fact]
-    public async Task DisposeAsync_removes_the_database_and_both_sidecars()
+    public async Task DisposeAsync_removes_the_database_and_all_sidecars()
     {
         var database = new TemporarySqliteDatabase("helper-test");
         await File.WriteAllTextAsync(database.Path, "database");
         await File.WriteAllTextAsync($"{database.Path}-wal", "wal");
         await File.WriteAllTextAsync($"{database.Path}-shm", "shm");
+        await File.WriteAllTextAsync($"{database.Path}-journal", "journal");
 
         await database.DisposeAsync();
 
         Assert.False(File.Exists(database.Path));
         Assert.False(File.Exists($"{database.Path}-wal"));
         Assert.False(File.Exists($"{database.Path}-shm"));
+        Assert.False(File.Exists($"{database.Path}-journal"));
     }
 
     [Fact]
@@ -42,5 +44,23 @@ public sealed class TemporarySqliteDatabaseTests
         var path = Path.Join(Path.GetTempPath(), new string('a', 5000) + ".db");
 
         TemporarySqliteDatabase.ClearPoolAndDeleteFiles(path);
+    }
+
+    [Fact]
+    public void ClearPoolAndDeleteFiles_does_not_throw_on_an_UnauthorizedAccessException()
+    {
+        // File.Delete on a directory throws UnauthorizedAccessException on every platform (not just Windows), so
+        // this stands in for the Windows-only case - an antivirus scanner or a lingering lock - the widened catch
+        // exists to tolerate.
+        var path = Path.Join(Path.GetTempPath(), $"elsa-helper-test-dir-{Guid.NewGuid():N}.db");
+        Directory.CreateDirectory(path);
+        try
+        {
+            TemporarySqliteDatabase.ClearPoolAndDeleteFiles(path);
+        }
+        finally
+        {
+            Directory.Delete(path);
+        }
     }
 }

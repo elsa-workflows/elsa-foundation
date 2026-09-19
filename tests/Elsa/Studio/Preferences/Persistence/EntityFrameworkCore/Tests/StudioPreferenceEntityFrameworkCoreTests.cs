@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Studio.Preferences.Core;
 using Elsa.Studio.Preferences.Core.Contracts;
 using Elsa.Studio.Preferences.Core.Exceptions;
@@ -7,7 +8,6 @@ using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Stores;
-using Elsa.Persistence.EntityFramework.Tests;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;

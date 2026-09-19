@@ -588,8 +588,6 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
         finally
         {
             await other.DisposeAsync();
-            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-            File.Delete(otherPath);
         }
     }
 
