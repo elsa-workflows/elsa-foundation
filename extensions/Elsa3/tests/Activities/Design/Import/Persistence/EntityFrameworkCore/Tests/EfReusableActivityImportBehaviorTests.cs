@@ -6,6 +6,7 @@ using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
@@ -588,8 +589,7 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
         finally
         {
             await other.DisposeAsync();
-            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-            File.Delete(otherPath);
+            TemporarySqliteDatabase.ClearPoolAndDeleteFiles(otherPath);
         }
     }
 

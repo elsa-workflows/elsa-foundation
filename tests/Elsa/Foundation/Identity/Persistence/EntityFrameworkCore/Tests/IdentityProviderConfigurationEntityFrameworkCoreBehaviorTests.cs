@@ -2,6 +2,7 @@ using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Core.Ownership;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Data.Sqlite;
@@ -656,11 +657,7 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreBehaviorTest
     private static string TemporaryDatabasePath() =>
         Path.Join(Path.GetTempPath(), $"elsa-identity-provider-config-{Guid.NewGuid():N}.db");
 
-    private static void DeleteDatabaseFiles(string databasePath)
-    {
-        foreach (var path in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" }.Where(File.Exists))
-            File.Delete(path);
-    }
+    private static void DeleteDatabaseFiles(string databasePath) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles(databasePath);
 
     private sealed class FileFixture(
         string databasePath,

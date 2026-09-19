@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Data.Common;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
@@ -63,110 +64,92 @@ public sealed class EfActivityExecutionStoresTests
     [Fact]
     public async Task Activity_execution_rows_survive_an_independent_file_backed_sqlite_restart()
     {
-        var path = Path.Join(Path.GetTempPath(), $"elsa-runtime-{Guid.NewGuid():N}.db");
+        await using var database = new TemporarySqliteDatabase("runtime");
+        var path = database.Path;
         const string scope = "tenant-restart";
         const string workflow = "wf-restart";
-        try
+        await using (var connection = new SqliteConnection($"Data Source={path}"))
         {
-            await using (var connection = new SqliteConnection($"Data Source={path}"))
-            {
-                await connection.OpenAsync();
-                await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
-                await context.Database.EnsureCreatedAsync();
-                var accessor = new Accessor(scope);
-                var continuationCodec = new HmacRuntimeRecoveryContinuationCodec(Microsoft.Extensions.Options.Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "ef-runtime-restart-signing-key-32-bytes" }));
-                var hierarchyCodec = new HmacActivityExecutionHierarchyCursorCodec(Microsoft.Extensions.Options.Options.Create(new ActivityExecutionHierarchyCursorOptions { SigningKey = "ef-runtime-restart-signing-key-32-bytes" }));
-                var state = new EfActivityExecutionStateStore(context, accessor, continuationCodec);
-                var inspection = new EfActivityExecutionInspectionStore(context, accessor, continuationCodec);
-                var hierarchy = new EfActivityExecutionHierarchyStore(context, accessor, hierarchyCodec);
-                await state.SaveAsync(State(workflow, "activity", 1));
-                await inspection.SaveAsync(Projection(workflow, "root", 1, "root", null, true));
-                await hierarchy.SaveAsync(HierarchyProjection(workflow, "root", 1, "root", null, true));
-                await hierarchy.SaveAsync(HierarchyProjection(workflow, "child", 2, "root", "root"));
-            }
-
-            await using (var connection = new SqliteConnection($"Data Source={path}"))
-            {
-                await connection.OpenAsync();
-                await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
-                var accessor = new Accessor(scope);
-                var continuationCodec = new HmacRuntimeRecoveryContinuationCodec(Microsoft.Extensions.Options.Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "ef-runtime-restart-signing-key-32-bytes" }));
-                var hierarchyCodec = new HmacActivityExecutionHierarchyCursorCodec(Microsoft.Extensions.Options.Options.Create(new ActivityExecutionHierarchyCursorOptions { SigningKey = "ef-runtime-restart-signing-key-32-bytes" }));
-                var state = new EfActivityExecutionStateStore(context, accessor, continuationCodec);
-                var inspection = new EfActivityExecutionInspectionStore(context, accessor, continuationCodec);
-                var hierarchy = new EfActivityExecutionHierarchyStore(context, accessor, hierarchyCodec);
-                Assert.NotNull(await state.FindAsync(workflow, "activity"));
-                Assert.NotNull(await inspection.FindAsync(workflow, "root"));
-                var page = await hierarchy.ReadPageAsync(new ActivityExecutionHierarchyQuery(workflow, "root", null, 10,
-                    new HashSet<ActivityExecutionHierarchyInclude>(), "profile", $"tenant:{scope}"));
-                Assert.Equal("child", Assert.Single(page!.Items).ActivityExecutionId);
-            }
+            await connection.OpenAsync();
+            await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
+            await context.Database.EnsureCreatedAsync();
+            var accessor = new Accessor(scope);
+            var continuationCodec = new HmacRuntimeRecoveryContinuationCodec(Microsoft.Extensions.Options.Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "ef-runtime-restart-signing-key-32-bytes" }));
+            var hierarchyCodec = new HmacActivityExecutionHierarchyCursorCodec(Microsoft.Extensions.Options.Options.Create(new ActivityExecutionHierarchyCursorOptions { SigningKey = "ef-runtime-restart-signing-key-32-bytes" }));
+            var state = new EfActivityExecutionStateStore(context, accessor, continuationCodec);
+            var inspection = new EfActivityExecutionInspectionStore(context, accessor, continuationCodec);
+            var hierarchy = new EfActivityExecutionHierarchyStore(context, accessor, hierarchyCodec);
+            await state.SaveAsync(State(workflow, "activity", 1));
+            await inspection.SaveAsync(Projection(workflow, "root", 1, "root", null, true));
+            await hierarchy.SaveAsync(HierarchyProjection(workflow, "root", 1, "root", null, true));
+            await hierarchy.SaveAsync(HierarchyProjection(workflow, "child", 2, "root", "root"));
         }
-        finally
+
+        await using (var connection = new SqliteConnection($"Data Source={path}"))
         {
-            File.Delete(path);
+            await connection.OpenAsync();
+            await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
+            var accessor = new Accessor(scope);
+            var continuationCodec = new HmacRuntimeRecoveryContinuationCodec(Microsoft.Extensions.Options.Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "ef-runtime-restart-signing-key-32-bytes" }));
+            var hierarchyCodec = new HmacActivityExecutionHierarchyCursorCodec(Microsoft.Extensions.Options.Options.Create(new ActivityExecutionHierarchyCursorOptions { SigningKey = "ef-runtime-restart-signing-key-32-bytes" }));
+            var state = new EfActivityExecutionStateStore(context, accessor, continuationCodec);
+            var inspection = new EfActivityExecutionInspectionStore(context, accessor, continuationCodec);
+            var hierarchy = new EfActivityExecutionHierarchyStore(context, accessor, hierarchyCodec);
+            Assert.NotNull(await state.FindAsync(workflow, "activity"));
+            Assert.NotNull(await inspection.FindAsync(workflow, "root"));
+            var page = await hierarchy.ReadPageAsync(new ActivityExecutionHierarchyQuery(workflow, "root", null, 10,
+                new HashSet<ActivityExecutionHierarchyInclude>(), "profile", $"tenant:{scope}"));
+            Assert.Equal("child", Assert.Single(page!.Items).ActivityExecutionId);
         }
     }
 
     [Fact]
     public async Task Two_context_create_races_normalize_conflicts_through_each_activity_execution_store()
     {
-        var path = Path.Join(Path.GetTempPath(), $"elsa-runtime-race-{Guid.NewGuid():N}.db");
+        await using var database = new TemporarySqliteDatabase("runtime-race");
+        var path = database.Path;
         const string scope = "tenant-race";
-        try
+        await using (var connection = new SqliteConnection($"Data Source={path}"))
         {
-            await using (var connection = new SqliteConnection($"Data Source={path}"))
-            {
-                await connection.OpenAsync();
-                await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
-                await context.Database.EnsureCreatedAsync();
-            }
-
-            var stateResults = await RunCreateRaceAsync(path, "elsa_runtime_activity_execution_state", context =>
-                new EfActivityExecutionStateStore(context, new Accessor(scope), RecoveryCodec()).SaveAsync(State("wf-race-state", "activity", 1)).AsTask());
-            var inspectionResults = await RunCreateRaceAsync(path, "elsa_runtime_activity_execution_inspection", context =>
-                new EfActivityExecutionInspectionStore(context, new Accessor(scope), RecoveryCodec()).SaveAsync(Projection("wf-race-inspection", "activity", 1, "activity")).AsTask());
-            var hierarchyResults = await RunCreateRaceAsync(path, "elsa_runtime_activity_execution_hierarchy", context =>
-                new EfActivityExecutionHierarchyStore(context, new Accessor(scope), HierarchyCodec()).SaveAsync(HierarchyProjection("wf-race-hierarchy", "root", 1, "root", null, true)).AsTask());
-
-            AssertCreateRaceConflict(stateResults, "activity");
-            AssertCreateRaceConflict(inspectionResults, "activity");
-            AssertCreateRaceConflict(hierarchyResults, "root");
+            await connection.OpenAsync();
+            await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
+            await context.Database.EnsureCreatedAsync();
         }
-        finally
-        {
-            File.Delete(path);
-        }
+
+        var stateResults = await RunCreateRaceAsync(path, "elsa_runtime_activity_execution_state", context =>
+            new EfActivityExecutionStateStore(context, new Accessor(scope), RecoveryCodec()).SaveAsync(State("wf-race-state", "activity", 1)).AsTask());
+        var inspectionResults = await RunCreateRaceAsync(path, "elsa_runtime_activity_execution_inspection", context =>
+            new EfActivityExecutionInspectionStore(context, new Accessor(scope), RecoveryCodec()).SaveAsync(Projection("wf-race-inspection", "activity", 1, "activity")).AsTask());
+        var hierarchyResults = await RunCreateRaceAsync(path, "elsa_runtime_activity_execution_hierarchy", context =>
+            new EfActivityExecutionHierarchyStore(context, new Accessor(scope), HierarchyCodec()).SaveAsync(HierarchyProjection("wf-race-hierarchy", "root", 1, "root", null, true)).AsTask());
+
+        AssertCreateRaceConflict(stateResults, "activity");
+        AssertCreateRaceConflict(inspectionResults, "activity");
+        AssertCreateRaceConflict(hierarchyResults, "root");
     }
 
     [Fact]
     public async Task Provider_read_and_write_failures_normalize_through_each_activity_execution_store()
     {
-        var path = Path.Join(Path.GetTempPath(), $"elsa-runtime-provider-{Guid.NewGuid():N}.db");
+        await using var database = new TemporarySqliteDatabase("runtime-provider");
+        var path = database.Path;
         const string scope = "tenant-provider";
-        try
+        await using (var connection = new SqliteConnection($"Data Source={path}"))
         {
-            await using (var connection = new SqliteConnection($"Data Source={path}"))
-            {
-                await connection.OpenAsync();
-                await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
-                await context.Database.EnsureCreatedAsync();
-            }
+            await connection.OpenAsync();
+            await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
+            await context.Database.EnsureCreatedAsync();
+        }
 
-            await AssertProviderFailuresAsync(path, scope, "state", context => new EfActivityExecutionStateStore(context, new Accessor(scope), RecoveryCodec()),
-                store => store.FindAsync("wf-provider-state", "activity").AsTask(),
-                context => new EfActivityExecutionStateStore(context, new Accessor(scope), RecoveryCodec()).SaveAsync(State("wf-provider-state", "activity", 1)).AsTask());
-            await AssertProviderFailuresAsync(path, scope, "inspection", context => new EfActivityExecutionInspectionStore(context, new Accessor(scope), RecoveryCodec()),
-                store => store.FindAsync("wf-provider-inspection", "activity").AsTask(),
-                context => new EfActivityExecutionInspectionStore(context, new Accessor(scope), RecoveryCodec()).SaveAsync(Projection("wf-provider-inspection", "activity", 1, "activity")).AsTask());
-            await AssertProviderFailuresAsync(path, scope, "hierarchy", context => new EfActivityExecutionHierarchyStore(context, new Accessor(scope), HierarchyCodec()),
-                store => store.FindBoundaryAsync("wf-provider-hierarchy", "root").AsTask(),
-                context => new EfActivityExecutionHierarchyStore(context, new Accessor(scope), HierarchyCodec()).SaveAsync(HierarchyProjection("wf-provider-hierarchy", "root", 1, "root", null, true)).AsTask());
-        }
-        finally
-        {
-            File.Delete(path);
-        }
+        await AssertProviderFailuresAsync(path, scope, "state", context => new EfActivityExecutionStateStore(context, new Accessor(scope), RecoveryCodec()),
+            store => store.FindAsync("wf-provider-state", "activity").AsTask(),
+            context => new EfActivityExecutionStateStore(context, new Accessor(scope), RecoveryCodec()).SaveAsync(State("wf-provider-state", "activity", 1)).AsTask());
+        await AssertProviderFailuresAsync(path, scope, "inspection", context => new EfActivityExecutionInspectionStore(context, new Accessor(scope), RecoveryCodec()),
+            store => store.FindAsync("wf-provider-inspection", "activity").AsTask(),
+            context => new EfActivityExecutionInspectionStore(context, new Accessor(scope), RecoveryCodec()).SaveAsync(Projection("wf-provider-inspection", "activity", 1, "activity")).AsTask());
+        await AssertProviderFailuresAsync(path, scope, "hierarchy", context => new EfActivityExecutionHierarchyStore(context, new Accessor(scope), HierarchyCodec()),
+            store => store.FindBoundaryAsync("wf-provider-hierarchy", "root").AsTask(),
+            context => new EfActivityExecutionHierarchyStore(context, new Accessor(scope), HierarchyCodec()).SaveAsync(HierarchyProjection("wf-provider-hierarchy", "root", 1, "root", null, true)).AsTask());
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Studio.Preferences.Core;
 using Elsa.Studio.Preferences.Core.Contracts;
 using Elsa.Studio.Preferences.Core.Exceptions;
@@ -467,11 +468,7 @@ public sealed class StudioPreferenceEntityFrameworkCoreTests
     private static string TemporaryDatabasePath() =>
         Path.Join(Path.GetTempPath(), $"elsa-studio-preferences-{Guid.NewGuid():N}.db");
 
-    private static void DeleteDatabaseFiles(string databasePath)
-    {
-        foreach (var path in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" }.Where(File.Exists))
-            File.Delete(path);
-    }
+    private static void DeleteDatabaseFiles(string databasePath) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles(databasePath);
 
     private sealed class SqliteFixture : IAsyncDisposable
     {

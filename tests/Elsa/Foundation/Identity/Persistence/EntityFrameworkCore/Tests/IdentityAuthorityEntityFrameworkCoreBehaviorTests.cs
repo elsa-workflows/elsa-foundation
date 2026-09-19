@@ -8,6 +8,7 @@ using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -2537,11 +2538,7 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         Revision = 1
     };
 
-    private static void DeleteDatabaseFiles(string databasePath)
-    {
-        foreach (var path in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" }.Where(File.Exists))
-            File.Delete(path);
-    }
+    private static void DeleteDatabaseFiles(string databasePath) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles(databasePath);
 
     private sealed class EfIdentityScope : IAsyncDisposable
     {

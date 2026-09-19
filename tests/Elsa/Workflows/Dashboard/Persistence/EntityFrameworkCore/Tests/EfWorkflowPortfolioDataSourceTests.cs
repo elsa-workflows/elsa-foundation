@@ -1,4 +1,5 @@
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Stores;
@@ -28,17 +29,17 @@ public sealed class EfWorkflowPortfolioDataSourceTests : IAsyncLifetime
     private const string Tenant = "tenant-a";
     private static readonly DateTimeOffset AsOf = new(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
     private static readonly TestPayloadSerializer PayloadSerializer = new();
-    private string designPath = null!;
-    private string runtimePath = null!;
+    private TemporarySqliteDatabase designDatabase = null!;
+    private TemporarySqliteDatabase runtimeDatabase = null!;
     private WorkflowsDesignSqliteDbContext design = null!;
     private RuntimeSqliteDbContext runtime = null!;
 
     public async Task InitializeAsync()
     {
-        designPath = Path.Combine(Path.GetTempPath(), $"elsa-dashboard-design-{Guid.NewGuid():N}.db");
-        runtimePath = Path.Combine(Path.GetTempPath(), $"elsa-dashboard-runtime-{Guid.NewGuid():N}.db");
-        design = new(new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>().UseSqlite($"Data Source={designPath}").Options);
-        runtime = new(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite($"Data Source={runtimePath}").Options);
+        designDatabase = new TemporarySqliteDatabase("dashboard-design");
+        runtimeDatabase = new TemporarySqliteDatabase("dashboard-runtime");
+        design = new(new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>().UseSqlite(designDatabase.ConnectionString).Options);
+        runtime = new(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(runtimeDatabase.ConnectionString).Options);
         await design.Database.EnsureCreatedAsync();
         await runtime.Database.EnsureCreatedAsync();
     }
@@ -47,9 +48,8 @@ public sealed class EfWorkflowPortfolioDataSourceTests : IAsyncLifetime
     {
         await design.DisposeAsync();
         await runtime.DisposeAsync();
-        foreach (var path in new[] { designPath, runtimePath, $"{designPath}-shm", $"{designPath}-wal", $"{runtimePath}-shm", $"{runtimePath}-wal" })
-            if (File.Exists(path))
-                File.Delete(path);
+        await designDatabase.DisposeAsync();
+        await runtimeDatabase.DisposeAsync();
     }
 
     [Fact]
@@ -102,8 +102,8 @@ public sealed class EfWorkflowPortfolioDataSourceTests : IAsyncLifetime
 
         await design.DisposeAsync();
         await runtime.DisposeAsync();
-        design = new(new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>().UseSqlite($"Data Source={designPath}").Options);
-        runtime = new(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite($"Data Source={runtimePath}").Options);
+        design = new(new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>().UseSqlite(designDatabase.ConnectionString).Options);
+        runtime = new(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(runtimeDatabase.ConnectionString).Options);
 
         var counts = await Source().QueryBaseCountsAsync(Tenant, AsOf);
 
