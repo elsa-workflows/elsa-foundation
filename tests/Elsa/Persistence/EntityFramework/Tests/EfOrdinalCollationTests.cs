@@ -1,5 +1,6 @@
 using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Xunit;
 
@@ -74,6 +75,45 @@ public sealed class EfOrdinalCollationTests
         Assert.Null(Build().GetCollation());
         Assert.Null(Build().FindEntityType(typeof(Row))!.FindAnnotation(RelationalAnnotationNames.Collation)?.Value);
     }
+
+    /// <summary>
+    /// The in-memory half covers the same columns as the SQL half, so a module cannot declare one and get the
+    /// other silently (elsa-workflows/elsa-foundation#1855). What that comparer is worth on a real SQL Server
+    /// model is measured in <c>OrdinalKeyComparerTests</c>; here it is the coverage that is pinned.
+    /// </summary>
+    [Theory]
+    [InlineData(EfProviderNames.SqlServer)]
+    [InlineData(EfProviderNames.PostgreSql)]
+    [InlineData(EfProviderNames.MySql)]
+    // SQLite declares no collation, and still declares the comparer: the identity map is not the server's.
+    [InlineData(EfProviderNames.Sqlite)]
+    public void The_comparer_covers_the_same_columns_on_every_provider(string provider)
+    {
+        var model = Build(nameof(Row.Cursor), provider);
+
+        Assert.False(Comparer(model, nameof(Row.LookupHash))!.Equals("A", "a"));
+        Assert.False(Comparer(model, nameof(Row.ScopeKey))!.Equals("A", "a"));
+        Assert.False(Comparer(model, nameof(Row.Cursor))!.Equals("A", "a"));
+        // Declaring nothing leaves the property on whatever the provider's type mapping brings.
+        Assert.Null(Comparer(model, nameof(Row.Payload)));
+    }
+
+    /// <summary>
+    /// Ordinal equality is only half a comparer. Two strings that differ by case must also land on different
+    /// hashes, or the identity map buckets them together and compares them anyway.
+    /// </summary>
+    [Fact]
+    public void The_comparer_hashes_ordinally_as_well_as_compares()
+    {
+        var comparer = Comparer(Build(), nameof(Row.LookupHash))!;
+
+        Assert.False(comparer.Equals("A", "a"));
+        Assert.NotEqual(comparer.GetHashCode("A"), comparer.GetHashCode("a"));
+        Assert.True(comparer.Equals("A", "A"));
+    }
+
+    private static ValueComparer? Comparer(IMutableModel model, string property) =>
+        model.FindEntityType(typeof(Row))!.FindProperty(property)!.GetValueComparer();
 
     /// <summary>
     /// Read through the annotation rather than <c>GetCollation()</c>: this model is never finalized, and

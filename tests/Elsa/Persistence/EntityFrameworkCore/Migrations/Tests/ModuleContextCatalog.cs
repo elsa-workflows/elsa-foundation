@@ -61,6 +61,20 @@ internal static class ModuleContextCatalog
         .OrderBy(row => row.Module, StringComparer.Ordinal)
         .ToArray();
 
+    /// <summary>
+    /// The modules that declare ordinal comparison — a binary collation per column (#1837) and the matching
+    /// change-tracker comparer (#1855) — by the prefix their context names share. The six contexts outside this
+    /// list declare neither half and are tracked by #1860, so it is also the control both suites lean on.
+    /// </summary>
+    public static readonly string[] OrdinalModules =
+    [
+        "ActivitiesDesign", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
+        "PublishingSnapshotReview", "Secrets", "WorkflowsDesign"
+    ];
+
+    public static bool DeclaresOrdinal(Type context) =>
+        OrdinalModules.Any(module => context.Name.StartsWith(module, StringComparison.Ordinal));
+
     public static IReadOnlyList<Type> Contexts(string provider) => Modules
         .SelectMany(assembly => assembly.GetTypes())
         .Where(type => type is { IsAbstract: false } && typeof(DbContext).IsAssignableFrom(type) &&

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Elsa.Persistence.EntityFramework;
@@ -12,6 +13,13 @@ namespace Elsa.Persistence.EntityFramework;
 /// <c>'a'</c> as equal, so an exact-value check stops being exact and a keyset page built from an ordinal
 /// cursor can skip or repeat rows. A binary collation makes SQL ordering and equality agree with
 /// <see cref="StringComparer.Ordinal"/>.
+/// </para>
+/// <para>
+/// <b>Both halves, one declaration.</b> A collation only governs what the server evaluates. EF Core's own
+/// identity map compares key values in memory, and on SQL Server it does so case-insensitively whatever the
+/// column says, so the schema and the change tracker disagreed about what "the same row" means
+/// (elsa-workflows/elsa-foundation#1855). Each column named here therefore gets an ordinal
+/// <see cref="ValueComparer"/> as well, over the same list, so a module declares the semantics once.
 /// </para>
 /// <para>
 /// <b>Per column, never at model level.</b> <see cref="RelationalModelBuilderExtensions.UseCollation(ModelBuilder,string?)"/>
@@ -61,8 +69,24 @@ public static class EfOrdinalCollation
     };
 
     /// <summary>
-    /// Applies <paramref name="providerName"/>'s binary collation to every string column the model compares
-    /// or orders: the ones a key or an index is built on, plus the ones named in <paramref name="alsoCompared"/>.
+    /// What the change tracker compares key values with: ordinal equality, an ordinal hash, and a snapshot
+    /// that is the string itself, strings being immutable.
+    /// <para>
+    /// This is the seam. SQL Server's string type mapping carries a case-insensitive <c>KeyComparer</c>, and
+    /// a type mapping's comparers are the fallback a property uses when it declares none — so declaring one
+    /// here outranks it. Only the value comparer needs setting: for a property with no value converter, both
+    /// the key comparer and the provider value comparer fall back to it.
+    /// (<see cref="IMutableProperty"/> has no <c>SetKeyValueComparer</c> in EF Core 10, and needs none.)
+    /// </para>
+    /// </summary>
+    private static readonly ValueComparer<string> Ordinal = new(
+        (left, right) => string.Equals(left, right, StringComparison.Ordinal),
+        value => value.GetHashCode(StringComparison.Ordinal),
+        value => value);
+
+    /// <summary>
+    /// Declares ordinal comparison, in SQL and in memory, for every string column the model compares or
+    /// orders: the ones a key or an index is built on, plus the ones named in <paramref name="alsoCompared"/>.
     /// Payload, description and free-text columns are left alone, so nothing that searches them changes meaning.
     /// </summary>
     /// <param name="alsoCompared">
@@ -74,10 +98,13 @@ public static class EfOrdinalCollation
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
         var collation = ForProvider(providerName);
-        if (collation is null)
-            return;
         foreach (var property in ComparedProperties(modelBuilder.Model, alsoCompared))
         {
+            // The in-memory half, declared on every provider: corrective on SQL Server, a restatement of
+            // the default on the other three, and the same sentence in all four models.
+            property.SetValueComparer(Ordinal);
+            if (collation is null)
+                continue;
             property.SetCollation(collation);
             if (providerName == EfProviderNames.MySql)
                 property.SetAnnotation(MySqlCollationAnnotation, collation);
@@ -85,8 +112,8 @@ public static class EfOrdinalCollation
     }
 
     /// <summary>
-    /// The string properties <see cref="Apply"/> collates. Exposed so a test can ask the model what it declared
-    /// and then check the generated migration carries exactly that.
+    /// The string properties <see cref="Apply"/> declares ordinal, in both halves. Exposed so a test can ask
+    /// the model what it declared and then check the generated migration carries exactly that.
     /// </summary>
     public static IReadOnlyList<IMutableProperty> ComparedProperties(IMutableModel model, params string[] alsoCompared)
     {
