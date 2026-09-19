@@ -55,7 +55,7 @@ public sealed class EfWorkflowAlterationStore(
         var row = ToPlan(plan, scopeKey, planId);
         _context.WorkflowAlterationPlans.Add(row);
         try { await _context.SaveChangesAsync(cancellationToken); return new(plan, false); }
-        catch (DbUpdateException)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             _context.ChangeTracker.Clear();
             var winner = await _context.WorkflowAlterationPlans.AsNoTracking().SingleOrDefaultAsync(x => x.Id == planId && x.ScopeKey == encodedScope && x.ScopeKeyHash == scopeHash && x.PlanId == encodedPlanId && x.PlanIdHash == planHash, cancellationToken)
@@ -180,7 +180,7 @@ public sealed class EfWorkflowAlterationStore(
         {
             await _context.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             _context.ChangeTracker.Clear();
             throw new WorkflowAlterationConcurrencyException(planId);
@@ -475,5 +475,5 @@ public sealed class EfWorkflowAlterationStore(
         return job;
     }
     internal static void CopyJob(WorkflowAlterationJobEntity r, WorkflowAlterationJobState j, string scope) { var copy = ToJob(j, scope); r.JobId = copy.JobId; r.JobIdHash = copy.JobIdHash; r.JobIdOrderKey = copy.JobIdOrderKey; r.PlanId = copy.PlanId; r.PlanIdHash = copy.PlanIdHash; r.WorkflowExecutionId = copy.WorkflowExecutionId; r.WorkflowExecutionIdOrderKey = copy.WorkflowExecutionIdOrderKey; r.WorkflowExecutionIdHash = copy.WorkflowExecutionIdHash; r.TenantPartition = copy.TenantPartition; r.TenantPartitionHash = copy.TenantPartitionHash; r.CaptureOrdinal = copy.CaptureOrdinal; r.ClaimableAtUtcTicks = copy.ClaimableAtUtcTicks; r.Status = copy.Status; r.CheckpointCommitId = copy.CheckpointCommitId; r.CheckpointCommitIdHash = copy.CheckpointCommitIdHash; r.Revision = copy.Revision; r.ContentJson = copy.ContentJson; }
-    private async Task SaveConcurrency(WorkflowAlterationPlanEntity row, CancellationToken ct, string id) { try { await _context.SaveChangesAsync(ct); } catch (DbUpdateException) { _context.ChangeTracker.Clear(); throw new WorkflowAlterationConcurrencyException(id); } }
+    private async Task SaveConcurrency(WorkflowAlterationPlanEntity row, CancellationToken ct, string id) { try { await _context.SaveChangesAsync(ct); } catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { _context.ChangeTracker.Clear(); throw new WorkflowAlterationConcurrencyException(id); } }
 }

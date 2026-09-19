@@ -42,7 +42,7 @@ public sealed class EfIncidentStateStore(
             await context.SaveChangesAsync(cancellationToken);
             return true;
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
             context.ChangeTracker.Clear();
             var winner = await context.IncidentStates.AsNoTracking().SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
@@ -89,7 +89,7 @@ public sealed class EfIncidentStateStore(
             context.ChangeTracker.Clear();
             throw new InvalidOperationException("The incident state changed concurrently; retry the operation.", exception);
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
             context.ChangeTracker.Clear();
             throw new InvalidOperationException("The incident state changed concurrently; retry the operation.", exception);

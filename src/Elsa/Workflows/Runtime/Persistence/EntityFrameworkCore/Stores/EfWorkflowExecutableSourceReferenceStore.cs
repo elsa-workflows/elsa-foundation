@@ -53,11 +53,11 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
                 context, "saving", reference.SourceReferenceId, () => transaction.CommitAsync(cancellationToken));
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         { context.ChangeTracker.Clear(); throw new InvalidOperationException("The workflow executable source reference already exists; source references are create-only.", exception); }
-        catch (DbUpdateException exception)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("saving", reference.SourceReferenceId, exception); }
-        catch (DbException exception)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("saving", reference.SourceReferenceId, exception); }
         catch { context.ChangeTracker.Clear(); throw; }
     }
@@ -236,8 +236,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             return true;
         }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
-        catch (DbUpdateException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("retiring", sourceReferenceId, exception); }
-        catch (DbException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("retiring", sourceReferenceId, exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("retiring", sourceReferenceId, exception); }
         catch { context.ChangeTracker.Clear(); throw; }
     }
 
@@ -299,8 +298,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             return true;
         }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
-        catch (DbUpdateException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure(restore ? "restoring" : "retiring", expected.SourceReferenceId, exception); }
-        catch (DbException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure(restore ? "restoring" : "retiring", expected.SourceReferenceId, exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure(restore ? "restoring" : "retiring", expected.SourceReferenceId, exception); }
         catch { context.ChangeTracker.Clear(); throw; }
     }
 
@@ -339,8 +337,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             return true;
         }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
-        catch (DbUpdateException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("deleting", sourceReferenceId, exception); }
-        catch (DbException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("deleting", sourceReferenceId, exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("deleting", sourceReferenceId, exception); }
         catch { context.ChangeTracker.Clear(); throw; }
     }
 
@@ -368,12 +365,12 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             context.ChangeTracker.Clear();
             return deleted;
         }
-        catch (DbUpdateException exception)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("cleaning up", scope, exception);
         }
-        catch (DbException exception)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("cleaning up", scope, exception);
@@ -419,8 +416,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             return true;
         }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
-        catch (DbUpdateException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("cleaning up", sourceReferenceId, exception); }
-        catch (DbException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("cleaning up", sourceReferenceId, exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("cleaning up", sourceReferenceId, exception); }
         catch { context.ChangeTracker.Clear(); throw; }
     }
 
