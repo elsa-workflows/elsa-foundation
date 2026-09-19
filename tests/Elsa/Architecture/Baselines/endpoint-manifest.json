@@ -2,6 +2,193 @@
   "entries": [
     {
       "authoringModel": "Minimal API",
+      "contentTypes": [],
+      "displayName": "HTTP: GET /_elsa/studio/diagnostics/structured-logs/recent",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Diagnostics.StructuredLogs",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 204
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/_elsa/studio/diagnostics/structured-logs/recent"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:Kg.RElBR05PU1RJQ1M6U1RSVUNUVVJFRExPR1M"
+      },
+      "sourceIdentity": "ElsaDiagnosticsStructuredLogsEndpointsRecent"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /_elsa/studio/diagnostics/structured-logs/sources",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Diagnostics.StructuredLogs",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "System.Collections.Generic.IReadOnlyList\u00601[[Elsa.Diagnostics.StructuredLogs.Core.Models.LogSource, Elsa.Diagnostics.StructuredLogs.Core, Version=0.0.1.0, Culture=neutral, PublicKeyToken=null]]",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/_elsa/studio/diagnostics/structured-logs/sources"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:Kg.RElBR05PU1RJQ1M6U1RSVUNUVVJFRExPR1M"
+      },
+      "sourceIdentity": "ElsaDiagnosticsStructuredLogsEndpointsSources"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [],
+      "displayName": "HTTP: GET /_elsa/studio/diagnostics/structured-logs/stream",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Diagnostics.StructuredLogs",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 204
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/_elsa/studio/diagnostics/structured-logs/stream"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:Kg.RElBR05PU1RJQ1M6U1RSVUNUVVJFRExPR1M"
+      },
+      "sourceIdentity": "ElsaDiagnosticsStructuredLogsEndpointsStream"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /_elsa/studio/preferences/{namespace}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Studio.Preferences.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Studio.Preferences.Core.Models.StudioPreferenceDocument",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/_elsa/studio/preferences/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:Kg.U1RVRElPLlBSRUZFUkVOQ0VTLlJFQUQ"
+      },
+      "sourceIdentity": "ElsaStudioPreferencesApiEndpointsGet"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: PUT /_elsa/studio/preferences/{namespace}",
+      "methods": [
+        "PUT"
+      ],
+      "owner": "Elsa.Studio.Preferences.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Studio.Preferences.Core.Models.StudioPreferenceDocument",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/_elsa/studio/preferences/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:Kg.U1RVRElPLlBSRUZFUkVOQ0VTLldSSVRF"
+      },
+      "sourceIdentity": "ElsaStudioPreferencesApiEndpointsPut"
+    },
+    {
+      "authoringModel": "Minimal API",
       "contentTypes": [
         "application/json"
       ],

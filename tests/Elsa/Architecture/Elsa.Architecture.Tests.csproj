@@ -66,8 +66,12 @@
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <!-- Core_projects_contain_no_implementation_shaped_types loads every src .Core assembly; these are not otherwise reachable. -->
     <ProjectReference Include="..\..\..\src\Elsa\Diagnostics\StructuredLogs\Core\Elsa.Diagnostics.StructuredLogs.Core.csproj" />
+    <!-- Structured Logs composes into the representative host in DomainManagementApiCompositionTests, so its endpoints appear in the committed endpoint-manifest baseline (#1455). -->
+    <ProjectReference Include="..\..\..\src\Elsa\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Secrets\Core\Elsa.Secrets.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Studio\Preferences\Core\Elsa.Studio.Preferences.Core.csproj" />
+    <!-- Studio Preferences composes into the representative host in DomainManagementApiCompositionTests, so its endpoints appear in the committed endpoint-manifest baseline (#1455). -->
+    <ProjectReference Include="..\..\..\src\Elsa\Studio\Preferences\Api\Elsa.Studio.Preferences.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Reconciliation\Core\Elsa.Workflows.Runtime.Reconciliation.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\ExecutionEvidence\Elsa.Workflows.ExecutionEvidence.csproj" />
