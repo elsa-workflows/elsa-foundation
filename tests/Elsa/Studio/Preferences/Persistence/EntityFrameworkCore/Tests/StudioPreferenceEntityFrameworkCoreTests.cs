@@ -7,6 +7,7 @@ using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Persistence.EntityFramework.Tests;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
@@ -467,11 +468,7 @@ public sealed class StudioPreferenceEntityFrameworkCoreTests
     private static string TemporaryDatabasePath() =>
         Path.Join(Path.GetTempPath(), $"elsa-studio-preferences-{Guid.NewGuid():N}.db");
 
-    private static void DeleteDatabaseFiles(string databasePath)
-    {
-        foreach (var path in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" }.Where(File.Exists))
-            File.Delete(path);
-    }
+    private static void DeleteDatabaseFiles(string databasePath) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles(databasePath);
 
     private sealed class SqliteFixture : IAsyncDisposable
     {

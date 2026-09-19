@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -653,11 +654,7 @@ public sealed class RegistrationTests
         return tables.ToArray();
     }
 
-    private static void DeleteSqliteFiles(string path)
-    {
-        foreach (var file in new[] { path, $"{path}-shm", $"{path}-wal" })
-            File.Delete(file);
-    }
+    private static void DeleteSqliteFiles(string path) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles(path);
 
     private sealed class DerivedExecutionPlacementFeature : DistributedRuntimeExecutionPlacementEntityFrameworkCoreFeature
     {

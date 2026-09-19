@@ -140,6 +140,8 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "tests/Elsa/Persistence/EntityFramework/Tests/EfSchemaTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfWriteRetryTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/ProviderFailures.cs",
+        "tests/Elsa/Persistence/EntityFramework/Tests/TemporarySqliteDatabase.cs",
+        "tests/Elsa/Persistence/EntityFramework/Tests/TemporarySqliteDatabaseTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/UnorderedRowLimitGuard.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/UnorderedRowLimitGuardTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/MySqlContainerFixture.cs",

@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Events.Core.Contracts;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Core.Events;
@@ -653,7 +654,7 @@ public sealed class EfWorkflowDesignPersistenceTests
     [Fact]
     public async Task Ef_registration_lookup_reads_a_definition_through_the_provider_store()
     {
-        var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-workflows-design-lookup-{Guid.NewGuid():N}.db");
+        await using var database = new TemporarySqliteDatabase("workflows-design-lookup");
         var services = new ServiceCollection();
         services.AddSingleton<IPayloadSerializer, TestSerializer>();
         services.AddSingleton<IIdentityGenerator, TestIdentity>();
@@ -661,28 +662,21 @@ public sealed class EfWorkflowDesignPersistenceTests
         services.AddWorkflowsDesignEntityFrameworkCore(new WorkflowsDesignEntityFrameworkCoreOptions
         {
             Provider = "Sqlite",
-            ConnectionString = $"Data Source={databasePath}"
+            ConnectionString = database.ConnectionString
         });
 
-        try
-        {
-            using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-            using var scope = provider.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>();
-            await db.Database.EnsureCreatedAsync();
-            db.Definitions.Add(new WorkflowDefinition { Id = "lookup-definition", TenantId = "default", Name = "Lookup definition" });
-            await db.SaveChangesAsync();
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>();
+        await db.Database.EnsureCreatedAsync();
+        db.Definitions.Add(new WorkflowDefinition { Id = "lookup-definition", TenantId = "default", Name = "Lookup definition" });
+        await db.SaveChangesAsync();
 
-            var lookup = scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionLookup>();
-            var definition = await lookup.GetDefinition("lookup-definition");
+        var lookup = scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionLookup>();
+        var definition = await lookup.GetDefinition("lookup-definition");
 
-            Assert.Equal("lookup-definition", definition.Id);
-            Assert.Equal("Lookup definition", definition.Name);
-        }
-        finally
-        {
-            File.Delete(databasePath);
-        }
+        Assert.Equal("lookup-definition", definition.Id);
+        Assert.Equal("Lookup definition", definition.Name);
     }
 
     [Fact]
@@ -891,98 +885,84 @@ public sealed class EfWorkflowDesignPersistenceTests
     [Fact]
     public async Task Concurrent_unique_marker_race_reports_winner_and_replayed_loser_and_publishes_once()
     {
-        var path = Path.Join(Path.GetTempPath(), $"elsa-workflow-design-race-{Guid.NewGuid():N}.db");
-        try
+        await using var database = new TemporarySqliteDatabase("workflow-design-race");
+        var path = database.Path;
+        await using (var setupConnection = new SqliteConnection($"Data Source={path};Default Timeout=30"))
         {
-            await using (var setupConnection = new SqliteConnection($"Data Source={path};Default Timeout=30"))
-            {
-                await setupConnection.OpenAsync();
-                await using var setup = Create(setupConnection);
-                await setup.Database.EnsureCreatedAsync();
-                setup.Definitions.Add(new WorkflowDefinition { Id = "definition", TenantId = "tenant-a", Name = "Definition" });
-                await setup.SaveChangesAsync();
-            }
-
-            await using var firstConnection = new SqliteConnection($"Data Source={path};Default Timeout=30");
-            await using var secondConnection = new SqliteConnection($"Data Source={path};Default Timeout=30");
-            await firstConnection.OpenAsync();
-            await secondConnection.OpenAsync();
-            await using var firstDb = Create(firstConnection);
-            await using var secondDb = Create(secondConnection);
-            var firstEvents = new CapturingDeferredEventPublisher();
-            var secondEvents = new CapturingDeferredEventPublisher();
-            var barrier = new Barrier(2);
-            var firstWriter = new PreTransactionBarrierAtomicWriter(new EfDesignAtomicWriter(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), barrier);
-            var secondWriter = new PreTransactionBarrierAtomicWriter(new EfDesignAtomicWriter(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), barrier);
-            var first = new EfCreateDraftCommand(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), firstWriter, new TestIdentity("first"), new TestSerializer(), new TestLockProvider(), deferredEvents: firstEvents);
-            var second = new EfCreateDraftCommand(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), secondWriter, new TestIdentity("second"), new TestSerializer(), new TestLockProvider(), deferredEvents: secondEvents);
-
-            await Task.WhenAll(
-                Task.Run(() => first.Execute(new DesignOperationKey("same-marker-race"), "definition")),
-                Task.Run(() => second.Execute(new DesignOperationKey("same-marker-race"), "definition")));
-
-            Assert.Equal(
-                [DesignAtomicWriteStatus.Committed, DesignAtomicWriteStatus.Replayed],
-                new[] { firstWriter.LastStatus, secondWriter.LastStatus }.OrderBy(status => status).ToArray());
-            Assert.True(firstWriter.BarrierPassed && secondWriter.BarrierPassed);
-            Assert.True(firstWriter.StageInvocationCount > 0 && secondWriter.StageInvocationCount > 0);
-            Assert.Equal(1, await firstDb.Operations.AsNoTracking().CountAsync());
-            var events = firstEvents.Events.Concat(secondEvents.Events).ToArray();
-            Assert.Single(events.OfType<DraftCreated>());
-            Assert.Single(events.OfType<DraftValidated>());
+            await setupConnection.OpenAsync();
+            await using var setup = Create(setupConnection);
+            await setup.Database.EnsureCreatedAsync();
+            setup.Definitions.Add(new WorkflowDefinition { Id = "definition", TenantId = "tenant-a", Name = "Definition" });
+            await setup.SaveChangesAsync();
         }
-        finally
-        {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
+
+        await using var firstConnection = new SqliteConnection($"Data Source={path};Default Timeout=30");
+        await using var secondConnection = new SqliteConnection($"Data Source={path};Default Timeout=30");
+        await firstConnection.OpenAsync();
+        await secondConnection.OpenAsync();
+        await using var firstDb = Create(firstConnection);
+        await using var secondDb = Create(secondConnection);
+        var firstEvents = new CapturingDeferredEventPublisher();
+        var secondEvents = new CapturingDeferredEventPublisher();
+        var barrier = new Barrier(2);
+        var firstWriter = new PreTransactionBarrierAtomicWriter(new EfDesignAtomicWriter(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), barrier);
+        var secondWriter = new PreTransactionBarrierAtomicWriter(new EfDesignAtomicWriter(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), barrier);
+        var first = new EfCreateDraftCommand(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), firstWriter, new TestIdentity("first"), new TestSerializer(), new TestLockProvider(), deferredEvents: firstEvents);
+        var second = new EfCreateDraftCommand(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), secondWriter, new TestIdentity("second"), new TestSerializer(), new TestLockProvider(), deferredEvents: secondEvents);
+
+        await Task.WhenAll(
+            Task.Run(() => first.Execute(new DesignOperationKey("same-marker-race"), "definition")),
+            Task.Run(() => second.Execute(new DesignOperationKey("same-marker-race"), "definition")));
+
+        Assert.Equal(
+            [DesignAtomicWriteStatus.Committed, DesignAtomicWriteStatus.Replayed],
+            new[] { firstWriter.LastStatus, secondWriter.LastStatus }.OrderBy(status => status).ToArray());
+        Assert.True(firstWriter.BarrierPassed && secondWriter.BarrierPassed);
+        Assert.True(firstWriter.StageInvocationCount > 0 && secondWriter.StageInvocationCount > 0);
+        Assert.Equal(1, await firstDb.Operations.AsNoTracking().CountAsync());
+        var events = firstEvents.Events.Concat(secondEvents.Events).ToArray();
+        Assert.Single(events.OfType<DraftCreated>());
+        Assert.Single(events.OfType<DraftValidated>());
     }
 
     [Fact]
     public async Task Concurrent_add_version_unique_identity_is_reported_as_a_version_conflict()
     {
-        var path = Path.Join(Path.GetTempPath(), $"elsa-workflow-design-version-race-{Guid.NewGuid():N}.db");
-        try
+        await using var database = new TemporarySqliteDatabase("workflow-design-version-race");
+        var path = database.Path;
+        await using (var setupConnection = new SqliteConnection($"Data Source={path};Default Timeout=30"))
         {
-            await using (var setupConnection = new SqliteConnection($"Data Source={path};Default Timeout=30"))
-            {
-                await setupConnection.OpenAsync();
-                await using var setup = Create(setupConnection);
-                await setup.Database.EnsureCreatedAsync();
-                setup.Definitions.Add(new WorkflowDefinition { Id = "definition", TenantId = "tenant-a", Name = "Definition" });
-                await setup.SaveChangesAsync();
-            }
-
-            await using var firstConnection = new SqliteConnection($"Data Source={path};Default Timeout=30");
-            await using var secondConnection = new SqliteConnection($"Data Source={path};Default Timeout=30");
-            await firstConnection.OpenAsync();
-            await secondConnection.OpenAsync();
-            await using var firstDb = Create(firstConnection);
-            await using var secondDb = Create(secondConnection);
-            var barrier = new Barrier(2);
-            var firstWriter = new PreTransactionBarrierAtomicWriter(new EfDesignAtomicWriter(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), barrier);
-            var secondWriter = new PreTransactionBarrierAtomicWriter(new EfDesignAtomicWriter(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), barrier);
-            var first = new EfAddWorkflowDefinitionVersionCommand(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), firstWriter, new TestSerializer(), new TestIdentity("first"), new TestLockProvider());
-            var second = new EfAddWorkflowDefinitionVersionCommand(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), secondWriter, new TestSerializer(), new TestIdentity("second"), new TestLockProvider());
-
-            var firstTask = Task.Run(() => first.Execute(new DesignOperationKey("version-race-a"), "definition", State()));
-            var secondTask = Task.Run(() => second.Execute(new DesignOperationKey("version-race-b"), "definition", State()));
-            var results = await Task.WhenAll(
-                CaptureAsync(firstTask),
-                CaptureAsync(secondTask));
-
-            Assert.Single(results.OfType<WorkflowDefinitionVersionAdded>());
-            var conflict = Assert.Single(results.OfType<WorkflowDefinitionVersionConflictException>());
-            Assert.Equal("definition", conflict.DefinitionId);
-            Assert.Equal("1.0.0", conflict.Version);
-            Assert.True(firstWriter.BarrierPassed && secondWriter.BarrierPassed);
-            Assert.Single(await firstDb.Versions.AsNoTracking().ToListAsync());
+            await setupConnection.OpenAsync();
+            await using var setup = Create(setupConnection);
+            await setup.Database.EnsureCreatedAsync();
+            setup.Definitions.Add(new WorkflowDefinition { Id = "definition", TenantId = "tenant-a", Name = "Definition" });
+            await setup.SaveChangesAsync();
         }
-        finally
-        {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
+
+        await using var firstConnection = new SqliteConnection($"Data Source={path};Default Timeout=30");
+        await using var secondConnection = new SqliteConnection($"Data Source={path};Default Timeout=30");
+        await firstConnection.OpenAsync();
+        await secondConnection.OpenAsync();
+        await using var firstDb = Create(firstConnection);
+        await using var secondDb = Create(secondConnection);
+        var barrier = new Barrier(2);
+        var firstWriter = new PreTransactionBarrierAtomicWriter(new EfDesignAtomicWriter(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), barrier);
+        var secondWriter = new PreTransactionBarrierAtomicWriter(new EfDesignAtomicWriter(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), barrier);
+        var first = new EfAddWorkflowDefinitionVersionCommand(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), firstWriter, new TestSerializer(), new TestIdentity("first"), new TestLockProvider());
+        var second = new EfAddWorkflowDefinitionVersionCommand(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), secondWriter, new TestSerializer(), new TestIdentity("second"), new TestLockProvider());
+
+        var firstTask = Task.Run(() => first.Execute(new DesignOperationKey("version-race-a"), "definition", State()));
+        var secondTask = Task.Run(() => second.Execute(new DesignOperationKey("version-race-b"), "definition", State()));
+        var results = await Task.WhenAll(
+            CaptureAsync(firstTask),
+            CaptureAsync(secondTask));
+
+        Assert.Single(results.OfType<WorkflowDefinitionVersionAdded>());
+        var conflict = Assert.Single(results.OfType<WorkflowDefinitionVersionConflictException>());
+        Assert.Equal("definition", conflict.DefinitionId);
+        Assert.Equal("1.0.0", conflict.Version);
+        Assert.True(firstWriter.BarrierPassed && secondWriter.BarrierPassed);
+        Assert.Single(await firstDb.Versions.AsNoTracking().ToListAsync());
 
         static async Task<object> CaptureAsync<T>(Task<T> task)
         {
@@ -1169,38 +1149,32 @@ public sealed class EfWorkflowDesignPersistenceTests
     [Fact]
     public async Task Definitions_drafts_layouts_and_versions_survive_reopen_and_preserve_scope()
     {
-        var path = Path.Join(Path.GetTempPath(), $"elsa-workflow-design-reopen-{Guid.NewGuid():N}.db");
-        try
+        await using var database = new TemporarySqliteDatabase("workflow-design-reopen");
+        var path = database.Path;
+        var serializer = new TestSerializer(); var accessor = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        await using (var connection = new SqliteConnection($"Data Source={path}"))
         {
-            var serializer = new TestSerializer(); var accessor = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
-            await using (var connection = new SqliteConnection($"Data Source={path}"))
-            {
-                await connection.OpenAsync();
-                await using var db = Create(connection);
-                await db.Database.EnsureCreatedAsync(); var atomic = new EfDesignAtomicWriter(db, accessor); var identities = new TestIdentity();
-                var definition = new WorkflowDefinition { Id = "definition-1", TenantId = "tenant-a", Name = "Order" }; var draft = new WorkflowDefinitionDraft { Id = "draft-1", TenantId = "tenant-a", WorkflowDefinitionId = definition.Id, State = State() };
-                var add = new EfAddWorkflowDefinitionCommand(db, accessor, atomic, serializer, identities); await add.Execute(new DesignOperationKey("create-1"), definition, draft, [new DesignMetadataRecord("root", 1, 2)]);
-                var definitions = new EfWorkflowDefinitionStore(db, accessor); Assert.Single(await definitions.ListAsync(new WorkflowDefinitionFilter { SearchTerm = "ord" }));
-                var drafts = new EfWorkflowDefinitionDraftStore(db, serializer, accessor); var loadedLayout = await drafts.FindWithLayoutByIdAsync(draft.Id); Assert.NotNull(loadedLayout); Assert.Single(loadedLayout!.Layout);
-                var version = new EfAddWorkflowDefinitionVersionCommand(db, accessor, atomic, serializer, identities, new TestLockProvider()); var added = await version.Execute(new DesignOperationKey("version-1"), definition.Id, State()); Assert.Equal("1.0.0", added.Version);
-            }
-            await using (var reopenedConnection = new SqliteConnection($"Data Source={path}"))
-            {
-                await reopenedConnection.OpenAsync();
-                await using var reopened = Create(reopenedConnection);
-                var store = new EfWorkflowDefinitionStore(reopened, accessor); Assert.NotNull(await store.FindByIdAsync("definition-1"));
-                var versions = new EfWorkflowDefinitionVersionStore(reopened, serializer, store, accessor); Assert.Equal("1.0.0", (await versions.FindLatestVersionAsync("definition-1"))!.Version);
-            }
-            await using (var scopeConnection = new SqliteConnection($"Data Source={path}"))
-            {
-                await scopeConnection.OpenAsync();
-                await using var scopedDb = Create(scopeConnection);
-                var other = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-b"))); Assert.Null(await new EfWorkflowDefinitionStore(scopedDb, other).FindByIdAsync("definition-1"));
-            }
+            await connection.OpenAsync();
+            await using var db = Create(connection);
+            await db.Database.EnsureCreatedAsync(); var atomic = new EfDesignAtomicWriter(db, accessor); var identities = new TestIdentity();
+            var definition = new WorkflowDefinition { Id = "definition-1", TenantId = "tenant-a", Name = "Order" }; var draft = new WorkflowDefinitionDraft { Id = "draft-1", TenantId = "tenant-a", WorkflowDefinitionId = definition.Id, State = State() };
+            var add = new EfAddWorkflowDefinitionCommand(db, accessor, atomic, serializer, identities); await add.Execute(new DesignOperationKey("create-1"), definition, draft, [new DesignMetadataRecord("root", 1, 2)]);
+            var definitions = new EfWorkflowDefinitionStore(db, accessor); Assert.Single(await definitions.ListAsync(new WorkflowDefinitionFilter { SearchTerm = "ord" }));
+            var drafts = new EfWorkflowDefinitionDraftStore(db, serializer, accessor); var loadedLayout = await drafts.FindWithLayoutByIdAsync(draft.Id); Assert.NotNull(loadedLayout); Assert.Single(loadedLayout!.Layout);
+            var version = new EfAddWorkflowDefinitionVersionCommand(db, accessor, atomic, serializer, identities, new TestLockProvider()); var added = await version.Execute(new DesignOperationKey("version-1"), definition.Id, State()); Assert.Equal("1.0.0", added.Version);
         }
-        finally
+        await using (var reopenedConnection = new SqliteConnection($"Data Source={path}"))
         {
-            if (File.Exists(path)) File.Delete(path);
+            await reopenedConnection.OpenAsync();
+            await using var reopened = Create(reopenedConnection);
+            var store = new EfWorkflowDefinitionStore(reopened, accessor); Assert.NotNull(await store.FindByIdAsync("definition-1"));
+            var versions = new EfWorkflowDefinitionVersionStore(reopened, serializer, store, accessor); Assert.Equal("1.0.0", (await versions.FindLatestVersionAsync("definition-1"))!.Version);
+        }
+        await using (var scopeConnection = new SqliteConnection($"Data Source={path}"))
+        {
+            await scopeConnection.OpenAsync();
+            await using var scopedDb = Create(scopeConnection);
+            var other = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-b"))); Assert.Null(await new EfWorkflowDefinitionStore(scopedDb, other).FindByIdAsync("definition-1"));
         }
     }
 

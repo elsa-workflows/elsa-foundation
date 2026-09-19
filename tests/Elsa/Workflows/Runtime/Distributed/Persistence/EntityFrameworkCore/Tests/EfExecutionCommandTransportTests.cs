@@ -1,4 +1,5 @@
 using System.Data.Common;
+using Elsa.Persistence.EntityFramework.Tests;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -532,16 +533,14 @@ public sealed class EfExecutionCommandTransportTests
     private sealed class Fixture : IAsyncDisposable
     {
         private readonly SqliteConnection connection;
-        private readonly string databasePath;
-        private readonly bool ownsDatabase;
+        private readonly TemporarySqliteDatabase? ownedDatabase;
         private readonly string scope;
 
-        private Fixture(SqliteConnection connection, ExecutionCommandTransportSqliteDbContext context, string scope, bool ownsDatabase)
+        private Fixture(SqliteConnection connection, ExecutionCommandTransportSqliteDbContext context, string scope, TemporarySqliteDatabase? ownedDatabase)
         {
             this.connection = connection;
-            databasePath = new SqliteConnectionStringBuilder(connection.ConnectionString).DataSource;
             this.scope = scope;
-            this.ownsDatabase = ownsDatabase;
+            this.ownedDatabase = ownedDatabase;
             Context = context;
             Transport = new EfExecutionCommandTransport(context, new Accessor(scope));
         }
@@ -551,8 +550,8 @@ public sealed class EfExecutionCommandTransportTests
 
         public static async Task<Fixture> CreateAsync(string scope, params IInterceptor[] interceptors)
         {
-            var path = Path.Join(Path.GetTempPath(), $"elsa-command-transport-{Guid.NewGuid():N}.db");
-            var connection = new SqliteConnection($"Data Source={path}");
+            var database = new TemporarySqliteDatabase("command-transport");
+            var connection = new SqliteConnection(database.ConnectionString);
             await connection.OpenAsync();
             var options = new DbContextOptionsBuilder<ExecutionCommandTransportSqliteDbContext>().UseSqlite(connection, sqlite => sqlite.MaxBatchSize(1));
             foreach (var interceptor in interceptors)
@@ -561,7 +560,7 @@ public sealed class EfExecutionCommandTransportTests
             await context.Database.EnsureCreatedAsync();
             foreach (var interceptor in interceptors.OfType<CountingInterceptor>())
                 interceptor.Reset();
-            return new Fixture(connection, context, scope, ownsDatabase: true);
+            return new Fixture(connection, context, scope, ownedDatabase: database);
         }
 
         public async Task<Fixture> ReopenAsync(string nextScope, params IInterceptor[] interceptors)
@@ -572,17 +571,15 @@ public sealed class EfExecutionCommandTransportTests
             foreach (var interceptor in interceptors)
                 options.AddInterceptors(interceptor);
             var context = new ExecutionCommandTransportSqliteDbContext(options.Options);
-            return new Fixture(next, context, nextScope, ownsDatabase: false);
+            return new Fixture(next, context, nextScope, ownedDatabase: null);
         }
 
         public async ValueTask DisposeAsync()
         {
             await Context.DisposeAsync();
             await connection.DisposeAsync();
-            if (ownsDatabase)
-                foreach (var path in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" })
-                    if (File.Exists(path))
-                        File.Delete(path);
+            if (ownedDatabase is not null)
+                await ownedDatabase.DisposeAsync();
         }
 
         private sealed class Accessor(string scope) : IPersistenceAccessContextAccessor
