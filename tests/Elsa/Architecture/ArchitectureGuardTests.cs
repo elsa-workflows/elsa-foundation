@@ -465,8 +465,7 @@ public sealed partial class ArchitectureGuardTests
     [Fact]
     public void Pruned_unused_public_contracts_do_not_reappear_in_production_source()
     {
-        var sourceRoot = Path.Join(RepoRoot, "src");
-        var violations = Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
+        var violations = ModuleSourceFiles()
             .Where(file => !IsGeneratedScratchFile(file) && !IsBuildArtifactFile(file))
             .SelectMany(file => FindPrunedPublicContractNames(File.ReadAllText(file))
                 .Select(name => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {name}"))
@@ -676,9 +675,7 @@ public sealed partial class ArchitectureGuardTests
             .Select(file => ProjectInfo.From(RepoRoot, file));
 
     /// <summary>Production source files across every module root, excluding test and build output.</summary>
-    private static IEnumerable<string> ModuleSourceFiles() =>
-        ModuleRoots.SourceFiles(RepoRoot, ModuleRoots.Production)
-            .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}tests{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
+    private static IEnumerable<string> ModuleSourceFiles() => ModuleRoots.ProductionSourceFiles(RepoRoot);
 
     private static IEnumerable<SolutionProjectInfo> SolutionProjects()
     {
@@ -1031,6 +1028,16 @@ public sealed partial class ArchitectureGuardTests
 
         if (project.Name.StartsWith("Elsa.", StringComparison.Ordinal) && project.RelativePath.StartsWith("tests/", StringComparison.Ordinal))
             return $"tests/Elsa/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";
+
+        // An Elsa.* project under neither root has no expected path to compare against, and returning
+        // its own path would compare it with itself — the guard would pass while checking nothing. The
+        // next stage of #1815 moves Elsa.*-named modules to extensions/, so refuse rather than go quiet.
+        if (project.Name.StartsWith("Elsa.", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"{project.Name} lives at {project.RelativePath}, under neither src/ nor tests/. Teach " +
+                "ExpectedProjectPath where that root puts a module before moving one there.");
+        }
 
         return project.RelativePath;
     }

@@ -38,7 +38,7 @@ public sealed partial class RuntimeCheckpointCommitValidationBoundaryTests
     [Fact]
     public void Only_known_production_files_name_a_checkpoint_commit_store_type()
     {
-        var referencing = Directory.EnumerateFiles(Path.Join(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
+        var referencing = ModuleRoots.ProductionSourceFiles(RepoRoot)
             .Select(path => Path.GetRelativePath(RepoRoot, path).Replace('\\', '/'))
             .Where(path => !path.Contains("/obj/", StringComparison.Ordinal) && !path.Contains("/bin/", StringComparison.Ordinal))
             .Where(path => CheckpointCommitStoreType().IsMatch(File.ReadAllText(Path.Join(RepoRoot, path))))

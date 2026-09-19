@@ -34,7 +34,7 @@ public sealed class MySqlTestConnectionTests(RuntimePlacementMySqlContainerFixtu
         Assert.NotEqual(string.Empty, await SessionCipherAsync(builder.ConnectionString));
     }
 
-    private static async Task<string> SessionCipherAsync(string connectionString)
+    internal static async Task<string> SessionCipherAsync(string connectionString)
     {
         await using var connection = new MySqlConnection(connectionString);
         await connection.OpenAsync();
@@ -42,5 +42,50 @@ public sealed class MySqlTestConnectionTests(RuntimePlacementMySqlContainerFixtu
         command.CommandText = "SHOW STATUS LIKE 'Ssl_cipher'";
         await using var reader = await command.ExecuteReaderAsync();
         return await reader.ReadAsync() ? reader.GetString(1) : string.Empty;
+    }
+}
+
+/// <summary>
+/// The same guard for the assembly's other MySQL collection. The race needs both fixtures negotiating at once, so
+/// the transport half of the fix is exactly as load-bearing as the placement half — and without this, deleting
+/// <c>MySqlTestConnection.WithoutSsl</c> from <c>RuntimeCommandTransportMySqlContainerFixture</c> left the whole
+/// suite green.
+/// </summary>
+/// <remarks>
+/// Positive assertion only, deliberately. See the invariant in <see cref="MySqlTestConnection"/>: a second
+/// TLS-negotiating test, in a second collection, is the precondition for #1854 rather than a check against it.
+/// </remarks>
+[Collection(RuntimeCommandTransportMySqlContainerFixture.CollectionName)]
+public sealed class MySqlCommandTransportConnectionTests(RuntimeCommandTransportMySqlContainerFixture fixture)
+{
+    [SkippableFact]
+    public async Task Fixture_connection_string_does_not_negotiate_tls()
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker/MySQL is unavailable.");
+
+        Assert.Equal(string.Empty, await MySqlTestConnectionTests.SessionCipherAsync(fixture.ConnectionString));
+    }
+}
+
+/// <summary>
+/// Pins which MySQL fixtures this assembly has, because the two guards above are per-fixture: a third fixture added
+/// later would negotiate TLS by default, restore the #1854 precondition, and pass both of them. Needs no container,
+/// so it runs in every lane rather than only where Docker is.
+/// </summary>
+public sealed class MySqlFixtureInventoryTests
+{
+    [Fact]
+    public void Every_mysql_fixture_in_this_assembly_is_guarded()
+    {
+        var fixtures = typeof(MySqlTestConnection).Assembly.GetTypes()
+            .Where(type => type is { IsAbstract: false, IsClass: true } &&
+                           type.Name.EndsWith("MySqlContainerFixture", StringComparison.Ordinal))
+            .Select(type => type.Name)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(
+            ["RuntimeCommandTransportMySqlContainerFixture", "RuntimePlacementMySqlContainerFixture"],
+            fixtures);
     }
 }

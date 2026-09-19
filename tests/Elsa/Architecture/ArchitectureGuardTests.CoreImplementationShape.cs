@@ -173,6 +173,8 @@ public sealed partial class ArchitectureGuardTests
             string.Join(Environment.NewLine, violations));
     }
 
+    // Deliberately src/ only: a .Core project is a required-module shape, and no extension declares one.
+    // Widen this the moment one does, or the shape guard stops seeing it (#1815).
     private static IEnumerable<Assembly> CoreProjectAssemblies() => ProjectFiles()
         .Where(project => project.RelativePath.StartsWith("src/", StringComparison.Ordinal) &&
                           project.Name.EndsWith(".Core", StringComparison.Ordinal))

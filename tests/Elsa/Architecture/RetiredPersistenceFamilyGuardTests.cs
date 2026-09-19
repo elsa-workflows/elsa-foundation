@@ -36,7 +36,7 @@ public sealed partial class RetiredPersistenceFamilyGuardTests
     ];
 
     /// <summary>Roots that ship or build the product. History under docs/, specs/ and archives is out of scope.</summary>
-    private static readonly string[] ScannedRoots = ["src", "tests", "tools", "docker", "e2e-tests", ".github", ".config"];
+    private static readonly string[] ScannedRoots = ["src", "extensions", "tests", "tools", "docker", "e2e-tests", ".github", ".config"];
 
     /// <summary>Repository-level files that select packages and feeds.</summary>
     private static readonly string[] ScannedFiles = ["Directory.Packages.props", "NuGet.config", "Elsa.Server.slnx"];
