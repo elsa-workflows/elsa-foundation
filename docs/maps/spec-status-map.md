@@ -208,4 +208,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [167-publishing-api-migration](../../specs/167-publishing-api-migration/spec.md) | Publishing API Minimal API Migration | Implemented — merged by #1403 as `abc262aa50593cb037a27e0ac84dd2b1b78a9bd0` | - | 55 | 0 | retained, out of scope |
 | [168-fastendpoints-retirement](../../specs/168-fastendpoints-retirement/spec.md) | Final FastEndpoints Retirement | Draft | - | 30 | 27 | retained |
 | [169-outbox-delivery-contention](../../specs/169-outbox-delivery-contention/spec.md) | Tolerate Concurrent Post-Commit Outbox Delivery Contention | Draft | - | 34 | 4 | superseded, out of scope |
-| [170-ef-payload-compression](../../specs/170-ef-payload-compression/spec.md) | Opt-in Compression for Large EF Payload Columns | Draft | - | 0 | 0 | deferred, out of scope |
+| [170-ef-payload-compression](../../specs/170-ef-payload-compression/spec.md) | Opt-in Compression for Large EF Payload Columns | In progress — accepted by the owner 2026-09-19; decoder unit implemented, encoder not yet reachable from configuration | - | 0 | 0 | deferred, out of scope |

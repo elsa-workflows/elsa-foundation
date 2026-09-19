@@ -158,6 +158,8 @@ One in-memory equality also touches a payload column: `EfWorkflowTriggerBindingS
 
 ## Collations
 
-Binary and ordinal collations are applied model-wide by six modules (see [#1837](https://github.com/elsa-workflows/elsa-foundation/issues/1837) for the divergence between them, which is a separate unit of work). `PublishingSnapshotReviewProviderContexts.cs:91-92` applies one to **every** string property of six publishing entities, `Content` included.
+**Superseded by [PR #1853](https://github.com/elsa-workflows/elsa-foundation/pull/1853), which closed [#1837](https://github.com/elsa-workflows/elsa-foundation/issues/1837) after this file was written.** Six modules each declared their own provider-to-collation mapping, and `PublishingSnapshotReviewProviderContexts` applied one to **every** string property of six publishing entities, `Content` included. `EfOrdinalCollation` now owns the decision once and applies it **per column**, to keys, indexes and columns a module names as compared; in its own words, "payload, description and free-text columns keep the database default".
+
+That strengthens this design rather than changing it: payload columns now carry no collation at all.
 
 These compare bytes without interpreting them, and the payload columns are unindexed, so nothing depends on their collated ordering. Base64 is ASCII, so a framed value is strictly friendlier to them than plaintext JSON, and cannot carry a lone surrogate, which the `LosslessUtf16StringConverter` in `Stores/RuntimeArtifactJson.cs:31-45` exists to preserve.

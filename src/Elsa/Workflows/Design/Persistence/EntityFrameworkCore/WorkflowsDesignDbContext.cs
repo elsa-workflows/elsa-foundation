@@ -29,6 +29,14 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
         DesignEntityConfigurations.ConfigureVersionLayout(modelBuilder.Entity<WorkflowDefinitionVersionLayout>());
         DesignEntityConfigurations.ConfigureOperation(modelBuilder.Entity<DesignOperationEntity>());
         ConfigureProvider(modelBuilder);
+        // Installed unconditionally, so this context reads a frame whatever wrote it. Nothing here enables an
+        // encoder: with no codec configured these columns are written exactly as they were before.
+        modelBuilder.UseElsaPayloadColumns(
+            this,
+            "StateSource",
+            "RecordsJson",
+            "ActivityPresentationJson",
+            "ResultJson");
     }
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);

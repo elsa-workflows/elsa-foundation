@@ -151,6 +151,19 @@ public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbCo
         ConfigureForeignKeyStringLengths(modelBuilder);
         ConfigureImmutableProperties(modelBuilder);
         ConfigureProvider(modelBuilder);
+        // Installed unconditionally, so this context reads a frame whatever wrote it. Nothing here enables an
+        // encoder: with no codec configured these columns are written exactly as they were before.
+        modelBuilder.UseElsaPayloadColumns(
+            this,
+            "AuthoritativeResultJson",
+            "MutatedUnitsJson",
+            "PlanJson",
+            "ReceiptJson",
+            "DefinitionMaterialJson",
+            "DescriptorPayloadSource",
+            "InputsSource",
+            "OutputsSource",
+            "DesignFacetsSource");
     }
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);
