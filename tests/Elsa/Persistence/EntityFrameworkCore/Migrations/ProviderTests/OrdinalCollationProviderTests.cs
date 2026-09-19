@@ -1,6 +1,7 @@
 using System.Data.Common;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
+using Elsa.Secrets.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.Data.SqlClient;
 using MySql.Data.MySqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +17,11 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests;
 /// default collation is linguistic, and the question the application asks — does <c>ORDER BY</c> on a key
 /// column agree with <see cref="StringComparer.Ordinal"/>?
 /// <para>
+/// And #1855 with it: the change tracker has to agree with that schema, so two rows the primary key
+/// separates are written as two rows through a real context, not merged before <c>SaveChanges</c> is
+/// reached. A comparer read out of the model would not show that; this writes and reads back.
+/// </para>
+/// <para>
 /// SQLite cannot show any of this. Its only TEXT collation is <c>BINARY</c> and it is the default, so the
 /// SQLite legs are green whether or not the declaration exists. These two legs are the evidence.
 /// </para>
@@ -27,13 +33,6 @@ public sealed class OrdinalCollationProviderTests
     /// uppercase letter before every lowercase one and sorts the accented letter far above both.
     /// </summary>
     private static readonly string[] Keys = ["B", "A", "a", "b", "Á", "_"];
-
-    /// <summary>The modules #1837 put in scope, by the prefix their context names share.</summary>
-    private static readonly string[] CollatingModules =
-    [
-        "ActivitiesDesign", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
-        "PublishingSnapshotReview", "Secrets", "WorkflowsDesign"
-    ];
 
     [SkippableFact]
     public Task Sql_server_orders_key_columns_ordinally_in_a_case_insensitive_database() =>
@@ -79,6 +78,7 @@ public sealed class OrdinalCollationProviderTests
             WHERE t.name = @table AND c.name = @column
             """);
         await AssertSecretNamesOrderOrdinallyAsync(connection, name => $"[{name}]", "@payload");
+        await AssertCaseDistinctSecretsAreTwoRowsAsync("SqlServer", hostile, connection, name => $"[{name}]");
     }
 
     private static async Task RunMySqlAsync(string connectionString)
@@ -128,6 +128,7 @@ public sealed class OrdinalCollationProviderTests
             """);
         // Secrets stores its payload as jsonb on PostgreSQL, and a text parameter needs saying so.
         await AssertSecretNamesOrderOrdinallyAsync(connection, name => $"\"{name}\"", "CAST(@payload AS jsonb)");
+        await AssertCaseDistinctSecretsAreTwoRowsAsync("PostgreSql", hostile, connection, name => $"\"{name}\"");
     }
 
     /// <summary>
@@ -140,7 +141,7 @@ public sealed class OrdinalCollationProviderTests
     {
         var expected = EfOrdinalCollation.ForProvider(EfRelationalProviderBinding.ExpectedProviderName(provider));
         foreach (var type in ModuleContextCatalog.Contexts(provider)
-                     .Where(type => CollatingModules.Any(module => type.Name.StartsWith(module, StringComparison.Ordinal))))
+                     .Where(ModuleContextCatalog.DeclaresOrdinal))
         {
             await using var context = ModuleContextCatalog.Create(type, connectionString);
             var columns = 0;
@@ -167,10 +168,10 @@ public sealed class OrdinalCollationProviderTests
     /// The application-level question, on a real key column of a real module table: a page the database
     /// orders has to be the page an ordinal cursor expects.
     /// <para>
-    /// The rows go in through raw SQL rather than through the context on purpose. EF Core's SQL Server
-    /// provider gives every string property a case-insensitive <c>ValueComparer</c>, so its change tracker
-    /// refuses <c>'A'</c> and <c>'a'</c> as one key no matter what the column's collation says — a separate
-    /// divergence, reported on #1837, and not something this test should be measuring.
+    /// The rows go in through raw SQL rather than through the context, so that what is being measured is the
+    /// server's ordering and nothing else. Whether a context can write them at all is
+    /// <see cref="AssertCaseDistinctSecretsAreTwoRowsAsync"/>, which runs after this one and under its own
+    /// tenant, because this assertion reads every row in the table.
     /// </para>
     /// </summary>
     private static async Task AssertSecretNamesOrderOrdinallyAsync(DbConnection connection, Func<string, string> quote, string payload)
@@ -191,6 +192,38 @@ public sealed class OrdinalCollationProviderTests
 
         var column = quote("NormalizedName");
         Assert.Equal(Ordinal(), await ReadAsync(connection, $"SELECT {column} FROM {quote("elsa_secrets")} ORDER BY {column}"));
+    }
+
+    /// <summary>
+    /// #1855, end to end on a live server: two secrets whose <c>NormalizedName</c> differs only in case go in
+    /// through the module's own context and come back as two rows.
+    /// <para>
+    /// Both halves have to hold for this to pass. If the change tracker compares the key case-insensitively
+    /// the second <c>Add</c> throws before any SQL is sent; if the column lost its binary collation the insert
+    /// is refused by the primary key. Under its own tenant, so the table-wide ordering assertion above is
+    /// unaffected.
+    /// </para>
+    /// </summary>
+    private static async Task AssertCaseDistinctSecretsAreTwoRowsAsync(
+        string provider, string connectionString, DbConnection connection, Func<string, string> quote)
+    {
+        const string tenant = "tracker";
+        await using (var context = ModuleContextCatalog.Create(
+                         ModuleContextCatalog.Contexts(provider).Single(type => type.Name.StartsWith("Secrets", StringComparison.Ordinal)),
+                         connectionString))
+        {
+            context.Add(new SecretRecord { TenantId = tenant, NormalizedName = "A", Status = "Active" });
+            context.Add(new SecretRecord { TenantId = tenant, NormalizedName = "a", Status = "Active" });
+            await context.SaveChangesAsync();
+        }
+
+        Assert.Equal(
+            ["A", "a"],
+            await ReadAsync(
+                connection,
+                $"SELECT {quote("NormalizedName")} FROM {quote("elsa_secrets")} " +
+                $"WHERE {quote("TenantId")} = @tenant ORDER BY {quote("NormalizedName")}",
+                ("@tenant", tenant)));
     }
 
     private static string[] Ordinal() => [.. Keys.Order(StringComparer.Ordinal)];
