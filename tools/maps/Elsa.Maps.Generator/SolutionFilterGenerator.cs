@@ -187,7 +187,7 @@ public static class SolutionFilterGenerator
                 .Select(include => include!)
                 .ToArray();
 
-            projects.Add(projectPath, new SolutionProject(projectName, projectPath, projectReferenceIncludes, [], packageReferences));
+            projects.Add(projectPath, new SolutionProject(projectName, projectPath, projectReferenceIncludes, [], packageReferences, []));
         }
 
         var allowedExternalReferences = manifest.AllowedExternalProjectReferences
@@ -233,6 +233,14 @@ public static class SolutionFilterGenerator
         if (unusedAllowlistEntries.Length > 0)
             throw new InvalidOperationException($"Solution filter external-project allowlist contains unused entries: {string.Join(", ", unusedAllowlistEntries)}");
 
+        var closures = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+        var visiting = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var project in projects.Values.ToArray())
+            projects[project.Path] = project with
+            {
+                PackageReferenceClosure = PackageReferenceClosure(projects, closures, visiting, project.Path)
+            };
+
         return new SolutionGraph(projects);
     }
 
@@ -277,10 +285,10 @@ public static class SolutionFilterGenerator
                 .Any(value => project.Path.Contains(value, StringComparison.OrdinalIgnoreCase)))
             .Where(project => profile.RequirePackageReferencePrefixes.Count == 0 ||
                               profile.RequirePackageReferencePrefixes.Any(required =>
-                                  project.PackageReferences.Any(package =>
+                                  project.PackageReferenceClosure.Any(package =>
                                       package.StartsWith(required, StringComparison.OrdinalIgnoreCase))))
             .Where(project => !profile.ExcludeWhenPackageReferencePrefixes.Any(excluded =>
-                project.PackageReferences.Any(package =>
+                project.PackageReferenceClosure.Any(package =>
                     package.StartsWith(excluded, StringComparison.OrdinalIgnoreCase))))
             .Select(project => project.Path)
             .Order(StringComparer.Ordinal)
@@ -301,6 +309,37 @@ public static class SolutionFilterGenerator
         }
 
         return roots;
+    }
+
+    /// <summary>
+    /// Returns the packages a project loads at run time: its own <c>PackageReference</c> elements plus
+    /// every package reachable through the <c>ProjectReference</c> graph. Both package selectors ask the
+    /// same question -- "does this project need what that package brings?" -- and a dependency answers it
+    /// just as a direct reference does. A test project that reaches Testcontainers only through another
+    /// test project still starts containers, so classifying it by direct references alone drops it out of
+    /// the integration filter and leaves it in the fast lane, where its fixtures self-skip and the job
+    /// still reports green.
+    /// </summary>
+    private static IReadOnlyList<string> PackageReferenceClosure(
+        IReadOnlyDictionary<string, SolutionProject> projects,
+        Dictionary<string, IReadOnlyList<string>> memo,
+        HashSet<string> visiting,
+        string path)
+    {
+        if (memo.TryGetValue(path, out var cached))
+            return cached;
+        if (!visiting.Add(path))
+            throw new InvalidOperationException($"Project reference cycle reaches '{path}'.");
+
+        var project = projects[path];
+        var closure = new HashSet<string>(project.PackageReferences, StringComparer.Ordinal);
+        foreach (var dependency in project.References)
+            closure.UnionWith(PackageReferenceClosure(projects, memo, visiting, dependency));
+
+        visiting.Remove(path);
+        var result = closure.Order(StringComparer.Ordinal).ToArray();
+        memo.Add(path, result);
+        return result;
     }
 
     private static IReadOnlyList<string> ExpandDependencies(
@@ -333,7 +372,8 @@ public static class SolutionFilterGenerator
         string Path,
         IReadOnlyList<string> ProjectReferenceIncludes,
         IReadOnlyList<string> References,
-        IReadOnlyList<string> PackageReferences);
+        IReadOnlyList<string> PackageReferences,
+        IReadOnlyList<string> PackageReferenceClosure);
 }
 
 public sealed class SolutionFilterManifest

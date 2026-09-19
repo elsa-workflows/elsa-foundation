@@ -5,9 +5,11 @@ name: Integration (nightly)
 # fast, container-free unit tests.
 #
 # This workflow is the INVERSE of ci.yml's filter: it runs ONLY the test projects
-# that reference Testcontainers (Docker required). The committed integration solution
-# filter is generated from parsed PackageReference elements, so new Testcontainers test
-# projects are picked up when the solution-filter freshness gate refreshes the profile.
+# that reach Testcontainers (Docker required). The committed integration solution filter
+# is generated from parsed PackageReference elements and the ProjectReference edges that
+# carry them, so new Testcontainers test projects -- including ones that inherit their
+# container fixtures from another test project -- are picked up when the solution-filter
+# freshness gate refreshes the profile.
 #
 # Why not on pull_request: containers are too slow/flaky to run on every PR -- that is
 # the explicit reason #544 excluded them from ci.yml. This runs nightly against main
