@@ -161,9 +161,17 @@ worker's one call into product code is a frozen entry point, reflectively invoke
 Reason: a worker that resolved assemblies its own way would bind a provider through a different
 mechanism than the real host and could disagree with it silently, because
 `EfRelationalProviderBinding` binds reflectively (Context, above) and a `HostIntegrated` package is
-visible only through Nuplane's own `Default.Resolving` hook, not the default load context. Because
-the tool ships no EF of its own, it cannot skew from the host's EF version, and
-`EfCoreDependencyGuardTests` needs no allowlist change for it.
+visible only through Nuplane's own `Default.Resolving` hook, not the default load context.
+`dotnet-elsa` and its worker resolve no EF package at all, so `EfCoreDependencyGuardTests`'s consumer
+scan finds nothing to flag for either project, and neither needs an admission record or a place in
+`AllowedEfConsumers` — which licenses *hosts* to carry EF, provider engines included
+(`EfCoreDependencyGuardTests.cs:20-38`), not how a module project is admitted. `EfToolingHost` itself
+lives inside `Elsa.Persistence.EntityFramework`, a project the guard already admits through the
+`Adr0072SecretsEfPilot` record (`EfCoreDependencyGuardTests.cs:716,729`); that record's expected
+package set for the project — EF Core, Abstractions, Analyzers, and Relational only — does not need
+to grow, because the entry point needs only `IMigrator`, `IMigrationsAssembly`, and
+`IHistoryRepository`, all in `Microsoft.EntityFrameworkCore.Relational`, no `Design` package and no
+provider engine.
 
 Resolution failures exit 3 before any file is written, in four cases: the provider engine is in
 neither the host's deps file nor the active package set, and the message reuses
@@ -352,7 +360,10 @@ exact `script` command, and nothing is saved or reloaded. When the guard is not 
 fallback is today's behavior: the `Validate` exception at `Prepare` still refuses, but only after
 `shells.json` has already been saved. The documented operator path is: pin or upload the package,
 reconcile so the feature becomes visible but stays disabled, run `script`, have the DBA apply the
-SQL, run `post-migrate` if the plan lists a required action, then enable the feature.
+SQL, run `post-migrate` if the plan lists a required action, then enable the feature. The new project
+needs its own admission record in `EfCoreDependencyGuardTests` — a surface path prefix plus an exact
+expected package set limited to EF Core and Relational, no provider engine (Consequences) — and must
+not be added to `AllowedEfConsumers`, which licenses hosts to carry provider engines, not modules.
 
 Reason: `FeatureManagementService.ApplyAsync` runs `ValidateRequest`, then `shellStore.SaveAsync`,
 then refreshes and reloads, with no migration check anywhere in that sequence (Context, above), so a
@@ -492,12 +503,21 @@ Costs and risks:
   design-time factories Secrets is missing today — SQLite, SQL Server, and PostgreSQL, beside its
   existing MySQL-only line (`ModuleDesignTimeFactories.cs:41`) — are added, so Secrets stops being the
   one module the shared catalog treats differently.
-- The new `Elsa.Modularity.EntityFramework` adapter project (proposed) needs an explicit admission
-  decision in `EfCoreDependencyGuardTests`, whose `AllowedEfConsumers` names only `Elsa.Workbench`
-  today (`EfCoreDependencyGuardTests.cs:20`). Its project scan already covers `src/**/*.csproj`
-  (`EfCoreDependencyGuardTests.cs:518-521`) — unlike several other architecture guards [PR
-  #1850](https://github.com/elsa-workflows/elsa-foundation/pull/1850) had to widen to `extensions/` —
-  so because the new adapter lives under `src/`, only the allowlist needs a decision, not the scan.
+- The proposed `Elsa.Modularity.EntityFramework` adapter needs a new admission record of its own in
+  `EfCoreDependencyGuardTests` — a `SurfacePathPrefixes` entry plus an `ExpectedEfPackagesByProject`
+  set restricted to EF Core and Relational, no provider engine — the same shape as the existing
+  `Adr0072SecretsEfPilot` and `Adr0073*` records (`EfCoreDependencyGuardTests.cs:673-688,716-786`). It
+  must not be added to `AllowedEfConsumers` (`EfCoreDependencyGuardTests.cs:20`), which licenses
+  *hosts* to carry EF including every provider engine (`:21-38`) and would wrongly license the adapter
+  to do the same. `dotnet-elsa` and its worker resolve no EF package at all, so neither needs a record
+  or an allowlist entry. `Elsa.Persistence.EntityFramework`, which hosts `EfToolingHost`, is already
+  admitted by `Adr0072SecretsEfPilot` (`:716,729`); its expected package set for that project — EF
+  Core, Abstractions, Analyzers, and Relational only — must not grow, because the entry point needs
+  only `IMigrator`, `IMigrationsAssembly`, and `IHistoryRepository`, all in
+  `Microsoft.EntityFrameworkCore.Relational`, no `Design` package and no engine. This guard's project
+  scan already covers `src/**/*.csproj` (`:518-521`), where the new adapter lives; [PR
+  #1850](https://github.com/elsa-workflows/elsa-foundation/pull/1850) widened a different set of
+  architecture guards' scan roots to `extensions/` and is unrelated to this admission mechanism.
 - U1–U4 depend on a Nuplane release ahead of the pinned `0.0.9-preview.61`, and on an Elsa pin bump
   after that release ships; the Nuplane checkout this ADR verifies facts against is ten commits past
   a tag Elsa does not yet consume, so every dependent Elsa slice is blocked until that release and
