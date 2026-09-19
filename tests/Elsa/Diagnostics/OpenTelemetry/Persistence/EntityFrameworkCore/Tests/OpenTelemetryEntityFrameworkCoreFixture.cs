@@ -8,6 +8,7 @@ using Elsa.Diagnostics.OpenTelemetry.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests;
@@ -22,15 +23,20 @@ internal sealed class OpenTelemetryEntityFrameworkCoreFixture : IAsyncDisposable
     public EfOpenTelemetryStore EfStore => provider!.GetRequiredService<EfOpenTelemetryStore>();
     public IOpenTelemetrySourceRegistry SourceRegistry => provider!.GetRequiredService<IOpenTelemetrySourceRegistry>();
 
-    public async Task InitializeAsync(OpenTelemetryDiagnosticsOptions? diagnostics = null, TimeProvider? timeProvider = null)
+    public async Task InitializeAsync(OpenTelemetryDiagnosticsOptions? diagnostics = null, TimeProvider? timeProvider = null, int? keyBatchSize = null)
     {
         Directory.CreateDirectory(directory);
-        provider = BuildProvider(DatabasePath, diagnostics, timeProvider);
+        provider = BuildProvider(DatabasePath, diagnostics, timeProvider, keyBatchSize);
         await EnsureCreatedAsync(provider);
         EfStore.Start();
     }
 
-    public static ServiceProvider BuildProvider(string path, OpenTelemetryDiagnosticsOptions? diagnostics = null, TimeProvider? timeProvider = null)
+    /// <summary>
+    /// <paramref name="keyBatchSize"/> lets a test force the store's merge, recompute and search-key chunk
+    /// loops to iterate more than once, by replacing the constructor-selected default with a small value
+    /// instead of seeding hundreds of keys. Production callers never set it.
+    /// </summary>
+    public static ServiceProvider BuildProvider(string path, OpenTelemetryDiagnosticsOptions? diagnostics = null, TimeProvider? timeProvider = null, int? keyBatchSize = null)
     {
         var services = new ServiceCollection();
         services.AddOptions<OpenTelemetryDiagnosticsOptions>();
@@ -44,6 +50,12 @@ internal sealed class OpenTelemetryEntityFrameworkCoreFixture : IAsyncDisposable
             Provider = "Sqlite",
             ConnectionString = $"Data Source={path}"
         });
+
+        if (keyBatchSize is { } size)
+        {
+            services.RemoveAll<EfOpenTelemetryStore>();
+            services.AddSingleton(sp => ActivatorUtilities.CreateInstance<EfOpenTelemetryStore>(sp, size));
+        }
 
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }

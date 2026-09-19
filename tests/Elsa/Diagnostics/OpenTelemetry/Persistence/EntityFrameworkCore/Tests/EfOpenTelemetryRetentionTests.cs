@@ -350,14 +350,21 @@ public sealed class EfOpenTelemetryRetentionTests
     /// partially retained key is rebuilt from what survived, and the key retention never touched keeps the
     /// memberships the append path gave it.
     /// </summary>
-    [Fact]
-    public async Task Trace_retention_recomputes_every_affected_key_and_leaves_an_unaffected_one_alone()
+    /// <param name="keyBatchSize">
+    /// Null runs at the provider-safe default, where the two affected keys share one chunk. 1 forces the
+    /// recompute loop (and the resource search-key lookup inside it) to iterate once per key instead, so the
+    /// same assertions also cover state that has to survive across chunk iterations, not just within one.
+    /// </param>
+    [Theory]
+    [InlineData(null)]
+    [InlineData(1)]
+    public async Task Trace_retention_recomputes_every_affected_key_and_leaves_an_unaffected_one_alone(int? keyBatchSize)
     {
         await using var fixture = await CreateFixtureAsync(new OpenTelemetryDiagnosticsOptions
         {
             TraceCapacity = 3,
             MaxQuerySize = 20
-        });
+        }, keyBatchSize: keyBatchSize);
         var resources = SixResources();
 
         await fixture.Store.WriteAsync(new(resources,
@@ -391,14 +398,21 @@ public sealed class EfOpenTelemetryRetentionTests
     /// trace keys, so the foreign rows here are seeded under the very trace keys the second capture rewrites.
     /// A delete that lost its ScopeKey clause would take them with it.
     /// </summary>
-    [Fact]
-    public async Task Summary_recompute_and_merge_leave_a_second_scopes_rows_untouched()
+    /// <param name="keyBatchSize">
+    /// Null runs at the provider-safe default, where all three keys share one chunk in both the merge (append)
+    /// loop and the recompute (retention) loop. 1 forces both loops, and the resource search-key lookups inside
+    /// them, to iterate once per key, so the second-scope isolation this test pins has to hold across chunks.
+    /// </param>
+    [Theory]
+    [InlineData(null)]
+    [InlineData(1)]
+    public async Task Summary_recompute_and_merge_leave_a_second_scopes_rows_untouched(int? keyBatchSize)
     {
         await using var fixture = await CreateFixtureAsync(new OpenTelemetryDiagnosticsOptions
         {
             TraceCapacity = 3,
             MaxQuerySize = 20
-        });
+        }, keyBatchSize: keyBatchSize);
         var resources = SixResources();
         var other = new EfOpenTelemetryBinding("other-tenant", "other-scope", "opentelemetry").ScopeKey;
         Assert.NotEqual(EfOpenTelemetryBinding.Default.ScopeKey, other);
@@ -592,10 +606,11 @@ public sealed class EfOpenTelemetryRetentionTests
 
     private static async Task<OpenTelemetryEntityFrameworkCoreFixture> CreateFixtureAsync(
         OpenTelemetryDiagnosticsOptions options,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        int? keyBatchSize = null)
     {
         var fixture = new OpenTelemetryEntityFrameworkCoreFixture();
-        await fixture.InitializeAsync(options, timeProvider);
+        await fixture.InitializeAsync(options, timeProvider, keyBatchSize);
         return fixture;
     }
 
