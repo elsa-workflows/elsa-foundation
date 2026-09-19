@@ -19,17 +19,17 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.PostgreSql
                 .HasAnnotation("ProductVersion", "10.0.10")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
-            // NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns omitted: the module stays provider-free.
-
             modelBuilder.Entity("Elsa.Secrets.Persistence.EntityFrameworkCore.Entities.SecretRecord", b =>
                 {
                     b.Property<string>("TenantId")
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.Property<string>("NormalizedName")
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
@@ -38,7 +38,8 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.PostgreSql
 
                     b.Property<string>("DisplayNameSearchKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<bool>("HasNonExpiringActiveVersion")
                         .HasColumnType("boolean");
@@ -48,27 +49,32 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.PostgreSql
 
                     b.Property<string>("NameSearchKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("Payload")
                         .IsRequired()
                         .HasColumnType("jsonb");
 
                     b.Property<string>("ScopeLookupKey")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<string>("StoreNameLookupKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("TypeNameLookupKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.HasKey("TenantId", "NormalizedName");
 

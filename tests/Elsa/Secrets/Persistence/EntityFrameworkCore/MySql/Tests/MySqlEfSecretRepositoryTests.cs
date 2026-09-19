@@ -24,9 +24,11 @@ public sealed class MySqlEfSecretRepositoryTests(MySqlContainerFixture fixture)
         var entity = model.FindEntityType(typeof(SecretRecord))!;
         Assert.Equal(SecretsEfModule.TableName, entity.GetTableName());
         Assert.Equal(SecretsMySqlDbContext.CharacterSet, model.FindAnnotation("MySQL:Charset")?.Value);
-        Assert.Equal(SecretsMySqlDbContext.Collation, model.GetCollation());
-        Assert.Equal(SecretsMySqlDbContext.Collation,
-            entity.FindProperty(nameof(SecretRecord.NormalizedName))!.FindAnnotation("MySQL:Collation")?.Value);
+        // #1837: per column, never model-wide. OrdinalCollationMigrationTests proves it reaches the schema.
+        Assert.Null(model.GetCollation());
+        Assert.Null(entity.FindAnnotation(RelationalAnnotationNames.Collation)?.Value);
+        Assert.Equal(EfOrdinalCollation.MySql, entity.FindProperty(nameof(SecretRecord.NormalizedName))!.GetCollation());
+        Assert.Null(entity.FindProperty(nameof(SecretRecord.Payload))!.GetCollation());
         Assert.Equal("json", entity.FindProperty(nameof(SecretRecord.Payload))!.GetColumnType());
         Assert.Equal("bigint", entity.FindProperty(nameof(SecretRecord.MaxActiveVersionExpiresAt))!.GetColumnType());
         Assert.Equal("varbinary(16)", entity.FindProperty(nameof(SecretRecord.ConcurrencyToken))!.GetColumnType());

@@ -32,14 +32,24 @@ public abstract class Elsa3ImportDbContext(DbContextOptions options) : DbContext
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);
 
-    /// <summary>Binds every text column to the provider's ordinal collation.</summary>
-    protected static void ConfigureOrdinalCollation(ModelBuilder modelBuilder, string collation)
-    {
-        foreach (var property in modelBuilder.Model.GetEntityTypes()
-                     .SelectMany(entity => entity.GetProperties())
-                     .Where(property => property.ClrType == typeof(string)))
-            property.SetCollation(collation);
-    }
+    /// <summary>
+    /// The string columns this module compares or orders in SQL beyond the ones its composite keys already
+    /// cover: the identity material the stores match on, and the hashes beside it. <c>ContentJson</c> is
+    /// absent because nothing compares it in SQL; the stores compare <c>ContentHash</c> instead.
+    /// </summary>
+    private static readonly string[] OrdinallyComparedColumns =
+    [
+        "TenantKey", "TenantId", "UserId", "UserIdHash",
+        "Handle", "HandleHash", "SchemaVersion", "ContentHash",
+        "ReceiptId", "ReceiptIdHash", "IdempotencyKey", "CommitAttemptId",
+        "BindingId", "BindingIdHash", "TargetDocumentKind",
+        "TargetDefinitionId", "TargetDefinitionIdHash",
+        "SourceKind", "SourceDefinitionId"
+    ];
+
+    /// <summary>Binds this module's ordinal columns to <paramref name="providerName"/>'s binary collation, per column.</summary>
+    protected static void ApplyOrdinalCollation(ModelBuilder modelBuilder, string providerName) =>
+        EfOrdinalCollation.Apply(modelBuilder, providerName, OrdinallyComparedColumns);
 
     private static void ConfigureCollection(EntityTypeBuilder<Elsa3ImportCollectionRecord> builder)
     {

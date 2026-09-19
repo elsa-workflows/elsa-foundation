@@ -208,6 +208,75 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
         Assert.Equal(v1, (await CurrentProjectionAsync()).HeadVersionId);
     }
 
+    /// <summary>
+    /// The preflight reads one batch per collection instead of one row per item. A plan that mixes items which are
+    /// already imported with new ones must still reuse the former and create the latter, and a colliding item sitting
+    /// in the same batch as healthy siblings must still be refused with the message it carried when every item was
+    /// read on its own.
+    /// </summary>
+    [Fact]
+    public async Task Mixed_new_and_existing_items_across_every_collection_resolve_per_item_from_batched_reads()
+    {
+        var reusableA = Workflow("reusable-a", "reusable-a-v1", 1, true, Leaf("root-a"));
+        var plainB = Workflow("plain-b", "plain-b-v1", 1, false, Leaf("root-b"));
+        var service = Db.Service(access);
+
+        var seedUpload = await service.UploadAsync(Json(reusableA, plainB), null, Scope);
+        var seedAnalysis = await service.AnalyzeAsync(seedUpload.CollectionHandle, 0, 10, Scope);
+        var reusedActivityDefinitionId = seedAnalysis.Items
+            .Single(item => StringComparer.Ordinal.Equals(item.SourceDefinitionId, reusableA.DefinitionId)).ActivityDefinitionId!;
+        await service.ApplyAsync(seedUpload.CollectionHandle, seedAnalysis.PlanId, [reusableA.Id, plainB.Id], "mixed-seed", Scope);
+        var seeded = await Db.CountAsync();
+
+        // Every collection now carries an already-imported item and a new one inside the same batched read.
+        var reusableC = Workflow("reusable-c", "reusable-c-v1", 1, true, Leaf("root-c"));
+        var plainD = Workflow("plain-d", "plain-d-v1", 1, false, Leaf("root-d"));
+        var (mixedUpload, mixedPlan) = await UploadAsync(service, Scope, reusableA, plainB, reusableC, plainD);
+        await service.ApplyAsync(mixedUpload.CollectionHandle, mixedPlan,
+            [reusableA.Id, plainB.Id, reusableC.Id, plainD.Id], "mixed-apply", Scope);
+
+        var mixed = await Db.CountAsync();
+        Assert.Equal(seeded.ActivityDefinitions + 1, mixed.ActivityDefinitions);
+        Assert.Equal(seeded.ActivityVersions + 1, mixed.ActivityVersions);
+        Assert.Equal(seeded.Authoring + 1, mixed.Authoring);
+        Assert.Equal(seeded.WorkflowDefinitions + 2, mixed.WorkflowDefinitions);
+        Assert.Equal(seeded.WorkflowVersions + 2, mixed.WorkflowVersions);
+        Assert.True(mixed.Bindings > seeded.Bindings, "the two new sources must add bindings");
+        await using (var activities = Db.Activities())
+            Assert.Equal(1, await activities.ActivityDefinitions.CountAsync(row => row.Id == reusedActivityDefinitionId));
+
+        // A colliding item among healthy siblings: an unrelated row already owns one plan item's activity type key.
+        var reusableE = Workflow("reusable-e", "reusable-e-v1", 1, true, Leaf("root-e"));
+        var reusableF = Workflow("reusable-f", "reusable-f-v1", 1, true, Leaf("root-f"));
+        var (collidingUpload, collidingPlan) = await UploadAsync(service, Scope, reusableE, reusableF);
+        var victim = (await service.AnalyzeAsync(collidingUpload.CollectionHandle, 0, 10, Scope))
+            .Items.Single(item => StringComparer.Ordinal.Equals(item.SourceDefinitionId, reusableF.DefinitionId));
+        await using (var activities = Db.Activities())
+        {
+            activities.ActivityDefinitions.Add(new ActivityDefinition
+            {
+                Id = "unrelated-owner",
+                TenantId = Scope.TenantId,
+                ActivityTypeKey = victim.ActivityTypeKey!,
+                Category = "Elsa 3 reusable workflows",
+                DisplayName = reusableF.Name,
+                Description = reusableF.Description,
+                CreatedAt = reusableF.CreatedAt
+            });
+            await activities.SaveChangesAsync();
+        }
+
+        var before = await Db.CountAsync();
+        var collision = await Assert.ThrowsAsync<ReusableActivityImportCollisionException>(async () =>
+            await service.ApplyAsync(collidingUpload.CollectionHandle, collidingPlan, [reusableE.Id, reusableF.Id], "mixed-collision", Scope));
+
+        Assert.Equal($"Elsa 3 activity definition identity '{victim.ActivityDefinitionId}' is already owned by a different resource.", collision.Message);
+        var after = await Db.CountAsync();
+        Assert.Equal(
+            (before.Bindings, before.ActivityDefinitions, before.ActivityVersions, before.WorkflowDefinitions, before.WorkflowVersions),
+            (after.Bindings, after.ActivityDefinitions, after.ActivityVersions, after.WorkflowDefinitions, after.WorkflowVersions));
+    }
+
     [Fact]
     public async Task Unrelated_activity_definition_with_a_matching_shell_but_no_import_binding_fails_before_writes()
     {

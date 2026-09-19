@@ -52,4 +52,31 @@ public abstract class IdentityIamDbContext(DbContextOptions options) : DbContext
     }
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);
+
+    /// <summary>
+    /// The string columns this module compares in SQL beyond the ones a key or an index already covers:
+    /// the lookup keys every scoped read matches on, the normalized forms behind them, and the identity
+    /// material stored beside each key. Display names, descriptions, JSON columns and secret material are
+    /// absent; nothing compares them in SQL, and the uniqueness that matters runs through the normalized
+    /// keys. A case-insensitive database default here would let two reservations differing only in case
+    /// collide.
+    /// </summary>
+    private static readonly string[] OrdinallyComparedColumns =
+    [
+        "Id", "TenantId", "TenantLookupKey",
+        "UserId", "UserLookupKey", "RoleId", "RoleLookupKey",
+        "RuleId", "RuleLookupKey", "CredentialId", "CredentialLookupKey", "SubjectId",
+        "Provider", "ProviderLookupKey", "ProviderSubject", "ProviderSubjectLookupKey",
+        "NormalizedEmail", "NormalizedEmailKey",
+        "NormalizedUserName", "NormalizedUserNameKey",
+        "NormalizedRoleName", "NormalizedRoleNameKey",
+        "NormalizedName", "NormalizedNameKey",
+        "ClaimKey", "TokenKey",
+        "MutationReceiptId", "OperationId", "RequestFingerprint",
+        "ApplicationId", "ClientId"
+    ];
+
+    /// <summary>Binds this module's ordinal columns to <paramref name="providerName"/>'s binary collation, per column.</summary>
+    protected static void ApplyOrdinalCollation(ModelBuilder modelBuilder, string providerName) =>
+        EfOrdinalCollation.Apply(modelBuilder, providerName, OrdinallyComparedColumns);
 }

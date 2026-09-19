@@ -34,6 +34,7 @@ using Elsa.Serialization.Core;
 using Elsa.Locking.Core;
 using Elsa.Tasks.Core;
 using Microsoft.Data.Sqlite;
+using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -481,17 +482,25 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.Equal("TEXT", db.Model.FindEntityType(typeof(WorkflowDefinitionVersion))!.FindProperty(nameof(WorkflowDefinitionVersion.StateSource))!.GetColumnType());
     }
 
+    /// <summary>
+    /// The charset stays a model-wide declaration, because a charset decides what a column can store.
+    /// The collation does not: #1837 settled that it belongs on the columns this module compares, and
+    /// nowhere else, since modules share a database. The schema-level proof is in
+    /// <c>OrdinalCollationMigrationTests</c>; this only pins the shape of the declaration.
+    /// </summary>
     [Fact]
-    public void MySql_model_declares_provider_spike_collation_without_cross_provider_leakage()
+    public void MySql_model_declares_its_charset_model_wide_and_its_collation_only_per_column()
     {
         // SQLite supplies a relational model builder here; the assertions target the provider
         // metadata emitted by the MySQL context without adding a provider dependency to this test.
         using var db = new WorkflowsDesignMySqlDbContext(new DbContextOptionsBuilder<WorkflowsDesignMySqlDbContext>().UseSqlite("Data Source=:memory:").Options);
         Assert.Equal(WorkflowsDesignMySqlDbContext.CharacterSet, db.Model.FindAnnotation("MySQL:Charset")?.Value);
         var model = db.GetService<IDesignTimeModel>().Model;
-        Assert.Equal(WorkflowsDesignMySqlDbContext.Collation, model.GetCollation());
-        Assert.All(model.GetEntityTypes(), entity =>
-            Assert.Equal(WorkflowsDesignMySqlDbContext.Collation, entity.FindAnnotation("MySQL:Collation")?.Value));
+        Assert.Null(model.GetCollation());
+        Assert.All(model.GetEntityTypes(), entity => Assert.Null(entity.FindAnnotation(RelationalAnnotationNames.Collation)?.Value));
+        var definitions = model.FindEntityType(typeof(WorkflowDefinition))!;
+        Assert.Equal(EfOrdinalCollation.MySql, definitions.FindProperty(nameof(WorkflowDefinition.IdLookupHash))!.GetCollation());
+        Assert.Null(definitions.FindProperty(nameof(WorkflowDefinition.DeletedReason))!.GetCollation());
     }
 
     [Fact]

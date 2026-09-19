@@ -1,5 +1,6 @@
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -52,12 +53,14 @@ public sealed class IdentityProviderConfigurationProviderModelTests
         Assert.NotNull(kind);
         Assert.Null(kind!.GetMaxLength());
         if (provider == "MySql")
-        {
             Assert.Equal(IdentityProviderConfigurationMySqlDbContext.CharacterSet, designTimeModel.FindAnnotation("MySQL:Charset")?.Value);
-            Assert.Equal(IdentityProviderConfigurationMySqlDbContext.Collation, designTimeModel.GetCollation());
-            Assert.Equal(IdentityProviderConfigurationMySqlDbContext.Collation,
-                designTimeModel.FindEntityType(typeof(GlobalProviderConfigurationEntity))!.FindAnnotation("MySQL:Collation")?.Value);
-            Assert.Equal(IdentityProviderConfigurationMySqlDbContext.Collation, lookup!.FindAnnotation("MySQL:Collation")?.Value);
-        }
+
+        // #1837: per column, never model-wide. OrdinalCollationMigrationTests proves it reaches the schema.
+        Assert.Null(designTimeModel.GetCollation());
+        Assert.All(designTimeModel.GetEntityTypes(), entity => Assert.Null(entity.FindAnnotation(RelationalAnnotationNames.Collation)?.Value));
+        var expected = EfOrdinalCollation.ForProvider(EfRelationalProviderBinding.ExpectedProviderName(provider));
+        Assert.Equal(expected, lookup!.GetCollation());
+        Assert.Null(designTimeModel.FindEntityType(typeof(GlobalProviderConfigurationEntity))!
+            .FindProperty(nameof(GlobalProviderConfigurationEntity.SettingsJson))!.GetCollation());
     }
 }

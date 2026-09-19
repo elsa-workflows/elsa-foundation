@@ -26,4 +26,17 @@ public abstract class IdentityProviderConfigurationDbContext(DbContextOptions op
     }
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);
+
+    /// <summary>
+    /// The string columns this module compares in SQL: the row identity and the tenant/provider lookup
+    /// keys every read matches on. <c>SettingsJson</c> is absent; it is deserialized in .NET.
+    /// </summary>
+    private static readonly string[] OrdinallyComparedColumns =
+    [
+        "Id", "TenantId", "TenantLookupKey", "Provider", "ProviderLookupKey"
+    ];
+
+    /// <summary>Binds this module's ordinal columns to <paramref name="providerName"/>'s binary collation, per column.</summary>
+    protected static void ApplyOrdinalCollation(ModelBuilder modelBuilder, string providerName) =>
+        EfOrdinalCollation.Apply(modelBuilder, providerName, OrdinallyComparedColumns);
 }

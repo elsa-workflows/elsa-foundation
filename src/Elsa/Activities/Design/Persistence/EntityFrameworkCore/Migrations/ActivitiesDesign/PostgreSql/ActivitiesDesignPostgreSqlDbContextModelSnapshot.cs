@@ -16,7 +16,6 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .UseCollation("C")
                 .HasAnnotation("ProductVersion", "10.0.10")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
@@ -27,17 +26,20 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("TenantScopeKey")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("ActivityTypeKey")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.Property<string>("Category")
                         .IsRequired()
@@ -58,18 +60,21 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantKey")
                         .IsRequired()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
 
@@ -84,12 +89,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("TenantScopeKey")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
@@ -105,41 +112,49 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("DefinitionIdIdentityHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("ForkedFrom")
                         .HasColumnType("text");
 
                     b.Property<string>("HeadVersionId")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("HeadVersionIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("RecommendedVersionId")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("RecommendedVersionIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
 
@@ -156,12 +171,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("TenantScopeKey")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
@@ -173,15 +190,18 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("DefinitionIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
@@ -191,22 +211,26 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("PublishedVersionId")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("PublishedVersionIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<long>("Revision")
                         .HasColumnType("bigint");
 
                     b.Property<string>("SourceVersionId")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("SourceVersionIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("State")
                         .IsRequired()
@@ -216,7 +240,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("integer");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
 
@@ -230,12 +255,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("TenantScopeKey")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
@@ -247,16 +274,19 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("DraftId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("DraftIdIdentityHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
@@ -269,7 +299,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("bigint");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
 
@@ -284,12 +315,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("TenantScopeKey")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
@@ -301,24 +334,29 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("DefinitionIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("DraftId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("DraftIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
@@ -328,7 +366,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("ProviderKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("ProviderSchemaVersion")
                         .IsRequired()
@@ -337,12 +376,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("ResourceId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("ResourceIdIdentityHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<long>("Revision")
                         .HasColumnType("bigint");
@@ -353,22 +394,26 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("SortKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("SourceVersionId")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("SourceVersionIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -405,16 +450,19 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("TenantScopeKey")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("ActivityTypeKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("Category")
                         .IsRequired()
@@ -460,11 +508,13 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("DefinitionIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("Description")
                         .HasColumnType("text");
@@ -479,19 +529,23 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("text");
 
                     b.Property<string>("HeadProviderKey")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("HeadVersionId")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("HeadVersionIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
@@ -500,25 +554,30 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("text");
 
                     b.Property<string>("RecommendationProviderKey")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("RecommendedVersionId")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("RecommendedVersionIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("ResourceId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("ResourceIdIdentityHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("SearchText")
                         .IsRequired()
@@ -526,11 +585,13 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("SortKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -570,12 +631,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("TenantScopeKey")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
@@ -595,12 +658,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("DefinitionIdIdentityHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("DescriptorPayloadSource")
                         .HasColumnType("text");
@@ -620,7 +685,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("InputsSource")
                         .HasColumnType("text");
@@ -633,7 +699,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("ProviderKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("ProviderSchemaVersion")
                         .IsRequired()
@@ -642,7 +709,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("SemVerSortKey")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.Property<string>("SourceId")
                         .IsRequired()
@@ -653,11 +721,13 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("text");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("Version")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
 
@@ -672,12 +742,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("TenantScopeKey")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
@@ -689,16 +761,19 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("DefinitionVersionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("DefinitionVersionIdIdentityHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
@@ -708,7 +783,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("text");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
 
@@ -723,12 +799,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("TenantScopeKey")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
@@ -740,24 +818,29 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("DefinitionIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("DefinitionVersionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("DefinitionVersionIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
@@ -767,7 +850,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("ProviderKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("ProviderSchemaVersion")
                         .IsRequired()
@@ -779,12 +863,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("ResourceId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("ResourceIdIdentityHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("SearchText")
                         .IsRequired()
@@ -792,11 +878,13 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("SortKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.Property<string>("ValidFromKey")
                         .IsRequired()
@@ -814,7 +902,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("Version")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("VisibilityKey")
                         .IsRequired()
@@ -834,16 +923,19 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("TenantScopeKey")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("ActivityTypeKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<int>("ClosedTemplateCount")
                         .HasColumnType("integer");
@@ -862,29 +954,34 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("DefinitionIdIdentityHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("DefinitionVersionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("DefinitionVersionIdIdentityHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<int>("DirectDependencyCount")
                         .HasColumnType("integer");
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
@@ -926,11 +1023,13 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("SourceVersionId")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("SourceVersionIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("TemplateHash")
                         .IsRequired()
@@ -941,11 +1040,13 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("text");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("Version")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
 
@@ -963,12 +1064,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("TenantScopeKey")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<int>("ChildIndex")
                         .HasColumnType("integer");
@@ -991,16 +1094,19 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("DependencyVersionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("DependencyVersionIdIdentityHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1016,12 +1122,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("OccurrenceId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("OccurrenceIdIdentityHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("OwnerTemplateHash")
                         .IsRequired()
@@ -1030,23 +1138,28 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("OwnerVersionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("OwnerVersionIdIdentityHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("ParentOccurrenceId")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("ParentOccurrenceIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
 
@@ -1066,12 +1179,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("TenantScopeKey")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("AsOf")
                         .HasColumnType("timestamp with time zone");
@@ -1085,7 +1200,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("Items")
                         .IsRequired()
@@ -1102,7 +1218,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("bigint");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
 
@@ -1114,12 +1231,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("TenantScopeKey")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
@@ -1135,16 +1254,19 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("DraftId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("DraftIdIdentityHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1153,7 +1275,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("bigint");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("ValidatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1171,12 +1294,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("TenantScopeKey")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("AccessBindingFingerprint")
                         .IsRequired()
@@ -1184,20 +1309,24 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("ActorId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("ActorIdentityHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("AppliedIdempotencyKey")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("AppliedIdempotencyKeyIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("AuthorizationProfile")
                         .IsRequired()
@@ -1206,12 +1335,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("CandidateId")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                        .HasColumnType("character varying(512)")
+                        .UseCollation("C");
 
                     b.Property<string>("CandidateIdIdentityHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
@@ -1225,7 +1356,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1264,7 +1396,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("RetentionKey")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.Property<string>("SourceContractFingerprint")
                         .IsRequired()
@@ -1273,11 +1406,13 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("SourceDefinitionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("SourceDefinitionIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<int>("SourceLifecycle")
                         .HasColumnType("integer");
@@ -1293,11 +1428,13 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("SourceVersionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("SourceVersionIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
@@ -1311,7 +1448,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("text");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
 
@@ -1328,12 +1466,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("TenantScopeKey")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("AccessBindingFingerprint")
                         .IsRequired()
@@ -1341,16 +1481,19 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("ActivityTypeKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("ActorId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("ActorIdentityHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("AppliedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1366,11 +1509,13 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("CandidateId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("CandidateIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
@@ -1382,11 +1527,13 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("DefinitionIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("DefinitionMaterialJson")
                         .IsRequired()
@@ -1399,24 +1546,29 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("DraftId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("DraftIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdempotencyIdentityHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdempotencyKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1432,11 +1584,13 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("PublicCandidateId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("PublicCandidateIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("RequestFingerprint")
                         .IsRequired()
@@ -1446,7 +1600,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("integer");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
 
@@ -1461,12 +1616,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("TenantScopeKey")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("AsOf")
                         .HasColumnType("timestamp with time zone");
@@ -1480,7 +1637,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1489,7 +1647,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("bigint");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
 
@@ -1504,12 +1663,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("TenantScopeKey")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("AdvancedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1523,7 +1684,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1535,7 +1697,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("bigint");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
 
@@ -1547,12 +1710,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("TenantScopeKey")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("AuthoritativeResultFingerprint")
                         .IsRequired()
@@ -1575,7 +1740,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1586,24 +1752,29 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("OperationKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("OperationKeyIdentityHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("OperationKind")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.Property<string>("OperationKindIdentityHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
 
@@ -1618,12 +1789,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("TenantScopeKey")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
@@ -1634,12 +1807,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdempotencyKeyHash")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1647,28 +1822,33 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("PlanId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("PlanIdIdentityHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("ReceiptId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("ReceiptIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("ReceiptJson")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
 
@@ -1683,12 +1863,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("TenantScopeKey")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("IdIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
@@ -1699,7 +1881,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1707,18 +1890,21 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("PlanId")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<string>("PlanIdIdentityHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("PlanJson")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .UseCollation("C");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
 
@@ -1729,12 +1915,14 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                 {
                     b.Property<string>("TenantScopeKey")
                         .HasMaxLength(66)
-                        .HasColumnType("character varying(66)");
+                        .HasColumnType("character varying(66)")
+                        .UseCollation("C");
 
                     b.Property<string>("ScopeIdentityHash")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
@@ -1745,7 +1933,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.Property<string>("Id")
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1760,7 +1949,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<string>("Scope")
                         .IsRequired()
                         .HasMaxLength(450)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(450)")
+                        .UseCollation("C");
 
                     b.HasKey("TenantScopeKey", "ScopeIdentityHash");
 

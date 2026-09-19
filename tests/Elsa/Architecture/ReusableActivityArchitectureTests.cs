@@ -90,8 +90,8 @@ public sealed class ReusableActivityArchitectureTests
                            !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
             // Both module roots (#1815). src/ alone would quietly narrow this sweep as optional modules
             // move out; the Elsa3 exclusion below is what keeps the import boundary exempt, not the root.
-            .Concat(new[] { "src", "extensions" }
-                .SelectMany(root => Directory.EnumerateFiles(FullPath(root), "ReusableActivity*.cs", SearchOption.AllDirectories)))
+            .Concat(ModuleRoots.Resolve(RepoRoot, ModuleRoots.Production)
+                .SelectMany(directory => Directory.EnumerateFiles(directory, "ReusableActivity*.cs", SearchOption.AllDirectories)))
             .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}Elsa3{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
@@ -115,8 +115,7 @@ public sealed class ReusableActivityArchitectureTests
         // catching the marker leaking back into core. Test code stays out of scope, as it was when src/ was
         // the only root and tests/ sat outside it: fixtures legitimately construct the legacy shape, and an
         // extension carries its own tests/ subtree inside the root being scanned.
-        var hits = new[] { "src", "extensions" }
-            .SelectMany(root => Directory.EnumerateFiles(FullPath(root), "*.cs", SearchOption.AllDirectories))
+        var hits = ModuleRoots.SourceFiles(RepoRoot, ModuleRoots.Production)
             .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) &&
                            !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal) &&
                            !file.Contains($"{Path.DirectorySeparatorChar}tests{Path.DirectorySeparatorChar}", StringComparison.Ordinal))

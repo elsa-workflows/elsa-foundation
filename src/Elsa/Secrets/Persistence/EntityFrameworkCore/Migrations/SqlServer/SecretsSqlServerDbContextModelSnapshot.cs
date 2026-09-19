@@ -27,12 +27,12 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.SqlServer
                     b.Property<string>("TenantId")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("NormalizedName")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
@@ -41,7 +41,8 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.SqlServer
 
                     b.Property<string>("DisplayNameSearchKey")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(max)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<bool>("HasNonExpiringActiveVersion")
                         .HasColumnType("bit");
@@ -51,7 +52,8 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.SqlServer
 
                     b.Property<string>("NameSearchKey")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(max)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("Payload")
                         .IsRequired()
@@ -59,22 +61,23 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.SqlServer
 
                     b.Property<string>("ScopeLookupKey")
                         .HasColumnType("nvarchar(max)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
+                        .HasColumnType("nvarchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("StoreNameLookupKey")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("TypeNameLookupKey")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)")
-                        .UseCollation("Latin1_General_BIN2");
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("TenantId", "NormalizedName");
 

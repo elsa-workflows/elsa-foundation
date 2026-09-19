@@ -8,10 +8,10 @@ public sealed class ActivitiesDesignSqliteDbContext(DbContextOptions<ActivitiesD
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.Sqlite;
     protected override void ConfigureProvider(ModelBuilder modelBuilder)
     {
-        modelBuilder.UseCollation("BINARY");
         modelBuilder.Model.FindEntityType(typeof(ActivityDefinition))!.FindProperty("ConcurrencyToken")!.SetColumnType("BLOB");
         modelBuilder.Entity<ActivityDefinitionManagementProjectionRevision>().Property(x => x.ContentAuthorityIsValid)
             .HasComputedColumnSql(ActivityAuthorityValiditySql.Compose(ActivityAuthorityValiditySql.Sqlite(), "1", "0"), stored: false);
+        ApplyOrdinalCollation(modelBuilder, ExpectedProviderName);
     }
 }
 
@@ -20,7 +20,6 @@ public sealed class ActivitiesDesignSqlServerDbContext(DbContextOptions<Activiti
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.SqlServer;
     protected override void ConfigureProvider(ModelBuilder modelBuilder)
     {
-        modelBuilder.UseCollation("Latin1_General_100_BIN2");
         modelBuilder.Model.GetEntityTypes().ToList().ForEach(entity => entity.FindProperty("ConcurrencyToken")?.SetColumnType("varbinary(16)"));
         modelBuilder.Entity<ActivityDefinitionManagementProjectionRevision>().Property(x => x.ContentAuthorityIsValid)
             .HasComputedColumnSql(ActivityAuthorityValiditySql.Compose(ActivityAuthorityValiditySql.SqlServer(), "CONVERT(bit, 1)", "CONVERT(bit, 0)"), stored: false);
@@ -45,6 +44,8 @@ public sealed class ActivitiesDesignSqlServerDbContext(DbContextOptions<Activiti
                 property.SetMaxLength(Math.Max(1, current * (450 - fixedLength) / Math.Max(1, variableTotal)));
             }
         }
+
+        ApplyOrdinalCollation(modelBuilder, ExpectedProviderName);
     }
 }
 
@@ -53,10 +54,10 @@ public sealed class ActivitiesDesignPostgreSqlDbContext(DbContextOptions<Activit
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.PostgreSql;
     protected override void ConfigureProvider(ModelBuilder modelBuilder)
     {
-        modelBuilder.UseCollation("C");
         modelBuilder.Model.GetEntityTypes().ToList().ForEach(entity => entity.FindProperty("ConcurrencyToken")?.SetColumnType("bytea"));
         modelBuilder.Entity<ActivityDefinitionManagementProjectionRevision>().Property(x => x.ContentAuthorityIsValid)
             .HasComputedColumnSql(ActivityAuthorityValiditySql.Compose(ActivityAuthorityValiditySql.PostgreSql(), "true", "false"), stored: true);
+        ApplyOrdinalCollation(modelBuilder, ExpectedProviderName);
     }
 }
 
@@ -65,9 +66,9 @@ public sealed class ActivitiesDesignMySqlDbContext(DbContextOptions<ActivitiesDe
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.MySql;
     protected override void ConfigureProvider(ModelBuilder modelBuilder)
     {
-        modelBuilder.UseCollation("utf8mb4_0900_bin");
         modelBuilder.Model.GetEntityTypes().ToList().ForEach(entity => entity.FindProperty("ConcurrencyToken")?.SetColumnType("varbinary(16)"));
         modelBuilder.Entity<ActivityDefinitionManagementProjectionRevision>().Property(x => x.ContentAuthorityIsValid)
             .HasComputedColumnSql(ActivityAuthorityValiditySql.Compose(ActivityAuthorityValiditySql.MySql(), "1", "0"), stored: false);
+        ApplyOrdinalCollation(modelBuilder, ExpectedProviderName);
     }
 }

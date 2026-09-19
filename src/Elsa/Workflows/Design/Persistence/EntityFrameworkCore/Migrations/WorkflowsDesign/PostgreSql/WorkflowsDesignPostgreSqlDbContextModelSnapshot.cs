@@ -40,8 +40,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("DeletedReason")
-                        .HasColumnType("text")
-                        .UseCollation("C");
+                        .HasColumnType("text");
 
                     b.Property<string>("Description")
                         .HasMaxLength(256)
@@ -125,8 +124,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .UseCollation("C");
 
                     b.Property<string>("StateSource")
-                        .HasColumnType("text")
-                        .UseCollation("C");
+                        .HasColumnType("text");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
@@ -166,8 +164,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
 
                     b.Property<string>("ActivityPresentationJson")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .UseCollation("C");
+                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -183,8 +180,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
 
                     b.Property<string>("RecordsJson")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .UseCollation("C");
+                        .HasColumnType("text");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
@@ -257,12 +253,10 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("SourceDraftId")
-                        .HasColumnType("text")
-                        .UseCollation("C");
+                        .HasColumnType("text");
 
                     b.Property<string>("StateSource")
-                        .HasColumnType("text")
-                        .UseCollation("C");
+                        .HasColumnType("text");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
@@ -298,8 +292,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
 
                     b.Property<string>("ActivityPresentationJson")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .UseCollation("C");
+                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -315,8 +308,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
 
                     b.Property<string>("RecordsJson")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .UseCollation("C");
+                        .HasColumnType("text");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
@@ -389,8 +381,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
 
                     b.Property<string>("ResultJson")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .UseCollation("C");
+                        .HasColumnType("text");
 
                     b.Property<string>("TenantId")
                         .IsRequired()

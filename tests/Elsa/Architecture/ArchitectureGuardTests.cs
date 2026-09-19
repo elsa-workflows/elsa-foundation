@@ -670,26 +670,14 @@ public sealed partial class ArchitectureGuardTests
     /// loss of coverage rather than a failure. Moving Elsa 3 dropped seven projects out of the fifteen
     /// guards below before this was widened.
     /// </remarks>
-    private static readonly string[] CodeRoots = ["src", "tests", "extensions"];
-
-    private static IEnumerable<ProjectInfo> ProjectFiles()
-    {
-        foreach (var root in CodeRoots)
-        {
-            var directory = Path.Combine(RepoRoot, root);
-            if (!Directory.Exists(directory)) continue;
-
-            foreach (var file in Directory.EnumerateFiles(directory, "*.csproj", SearchOption.AllDirectories))
-                yield return ProjectInfo.From(RepoRoot, file);
-        }
-    }
+    private static IEnumerable<ProjectInfo> ProjectFiles() =>
+        ModuleRoots.Resolve(RepoRoot, ModuleRoots.All)
+            .SelectMany(directory => Directory.EnumerateFiles(directory, "*.csproj", SearchOption.AllDirectories))
+            .Select(file => ProjectInfo.From(RepoRoot, file));
 
     /// <summary>Production source files across every module root, excluding test and build output.</summary>
     private static IEnumerable<string> ModuleSourceFiles() =>
-        new[] { "src", "extensions" }
-            .Select(root => Path.Combine(RepoRoot, root))
-            .Where(Directory.Exists)
-            .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+        ModuleRoots.SourceFiles(RepoRoot, ModuleRoots.Production)
             .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}tests{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
 
     private static IEnumerable<SolutionProjectInfo> SolutionProjects()

@@ -15,7 +15,6 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .UseCollation("utf8mb4_0900_bin")
                 .HasAnnotation("ProductVersion", "10.0.10")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
@@ -26,12 +25,12 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("Id")
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("Content")
                         .IsRequired()
-                        .HasColumnType("longtext")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("longtext");
 
                     b.Property<int>("ReceiptExpiresAtOffsetMinutes")
                         .HasColumnType("int");
@@ -47,35 +46,41 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("varchar(32)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("varchar(32)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(1200)
                         .HasColumnType("varchar(1200)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TestRunId")
                         .IsRequired()
                         .HasMaxLength(1200)
                         .HasColumnType("varchar(1200)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TestRunIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<byte[]>("TestRunIdOrderKey")
@@ -93,8 +98,6 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .HasDatabaseName("IX_elsa_activity_draft_test_runs_scope_expiry_testRunId");
 
                     b.ToTable("elsa_activity_draft_test_runs", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 
             modelBuilder.Entity("Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities.ActivityPublicationReceiptEntity", b =>
@@ -102,51 +105,58 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("Id")
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("Content")
                         .IsRequired()
-                        .HasColumnType("longtext")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("IdempotencyKey")
                         .IsRequired()
                         .HasMaxLength(1200)
                         .HasColumnType("varchar(1200)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("ReceiptKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("ReceiptTenantId")
                         .HasMaxLength(1200)
                         .HasColumnType("varchar(1200)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("varchar(32)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("varchar(32)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(1200)
                         .HasColumnType("varchar(1200)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("Id");
@@ -156,8 +166,6 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .HasDatabaseName("IX_elsa_activity_publication_receipts_scope_receiptKey");
 
                     b.ToTable("elsa_activity_publication_receipts", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 
             modelBuilder.Entity("Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities.PublicationPolicyEntity", b =>
@@ -165,30 +173,35 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("Id")
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("DefaultAction")
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("varchar(32)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("DefaultSlotName")
                         .IsRequired()
                         .HasMaxLength(1200)
                         .HasColumnType("varchar(1200)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("PolicyKey")
                         .IsRequired()
                         .HasMaxLength(1244)
                         .HasColumnType("varchar(1244)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("PolicyKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<long>("Revision")
@@ -198,12 +211,14 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("TenantId")
                         .HasMaxLength(1200)
                         .HasColumnType("varchar(1200)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<int>("UpdatedAtOffsetMinutes")
@@ -215,11 +230,13 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("WorkflowDefinitionId")
                         .HasMaxLength(1200)
                         .HasColumnType("varchar(1200)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("WorkflowDefinitionIdHash")
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("Id");
@@ -229,8 +246,6 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .HasDatabaseName("IX_elsa_publication_policies_scope_policyKey");
 
                     b.ToTable("elsa_publication_policies", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 
             modelBuilder.Entity("Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities.PublicationProjectionIntentEntity", b =>
@@ -238,6 +253,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("Id")
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<int>("AttemptCount")
@@ -247,12 +263,14 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .IsRequired()
                         .HasMaxLength(1200)
                         .HasColumnType("varchar(1200)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("IntentIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<byte[]>("IntentIdOrderKey")
@@ -262,13 +280,11 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
 
                     b.Property<string>("LastFailureCode")
                         .HasMaxLength(344)
-                        .HasColumnType("varchar(344)")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("varchar(344)");
 
                     b.Property<string>("LastFailureMessage")
                         .HasMaxLength(1368)
-                        .HasColumnType("varchar(1368)")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("varchar(1368)");
 
                     b.Property<int?>("NextAttemptAtOffsetMinutes")
                         .HasColumnType("int");
@@ -280,30 +296,35 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("varchar(32)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("ProjectionKind")
                         .IsRequired()
                         .HasMaxLength(1200)
                         .HasColumnType("varchar(1200)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("ProjectionKindHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("PublicationId")
                         .IsRequired()
                         .HasMaxLength(1200)
                         .HasColumnType("varchar(1200)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("PublicationIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<long>("Revision")
@@ -314,17 +335,20 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("varchar(32)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(1200)
                         .HasColumnType("varchar(1200)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("Id");
@@ -337,8 +361,6 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .HasDatabaseName("IX_elsa_publication_projection_intents_scope_publication_order");
 
                     b.ToTable("elsa_publication_projection_intents", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 
             modelBuilder.Entity("Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities.PublicationRecordEntity", b =>
@@ -346,6 +368,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("Id")
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<int?>("ActivatedAtOffsetMinutes")
@@ -358,6 +381,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .IsRequired()
                         .HasMaxLength(1200)
                         .HasColumnType("varchar(1200)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<int>("CreatedAtOffsetMinutes")
@@ -370,23 +394,23 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .HasColumnType("bigint");
 
                     b.Property<string>("FailureCode")
-                        .HasColumnType("longtext")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("FailureMessage")
-                        .HasColumnType("longtext")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("PublicationId")
                         .IsRequired()
                         .HasMaxLength(1200)
                         .HasColumnType("varchar(1200)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("PublicationIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<int?>("RetiredAtOffsetMinutes")
@@ -403,52 +427,61 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .IsRequired()
                         .HasMaxLength(1200)
                         .HasColumnType("varchar(1200)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("SlotIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("SlotName")
                         .IsRequired()
                         .HasMaxLength(1200)
                         .HasColumnType("varchar(1200)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("SourceReferenceId")
                         .HasMaxLength(1200)
                         .HasColumnType("varchar(1200)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("varchar(32)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(1200)
                         .HasColumnType("varchar(1200)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TenantIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("WorkflowDefinitionId")
                         .IsRequired()
                         .HasMaxLength(1200)
                         .HasColumnType("varchar(1200)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("WorkflowDefinitionVersionId")
                         .IsRequired()
                         .HasMaxLength(1200)
                         .HasColumnType("varchar(1200)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("Id");
@@ -461,8 +494,6 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .HasDatabaseName("IX_elsa_publication_records_scope_slot_publication");
 
                     b.ToTable("elsa_publication_records", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 
             modelBuilder.Entity("Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities.PublicationSnapshotReviewEntity", b =>
@@ -470,29 +501,34 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("PreflightToken")
                         .HasMaxLength(256)
                         .HasColumnType("varchar(256)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("Action")
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("varchar(32)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("ActivePublicationId")
                         .HasMaxLength(256)
                         .HasColumnType("varchar(256)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("CandidateHash")
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("varchar(128)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("varchar(256)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<long>("ExpiresAt")
@@ -502,6 +538,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("varchar(32)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<long?>("PolicyRevision")
@@ -511,27 +548,32 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("varchar(32)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("RequestedAction")
                         .HasMaxLength(32)
                         .HasColumnType("varchar(32)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("RequestedExpectedPublicationId")
                         .HasMaxLength(256)
                         .HasColumnType("varchar(256)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("RequestedSlotName")
                         .HasMaxLength(256)
                         .HasColumnType("varchar(256)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("SlotName")
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("varchar(256)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<long>("SlotRevision")
@@ -540,6 +582,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<string>("TenantId")
                         .HasMaxLength(256)
                         .HasColumnType("varchar(256)")
+                        .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("PreflightToken");
@@ -548,8 +591,6 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .HasDatabaseName("IX_elsa_publication_snapshot_reviews_expiresAt_preflightToken");
 
                     b.ToTable("elsa_publication_snapshot_reviews", (string)null);
-
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 #pragma warning restore 612, 618
         }
