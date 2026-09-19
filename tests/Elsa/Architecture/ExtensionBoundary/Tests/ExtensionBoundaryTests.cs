@@ -34,7 +34,8 @@ public sealed class ExtensionBoundaryTests
     /// <c>referencing project -> referenced project</c>.
     /// </summary>
     /// <remarks>
-    /// Empty while <c>extensions/</c> is empty. Every entry added later needs a comment saying why the
+    /// Empty because Elsa 3, the one bucket in <c>extensions/</c>, declares no edge — not because the
+    /// tree is empty. Every entry added later needs a comment saying why the
     /// edge is legitimate, in the same spirit as <c>EfCoreDependencyGuardTests.AllowedEfConsumers</c>:
     /// the point is that the list is short and argued, not that it is absent.
     /// </remarks>

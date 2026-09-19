@@ -13,8 +13,15 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Pro
 /// <c>EnsureCreatedAsync</c>, nowhere near the concurrency the failing test itself exercises.
 ///
 /// Nothing in this assembly intends to exercise TLS, so the negotiation is removed rather than serialized. Warming
-/// one fixture's connection would not warm the other's, and the two collections are not the only source of
-/// concurrency either: one placement test opens two MySQL connections at once by design. See #1854.
+/// a connection up front inside the fixtures would not help either: the two collection fixtures' own
+/// <c>InitializeAsync</c> run in parallel, so the warm-up would race exactly as the first real connection did.
+/// See #1854.
+///
+/// One invariant follows from this and is easy to break by accident: <b>at most one test in this assembly may
+/// negotiate TLS, and it must live in a single collection.</b> <c>MySqlTestConnectionTests</c> is that test — its
+/// negative control opens a deliberately TLS-negotiating connection to prove the guard is load-bearing. Mirroring
+/// that control onto a second collection would put two negotiations back in parallel and reproduce #1854, so the
+/// command-transport guard asserts the hardened string only.
 /// </remarks>
 internal static class MySqlTestConnection
 {

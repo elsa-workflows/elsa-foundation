@@ -69,8 +69,8 @@ public sealed class HostShellFeatureVisibilityTests
     [Fact]
     public void Generated_feature_maps_include_direct_web_shell_features()
     {
-        var webFeatures = Directory
-            .EnumerateFiles(Path.Join(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
+        var webFeatures = ModuleRoots
+            .ProductionSourceFiles(RepoRoot)
             .Where(file => !IsGeneratedOutput(file))
             .SelectMany(file => DirectWebFeatureDeclaration.Matches(File.ReadAllText(file))
                 .Select(match => match.Groups["name"].Value))

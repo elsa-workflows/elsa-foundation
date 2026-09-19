@@ -36,4 +36,18 @@ internal static class ModuleRoots
     /// <summary>Every <c>.cs</c> file under the given roots, excluding build output.</summary>
     internal static IEnumerable<string> SourceFiles(string repoRoot, params string[] roots) =>
         Resolve(repoRoot, roots).SelectMany(directory => Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories));
+
+    /// <summary>Shipping module source: <see cref="Production"/> with each extension's own tests left out.</summary>
+    /// <remarks>
+    /// A guard that sweeps <see cref="Production"/> raw also sweeps <c>extensions/&lt;bucket&gt;/tests/</c>, because an
+    /// extension carries its tests inside its own root rather than under the repository's <c>tests/</c>. Guards that
+    /// state a rule about production code — no EF namespace outside the admitted surfaces, no pruned contract
+    /// reappearing — then fail on test code that was always allowed to do those things. Every such guard wants this.
+    /// </remarks>
+    internal static IEnumerable<string> ProductionSourceFiles(string repoRoot) =>
+        SourceFiles(repoRoot, Production).Where(IsNotTestFile);
+
+    /// <summary>The same exclusion for a path that is not necessarily a <c>.cs</c> file.</summary>
+    internal static bool IsNotTestFile(string path) =>
+        !path.Contains($"{Path.DirectorySeparatorChar}tests{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
 }

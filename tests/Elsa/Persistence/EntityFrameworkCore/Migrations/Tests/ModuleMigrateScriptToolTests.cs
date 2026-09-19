@@ -15,6 +15,7 @@ public sealed class ModuleMigrateScriptToolTests : IDisposable
         AlphaPostgreSqlDbContext|PostgreSql|Elsa.Alpha.Persistence|Elsa.Alpha.Persistence
         AlphaSqliteDbContext|Sqlite|Elsa.Alpha.Persistence|Elsa.Alpha.Persistence
         BetaPostgreSqlDbContext|PostgreSql|Elsa.Beta.Persistence|Elsa.Beta.Persistence
+        DeltaPostgreSqlDbContext|PostgreSql|Elsa3.Delta.Persistence|Elsa3.Delta.Persistence
         """;
 
     private readonly string sandbox = Path.Join(Path.GetTempPath(), $"elsa-module-migrate-{Guid.NewGuid():N}");
@@ -32,6 +33,13 @@ public sealed class ModuleMigrateScriptToolTests : IDisposable
         File.Copy(RealScript, Path.Join(repository, "tools", "ef", "module-migrate.sh"));
         foreach (var assembly in new[] { "Elsa.Alpha.Persistence", "Elsa.Beta.Persistence" })
             File.WriteAllText(Path.Join(repository, "src", $"{assembly}.csproj"), "<Project />");
+        // An optional module, to keep the script resolving projects outside src/ (#1815). Without one here
+        // the sandbox looked exactly like the tree did before Elsa 3 moved, and a root the script no longer
+        // searches reads as "module not found" only when an operator runs it against a real database.
+        Directory.CreateDirectory(Path.Join(repository, "extensions", "Elsa3", "src"));
+        File.WriteAllText(
+            Path.Join(repository, "extensions", "Elsa3", "src", "Elsa3.Delta.Persistence.csproj"),
+            "<Project />");
         WriteShim("dotnet", $$"""
             #!/usr/bin/env bash
             set -euo pipefail
@@ -40,16 +48,20 @@ public sealed class ModuleMigrateScriptToolTests : IDisposable
               run) printf '%s\n' '{{Catalog}}' ;;
               ef)
                 [[ "${2:-}" == "migrations" && "${3:-}" == "script" ]] || exit 97
-                context=""; file=""; idempotent=0
+                context=""; file=""; project=""; idempotent=0
                 while [[ $# -gt 0 ]]; do
                   case "$1" in
                     --context) context="${2:?}"; shift 2 ;;
                     --output) file="${2:?}"; shift 2 ;;
+                    --project) project="${2-}"; shift 2 ;;
                     --idempotent) idempotent=1; shift ;;
                     *) shift ;;
                   esac
                 done
                 [[ $idempotent -eq 1 ]] || exit 96
+                # Real `dotnet ef` cannot operate on a project it was not given. Refusing here is what makes
+                # every test below an assertion that the script resolved the module, whatever root it lives in.
+                [[ -n "$project" && -f "$project" ]] || exit 94
                 printf 'script|%s|%s\n' "$context" "$file" >> "$ELSA_EF_TEST_CALLS"
                 # Deterministic stand-in for what EF writes: the same model must script the same bytes twice.
                 printf 'INSERT INTO __EFMigrationsHistory_%s VALUES (1);\n' "$context" > "$file"
@@ -65,15 +77,19 @@ public sealed class ModuleMigrateScriptToolTests : IDisposable
         var result = Run("script", "PostgreSql", output);
 
         Assert.Equal(0, result.ExitCode);
-        Assert.Equal(["Alpha/PostgreSql.sql", "Beta/PostgreSql.sql"], WrittenScripts());
+        Assert.Equal(["Alpha/PostgreSql.sql", "Beta/PostgreSql.sql", "Delta/PostgreSql.sql"], WrittenScripts());
         // The same module's Sqlite row is in the catalog; naming PostgreSql must not script it. The shim
         // refuses a call without --idempotent, so a recorded call is also proof the flag was passed.
         Assert.Equal(
-            ["AlphaPostgreSqlDbContext|Alpha/PostgreSql.sql", "BetaPostgreSqlDbContext|Beta/PostgreSql.sql"],
+            [
+                "AlphaPostgreSqlDbContext|Alpha/PostgreSql.sql",
+                "BetaPostgreSqlDbContext|Beta/PostgreSql.sql",
+                "DeltaPostgreSqlDbContext|Delta/PostgreSql.sql"
+            ],
             ScriptedContexts());
         Assert.Contains("script AlphaPostgreSqlDbContext -> ", result.Output, StringComparison.Ordinal);
         Assert.Contains("Alpha/PostgreSql.sql", result.Output, StringComparison.Ordinal);
-        Assert.Contains("script: 2 module context(s) OK", result.Output, StringComparison.Ordinal);
+        Assert.Contains("script: 3 module context(s) OK", result.Output, StringComparison.Ordinal);
     }
 
     [SkippableFact]
@@ -109,7 +125,7 @@ public sealed class ModuleMigrateScriptToolTests : IDisposable
         var result = Run("script-check", "PostgreSql", output);
 
         Assert.Equal(0, result.ExitCode);
-        Assert.Contains("script-check: 2 module context(s) OK", result.Output, StringComparison.Ordinal);
+        Assert.Contains("script-check: 3 module context(s) OK", result.Output, StringComparison.Ordinal);
     }
 
     [SkippableFact]

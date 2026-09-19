@@ -45,7 +45,7 @@ an Elsa 3 database, so the route does not need one:
 1. Export your workflow definitions from Elsa 3 as JSON.
 2. Install Elsa 4 fresh against one of the four supported engines above.
 3. Import the definitions through
-   [`Elsa3.Activities.Design.Import`](../../../Elsa3/Activities/Design/Import/EXTENSION_POINTS.md), which
+   [`Elsa3.Activities.Design.Import`](../../../../extensions/Elsa3/src/Activities/Design/Import/EXTENSION_POINTS.md), which
    reads that JSON through `IActivityCollectionJsonSource` and applies a reviewed, dependency-closed
    mutation.
 

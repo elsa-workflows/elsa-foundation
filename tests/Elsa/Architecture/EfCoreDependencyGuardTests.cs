@@ -43,7 +43,7 @@ public sealed class EfCoreDependencyGuardTests
     [Fact]
     public void Only_admitted_consumers_and_pilot_projects_resolve_ef_core_packages()
     {
-        var projects = LoadSrcProjects();
+        var projects = LoadModuleProjects();
 
         Assert.All(AllowedEfConsumers, name => Assert.Contains(name, projects.Keys));
 
@@ -61,7 +61,7 @@ public sealed class EfCoreDependencyGuardTests
     [Fact]
     public void Workbench_resolves_only_reviewed_vendor_and_pilot_EF_packages()
     {
-        var offenders = LoadSrcProjects()["Elsa.Workbench"].EfPackagesByConfiguration
+        var offenders = LoadModuleProjects()["Elsa.Workbench"].EfPackagesByConfiguration
             .SelectMany(configuration =>
                 FindUnexpectedEfPackages(configuration.Value, AllowedWorkbenchEfPackages)
                     .Select(package => $"{package} ({configuration.Key}) is not reviewed")
@@ -505,7 +505,7 @@ public sealed class EfCoreDependencyGuardTests
     [Fact]
     public void No_source_file_outside_the_admitted_surfaces_mentions_ef_core()
     {
-        var offenders = Directory.EnumerateFiles(Path.Join(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
+        var offenders = ModuleRoots.ProductionSourceFiles(RepoRoot)
             .Where(file => !IsBuildOutput(file) && !IsAdmittedEfSource(file))
             .Where(file => File.ReadAllText(file).Contains(EfPackageToken, StringComparison.Ordinal))
             .Select(file => Path.GetRelativePath(RepoRoot, file))
@@ -515,10 +515,12 @@ public sealed class EfCoreDependencyGuardTests
         Assert.True(offenders.Length == 0, Report("mention an EF package namespace in source", offenders));
     }
 
-    private static Dictionary<string, Project> LoadSrcProjects()
+    private static Dictionary<string, Project> LoadModuleProjects()
     {
         var projects = new Dictionary<string, Project>(StringComparer.Ordinal);
-        foreach (var file in Directory.EnumerateFiles(Path.Join(RepoRoot, "src"), "*.csproj", SearchOption.AllDirectories).Where(f => !IsBuildOutput(f)))
+        var files = ModuleRoots.Resolve(RepoRoot, ModuleRoots.Production)
+            .SelectMany(root => Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories));
+        foreach (var file in files.Where(f => !IsBuildOutput(f) && ModuleRoots.IsNotTestFile(f)))
         {
             var relativePath = Path.GetRelativePath(RepoRoot, file).Replace('\\', '/');
             projects.Add(
