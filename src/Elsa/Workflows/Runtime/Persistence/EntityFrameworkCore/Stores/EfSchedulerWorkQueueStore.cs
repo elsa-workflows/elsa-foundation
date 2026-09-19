@@ -46,7 +46,7 @@ public sealed class EfSchedulerWorkQueueStore(
             Detach(entity);
             return workItem;
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
             Detach(entity);
             var winner = await context.SchedulerWorkItems.AsNoTracking().SingleOrDefaultAsync(row => row.Id == id, cancellationToken)
@@ -58,7 +58,7 @@ public sealed class EfSchedulerWorkQueueStore(
             Detach(entity);
             throw;
         }
-        catch (DbUpdateException)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             Detach(entity);
             throw;
@@ -265,7 +265,7 @@ public sealed class EfSchedulerWorkQueueStore(
             Detach(updated);
             throw;
         }
-        catch (DbUpdateException)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             Detach(updated);
             throw;
@@ -302,7 +302,7 @@ public sealed class EfSchedulerWorkQueueStore(
             Detach(row);
             throw;
         }
-        catch (DbUpdateException)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             Detach(row);
             throw;
@@ -347,7 +347,7 @@ public sealed class EfSchedulerWorkQueueStore(
             Detach(row);
             throw;
         }
-        catch (DbUpdateException)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             Detach(row);
             throw;

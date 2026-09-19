@@ -12,6 +12,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
+using Elsa.Persistence.EntityFramework.Tests;
 using Xunit;
 using Microsoft.Extensions.DependencyInjection;
 using static Elsa.Persistence.EntityFramework.Tests.ProviderFailures;
@@ -387,6 +388,24 @@ public sealed class EfWorkflowExecutionStateStoreTests
 
     private sealed class DerivedFeature : RuntimeWorkflowExecutionEntityFrameworkCoreFeature
     {
+    }
+
+    /// <summary>
+    /// A provider failure an execution strategy re-raised must reach this store's own exception with the change
+    /// tracker cleared. Before #1814 every clause here was keyed to DbUpdateException or DbException by type, so the
+    /// wrapper escaped untouched and left the tracker holding the failed entity.
+    /// </summary>
+    [Fact]
+    public async Task A_wrapped_provider_failure_is_normalized_and_clears_the_change_tracker()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a", ProviderFailures.FailingSaveInterceptor.WrappedProviderFailure());
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => fixture.Store.SaveAsync(State("wrapped-failure", "tenant-a", DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("EF workflow execution state saving failed", failure.Message, StringComparison.Ordinal);
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
     }
 
     private sealed class Database : IAsyncDisposable

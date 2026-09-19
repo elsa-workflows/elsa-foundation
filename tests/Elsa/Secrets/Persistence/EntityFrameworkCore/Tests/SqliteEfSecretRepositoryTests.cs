@@ -1,4 +1,5 @@
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
@@ -287,6 +288,56 @@ public sealed class SqliteEfSecretRepositoryTests
         {
             File.Delete(path);
         }
+    }
+
+    /// <summary>
+    /// A provider failure an execution strategy re-raised must still reach the store's own exception, and must still
+    /// leave the change tracker clean. Before #1814 the wrapper escaped this store untouched, because every clause
+    /// here was keyed to <c>DbUpdateException</c> by type and the wrapper is an <c>InvalidOperationException</c>.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_wrapped_provider_failure_is_normalized_on_add_and_on_save(bool wrapped)
+    {
+        var failure = wrapped
+            ? ProviderFailures.FailingSaveInterceptor.WrappedProviderFailure()
+            : new ProviderFailures.FailingSaveInterceptor(() => new DbUpdateException("save failed", new ProviderFailures.SyntheticProviderException()));
+        await using var fixture = await SqliteFixture.CreateAsync(failure);
+
+        var add = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => fixture.Repository.TryAddAsync(Secret("tenant-a", "payments.api", "alpha")).AsTask());
+
+        Assert.Contains("Could not add secret", add.Message, StringComparison.Ordinal);
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+
+        var save = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => fixture.Repository.SaveAsync(Secret("tenant-a", "payments.api", "alpha")).AsTask());
+
+        Assert.Contains("Could not save secret", save.Message, StringComparison.Ordinal);
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+    }
+
+    /// <summary>
+    /// The create race is the case that mattered most: wrapped, the old clause could not match it at all, so "another
+    /// writer won" surfaced as a thrown exception instead of the documented <c>false</c> and <c>Conflict</c> answers.
+    /// </summary>
+    [Fact]
+    public async Task A_wrapped_unique_violation_is_still_the_documented_conflict_answer()
+    {
+        const int uniqueViolation = 2627;
+        var races = new ProviderFailures.FailingSaveInterceptor(
+            () => ProviderFailures.WrappedSaveFailure(new ProviderFailures.SqlException(uniqueViolation)));
+        await using var fixture = await SqliteFixture.CreateAsync(races);
+        var revisions = Assert.IsAssignableFrom<IRevisionAwareSecretRepository>(fixture.Repository);
+
+        Assert.False(await fixture.Repository.TryAddAsync(Secret("tenant-a", "payments.api", "alpha")));
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+
+        var saved = await revisions.SaveWithRevisionAsync(Secret("tenant-a", "payments.api", "beta"), null);
+
+        Assert.Equal(SecretRevisionSaveStatus.Conflict, saved.Status);
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
     }
 
     private static Secret Secret(

@@ -158,8 +158,8 @@ public sealed class EfActivityManagementProjectionWriter(ActivitiesDesignDbConte
             db.ActivityManagementProjectionSnapshots.Add(new ActivityManagementProjectionSnapshot { Id = SequenceKey(sequence), Sequence = sequence, AsOf = changedAt });
             try { await db.SaveChangesAsync(cancellationToken); }
             catch (DbUpdateConcurrencyException) { throw; }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception)) { throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Provider, "projection-checkpoint-unique", null, exception); }
-            catch (DbUpdateException exception) { throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Provider, "projection-checkpoint", null, exception); }
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey)) { throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Provider, "projection-checkpoint-unique", null, exception); }
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Provider, "projection-checkpoint", null, exception); }
             return sequence;
         }
     }

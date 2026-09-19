@@ -200,7 +200,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 await transaction.CommitAsync(writeCancellationToken);
                 return ResultFor(commit, marker);
             }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
             {
                 await RollbackAndRestoreAsync(transaction);
                 var winner = await FindMarkerAsync(scope, commit.CommitId, writeCancellationToken);

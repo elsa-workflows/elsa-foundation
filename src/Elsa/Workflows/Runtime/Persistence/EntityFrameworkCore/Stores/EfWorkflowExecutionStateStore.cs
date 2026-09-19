@@ -54,8 +54,7 @@ public sealed class EfWorkflowExecutionStateStore(
         }
         catch (OperationCanceledException) { context.ChangeTracker.Clear(); throw; }
         catch (InvalidDataException) { context.ChangeTracker.Clear(); throw; }
-        catch (DbUpdateException exception) { context.ChangeTracker.Clear(); throw Normalize("saving", state.WorkflowExecutionId, exception); }
-        catch (DbException exception) { context.ChangeTracker.Clear(); throw Normalize("saving", state.WorkflowExecutionId, exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { context.ChangeTracker.Clear(); throw Normalize("saving", state.WorkflowExecutionId, exception); }
     }
 
     public async ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
@@ -71,7 +70,7 @@ public sealed class EfWorkflowExecutionStateStore(
         }
         catch (OperationCanceledException) { throw; }
         catch (InvalidDataException) { context.ChangeTracker.Clear(); throw; }
-        catch (DbException exception) { throw Normalize("reading", workflowExecutionId, exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { throw Normalize("reading", workflowExecutionId, exception); }
     }
 
     public async ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default)
@@ -90,7 +89,7 @@ public sealed class EfWorkflowExecutionStateStore(
         }
         catch (OperationCanceledException) { throw; }
         catch (InvalidDataException) { throw; }
-        catch (DbException exception) { throw Normalize("listing", "<all>", exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { throw Normalize("listing", "<all>", exception); }
     }
 
     public async ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default)
@@ -123,7 +122,7 @@ public sealed class EfWorkflowExecutionStateStore(
         }
         catch (OperationCanceledException) { throw; }
         catch (InvalidDataException) { throw; }
-        catch (DbException exception) { throw Normalize("querying", "<history>", exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { throw Normalize("querying", "<history>", exception); }
     }
 
     public async ValueTask<WorkflowExecutionAlterationCapturePage> QueryAlterationCapturePageAsync(WorkflowExecutionAlterationCaptureQuery query, CancellationToken cancellationToken = default)
@@ -161,7 +160,7 @@ public sealed class EfWorkflowExecutionStateStore(
         }
         catch (OperationCanceledException) { throw; }
         catch (InvalidDataException) { throw; }
-        catch (DbException exception) { throw Normalize("querying", "<alteration-capture>", exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { throw Normalize("querying", "<alteration-capture>", exception); }
     }
 
     public async ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)
@@ -188,7 +187,7 @@ public sealed class EfWorkflowExecutionStateStore(
         }
         catch (OperationCanceledException) { throw; }
         catch (InvalidDataException) { context.ChangeTracker.Clear(); throw; }
-        catch (DbException exception) { throw Normalize("listing pinned artifacts for", "<all>", exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { throw Normalize("listing pinned artifacts for", "<all>", exception); }
     }
 
     public async ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
@@ -210,8 +209,7 @@ public sealed class EfWorkflowExecutionStateStore(
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Transient)) { context.ChangeTracker.Clear(); throw Normalize("deleting", workflowExecutionId, exception); }
         catch (OperationCanceledException) { context.ChangeTracker.Clear(); throw; }
         catch (InvalidDataException) { context.ChangeTracker.Clear(); throw; }
-        catch (DbUpdateException exception) { context.ChangeTracker.Clear(); throw Normalize("deleting", workflowExecutionId, exception); }
-        catch (DbException exception) { context.ChangeTracker.Clear(); throw Normalize("deleting", workflowExecutionId, exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { context.ChangeTracker.Clear(); throw Normalize("deleting", workflowExecutionId, exception); }
     }
 
     private IQueryable<WorkflowExecutionStateEntity> HistoryQuery(WorkflowExecutionStatePageQuery query, string scope)

@@ -70,7 +70,7 @@ public sealed class EfRecurringTriggerScheduleStore(
             context.ChangeTracker.Clear();
             throw new InvalidOperationException($"Recurring-trigger schedule '{schedule.ScheduleId}' changed concurrently; retry the operation.", exception);
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
             context.ChangeTracker.Clear();
             var winner = await context.RecurringTriggerSchedules.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
@@ -123,7 +123,7 @@ public sealed class EfRecurringTriggerScheduleStore(
             await RollbackAndClearAsync(transaction);
             throw new InvalidOperationException($"Recurring-schedule activation projection '{activationId}' changed concurrently; retry the operation.", exception);
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
             await RollbackAndClearAsync(transaction);
             var winner = await ActivationState(scope, activationId, cancellationToken);
@@ -132,7 +132,7 @@ public sealed class EfRecurringTriggerScheduleStore(
                 return;
             throw new InvalidOperationException($"Recurring-schedule activation projection '{activationId}' changed concurrently with different state.", exception);
         }
-        catch (DbUpdateException exception)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             await RollbackAndClearAsync(transaction);
             throw new InvalidOperationException($"Recurring-schedule activation projection '{activationId}' could not be committed.", exception);
@@ -459,7 +459,7 @@ public sealed class EfRecurringTriggerScheduleStore(
         try { await CommitAndClearAsync(transaction, ct); }
         catch (DbUpdateConcurrencyException exception) { await RollbackAndClearAsync(transaction); throw new InvalidOperationException($"{operation} changed concurrently; retry the operation.", exception); }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Transient)) { await RollbackAndClearAsync(transaction); throw new InvalidOperationException($"{operation} encountered a transient write conflict; retry the operation.", exception); }
-        catch (DbUpdateException exception) { await RollbackAndClearAsync(transaction); throw new InvalidOperationException($"{operation} could not be committed.", exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { await RollbackAndClearAsync(transaction); throw new InvalidOperationException($"{operation} could not be committed.", exception); }
     }
 
     private async Task RollbackAndClearAsync(IDbContextTransaction transaction)
