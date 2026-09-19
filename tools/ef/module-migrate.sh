@@ -28,6 +28,11 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 cd "$root"
 tooling="tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj"
+# Required modules live under src/ and optional ones under extensions/ (#1815). Roots are filtered to
+# the ones that exist: `find` exits non-zero on a missing directory, and under `set -e` that would end
+# the run instead of reporting the one module it could not resolve.
+module_roots=(src)
+if [[ -d extensions ]]; then module_roots+=(extensions); fi
 configuration="${ELSA_EF_CONFIGURATION:-Release}"
 
 usage() {
@@ -88,8 +93,7 @@ count=0
 while IFS='|' read -r context row_provider assembly _; do
   [[ "$context" =~ ^($filter)$ ]] || continue
   [[ -z "$provider" || "$row_provider" == "$provider" ]] || continue
-  # Optional modules live under extensions/ (#1815); the sibling generate script already looks in both.
-  project="$(find src extensions -name "$assembly.csproj" -not -path '*/obj/*' | head -n 1)"
+  project="$(find "${module_roots[@]}" -name "$assembly.csproj" -not -path '*/obj/*' | head -n 1)"
   count=$((count + 1))
   case "$command" in
     pending)
