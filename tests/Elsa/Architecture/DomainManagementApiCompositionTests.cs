@@ -19,6 +19,8 @@ using Elsa.Api.Capabilities.Models;
 using Elsa.Api.Compatibility.Testing.Baselines;
 using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Api.Compatibility.Testing.Security;
+using Elsa.Diagnostics.StructuredLogs;
+using Elsa.Diagnostics.StructuredLogs.Endpoints;
 using Elsa.Expressions;
 using Elsa.Expressions.Api;
 using Elsa.Expressions.Api.Models;
@@ -28,6 +30,8 @@ using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Mediator;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Studio.Preferences.Api;
+using Elsa.Studio.Preferences.Core;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -473,6 +477,9 @@ public sealed class DomainManagementApiCompositionTests
             new WorkflowsDesignApiFeature().ConfigureServices(builder.Services);
             new WorkflowsPublishingApiFeature().ConfigureServices(builder.Services);
             new WorkflowsRuntimeApiFeature().ConfigureServices(builder.Services);
+            new StructuredLogsFeature().ConfigureServices(builder.Services);
+            new StudioPreferencesFeature().ConfigureServices(builder.Services);
+            new StudioPreferencesApiFeature().ConfigureServices(builder.Services);
             builder.Services.AddFoundationIdentityAbstractions(options =>
                 options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal)
                 {
@@ -508,6 +515,8 @@ public sealed class DomainManagementApiCompositionTests
             WorkflowsDesignApi.MapWorkflowsDesignApi(app);
             WorkflowsPublishingApi.MapWorkflowsPublishingApi(app);
             WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(app);
+            StructuredLogsApi.MapStructuredLogsApi(app);
+            StudioPreferencesApi.MapStudioPreferencesApi(app);
             if (includeExpressions)
                 ExpressionsApi.MapExpressionsApi(app);
             app.Use(async (context, next) =>
