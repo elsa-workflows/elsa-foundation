@@ -2372,9 +2372,14 @@ public sealed class EfWorkflowDesignPersistenceTests
         var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
         IDesignAtomicWriter writer = new EfDesignAtomicWriter(db, access);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.ExecuteAsync(
+        // Before #1814 this asserted InvalidOperationException, which was the execution strategy's own wrapper
+        // escaping the store untouched. The writer now normalizes it like any other provider failure, so the
+        // assertion moves to the store's exception; that the failure is not retried is what this test pins.
+        var failure = await Assert.ThrowsAsync<DesignPersistenceException>(() => writer.ExecuteAsync(
             new DesignOperationKey("wrapped-provider-failure"), "test.op", new { Value = 1 }, ["test"],
             (_, _) => Task.FromResult(DesignAtomicWriteStage<int>.Accepted(1))));
+
+        Assert.IsType<DbUpdateException>(failure.InnerException);
 
         Assert.Equal(1, saves.Attempts);
     }

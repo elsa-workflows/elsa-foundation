@@ -212,7 +212,7 @@ public sealed class EfDesignAtomicWriter(
                 throw ProviderFailure(operationKind, exception);
             return EfWriteAttempt<DesignAtomicWriteResult<T>>.Retry(exception);
         }
-        catch (DbUpdateException exception)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             transactionDisposed = true;
             await CleanupAsync(transaction, exception, operationKind, rollback: true);
