@@ -16,6 +16,50 @@ single-storage-library policy, ADR 0065's proposed target/lane topology, and ADR
 EF lane while preserving each record's distinct history. The Secrets implementation remains opt-in
 until its migration slice proves four-provider parity and performs the explicit default flip.
 
+## Supported providers
+
+First-party EF Core persistence supports four relational engines, and only these four:
+
+| Provider | Configuration value | Host package |
+|---|---|---|
+| SQLite | `Sqlite` | `Microsoft.EntityFrameworkCore.Sqlite` |
+| SQL Server | `SqlServer` | `Microsoft.EntityFrameworkCore.SqlServer` |
+| PostgreSQL | `PostgreSql` | `Npgsql.EntityFrameworkCore.PostgreSQL` |
+| MySQL | `MySql` | `MySql.EntityFrameworkCore` |
+
+**Oracle is not supported.** There is no Oracle provider context, no Oracle migrations, and no Oracle
+error-code mapping; a module configured with `Oracle` is refused as it registers, by the same message
+that lists the four above, and that refusal is pinned by
+[`EfRelationalProviderBindingTests`](../../../../tests/Elsa/Persistence/EntityFramework/Tests/EfRelationalProviderBindingTests.cs).
+This is a decision, not a gap awaiting a contribution: accepted
+[ADR 0075](../../../../docs/adr/0075-oracle-is-not-a-supported-ef-core-engine.md) records why, and names
+the condition under which it is revisited. The short form is that every engine here has a container leg
+running in CI, Elsa 3's Oracle lane never had one, and shipping a fifth engine weaker than the other
+four would be a worse deal for Oracle users than saying plainly that it is unsupported.
+
+### Coming from Elsa 3 on Oracle
+
+Elsa 3 ships `Elsa.Persistence.EFCore.Oracle`. Elsa 4 has no equivalent, but it also never connects to
+an Elsa 3 database, so the route does not need one:
+
+1. Export your workflow definitions from Elsa 3 as JSON.
+2. Install Elsa 4 fresh against one of the four supported engines above.
+3. Import the definitions through
+   [`Elsa3.Activities.Design.Import`](../../../Elsa3/Activities/Design/Import/EXTENSION_POINTS.md), which
+   reads that JSON through `IActivityCollectionJsonSource` and applies a reviewed, dependency-closed
+   mutation.
+
+This is a fresh installation plus a definition import, not a data migration: Elsa 3 runtime and instance
+history does not come across. That follows from
+[ADR 0073](../../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md) D5's pre-GA
+clean break rather than from anything Oracle-specific.
+
+**Where this does not help.** If your organization's database policy forbids introducing PostgreSQL, SQL
+Server or MySQL, there is no route. Oracle being unsupported is a hard no for that deployment rather than
+an inconvenience, and no configuration or workaround changes it. Say so on
+[#1803](https://github.com/elsa-workflows/elsa-foundation/issues/1803): a named adopter willing to run the
+Oracle container leg is the first of the three conditions ADR 0075 requires to reopen the question.
+
 ## What this package owns
 
 | Helper | Role |
