@@ -352,8 +352,10 @@ public sealed class EfOpenTelemetryRetentionTests
     /// </summary>
     /// <param name="keyBatchSize">
     /// Null runs at the provider-safe default, where the two affected keys share one chunk. 1 forces the
-    /// recompute loop (and the resource search-key lookup inside it) to iterate once per key instead, so the
-    /// same assertions also cover state that has to survive across chunk iterations, not just within one.
+    /// recompute loop (and the resource search-key lookup inside it) to iterate once per key instead. The first
+    /// chunk this produces, trace-a, is an orphaned key with no memberships of its own, so this parametrisation
+    /// exercises the loops running more than once; it does not demonstrate a key's memberships surviving a later
+    /// chunk's delete.
     /// </param>
     [Theory]
     [InlineData(null)]
@@ -460,6 +462,51 @@ public sealed class EfOpenTelemetryRetentionTests
         Assert.Equal((3, 3), await fixture.WithDbAsync(async db => (
             await db.TraceSummaries.CountAsync(x => x.ScopeKey == other),
             await db.TraceSummaryMemberships.CountAsync(x => x.ScopeKey == other))));
+    }
+
+    /// <summary>
+    /// Three traces, one key each, written in a single capture with capacity high enough that retention never
+    /// runs. Recompute rebuilds every key it touches from raw traces, so it would mask a corrupted merge; keeping
+    /// capacity above what is written is what isolates the merge loop's own chunking from that recompute path.
+    /// </summary>
+    /// <param name="keyBatchSize">
+    /// Null runs at the provider-safe default, where all three keys share one merge chunk. 1 forces the merge
+    /// loop to iterate once per key, so a chunk's membership delete that reached past its own key would clobber
+    /// a key an earlier chunk already saved in this same write.
+    /// </param>
+    [Theory]
+    [InlineData(null)]
+    [InlineData(1)]
+    public async Task Merge_across_chunks_keeps_each_keys_own_memberships_without_retention(int? keyBatchSize)
+    {
+        await using var fixture = await CreateFixtureAsync(new OpenTelemetryDiagnosticsOptions
+        {
+            TraceCapacity = 3,
+            MaxQuerySize = 20
+        }, keyBatchSize: keyBatchSize);
+        var resources = SixResources().Take(3).ToArray();
+
+        await fixture.Store.WriteAsync(new(resources,
+        [
+            TraceAt(resources, 1, "trace-a", "workflow-a1"),
+            TraceAt(resources, 2, "trace-b", "workflow-b1"),
+            TraceAt(resources, 3, "trace-c", "workflow-c1")
+        ], [], [], [], []));
+
+        Assert.Equal(3, await fixture.WithDbAsync(db => db.Traces.CountAsync()));
+        Assert.Equal(["trace-a", "trace-b", "trace-c"], await SummaryTraceIdsAsync(fixture));
+        Assert.Equal(
+        [
+            "trace-a|Resource|resource-1",
+            "trace-a|Service|service-1",
+            "trace-a|WorkflowInstance|workflow-a1",
+            "trace-b|Resource|resource-2",
+            "trace-b|Service|service-2",
+            "trace-b|WorkflowInstance|workflow-b1",
+            "trace-c|Resource|resource-3",
+            "trace-c|Service|service-3",
+            "trace-c|WorkflowInstance|workflow-c1"
+        ], await MembershipsAsync(fixture));
     }
 
     private static TelemetryResource[] SixResources() => Enumerable.Range(1, 6)

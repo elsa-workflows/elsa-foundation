@@ -83,7 +83,8 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         binding.Validate();
         this.sourceRegistry = sourceRegistry;
         this.timeProvider = timeProvider ?? TimeProvider.System;
-        this.keyBatchSize = keyBatchSize > 0 ? keyBatchSize : ProviderSafeKeyBatchSize;
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(keyBatchSize);
+        this.keyBatchSize = keyBatchSize;
         traceCapacity = Clamp(options.Value.TraceCapacity);
         spanCapacity = Clamp(options.Value.SpanCapacity);
         metricPointCapacity = Clamp(options.Value.MetricPointCapacity);
