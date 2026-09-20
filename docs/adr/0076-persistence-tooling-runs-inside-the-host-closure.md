@@ -252,24 +252,50 @@ it is not limited to `--from-host`.
 
 The check is per feature, not per module. One module can be backed by several shell features that
 each carry their own `Provider` setting while mapping to the same context: `Workflows.Runtime` alone
-is backed by, among others, `RuntimeEntityFrameworkCoreFeature`,
+is backed by eight such features — `RuntimeEntityFrameworkCoreFeature`,
 `RuntimeBookmarksEntityFrameworkCoreFeature`, `RuntimeActivityExecutionEntityFrameworkCoreFeature`,
-and `RuntimeOperationalStateEntityFrameworkCoreFeature`, every one of them defaulting `Provider` to
-`Sqlite` and each applying its own migrations against the one shared `RuntimeDbContext`
+`RuntimeOperationalStateEntityFrameworkCoreFeature`, `RuntimeWorkflowAlterationEntityFrameworkCoreFeature`,
+`RuntimeWorkflowTestScopeEntityFrameworkCoreFeature`, `RuntimeWorkflowExecutionEntityFrameworkCoreFeature`,
+and `RuntimeArtifactsEntityFrameworkCoreFeature` — every one of them defaulting `Provider` to `Sqlite`
+and each applying its own migrations against the one shared `RuntimeDbContext`
 (`RuntimeEntityFrameworkCoreFeature.cs:30`; `RuntimeBookmarksEntityFrameworkCoreFeature.cs:24,58`;
 `RuntimeActivityExecutionEntityFrameworkCoreFeature.cs:23`;
-`RuntimeOperationalStateEntityFrameworkCoreFeature.cs:21`). Every feature that is enabled in the
-shell and mapped through `[UsesEfModule]` to a selected module must have an effective `Provider`
-equal to `--provider`; the tool exits 3 and lists each one that differs, by feature name, together
-with its configured value. A feature that is not enabled in the shell is ignored. Two features of
-one module that disagree with each other therefore always surface, because at most one of them can
-equal `--provider` — an unset feature `Provider` defaults to `Sqlite`
-(`SecretsEntityFrameworkCoreFeature.cs:23`), so it disagrees with `--provider PostgreSql` exactly as
-an explicit `Sqlite` setting would, and that disagreement is treated as the same error rather than
-papered over as a gap. The manifest records `providerAgreement: checked | not-checked`, and states
-plainly that an environment-variable override of a shell's configured provider is invisible to the
-tool: the check reads shell configuration, not what a host's environment would resolve to at
-runtime. There is no provider auto-detection and no fallback to a different provider.
+`RuntimeOperationalStateEntityFrameworkCoreFeature.cs:21`;
+`RuntimeWorkflowAlterationEntityFrameworkCoreFeature.cs:17`;
+`RuntimeWorkflowTestScopeEntityFrameworkCoreFeature.cs:17`;
+`RuntimeWorkflowExecutionEntityFrameworkCoreFeature.cs:21`;
+`RuntimeArtifactsEntityFrameworkCoreFeature.cs:69-73`). A mapped feature need not even live in the
+module's own project: `AspNetCoreIdentityEntityFrameworkCoreFeature`, in the separate
+`Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore` project, carries its own `Provider`
+and registers migrations for `Identity.Iam`'s `IdentityIamDbContext` directly
+(`AspNetCoreIdentityEntityFrameworkCoreFeature.cs:21,66`). A feature can also map to more than one
+module: `WorkflowsDashboardEntityFrameworkCoreFeature` reads both `Workflows.Design`'s and
+`Workflows.Runtime`'s contexts, through `WorkflowsDesignDbContext` and `RuntimeDbContext`
+(`WorkflowsDashboardEntityFrameworkCoreFeature.cs:17-21`; `EfWorkflowPortfolioDataSource.cs:31-33`),
+which is why `[UsesEfModule]` is `AllowMultiple`.
+
+Every feature that is enabled in the shell and mapped through `[UsesEfModule]` to a selected module
+must have an effective `Provider` equal to `--provider`; the tool exits 3 and lists each one that
+differs, by feature name, together with its configured value. A feature that is not enabled in the
+shell is ignored. Two features of one module that disagree with each other therefore always surface,
+because at most one of them can equal `--provider` — an unset feature `Provider` defaults to
+`Sqlite` (`SecretsEntityFrameworkCoreFeature.cs:23`), so it disagrees with `--provider PostgreSql`
+exactly as an explicit `Sqlite` setting would, and that disagreement is treated as the same error
+rather than papered over as a gap. The manifest records `providerAgreement: checked | not-checked`,
+and states plainly that an environment-variable override of a shell's configured provider is
+invisible to the tool: the check reads shell configuration, not what a host's environment would
+resolve to at runtime. There is no provider auto-detection and no fallback to a different provider.
+
+The check reads the same layered configuration a host would: `shells.json`, then
+`shells.<environment>.json` when that file exists, the same overlay `Elsa.Workbench` applies
+(`src/Apps/Elsa.Workbench/Program.cs:85,91`). `--environment` defaults to `Production`, because
+ASP.NET Core's own default `EnvironmentName` is `Production` whenever no environment variable sets
+it, and a host started with no configuration at all — the ordinary case — therefore reads
+`shells.Production.json` when the host ships one, as `Elsa.Workbench` does
+(`src/Apps/Elsa.Workbench/shells.Production.json`). The tool never reads `ASPNETCORE_ENVIRONMENT`
+from its own process: the tool's environment is not the host's, and inferring one from the other
+would be exactly the kind of silent cross-process assumption D10 refuses to make for packages. The
+manifest records the environment the check actually used.
 
 Reason: `EfProviderGuard.Ensure` already refuses a context opened against the wrong live provider at
 runtime, throwing `"{owner} refuses provider '...'. Expected '...'"` (`EfProviderGuard.cs:17-27`), and
@@ -303,11 +329,20 @@ for a manifest flag a downstream pipeline is free to ignore.
 
 The output is flat `NN-<slug>.sql` files plus `migration-plan.json`, ordered topologically by each
 module's declared `DependsOn` and then by ordinal name — never by the order modules were named on the
-command line. Per module the manifest carries package id and version, context, history table,
-migration id range, a sha256, `dependsOn`, and `postMigration[]`. Output is LF-terminated, UTF-8
-without a byte-order mark, with a fixed JSON key order, and carries no timestamps, absolute paths,
-tool version, or connection string. `script-check` regenerates from the directory's own plan and
-byte-compares, reporting any `.sql` file the plan does not list as stale.
+command line. The manifest carries top-level `efCoreVersion` and `engine` (`package`, `version`,
+`source`), and per module: package id and version, context, history table, migration id range, a
+sha256, `dependsOn`, and `postMigration[]`. Output is LF-terminated, UTF-8 without a byte-order mark,
+with a fixed JSON key order, and carries no timestamps, absolute paths, tool version, or connection
+string. `script-check` regenerates from the directory's own plan and byte-compares, reporting any
+`.sql` file the plan does not list as stale.
+
+A package upgrade with no migration change still moves `efCoreVersion`, `engine.version`, or a
+module's `package.version`, without moving any SQL. `script-check` still exits 1 for that case: the
+committed artifact no longer describes exactly what the host pins, and D6's determinism promise
+covers the whole artifact, not only the `.sql` files. It reports that case distinctly from an actual
+SQL difference — "manifest versions differ, SQL identical: regenerate and commit, nothing new to
+run" — and lists which fields moved, so a reviewer does not mistake a version-only diff for a schema
+change.
 
 Reason: no cross-module foreign key exists anywhere in the codebase today, so `dependsOn: []` for
 every module in the manifest is a true statement, not an aspiration; topological order still matters
@@ -349,6 +384,20 @@ wrapping `SecretsProjectionContract`, is the first instance; `SecretsEfMigration
 Secrets-only `MigratePolicy` setting are retired, because the seam this decision adds is general
 rather than Secrets-specific.
 
+`SecretsEntityFrameworkCoreFeature.MigratePolicy` (`:54`) is a per-feature setting independent of the
+host-wide `Elsa:Persistence:EntityFramework:Migrate:Policy` (`EfMigrateOptions.SectionName`).
+Retiring it costs exactly that independence: an operator can no longer set Secrets' apply policy
+separately from every other module enabled in the same shell. A host that configured it explicitly
+must move the value to the host-wide key; a shell that genuinely needs a different policy from its
+neighbors still can, because a shell's own `Configuration` node already layers over the host's for
+this key — "one shell can run `Validate` while another does not"
+(`src/Elsa/Persistence/EntityFramework/README.md:286-287`) — just at the shell-configuration layer
+rather than the retired feature-setting layer. A host that still sets the removed `MigratePolicy`
+setting must fail loudly, not be silently ignored. Everything else
+`SecretsEfMigrationHostedService` did — the provider guard, the host and shell lifecycle hooks, and
+the reindex audit — is covered by the general `EfModuleMigrator<T>` plus the post-migration audit
+above; only the independent per-feature policy knob is lost.
+
 Reason: today's rule — audit and fail closed at runtime, repair only out of process — is already the
 right one; it is just hand-wired three separate ways for Secrets alone (Context, above), with no
 declaration surface for any other module. This decision keeps that rule and generalizes it:
@@ -382,6 +431,17 @@ SQL, run `post-migrate` if the plan lists a required action, then enable the fea
 needs its own admission record in `EfCoreDependencyGuardTests` — a surface path prefix plus an exact
 expected package set limited to EF Core and Relational, no provider engine (Consequences) — and must
 not be added to `AllowedEfConsumers`, which licenses hosts to carry provider engines, not modules.
+
+`FeatureManagementService.ApplyAsync` calls `RestoreSecrets` before `ValidateRequest`
+(`FeatureManagementService.cs:23-24`), so by the time the guards run — after `ValidateRequest` — the
+feature configuration they inspect already has its real connection settings restored, not the masked
+placeholder a client submitted. A guard must never put a connection string in a refusal message or a
+log line; only the feature name, the module name, and the policy may appear there. Under `Validate`,
+a guard that cannot open the database or read its history table treats every migration as pending and
+refuses — fail closed, naming the feature and the module and saying the database could not be
+reached, never the connection itself. Under `AutoMigrate` the guard does not open the database at all
+and passes, except that a provider engine that cannot bind is still a refusal regardless of policy,
+exactly like D1's resolution failures (`EfRelationalProviderBinding.DescribeBindingFailure`).
 
 Reason: `FeatureManagementService.ApplyAsync` runs `ValidateRequest`, then `shellStore.SaveAsync`,
 then refreshes and reloads, with no migration check anywhere in that sequence (Context, above), so a
@@ -508,11 +568,17 @@ Costs and risks:
 - `Tooling.EfToolingHost.RunAsync` (proposed) becomes a frozen compatibility surface the moment it
   ships: a host built against a release older than the one that adds it has no such entry point, and
   the worker must fail with a clear, named error rather than an opaque reflection failure.
-- `SecretsEfMigrationHostedService` and the Secrets-only `MigratePolicy` setting are retired; a host
-  that configured `MigratePolicy` explicitly moves that value to the host-wide key
+- `SecretsEfMigrationHostedService` and the Secrets-only `MigratePolicy` setting
+  (`SecretsEntityFrameworkCoreFeature.cs:54`) are retired. A host that configured it loses the
+  ability to set Secrets' apply policy independently of every other module enabled in the same
+  shell, and must move the value to the host-wide key
   `Elsa:Persistence:EntityFramework:Migrate:Policy` (`EfMigrateOptions.SectionName`,
   `EfMigrateOptions.cs:18`), the same key every other module's `EfModuleMigrator<T>` already reads.
-  This is a behavior change, not an additive one.
+  A shell that still needs Secrets on a different policy from its neighbors keeps that ability, since
+  a shell's own `Configuration` node already layers over the host's for this key
+  (`src/Elsa/Persistence/EntityFramework/README.md:286-287`) — at the shell-configuration layer, not
+  the retired feature-setting layer. A host that still sets the removed `MigratePolicy` setting must
+  fail loudly rather than be silently ignored. This is a behavior change, not an additive one.
 - `module-migrate.sh`'s `apply`, `validate`, `script`, and `script-check` become thin shims over the
   new CLI; its `pending` command, and `generate-module-migrations.sh` / `generate-ef-migrations.sh`,
   stay exactly as they are, because migration generation still needs a source project and `dotnet-ef`
