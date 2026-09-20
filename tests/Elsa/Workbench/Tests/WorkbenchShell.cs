@@ -27,6 +27,12 @@ public sealed record WorkbenchShell(
     /// </summary>
     public static readonly WorkbenchShell Production = new("Production", "shells.json", "shells.Production.json", new Dictionary<string, string>
     {
+        // appsettings.Production.json validates instead of migrating, because a deployment applies migrations before
+        // the host runs. This test starts against an empty database with no such step, which is the case that policy
+        // is built to refuse, so it migrates on activation like the other compositions. The Secrets module carries
+        // its own policy setting rather than reading the shared key, so it takes a second override.
+        ["Elsa:Persistence:EntityFramework:Migrate:Policy"] = "AutoMigrate",
+        [$"{FeaturesPath}:SecretsEntityFrameworkCore:MigratePolicy"] = "AutoMigrate",
         [$"{FeaturesPath}:WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey"] = "smoke-test-recovery-continuation-signing-key",
         [$"{FeaturesPath}:WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey"] = "smoke-test-hierarchy-cursor-signing-key",
         [$"{FeaturesPath}:FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminPassword"] = $"Smoke-{Guid.NewGuid():n}!",

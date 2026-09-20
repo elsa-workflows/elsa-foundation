@@ -94,6 +94,10 @@ services:
         ZPeFAoGAI8ueMwrQDfJ6Q0fBj2ah0wdU84XZ9xdHajBIVrGuIsYBH0lSoq1wTPk1FvKwyZnnXESl
         u+O+NLeJuPF2qjgTc2UX6Gt9cI1CVa++5IQIXqx45dKD1pIDskJGly6MD7Ez1Ps1iykBhYYDnsxS
         rP6K4lXoYB89C+dKJAPF+CCPCH8=
+      # Demo stacks have no migration step, so the host applies migrations on shell activation. The image's
+      # appsettings.Production.json validates instead, for deployments that apply them from CI/CD with
+      # tools/ef/module-migrate.sh and tools/ef/dual-migrate.sh before the host starts.
+      Elsa__Persistence__EntityFramework__Migrate__Policy: AutoMigrate
       # One connection for every EF module. Each module owns its own tables, migrations and history
       # table inside this database; set ConnectionString on a single feature to split one out.
       ConnectionStrings__Elsa: "Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa"
