@@ -26,11 +26,10 @@
           },
           "DiagnosticsOpenTelemetry": {},
           "DiagnosticsOpenTelemetryEntityFrameworkCore": {
-            "Provider": "PostgreSql",
-            "ConnectionName": "Elsa"
+            "ConnectionString": "Data Source=elsa-diagnostics.db"
           },
           "DiagnosticsStructuredLogsEntityFrameworkCore": {
-            "Provider": "PostgreSql"
+            "ConnectionString": "Data Source=elsa-diagnostics.db"
           },
           "DiagnosticsOpenTelemetryEngineBridge": {},
           "DiagnosticsStructuredLogs": {},
@@ -49,14 +48,9 @@
               "http://localhost:5089"
             ]
           },
-          "IdentityIamEntityFrameworkCore": {
-            "Provider": "PostgreSql"
-          },
-          "IdentityProviderConfigurationEntityFrameworkCore": {
-            "Provider": "PostgreSql"
-          },
+          "IdentityIamEntityFrameworkCore": {},
+          "IdentityProviderConfigurationEntityFrameworkCore": {},
           "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
-            "Provider": "PostgreSql",
             "IsDevelopmentOrDemo": true,
             "SeedAdminUserName": "admin",
             "SeedAdminPassword": "Password123!",
@@ -77,25 +71,16 @@
             "BaseDirectory": ".elsa/copilot"
           },
           "WorkflowsRuntimeEntityFrameworkCore": {
-            "Provider": "PostgreSql",
             "CacheWorkflowExecutables": true,
             "WorkflowExecutableCacheCapacity": 256,
             "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key",
             "HierarchyCursorSigningKey": "development-demo-only-hierarchy-cursor-signing-key"
           },
-          "ActivitiesDesignEntityFrameworkCore": {
-            "Provider": "PostgreSql"
-          },
-          "WorkflowsDesignEntityFrameworkCore": {
-            "Provider": "PostgreSql"
-          },
+          "ActivitiesDesignEntityFrameworkCore": {},
+          "WorkflowsDesignEntityFrameworkCore": {},
           "WorkflowsRuntimeDistributed": {},
-          "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence": {
-            "Provider": "PostgreSql"
-          },
-          "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence": {
-            "Provider": "PostgreSql"
-          },
+          "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence": {},
           "WorkflowsDashboardEntityFrameworkCore": {},
           "Http": {},
           "HttpJavaScript": {},
@@ -173,17 +158,13 @@
           "Primitives": {},
           "Secrets": {},
           "SecretsApi": {},
-          "SecretsEntityFrameworkCore": {
-            "Provider": "PostgreSql"
-          },
+          "SecretsEntityFrameworkCore": {},
           "Serialization": {},
           "AttentionApi": {},
           "ModularityAttention": {},
           "StudioPreferences": {},
           "StudioPreferencesApi": {},
-          "StudioPreferencesEntityFrameworkCore": {
-            "Provider": "PostgreSql"
-          },
+          "StudioPreferencesEntityFrameworkCore": {},
           "Tasks": {},
           "WorkflowsDesignApi": {},
           "WorkflowDesignValidations": {},
@@ -191,9 +172,7 @@
           "WorkflowsRuntimeAttention": {},
           "WorkflowsPublishing": {},
           "WorkflowsPublishingApi": {},
-          "WorkflowsPublishingEntityFrameworkCore": {
-            "Provider": "PostgreSql"
-          },
+          "WorkflowsPublishingEntityFrameworkCore": {},
           "WorkflowsRuntimeApi": {
             "WorkflowAlterationPayloadProtectionActiveKeyId": "development-demo-only",
             "WorkflowAlterationPayloadProtectionKeys": {

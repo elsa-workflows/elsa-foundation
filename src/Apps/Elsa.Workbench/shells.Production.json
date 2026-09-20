@@ -1,8 +1,12 @@
 {
+  "//_migrate": "appsettings.Production.json sets Elsa:Persistence:EntityFramework:Migrate:Policy to Validate, so a deployment applies migrations before the host runs. Secrets carries its own MigratePolicy instead of reading that key, so it is named below; without it that one lane auto-migrates in process while every other lane validates.",
   "CShells": {
     "Shells": {
       "default": {
         "Features": {
+          "SecretsEntityFrameworkCore": {
+            "MigratePolicy": "Validate"
+          },
           "IdentityIamEntityFrameworkCore": {},
           "IdentityProviderConfigurationEntityFrameworkCore": {},
           "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
