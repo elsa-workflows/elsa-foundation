@@ -207,8 +207,49 @@ the schema does and for the same reason: the encoding is baked into a value conv
 model per internal service provider, and two contexts configured differently have to disagree on the extension hash or
 the second silently reuses the first one's model. It also keeps pooling correct, since a pool is keyed by options.
 
-**There is deliberately no configuration key yet.** `UseElsaPayloadCompression` is the only way to set a codec, and
-nothing calls it outside tests. Wiring it to a module feature option and a host-wide key is the next unit of work.
+### Turning it on
+
+Off everywhere by default. An operator names a codec per module, or once for the whole host:
+
+```jsonc
+// appsettings.Production.json
+{
+  "Elsa": { "Persistence": { "EntityFramework": {
+    "PayloadCompression": "None",                       // host-wide fallback
+    "OpenTelemetry": { "PayloadCompression": "GZip" },  // one module, by its owner name
+    "Runtime":       { "PayloadCompression": "GZip" }
+  } } }
+}
+```
+
+```bash
+export Elsa__Persistence__EntityFramework__OpenTelemetry__PayloadCompression=GZip
+```
+
+The module's own key wins, then the host-wide one, then no compression. The owner name is the one the module binds
+with — `Runtime`, `OpenTelemetry`, `WorkflowsDesign`, `ActivitiesDesign`, `StructuredLogs`, `Publishing`,
+`Distributedruntimeexecutioncommandtransport`, `Elsa3import` — the same name its history table and its errors carry.
+`…:PayloadCompressionMinimumLength` sets the threshold host-wide.
+
+Per module rather than one switch because the modules differ in kind: diagnostics rows are append-mostly and read
+rarely, runtime execution state is read on every resume, design documents back an interactive UI. The host-wide key
+is a fallback for operators who do not want to draw that distinction, and it is safe because the excluded columns are
+excluded **by column** rather than by module — a module that owns an excluded column also owns ordinary payload
+columns, and no switch can reach the excluded ones.
+
+Configuration only, with no C# option on each module's feature, unlike `Schema` and `Pooling`. Those exist in code
+because a module can be moved onto its own database or pool while composing a host; the codec is a deployment choice
+about stored bytes, and nothing in composition depends on it. It also keeps the setting out of the Runtime module's
+shared-context agreement, where every participating feature would otherwise have to carry and agree on a value none
+of them acts on. Tests that need a codec in-process call `UseElsaPayloadCompression` on the options builder directly.
+
+A host that configures nothing binds **no options extension at all**, so its contexts are byte-identical to what they
+were and do not split EF's model cache. An unknown codec name is refused at startup rather than ignored: a typo that
+fell back to no compression would look exactly like the setting working.
+
+**Turning it on is one-way in one respect.** A database written with a codec can only be read by a build that has the
+decoder, which shipped separately and earlier for exactly that reason. Rows already written stay readable whichever
+way the setting is later moved, and nothing needs a backfill.
 
 Excluded permanently: the `ContentAuthority` family, which four provider computed columns read in the database, so a
 client-side encoding would make every activity definition evaluate invalid and vanish from paged reads rather than
