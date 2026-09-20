@@ -42,7 +42,7 @@ public sealed class EfExecutionLivenessStateStore(
             context.ChangeTracker.Clear();
             throw new InvalidOperationException("The execution-liveness state changed concurrently; retry the operation.", exception);
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
             context.ChangeTracker.Clear();
             throw new InvalidOperationException("The execution-liveness state changed concurrently; retry the operation.", exception);
@@ -88,7 +88,7 @@ public sealed class EfExecutionLivenessStateStore(
             context.ChangeTracker.Clear();
             return new(ExecutionLivenessStateWriteStatus.RevisionConflict);
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
             context.ChangeTracker.Clear();
             return new(ExecutionLivenessStateWriteStatus.RevisionConflict);

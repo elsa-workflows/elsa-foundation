@@ -233,7 +233,7 @@ internal static class EfIdentityStoreSupport
         IdentityEntityFrameworkKey.FramedRecordId(values);
 
     /// <summary>Returns the reservation unit implicated by a provider-reported unique violation.</summary>
-    public static string? UniqueConflictUnit(DbUpdateException exception)
+    public static string? UniqueConflictUnit(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
 
@@ -255,9 +255,13 @@ internal static class EfIdentityStoreSupport
         // contain both a root and reservations, so multiple entries cannot identify which row
         // caused the unique violation. Provider constraint identity above always wins because
         // Entries can contain pending rows other than the row that actually failed.
-        if (exception.Entries.Count == 1)
+        // Entries live on the save failure itself, not on any wrapper above it.
+        if (EfRelationalExceptionClassifier.FindSaveFailure(exception) is not { } update)
+            return null;
+
+        if (update.Entries.Count == 1)
         {
-            var unit = exception.Entries.Single().Entity switch
+            var unit = update.Entries.Single().Entity switch
             {
                 UserNameReservationEntity => IdentityIamEfModule.UserNameReservationTableName,
                 EmailReservationEntity => IdentityIamEfModule.EmailReservationTableName,
@@ -277,17 +281,23 @@ internal static class EfIdentityStoreSupport
     /// another caller may already have committed the authoritative result for this operation and
     /// therefore must be reconciled and replayed.
     /// </summary>
-    public static bool IsMutationReceiptConflict(DbUpdateException exception)
+    public static bool IsMutationReceiptConflict(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
 
-        var providerConstraint = ClassifyProviderUniqueConstraint(exception.ToString());
+        // An execution strategy re-raises a save failure as an InvalidOperationException around the
+        // DbUpdateException, and only that carries the entries this decision reads. Unwrapped, the
+        // search finds the argument itself, so the answer is unchanged for a direct save failure.
+        if (EfRelationalExceptionClassifier.FindSaveFailure(exception) is not { } update)
+            return false;
+
+        var providerConstraint = ClassifyProviderUniqueConstraint(update.ToString());
         if (providerConstraint != ProviderUniqueConstraint.Unidentified)
             return providerConstraint == ProviderUniqueConstraint.MutationReceipt;
 
         // Entries can contain every pending row in a failed batch, not only the row whose
         // constraint failed. Treat it as authoritative only when the receipt is the sole entry.
-        return exception.Entries.Count == 1 && exception.Entries[0].Entity is MutationReceiptEntity;
+        return update.Entries.Count == 1 && update.Entries[0].Entity is MutationReceiptEntity;
     }
 
     private static ProviderUniqueConstraint ClassifyProviderUniqueConstraint(string message)

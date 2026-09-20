@@ -1,4 +1,4 @@
-using System.Data.Common;
+using Elsa.Persistence.EntityFramework;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -53,12 +53,7 @@ public sealed class EfActivityExecutionHierarchyStore(
             context.ChangeTracker.Clear();
             throw new InvalidOperationException("The activity execution hierarchy changed concurrently; retry the operation.", exception);
         }
-        catch (DbUpdateException exception)
-        {
-            context.ChangeTracker.Clear();
-            throw RuntimeActivityExecutionEfPersistenceBoundary.Normalize("saving", record.ActivityExecutionId, exception);
-        }
-        catch (DbException exception)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw RuntimeActivityExecutionEfPersistenceBoundary.Normalize("saving", record.ActivityExecutionId, exception);

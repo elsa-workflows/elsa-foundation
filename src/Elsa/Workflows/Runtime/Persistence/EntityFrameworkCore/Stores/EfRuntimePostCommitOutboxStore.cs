@@ -48,7 +48,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
         {
             await context.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
             Detach(row);
             var winner = await LoadAsync(scope, item.OutboxItemId, tracking: false, cancellationToken);

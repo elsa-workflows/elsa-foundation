@@ -216,7 +216,7 @@ public sealed class EfAddWorkflowDefinitionVersionCommand(WorkflowsDesignDbConte
         {
             throw new WorkflowDefinitionVersionConflictException(definitionId, attemptedVersion ?? "automatic");
         }
-        catch (DbUpdateException exception) when (IsSemanticVersionIdentityViolation(exception))
+        catch (Exception exception) when (IsSemanticVersionIdentityViolation(exception))
         {
             throw new WorkflowDefinitionVersionConflictException(definitionId, attemptedVersion ?? "automatic");
         }
@@ -455,7 +455,7 @@ public sealed class EfPromoteDraftToVersionCommand(WorkflowsDesignDbContext db, 
                 draftId,
                 normalizedRequestedVersion ?? "automatic");
         }
-        catch (DbUpdateException exception) when (IsSemanticVersionIdentityViolation(exception))
+        catch (Exception exception) when (IsSemanticVersionIdentityViolation(exception))
         {
             throw new WorkflowDefinitionVersionConflictException(
                 draftId,
@@ -488,7 +488,6 @@ public sealed class EfPromoteDraftToVersionCommand(WorkflowsDesignDbContext db, 
 
             throw new WorkflowVersionSelectionException(issue.Code, issue.Message);
         }
-
     }
 }
 

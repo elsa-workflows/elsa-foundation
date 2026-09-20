@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Data.Common;
 using System.Text;
 using System.Text.Json;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -28,8 +27,7 @@ internal static class EfDesignSupport
         }
         catch (OperationCanceledException) { throw; }
         catch (DesignPersistenceException) { throw; }
-        catch (DbUpdateException exception) { throw ProviderFailure(operation, exception); }
-        catch (DbException exception) { throw ProviderFailure(operation, exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { throw ProviderFailure(operation, exception); }
     }
 
     public static void ValidateOperationIdentity(DesignOperationKey key, string operationKind)

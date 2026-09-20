@@ -48,7 +48,7 @@ public sealed class EfWorkflowTriggerBindingStore(
             context.ChangeTracker.Clear();
             throw new InvalidOperationException($"Workflow trigger binding '{binding.TriggerBindingId}' changed concurrently.", exception);
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
             context.ChangeTracker.Clear();
             var winner = await context.WorkflowTriggerBindings.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
@@ -106,7 +106,7 @@ public sealed class EfWorkflowTriggerBindingStore(
             await RollbackAndClearAsync(transaction);
             throw new InvalidOperationException($"Trigger-binding activation projection '{activationId}' changed concurrently; retry the operation.", exception);
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
             await RollbackAndClearAsync(transaction);
             var winner = await context.WorkflowTriggerBindingProjectionStates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == ProjectionId(scope, activationId), cancellationToken);
@@ -115,7 +115,7 @@ public sealed class EfWorkflowTriggerBindingStore(
                 return;
             throw new InvalidOperationException($"Trigger-binding activation projection '{activationId}' changed concurrently with different state.", exception);
         }
-        catch (DbUpdateException exception)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             await RollbackAndClearAsync(transaction);
             throw new InvalidOperationException($"Trigger-binding activation projection '{activationId}' could not be committed.", exception);
@@ -284,7 +284,7 @@ public sealed class EfWorkflowTriggerBindingStore(
             await RollbackAndClearAsync(transaction);
             throw new InvalidOperationException($"{operation} encountered a transient write conflict; retry the operation.", exception);
         }
-        catch (DbUpdateException exception)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             await RollbackAndClearAsync(transaction);
             throw new InvalidOperationException($"{operation} could not be committed.", exception);

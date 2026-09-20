@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Persistence.EntityFramework;
@@ -73,13 +74,104 @@ public static class EfRelationalExceptionClassifier
     {
         ArgumentNullException.ThrowIfNull(exception);
 
+        return FindSaveFailure(exception) is { } update && IsWriteConflict(update, conflicts);
+    }
+
+    /// <summary>
+    /// Returns the <see cref="DbUpdateException"/> a save failure carries, however many wrappers sit above it, or
+    /// <c>null</c> when the exception reports no save failure at all. Callers that must read the save's own detail,
+    /// such as its entries or the violated constraint's name, need the inner exception rather than the wrapper.
+    /// </summary>
+    public static DbUpdateException? FindSaveFailure(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
         for (var current = exception; current is not null; current = current.InnerException)
         {
             if (current is DbUpdateException update)
-                return IsWriteConflict(update, conflicts);
+                return update;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Returns whether <paramref name="exception"/> is an <see cref="InvalidOperationException"/> carrying a provider
+    /// failure somewhere beneath it, whoever put it there.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The repository configures no retry, but EF 10's SQL Server strategy and Npgsql's still wrap any error they
+    /// judge transient, which covers connection-level failures such as 10054 as well as conflicts. A store whose
+    /// failure mapping is keyed to <see cref="DbException"/> or <see cref="DbUpdateException"/> by type therefore
+    /// never sees those, and the raw wrapper escapes past the store's own persistence exception, often leaving the
+    /// change tracker dirty.
+    /// </para>
+    /// <para>
+    /// Conflicts are already reconciled by <see cref="IsSaveConflict"/> and <see cref="IsTransientWriteConflict"/>,
+    /// so this predicate deliberately says nothing about whether the failure is retryable: it answers only "did a
+    /// provider fail here". Order a catch clause using it after the conflict clauses, so a conflict keeps its own
+    /// handling.
+    /// </para>
+    /// <para>
+    /// A bare <see cref="InvalidOperationException"/> that carries no provider exception does not match. That matters,
+    /// because stores raise that type themselves for scope and identity violations, and those must keep travelling.
+    /// </para>
+    /// <para>
+    /// It does not identify the <em>wrapper</em>, only the shape, and the name reflects that: an earlier name claiming
+    /// the execution strategy specifically was wrong twice over. A store's own persistence exception usually derives
+    /// from <see cref="InvalidOperationException"/> and carries the provider failure as its inner, so an
+    /// already-normalized failure matches this too. A clause that may see one must rethrow its own exception type
+    /// before reaching a clause built on this, or it will wrap a normalized failure a second time.
+    /// </para>
+    /// </remarks>
+    public static bool IsWrappedProviderFailure(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        if (exception is not InvalidOperationException)
+            return false;
+
+        for (var current = exception.InnerException; current is not null; current = current.InnerException)
+        {
+            if (current is DbException or DbUpdateException)
+                return true;
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Returns whether <paramref name="exception"/> reports that a relational provider failed, whether it surfaced as
+    /// the provider's own exception or was re-raised by an execution strategy. This is the predicate a store's
+    /// outermost provider-failure clause wants, in place of catching <see cref="DbException"/> and
+    /// <see cref="DbUpdateException"/> by type and missing the wrapped form.
+    /// </summary>
+    public static bool IsProviderFailure(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        return exception is DbException or DbUpdateException || IsWrappedProviderFailure(exception);
+    }
+
+    /// <summary>
+    /// Returns whether a store's outermost boundary should normalize <paramref name="exception"/> into its own
+    /// persistence exception. Deliberately wider than <see cref="IsProviderFailure"/>: it also takes a bare
+    /// <see cref="InvalidOperationException"/>, because that is what EF raises for infrastructure faults that carry no
+    /// provider exception at all, among them "a second operation was started on this context", "sequence contains more
+    /// than one element" from a scalar read, and an already-open transaction. A boundary that ignored those would let
+    /// them escape unnormalized with the change tracker left dirty.
+    /// </summary>
+    /// <remarks>
+    /// This over-reaches, knowingly. A store raises <see cref="InvalidOperationException"/> itself for scope and
+    /// identity violations, and those are swallowed here too. Type alone cannot separate them, so fixing it needs a
+    /// distinct exception type for those violations rather than a cleverer predicate. Use
+    /// <see cref="IsProviderFailure"/> for an inner clause, and this only where the alternative is an unnormalized
+    /// escape.
+    /// </remarks>
+    public static bool IsStoreBoundaryFailure(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        return exception is not (InvalidDataException or OperationCanceledException) &&
+               (IsProviderFailure(exception) || exception is InvalidOperationException);
     }
 
     /// <summary>

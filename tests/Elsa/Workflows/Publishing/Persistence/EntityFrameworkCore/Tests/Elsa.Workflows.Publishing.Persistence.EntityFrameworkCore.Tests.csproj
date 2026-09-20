@@ -31,4 +31,8 @@
     <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->
     <Compile Include="../../../../../Persistence/EntityFramework/Tests/UnorderedRowLimitGuard.cs" Link="UnorderedRowLimitGuard.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Wrapped provider failures this suite injects without a real server. -->
+    <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\ProviderFailures.cs" Link="ProviderFailures.cs" />
+  </ItemGroup>
 </Project>

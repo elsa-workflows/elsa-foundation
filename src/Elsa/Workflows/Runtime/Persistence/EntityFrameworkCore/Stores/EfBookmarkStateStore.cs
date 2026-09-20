@@ -1,4 +1,3 @@
-using System.Data.Common;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -48,24 +47,18 @@ public sealed class EfBookmarkStateStore(
             context.ChangeTracker.Clear();
             throw new InvalidOperationException("The bookmark state changed concurrently; retry the operation.", exception);
         }
-        catch (DbUpdateException exception) when (
-            EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception) ||
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey) ||
             EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
         {
             context.ChangeTracker.Clear();
             throw new InvalidOperationException("The bookmark state changed concurrently; retry the operation.", exception);
-        }
-        catch (DbUpdateException exception)
-        {
-            context.ChangeTracker.Clear();
-            throw NormalizeProviderFailure("saving", state.WorkflowExecutionId, exception);
         }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
         {
             context.ChangeTracker.Clear();
             throw new InvalidOperationException("The bookmark state changed concurrently; retry the operation.", exception);
         }
-        catch (Exception exception) when (IsProviderFailure(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsStoreBoundaryFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("saving", state.WorkflowExecutionId, exception);
@@ -109,22 +102,17 @@ public sealed class EfBookmarkStateStore(
             context.ChangeTracker.Clear();
             throw;
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Transient))
         {
             context.ChangeTracker.Clear();
             return false;
-        }
-        catch (DbUpdateException exception)
-        {
-            context.ChangeTracker.Clear();
-            throw NormalizeProviderFailure("deleting", workflowExecutionId, exception);
         }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
         {
             context.ChangeTracker.Clear();
             return false;
         }
-        catch (Exception exception) when (IsProviderFailure(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsStoreBoundaryFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("deleting", workflowExecutionId, exception);
@@ -153,7 +141,7 @@ public sealed class EfBookmarkStateStore(
             context.ChangeTracker.Clear();
             throw;
         }
-        catch (Exception exception) when (IsProviderFailure(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsStoreBoundaryFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("finding", workflowExecutionId, exception);
@@ -260,7 +248,7 @@ public sealed class EfBookmarkStateStore(
             context.ChangeTracker.Clear();
             throw;
         }
-        catch (Exception exception) when (IsProviderFailure(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsStoreBoundaryFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("listing", binding, exception);
@@ -435,10 +423,6 @@ public sealed class EfBookmarkStateStore(
             throw new ArgumentException("The bookmark continuation token is invalid.", nameof(token), exception);
         }
     }
-
-    private static bool IsProviderFailure(Exception exception) =>
-        exception is not (InvalidDataException or OperationCanceledException) &&
-        exception is (DbException or DbUpdateException or InvalidOperationException);
 
     private static BookmarkStateEntityFrameworkPersistenceException NormalizeProviderFailure(
         string operation,

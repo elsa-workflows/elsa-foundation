@@ -1,4 +1,4 @@
-using System.Data.Common;
+using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
@@ -20,7 +20,7 @@ internal static class RuntimeActivityExecutionEfPersistenceBoundary
             context.ChangeTracker.Clear();
             throw;
         }
-        catch (Exception exception) when (IsProviderFailure(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsStoreBoundaryFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw Normalize(operation, identity, exception);
@@ -32,8 +32,4 @@ internal static class RuntimeActivityExecutionEfPersistenceBoundary
         string identity,
         Exception innerException) =>
         new(operation, identity, $"The EF runtime activity-execution store failed while {operation} '{identity}'.", innerException);
-
-    private static bool IsProviderFailure(Exception exception) =>
-        exception is not (InvalidDataException or OperationCanceledException) &&
-        exception is (DbException or DbUpdateException or InvalidOperationException);
 }

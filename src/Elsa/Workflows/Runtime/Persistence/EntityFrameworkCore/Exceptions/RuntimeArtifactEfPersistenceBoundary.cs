@@ -1,4 +1,4 @@
-using System.Data.Common;
+using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
@@ -72,7 +72,7 @@ internal static class RuntimeArtifactEfPersistenceBoundary
             context.ChangeTracker.Clear();
             throw;
         }
-        catch (Exception exception) when (IsProviderFailure(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsStoreBoundaryFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw new RuntimeArtifactEntityFrameworkPersistenceException(
@@ -82,8 +82,4 @@ internal static class RuntimeArtifactEfPersistenceBoundary
                 exception);
         }
     }
-
-    private static bool IsProviderFailure(Exception exception) =>
-        exception is not (InvalidDataException or OperationCanceledException) &&
-        exception is (DbException or DbUpdateException or InvalidOperationException);
 }

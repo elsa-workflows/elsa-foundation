@@ -89,7 +89,7 @@ internal static class EfIdentityRevisionedRowWrite
                 context.ChangeTracker.Clear();
                 return Saved(1);
             }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
             {
                 context.ChangeTracker.Clear();
                 return Conflict();

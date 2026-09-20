@@ -7,7 +7,6 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Microsoft.EntityFrameworkCore;
-using System.Data.Common;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
@@ -53,11 +52,13 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
                 context, "saving", reference.SourceReferenceId, () => transaction.CommitAsync(cancellationToken));
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         { context.ChangeTracker.Clear(); throw new InvalidOperationException("The workflow executable source reference already exists; source references are create-only.", exception); }
-        catch (DbUpdateException exception)
-        { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("saving", reference.SourceReferenceId, exception); }
-        catch (DbException exception)
+        // Already normalized by an inner call: rethrow rather than let the clause below wrap it a second time,
+        // which it would, because this store's exception derives from InvalidOperationException and carries the
+        // provider failure as its inner.
+        catch (RuntimeArtifactEntityFrameworkPersistenceException) { throw; }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("saving", reference.SourceReferenceId, exception); }
         catch { context.ChangeTracker.Clear(); throw; }
     }
@@ -236,8 +237,11 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             return true;
         }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
-        catch (DbUpdateException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("retiring", sourceReferenceId, exception); }
-        catch (DbException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("retiring", sourceReferenceId, exception); }
+        // Already normalized by an inner call: rethrow rather than let the clause below wrap it a second time,
+        // which it would, because this store's exception derives from InvalidOperationException and carries the
+        // provider failure as its inner.
+        catch (RuntimeArtifactEntityFrameworkPersistenceException) { throw; }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("retiring", sourceReferenceId, exception); }
         catch { context.ChangeTracker.Clear(); throw; }
     }
 
@@ -299,8 +303,11 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             return true;
         }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
-        catch (DbUpdateException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure(restore ? "restoring" : "retiring", expected.SourceReferenceId, exception); }
-        catch (DbException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure(restore ? "restoring" : "retiring", expected.SourceReferenceId, exception); }
+        // Already normalized by an inner call: rethrow rather than let the clause below wrap it a second time,
+        // which it would, because this store's exception derives from InvalidOperationException and carries the
+        // provider failure as its inner.
+        catch (RuntimeArtifactEntityFrameworkPersistenceException) { throw; }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure(restore ? "restoring" : "retiring", expected.SourceReferenceId, exception); }
         catch { context.ChangeTracker.Clear(); throw; }
     }
 
@@ -339,8 +346,11 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             return true;
         }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
-        catch (DbUpdateException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("deleting", sourceReferenceId, exception); }
-        catch (DbException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("deleting", sourceReferenceId, exception); }
+        // Already normalized by an inner call: rethrow rather than let the clause below wrap it a second time,
+        // which it would, because this store's exception derives from InvalidOperationException and carries the
+        // provider failure as its inner.
+        catch (RuntimeArtifactEntityFrameworkPersistenceException) { throw; }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("deleting", sourceReferenceId, exception); }
         catch { context.ChangeTracker.Clear(); throw; }
     }
 
@@ -368,12 +378,11 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             context.ChangeTracker.Clear();
             return deleted;
         }
-        catch (DbUpdateException exception)
-        {
-            context.ChangeTracker.Clear();
-            throw NormalizeProviderFailure("cleaning up", scope, exception);
-        }
-        catch (DbException exception)
+        // Already normalized by an inner call: rethrow rather than let the clause below wrap it a second time,
+        // which it would, because this store's exception derives from InvalidOperationException and carries the
+        // provider failure as its inner.
+        catch (RuntimeArtifactEntityFrameworkPersistenceException) { throw; }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("cleaning up", scope, exception);
@@ -419,8 +428,11 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             return true;
         }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
-        catch (DbUpdateException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("cleaning up", sourceReferenceId, exception); }
-        catch (DbException exception) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("cleaning up", sourceReferenceId, exception); }
+        // Already normalized by an inner call: rethrow rather than let the clause below wrap it a second time,
+        // which it would, because this store's exception derives from InvalidOperationException and carries the
+        // provider failure as its inner.
+        catch (RuntimeArtifactEntityFrameworkPersistenceException) { throw; }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("cleaning up", sourceReferenceId, exception); }
         catch { context.ChangeTracker.Clear(); throw; }
     }
 

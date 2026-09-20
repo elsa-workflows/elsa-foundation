@@ -2,7 +2,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Data.Common;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Services;
@@ -282,8 +281,7 @@ public sealed class EfActivityDesignStores(
         try { return await ReadDefinitionsCoreAsync(query, cancellationToken); }
         catch (OperationCanceledException) { throw; }
         catch (DesignPersistenceException) { throw; }
-        catch (DbUpdateException exception) { throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Provider, "read-definitions", null, exception); }
-        catch (DbException exception) { throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Provider, "read-definitions", null, exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Provider, "read-definitions", null, exception); }
     }
 
     private async Task<ActivityManagementProjectionPage<ActivityDefinitionManagementProjectionRevision>> ReadDefinitionsCoreAsync(ActivityManagementProjectionPageQuery query, CancellationToken cancellationToken = default)
@@ -445,7 +443,7 @@ public sealed class EfActivityDesignStores(
         if (await ById(Access(db.ActivityUpgradeApplyReceipts), receipt.ReceiptId).AnyAsync(cancellationToken)) return false;
         db.ActivityUpgradeApplyReceipts.Add(new ActivityUpgradeApplyReceiptRecord { Id = receipt.ReceiptId, TenantId = receipt.TenantId, ReceiptId = receipt.ReceiptId, PlanId = receipt.PlanId, IdempotencyKeyHash = receipt.IdempotencyKeyHash, ReceiptJson = SerializeJson(receipt, nameof(ActivityUpgradeApplyReceipt)) });
         try { await SaveAsync(cancellationToken); return true; }
-        catch (DesignPersistenceException exception) when (exception.InnerException is DbUpdateException providerFailure && EfRelationalExceptionClassifier.IsUniqueConstraintViolation(providerFailure))
+        catch (DesignPersistenceException exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
             db.ChangeTracker.Clear();
             // The receipt row is the authority for a create race. EF may report unrelated
@@ -855,7 +853,7 @@ public sealed class EfActivityDesignStores(
     public async Task<ActivityForkCandidate> ExecuteAsync(SaveActivityForkCandidateRequest request, CancellationToken cancellationToken = default)
     {
         try { return await SaveForkCandidateCoreAsync(request, cancellationToken); }
-        catch (DesignPersistenceException exception) when (exception.InnerException is DbUpdateException providerFailure && EfRelationalExceptionClassifier.IsUniqueConstraintViolation(providerFailure))
+        catch (DesignPersistenceException exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
             db.ChangeTracker.Clear();
             return await ReconcileForkCandidateSaveAsync(request, exception, cancellationToken);
@@ -911,7 +909,7 @@ public sealed class EfActivityDesignStores(
     public async Task<ActivityForkApplyResult> ExecuteAsync(ApplyActivityForkCandidateRequest request, CancellationToken cancellationToken = default)
     {
         try { return await ApplyForkCandidateCoreAsync(request, cancellationToken); }
-        catch (DesignPersistenceException exception) when (exception.InnerException is DbUpdateException providerFailure && EfRelationalExceptionClassifier.IsUniqueConstraintViolation(providerFailure))
+        catch (DesignPersistenceException exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
             // A concurrent apply may have committed after this transaction read the candidate.
             // Re-read the durable receipt only after the failed transaction is gone; if no exact
@@ -1226,8 +1224,8 @@ public sealed class EfActivityDesignStores(
         try { await db.SaveChangesAsync(cancellationToken); }
         catch (OperationCanceledException) { db.ChangeTracker.Clear(); throw; }
         catch (DbUpdateConcurrencyException exception) { db.ChangeTracker.Clear(); throw new DbUpdateConcurrencyException(exception.Message, exception); }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception)) { db.ChangeTracker.Clear(); throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Provider, "save-unique", null, exception); }
-        catch (DbUpdateException exception) { db.ChangeTracker.Clear(); throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Provider, "save", null, exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey)) { db.ChangeTracker.Clear(); throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Provider, "save-unique", null, exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { db.ChangeTracker.Clear(); throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Provider, "save", null, exception); }
     }
 
     private static async Task AdvanceConcurrencyFenceAsync<TEntity>(DbSet<TEntity> set, TEntity entity, string message, CancellationToken cancellationToken)

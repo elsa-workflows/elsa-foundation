@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities;
@@ -47,7 +48,7 @@ public sealed class EfPublicationPolicyStore(
                 await context.SaveChangesAsync(cancellationToken);
                 return new PublicationPolicyWriteResult(true, saved);
             }
-            catch (DbUpdateException)
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
             {
                 context.ChangeTracker.Clear();
                 var winner = await FindAsync(policy.WorkflowDefinitionId, cancellationToken);

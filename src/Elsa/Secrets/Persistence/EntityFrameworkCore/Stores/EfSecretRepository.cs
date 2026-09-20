@@ -89,12 +89,12 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
             context.ChangeTracker.Clear();
             return true;
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
             context.ChangeTracker.Clear();
             return false;
         }
-        catch (DbUpdateException exception)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw new InvalidOperationException($"Could not add secret '{secret.Name}'.", exception);
@@ -119,7 +119,7 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
             {
                 await context.SaveChangesAsync(cancellationToken);
             }
-            catch (DbUpdateException exception)
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
             {
                 context.ChangeTracker.Clear();
                 if (UnconditionalSaves.ShouldRetry(context, exception))
@@ -170,18 +170,18 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
         {
             await context.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateConcurrencyException)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Concurrency))
         {
             context.ChangeTracker.Clear();
             return new SecretRevisionSaveResult(SecretRevisionSaveStatus.Conflict);
         }
-        catch (DbUpdateException exception)
-            when (expectedToken is null && EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (Exception exception)
+            when (expectedToken is null && EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
             context.ChangeTracker.Clear();
             return new SecretRevisionSaveResult(SecretRevisionSaveStatus.Conflict);
         }
-        catch (DbUpdateException exception)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw new InvalidOperationException($"Could not save secret '{secret.Name}'.", exception);

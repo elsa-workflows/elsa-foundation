@@ -44,7 +44,7 @@ public sealed class EfWorkflowHoldStateStore(
             context.ChangeTracker.Clear();
             throw new InvalidOperationException("The workflow-hold state changed concurrently; retry the operation.", exception);
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
             context.ChangeTracker.Clear();
             throw new InvalidOperationException("The workflow-hold state changed concurrently; retry the operation.", exception);
