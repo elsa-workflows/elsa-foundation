@@ -418,6 +418,7 @@ public sealed class EfActivityManagementProjectionWriter(ActivitiesDesignDbConte
     }
 }
 
+/// <summary>Deletes the projection revisions and snapshots that fall below the retention watermark.</summary>
 public sealed class EfActivityManagementProjectionRetention(ActivitiesDesignDbContext db, IPersistenceAccessContextAccessor? accessContextAccessor = null)
 {
     private const int DeleteBatchSize = 256;
@@ -484,6 +485,26 @@ public sealed class EfActivityManagementProjectionRetention(ActivitiesDesignDbCo
         }
     }
 
+    /// <summary>Deletes every row matching <paramref name="predicate"/> in bounded tracked batches.</summary>
+    /// <remarks>
+    /// Stays tracked rather than becoming one <c>ExecuteDelete</c> like the other retention paths in
+    /// the #1804 wave (#1822, declined): these rows are the only ones in that wave that carry an
+    /// optimistic-concurrency token, declared for every configured entity by
+    /// <c>ActivitiesDesignDbContext.ConfigureEntity</c> (<c>ActivitiesDesignDbContext.cs:356</c>),
+    /// and a tracked delete checks it per row.
+    /// <para>
+    /// No writer reachable today can modify a row these predicates select:
+    /// <see cref="EfActivityManagementProjectionWriter"/>'s <c>Close</c> is the only assignment to
+    /// <c>ValidToSequenceExclusive</c> in the tree and only moves a row from <c>long.MaxValue</c> to
+    /// <c>watermark.Sequence + 1</c>, which <c>ExpireCoreAsync</c>'s bounds check keeps above
+    /// <c>oldest</c>. Nothing enforces that, though. The column has a public setter and is not
+    /// sealed after save, and <c>WriteInCurrentTransactionAsync</c> is public so another module can
+    /// embed a checkpoint in its own transaction. Keeping the delete tracked makes a second writer
+    /// that touched a closed revision fail here instead of losing the row in silence, and the only
+    /// thing the set-based form would buy is throughput, which this repository does not measure or
+    /// gate (#1668, ADR 0073).
+    /// </para>
+    /// </remarks>
     private async Task DeleteInBatchesAsync<TEntity>(DbSet<TEntity> set, System.Linq.Expressions.Expression<Func<TEntity, bool>> predicate, CancellationToken token)
         where TEntity : class
     {
