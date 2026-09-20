@@ -45,7 +45,7 @@ public sealed class EfWorkflowSchedulerPoisonStore(
                     Detach(inserted);
                     return record;
                 }
-                catch (Exception exception) when (exception is DbUpdateException or OperationCanceledException)
+                catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception) || exception is OperationCanceledException)
                 {
                     // A provider failure can leave the failed Added entity tracked even though its transaction was
                     // rolled back. Detach it before the caller can stage another shared-context participant; the
@@ -66,7 +66,7 @@ public sealed class EfWorkflowSchedulerPoisonStore(
                 Detach(replacement);
                 return record;
             }
-            catch (Exception exception) when (exception is DbUpdateException or OperationCanceledException)
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception) || exception is OperationCanceledException)
             {
                 // Keep the shared context usable after a generic provider failure, just as after a CAS conflict.
                 Detach(replacement);

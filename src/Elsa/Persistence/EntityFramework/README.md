@@ -75,7 +75,7 @@ Oracle container leg is the first of the three conditions ADR 0075 requires to r
 | `EfConnectionDefaults.ResolveConnectionString` | Explicit connection string, then a named `ConnectionStrings` entry (refused when missing or blank), then the module's default entry, then the SQLite file |
 | `EfModuleBinding` | A module's owner name, history table, migrations assembly and connection defaults; selects its per-dialect registration and binds its context |
 | `EfSharedTransaction` | Own one connection and one transaction for several module contexts that must commit together; refuse split targets and provider mismatches |
-| `EfRelationalExceptionClassifier` | Classify unique-key violations and transient write conflicts by provider error code without referencing provider engines; `IsSaveConflict` recognizes a race SaveChanges reported even when the provider's execution strategy wrapped it in `InvalidOperationException` (SQL Server, PostgreSQL) |
+| `EfRelationalExceptionClassifier` | Classifies provider failures without referencing provider engines. `IsSaveConflict` recognizes a race SaveChanges reported, `IsProviderFailure` any provider failure, and both see through the `InvalidOperationException` a non-retrying SQL Server or PostgreSQL execution strategy wraps around one. `FindSaveFailure` returns the `DbUpdateException` for code needing its entries or constraint name; `IsStoreBoundaryFailure` additionally takes a bare `InvalidOperationException`, for outermost boundaries only |
 | `EfProviderBindingValidator` | Fail a host closed at startup, in the CShells `Prepare` phase ahead of every module migrator, when a configured module's provider engine is missing or no longer exposes what the reflection binding calls |
 | `EfWriteRetry` | The one bounded retry loop for compare-and-swap and race-prone store writes: the store supplies budget (`DefaultMaxAttempts` unless pinned), the `EfWriteConflict` kinds or predicate it retries, backoff, and exhaustion outcome; a transient conflict inside a caller's open transaction is rethrown, never retried. See [Retry policy](#retry-policy) |
 | `UnicodeOrdinalCasingTable` | The pinned Unicode simple-uppercase mappings that Secrets and OpenTelemetry project persisted ordinal-ignore-case search keys from; each consumer pins `ComputeMappingFingerprint()` in its algorithm id, so the table is never edited in place |
@@ -92,7 +92,7 @@ strategy forbids, SQLite has no retrying strategy to enable and is the provider 
 suites use, and `EfRelationalProviderBinding` has no per-provider seam for the option. The ADR names the
 conditions under which that is revisited.
 
-Three rules apply when you write or review a store:
+Four rules apply when you write or review a store:
 
 1. **Retry through `EfWriteRetry`, not a hand-rolled loop.** Declare the budget, the
    `EfWriteConflict` kinds or the predicate, any backoff, and what exhaustion means for the store's
@@ -112,6 +112,25 @@ Three rules apply when you write or review a store:
    deadlock or lock timeout surfaces to the caller. That is a legitimate choice for some contracts,
    but make it a choice: it is the difference between a lost race, which is the caller's to resolve,
    and a provider conflict, which is not.
+
+4. **Map provider failures with `IsProviderFailure`, and order it last.** The same wrapping that
+   defeats a type-keyed conflict check defeats a type-keyed *failure* mapping, so a clause written as
+   `catch (DbUpdateException)` or `catch (DbException)` lets the wrapper escape past the store's own
+   persistence exception, usually leaving the change tracker dirty. `IsProviderFailure` answers "did a
+   provider fail here" for both shapes. It says nothing about retryability, so put it **after** the
+   conflict clauses or it will swallow them: that ordering mistake is a real one, not a hypothetical
+   (#1814). Two companions exist for the cases that clause cannot cover. `FindSaveFailure` returns the
+   `DbUpdateException` itself, for code that must read the save's own entries or constraint name
+   rather than the wrapper's. `IsStoreBoundaryFailure` is wider, taking a bare
+   `InvalidOperationException` too, because that is what EF raises for infrastructure faults carrying
+   no provider exception at all; use it only at an outermost boundary where the alternative is an
+   unnormalized escape, and read its remarks first, because it knowingly over-reaches.
+
+   One more trap, and it is not obvious: most stores' own persistence exceptions derive from
+   `InvalidOperationException` and carry the provider failure as their inner, so an already-normalized
+   failure matches `IsProviderFailure` too. A ladder that can see one must rethrow its own exception
+   type first, or it will wrap the same failure twice and the caller's `InnerException as DbException`
+   becomes `null`.
 ## Ordinal string columns (`EfOrdinalCollation`)
 
 A module that compares or orders a string column the way .NET compares strings needs the database to

@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Data.Common;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -49,7 +48,7 @@ public sealed class EfActivityManagementProjectionWriter(ActivitiesDesignDbConte
             db.ChangeTracker.Clear();
             throw;
         }
-        catch (Exception exception) when (exception is DbException or DbUpdateException)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             if (transaction is not null) await EfPersistenceCleanup.RollbackQuietlyAsync(transaction);
             db.ChangeTracker.Clear();
@@ -417,7 +416,6 @@ public sealed class EfActivityManagementProjectionWriter(ActivitiesDesignDbConte
             return query;
         return access.Current.Scope is { } scope ? query.Where(x => x.TenantId == scope.Value || x.TenantId == null) : query.Where(x => x.TenantId == null);
     }
-
 }
 
 public sealed class EfActivityManagementProjectionRetention(ActivitiesDesignDbContext db, IPersistenceAccessContextAccessor? accessContextAccessor = null)
@@ -468,7 +466,7 @@ public sealed class EfActivityManagementProjectionRetention(ActivitiesDesignDbCo
             db.ChangeTracker.Clear();
             throw;
         }
-        catch (Exception exception) when (exception is DbException or DbUpdateException)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             if (tx is not null) await EfPersistenceCleanup.RollbackQuietlyAsync(tx);
             db.ChangeTracker.Clear();
@@ -497,5 +495,4 @@ public sealed class EfActivityManagementProjectionRetention(ActivitiesDesignDbCo
             await db.SaveChangesAsync(token);
         }
     }
-
 }

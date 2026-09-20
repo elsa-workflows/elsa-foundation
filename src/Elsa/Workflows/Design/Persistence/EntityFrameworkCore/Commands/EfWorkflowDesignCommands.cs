@@ -488,7 +488,6 @@ public sealed class EfPromoteDraftToVersionCommand(WorkflowsDesignDbContext db, 
 
             throw new WorkflowVersionSelectionException(issue.Code, issue.Message);
         }
-
     }
 }
 

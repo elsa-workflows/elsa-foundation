@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Data.Common;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
@@ -232,7 +231,7 @@ public sealed class EfDesignAtomicWrite(
                 // Reconciliation is best effort; preserve the original operation failure when
                 // the provider cannot be queried after the failed write.
             }
-            if (exception is DbException or DbUpdateException)
+            if (EfRelationalExceptionClassifier.IsProviderFailure(exception))
                 throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Provider, "atomic-write", request.Operation.OperationKind, exception);
             if (exception is InvalidDataException or JsonException)
                 throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Serialization, "atomic-write", request.Operation.OperationKind, exception);
@@ -281,7 +280,6 @@ public sealed class EfDesignAtomicWrite(
         catch (Exception exception) when (exception is JsonException or NotSupportedException or InvalidOperationException)
         { throw new DesignPersistenceException(DesignPersistenceDomain.Activity, DesignPersistenceFailureKind.Serialization, "save", operation, exception); }
     }
-
 }
 
 /// <summary>Shared command adapter that canonicalizes request/result material and translates replay outcomes.</summary>

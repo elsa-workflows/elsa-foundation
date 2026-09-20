@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Data.Common;
 using System.Text;
 using System.Text.Json;
 using Elsa.Workflows.Design.Persistence.Core.Entities;

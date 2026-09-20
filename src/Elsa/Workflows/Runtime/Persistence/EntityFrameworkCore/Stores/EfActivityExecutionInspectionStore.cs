@@ -1,5 +1,4 @@
 using Elsa.Persistence.EntityFramework;
-using System.Data.Common;
 using System.Text;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -54,11 +53,6 @@ public sealed class EfActivityExecutionInspectionStore(
         {
             context.ChangeTracker.Clear();
             throw new InvalidOperationException("The activity execution inspection projection changed concurrently; retry the operation.", exception);
-        }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
-        {
-            context.ChangeTracker.Clear();
-            throw RuntimeActivityExecutionEfPersistenceBoundary.Normalize("saving", projection.ActivityExecutionId, exception);
         }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {

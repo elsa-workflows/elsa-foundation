@@ -51,7 +51,7 @@ public sealed class EfWorkflowDispatchStore(
                 catch (Exception exception)
                 {
                     Detach(added);
-                    if (exception is DbUpdateException update && EfRelationalExceptionClassifier.IsUniqueConstraintViolation(update))
+                    if (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
                         return EfWriteAttempt<WorkflowDispatchRecord>.Retry(exception);
                     throw;
                 }

@@ -312,9 +312,15 @@ public sealed class SqliteEfSecretRepositoryTests
     }
 
     /// <summary>
-    /// The create race is the case that mattered most: wrapped, the old clause could not match it at all, so "another
-    /// writer won" surfaced as a thrown exception instead of the documented <c>false</c> and <c>Conflict</c> answers.
+    /// Wrapped, the old clause could not match a create race at all, so "another writer won" surfaced as a thrown
+    /// exception instead of the documented <c>false</c> and <c>Conflict</c> answers.
     /// </summary>
+    /// <remarks>
+    /// The wrapper here is a store boundary's, not an execution strategy's, and the distinction is worth stating
+    /// because an earlier version of this comment got it wrong. SQL Server's strategy wraps only errors its transient
+    /// detector lists, and 2627 and 2601, the unique-key violations, are not among them; 1205 and 10054 are. The shape
+    /// is identical either way, which is what this test pins, but the strategy is not what produces it for a conflict.
+    /// </remarks>
     [Fact]
     public async Task A_wrapped_unique_violation_is_still_the_documented_conflict_answer()
     {

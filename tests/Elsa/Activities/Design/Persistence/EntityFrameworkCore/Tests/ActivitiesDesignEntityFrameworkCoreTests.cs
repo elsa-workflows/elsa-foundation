@@ -412,6 +412,27 @@ public sealed class ActivitiesDesignEntityFrameworkCoreTests
         Assert.Empty(await first.ActivityDefinitionDrafts.ToListAsync());
     }
 
+    /// <summary>
+    /// A provider failure an execution strategy or a store boundary re-raised must still reach this module's own
+    /// DesignPersistenceException. Before #1814 every clause here was keyed to DbUpdateException or DbException by
+    /// type, so the wrapper escaped unnormalized.
+    /// </summary>
+    [Fact]
+    public async Task Sqlite_normalizes_a_wrapped_provider_failure_on_save()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var saves = ProviderFailures.FailingSaveInterceptor.WrappedProviderFailure();
+        var options = new DbContextOptionsBuilder<ActivitiesDesignSqliteDbContext>().UseSqlite(connection).AddInterceptors(saves).Options;
+        await using var db = new ActivitiesDesignSqliteDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+
+        var failure = await Assert.ThrowsAsync<DesignPersistenceException>(() => new EfActivityDesignStores(db).SaveAsync(
+            new ActivityAvailabilitySettings { Scope = "wrapped-failure", Mode = ActivityAvailabilityManagementMode.AllExcept }));
+
+        Assert.Equal(DesignPersistenceFailureKind.Provider, failure.FailureKind);
+    }
+
     [Fact]
     public async Task Sqlite_conflict_copy_rolls_back_when_the_source_fence_is_stale()
     {
