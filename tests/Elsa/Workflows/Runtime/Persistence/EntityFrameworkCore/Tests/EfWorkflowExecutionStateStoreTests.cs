@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -13,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using Elsa.Persistence.EntityFramework.Tests;
+using System.Data.Common;
 using Xunit;
 using Microsoft.Extensions.DependencyInjection;
 using static Elsa.Persistence.EntityFramework.Tests.ProviderFailures;
@@ -355,7 +357,7 @@ public sealed class EfWorkflowExecutionStateStoreTests
         var saves = FailingSaveInterceptor.WrappedProviderFailure();
         await using var fixture = database.Open("tenant-a", saves);
 
-        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var failure = await Assert.ThrowsAsync<WorkflowExecutionStateEntityFrameworkPersistenceException>(() =>
             fixture.Store.SaveAsync(State("wrapped-provider-failure", "tenant-a", DateTimeOffset.UtcNow)).AsTask());
 
         Assert.NotEqual(ConcurrentChange, failure.Message);
@@ -371,9 +373,10 @@ public sealed class EfWorkflowExecutionStateStoreTests
             await seed.Store.SaveAsync(state);
         await using var fixture = database.Open("tenant-a", FailingSaveInterceptor.WrappedDeadlock());
 
-        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.DeleteAsync(state.WorkflowExecutionId).AsTask());
+        var failure = await Assert.ThrowsAsync<WorkflowExecutionStateEntityFrameworkPersistenceException>(() => fixture.Store.DeleteAsync(state.WorkflowExecutionId).AsTask());
 
         Assert.Equal($"EF workflow execution state deleting failed for '{state.WorkflowExecutionId}'.", failure.Message);
+        Assert.Equal("deleting", failure.Operation);
         Assert.Empty(fixture.Context.ChangeTracker.Entries());
         Assert.NotNull(await fixture.Store.FindAsync(state.WorkflowExecutionId));
     }
@@ -401,11 +404,45 @@ public sealed class EfWorkflowExecutionStateStoreTests
         await using var database = await Database.CreateAsync();
         await using var fixture = database.Open("tenant-a", ProviderFailures.FailingSaveInterceptor.WrappedProviderFailure());
 
-        var failure = await Assert.ThrowsAsync<InvalidOperationException>(
+        var failure = await Assert.ThrowsAsync<WorkflowExecutionStateEntityFrameworkPersistenceException>(
             () => fixture.Store.SaveAsync(State("wrapped-failure", "tenant-a", DateTimeOffset.UtcNow)).AsTask());
 
         Assert.Contains("EF workflow execution state saving failed", failure.Message, StringComparison.Ordinal);
         Assert.Empty(fixture.Context.ChangeTracker.Entries());
+    }
+
+    /// <summary>
+    /// ListAsync loops QueryPageAsync, which already normalizes its own provider failures into this store's
+    /// exception type. Before the store had a distinct type, ListAsync's own provider-failure clause matched the
+    /// already-normalized failure too (it derives from InvalidOperationException and carries the provider failure
+    /// as its inner), so the caller received a second wrapper and `ex.InnerException as DbException` came back null.
+    /// </summary>
+    [Fact]
+    public async Task ListAsync_surfaces_a_provider_failure_from_QueryPageAsync_normalized_only_once()
+    {
+        await using var database = await Database.CreateAsync();
+        var reads = new FailingReadInterceptor(() => new SyntheticProviderException());
+        await using var fixture = database.Open("tenant-a", reads);
+
+        var failure = await Assert.ThrowsAsync<WorkflowExecutionStateEntityFrameworkPersistenceException>(
+            () => fixture.Store.ListAsync().AsTask());
+
+        Assert.Equal("querying", failure.Operation);
+        Assert.IsType<SyntheticProviderException>(failure.InnerException);
+    }
+
+    private sealed class FailingReadInterceptor(Func<Exception> failure) : DbCommandInterceptor
+    {
+        private int attempts;
+
+        public int Attempts => Volatile.Read(ref attempts);
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default) =>
+            Interlocked.Increment(ref attempts) == 1 ? throw failure() : ValueTask.FromResult(result);
     }
 
     private sealed class Database : IAsyncDisposable

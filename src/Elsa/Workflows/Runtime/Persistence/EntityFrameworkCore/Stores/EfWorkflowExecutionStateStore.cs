@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -86,6 +87,9 @@ public sealed class EfWorkflowExecutionStateStore(
             } while (cursor is not null);
             return result;
         }
+        // QueryPageAsync already normalizes its own provider failures; rethrow that type before the
+        // classifier below, which would otherwise match the normalized failure too and wrap it again.
+        catch (WorkflowExecutionStateEntityFrameworkPersistenceException) { throw; }
         catch (OperationCanceledException) { throw; }
         catch (InvalidDataException) { throw; }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { throw Normalize("listing", "<all>", exception); }
@@ -350,7 +354,8 @@ public sealed class EfWorkflowExecutionStateStore(
     // The checkpoint staging seam must use the same framed identity as direct workflow-execution persistence.
     internal static string CreateId(string scope, string id) => Hash($"workflow-execution:{scope.Length}:{scope}{id.Length}:{id}");
     private static long NewRevision() { Span<byte> bytes = stackalloc byte[8]; RandomNumberGenerator.Fill(bytes); var result = BitConverter.ToInt64(bytes) & (long.MaxValue >> 1); return result == 0 ? 1 : result; }
-    private static InvalidOperationException Normalize(string action, string id, Exception exception) => new($"EF workflow execution state {action} failed for '{id}'.", exception);
+    private static WorkflowExecutionStateEntityFrameworkPersistenceException Normalize(string action, string id, Exception exception) =>
+        new(action, id, $"EF workflow execution state {action} failed for '{id}'.", exception);
 
     private HistoryCursor? DecodeHistoryCursor(string? token, WorkflowExecutionStatePageQuery query, string scope)
     {
