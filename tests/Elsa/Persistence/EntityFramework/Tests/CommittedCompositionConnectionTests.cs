@@ -52,11 +52,25 @@ public sealed partial class CommittedCompositionConnectionTests
         // A feature that carries both a provider and a connection name resolves its own connection; the rest
         // either compose onto a context another feature bound, or pin one engine and take a connection string only.
         .Where(candidate => candidate.Name.Success && candidate.Provider.Success && candidate.Source.Text.Contains("ConnectionName", StringComparison.Ordinal))
-        // An uninitialised provider property is the feature's own "unset", which every such feature reads as Sqlite.
-        .ToDictionary(
-            candidate => candidate.Name.Groups["name"].Value,
-            candidate => candidate.Provider.Groups["provider"].Success ? candidate.Provider.Groups["provider"].Value : "Sqlite",
-            StringComparer.Ordinal);
+        .Select(candidate => (Name: candidate.Name.Groups["name"].Value, Provider: ProviderDefault(candidate.Provider)))
+        .Where(candidate => candidate.Provider is not null)
+        .ToDictionary(candidate => candidate.Name, candidate => candidate.Provider!, StringComparer.Ordinal);
+
+    /// <summary>
+    /// The provider a feature selects when a composition names none: its initialiser's literal, or <c>Sqlite</c>
+    /// when it declares none, which every such feature reads its unset value as. A computed initialiser gives
+    /// <c>null</c>: the scan cannot read it, and recording a guess would check that feature against the wrong
+    /// provider, so it leaves the catalog and
+    /// <see cref="Every_entity_framework_feature_a_committed_composition_composes_is_in_the_catalog"/> names it.
+    /// </summary>
+    private static string? ProviderDefault(Match provider)
+    {
+        if (!provider.Groups["initializer"].Success)
+            return "Sqlite";
+
+        var initializer = provider.Groups["initializer"].Value.Trim();
+        return QuotedLiteral().IsMatch(initializer) && initializer.Length > 2 ? initializer[1..^1] : null;
+    }
 
     /// <summary>
     /// The EF-named features that deliberately resolve no connection of their own, so a composition may list
@@ -324,7 +338,7 @@ public sealed partial class CommittedCompositionConnectionTests
             _ = new SqliteConnectionStringBuilder(connectionString);
             return null;
         }
-        catch (ArgumentException exception)
+        catch (Exception exception) when (exception is ArgumentException or FormatException)
         {
             return exception.Message;
         }
@@ -353,7 +367,10 @@ public sealed partial class CommittedCompositionConnectionTests
 
     // The initialiser is optional: a feature may declare `public string? Provider { get; set; }` and read the
     // unset value as Sqlite at its own call site.
-    [GeneratedRegex("""public\s+string\??\s+Provider\s*\{\s*get;\s*set;\s*\}\s*(?:=\s*"(?<provider>[^"]+)"\s*;|(?!\s*=))""")]
+    // The initialiser is optional — a feature may declare `public string? Provider { get; set; }` and read the
+    // unset value as Sqlite at its own call site — and is captured whole rather than only when it is a literal,
+    // so a computed one is rejected here rather than sending the scan looking for another Provider property.
+    [GeneratedRegex("""public\s+string\??\s+Provider\s*\{\s*get;\s*set;\s*\}\s*(?:=\s*(?<initializer>[^;\r\n]+);)?""")]
     private static partial Regex ProviderSetting();
 
     [GeneratedRegex("""const\s+string\s+DefaultConnectionName\s*=\s*"(?<name>[^"]+)"\s*;""")]
