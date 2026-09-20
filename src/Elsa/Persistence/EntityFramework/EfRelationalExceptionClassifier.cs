@@ -96,8 +96,8 @@ public static class EfRelationalExceptionClassifier
     }
 
     /// <summary>
-    /// Returns whether <paramref name="exception"/> is a provider failure that an execution strategy re-raised as an
-    /// <see cref="InvalidOperationException"/> rather than letting the provider's own exception surface.
+    /// Returns whether <paramref name="exception"/> is an <see cref="InvalidOperationException"/> carrying a provider
+    /// failure somewhere beneath it, whoever put it there.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -117,8 +117,15 @@ public static class EfRelationalExceptionClassifier
     /// A bare <see cref="InvalidOperationException"/> that carries no provider exception does not match. That matters,
     /// because stores raise that type themselves for scope and identity violations, and those must keep travelling.
     /// </para>
+    /// <para>
+    /// It does not identify the <em>wrapper</em>, only the shape, and the name reflects that: an earlier name claiming
+    /// the execution strategy specifically was wrong twice over. A store's own persistence exception usually derives
+    /// from <see cref="InvalidOperationException"/> and carries the provider failure as its inner, so an
+    /// already-normalized failure matches this too. A clause that may see one must rethrow its own exception type
+    /// before reaching a clause built on this, or it will wrap a normalized failure a second time.
+    /// </para>
     /// </remarks>
-    public static bool IsExecutionStrategyWrapped(Exception exception)
+    public static bool IsWrappedProviderFailure(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
         if (exception is not InvalidOperationException)
@@ -142,7 +149,7 @@ public static class EfRelationalExceptionClassifier
     public static bool IsProviderFailure(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
-        return exception is DbException or DbUpdateException || IsExecutionStrategyWrapped(exception);
+        return exception is DbException or DbUpdateException || IsWrappedProviderFailure(exception);
     }
 
     /// <summary>

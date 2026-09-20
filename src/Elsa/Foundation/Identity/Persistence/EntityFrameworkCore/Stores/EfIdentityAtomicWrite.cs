@@ -646,7 +646,6 @@ public sealed class EfIdentityAtomicWrite
 
         return new EfIdentityWriteResult(status, row.Version, row.Message, row.AuthoritativeId, row.FailedUnitId);
     }
-
 }
 
 /// <summary>Coordinates bounded mutation-receipt cleanup across EF scopes using one process-wide scheduler.</summary>

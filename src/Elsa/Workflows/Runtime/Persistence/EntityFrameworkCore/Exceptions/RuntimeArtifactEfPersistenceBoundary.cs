@@ -1,5 +1,4 @@
 using Elsa.Persistence.EntityFramework;
-using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
@@ -83,5 +82,4 @@ internal static class RuntimeArtifactEfPersistenceBoundary
                 exception);
         }
     }
-
 }

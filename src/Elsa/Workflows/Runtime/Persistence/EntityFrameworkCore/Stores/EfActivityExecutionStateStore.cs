@@ -1,5 +1,4 @@
 using Elsa.Persistence.EntityFramework;
-using System.Data.Common;
 using System.Text;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;

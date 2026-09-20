@@ -2,7 +2,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Data.Common;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Services;

@@ -1,5 +1,4 @@
 using Elsa.Persistence.EntityFramework;
-using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
@@ -33,5 +32,4 @@ internal static class RuntimeActivityExecutionEfPersistenceBoundary
         string identity,
         Exception innerException) =>
         new(operation, identity, $"The EF runtime activity-execution store failed while {operation} '{identity}'.", innerException);
-
 }

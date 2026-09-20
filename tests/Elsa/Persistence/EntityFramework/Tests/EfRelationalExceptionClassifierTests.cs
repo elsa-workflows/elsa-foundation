@@ -135,9 +135,9 @@ public sealed class EfRelationalExceptionClassifierTests
         var queryFailure = ProviderFailures.WrappedByExecutionStrategy(new ProviderFailures.SqlException(10054));
         var saveFailure = ProviderFailures.WrappedSaveFailure(new ProviderFailures.SqlException(10054));
 
-        Assert.True(EfRelationalExceptionClassifier.IsExecutionStrategyWrapped(queryFailure));
-        Assert.True(EfRelationalExceptionClassifier.IsExecutionStrategyWrapped(saveFailure));
-        Assert.True(EfRelationalExceptionClassifier.IsExecutionStrategyWrapped(new InvalidOperationException("store boundary", saveFailure)));
+        Assert.True(EfRelationalExceptionClassifier.IsWrappedProviderFailure(queryFailure));
+        Assert.True(EfRelationalExceptionClassifier.IsWrappedProviderFailure(saveFailure));
+        Assert.True(EfRelationalExceptionClassifier.IsWrappedProviderFailure(new InvalidOperationException("store boundary", saveFailure)));
 
         Assert.True(EfRelationalExceptionClassifier.IsProviderFailure(queryFailure));
         Assert.True(EfRelationalExceptionClassifier.IsProviderFailure(saveFailure));
@@ -152,8 +152,8 @@ public sealed class EfRelationalExceptionClassifierTests
     [Fact]
     public void An_unwrapped_provider_exception_is_not_reported_as_wrapped()
     {
-        Assert.False(EfRelationalExceptionClassifier.IsExecutionStrategyWrapped(new ProviderFailures.SqlException(10054)));
-        Assert.False(EfRelationalExceptionClassifier.IsExecutionStrategyWrapped(new DbUpdateException("write failed", new ProviderFailures.SqlException(10054))));
+        Assert.False(EfRelationalExceptionClassifier.IsWrappedProviderFailure(new ProviderFailures.SqlException(10054)));
+        Assert.False(EfRelationalExceptionClassifier.IsWrappedProviderFailure(new DbUpdateException("write failed", new ProviderFailures.SqlException(10054))));
     }
 
     /// <summary>
@@ -163,9 +163,9 @@ public sealed class EfRelationalExceptionClassifierTests
     [Fact]
     public void An_exception_carrying_no_provider_failure_never_matches()
     {
-        Assert.False(EfRelationalExceptionClassifier.IsExecutionStrategyWrapped(
+        Assert.False(EfRelationalExceptionClassifier.IsWrappedProviderFailure(
             new InvalidOperationException("The requested resource does not belong to the current persistence scope.")));
-        Assert.False(EfRelationalExceptionClassifier.IsExecutionStrategyWrapped(
+        Assert.False(EfRelationalExceptionClassifier.IsWrappedProviderFailure(
             new InvalidOperationException("corrupt projection", new InvalidDataException("not valid current data"))));
         Assert.False(EfRelationalExceptionClassifier.IsProviderFailure(
             new InvalidOperationException("The requested resource does not belong to the current persistence scope.")));
