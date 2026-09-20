@@ -396,7 +396,7 @@ separately from every other module enabled in the same shell. A host that config
 must move the value to the host-wide key; a shell that genuinely needs a different policy from its
 neighbors still can, because a shell's own `Configuration` node already layers over the host's for
 this key — "one shell can run `Validate` while another does not"
-(`src/Elsa/Persistence/EntityFramework/README.md:286-287`) — just at the shell-configuration layer
+(`src/Elsa/Persistence/EntityFramework/README.md:305-306`) — just at the shell-configuration layer
 rather than the retired feature-setting layer.
 
 Failing loudly needs a specific mechanism, not just an intention. CShells only binds a configuration
@@ -601,7 +601,7 @@ Costs and risks:
   `EfMigrateOptions.cs:18`), the same key every other module's `EfModuleMigrator<T>` already reads.
   A shell that still needs Secrets on a different policy from its neighbors keeps that ability, since
   a shell's own `Configuration` node already layers over the host's for this key
-  (`src/Elsa/Persistence/EntityFramework/README.md:286-287`) — at the shell-configuration layer, not
+  (`src/Elsa/Persistence/EntityFramework/README.md:305-306`) — at the shell-configuration layer, not
   the retired feature-setting layer. Failing loudly for a host that still sets it needs a specific
   mechanism: CShells binds a configuration key onto a feature only when the feature type still has a
   public settable property of that name (`cshells:
