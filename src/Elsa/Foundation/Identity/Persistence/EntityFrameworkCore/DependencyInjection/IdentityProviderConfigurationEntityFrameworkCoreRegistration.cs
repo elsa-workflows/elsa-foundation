@@ -13,12 +13,7 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInj
 public static class IdentityProviderConfigurationEntityFrameworkCoreRegistration
 {
     public const string StoreBackendName = "entity-framework";
-    private static readonly EfModuleBinding Binding = new(
-        "Identity provider-configuration",
-        IdentityProviderConfigurationEfModule.HistoryTableName,
-        typeof(IdentityProviderConfigurationDbContext).Assembly.GetName().Name,
-        IdentityProviderConfigurationEfModule.DefaultConnectionName,
-        IdentityProviderConfigurationEfModule.DefaultSqliteConnectionString);
+    private static readonly EfModuleBinding Binding = EfModuleBinding.For(typeof(IdentityProviderConfigurationDbContext));
 
     public static IServiceCollection AddIdentityProviderConfigurationEntityFrameworkCore(
         this IServiceCollection services,

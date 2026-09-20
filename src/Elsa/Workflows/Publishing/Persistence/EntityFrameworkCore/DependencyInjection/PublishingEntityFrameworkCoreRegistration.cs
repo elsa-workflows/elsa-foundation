@@ -22,12 +22,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.DependencyIn
 
 public static class PublishingEntityFrameworkCoreRegistration
 {
-    private static readonly EfModuleBinding Binding = new(
-        "Publishing",
-        PublishingSnapshotReviewEfModule.HistoryTableName,
-        typeof(PublishingSnapshotReviewDbContext).Assembly.GetName().Name,
-        PublishingSnapshotReviewEfModule.DefaultConnectionName,
-        PublishingSnapshotReviewEfModule.DefaultSqliteConnectionString);
+    private static readonly EfModuleBinding Binding = EfModuleBinding.For(typeof(PublishingSnapshotReviewDbContext));
 
     /// <summary>
     /// The P01, P05 and P06 families and the reusable-activity publication commands. The commands write the P05

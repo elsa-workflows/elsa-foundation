@@ -10,12 +10,7 @@ namespace Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.DependencyInje
 public static class StudioPreferencesEntityFrameworkCoreRegistration
 {
     public const string StoreBackendName = "entity-framework";
-    private static readonly EfModuleBinding Binding = new(
-        "Studio Preferences",
-        StudioPreferencesEfModule.HistoryTableName,
-        typeof(StudioPreferencesDbContext).Assembly.GetName().Name,
-        StudioPreferencesEfModule.DefaultConnectionName,
-        StudioPreferencesEfModule.DefaultSqliteConnectionString);
+    private static readonly EfModuleBinding Binding = EfModuleBinding.For(typeof(StudioPreferencesDbContext));
 
     public static IServiceCollection AddStudioPreferencesEntityFrameworkCore(
         this IServiceCollection services,

@@ -87,9 +87,18 @@ internal static class ModuleContextCatalog
     public static string ProviderOf(Type context) =>
         Providers.Single(provider => context.Name.EndsWith(provider + "DbContext", StringComparison.Ordinal));
 
-    /// <summary>Each module context keeps its own history table, so modules can share one database.</summary>
+    // Read once, not re-derived per lookup: the same descriptors EfModuleBinding.For reads off each
+    // module's [EfModule] declaration.
+    private static readonly IReadOnlyList<EfModuleDescriptor> Descriptors = EfModuleCatalog.Discover(Modules);
+
+    /// <summary>
+    /// Each module context keeps its own history table, so modules can share one database. Read from the
+    /// module's declared <see cref="EfModuleDescriptor.HistoryModule"/> rather than re-derived from the
+    /// context class name, which is what let this catalog compute <c>__EFMigrationsHistory_Runtime</c>
+    /// while the host actually uses <c>__EFMigrationsHistory_ElsaRuntime</c> (#1872).
+    /// </summary>
     public static string HistoryTable(Type context) =>
-        EfMigrationsHistory.TableName(context.Name[..^(ProviderOf(context).Length + "DbContext".Length)]);
+        Descriptors.First(descriptor => descriptor.ProviderContext(ProviderOf(context)) == context).HistoryTableName;
 
     /// <summary>A connection string the provider parses but nothing ever opens; building a model needs no database.</summary>
     public static string PlaceholderConnection(string provider) => provider switch

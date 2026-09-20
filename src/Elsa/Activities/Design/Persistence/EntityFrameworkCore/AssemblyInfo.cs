@@ -2,7 +2,7 @@ using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework;
 
 // The single, discoverable declaration of this module (ADR 0076 D2). EfModuleCatalog.Discover reads this,
-// not the hand-written EfModuleBinding each registration class still builds for itself (slice 2, #1872).
+// and EfModuleBinding.For derives the registration class's binding from it (#1872).
 [assembly: EfModule(
     "Activities.Design",
     typeof(ActivitiesDesignDbContext),
@@ -10,4 +10,5 @@ using Elsa.Persistence.EntityFramework;
     Sqlite = typeof(ActivitiesDesignSqliteDbContext),
     SqlServer = typeof(ActivitiesDesignSqlServerDbContext),
     PostgreSql = typeof(ActivitiesDesignPostgreSqlDbContext),
-    MySql = typeof(ActivitiesDesignMySqlDbContext))]
+    MySql = typeof(ActivitiesDesignMySqlDbContext),
+    DisplayName = "Activities Design")]

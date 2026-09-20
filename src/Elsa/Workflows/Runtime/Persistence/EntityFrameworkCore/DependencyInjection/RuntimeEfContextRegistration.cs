@@ -8,12 +8,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjec
 
 internal static class RuntimeEfContextRegistration
 {
-    private static readonly EfModuleBinding Binding = new(
-        "Runtime",
-        RuntimeEfModule.HistoryTableName,
-        typeof(RuntimeDbContext).Assembly.GetName().Name,
-        RuntimeEfModule.DefaultConnectionName,
-        RuntimeEfModule.DefaultSqliteConnectionString);
+    private static readonly EfModuleBinding Binding = EfModuleBinding.For(typeof(RuntimeDbContext));
 
     public static void EnsureRecoveryContinuationSigningKeyCompatible(
         IServiceCollection services,

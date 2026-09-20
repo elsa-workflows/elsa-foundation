@@ -12,12 +12,7 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.DependencyInjection;
 public static class SecretsEntityFrameworkCoreRegistration
 {
     private const string RepositoryBackendName = "entity-framework";
-    private static readonly EfModuleBinding Binding = new(
-        "Secrets",
-        SecretsEfModule.HistoryTableName,
-        typeof(SecretsDbContext).Assembly.GetName().Name,
-        SecretsEfModule.DefaultConnectionName,
-        SecretsEfModule.DefaultSqliteConnectionString);
+    private static readonly EfModuleBinding Binding = EfModuleBinding.For(typeof(SecretsDbContext));
 
     public static IServiceCollection AddSecretsEntityFrameworkCore(
         this IServiceCollection services,

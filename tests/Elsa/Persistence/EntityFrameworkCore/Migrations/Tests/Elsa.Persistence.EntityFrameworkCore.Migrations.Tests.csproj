@@ -28,5 +28,9 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Publishing\Persistence\EntityFrameworkCore\Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Distributed\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <!-- Guards spec 171 FR-019: every design-time factory line corresponds to a declared provider context
+         and vice versa. This project already references all four provider engines and every module
+         project, so it can also reference the tooling project rather than duplicating its factory list. -->
+    <ProjectReference Include="..\..\..\..\..\..\tools\ef\Elsa.EntityFrameworkCore.Tooling\Elsa.EntityFrameworkCore.Tooling.csproj" />
   </ItemGroup>
 </Project>

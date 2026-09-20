@@ -12,12 +12,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Dep
 public static class DistributedRuntimeExecutionCommandTransportEntityFrameworkCoreRegistration
 {
     public const string StoreBackendName = ExecutionCommandTransportBackend.EntityFramework;
-    private static readonly EfModuleBinding Binding = new(
-        "Distributed runtime execution command transport",
-        ExecutionCommandTransportEfModule.HistoryTableName,
-        typeof(ExecutionCommandTransportDbContext).Assembly.GetName().Name,
-        ExecutionCommandTransportEfModule.DefaultConnectionName,
-        ExecutionCommandTransportEfModule.DefaultSqliteConnectionString);
+    private static readonly EfModuleBinding Binding = EfModuleBinding.For(typeof(ExecutionCommandTransportDbContext));
 
     public static IServiceCollection AddDistributedRuntimeExecutionCommandTransportEntityFrameworkCore(
         this IServiceCollection services,
