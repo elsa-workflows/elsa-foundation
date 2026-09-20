@@ -119,4 +119,21 @@ public sealed class EfModuleBindingForTests
 
     public static IEnumerable<object[]> ExpectedCases() =>
         Expected.Select(entry => new object[] { entry.ContextType, entry.Expected });
+
+    [Fact]
+    public void For_throws_when_the_assembly_declares_EfModule_but_none_for_the_given_context()
+    {
+        // SecretsSqliteDbContext lives in the same assembly as SecretsDbContext, but [EfModule]'s
+        // ContextType names SecretsDbContext, not its provider-derived Sqlite context.
+        var exception = Assert.Throws<InvalidOperationException>(() => EfModuleBinding.For(typeof(SecretsSqliteDbContext)));
+        Assert.Contains(nameof(SecretsSqliteDbContext), exception.Message);
+    }
+
+    [Fact]
+    public void For_throws_when_the_assembly_declares_no_EfModule_at_all()
+    {
+        // This test assembly declares no [assembly: EfModule] anywhere.
+        var exception = Assert.Throws<InvalidOperationException>(() => EfModuleBinding.For(typeof(EfModuleBindingForTests)));
+        Assert.Contains(nameof(EfModuleBindingForTests), exception.Message);
+    }
 }
