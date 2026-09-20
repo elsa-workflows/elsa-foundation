@@ -13,12 +13,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\src\Elsa\Agent\Core\Elsa.Agent.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Elsa\Agent\Anthropic\Elsa.Agent.Anthropic.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Elsa\Agent\Api\Elsa.Agent.Api.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Elsa\Agent\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Elsa\Agent\Workflows\Elsa.Agent.Workflows.csproj" />
-    <ProjectReference Include="..\..\Testing\Elsa.Testing.csproj" />
+    <ProjectReference Include="..\..\src\Core\Elsa.Agent.Core.csproj" />
+    <ProjectReference Include="..\..\src\Anthropic\Elsa.Agent.Anthropic.csproj" />
+    <ProjectReference Include="..\..\src\Api\Elsa.Agent.Api.csproj" />
+    <ProjectReference Include="..\..\src\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
+    <ProjectReference Include="..\..\src\Workflows\Elsa.Agent.Workflows.csproj" />
+    <ProjectReference Include="..\..\..\..\tests\Elsa\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>

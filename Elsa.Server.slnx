@@ -1,5 +1,16 @@
 <Solution>
   <Folder Name="/extensions/" />
+  <Folder Name="/extensions/Agent/" />
+  <Folder Name="/extensions/Agent/src/">
+    <Project Path="extensions/Agent/src/Anthropic/Elsa.Agent.Anthropic.csproj" />
+    <Project Path="extensions/Agent/src/Api/Elsa.Agent.Api.csproj" />
+    <Project Path="extensions/Agent/src/Core/Elsa.Agent.Core.csproj" />
+    <Project Path="extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj" />
+    <Project Path="extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj" />
+  </Folder>
+  <Folder Name="/extensions/Agent/tests/">
+    <Project Path="extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj" />
+  </Folder>
   <Folder Name="/extensions/Elsa3/" />
   <Folder Name="/extensions/Elsa3/tests/" />
   <Folder Name="/extensions/Elsa3/src/">
@@ -87,13 +98,6 @@
   <Folder Name="/src/Elsa/Activities/Runtime/">
     <Project Path="src/Elsa/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj" />
     <Project Path="src/Elsa/Activities/Runtime/Elsa.Activities.Runtime.csproj" />
-  </Folder>
-  <Folder Name="/src/Elsa/Agent/">
-    <Project Path="src\Elsa\Agent\Core\Elsa.Agent.Core.csproj" />
-    <Project Path="src\Elsa\Agent\Anthropic\Elsa.Agent.Anthropic.csproj" />
-    <Project Path="src\Elsa\Agent\Api\Elsa.Agent.Api.csproj" />
-    <Project Path="src\Elsa\Agent\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
-    <Project Path="src\Elsa\Agent\Workflows\Elsa.Agent.Workflows.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Attention/">
     <Project Path="src/Elsa/Attention/Core/Elsa.Attention.Core.csproj" />
@@ -341,9 +345,6 @@
   </Folder>
   <Folder Name="/tests/Elsa/Activities/Runtime/">
     <Project Path="tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Elsa/Agent/">
-    <Project Path="tests/Elsa/Agent/Tests/Elsa.Agent.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Api/" />
   <Folder Name="/tests/Elsa/Api/Compatibility/" />

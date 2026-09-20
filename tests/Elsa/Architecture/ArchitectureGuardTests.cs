@@ -1037,6 +1037,16 @@ public sealed partial class ArchitectureGuardTests
         return count;
     }
 
+    /// <summary>
+    /// Project-name prefixes that belong to an optional module, and the <c>extensions/</c> bucket owning
+    /// each (#1815). Order matters only if one prefix is a prefix of another, which none are today.
+    /// </summary>
+    private static readonly (string Prefix, string Bucket)[] ExtensionBuckets =
+    [
+        ("Elsa3.", "Elsa3"),
+        ("Elsa.Agent.", "Agent"),
+    ];
+
     private static string ExpectedProjectPath(ProjectInfo project)
     {
         if (project.Name == "Elsa.Workbench")
@@ -1054,14 +1064,16 @@ public sealed partial class ArchitectureGuardTests
         if (project.Name == "Elsa.Primitives")
             return "src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj";
 
-        // Elsa 3 import is an optional module, so it lives under extensions/ rather than src/ (#1815).
-        // The name-to-path derivation is unchanged; only the root differs, and the src|tests split now
-        // sits inside the extension rather than at the top of the tree.
-        if (project.Name.StartsWith("Elsa3.", StringComparison.Ordinal) && project.RelativePath.Contains("/tests/", StringComparison.Ordinal))
-            return $"extensions/Elsa3/tests/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";
-
-        if (project.Name.StartsWith("Elsa3.", StringComparison.Ordinal))
-            return $"extensions/Elsa3/src/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";
+        // Optional modules live under extensions/<Bucket>/<src|tests>/ rather than in the src/Elsa tree
+        // (#1815). The name-to-path derivation is the same one the src/ rules below use; only the root
+        // differs, and the src|tests split sits inside the extension rather than at the top of the tree.
+        // Moving a module is therefore one row in ExtensionBuckets, not another branch here.
+        if (ExtensionBuckets.FirstOrDefault(bucket => project.Name.StartsWith(bucket.Prefix, StringComparison.Ordinal)) is { Bucket.Length: > 0 } owner)
+        {
+            var subPath = string.Join('/', project.Name[owner.Prefix.Length..].Split('.'));
+            var root = project.RelativePath.Contains("/tests/", StringComparison.Ordinal) ? "tests" : "src";
+            return $"extensions/{owner.Bucket}/{root}/{subPath}/{project.Name}.csproj";
+        }
 
         if (project.Name.StartsWith("Elsa.", StringComparison.Ordinal) && project.RelativePath.StartsWith("src/", StringComparison.Ordinal))
             return $"src/Elsa/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";

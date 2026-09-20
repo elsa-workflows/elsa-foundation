@@ -173,11 +173,15 @@ public sealed partial class ArchitectureGuardTests
             string.Join(Environment.NewLine, violations));
     }
 
-    // Deliberately src/ only: a .Core project is a required-module shape, and no extension declares one.
-    // Widen this the moment one does, or the shape guard stops seeing it (#1815).
+    // Every production module root, not just src/. This was src/-only on the reasoning that a .Core
+    // project is a required-module shape and no extension declared one; moving the Agent bucket to
+    // extensions/ made Elsa.Agent.Core the first that does (#1815). The narrowing showed up as sixteen
+    // baseline entries reported stale rather than as missed violations, which is the inverse assertion
+    // earning its keep: without it the guard would simply have stopped checking Agent and stayed green.
     private static IEnumerable<Assembly> CoreProjectAssemblies() => ProjectFiles()
-        .Where(project => project.RelativePath.StartsWith("src/", StringComparison.Ordinal) &&
-                          project.Name.EndsWith(".Core", StringComparison.Ordinal))
+        .Where(project => ModuleRoots.Production.Any(root => project.RelativePath.StartsWith(root + "/", StringComparison.Ordinal)))
+        .Where(project => !project.RelativePath.Contains("/tests/", StringComparison.Ordinal))
+        .Where(project => project.Name.EndsWith(".Core", StringComparison.Ordinal))
         .Select(project => Assembly.Load(new AssemblyName(project.Name)));
 
     private static bool IsImplementationShaped(Type type) =>
