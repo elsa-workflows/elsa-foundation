@@ -2676,7 +2676,6 @@ public sealed class EfWorkflowDesignPersistenceTests
         }
     }
 
-
     private static DesignAtomicWriteLane<ProtocolScope, ProtocolMarker, ProtocolStage, ProtocolResult> CreateProtocolLane(
         ProtocolScope scope,
         Func<ProtocolScope, CancellationToken, Task<DesignAtomicCommitDisposition>> commit,

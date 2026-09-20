@@ -82,7 +82,7 @@ public sealed class EfActivityPublicationRuntimeCommit
                     context, "publishing", template.TemplateId, () => transaction.CommitAsync(cancellationToken));
                 return createsTemplate || createsReference;
             }
-            catch (Exception exception) when (exception is DbUpdateException or DbException)
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
             {
                 if (Commits.ShouldRetry(context, exception))
                     throw;

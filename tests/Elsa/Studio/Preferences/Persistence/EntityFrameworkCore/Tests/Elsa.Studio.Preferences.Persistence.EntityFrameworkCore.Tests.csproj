@@ -25,4 +25,8 @@
     <Compile Include="../../../../../Persistence/EntityFramework/Tests/TemporarySqliteDatabase.cs" Link="TemporarySqliteDatabase.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Wrapped provider failures this suite injects without a real server. -->
+    <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\ProviderFailures.cs" Link="ProviderFailures.cs" />
+  </ItemGroup>
 </Project>

@@ -97,11 +97,10 @@ public sealed class EfWorkflowExecutableStore(
                 context.ChangeTracker.Clear();
             }
         }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
-        {
-            context.ChangeTracker.Clear();
-            throw NormalizeProviderFailure("saving", string.Join(",", executables.Select(x => x.Identity.ArtifactId)), exception);
-        }
+        // Already normalized by an inner call: rethrow rather than let the clause below wrap it a second time,
+        // which it would, because this store's exception derives from InvalidOperationException and carries the
+        // provider failure as its inner.
+        catch (RuntimeArtifactEntityFrameworkPersistenceException) { throw; }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             context.ChangeTracker.Clear();
@@ -301,11 +300,10 @@ public sealed class EfWorkflowExecutableStore(
                 context.ChangeTracker.Clear();
             }, _ => throw CoordinationDidNotSettle(lease.ArtifactId), cancellationToken);
         }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
-        {
-            context.ChangeTracker.Clear();
-            throw NormalizeProviderFailure("releasing", lease.ArtifactId, exception);
-        }
+        // Already normalized by an inner call: rethrow rather than let the clause below wrap it a second time,
+        // which it would, because this store's exception derives from InvalidOperationException and carries the
+        // provider failure as its inner.
+        catch (RuntimeArtifactEntityFrameworkPersistenceException) { throw; }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             context.ChangeTracker.Clear();
@@ -542,7 +540,11 @@ public sealed class EfWorkflowExecutableStore(
             context.ChangeTracker.Clear();
             throw;
         }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        // Already normalized by an inner call: rethrow rather than let the clause below wrap it a second time,
+        // which it would, because this store's exception derives from InvalidOperationException and carries the
+        // provider failure as its inner.
+        catch (RuntimeArtifactEntityFrameworkPersistenceException) { throw; }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsStoreBoundaryFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("updating coordination", row.ArtifactId, exception);
@@ -753,7 +755,6 @@ public sealed class EfWorkflowExecutableStore(
         string identity,
         Exception inner) =>
         new(operation, identity, $"The EF runtime artifact store failed while {operation} workflow executable '{identity}'.", inner);
-
 
     private static string Encode(string x, string scope) =>
         Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{Hash(scope)}:{x}"));

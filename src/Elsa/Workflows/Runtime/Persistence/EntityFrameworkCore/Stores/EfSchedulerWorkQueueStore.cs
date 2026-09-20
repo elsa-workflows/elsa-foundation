@@ -129,7 +129,7 @@ public sealed class EfSchedulerWorkQueueStore(
                 await context.SaveChangesAsync(cancellationToken);
                 return item;
             }
-            catch (Exception exception) when (exception is DbUpdateException or OperationCanceledException)
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception) || exception is OperationCanceledException)
             {
                 Detach(row);
                 throw;
@@ -158,7 +158,7 @@ public sealed class EfSchedulerWorkQueueStore(
                 await context.SaveChangesAsync(cancellationToken);
                 return true;
             }
-            catch (Exception exception) when (exception is DbUpdateException or OperationCanceledException)
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception) || exception is OperationCanceledException)
             {
                 Detach(row);
                 throw;
@@ -220,7 +220,7 @@ public sealed class EfSchedulerWorkQueueStore(
                 Detach(updated);
                 return ToClaim(updated, item);
             }
-            catch (Exception exception) when (exception is DbUpdateException or OperationCanceledException)
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception) || exception is OperationCanceledException)
             {
                 Detach(updated);
                 throw;
