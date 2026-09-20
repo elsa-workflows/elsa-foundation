@@ -68,24 +68,38 @@ public sealed class EfModuleDescriptorTests
     [Fact]
     public void Every_module_name_is_unique_case_insensitively()
     {
-        var duplicates = Discover()
-            .GroupBy(descriptor => descriptor.Name, StringComparer.OrdinalIgnoreCase)
-            .Where(group => group.Count() > 1)
-            .ToArray();
+        var collisions = DescribeDuplicates(
+            Discover(),
+            descriptor => descriptor.Name,
+            StringComparer.OrdinalIgnoreCase,
+            descriptor => $"{descriptor.ContextType.Name} in {descriptor.Assembly.GetName().Name}");
 
-        Assert.Empty(duplicates);
+        Assert.True(collisions.Length == 0, $"Module names declared more than once: {string.Join("; ", collisions)}.");
     }
 
     [Fact]
     public void Every_history_module_is_unique()
     {
-        var duplicates = Discover()
-            .GroupBy(descriptor => descriptor.HistoryModule, StringComparer.Ordinal)
-            .Where(group => group.Count() > 1)
-            .ToArray();
+        var collisions = DescribeDuplicates(
+            Discover(),
+            descriptor => descriptor.HistoryModule,
+            StringComparer.Ordinal,
+            descriptor => descriptor.Name);
 
-        Assert.Empty(duplicates);
+        Assert.True(collisions.Length == 0, $"History modules shared by more than one module: {string.Join("; ", collisions)}.");
     }
+
+    /// <summary>Groups <paramref name="descriptors"/> by <paramref name="key"/>, naming the colliding key and every module that declares it.</summary>
+    private static string[] DescribeDuplicates<TKey>(
+        IReadOnlyList<EfModuleDescriptor> descriptors,
+        Func<EfModuleDescriptor, TKey> key,
+        IEqualityComparer<TKey> comparer,
+        Func<EfModuleDescriptor, string> describe) =>
+        descriptors
+            .GroupBy(key, comparer)
+            .Where(group => group.Count() > 1)
+            .Select(group => $"{group.Key} <- {string.Join(", ", group.Select(describe))}")
+            .ToArray();
 
     [Fact]
     public void Secrets_declares_all_four_providers()
@@ -156,7 +170,6 @@ public sealed class EfModuleDescriptorTests
             MySql: typeof(object),
             DependsOn: [],
             PostMigration: [],
-            DisplayName: null,
             Assembly: typeof(EfModuleDescriptorTests).Assembly);
 
         Assert.Null(descriptor.ProviderContext("SqlServer"));

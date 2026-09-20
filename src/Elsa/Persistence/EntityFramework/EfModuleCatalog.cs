@@ -53,7 +53,6 @@ public static class EfModuleCatalog
             attribute.MySql,
             attribute.DependsOn,
             attribute.PostMigration,
-            attribute.DisplayName,
             assembly);
     }
 }

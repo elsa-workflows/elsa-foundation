@@ -51,7 +51,4 @@ public sealed class EfModuleAttribute(string name, Type contextType) : Attribute
     /// module sets this until it does.
     /// </summary>
     public Type[] PostMigration { get; init; } = [];
-
-    /// <summary>An operator-facing name, when the canonical <see cref="Name"/> alone would not read clearly.</summary>
-    public string? DisplayName { get; init; }
 }

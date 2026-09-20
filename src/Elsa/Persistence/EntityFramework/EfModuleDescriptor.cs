@@ -16,7 +16,6 @@ public sealed record EfModuleDescriptor(
     Type? MySql,
     IReadOnlyList<string> DependsOn,
     IReadOnlyList<Type> PostMigration,
-    string? DisplayName,
     Assembly Assembly)
 {
     /// <summary>The frozen migrations-history table this module's host actually uses.</summary>
