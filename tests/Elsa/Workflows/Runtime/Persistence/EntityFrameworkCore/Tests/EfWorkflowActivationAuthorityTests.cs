@@ -1,4 +1,3 @@
-using System.Data.Common;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -239,20 +238,5 @@ public sealed class EfWorkflowActivationAuthorityTests
             await context.DisposeAsync();
             await connection.DisposeAsync();
         }
-    }
-
-    /// <summary>Fails the first read with <paramref name="failure"/>, then lets reads through.</summary>
-    private sealed class FailingReadInterceptor(Func<Exception> failure) : DbCommandInterceptor
-    {
-        private int attempts;
-
-        public int Attempts => Volatile.Read(ref attempts);
-
-        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
-            DbCommand command,
-            CommandEventData eventData,
-            InterceptionResult<DbDataReader> result,
-            CancellationToken cancellationToken = default) =>
-            Interlocked.Increment(ref attempts) == 1 ? throw failure() : ValueTask.FromResult(result);
     }
 }

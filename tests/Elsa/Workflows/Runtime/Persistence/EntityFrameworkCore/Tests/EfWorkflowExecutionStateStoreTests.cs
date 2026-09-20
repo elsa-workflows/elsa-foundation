@@ -14,7 +14,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using Elsa.Persistence.EntityFramework.Tests;
-using System.Data.Common;
 using Xunit;
 using Microsoft.Extensions.DependencyInjection;
 using static Elsa.Persistence.EntityFramework.Tests.ProviderFailures;
@@ -415,7 +414,7 @@ public sealed class EfWorkflowExecutionStateStoreTests
     /// ListAsync loops QueryPageAsync, which already normalizes its own provider failures into this store's
     /// exception type. Before the store had a distinct type, ListAsync's own provider-failure clause matched the
     /// already-normalized failure too (it derives from InvalidOperationException and carries the provider failure
-    /// as its inner), so the caller received a second wrapper and `ex.InnerException as DbException` came back null.
+    /// as its inner), so the caller received a second wrapper and <c>ex.InnerException as DbException</c> came back null.
     /// </summary>
     [Fact]
     public async Task ListAsync_surfaces_a_provider_failure_from_QueryPageAsync_normalized_only_once()
@@ -429,20 +428,6 @@ public sealed class EfWorkflowExecutionStateStoreTests
 
         Assert.Equal("querying", failure.Operation);
         Assert.IsType<SyntheticProviderException>(failure.InnerException);
-    }
-
-    private sealed class FailingReadInterceptor(Func<Exception> failure) : DbCommandInterceptor
-    {
-        private int attempts;
-
-        public int Attempts => Volatile.Read(ref attempts);
-
-        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
-            DbCommand command,
-            CommandEventData eventData,
-            InterceptionResult<DbDataReader> result,
-            CancellationToken cancellationToken = default) =>
-            Interlocked.Increment(ref attempts) == 1 ? throw failure() : ValueTask.FromResult(result);
     }
 
     private sealed class Database : IAsyncDisposable
