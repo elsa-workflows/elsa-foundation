@@ -64,6 +64,46 @@ public sealed partial class ArchitectureGuardTests
         Assert.DoesNotContain("/modules/", folders);
     }
 
+    /// <summary>
+    /// Every guard below is built on <see cref="ProjectFiles"/>, so if that enumeration ever stops seeing a
+    /// module root, fifteen guards go quietly vacuous instead of red. That is not hypothetical: moving Elsa 3
+    /// to <c>extensions/</c> dropped seven projects out of all of them while the suite stayed green, because
+    /// the enumeration was pinned to <c>src/</c> and <c>tests/</c> (#1815).
+    /// </summary>
+    /// <remarks>
+    /// The expected roots are discovered from the working tree, deliberately NOT read from
+    /// <see cref="ModuleRoots.All"/>. Checking the enumeration against the same list it is built from is
+    /// circular and passes even when a whole root has been dropped, which is precisely the bug being guarded
+    /// against. The excluded roots hold projects that are not first-party modules and are outside every
+    /// guard's remit: <c>samples/</c>, <c>tools/</c>, and <c>docs/</c>, whose
+    /// <c>reports/repros/</c> tree carries standalone reproduction projects attached to written reports.
+    /// </remarks>
+    [Fact]
+    public void Project_enumeration_covers_every_module_root()
+    {
+        string[] notModuleRoots = ["samples", "tools", "docs"];
+
+        var rootsHoldingProjects = Directory.EnumerateDirectories(RepoRoot)
+            .Select(directory => Path.GetFileName(directory)!)
+            .Where(name => !name.StartsWith('.'))
+            .Where(name => !notModuleRoots.Contains(name, StringComparer.Ordinal))
+            .Where(name => Directory.EnumerateFiles(Path.Join(RepoRoot, name), "*.csproj", SearchOption.AllDirectories).Any())
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.NotEmpty(rootsHoldingProjects);
+
+        var projects = ProjectFiles().ToArray();
+        var ignored = rootsHoldingProjects
+            .Where(root => !projects.Any(project => project.RelativePath.StartsWith(root + "/", StringComparison.Ordinal)))
+            .ToArray();
+
+        Assert.True(
+            ignored.Length == 0,
+            "These roots hold projects but contribute none to ProjectFiles(), so every guard built on it is "
+            + "silently ignoring them. Add them to ModuleRoots.All: " + string.Join(", ", ignored));
+    }
+
     [Fact]
     public void Project_paths_match_domain_tree_convention()
     {

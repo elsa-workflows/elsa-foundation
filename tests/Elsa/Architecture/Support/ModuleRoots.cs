@@ -22,16 +22,23 @@ internal static class ModuleRoots
     /// Resolves root names to existing absolute directories under <paramref name="repoRoot"/>.
     /// </summary>
     /// <remarks>
-    /// Rooted names are rejected rather than combined: <see cref="Path.Combine(string, string)"/> discards
-    /// everything before an absolute segment, so an absolute entry would silently redirect a guard's sweep
-    /// outside the repository and the guard would keep reporting green about whatever it found there.
+    /// <see cref="Path.Join(string, string)"/> rather than <c>Path.Combine</c>, and a rejection rather than
+    /// a silent fallback. <c>Combine</c> discards everything before an absolute segment, so an absolute root
+    /// would redirect a guard's sweep outside the repository and the guard would keep reporting green about
+    /// whatever it found there. <c>Join</c> has no such behavior, so the hazard is removed rather than merely
+    /// guarded; the explicit rejection stays because an absolute root is a programming error worth failing on
+    /// loudly rather than resolving to a nonsense path.
     /// </remarks>
     internal static IEnumerable<string> Resolve(string repoRoot, params string[] roots) =>
-        roots
-            .Select(root => Path.IsPathRooted(root)
-                ? throw new InvalidOperationException($"Module root '{root}' must be relative to the repository root.")
-                : Path.Combine(repoRoot, root))
-            .Where(Directory.Exists);
+        roots.Select(root => UnderRepoRoot(repoRoot, root)).Where(Directory.Exists);
+
+    private static string UnderRepoRoot(string repoRoot, string root)
+    {
+        if (Path.IsPathRooted(root))
+            throw new InvalidOperationException($"Module root '{root}' must be relative to the repository root.");
+
+        return Path.Join(repoRoot, root);
+    }
 
     /// <summary>Every <c>.cs</c> file under the given roots, excluding build output.</summary>
     internal static IEnumerable<string> SourceFiles(string repoRoot, params string[] roots) =>
