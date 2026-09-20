@@ -188,7 +188,7 @@ public sealed class EfDesignAtomicWrite(
             db.ChangeTracker.Clear();
             throw;
         }
-        catch (DbUpdateException exception) when (transaction is not null && EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (Exception exception) when (transaction is not null && EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
             await EfPersistenceCleanup.RollbackQuietlyAsync(transaction);
             db.ChangeTracker.Clear();

@@ -277,17 +277,26 @@ internal static class EfIdentityStoreSupport
     /// another caller may already have committed the authoritative result for this operation and
     /// therefore must be reconciled and replayed.
     /// </summary>
-    public static bool IsMutationReceiptConflict(DbUpdateException exception)
+    public static bool IsMutationReceiptConflict(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
 
-        var providerConstraint = ClassifyProviderUniqueConstraint(exception.ToString());
+        // An execution strategy re-raises a save failure as an InvalidOperationException around the
+        // DbUpdateException, and only that carries the entries this decision reads. Unwrapped, the
+        // search finds the argument itself, so the answer is unchanged for a direct save failure.
+        DbUpdateException? update = null;
+        for (var current = exception; update is null && current is not null; current = current.InnerException)
+            update = current as DbUpdateException;
+        if (update is null)
+            return false;
+
+        var providerConstraint = ClassifyProviderUniqueConstraint(update.ToString());
         if (providerConstraint != ProviderUniqueConstraint.Unidentified)
             return providerConstraint == ProviderUniqueConstraint.MutationReceipt;
 
         // Entries can contain every pending row in a failed batch, not only the row whose
         // constraint failed. Treat it as authoritative only when the receipt is the sole entry.
-        return exception.Entries.Count == 1 && exception.Entries[0].Entity is MutationReceiptEntity;
+        return update.Entries.Count == 1 && update.Entries[0].Entity is MutationReceiptEntity;
     }
 
     private static ProviderUniqueConstraint ClassifyProviderUniqueConstraint(string message)

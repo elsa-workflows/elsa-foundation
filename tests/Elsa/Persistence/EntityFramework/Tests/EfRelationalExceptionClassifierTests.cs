@@ -130,6 +130,50 @@ public sealed class EfRelationalExceptionClassifierTests
     }
 
     [Fact]
+    public void A_provider_failure_is_recognized_whether_or_not_a_strategy_wrapped_it()
+    {
+        var queryFailure = ProviderFailures.WrappedByExecutionStrategy(new ProviderFailures.SqlException(10054));
+        var saveFailure = ProviderFailures.WrappedSaveFailure(new ProviderFailures.SqlException(10054));
+
+        Assert.True(EfRelationalExceptionClassifier.IsExecutionStrategyWrapped(queryFailure));
+        Assert.True(EfRelationalExceptionClassifier.IsExecutionStrategyWrapped(saveFailure));
+        Assert.True(EfRelationalExceptionClassifier.IsExecutionStrategyWrapped(new InvalidOperationException("store boundary", saveFailure)));
+
+        Assert.True(EfRelationalExceptionClassifier.IsProviderFailure(queryFailure));
+        Assert.True(EfRelationalExceptionClassifier.IsProviderFailure(saveFailure));
+        Assert.True(EfRelationalExceptionClassifier.IsProviderFailure(new ProviderFailures.SqlException(10054)));
+        Assert.True(EfRelationalExceptionClassifier.IsProviderFailure(new DbUpdateException("write failed", new ProviderFailures.SqlException(10054))));
+    }
+
+    /// <summary>
+    /// The unwrapped provider exceptions are what a store already catches by type, so they must not be reported as
+    /// wrapped; otherwise a clause ordered for the wrapped form would start swallowing the plain one too.
+    /// </summary>
+    [Fact]
+    public void An_unwrapped_provider_exception_is_not_reported_as_wrapped()
+    {
+        Assert.False(EfRelationalExceptionClassifier.IsExecutionStrategyWrapped(new ProviderFailures.SqlException(10054)));
+        Assert.False(EfRelationalExceptionClassifier.IsExecutionStrategyWrapped(new DbUpdateException("write failed", new ProviderFailures.SqlException(10054))));
+    }
+
+    /// <summary>
+    /// Stores raise <see cref="InvalidOperationException"/> themselves for scope and identity violations, and those
+    /// are not provider failures. Normalizing them would turn a detected corruption into a generic persistence error.
+    /// </summary>
+    [Fact]
+    public void An_exception_carrying_no_provider_failure_never_matches()
+    {
+        Assert.False(EfRelationalExceptionClassifier.IsExecutionStrategyWrapped(
+            new InvalidOperationException("The requested resource does not belong to the current persistence scope.")));
+        Assert.False(EfRelationalExceptionClassifier.IsExecutionStrategyWrapped(
+            new InvalidOperationException("corrupt projection", new InvalidDataException("not valid current data"))));
+        Assert.False(EfRelationalExceptionClassifier.IsProviderFailure(
+            new InvalidOperationException("The requested resource does not belong to the current persistence scope.")));
+        Assert.False(EfRelationalExceptionClassifier.IsProviderFailure(new OperationCanceledException()));
+        Assert.False(EfRelationalExceptionClassifier.IsProviderFailure(new InvalidDataException("not valid current data")));
+    }
+
+    [Fact]
     public async Task Classifies_a_real_sqlite_unique_constraint_failure()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

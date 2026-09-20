@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Persistence.EntityFramework;
@@ -80,6 +81,56 @@ public static class EfRelationalExceptionClassifier
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Returns whether <paramref name="exception"/> is a provider failure that an execution strategy re-raised as an
+    /// <see cref="InvalidOperationException"/> rather than letting the provider's own exception surface.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The repository configures no retry, but EF 10's SQL Server strategy and Npgsql's still wrap any error they
+    /// judge transient, which covers connection-level failures such as 10054 as well as conflicts. A store whose
+    /// failure mapping is keyed to <see cref="DbException"/> or <see cref="DbUpdateException"/> by type therefore
+    /// never sees those, and the raw wrapper escapes past the store's own persistence exception, often leaving the
+    /// change tracker dirty.
+    /// </para>
+    /// <para>
+    /// Conflicts are already reconciled by <see cref="IsSaveConflict"/> and <see cref="IsTransientWriteConflict"/>,
+    /// so this predicate deliberately says nothing about whether the failure is retryable: it answers only "did a
+    /// provider fail here". Order a catch clause using it after the conflict clauses, so a conflict keeps its own
+    /// handling.
+    /// </para>
+    /// <para>
+    /// A bare <see cref="InvalidOperationException"/> that carries no provider exception does not match. That matters,
+    /// because stores raise that type themselves for scope and identity violations, and those must keep travelling.
+    /// </para>
+    /// </remarks>
+    public static bool IsExecutionStrategyWrapped(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        if (exception is not InvalidOperationException)
+            return false;
+
+        for (var current = exception.InnerException; current is not null; current = current.InnerException)
+        {
+            if (current is DbException or DbUpdateException)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Returns whether <paramref name="exception"/> reports that a relational provider failed, whether it surfaced as
+    /// the provider's own exception or was re-raised by an execution strategy. This is the predicate a store's
+    /// outermost provider-failure clause wants, in place of catching <see cref="DbException"/> and
+    /// <see cref="DbUpdateException"/> by type and missing the wrapped form.
+    /// </summary>
+    public static bool IsProviderFailure(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        return exception is DbException or DbUpdateException || IsExecutionStrategyWrapped(exception);
     }
 
     /// <summary>

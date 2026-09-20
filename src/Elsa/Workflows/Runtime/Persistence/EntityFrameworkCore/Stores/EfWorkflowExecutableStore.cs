@@ -97,12 +97,12 @@ public sealed class EfWorkflowExecutableStore(
                 context.ChangeTracker.Clear();
             }
         }
-        catch (DbUpdateException exception)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("saving", string.Join(",", executables.Select(x => x.Identity.ArtifactId)), exception);
         }
-        catch (DbException exception)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("saving", string.Join(",", executables.Select(x => x.Identity.ArtifactId)), exception);
@@ -301,12 +301,12 @@ public sealed class EfWorkflowExecutableStore(
                 context.ChangeTracker.Clear();
             }, _ => throw CoordinationDidNotSettle(lease.ArtifactId), cancellationToken);
         }
-        catch (DbUpdateException exception)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("releasing", lease.ArtifactId, exception);
         }
-        catch (DbException exception)
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("releasing", lease.ArtifactId, exception);
@@ -542,7 +542,7 @@ public sealed class EfWorkflowExecutableStore(
             context.ChangeTracker.Clear();
             throw;
         }
-        catch (Exception exception) when (IsProviderFailure(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("updating coordination", row.ArtifactId, exception);
@@ -754,9 +754,6 @@ public sealed class EfWorkflowExecutableStore(
         Exception inner) =>
         new(operation, identity, $"The EF runtime artifact store failed while {operation} workflow executable '{identity}'.", inner);
 
-    private static bool IsProviderFailure(Exception exception) =>
-        exception is not (InvalidDataException or OperationCanceledException) &&
-        exception is (DbException or DbUpdateException or InvalidOperationException);
 
     private static string Encode(string x, string scope) =>
         Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{Hash(scope)}:{x}"));

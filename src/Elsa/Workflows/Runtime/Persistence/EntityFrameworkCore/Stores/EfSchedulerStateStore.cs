@@ -47,7 +47,7 @@ public sealed class EfSchedulerStateStore(
             context.ChangeTracker.Clear();
             throw new InvalidOperationException("The scheduler state changed concurrently; retry the operation.", exception);
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
             context.ChangeTracker.Clear();
             throw new InvalidOperationException("The scheduler state changed concurrently; retry the operation.", exception);

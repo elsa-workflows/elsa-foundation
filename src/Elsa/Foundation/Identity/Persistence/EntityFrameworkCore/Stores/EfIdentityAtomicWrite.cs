@@ -219,7 +219,7 @@ public sealed class EfIdentityAtomicWrite
                 }
                 return await ReconcileOrConflictAsync(mutation, exception, rollbackException, rollbackException is null ? cancellationToken : CancellationToken.None);
             }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
             {
                 var rollbackException = await RollbackAsync(transaction);
                 if (!stageStarted)
