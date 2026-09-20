@@ -102,11 +102,6 @@ public sealed class EfWorkflowExecutableStore(
             context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("saving", string.Join(",", executables.Select(x => x.Identity.ArtifactId)), exception);
         }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
-        {
-            context.ChangeTracker.Clear();
-            throw NormalizeProviderFailure("saving", string.Join(",", executables.Select(x => x.Identity.ArtifactId)), exception);
-        }
         catch
         {
             context.ChangeTracker.Clear();
@@ -300,11 +295,6 @@ public sealed class EfWorkflowExecutableStore(
                 await UpdateCoordination(row, new CoordinationState(leases, state.Guard), cancellationToken);
                 context.ChangeTracker.Clear();
             }, _ => throw CoordinationDidNotSettle(lease.ArtifactId), cancellationToken);
-        }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
-        {
-            context.ChangeTracker.Clear();
-            throw NormalizeProviderFailure("releasing", lease.ArtifactId, exception);
         }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
@@ -542,7 +532,7 @@ public sealed class EfWorkflowExecutableStore(
             context.ChangeTracker.Clear();
             throw;
         }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsStoreBoundaryFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("updating coordination", row.ArtifactId, exception);

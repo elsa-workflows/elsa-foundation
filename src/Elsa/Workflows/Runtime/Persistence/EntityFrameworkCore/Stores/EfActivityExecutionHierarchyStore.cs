@@ -59,11 +59,6 @@ public sealed class EfActivityExecutionHierarchyStore(
             context.ChangeTracker.Clear();
             throw RuntimeActivityExecutionEfPersistenceBoundary.Normalize("saving", record.ActivityExecutionId, exception);
         }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
-        {
-            context.ChangeTracker.Clear();
-            throw RuntimeActivityExecutionEfPersistenceBoundary.Normalize("saving", record.ActivityExecutionId, exception);
-        }
         catch (InvalidOperationException exception)
         {
             context.ChangeTracker.Clear();

@@ -469,9 +469,10 @@ public sealed class EfIdentityAtomicWrite
         // domain conflict immediately instead of spending the reconciliation window polling. A
         // duplicate receipt is the exception: another context may have committed this operation,
         // so its typed result must be reread and replayed.
-        var receiptConflict = exception is DbUpdateException update && EfIdentityStoreSupport.IsMutationReceiptConflict(update);
-        var domainReservationConflict = exception is DbUpdateException reservationUpdate &&
-                                        EfIdentityStoreSupport.UniqueConflictUnit(reservationUpdate) is not null;
+        // These read the save's own detail, so they must see through an execution strategy's wrapper the way the
+        // clause that admitted it does; otherwise a wrapped duplicate receipt skips the replay branch below.
+        var receiptConflict = EfIdentityStoreSupport.IsMutationReceiptConflict(exception);
+        var domainReservationConflict = EfIdentityStoreSupport.UniqueConflictUnit(exception) is not null;
         if (rollbackException is null && !receiptConflict)
         {
             if (domainReservationConflict)
@@ -520,7 +521,7 @@ public sealed class EfIdentityAtomicWrite
         if (receipt is not null)
             return receipt;
         var failure = exception;
-        if (exception is DbUpdateException or DbUpdateConcurrencyException)
+        if (EfRelationalExceptionClassifier.FindSaveFailure(exception) is not null)
             return ConflictResult(mutation, exception);
         throw new IdentityEntityFrameworkPersistenceException($"Identity mutation '{mutation.OperationId}' conflicted without a durable receipt.", failure);
     }
@@ -530,9 +531,7 @@ public sealed class EfIdentityAtomicWrite
             EfIdentityWriteStatus.Conflict,
             null,
             "Identity mutation conflicted with an existing durable value.",
-            FailedUnitId: exception is DbUpdateException update
-                ? EfIdentityStoreSupport.UniqueConflictUnit(update) ?? mutation.OperationId
-                : mutation.OperationId);
+            FailedUnitId: EfIdentityStoreSupport.UniqueConflictUnit(exception) ?? mutation.OperationId);
 
     private async Task<EfIdentityWriteResult> ReconcileOrThrowAsync(EfIdentityAtomicMutation mutation, Exception exception, Exception? rollbackException, CancellationToken cancellationToken)
     {

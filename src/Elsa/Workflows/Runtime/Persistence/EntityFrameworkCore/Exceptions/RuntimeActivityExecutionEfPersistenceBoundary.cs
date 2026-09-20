@@ -21,7 +21,7 @@ internal static class RuntimeActivityExecutionEfPersistenceBoundary
             context.ChangeTracker.Clear();
             throw;
         }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsStoreBoundaryFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw Normalize(operation, identity, exception);

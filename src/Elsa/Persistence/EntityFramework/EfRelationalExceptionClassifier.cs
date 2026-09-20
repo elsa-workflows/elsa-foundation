@@ -74,13 +74,25 @@ public static class EfRelationalExceptionClassifier
     {
         ArgumentNullException.ThrowIfNull(exception);
 
+        return FindSaveFailure(exception) is { } update && IsWriteConflict(update, conflicts);
+    }
+
+    /// <summary>
+    /// Returns the <see cref="DbUpdateException"/> a save failure carries, however many wrappers sit above it, or
+    /// <c>null</c> when the exception reports no save failure at all. Callers that must read the save's own detail,
+    /// such as its entries or the violated constraint's name, need the inner exception rather than the wrapper.
+    /// </summary>
+    public static DbUpdateException? FindSaveFailure(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
         for (var current = exception; current is not null; current = current.InnerException)
         {
             if (current is DbUpdateException update)
-                return IsWriteConflict(update, conflicts);
+                return update;
         }
 
-        return false;
+        return null;
     }
 
     /// <summary>
@@ -131,6 +143,28 @@ public static class EfRelationalExceptionClassifier
     {
         ArgumentNullException.ThrowIfNull(exception);
         return exception is DbException or DbUpdateException || IsExecutionStrategyWrapped(exception);
+    }
+
+    /// <summary>
+    /// Returns whether a store's outermost boundary should normalize <paramref name="exception"/> into its own
+    /// persistence exception. Deliberately wider than <see cref="IsProviderFailure"/>: it also takes a bare
+    /// <see cref="InvalidOperationException"/>, because that is what EF raises for infrastructure faults that carry no
+    /// provider exception at all, among them "a second operation was started on this context", "sequence contains more
+    /// than one element" from a scalar read, and an already-open transaction. A boundary that ignored those would let
+    /// them escape unnormalized with the change tracker left dirty.
+    /// </summary>
+    /// <remarks>
+    /// This over-reaches, knowingly. A store raises <see cref="InvalidOperationException"/> itself for scope and
+    /// identity violations, and those are swallowed here too. Type alone cannot separate them, so fixing it needs a
+    /// distinct exception type for those violations rather than a cleverer predicate. Use
+    /// <see cref="IsProviderFailure"/> for an inner clause, and this only where the alternative is an unnormalized
+    /// escape.
+    /// </remarks>
+    public static bool IsStoreBoundaryFailure(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        return exception is not (InvalidDataException or OperationCanceledException) &&
+               (IsProviderFailure(exception) || exception is InvalidOperationException);
     }
 
     /// <summary>

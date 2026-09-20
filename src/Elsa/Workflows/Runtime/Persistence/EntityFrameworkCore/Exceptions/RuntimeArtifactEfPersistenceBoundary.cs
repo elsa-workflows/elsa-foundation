@@ -73,7 +73,7 @@ internal static class RuntimeArtifactEfPersistenceBoundary
             context.ChangeTracker.Clear();
             throw;
         }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsStoreBoundaryFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw new RuntimeArtifactEntityFrameworkPersistenceException(

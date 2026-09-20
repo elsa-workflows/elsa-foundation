@@ -57,8 +57,6 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         { context.ChangeTracker.Clear(); throw new InvalidOperationException("The workflow executable source reference already exists; source references are create-only.", exception); }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("saving", reference.SourceReferenceId, exception); }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
-        { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("saving", reference.SourceReferenceId, exception); }
         catch { context.ChangeTracker.Clear(); throw; }
     }
 
@@ -364,11 +362,6 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             }
             context.ChangeTracker.Clear();
             return deleted;
-        }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
-        {
-            context.ChangeTracker.Clear();
-            throw NormalizeProviderFailure("cleaning up", scope, exception);
         }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
