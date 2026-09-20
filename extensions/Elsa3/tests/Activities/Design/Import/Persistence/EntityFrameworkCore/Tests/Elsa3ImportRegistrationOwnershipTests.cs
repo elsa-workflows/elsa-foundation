@@ -107,7 +107,7 @@ public sealed class Elsa3ImportRegistrationOwnershipTests
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         try
         {
-            await SqliteImportHarness.For(connectionString).CreateSchemaAsync();
+            await ImportDatabase.Sqlite(connectionString).CreateSchemaAsync();
             var scope = new ReusableActivityImportAccessScope("tenant-a", "user-a");
             ReusableActivityImportReceipt applied;
             await using (var request = provider.CreateAsyncScope())

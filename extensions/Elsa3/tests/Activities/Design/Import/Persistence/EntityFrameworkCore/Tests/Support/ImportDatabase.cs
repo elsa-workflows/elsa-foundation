@@ -18,7 +18,7 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.S
 /// One physical database holding the import ledger and both Design lanes. Provider suites supply the three
 /// provider-derived contexts; everything else — schema, command, stores, and counting — is provider-neutral.
 /// </summary>
-internal sealed class ImportDatabase(
+internal sealed partial class ImportDatabase(
     Func<IInterceptor[], Elsa3ImportDbContext> import,
     Func<IInterceptor[], ActivitiesDesignDbContext> activities,
     Func<IInterceptor[], WorkflowsDesignDbContext> workflows) : IAsyncDisposable
@@ -87,6 +87,10 @@ internal sealed class ImportDatabase(
             await workflowsDb.Operations.CountAsync());
     }
 
+    /// <summary>
+    /// Disposes every context this instance handed out. The database itself is not this type's to remove: whoever
+    /// created it removes it.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
         foreach (var context in created)
