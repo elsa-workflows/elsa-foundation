@@ -19,8 +19,10 @@
     <ProjectReference Include="..\..\..\..\..\..\extensions\Elsa3\src\Activities\Design\Import\Persistence\EntityFrameworkCore\Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Diagnostics\OpenTelemetry\Persistence\EntityFrameworkCore\Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Diagnostics\StructuredLogs\Persistence\EntityFrameworkCore\Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Foundation\Identity\AspNetCoreIdentity\EntityFrameworkCore\Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Foundation\Identity\Persistence\EntityFrameworkCore\Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Dashboard\Persistence\EntityFrameworkCore\Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Studio\Preferences\Persistence\EntityFrameworkCore\Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Publishing\Persistence\EntityFrameworkCore\Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />

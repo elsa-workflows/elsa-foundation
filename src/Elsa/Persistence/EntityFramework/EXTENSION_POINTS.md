@@ -10,6 +10,17 @@ There is no replacement contract in this package. Modules own derived `DbContext
 Hosts register the derived context that matches the selected relational provider and call
 `EfDatabaseMigrator.ApplyAsync` with that provider's expected `Database.ProviderName`.
 
+## Module descriptor
+
+An assembly-level `[EfModule(name, contextType, ...)]` (`AllowMultiple`) is a module's single,
+discoverable declaration — first-party or third-party — of its canonical name, base context, per-provider
+derived contexts, frozen history name, dependencies and post-migration actions (accepted
+[ADR 0076](../../../../docs/adr/0076-persistence-tooling-runs-inside-the-host-closure.md) D2). A third-party
+module author declares one on their own assembly with no Elsa PR required.
+`EfModuleCatalog.Discover(assemblies)` is the one place that reads it, and a `null` provider property means
+that provider is unsupported for the module rather than a missing case. See the package README's table for
+both types.
+
 ## Apply policy
 
 `EfMigratePolicy.AutoMigrate` runs `Database.MigrateAsync` (EF 9+ lock).
