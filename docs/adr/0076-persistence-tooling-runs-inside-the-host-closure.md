@@ -274,17 +274,22 @@ module: `WorkflowsDashboardEntityFrameworkCoreFeature` reads both `Workflows.Des
 (`WorkflowsDashboardEntityFrameworkCoreFeature.cs:17-21`; `EfWorkflowPortfolioDataSource.cs:31-33`),
 which is why `[UsesEfModule]` is `AllowMultiple`.
 
-Every feature that is enabled in the shell and mapped through `[UsesEfModule]` to a selected module
-must have an effective `Provider` equal to `--provider`; the tool exits 3 and lists each one that
-differs, by feature name, together with its configured value. A feature that is not enabled in the
-shell is ignored. Two features of one module that disagree with each other therefore always surface,
-because at most one of them can equal `--provider` — an unset feature `Provider` defaults to
-`Sqlite` (`SecretsEntityFrameworkCoreFeature.cs:23`), so it disagrees with `--provider PostgreSql`
-exactly as an explicit `Sqlite` setting would, and that disagreement is treated as the same error
-rather than papered over as a gap. The manifest records `providerAgreement: checked | not-checked`,
-and states plainly that an environment-variable override of a shell's configured provider is
-invisible to the tool: the check reads shell configuration, not what a host's environment would
-resolve to at runtime. There is no provider auto-detection and no fallback to a different provider.
+Every feature that is enabled in the shell, mapped through `[UsesEfModule]` to a selected module, and
+that itself declares a `Provider` setting, must have an effective `Provider` equal to `--provider`;
+the tool exits 3 and lists each one that differs, by feature name, together with its configured
+value. A feature that is not enabled in the shell is ignored. Two features of one module that
+disagree with each other therefore always surface, because at most one of them can equal
+`--provider` — an unset `Provider` on a feature that declares one defaults to `Sqlite`
+(`SecretsEntityFrameworkCoreFeature.cs:23`), so it disagrees with `--provider PostgreSql` exactly as
+an explicit `Sqlite` setting would, and that disagreement is treated as the same error rather than
+papered over as a gap. A mapped feature with no `Provider` property at all —
+`WorkflowsDashboardEntityFrameworkCoreFeature` registers no migrations and only reads contexts other
+features register — is skipped by this comparison entirely: the provider of the contexts it reads is
+decided by the features that register them, and those are the ones compared. The manifest records
+`providerAgreement: checked | not-checked`, and states plainly that an environment-variable override
+of a shell's configured provider is invisible to the tool: the check reads shell configuration, not
+what a host's environment would resolve to at runtime. There is no provider auto-detection and no
+fallback to a different provider.
 
 The check reads the same layered configuration a host would: `shells.json`, then
 `shells.<environment>.json` when that file exists, the same overlay `Elsa.Workbench` applies
@@ -392,8 +397,20 @@ must move the value to the host-wide key; a shell that genuinely needs a differe
 neighbors still can, because a shell's own `Configuration` node already layers over the host's for
 this key — "one shell can run `Validate` while another does not"
 (`src/Elsa/Persistence/EntityFramework/README.md:286-287`) — just at the shell-configuration layer
-rather than the retired feature-setting layer. A host that still sets the removed `MigratePolicy`
-setting must fail loudly, not be silently ignored. Everything else
+rather than the retired feature-setting layer.
+
+Failing loudly needs a specific mechanism, not just an intention. CShells only binds a configuration
+key onto a feature when the feature type still has a public settable property of that name
+(`cshells: src/CShells/Features/FeatureConfigurationBinder.cs`, `AutoBindFeatureProperties`,
+`:54-75`), so deleting the `MigratePolicy` property outright would make a host's still-configured
+value bind to nothing and vanish silently. A throwing property setter is not sufficient either:
+`BindProperty` (`:80-116`) catches any exception the setter raises and only logs a warning
+(`:111-115`), so shell activation would proceed as if nothing were wrong. The property therefore
+stays for one release, as an obsolete, nullable, ordinarily settable property that binds without
+throwing, and the feature refuses to configure when it has a value — either throwing from its own
+service-configuration path, or failing the feature validation the binder runs immediately after
+binding (`ValidateFeature`, `:226-229`) — with a message naming
+`Elsa:Persistence:EntityFramework:Migrate:Policy`. Everything else
 `SecretsEfMigrationHostedService` did — the provider guard, the host and shell lifecycle hooks, and
 the reindex audit — is covered by the general `EfModuleMigrator<T>` plus the post-migration audit
 above; only the independent per-feature policy knob is lost.
@@ -442,6 +459,14 @@ refuses — fail closed, naming the feature and the module and saying the databa
 reached, never the connection itself. Under `AutoMigrate` the guard does not open the database at all
 and passes, except that a provider engine that cannot bind is still a refusal regardless of policy,
 exactly like D1's resolution failures (`EfRelationalProviderBinding.DescribeBindingFailure`).
+
+A mapped feature with no `Provider` or connection of its own —
+`WorkflowsDashboardEntityFrameworkCoreFeature` registers no migrations and only reads contexts other
+features register — is evaluated through whichever enabled feature in the same shell actually
+registers that module's migrations. If none is enabled, the guard passes and leaves the refusal to
+that reading feature's own startup check, which already throws when its backends are not EF-owned
+(`WorkflowRunHealthEntityFrameworkCoreRegistration.cs:16-21`;
+`WorkflowPortfolioEntityFrameworkCoreRegistration.cs:19-22,30-33`).
 
 Reason: `FeatureManagementService.ApplyAsync` runs `ValidateRequest`, then `shellStore.SaveAsync`,
 then refreshes and reloads, with no migration check anywhere in that sequence (Context, above), so a
@@ -524,9 +549,9 @@ regardless of Nuplane's release schedule. U3, Nuplane's own pre-activation gate 
 the advisor pass and load-context creation), is kept as a second, independent gate rather than folded
 into the first or dropped once the first exists. Nuplane's contract itself knows only the package
 being loaded, but the Elsa implementation of that contract reads `[EfModule]` metadata from the
-package without loading it, looks in shell configuration for an enabled feature mapped to that module
-through `[UsesEfModule]`, and returns Allow when no enabled feature uses the module — or when the
-policy is `AutoMigrate`.
+package without loading it, looks in shell configuration for any enabled feature mapped to that
+module through `[UsesEfModule]`, and returns Allow when no enabled feature uses the module — or when
+the policy is `AutoMigrate`.
 
 Reason: the two gates differ mainly in *when* they run, not in what either one is theoretically able
 to know. The Elsa guard runs when a feature is enabled on a package that is already loaded — Nuplane's
@@ -577,8 +602,17 @@ Costs and risks:
   A shell that still needs Secrets on a different policy from its neighbors keeps that ability, since
   a shell's own `Configuration` node already layers over the host's for this key
   (`src/Elsa/Persistence/EntityFramework/README.md:286-287`) — at the shell-configuration layer, not
-  the retired feature-setting layer. A host that still sets the removed `MigratePolicy` setting must
-  fail loudly rather than be silently ignored. This is a behavior change, not an additive one.
+  the retired feature-setting layer. Failing loudly for a host that still sets it needs a specific
+  mechanism: CShells binds a configuration key onto a feature only when the feature type still has a
+  public settable property of that name (`cshells:
+  src/CShells/Features/FeatureConfigurationBinder.cs`, `AutoBindFeatureProperties`, `:54-75`), so
+  deleting the property outright would make a still-configured value bind to nothing and vanish
+  silently, and a throwing property setter is not sufficient either, because `BindProperty`
+  (`:80-116`) catches any exception the setter raises and only logs a warning (`:111-115`). The
+  property therefore stays for one release, obsolete and nullable, and the feature refuses to
+  configure when it has a value — either from its own service-configuration path, or from the feature
+  validation the binder runs after binding (`ValidateFeature`, `:226-229`) — naming
+  `Elsa:Persistence:EntityFramework:Migrate:Policy`. This is a behavior change, not an additive one.
 - `module-migrate.sh`'s `apply`, `validate`, `script`, and `script-check` become thin shims over the
   new CLI; its `pending` command, and `generate-module-migrations.sh` / `generate-ef-migrations.sh`,
   stay exactly as they are, because migration generation still needs a source project and `dotnet-ef`
