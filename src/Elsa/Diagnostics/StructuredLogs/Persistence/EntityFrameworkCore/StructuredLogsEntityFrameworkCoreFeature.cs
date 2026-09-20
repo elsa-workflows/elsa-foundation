@@ -24,7 +24,7 @@ public class StructuredLogsEntityFrameworkCoreFeature : IShellFeature
 
     [ManifestSetting(
         DisplayName = "Connection string",
-        Description = "Optional explicit connection string. When omitted, ConnectionName or ConnectionStrings:ElsaStructuredLogs is used.",
+        Description = "Optional explicit connection string. When omitted, ConnectionName or the shared ConnectionStrings:Elsa is used.",
         Category = "Persistence",
         Secret = true)]
     public string? ConnectionString { get; set; }

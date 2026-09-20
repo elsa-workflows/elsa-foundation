@@ -136,6 +136,22 @@ server outside Docker; the compose file adds the Studio container origin.
   connection, which `docker-compose.yml` supplies as `ConnectionStrings__Elsa`. A module can override
   its own connection with a top-level `ConnectionString` property on its feature section.
 
+  Two modules do **not** fall back to `ConnectionStrings:Elsa`: OpenTelemetry looks for
+  `ConnectionStrings:ElsaOpenTelemetry` and the Elsa 3 import lane for `ConnectionStrings:ElsaElsa3Import`.
+  A composition that supplies only the shared connection therefore has to say which connection those
+  modules use — the demo composition gives `DiagnosticsOpenTelemetryEntityFrameworkCore` a
+  `"ConnectionName": "Elsa"` — or the shell fails activation with *"EF requires ConnectionString or
+  ConnectionName, or ConnectionStrings:ElsaOpenTelemetry, for a non-Sqlite provider"*.
+
+- A feature the image's `shells.Production.json` composes, rather than the mounted `shells.json`, gets no
+  provider from that overlay and so keeps the `Sqlite` default every EF feature class declares — while
+  still resolving `ConnectionStrings:Elsa`, which here holds a PostgreSQL connection string that SQLite
+  cannot open. The three EF identity stores the overlay adds are therefore also listed in the demo
+  composition, purely to set `"Provider": "PostgreSql"` on them.
+
+  `CommittedCompositionConnectionTests` resolves every EF feature of every committed composition through
+  the real resolver, so both of these fail in CI rather than at `docker compose up`.
+
 - The stack leaves `Elsa__Persistence__EntityFramework__Schema` unset, so Elsa's tables land in the
   provider's default schema (`public` on PostgreSQL). Setting it puts every module's tables, and every
   module's own `__EFMigrationsHistory_<Module>` table, in that schema instead; EF creates the schema on

@@ -24,7 +24,7 @@ public class Elsa3ImportActivitiesEntityFrameworkCoreFeature : IShellFeature
     [ManifestSetting(DisplayName = "Connection string", Description = "Optional explicit connection string. Must equal the Design EF Core lanes' connection string.", Category = "Persistence", Secret = true)]
     public string? ConnectionString { get; set; }
 
-    [ManifestSetting(DisplayName = "Connection name", Description = "Optional named connection under ConnectionStrings.", Category = "Persistence")]
+    [ManifestSetting(DisplayName = "Connection name", Description = "Optional named connection under ConnectionStrings. Defaults to ElsaElsa3Import rather than the shared Elsa, so a host whose Design lanes use the shared connection names it here.", Category = "Persistence")]
     public string? ConnectionName { get; set; }
 
     [ManifestSetting(

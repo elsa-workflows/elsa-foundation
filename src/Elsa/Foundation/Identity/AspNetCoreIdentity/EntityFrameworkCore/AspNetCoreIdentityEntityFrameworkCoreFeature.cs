@@ -20,7 +20,7 @@ public class AspNetCoreIdentityEntityFrameworkCoreFeature : IShellFeature
     [ManifestSetting(DisplayName = "Provider", Description = "Relational provider for the shared Identity IAM context: Sqlite, SqlServer, PostgreSql, or MySql.", Category = "Persistence")]
     public string Provider { get; set; } = "Sqlite";
 
-    [ManifestSetting(DisplayName = "Connection string", Description = "Optional explicit connection string. When omitted, ConnectionName or ConnectionStrings:ElsaIdentity is used.", Category = "Persistence", Secret = true)]
+    [ManifestSetting(DisplayName = "Connection string", Description = "Optional explicit connection string. When omitted, ConnectionName or the shared ConnectionStrings:Elsa is used.", Category = "Persistence", Secret = true)]
     public string? ConnectionString { get; set; }
 
     [ManifestSetting(DisplayName = "Connection name", Description = "Named connection under ConnectionStrings when ConnectionString is omitted.", Category = "Persistence")]

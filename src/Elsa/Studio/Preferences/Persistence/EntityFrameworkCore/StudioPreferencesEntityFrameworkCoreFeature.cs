@@ -24,7 +24,7 @@ public sealed class StudioPreferencesEntityFrameworkCoreFeature : IShellFeature
 
     [ManifestSetting(
         DisplayName = "Connection string",
-        Description = "Optional explicit connection string. When omitted, ConnectionName or ConnectionStrings:ElsaStudioPreferences is used. Sqlite defaults to Data Source=elsa-studio-preferences.db.",
+        Description = "Optional explicit connection string. When omitted, ConnectionName or the shared ConnectionStrings:Elsa is used. Sqlite defaults to Data Source=elsa-studio-preferences.db.",
         Category = "Persistence",
         Secret = true)]
     public string? ConnectionString { get; set; }

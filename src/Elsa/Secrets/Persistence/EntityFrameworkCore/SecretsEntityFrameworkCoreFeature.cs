@@ -24,7 +24,7 @@ public class SecretsEntityFrameworkCoreFeature : IShellFeature
 
     [ManifestSetting(
         DisplayName = "Connection string",
-        Description = "Optional explicit connection string. When omitted, ConnectionName or ConnectionStrings:ElsaSecrets is used. Sqlite defaults to Data Source=elsa-secrets.db.",
+        Description = "Optional explicit connection string. When omitted, ConnectionName or the shared ConnectionStrings:Elsa is used. Sqlite defaults to Data Source=elsa-secrets.db.",
         Category = "Persistence",
         Secret = true)]
     public string? ConnectionString { get; set; }
