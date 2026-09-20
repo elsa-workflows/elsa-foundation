@@ -115,9 +115,14 @@ never migrated, and the only backstop is `EfDatabaseMigrator`'s `Validate` excep
 **Nuplane facts driving D1, D12, and D13.** Checked against a local checkout of the
 `valence-works/nuplane` repository, branch `pr-67`, `git describe` = `0.0.10-10-g5c0e04e` — ten
 commits ahead of tag `0.0.10`, itself ahead of the pinned `Nuplane` package version,
-`0.0.9-preview.61` (`Directory.Packages.props:105`). **Every Nuplane change this ADR names therefore
-needs a Nuplane release and an Elsa pin bump before the Elsa slice depending on it can start**; that
-caveat applies to every `nuplane:`-cited fact below and is not repeated per fact.
+`0.0.9-preview.61` (`Directory.Packages.props:105`). **U1–U4 shipped upstream on 2026-09-20, published
+as `0.0.11-preview.83` from `valence-works/nuplane` `main` at `e93ad89`; Elsa still pins
+`0.0.9-preview.61` for all four packages (`Directory.Packages.props:105-108`).** What a dependent
+Elsa slice now waits on is only the Elsa pin bump, tracked by
+[#1893](https://github.com/elsa-workflows/elsa-foundation/issues/1893). Two readings are cited
+below and the distinction is stated once, here: a citation to a delivered API, or to where TFM and
+RID resolution live, is Nuplane `main` at `e93ad89`; every other `nuplane:` citation is `pr-67` as
+read at design time. Neither is what Elsa's pinned version does.
 
 A `HostIntegrated` package loads into a custom, non-collectible load context,
 `HostIntegratedPackageGraphLoadContext` (`nuplane: src/Nuplane.Loading/HostIntegratedPackageGraphLoadContext.cs:6-12`),
@@ -133,19 +138,51 @@ active set is `store-state.json`, read and written through `StoreRegistry`, whos
 (`StoreStateRecord`, `ActivePackageDescriptor`, carrying `InstallPath`) are already public and
 DI-free (`nuplane: src/Nuplane/Store/State/StoreRegistry.cs:28-33`;
 `src/Nuplane.Abstractions/ActivePackageDescriptor.cs:19-32`) — only `ActivePackageCatalogMapper` is
-internal (`nuplane: src/Nuplane/Operational/ActivePackageCatalogMapper.cs:7`). TFM selection,
-main-assembly choice, and native/RID probing are private statics inside `PackageLoader`; its
-`hostTargetFrameworkOverride` parameter exists on `ResolveMainAssemblyPath` but every call site passes
-`null` (`nuplane: src/Nuplane.Loading/PackageLoader.cs:69,716,890-894`). Nothing in Nuplane can refuse
-to activate a package today: `ObserverEventDispatcher` catches and only logs an observer's exception
-(`nuplane: src/Nuplane/Events/ObserverEventDispatcher.cs:16-45`), and `IPackageLoadModeAdvisor` is
-consulted where a graph's load context is built, between the advisor pass and load-context creation
-(`nuplane: src/Nuplane.Loading/PackageLoader.cs:123,271-273`), but it can only advise. Two adjacent
-defects were found and are out of scope for #1861 (mentioned in the issue comment, not decided here):
+internal (`nuplane: src/Nuplane/Operational/ActivePackageCatalogMapper.cs:7`). TFM selection and
+main-assembly choice are private statics inside `PackageLoader`
+(`ResolveAssemblySelection`/`ResolveMainAssemblyPath`,
+`nuplane: src/Nuplane.Loading/PackageLoader.cs:944-963`; `ResolveHostFramework` `:1193`);
+native-library probing and RID-graph expansion live in
+`PackageGraphLoadContext` instead (`nuplane: src/Nuplane.Loading/PackageGraphLoadContext.cs:86-98`
+`LoadUnmanagedDll`/`ResolveNativeLibraryPath`, `:128` `ExpandRuntimeIdentifiers`, `:152` the
+`runtimes/<rid>/native` probe), and `PackageLoader` selects RID-specific *managed* `runtimes/<rid>/lib`
+assets by calling that same expansion (`:998`). The `hostTargetFrameworkOverride` parameter — a
+`PackageLoader` constructor parameter, `:50` — was unreachable at design time; it is now reachable
+publicly through the delivered `HostIntegratedLoadOptions.TargetFrameworkOverride`
+(`nuplane: src/Nuplane.Loading/HostIntegratedLoadOptions.cs:32`). At design time, nothing in Nuplane
+could refuse to activate a package: `ObserverEventDispatcher` catches and only logs an observer's
+exception (`nuplane: src/Nuplane/Events/ObserverEventDispatcher.cs:16-45`), and
+`IPackageLoadModeAdvisor` is consulted where a graph's load context is built, between the advisor pass
+and load-context creation (`nuplane: src/Nuplane.Loading/PackageLoader.cs:123,271-273`), but it could
+only advise; the delivered `IPackageActivationGate` (U3, below) now answers this. Two adjacent defects
+were found and are out of scope for #1861 (mentioned in the issue comment, not decided here):
 `LockFileMode.Generate` never writes the lock file (`nuplane:
 src/Nuplane/Reconciliation/LockFileCoordinator.cs:23-26`), and `PackageDependencyGraphResolver`
 hardcodes an Elsa-specific allowlist of host-provided packages
 (`nuplane: src/Nuplane/Reconciliation/PackageDependencyGraphResolver.cs:514-533`).
+
+**Delivered upstream on 2026-09-20.** U1 (valence-works/nuplane#73, delivered through PR 79) shipped
+`NuplaneStore` (`nuplane: src/Nuplane/NuplaneStore.cs:14`), a public static reader with
+`ReadActivePackagesAsync` (`:70`), `ReadStateAsync` (`:100`), and `GetActivePackages` (`:136`). U2
+(valence-works/nuplane#74, delivered through PR 81) shipped
+`Nuplane.Loading.NuplaneHostIntegratedLoader`
+(`nuplane: src/Nuplane.Loading/NuplaneHostIntegratedLoader.cs:45`), with `LoadFromStateAsync`
+(`:151,175`), `LoadActivePackagesAsync` (`:116`), and `HostIntegratedLoadOptions`
+(`nuplane: src/Nuplane.Loading/HostIntegratedLoadOptions.cs:10`) carrying `TargetFrameworkOverride`,
+`ActivationGates`, `SharedAssemblies`, and `LoggerFactory`. U3 (valence-works/nuplane#75, delivered
+through PR 80) shipped `IPackageActivationGate`
+(`nuplane: src/Nuplane.Loading.Abstractions/IPackageActivationGate.cs:40`), evaluated inside
+`PackageLoader.EnsureGraphLoadedAsync` (`nuplane: src/Nuplane.Loading/PackageLoader.cs:120`); a
+`Block` surfaces as an ordinary load failure, and a gate that throws refuses the graph. U4
+(valence-works/nuplane#76, delivered through PR 78) registered
+`DesiredManifestPackageSource` as an `IDesiredPackageSource`
+(`nuplane: src/Nuplane/Registration/NuplaneDesiredStatePlanningRegistrationServices.cs:16-20`), so
+`Convergence:Manifest:Enabled` now has an effect. Spec 171's research item R4 — whether Nuplane's
+offline mode could serve as the worker's read path — is settled: offline mode only shapes feed
+candidate selection and does not gate reconciliation; a reconcile pass always rewrites
+`store-state.json` and can extract into or delete under the install root, so the worker must never
+reconcile; and the delivered `LoadFromStateAsync` is read-only and the only variant with grouping
+parity with the host, which is why D1 below calls it by name.
 
 ## Decision
 
@@ -154,10 +191,20 @@ hardcodes an Elsa-specific allowlist of host-provided packages
 `dotnet-elsa` is a thin front end with no EF and no Elsa references. It launches a BCL-only worker
 with `dotnet exec --runtimeconfig <host>.runtimeconfig.json --depsfile <host>.deps.json
 Elsa.Cli.Worker.dll` (proposed), so the worker runs on the host's exact EF Core and provider engine
-versions rather than versions the tool itself would pin. For a Nuplane host, the worker boots
-Nuplane's own loader — already present in the host's closure — instead of reimplementing assembly
-resolution; for a host that carries everything in its own deps file, it needs nothing extra. The
-worker's one call into product code is a frozen entry point, reflectively invoked in the host's own
+versions rather than versions the tool itself would pin. For a Nuplane host, the worker loads the
+active package set through the delivered
+`Nuplane.Loading.NuplaneHostIntegratedLoader.LoadFromStateAsync`
+(`nuplane: src/Nuplane.Loading/NuplaneHostIntegratedLoader.cs:151`) — already present in the host's
+closure — instead of reimplementing assembly resolution; for a host that carries everything in its
+own deps file, it needs nothing extra. The worker never reconciles, because a reconcile pass always
+rewrites `store-state.json` and can extract into or delete under the install root — unacceptable for a
+process sharing the host's directories. It calls `LoadFromStateAsync` at most once per process: the
+load is irreversible for the process lifetime, which fits the short-lived worker this decision already
+chose but rules out a long-running one. It passes no `TargetFrameworkOverride`, because the worker
+already runs on the host's own runtimeconfig; RID-specific assets follow the worker's own runtime
+identifier. A state read that races a host write (`IOException` or `JsonException`) is retried a
+bounded number of times and then exits 3. The worker's one call into product code is a frozen entry
+point, reflectively invoked in the host's own
 `Elsa.Persistence.EntityFramework`: `Tooling.EfToolingHost.RunAsync(Stream request, Stream response)`
 (proposed), taking versioned JSON on stdin.
 
@@ -176,15 +223,17 @@ to grow, because the entry point needs only `IMigrator`, `IMigrationsAssembly`, 
 `IHistoryRepository`, all in `Microsoft.EntityFrameworkCore.Relational`, no `Design` package and no
 provider engine.
 
-Resolution failures exit 3 before any file is written, in four cases: the provider engine is in
+Resolution failures exit 3 before any file is written, in five cases: the provider engine is in
 neither the host's deps file nor the active package set, and the message reuses
 `EfRelationalProviderBinding.DescribeBindingFailure(provider)` (`EfRelationalProviderBinding.cs:86`),
 names where the tool looked, and ends "No other provider was tried."; the host pins an
 `Elsa.Persistence.EntityFramework` older than the release that adds `EfToolingHost`, and the message
 names both the pinned version and the version required; the host directory has neither a
 `.runtimeconfig.json` nor a `.deps.json` — a single-file or self-contained publish — and the message
-names both required files; and two versions of one assembly exist with nothing to choose between
-them, which is refused rather than resolved by taking the highest.
+names both required files; two versions of one assembly exist with nothing to choose between them,
+which is refused rather than resolved by taking the highest; and, for a Nuplane host, a state-file
+read that keeps racing a host write past the retry bound, which exits 3 rather than retrying
+indefinitely.
 
 Rejected: an in-process isolated `AssemblyLoadContext`. The tool's own runtime config would decide
 which frameworks are shared, and `EfRelationalProviderBinding`'s reflection-based binding would then
@@ -491,7 +540,11 @@ Every command resolves the active package set already on disk: `store-state.json
 host, or `--packages <dir>` for an override directory carrying no state file, honoring the
 `.nuplane-ready` marker and skipping `.tmp/` either way. No command reconciles or fetches from a feed;
 an opt-in `--restore` remains an open research question (spec 171 research item R5) and nothing in
-this ADR adds one.
+this ADR adds one. Spec 171 research item R4 turned this from a design default into a hard rule for
+reconciliation specifically: a reconcile pass always rewrites `store-state.json`
+(`nuplane: src/Nuplane/Reconciliation/Middleware/CleanupMiddleware.cs:36`) and can extract into or
+delete under the install root (`nuplane: src/Nuplane/Feeds/PackageInstallStore.cs:79-142`), so no
+command may reconcile against directories shared with a host.
 
 Reason: the issue asks the tool to avoid silently falling back to a different provider or migration
 set, and an implicit restore is the same category of surprise applied to packages instead of
@@ -522,20 +575,27 @@ and a `dotnet-ef` invocation per context, neither of which a Nuplane-packaged ho
 ### D12 — Gaps in Nuplane are fixed in Nuplane; Elsa does not reimplement its loader or state format
 
 U1 (a named offline reader for `store-state.json`) and U2 (a host-free "load this active set" entry
-point) are filed as Nuplane changes rather than built as Elsa-side workarounds. U3 (a pre-activation
-gate contract, D13) and U4 (registering `DesiredManifestPackageSource`) are filed the same way. This
-matches the owner's earlier stance on Groundwork gaps: fix them upstream when that is the cleaner
-design, rather than duplicating the fix inside Elsa. Elsa's worker does not parse `store-state.json`
-by hand, and does not reimplement TFM or asset resolution.
+point) were filed and delivered as Nuplane changes (2026-09-20) rather than built as Elsa-side
+workarounds. U3 (a pre-activation gate contract, D13) and U4 (registering
+`DesiredManifestPackageSource`) were filed and delivered the same way. This matches the owner's
+earlier stance on Groundwork gaps: fix them upstream when that is the cleaner design, rather than
+duplicating the fix inside Elsa. The decision has been carried out upstream; what remains on Elsa's
+side is consuming the delivered APIs after the pin bump
+([#1893](https://github.com/elsa-workflows/elsa-foundation/issues/1893)), not building any of the
+four itself. Elsa's worker does not parse `store-state.json` by hand, and does not reimplement TFM or
+asset resolution.
 
 Reason: `StoreRegistry`, `StoreStateSerializer`, `StoreStateRecord`, and `ActivePackageDescriptor`
 (carrying `InstallPath`) are already public and DI-free — only `ActivePackageCatalogMapper` is
-internal — so a named reader is a thin addition, not new architecture. TFM selection, main-assembly
-choice, and native/RID probing are private statics inside `PackageLoader`, and its
-`hostTargetFrameworkOverride` parameter exists but no caller can reach it (Context, above). A
-hand-rolled Elsa-side reader or resolver would either duplicate logic Nuplane can change without
-notice, or misresolve an asset Nuplane's own loader would have picked correctly — the same skew
-concern D1 raises about assembly resolution, applied to package state instead.
+internal — so a named reader is a thin addition, not new architecture. At design time, TFM selection
+and main-assembly choice were private statics inside `PackageLoader`, native-library and RID probing
+lived in `PackageGraphLoadContext`, and the `hostTargetFrameworkOverride` parameter existed but no
+caller could reach it (Context, above); the delivered `NuplaneHostIntegratedLoader` and
+`HostIntegratedLoadOptions.TargetFrameworkOverride` now expose exactly that surface without Elsa
+touching either type directly. A hand-rolled Elsa-side reader or resolver would either duplicate logic
+Nuplane can change without notice, or misresolve an asset Nuplane's own loader would have picked
+correctly — the same skew concern D1 raises about assembly resolution, applied to package state
+instead.
 
 Rejected: Elsa parsing `store-state.json` directly and reimplementing TFM/asset resolution. Both are
 private, versioned Nuplane internals; matching them by hand ties Elsa to Nuplane's current file format
@@ -544,11 +604,14 @@ and resolution algorithm instead of to a contract Nuplane commits to keep stable
 ### D13 — Two gates, distinguished by when they run rather than by what either can know
 
 D9's `IFeatureActivationGuard` is the gate the acceptance criterion depends on, and it ships
-regardless of Nuplane's release schedule. U3, Nuplane's own pre-activation gate contract
-(`IPackageActivationGate.EvaluateAsync`, invoked inside `PackageLoader.EnsureGraphLoadedAsync` between
-the advisor pass and load-context creation), is kept as a second, independent gate rather than folded
-into the first or dropped once the first exists. Nuplane's contract itself knows only the package
-being loaded, but the Elsa implementation of that contract reads `[EfModule]` metadata from the
+regardless of Nuplane's release schedule. U3, Nuplane's delivered pre-activation gate contract
+(`IPackageActivationGate.EvaluateAsync`,
+`nuplane: src/Nuplane.Loading.Abstractions/IPackageActivationGate.cs:40,51`), is evaluated inside
+`PackageLoader.EnsureGraphLoadedAsync` after graph load-mode selection and before load-context
+construction (`nuplane: src/Nuplane.Loading/PackageLoader.cs:120,136,204-229,402-403`), and is kept as
+a second, independent gate rather than folded into the first or dropped now that it exists. Nuplane's
+contract itself knows only the package being loaded, but the Elsa implementation of that contract
+reads `[EfModule]` metadata from the
 package without loading it, looks in shell configuration for any enabled feature mapped to that
 module through `[UsesEfModule]`, and returns Allow when no enabled feature uses the module — or when
 the policy is `AutoMigrate`.
@@ -569,8 +632,10 @@ reconcile case, where no feature is being enabled and the Elsa guard's call neve
 only misses the ordinary case instead: it never runs when a feature is enabled on a package that is
 already loaded, which is exactly how a module installed earlier and enabled later behaves, and
 exactly the case the issue's acceptance criterion names. Depending on load-time alone would also make
-that acceptance criterion wait on a Nuplane release and an Elsa pin bump before it could be met, while
-the Elsa guard has no such dependency and can ship on its own schedule.
+that acceptance criterion wait on the Elsa pin bump
+([#1893](https://github.com/elsa-workflows/elsa-foundation/issues/1893)) before it could be met —
+the Nuplane contract itself is already delivered — while the Elsa guard has no such dependency and
+can ship on its own schedule.
 
 ## Consequences
 
@@ -640,15 +705,27 @@ Costs and risks:
   (`EfCoreDependencyGuardTests.cs:518,521-523`; `ModuleRoots.Production` at
   `tests/Elsa/Architecture/Support/ModuleRoots.cs:19`) — but the proposed adapter lives under `src/`
   regardless, so it was already inside the scan before that widening and stays inside it after.
-- U1–U4 depend on a Nuplane release ahead of the pinned `0.0.9-preview.61`, and on an Elsa pin bump
-  after that release ships; the Nuplane checkout this ADR verifies facts against is ten commits past
-  a tag Elsa does not yet consume, so every dependent Elsa slice is blocked until that release and
-  bump land (Context, above).
-- Out of scope: U5 (a schema-v2 capability declaration, recorded as a Nuplane follow-up, not required
-  for #1861); the two adjacent Nuplane defects found during this design (the lock file's missing
-  writer, and `PackageDependencyGraphResolver`'s hardcoded allowlist), which are named in the issue
-  comment only; and migration generation, which stays exactly where D11 leaves it, on `dotnet-ef`
-  against source projects.
+- U1–U4 shipped upstream on 2026-09-20 as `0.0.11-preview.83` (Nuplane `main` at `e93ad89`); Elsa
+  still pins `0.0.9-preview.61` (Context, above). The one remaining dependency is the Elsa pin bump,
+  tracked by [#1893](https://github.com/elsa-workflows/elsa-foundation/issues/1893); it gates
+  [#1874](https://github.com/elsa-workflows/elsa-foundation/issues/1874) (slice 4, for Nuplane hosts)
+  and the defence half of [#1880](https://github.com/elsa-workflows/elsa-foundation/issues/1880)
+  (slice 10), and nothing else in this ADR.
+- R4 also surfaced three residual risks in the delivered loader, all absorbed by D1's worker design
+  rather than left open: the load is irreversible for the process lifetime and not re-entrant
+  (`nuplane: src/Nuplane.Loading/NuplaneHostIntegratedLoader.cs:29-33,37-41`), so the worker calls
+  `LoadFromStateAsync` at most once and then exits; there is a TFM override but deliberately no RID
+  override (`nuplane: src/Nuplane.Loading/HostIntegratedLoadOptions.cs:27-29,32`), so the worker
+  passes none and accepts that native and RID-specific assets follow its own runtime identifier; and
+  the host writes `store-state.json` in place rather than write-to-temp-and-move
+  (`nuplane: src/Nuplane/Store/State/StoreStateSerializer.cs:51`), so a racing read can throw a
+  transient `IOException` or `JsonException`, which the worker retries a bounded number of times
+  before exiting 3.
+- Out of scope: U5 (valence-works/nuplane#77 — a schema-v2 capability declaration, recorded as a
+  Nuplane follow-up, not required for #1861, and still open); the two adjacent Nuplane defects found
+  during this design (the lock file's missing writer, and `PackageDependencyGraphResolver`'s hardcoded
+  allowlist), which are named in the issue comment only; and migration generation, which stays exactly
+  where D11 leaves it, on `dotnet-ef` against source projects.
 
 ## Decision record
 
@@ -657,3 +734,4 @@ Costs and risks:
 | 2026-09-19 | Design session held | Issue #1861 was designed against the current `tools/ef/module-migrate.sh`, `Elsa.Foundation.Host`, `FeatureManagementService`, and Nuplane's `pr-67` checkout. |
 | 2026-09-19 | Four owner decisions taken | Assembly source is the host's own output plus the Nuplane package root, resolved through EF's `IMigrator` directly with no `dotnet-ef`; `script --provider Sqlite` stays refused; the deliverable is spec 171, this ADR, and an issue comment proposing the slice breakdown; Nuplane gaps (U1–U4) are fixed in Nuplane rather than worked around in Elsa, matching the owner's earlier stance on Groundwork gaps. |
 | 2026-09-19 | ADR 0076 proposed | This document records D1–D13 from the design session. No implementation has started, and no child issue, Nuplane issue, or label change follows from this ADR alone. |
+| 2026-09-20 | Upstream U1–U4 delivered | valence-works/nuplane#73–#76 delivered through PRs 79, 81, 80, 78 and published as `0.0.11-preview.83` (`e93ad89`); R4 settled (spec 171 research.md); D1, D10, D12, D13 and Consequences updated to the delivered state; no decision changed; the remaining dependency is the Elsa pin bump tracked by [#1893](https://github.com/elsa-workflows/elsa-foundation/issues/1893); U5 (valence-works/nuplane#77) still open. |
