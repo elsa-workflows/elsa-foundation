@@ -14,7 +14,7 @@ Every Elsa-side citation below was re-opened in this worktree at the commit abov
 
 ## Inventory of existing building blocks
 
-[`tools/ef/module-migrate.sh`](../../tools/ef/module-migrate.sh) already does most of the mechanical work this issue asks for, for the sixteen `Elsa*` contexts it enumerates:
+[`tools/ef/module-migrate.sh`](../../tools/ef/module-migrate.sh) already does most of the mechanical work this issue asks for, for the 13 module contexts the tooling catalog enumerates — 12 with four provider-derived contexts each, plus Secrets with its single MySQL context, i.e. the 49 `ModuleDesignTimeFactory<TContext>` lines in `ModuleDesignTimeFactories.cs`:
 
 - `script` and `script-check` produce and verify the exact `<Module>/<Provider>.sql` idempotent layout the issue proposes ([`tools/ef/module-migrate.sh:116-130`](../../tools/ef/module-migrate.sh)), one file per module context, each recording into its own `__EFMigrationsHistory_*` table.
 - SQLite is already refused for scripting, with the same reasoning this spec keeps: `SqliteHistoryRepository.GetEndIfScript` throws `NotSupportedException` ([`tools/ef/module-migrate.sh:51-58`](../../tools/ef/module-migrate.sh)).

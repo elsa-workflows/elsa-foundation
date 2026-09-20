@@ -34,10 +34,10 @@ that AutoMigrate, Validate, and out-of-process apply share one compiled migratio
 decision keeps that invariant for the new tool instead of adding a second artifact format. [ADR
 0073](0073-ef-core-is-the-only-first-party-persistence-family.md) D6 named out-of-process apply and
 validation, concurrent locking, and fail-before-activation behavior as unresolved, gated on issue
-#1657; this decision answers that migration-lifecycle question for tooling, though it does not close
-#1657's cross-module transaction half. [ADR 0075](0075-oracle-is-not-a-supported-ef-core-engine.md)
-fixed the engine set at four; this decision's `--provider` flag accepts the same four and adds none.
-None of the three is reopened.
+#1657; this decision answers that migration-lifecycle question for tooling, while #1657's
+cross-module transaction half stays a separate, open question this ADR leaves untouched. [ADR
+0075](0075-oracle-is-not-a-supported-ef-core-engine.md) settled the engine set at four; this
+decision's `--provider` flag accepts the same four and adds none. None of the three is reopened.
 
 ## Context
 
@@ -54,10 +54,11 @@ directory and diffs it against the committed tree. None of this reaches a host b
 (`module-migrate.sh:46`), so it is not true today that "credentials never appear in process
 arguments." Module resolution used to search `src` alone, which left the `Elsa3ImportMySqlDbContext`
 and its three sibling contexts — now under `extensions/Elsa3/src` since [PR
-#1850](https://github.com/elsa-workflows/elsa-foundation/pull/1850) moved them — unable to resolve a
-project; [PR #1867](https://github.com/elsa-workflows/elsa-foundation/pull/1867) fixed that by
-resolving `module_roots=(src)` plus `extensions` when present (`module-migrate.sh:31-35,96`). What
-#1867 does not fix is the deeper limitation: the whole approach
+#1850](https://github.com/elsa-workflows/elsa-foundation/pull/1850) moved them, so lookup found no
+matching project there; [PR #1867](https://github.com/elsa-workflows/elsa-foundation/pull/1867)
+already made `module-migrate.sh` search `extensions/` as well, by setting `module_roots=(src)` plus
+`extensions` when present (`module-migrate.sh:31-35,96`). That change does not reach the deeper
+limitation: the whole approach
 still depends on `dotnet ef` against a **source** project and a **compile-time** design-time factory
 (`tools/ef/Elsa.EntityFrameworkCore.Tooling/ModuleDesignTimeFactories.cs`, 49 factory lines, one per
 provider-derived context across 13 modules). A host assembled from Nuplane packages has neither a
@@ -245,15 +246,30 @@ interface operators depend on.
 
 `--provider` is required on every command that selects a migration set (`plan`, `script`,
 `script-check`, `apply`, `validate`, `post-migrate`); `list` needs none, since it only enumerates
-what the host's closure declares. Where shell configuration is visible, a selected module whose
-feature is configured for a different provider makes the tool exit 3 and name every offender — an
-unset feature `Provider` defaults to `Sqlite` (`SecretsEntityFrameworkCoreFeature.cs:23`), so it
-disagrees with `--provider PostgreSql` exactly as an explicit `Sqlite` setting would, and that
-disagreement is treated as the same error rather than papered over as a gap. The manifest records
-`providerAgreement: checked | not-checked`, and states plainly that an environment-variable override
-of a shell's configured provider is invisible to the tool: the check reads shell configuration, not
-what a host's environment would resolve to at runtime. There is no provider auto-detection and no
-fallback to a different provider.
+what the host's closure declares. The provider-agreement check runs whenever the host's shells
+configuration is found, whichever of `--modules`, `--all`, or `--from-host` selected the modules —
+it is not limited to `--from-host`.
+
+The check is per feature, not per module. One module can be backed by several shell features that
+each carry their own `Provider` setting while mapping to the same context: `Workflows.Runtime` alone
+is backed by, among others, `RuntimeEntityFrameworkCoreFeature`,
+`RuntimeBookmarksEntityFrameworkCoreFeature`, `RuntimeActivityExecutionEntityFrameworkCoreFeature`,
+and `RuntimeOperationalStateEntityFrameworkCoreFeature`, every one of them defaulting `Provider` to
+`Sqlite` and each applying its own migrations against the one shared `RuntimeDbContext`
+(`RuntimeEntityFrameworkCoreFeature.cs:30`; `RuntimeBookmarksEntityFrameworkCoreFeature.cs:24,58`;
+`RuntimeActivityExecutionEntityFrameworkCoreFeature.cs:23`;
+`RuntimeOperationalStateEntityFrameworkCoreFeature.cs:21`). Every feature that is enabled in the
+shell and mapped through `[UsesEfModule]` to a selected module must have an effective `Provider`
+equal to `--provider`; the tool exits 3 and lists each one that differs, by feature name, together
+with its configured value. A feature that is not enabled in the shell is ignored. Two features of
+one module that disagree with each other therefore always surface, because at most one of them can
+equal `--provider` — an unset feature `Provider` defaults to `Sqlite`
+(`SecretsEntityFrameworkCoreFeature.cs:23`), so it disagrees with `--provider PostgreSql` exactly as
+an explicit `Sqlite` setting would, and that disagreement is treated as the same error rather than
+papered over as a gap. The manifest records `providerAgreement: checked | not-checked`, and states
+plainly that an environment-variable override of a shell's configured provider is invisible to the
+tool: the check reads shell configuration, not what a host's environment would resolve to at
+runtime. There is no provider auto-detection and no fallback to a different provider.
 
 Reason: `EfProviderGuard.Ensure` already refuses a context opened against the wrong live provider at
 runtime, throwing `"{owner} refuses provider '...'. Expected '...'"` (`EfProviderGuard.cs:17-27`), and
