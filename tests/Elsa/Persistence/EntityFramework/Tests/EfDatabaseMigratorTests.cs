@@ -67,33 +67,31 @@ public sealed class EfDatabaseMigratorTests
 
     private sealed class SqliteMigratorFixture : IAsyncDisposable
     {
-        private readonly string path;
+        private readonly TemporarySqliteDatabase database;
 
-        private SqliteMigratorFixture(string path, MigratorContext context)
+        private SqliteMigratorFixture(TemporarySqliteDatabase database, MigratorContext context)
         {
-            this.path = path;
+            this.database = database;
             Context = context;
         }
 
         public MigratorContext Context { get; }
 
-        public static async ValueTask<SqliteMigratorFixture> CreateAsync()
+        public static ValueTask<SqliteMigratorFixture> CreateAsync()
         {
-            var path = Path.Join(Path.GetTempPath(), $"elsa-ef-migrate-{Guid.NewGuid():N}.db");
+            var database = new TemporarySqliteDatabase("ef-migrate");
             var options = new DbContextOptionsBuilder<MigratorContext>()
-                .UseSqlite($"Data Source={path}", sqlite => sqlite
+                .UseSqlite(database.ConnectionString, sqlite => sqlite
                     .MigrationsAssembly(typeof(EfDatabaseMigratorTests).Assembly.GetName().Name))
                 .Options;
             var context = new MigratorContext(options);
-            return new SqliteMigratorFixture(path, context);
+            return ValueTask.FromResult(new SqliteMigratorFixture(database, context));
         }
 
         public async ValueTask DisposeAsync()
         {
             await Context.DisposeAsync();
-            File.Delete(path);
-            File.Delete($"{path}-wal");
-            File.Delete($"{path}-shm");
+            await database.DisposeAsync();
         }
     }
 

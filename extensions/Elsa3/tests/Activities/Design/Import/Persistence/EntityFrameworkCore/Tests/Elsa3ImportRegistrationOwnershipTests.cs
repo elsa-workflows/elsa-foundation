@@ -1,4 +1,5 @@
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa3.Activities.Design.Import.Composition;
@@ -126,8 +127,7 @@ public sealed class Elsa3ImportRegistrationOwnershipTests
         }
         finally
         {
-            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-            File.Delete(path);
+            TemporarySqliteDatabase.ClearPoolAndDeleteFiles(path);
         }
     }
 

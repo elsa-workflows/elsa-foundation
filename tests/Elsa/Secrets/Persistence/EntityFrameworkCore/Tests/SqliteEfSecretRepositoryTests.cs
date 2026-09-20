@@ -269,25 +269,18 @@ public sealed class SqliteEfSecretRepositoryTests
     [Fact]
     public async Task Validate_fails_when_the_initial_migration_is_pending()
     {
-        var path = Path.Join(Path.GetTempPath(), $"elsa-secrets-ef-pending-{Guid.NewGuid():N}.db");
-        await using var connection = new SqliteConnection($"Data Source={path}");
+        await using var database = new TemporarySqliteDatabase("secrets-ef-pending");
+        await using var connection = new SqliteConnection(database.ConnectionString);
         await connection.OpenAsync();
-        try
-        {
-            var options = new DbContextOptionsBuilder<SecretsSqliteDbContext>()
-                .UseSqlite(connection, sqlite => sqlite
-                    .MigrationsAssembly(typeof(SecretsSqliteDbContext).Assembly.GetName().Name)
-                    .MigrationsHistoryTable(SecretsEfModule.HistoryTableName))
-                .Options;
-            await using var context = new SecretsSqliteDbContext(options);
-            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                EfDatabaseMigrator.ApplyAsync(context, SecretsSqliteDbContext.ExpectedProviderName, EfMigratePolicy.Validate));
-            Assert.Contains("pending migrations", exception.Message, StringComparison.OrdinalIgnoreCase);
-        }
-        finally
-        {
-            File.Delete(path);
-        }
+        var options = new DbContextOptionsBuilder<SecretsSqliteDbContext>()
+            .UseSqlite(connection, sqlite => sqlite
+                .MigrationsAssembly(typeof(SecretsSqliteDbContext).Assembly.GetName().Name)
+                .MigrationsHistoryTable(SecretsEfModule.HistoryTableName))
+            .Options;
+        await using var context = new SecretsSqliteDbContext(options);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            EfDatabaseMigrator.ApplyAsync(context, SecretsSqliteDbContext.ExpectedProviderName, EfMigratePolicy.Validate));
+        Assert.Contains("pending migrations", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -375,14 +368,14 @@ public sealed class SqliteEfSecretRepositoryTests
             SecretsSqliteDbContext context,
             ISecretRepository repository,
             IInterceptor? interceptor,
-            bool deletePath = true)
+            TemporarySqliteDatabase? ownedDatabase = null)
         {
             Path = path;
             Connection = connection;
             Context = context;
             Repository = repository;
             _interceptor = interceptor;
-            _deletePath = deletePath;
+            _ownedDatabase = ownedDatabase;
         }
 
         private string Path { get; }
@@ -403,7 +396,7 @@ public sealed class SqliteEfSecretRepositoryTests
                     .AddInterceptors(_interceptor is null ? [] : [_interceptor])
                     .Options;
                 var context = new SecretsSqliteDbContext(options);
-                return new SqliteFixture(Path, connection, context, new EfSecretRepository(context), _interceptor, deletePath: false);
+                return new SqliteFixture(Path, connection, context, new EfSecretRepository(context), _interceptor);
             }
             catch
             {
@@ -414,8 +407,8 @@ public sealed class SqliteEfSecretRepositoryTests
 
         public static async ValueTask<SqliteFixture> CreateAsync(IInterceptor? interceptor = null)
         {
-            var path = System.IO.Path.Join(System.IO.Path.GetTempPath(), $"elsa-secrets-ef-{Guid.NewGuid():N}.db");
-            var connection = new SqliteConnection($"Data Source={path}");
+            var database = new TemporarySqliteDatabase("secrets-ef");
+            var connection = new SqliteConnection(database.ConnectionString);
             try
             {
                 await connection.OpenAsync();
@@ -429,7 +422,7 @@ public sealed class SqliteEfSecretRepositoryTests
                 try
                 {
                     await EfDatabaseMigrator.ApplyAsync(context, SecretsSqliteDbContext.ExpectedProviderName);
-                    return new SqliteFixture(path, connection, context, new EfSecretRepository(context), interceptor);
+                    return new SqliteFixture(database.Path, connection, context, new EfSecretRepository(context), interceptor, database);
                 }
                 catch (Exception)
                 {
@@ -440,7 +433,7 @@ public sealed class SqliteEfSecretRepositoryTests
             catch (Exception)
             {
                 await connection.DisposeAsync();
-                File.Delete(path);
+                await database.DisposeAsync();
                 throw;
             }
         }
@@ -449,11 +442,11 @@ public sealed class SqliteEfSecretRepositoryTests
         {
             await Context.DisposeAsync();
             await Connection.DisposeAsync();
-            if (_deletePath)
-                File.Delete(Path);
+            if (_ownedDatabase is not null)
+                await _ownedDatabase.DisposeAsync();
         }
 
-        private readonly bool _deletePath;
+        private readonly TemporarySqliteDatabase? _ownedDatabase;
         private readonly IInterceptor? _interceptor;
     }
 

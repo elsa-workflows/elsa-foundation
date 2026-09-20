@@ -1,6 +1,6 @@
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
@@ -43,11 +43,6 @@ internal sealed class SqliteImportHarness : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await Database.DisposeAsync();
-        SqliteConnection.ClearAllPools();
-        foreach (var suffix in new[] { "", "-wal", "-shm", "-journal" })
-        {
-            if (File.Exists(path + suffix))
-                File.Delete(path + suffix);
-        }
+        TemporarySqliteDatabase.ClearPoolAndDeleteFiles(path);
     }
 }

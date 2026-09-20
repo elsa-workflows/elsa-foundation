@@ -1,5 +1,6 @@
 using System.Data.Common;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -365,44 +366,36 @@ public sealed class EfRuntimePostCommitOutboxStoreTests
     [Fact]
     public async Task Public_dispatch_and_outbox_contracts_resolve_the_shared_sqlite_context()
     {
-        var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-runtime-di-{Guid.NewGuid():N}.db");
+        await using var database = new TemporarySqliteDatabase("runtime-di");
         var services = new ServiceCollection();
         services.AddWorkflowRuntime();
         services.AddRuntimeOperationalStateEntityFrameworkCore(new()
         {
             Provider = "Sqlite",
-            ConnectionString = $"Data Source={databasePath}"
+            ConnectionString = database.ConnectionString
         });
         services.AddRuntimeWorkflowDispatchEntityFrameworkCore();
         services.AddRuntimePostCommitOutboxEntityFrameworkCore();
 
-        try
-        {
-            await using var provider = services.BuildServiceProvider();
-            await using var scope = provider.CreateAsyncScope();
-            scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(
-                PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
-            var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
-            await context.Database.EnsureCreatedAsync();
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(
+            PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
+        await context.Database.EnsureCreatedAsync();
 
-            var dispatch = scope.ServiceProvider.GetRequiredService<IWorkflowDispatchStore>();
-            var outbox = scope.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxStore>();
-            Assert.IsType<EfWorkflowDispatchStore>(dispatch);
-            Assert.IsType<EfRuntimePostCommitOutboxStore>(outbox);
-            Assert.Same(dispatch, scope.ServiceProvider.GetRequiredService<EfWorkflowDispatchStore>());
-            Assert.Same(outbox, scope.ServiceProvider.GetRequiredService<EfRuntimePostCommitOutboxStore>());
+        var dispatch = scope.ServiceProvider.GetRequiredService<IWorkflowDispatchStore>();
+        var outbox = scope.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxStore>();
+        Assert.IsType<EfWorkflowDispatchStore>(dispatch);
+        Assert.IsType<EfRuntimePostCommitOutboxStore>(outbox);
+        Assert.Same(dispatch, scope.ServiceProvider.GetRequiredService<EfWorkflowDispatchStore>());
+        Assert.Same(outbox, scope.ServiceProvider.GetRequiredService<EfRuntimePostCommitOutboxStore>());
 
-            var item = Pending("di-outbox", "workflow-di");
-            await scope.ServiceProvider.GetRequiredService<EfRuntimePostCommitOutboxStore>().SavePendingAsync(item);
-            Assert.Equal(item.OutboxItemId, (await scope.ServiceProvider
-                .GetRequiredService<IPostCommitOutboxLookupStore>()
-                .FindAsync(item.OutboxItemId))!.OutboxItemId);
-        }
-        finally
-        {
-            if (File.Exists(databasePath))
-                File.Delete(databasePath);
-        }
+        var item = Pending("di-outbox", "workflow-di");
+        await scope.ServiceProvider.GetRequiredService<EfRuntimePostCommitOutboxStore>().SavePendingAsync(item);
+        Assert.Equal(item.OutboxItemId, (await scope.ServiceProvider
+            .GetRequiredService<IPostCommitOutboxLookupStore>()
+            .FindAsync(item.OutboxItemId))!.OutboxItemId);
     }
 
     private static RuntimePostCommitOutboxItem Pending(

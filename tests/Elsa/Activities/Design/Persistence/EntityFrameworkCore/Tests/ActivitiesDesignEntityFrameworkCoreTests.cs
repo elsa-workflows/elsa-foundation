@@ -1,4 +1,5 @@
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
@@ -379,45 +380,36 @@ public sealed class ActivitiesDesignEntityFrameworkCoreTests
     [Fact]
     public async Task Sqlite_draft_create_rejects_an_authoring_update_between_read_and_fence()
     {
-        var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-draft-create-fence-{Guid.NewGuid():N}.db");
-        try
+        await using var database = new TemporarySqliteDatabase("draft-create-fence");
+        var connectionString = new SqliteConnectionStringBuilder { DataSource = database.Path, Mode = SqliteOpenMode.ReadWriteCreate, Cache = SqliteCacheMode.Shared }.ToString();
+        await using var keeper = new SqliteConnection(connectionString);
+        await keeper.OpenAsync();
+        await using var journal = keeper.CreateCommand();
+        journal.CommandText = "PRAGMA journal_mode=WAL";
+        await journal.ExecuteNonQueryAsync();
+        var barrier = new TransactionStartBarrier();
+        var options = new DbContextOptionsBuilder<ActivitiesDesignSqliteDbContext>().UseSqlite(connectionString).AddInterceptors(barrier).Options;
+        await using var seed = new ActivitiesDesignSqliteDbContext(options);
+        await seed.Database.EnsureCreatedAsync();
+        seed.ActivityDefinitionAuthoringStates.Add(new ActivityDefinitionAuthoringState
         {
-            var connectionString = new SqliteConnectionStringBuilder { DataSource = databasePath, Mode = SqliteOpenMode.ReadWriteCreate, Cache = SqliteCacheMode.Shared }.ToString();
-            await using var keeper = new SqliteConnection(connectionString);
-            await keeper.OpenAsync();
-            await using var journal = keeper.CreateCommand();
-            journal.CommandText = "PRAGMA journal_mode=WAL";
-            await journal.ExecuteNonQueryAsync();
-            var barrier = new TransactionStartBarrier();
-            var options = new DbContextOptionsBuilder<ActivitiesDesignSqliteDbContext>().UseSqlite(connectionString).AddInterceptors(barrier).Options;
-            await using var seed = new ActivitiesDesignSqliteDbContext(options);
-            await seed.Database.EnsureCreatedAsync();
-            seed.ActivityDefinitionAuthoringStates.Add(new ActivityDefinitionAuthoringState
-            {
-                Id = "authoring-d1", DefinitionId = "d1", TenantId = "tenant-a",
-                ContentAuthority = new(ActivityContentAuthorityKind.Design, WellKnownActivityContentAuthorities.Design)
-            });
-            await seed.SaveChangesAsync();
-            await using var first = new ActivitiesDesignSqliteDbContext(options);
-            await using var second = new ActivitiesDesignSqliteDbContext(options);
-            barrier.BeforeContinue = async () =>
-            {
-                barrier.Enabled = false;
-                var authoring = await second.ActivityDefinitionAuthoringStates.SingleAsync();
-                authoring.HeadVersionId = "published-v1";
-                await second.SaveChangesAsync();
-            };
-            barrier.Enabled = true;
-            await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => new EfActivityDesignStores(first).ExecuteAsync(new CreateActivityDraftRequest(Draft("draft-1", "d1", "tenant-a", 1), Layout("draft-1", "tenant-a", 1), null)));
+            Id = "authoring-d1", DefinitionId = "d1", TenantId = "tenant-a",
+            ContentAuthority = new(ActivityContentAuthorityKind.Design, WellKnownActivityContentAuthorities.Design)
+        });
+        await seed.SaveChangesAsync();
+        await using var first = new ActivitiesDesignSqliteDbContext(options);
+        await using var second = new ActivitiesDesignSqliteDbContext(options);
+        barrier.BeforeContinue = async () =>
+        {
+            barrier.Enabled = false;
+            var authoring = await second.ActivityDefinitionAuthoringStates.SingleAsync();
+            authoring.HeadVersionId = "published-v1";
+            await second.SaveChangesAsync();
+        };
+        barrier.Enabled = true;
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => new EfActivityDesignStores(first).ExecuteAsync(new CreateActivityDraftRequest(Draft("draft-1", "d1", "tenant-a", 1), Layout("draft-1", "tenant-a", 1), null)));
 
-            Assert.Empty(await first.ActivityDefinitionDrafts.ToListAsync());
-        }
-        finally
-        {
-            foreach (var path in new[] { databasePath, $"{databasePath}-wal", $"{databasePath}-shm" })
-                if (File.Exists(path))
-                    File.Delete(path);
-        }
+        Assert.Empty(await first.ActivityDefinitionDrafts.ToListAsync());
     }
 
     [Fact]

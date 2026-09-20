@@ -17,6 +17,7 @@
   <ItemGroup>
     <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->
     <Compile Include="../../../../../../Persistence/EntityFramework/Tests/UnorderedRowLimitGuard.cs" Link="UnorderedRowLimitGuard.cs" />
+    <Compile Include="../../../../../../Persistence/EntityFramework/Tests/TemporarySqliteDatabase.cs" Link="TemporarySqliteDatabase.cs" />
     <!-- Injects provider failures, such as a deadlock wrapped by SQL Server's execution strategy. -->
     <Compile Include="../../../../../../Persistence/EntityFramework/Tests/ProviderFailures.cs" Link="ProviderFailures.cs" />
   </ItemGroup>

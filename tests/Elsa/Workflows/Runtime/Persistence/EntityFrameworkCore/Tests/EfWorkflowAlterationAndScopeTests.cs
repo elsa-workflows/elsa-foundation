@@ -1,4 +1,5 @@
 using System.Data.Common;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -58,50 +59,42 @@ public sealed class EfWorkflowAlterationAndScopeTests
         Assert.Equal(typeof(EfWorkflowTestScopeCleanupStore), coreFirstScope.Single(x => x.ServiceType == typeof(EfWorkflowTestScopeCleanupStore)).ImplementationType);
         Assert.Equal(typeof(EfWorkflowTestScopeStore), coreFirstScope.Single(x => x.ServiceType == typeof(EfWorkflowTestScopeStore)).ImplementationType);
 
-        var sharedDatabasePath = Path.Combine(Path.GetTempPath(), $"elsa-runtime-order-{Guid.NewGuid():N}.db");
-        try
+        await using var database = new TemporarySqliteDatabase("runtime-order");
+        var scopeThenAlteration = new ServiceCollection();
+        scopeThenAlteration.AddRuntimeWorkflowTestScopeEntityFrameworkCore(new()
         {
-            var scopeThenAlteration = new ServiceCollection();
-            scopeThenAlteration.AddRuntimeWorkflowTestScopeEntityFrameworkCore(new()
-            {
-                ConnectionString = $"Data Source={sharedDatabasePath}",
-                RecoveryContinuationSigningKey = new string('k', 32)
-            });
-            scopeThenAlteration.AddRuntimeWorkflowAlterationEntityFrameworkCore(new()
-            {
-                ConnectionString = $"Data Source={sharedDatabasePath}",
-                RecoveryContinuationSigningKey = new string('k', 32)
-            });
-            scopeThenAlteration.AddWorkflowRuntime();
-
-            Assert.Single(scopeThenAlteration, descriptor => descriptor.ServiceType == typeof(RuntimeSqliteDbContext));
-            Assert.Single(scopeThenAlteration, descriptor => descriptor.ServiceType == typeof(DbContextOptions<RuntimeSqliteDbContext>));
-
-            await using var serviceProvider = scopeThenAlteration.BuildServiceProvider();
-            await using var operationScope = serviceProvider.CreateAsyncScope();
-            operationScope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(
-                PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
-            var context = operationScope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
-            await context.Database.EnsureCreatedAsync();
-            var alterationStore = operationScope.ServiceProvider.GetRequiredService<IWorkflowAlterationStore>();
-            var testScopeStore = operationScope.ServiceProvider.GetRequiredService<IWorkflowTestScopeStore>();
-            var plan = Plan("scope-first-plan");
-            var workflowTestScope = new WorkflowTestScope(
-                "scope-first-scope",
-                DateTimeOffset.UtcNow.AddHours(1),
-                "tenant-a",
-                new WorkflowExecutionPartition("partition"));
-
-            Assert.False((await alterationStore.AdmitAsync(plan)).IsReplay);
-            Assert.Equal(workflowTestScope.ScopeId, (await testScopeStore.CreateAsync(workflowTestScope, DateTimeOffset.UtcNow)).Scope.ScopeId);
-            Assert.Equal(plan.PlanId, (await alterationStore.FindPlanAsync(plan.PlanId))!.PlanId);
-            Assert.Equal(workflowTestScope.ScopeId, (await testScopeStore.FindAsync(workflowTestScope.ScopeId))!.Scope.ScopeId);
-        }
-        finally
+            ConnectionString = database.ConnectionString,
+            RecoveryContinuationSigningKey = new string('k', 32)
+        });
+        scopeThenAlteration.AddRuntimeWorkflowAlterationEntityFrameworkCore(new()
         {
-            if (File.Exists(sharedDatabasePath))
-                File.Delete(sharedDatabasePath);
-        }
+            ConnectionString = database.ConnectionString,
+            RecoveryContinuationSigningKey = new string('k', 32)
+        });
+        scopeThenAlteration.AddWorkflowRuntime();
+
+        Assert.Single(scopeThenAlteration, descriptor => descriptor.ServiceType == typeof(RuntimeSqliteDbContext));
+        Assert.Single(scopeThenAlteration, descriptor => descriptor.ServiceType == typeof(DbContextOptions<RuntimeSqliteDbContext>));
+
+        await using var serviceProvider = scopeThenAlteration.BuildServiceProvider();
+        await using var operationScope = serviceProvider.CreateAsyncScope();
+        operationScope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(
+            PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var context = operationScope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
+        await context.Database.EnsureCreatedAsync();
+        var alterationStore = operationScope.ServiceProvider.GetRequiredService<IWorkflowAlterationStore>();
+        var testScopeStore = operationScope.ServiceProvider.GetRequiredService<IWorkflowTestScopeStore>();
+        var plan = Plan("scope-first-plan");
+        var workflowTestScope = new WorkflowTestScope(
+            "scope-first-scope",
+            DateTimeOffset.UtcNow.AddHours(1),
+            "tenant-a",
+            new WorkflowExecutionPartition("partition"));
+
+        Assert.False((await alterationStore.AdmitAsync(plan)).IsReplay);
+        Assert.Equal(workflowTestScope.ScopeId, (await testScopeStore.CreateAsync(workflowTestScope, DateTimeOffset.UtcNow)).Scope.ScopeId);
+        Assert.Equal(plan.PlanId, (await alterationStore.FindPlanAsync(plan.PlanId))!.PlanId);
+        Assert.Equal(workflowTestScope.ScopeId, (await testScopeStore.FindAsync(workflowTestScope.ScopeId))!.Scope.ScopeId);
 
         var foreign = new ServiceCollection();
         foreign.AddScoped<IWorkflowAlterationStore, ForeignAlterationStore>();

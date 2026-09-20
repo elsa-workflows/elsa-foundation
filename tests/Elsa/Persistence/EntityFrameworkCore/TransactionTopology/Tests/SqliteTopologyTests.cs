@@ -3,6 +3,7 @@ using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework.Tests;
 using Xunit;
 
 namespace Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests;
@@ -439,15 +440,7 @@ public sealed class SqliteTopologyTests
         "The commit outcome is unknown; recovery must inspect durable markers.",
         new IOException("connection dropped after commit request"));
 
-    private static void DeleteDatabase(string path)
-    {
-        foreach (var suffix in new[] { "", "-wal", "-shm" })
-        {
-            var candidate = path + suffix;
-            if (File.Exists(candidate))
-                File.Delete(candidate);
-        }
-    }
+    private static void DeleteDatabase(string path) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles(path);
 }
 
 internal static class TopologyPolicy

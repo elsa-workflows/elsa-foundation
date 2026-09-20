@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-18
 
-**Status**: Draft
+**Status**: In progress — accepted by the owner 2026-09-19; decoder unit implemented, encoder not yet reachable from configuration
 
 **Input**: GitHub issue [#1805](https://github.com/elsa-workflows/elsa-foundation/issues/1805), the design comment accepted on it, and the owner's answers to that comment's four open questions. The verified column inventory is in [research.md](./research.md).
 

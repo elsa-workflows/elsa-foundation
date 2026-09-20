@@ -1,4 +1,5 @@
 using System.Data.Common;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
@@ -498,16 +499,14 @@ public sealed class EfExecutionPlacementStoreTests
     private sealed class Fixture : IAsyncDisposable
     {
         private readonly SqliteConnection connection;
-        private readonly string databasePath;
-        private readonly bool ownsDatabase;
+        private readonly TemporarySqliteDatabase? ownedDatabase;
         private readonly string scope;
         private readonly ExecutionPlacementSqliteDbContext context;
 
-        private Fixture(SqliteConnection connection, ExecutionPlacementSqliteDbContext context, string? scope, bool ownsDatabase)
+        private Fixture(SqliteConnection connection, ExecutionPlacementSqliteDbContext context, string? scope, TemporarySqliteDatabase? ownedDatabase)
         {
             this.connection = connection;
-            databasePath = new SqliteConnectionStringBuilder(connection.ConnectionString).DataSource;
-            this.ownsDatabase = ownsDatabase;
+            this.ownedDatabase = ownedDatabase;
             this.context = context;
             this.scope = scope!;
             Store = new EfExecutionPlacementStore(context, new Accessor(scope));
@@ -519,15 +518,15 @@ public sealed class EfExecutionPlacementStoreTests
 
         public static async Task<Fixture> CreateAsync(string? scope, IInterceptor? interceptor = null)
         {
-            var path = Path.Join(Path.GetTempPath(), $"elsa-placement-{Guid.NewGuid():N}.db");
-            var connection = new SqliteConnection($"Data Source={path}");
+            var database = new TemporarySqliteDatabase("placement");
+            var connection = new SqliteConnection(database.ConnectionString);
             await connection.OpenAsync();
             var options = new DbContextOptionsBuilder<ExecutionPlacementSqliteDbContext>().UseSqlite(connection);
             if (interceptor is not null)
                 options.AddInterceptors(interceptor);
             var context = new ExecutionPlacementSqliteDbContext(options.Options);
             await context.Database.EnsureCreatedAsync();
-            return new Fixture(connection, context, scope, ownsDatabase: true);
+            return new Fixture(connection, context, scope, ownedDatabase: database);
         }
 
         public async Task<Fixture> ReopenAsync(string? nextScope, IInterceptor? interceptor = null)
@@ -538,16 +537,15 @@ public sealed class EfExecutionPlacementStoreTests
             if (interceptor is not null)
                 options.AddInterceptors(interceptor);
             var nextContext = new ExecutionPlacementSqliteDbContext(options.Options);
-            return new Fixture(next, nextContext, nextScope, ownsDatabase: false);
+            return new Fixture(next, nextContext, nextScope, ownedDatabase: null);
         }
 
         public async ValueTask DisposeAsync()
         {
             await context.DisposeAsync();
             await connection.DisposeAsync();
-            if (ownsDatabase)
-                foreach (var file in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" })
-                    File.Delete(file);
+            if (ownedDatabase is not null)
+                await ownedDatabase.DisposeAsync();
         }
 
         private sealed class Accessor(string? scope) : IPersistenceAccessContextAccessor

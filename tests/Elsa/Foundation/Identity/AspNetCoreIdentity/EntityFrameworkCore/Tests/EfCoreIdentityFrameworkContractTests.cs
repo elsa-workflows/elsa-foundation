@@ -13,6 +13,7 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Seeding;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
@@ -78,14 +79,14 @@ public sealed class EfCoreIdentityFrameworkContractTests
     [Fact]
     public async Task Login_display_names_round_trip_null_and_unpaired_surrogates_after_a_context_reopen()
     {
-        var databasePath = Path.Join(Path.GetTempPath(), $"elsa-identity-login-display-{Guid.NewGuid():N}.db");
-        await using var first = await EfCoreIdentityScenario.CreateAsync(databasePath: databasePath);
+        await using var database = new TemporarySqliteDatabase("identity-login-display");
+        await using var first = await EfCoreIdentityScenario.CreateAsync(databasePath: database.Path);
         var user = await first.CreateUserAsync("DisplayNames");
         Assert.True((await first.Users.AddLoginAsync(user, new UserLoginInfo("oidc", "null-display", null))).Succeeded);
         Assert.True((await first.Users.AddLoginAsync(user, new UserLoginInfo("oidc", "surrogate-display", "OIDC\ud800"))).Succeeded);
         await first.Services.GetRequiredService<IdentityIamDbContext>().Database.CloseConnectionAsync();
 
-        await using var reopened = await EfCoreIdentityScenario.CreateAsync(databasePath: databasePath, ensureSchema: false);
+        await using var reopened = await EfCoreIdentityScenario.CreateAsync(databasePath: database.Path, ensureSchema: false);
         var loadedUser = await reopened.Users.FindByIdAsync(user.Id);
         var logins = (await reopened.Users.GetLoginsAsync(Assert.IsType<AspNetCoreIdentityUser>(loadedUser)))
             .OrderBy(login => login.ProviderKey, StringComparer.Ordinal)
@@ -785,7 +786,7 @@ public sealed class EfCoreIdentityFrameworkContractTests
     [Fact]
     public async Task Two_concurrent_ef_seeders_converge_to_one_admin_aggregate_and_membership()
     {
-        var path = Path.Join(Path.GetTempPath(), $"elsa-identity-seeder-race-{Guid.NewGuid():N}.db");
+        await using var database = new TemporarySqliteDatabase("identity-seeder-race");
         var seed = new IdentitySeedOptions
         {
             UserName = "admin",
@@ -793,38 +794,30 @@ public sealed class EfCoreIdentityFrameworkContractTests
             Email = "admin@example.test",
             RoleName = "Administrators"
         };
-        try
-        {
-            await using var first = await EfCoreIdentityScenario.CreateAsync(
-                initialAdmin: seed,
-                addLogging: true,
-                databasePath: path);
-            await using var second = await EfCoreIdentityScenario.CreateAsync(
-                initialAdmin: seed,
-                addLogging: true,
-                databasePath: path);
+        await using var first = await EfCoreIdentityScenario.CreateAsync(
+            initialAdmin: seed,
+            addLogging: true,
+            databasePath: database.Path);
+        await using var second = await EfCoreIdentityScenario.CreateAsync(
+            initialAdmin: seed,
+            addLogging: true,
+            databasePath: database.Path);
 
-            await Task.WhenAll(
-                first.Services.GetRequiredService<EfCoreIdentitySeeder>().StartAsync(CancellationToken.None),
-                second.Services.GetRequiredService<EfCoreIdentitySeeder>().StartAsync(CancellationToken.None));
+        await Task.WhenAll(
+            first.Services.GetRequiredService<EfCoreIdentitySeeder>().StartAsync(CancellationToken.None),
+            second.Services.GetRequiredService<EfCoreIdentitySeeder>().StartAsync(CancellationToken.None));
 
-            var user = await first.Users.FindByNameAsync(seed.UserName);
-            Assert.NotNull(user);
-            var role = await first.Roles.FindByNameAsync(seed.RoleName);
-            Assert.NotNull(role);
-            Assert.True(await first.Users.IsInRoleAsync(user!, seed.RoleName));
+        var user = await first.Users.FindByNameAsync(seed.UserName);
+        Assert.NotNull(user);
+        var role = await first.Roles.FindByNameAsync(seed.RoleName);
+        Assert.NotNull(role);
+        Assert.True(await first.Users.IsInRoleAsync(user!, seed.RoleName));
 
-            var db = first.Services.GetRequiredService<IdentityIamDbContext>();
-            Assert.Equal(1, await db.Users.CountAsync(x => x.TenantId == first.TenantId));
-            Assert.Equal(1, await db.Roles.CountAsync(x => x.TenantId == first.TenantId));
-            Assert.Equal(1, await db.UserRoles.CountAsync(x => x.TenantId == first.TenantId));
-            Assert.Equal(1, await db.TenantMemberships.CountAsync(x => x.TenantId == first.TenantId));
-        }
-        finally
-        {
-            foreach (var file in new[] { path, path + "-wal", path + "-shm" }.Where(File.Exists))
-                File.Delete(file);
-        }
+        var db = first.Services.GetRequiredService<IdentityIamDbContext>();
+        Assert.Equal(1, await db.Users.CountAsync(x => x.TenantId == first.TenantId));
+        Assert.Equal(1, await db.Roles.CountAsync(x => x.TenantId == first.TenantId));
+        Assert.Equal(1, await db.UserRoles.CountAsync(x => x.TenantId == first.TenantId));
+        Assert.Equal(1, await db.TenantMemberships.CountAsync(x => x.TenantId == first.TenantId));
     }
 
     [Fact]
@@ -971,13 +964,15 @@ internal sealed class CapturingLoggerProvider(ICollection<string> messages) : IL
 
 internal sealed class EfCoreIdentityScenario : IAsyncDisposable
 {
-    private readonly string databasePath;
+    // Non-null only when this scenario created its own database rather than joining one a caller already owns
+    // (e.g. two scenarios racing against the same file); only the owner clears the pool and deletes it.
+    private readonly TemporarySqliteDatabase? ownedDatabase;
     private readonly ServiceProvider provider;
     private readonly AsyncServiceScope scope;
 
-    private EfCoreIdentityScenario(string databasePath, ServiceProvider provider, AsyncServiceScope scope)
+    private EfCoreIdentityScenario(TemporarySqliteDatabase? ownedDatabase, ServiceProvider provider, AsyncServiceScope scope)
     {
-        this.databasePath = databasePath;
+        this.ownedDatabase = ownedDatabase;
         this.provider = provider;
         this.scope = scope;
     }
@@ -994,7 +989,8 @@ internal sealed class EfCoreIdentityScenario : IAsyncDisposable
         string? databasePath = null,
         bool ensureSchema = true)
     {
-        var path = databasePath ?? Path.Join(Path.GetTempPath(), $"elsa-identity-contract-{Guid.NewGuid():N}.db");
+        var ownedDatabase = databasePath is null ? new TemporarySqliteDatabase("identity-contract") : null;
+        var path = databasePath ?? ownedDatabase!.Path;
         var services = new ServiceCollection();
         if (addLogging)
             services.AddLogging();
@@ -1013,13 +1009,14 @@ internal sealed class EfCoreIdentityScenario : IAsyncDisposable
                 .Bind(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
             if (ensureSchema)
                 await serviceProvider.GetRequiredService<IdentityIamDbContext>().Database.EnsureCreatedAsync();
-            return new EfCoreIdentityScenario(path, provider, scope);
+            return new EfCoreIdentityScenario(ownedDatabase, provider, scope);
         }
         catch
         {
             await scope.DisposeAsync();
             await provider.DisposeAsync();
-            DeleteDatabase(path);
+            if (ownedDatabase is not null)
+                await ownedDatabase.DisposeAsync();
             throw;
         }
     }
@@ -1050,12 +1047,7 @@ internal sealed class EfCoreIdentityScenario : IAsyncDisposable
     {
         await scope.DisposeAsync();
         await provider.DisposeAsync();
-        DeleteDatabase(databasePath);
-    }
-
-    private static void DeleteDatabase(string path)
-    {
-        foreach (var file in new[] { path, path + "-wal", path + "-shm" }.Where(File.Exists))
-            File.Delete(file);
+        if (ownedDatabase is not null)
+            await ownedDatabase.DisposeAsync();
     }
 }

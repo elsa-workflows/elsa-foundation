@@ -2,6 +2,7 @@ using System.Data.Common;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -1097,35 +1098,27 @@ public sealed class EfBookmarkStateStoreTests
         }
     }
 
-    private sealed class FileDatabase : IAsyncDisposable
+    private sealed class FileDatabase(TemporarySqliteDatabase database) : IAsyncDisposable
     {
-        private FileDatabase(string path) => Path = path;
-
-        private string Path { get; }
-
         public static async Task<FileDatabase> CreateAsync()
         {
-            var database = new FileDatabase(System.IO.Path.Join(System.IO.Path.GetTempPath(), $"elsa-runtime-bookmarks-{Guid.NewGuid():N}.db"));
-            await using var fixture = database.Open();
+            var fileDatabase = new FileDatabase(new TemporarySqliteDatabase("runtime-bookmarks"));
+            await using var fixture = fileDatabase.Open();
             await fixture.Context.Database.EnsureCreatedAsync();
-            return database;
+            return fileDatabase;
         }
 
         public FileFixture Open(IInterceptor? interceptor = null)
         {
             var options = new DbContextOptionsBuilder<RuntimeSqliteDbContext>()
-                .UseSqlite($"Data Source={Path}")
+                .UseSqlite(database.ConnectionString)
                 .AddInterceptors(interceptor is null ? [] : [interceptor])
                 .Options;
             var context = new RuntimeSqliteDbContext(options);
             return new FileFixture(context, new EfBookmarkStateStore(context, new Accessor("tenant-a")));
         }
 
-        public ValueTask DisposeAsync()
-        {
-            File.Delete(Path);
-            return ValueTask.CompletedTask;
-        }
+        public ValueTask DisposeAsync() => database.DisposeAsync();
     }
 
     private sealed class FileFixture(RuntimeSqliteDbContext context, EfBookmarkStateStore store) : IAsyncDisposable

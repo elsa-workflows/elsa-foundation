@@ -56,6 +56,10 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     private readonly int resourceCapacity;
     private readonly int instrumentCapacity;
     private readonly int maxQuerySize;
+    // Test-only override of ProviderSafeKeyBatchSize. Production callers never pass a value, so every real
+    // deployment chunks the merge, recompute and search-key loops at the provider-safe default; the retention
+    // tests set this smaller so those loops iterate more than once without seeding hundreds of keys.
+    private readonly int keyBatchSize;
     // EnqueueAsync acknowledges every accepted capture, so this adapter never silently drops a
     // signal. Keep the counters explicit because they are part of the shared diagnostics contract.
     private long droppedTraces = 0;
@@ -70,7 +74,8 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         EfOpenTelemetryBinding binding,
         IOpenTelemetrySourceRegistry? sourceRegistry = null,
         IDiagnosticsPersistenceObserver? observer = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        int keyBatchSize = ProviderSafeKeyBatchSize)
     {
         this.scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         ArgumentNullException.ThrowIfNull(options);
@@ -78,6 +83,8 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         binding.Validate();
         this.sourceRegistry = sourceRegistry;
         this.timeProvider = timeProvider ?? TimeProvider.System;
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(keyBatchSize);
+        this.keyBatchSize = keyBatchSize;
         traceCapacity = Clamp(options.Value.TraceCapacity);
         spanCapacity = Clamp(options.Value.SpanCapacity);
         metricPointCapacity = Clamp(options.Value.MetricPointCapacity);
@@ -682,7 +689,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     {
         foreach (var chunk in batch.Traces
                      .GroupBy(x => OpenTelemetrySearchKeys.TraceKey(x.TraceId), StringComparer.Ordinal)
-                     .Chunk(ProviderSafeKeyBatchSize))
+                     .Chunk(keyBatchSize))
         {
             var keys = chunk.Select(group => group.Key).ToArray();
             var existingByKey = await LoadSummariesAsync(db, keys, ct);
@@ -725,7 +732,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     /// </remarks>
     private async Task RecomputeSummariesAsync(OpenTelemetryDbContext db, IEnumerable<string> keys, CancellationToken ct)
     {
-        foreach (var chunk in keys.Distinct(StringComparer.Ordinal).Chunk(ProviderSafeKeyBatchSize))
+        foreach (var chunk in keys.Distinct(StringComparer.Ordinal).Chunk(keyBatchSize))
         {
             // One ordered read for the chunk. Grouping preserves the per-key Sequence order the merge relies on.
             var recordsByKey = (await db.Traces.AsNoTracking()
@@ -888,12 +895,12 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
 
     private async Task<long> NextSequenceAsync<T>(DbSet<T> set, CancellationToken ct) where T : EfOpenTelemetrySignalEntity => (await set.Where(x => x.ScopeKey == binding.ScopeKey).Select(x => (long?)x.Sequence).MaxAsync(ct) ?? 0) + 1;
 
-    private static async Task<List<T>> LoadBySearchKeysAsync<T>(
+    private async Task<List<T>> LoadBySearchKeysAsync<T>(
         IEnumerable<string> searchKeys,
         Func<string[], Task<List<T>>> loadBatch)
     {
         var result = new List<T>();
-        foreach (var keys in searchKeys.Distinct(StringComparer.Ordinal).Chunk(ProviderSafeKeyBatchSize))
+        foreach (var keys in searchKeys.Distinct(StringComparer.Ordinal).Chunk(keyBatchSize))
             result.AddRange(await loadBatch(keys));
         return result;
     }

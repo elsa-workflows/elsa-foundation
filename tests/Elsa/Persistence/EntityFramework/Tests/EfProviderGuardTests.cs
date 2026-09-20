@@ -32,22 +32,15 @@ public sealed class EfProviderGuardTests
     [Fact]
     public async Task Ensure_on_a_live_context_reads_Database_ProviderName()
     {
-        var path = Path.Join(Path.GetTempPath(), $"elsa-ef-guard-{Guid.NewGuid():N}.db");
-        try
-        {
-            var options = new DbContextOptionsBuilder<GuardTestContext>()
-                .UseSqlite($"Data Source={path}")
-                .Options;
-            await using var context = new GuardTestContext(options);
-            EfProviderGuard.Ensure(context, EfProviderNames.Sqlite);
-            var mismatch = Assert.Throws<InvalidOperationException>(() =>
-                EfProviderGuard.Ensure(context, EfProviderNames.SqlServer));
-            Assert.Contains(nameof(GuardTestContext), mismatch.Message, StringComparison.Ordinal);
-        }
-        finally
-        {
-            File.Delete(path);
-        }
+        await using var database = new TemporarySqliteDatabase("ef-guard");
+        var options = new DbContextOptionsBuilder<GuardTestContext>()
+            .UseSqlite(database.ConnectionString)
+            .Options;
+        await using var context = new GuardTestContext(options);
+        EfProviderGuard.Ensure(context, EfProviderNames.Sqlite);
+        var mismatch = Assert.Throws<InvalidOperationException>(() =>
+            EfProviderGuard.Ensure(context, EfProviderNames.SqlServer));
+        Assert.Contains(nameof(GuardTestContext), mismatch.Message, StringComparison.Ordinal);
     }
 
     private sealed class GuardTestContext(DbContextOptions<GuardTestContext> options) : DbContext(options);
