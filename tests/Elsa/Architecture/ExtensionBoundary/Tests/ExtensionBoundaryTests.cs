@@ -30,6 +30,18 @@ public sealed class ExtensionBoundaryTests
     private const string CoreRoot = "src";
 
     /// <summary>
+    /// Deployable hosts, which compose modules rather than being one.
+    /// </summary>
+    /// <remarks>
+    /// A host's whole job is to compose the modules an operator wants, optional ones included, so a host
+    /// referencing an extension is the design working rather than a boundary breach. <c>Elsa.Workbench</c>
+    /// references the Agent bucket for exactly that reason. They are excluded from the core side of the
+    /// check, not from the tree: a library must not hide here, which
+    /// <see cref="Excluded_hosts_are_deployable_hosts_not_libraries"/> enforces.
+    /// </remarks>
+    private const string HostRoot = "src/Apps";
+
+    /// <summary>
     /// Extension-to-extension edges that have been reviewed and accepted, as
     /// <c>referencing project -> referenced project</c>.
     /// </summary>
@@ -115,6 +127,32 @@ public sealed class ExtensionBoundaryTests
         Assert.True(stale.Length == 0, Report("Declared extension edges that no longer exist; remove them.", stale));
     }
 
+    /// <summary>
+    /// The host exclusion must stay narrow: it exempts composition roots, not anything parked under
+    /// <c>src/Apps</c>. A packable library there would inherit the exemption and could reference an
+    /// extension unchallenged, so every excluded project must be a non-packable deployable host.
+    /// </summary>
+    [Fact]
+    public void Excluded_hosts_are_deployable_hosts_not_libraries()
+    {
+        var hostRoot = Path.Join(RepoRoot, HostRoot);
+        Assert.True(Directory.Exists(hostRoot), $"'{HostRoot}' is missing; the host exclusion no longer describes the tree.");
+
+        var packable = Directory.EnumerateFiles(hostRoot, "*.csproj", SearchOption.AllDirectories)
+            .Where(path => !XDocument.Load(path)
+                .Descendants()
+                .Any(element => element.Name.LocalName == "IsPackable" &&
+                                string.Equals(element.Value.Trim(), "false", StringComparison.OrdinalIgnoreCase)))
+            .Select(Relative)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(packable.Length == 0, Report(
+            "These projects sit under the host root and are exempt from the core-to-extension check, but they "
+            + "are packable libraries rather than deployable hosts. Move them, or mark them IsPackable=false.",
+            packable));
+    }
+
     private static IReadOnlyList<ModuleProject> ReadModuleProjects()
     {
         var projects = new List<ModuleProject>();
@@ -127,7 +165,7 @@ public sealed class ExtensionBoundaryTests
             foreach (var absolutePath in Directory.EnumerateFiles(absoluteRoot, "*.csproj", SearchOption.AllDirectories))
             {
                 var path = Relative(absolutePath);
-                if (IsTestPath(path)) continue;
+                if (IsTestPath(path) || IsHostPath(path)) continue;
 
                 projects.Add(new ModuleProject(
                     Path.GetFileNameWithoutExtension(path),
@@ -166,6 +204,9 @@ public sealed class ExtensionBoundaryTests
 
     private static bool IsUnder(string relativePath, string root) =>
         relativePath.StartsWith(root + "/", StringComparison.Ordinal);
+
+    private static bool IsHostPath(string relativePath) =>
+        relativePath.StartsWith(HostRoot + "/", StringComparison.Ordinal);
 
     private static bool IsTestPath(string relativePath) =>
         relativePath.StartsWith("tests/", StringComparison.Ordinal) ||
