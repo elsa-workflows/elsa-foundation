@@ -216,12 +216,32 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         }
     }
 
+    /// <summary>
+    /// The wrapped counterpart of the case below: a save failure re-raised under an
+    /// <see cref="InvalidOperationException"/> must still be classified by its constraint name.
+    /// </summary>
+    /// <remarks>
+    /// This passes on the unfixed code too, and deliberately says so rather than implying more coverage than it has.
+    /// Classification here runs through <c>ClassifyProviderUniqueConstraint(exception.ToString())</c>, and
+    /// <see cref="Exception.ToString"/> already renders the whole inner chain, so the constraint name survives a
+    /// wrapper without help. What it pins is that no clause on the way out rejects the wrapper before classification
+    /// is reached, which is what the type-keyed clauses used to do. The chain-walking branch of
+    /// <c>IsMutationReceiptConflict</c> and <c>UniqueConflictUnit</c>, which reads the save's Entries, is reached only
+    /// from <c>EfIdentityAtomicWrite.ReconcileOrConflictAsync</c> and is still unguarded; see #1814's review notes.
+    /// </remarks>
+    [Theory]
+    [InlineData("PK_identity_users", EfIdentityAuthorityConflict.None)]
+    [InlineData("ux_identity_user_name_reservations_key", EfIdentityAuthorityConflict.UserName)]
+    public Task A_wrapped_provider_constraint_identity_still_wins(string constraintName, EfIdentityAuthorityConflict expectedConflict) =>
+        Provider_constraint_identity_wins_over_mixed_pending_entries(constraintName, expectedConflict, wrapped: true);
+
     [Theory]
     [InlineData("PK_identity_users", EfIdentityAuthorityConflict.None)]
     [InlineData("ux_identity_user_name_reservations_key", EfIdentityAuthorityConflict.UserName)]
     public async Task Provider_constraint_identity_wins_over_mixed_pending_entries(
         string constraintName,
-        EfIdentityAuthorityConflict expectedConflict)
+        EfIdentityAuthorityConflict expectedConflict,
+        bool wrapped = false)
     {
         var databasePath = TemporaryDatabasePath();
         try
@@ -229,7 +249,7 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
             await using (var schema = CreateContext(databasePath))
                 await schema.Database.EnsureCreatedAsync();
 
-            var interceptor = new NamedUniqueConstraintFailureInterceptor(constraintName);
+            var interceptor = new NamedUniqueConstraintFailureInterceptor(constraintName, wrapped);
             await using var context = CreateContext(databasePath, interceptor);
             var access = new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
             var coordinator = new EfIdentityAuthorityAggregateCoordinator(context, access);
@@ -2705,7 +2725,7 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         }
     }
 
-    private sealed class NamedUniqueConstraintFailureInterceptor(string constraintName) : SaveChangesInterceptor
+    private sealed class NamedUniqueConstraintFailureInterceptor(string constraintName, bool wrapped = false) : SaveChangesInterceptor
     {
         public IReadOnlyList<Type> PendingEntityTypes { get; private set; } = [];
 
@@ -2720,10 +2740,14 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                 return ValueTask.FromResult(result);
 
             PendingEntityTypes = entries.Select(entry => entry.Entity.GetType()).ToArray();
-            throw new DbUpdateException(
+            var failure = new DbUpdateException(
                 $"Violation of unique constraint '{constraintName}'.",
                 new SqlException(2627),
                 entries);
+            // Wrapped, the save failure sits under an InvalidOperationException, which is the shape a store
+            // boundary or an execution strategy hands on. Everything that reads the save's own detail, the
+            // constraint name and the entries, has to see through it.
+            throw wrapped ? ProviderFailures.WrappedByExecutionStrategy(failure) : failure;
         }
     }
 

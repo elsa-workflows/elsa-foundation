@@ -1,5 +1,6 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -99,6 +100,25 @@ public sealed class EfActivityDraftTestRunStoreTests : IAsyncLifetime
             foreach (var context in contenders)
                 await context.DisposeAsync();
         }
+    }
+
+    /// <summary>
+    /// These stores answer a create race by catching the save failure and re-reading to see whether a winner exists.
+    /// That handling was unreachable when an execution strategy or a store boundary wrapped the failure, because the
+    /// clause was keyed to DbUpdateException by type, so the race surfaced as a throw instead of Created=false.
+    /// </summary>
+    [Fact]
+    public async Task A_wrapped_create_race_still_finds_the_winner_and_reports_it()
+    {
+        const int uniqueViolation = 2627;
+        var receipt = Receipt("tenant-a", "draft-wrapped", "key-wrapped");
+        await using (var seeded = Open())
+            Assert.True((await Store(seeded, "tenant-a").TryCreateAsync(receipt)).Created);
+
+        await using var context = Open(new ProviderFailures.FailingSaveInterceptor(
+            () => ProviderFailures.WrappedSaveFailure(new ProviderFailures.SqlException(uniqueViolation))));
+
+        Assert.False((await Store(context, "tenant-a").TryCreateAsync(receipt)).Created);
     }
 
     [Fact]

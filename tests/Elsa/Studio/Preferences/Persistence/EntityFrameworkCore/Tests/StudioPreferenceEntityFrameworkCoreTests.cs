@@ -162,6 +162,37 @@ public sealed class StudioPreferenceEntityFrameworkCoreTests
         Assert.True((await fixture.Store.FindAsync(key))!.Value.GetProperty("value").GetBoolean());
     }
 
+    /// <summary>
+    /// The create race must still be reported as a conflict when the save failure arrives wrapped. Before #1814 this
+    /// store's clause was keyed to DbUpdateException by type, so a wrapper could not match it and WriteAsync threw
+    /// where it is documented to return Conflict.
+    /// </summary>
+    [Fact]
+    public async Task A_wrapped_unique_violation_is_still_reported_as_a_conflict()
+    {
+        const int uniqueViolation = 2627;
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await using var fixture = await InterceptedSqliteFixture.CreateAsync(
+                databasePath,
+                new ProviderFailures.FailingSaveInterceptor(
+                    () => ProviderFailures.WrappedSaveFailure(new ProviderFailures.SqlException(uniqueViolation))));
+
+            var write = await fixture.Store.WriteAsync(
+                Key(),
+                new(1, Json("{\"value\":\"wrapped\"}")),
+                StudioPreferenceWriteCondition.MustNotExist,
+                DateTimeOffset.Parse("2026-09-20T09:00:00Z"));
+
+            Assert.Equal(StudioPreferenceStoreWriteStatus.Conflict, write.Status);
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
     [Fact]
     public async Task Concurrent_creators_have_exactly_one_winner()
     {
