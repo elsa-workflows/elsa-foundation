@@ -382,7 +382,7 @@ The 13-name `--modules` vocabulary. Canonical names come from the design session
 | `Studio.Preferences` | [`StudioPreferencesDbContext`](../../src/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/StudioPreferencesDbContext.cs) | `ElsaStudioPreferences` | `studio-preferences` |
 | `Elsa3.Activities.Design.Import` | [`Elsa3ImportDbContext`](../../extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3ImportDbContext.cs) | `Elsa3ReusableActivityImport` | `elsa3-activities-design-import` |
 
-Elsa3's module is under `extensions/`, not `src/`; it is included in the vocabulary on the same terms as every other module (D2, D3). `module-migrate.sh` already resolves its project correctly: [PR #1867](https://github.com/elsa-workflows/elsa-foundation/pull/1867) widened its project lookup from a `src`-only `find` to `src` plus `extensions` ([`tools/ef/module-migrate.sh:34-35, 96`](../../tools/ef/module-migrate.sh)).
+Elsa3's module is under `extensions/`, not `src/`; it is included in the vocabulary on the same terms as every other module (D2, D3). `module-migrate.sh` already finds its project: [PR #1867](https://github.com/elsa-workflows/elsa-foundation/pull/1867) made it search `extensions/` as well, widening its project lookup from a `src`-only `find` to `src` plus `extensions` ([`tools/ef/module-migrate.sh:34-35, 96`](../../tools/ef/module-migrate.sh)).
 
 ## CLI flags
 

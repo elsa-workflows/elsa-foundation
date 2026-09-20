@@ -43,7 +43,7 @@ Place 4 does not read place 1's constant; it computes `EfMigrationsHistory.Table
 
 ## Shell features that register EF module migrations
 
-Built by grepping `AddEfModuleMigrations<` across `src/` and `extensions/` (excluding `README.md`/`EXTENSION_POINTS.md` prose mentions and the `EfModuleMigrator.cs`/`EfProviderBindingValidator.cs` definitions themselves), plus a check for any feature that depends on a module context without registering migrations. This is the complete input to `[UsesEfModule]` coverage (spec.md FR-062/FR-USESMODULE-COVERAGE): every row is a feature the activation guard must recognize.
+Built by grepping `AddEfModuleMigrations<` across `src/` and `extensions/` (excluding `README.md`/`EXTENSION_POINTS.md` prose mentions and the `EfModuleMigrator.cs`/`EfProviderBindingValidator.cs` definitions themselves), plus a check for any feature that depends on a module context without registering migrations. This is the complete input to `[UsesEfModule]` coverage (spec.md FR-064, which states `[UsesEfModule]` is `AllowMultiple` and cross-project; FR-066, which requires a guard test to fail when a feature takes a module dependency with no matching `[UsesEfModule]`): every row is a feature the activation guard must recognize.
 
 | Feature class | Project | Context(s) | Module(s) | Own `Provider` setting (file:line) |
 |---|---|---|---|---|
