@@ -66,10 +66,10 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | Newtonsoft.Json | 13.0.4 | Elsa.Serialization.Newtonsoft (13.0.4) |
 | Npgsql | 10.0.3 | Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests (10.0.3) |
 | Npgsql.EntityFrameworkCore.PostgreSQL | 10.0.0 | Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests (10.0.0)<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests (10.0.0)<br>Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests (10.0.0)<br>Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests (10.0.0)<br>Elsa.Persistence.EntityFramework.BindingDriftTests (10.0.0)<br>Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests (10.0.0)<br>Elsa.Persistence.EntityFrameworkCore.Migrations.Tests (10.0.0)<br>Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests (10.0.0)<br>Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe (10.0.0)<br>Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests (10.0.0)<br>Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling (10.0.0)<br>Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests (10.0.0)<br>Elsa.Workbench (10.0.0)<br>Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests (10.0.0)<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore.ProviderTests (10.0.0)<br>Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests (10.0.0)<br>Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests (10.0.0)<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests (10.0.0)<br>Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests (10.0.0) |
-| Nuplane | 0.0.9-preview.61 | Elsa.Foundation.Host (0.0.9-preview.61)<br>Elsa.Workbench (0.0.9-preview.61) |
-| Nuplane.Admin | 0.0.9-preview.61 | Elsa.Foundation.Host (0.0.9-preview.61)<br>Elsa.Modularity.Nuplane (0.0.9-preview.61)<br>Elsa.Workbench (0.0.9-preview.61) |
-| Nuplane.Loading | 0.0.9-preview.61 | Elsa.Foundation.Host (0.0.9-preview.61)<br>Elsa.Workbench (0.0.9-preview.61) |
-| Nuplane.Sources.Directory | 0.0.9-preview.61 | Elsa.Foundation.Host (0.0.9-preview.61)<br>Elsa.Workbench (0.0.9-preview.61) |
+| Nuplane | 0.0.11-preview.83 | Elsa.Foundation.Host (0.0.11-preview.83)<br>Elsa.Workbench (0.0.11-preview.83) |
+| Nuplane.Admin | 0.0.11-preview.83 | Elsa.Foundation.Host (0.0.11-preview.83)<br>Elsa.Modularity.Nuplane (0.0.11-preview.83)<br>Elsa.Workbench (0.0.11-preview.83) |
+| Nuplane.Loading | 0.0.11-preview.83 | Elsa.Foundation.Host (0.0.11-preview.83)<br>Elsa.Workbench (0.0.11-preview.83) |
+| Nuplane.Sources.Directory | 0.0.11-preview.83 | Elsa.Foundation.Host (0.0.11-preview.83)<br>Elsa.Workbench (0.0.11-preview.83) |
 | OpenIddict.Abstractions | 7.5.0 | Elsa.Foundation.Identity.OpenIddict.Behavior (7.5.0) |
 | OpenIddict.AspNetCore | 7.5.0 | Elsa.Foundation.Identity.OpenIddict.Behavior (7.5.0) |
 | OpenIddict.EntityFrameworkCore | 7.5.0 | Elsa.Foundation.Identity.Tests (7.5.0)<br>Elsa.Workbench (7.5.0) |
@@ -505,10 +505,10 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Expressions.Tests](../../tests/Elsa/Expressions/Tests/Elsa.Expressions.Tests.csproj) | test | xunit.runner.visualstudio | 3.1.5 |
 | [Elsa.Foundation.Host](../../src/Apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | source | CShells.AspNetCore | 0.0.29-preview.147 |
 | [Elsa.Foundation.Host](../../src/Apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | source | CShells.FastEndpoints | 0.0.29-preview.147 |
-| [Elsa.Foundation.Host](../../src/Apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | source | Nuplane | 0.0.9-preview.61 |
-| [Elsa.Foundation.Host](../../src/Apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | source | Nuplane.Admin | 0.0.9-preview.61 |
-| [Elsa.Foundation.Host](../../src/Apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | source | Nuplane.Loading | 0.0.9-preview.61 |
-| [Elsa.Foundation.Host](../../src/Apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | source | Nuplane.Sources.Directory | 0.0.9-preview.61 |
+| [Elsa.Foundation.Host](../../src/Apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | source | Nuplane | 0.0.11-preview.83 |
+| [Elsa.Foundation.Host](../../src/Apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | source | Nuplane.Admin | 0.0.11-preview.83 |
+| [Elsa.Foundation.Host](../../src/Apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | source | Nuplane.Loading | 0.0.11-preview.83 |
+| [Elsa.Foundation.Host](../../src/Apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | source | Nuplane.Sources.Directory | 0.0.11-preview.83 |
 | [Elsa.Foundation.Identity](../../src/Elsa/Foundation/Identity/Elsa.Foundation.Identity.csproj) | source | CShells.Abstractions | 0.0.29-preview.147 |
 | [Elsa.Foundation.Identity](../../src/Elsa/Foundation/Identity/Elsa.Foundation.Identity.csproj) | source | CShells.AspNetCore.Abstractions | 0.0.29-preview.147 |
 | [Elsa.Foundation.Identity](../../src/Elsa/Foundation/Identity/Elsa.Foundation.Identity.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.79 |
@@ -611,7 +611,7 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Modularity.Nuplane](../../src/Elsa/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj) | source | CShells | 0.0.29-preview.147 |
 | [Elsa.Modularity.Nuplane](../../src/Elsa/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj) | source | Elsa.Platform.PackageManifests | 0.0.1-preview.58 |
 | [Elsa.Modularity.Nuplane](../../src/Elsa/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj) | source | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.10 |
-| [Elsa.Modularity.Nuplane](../../src/Elsa/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj) | source | Nuplane.Admin | 0.0.9-preview.61 |
+| [Elsa.Modularity.Nuplane](../../src/Elsa/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj) | source | Nuplane.Admin | 0.0.11-preview.83 |
 | [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.79 |
 | [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Microsoft.AspNetCore.TestHost | 10.0.10 |
 | [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Microsoft.Extensions.TimeProvider.Testing | 10.8.0 |
@@ -842,10 +842,10 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | source | Microsoft.EntityFrameworkCore.Sqlite | 10.0.10 |
 | [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | source | MySql.EntityFrameworkCore | 10.0.9 |
 | [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | source | Npgsql.EntityFrameworkCore.PostgreSQL | 10.0.0 |
-| [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | source | Nuplane | 0.0.9-preview.61 |
-| [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | source | Nuplane.Admin | 0.0.9-preview.61 |
-| [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | source | Nuplane.Loading | 0.0.9-preview.61 |
-| [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | source | Nuplane.Sources.Directory | 0.0.9-preview.61 |
+| [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | source | Nuplane | 0.0.11-preview.83 |
+| [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | source | Nuplane.Admin | 0.0.11-preview.83 |
+| [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | source | Nuplane.Loading | 0.0.11-preview.83 |
+| [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | source | Nuplane.Sources.Directory | 0.0.11-preview.83 |
 | [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | source | OpenIddict.EntityFrameworkCore | 7.5.0 |
 | [Elsa.Workbench.Tests](../../tests/Elsa/Workbench/Tests/Elsa.Workbench.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 18.0.0 |
 | [Elsa.Workbench.Tests](../../tests/Elsa/Workbench/Tests/Elsa.Workbench.Tests.csproj) | test | Xunit.SkippableFact | 1.5.23 |
