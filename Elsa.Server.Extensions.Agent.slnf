@@ -1,0 +1,18 @@
+{
+  "solution": {
+    "path": "Elsa.Server.slnx",
+    "projects": [
+      "extensions/Agent/src/Anthropic/Elsa.Agent.Anthropic.csproj",
+      "extensions/Agent/src/Api/Elsa.Agent.Api.csproj",
+      "extensions/Agent/src/Core/Elsa.Agent.Core.csproj",
+      "extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj",
+      "extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj",
+      "extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj",
+      "src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj",
+      "src/Elsa/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj",
+      "src/Elsa/Foundation/Identity/Elsa.Foundation.Identity.csproj",
+      "src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj",
+      "tests/Elsa/Testing/Elsa.Testing.csproj"
+    ]
+  }
+}

@@ -93,6 +93,11 @@ Adding a project root to the repository means auditing both lists again.
 
 ## Adding an extension
 
+**Run `Elsa.Architecture.ExtensionBoundary.Tests` before pushing.** It is the guard a module move is
+most likely to trip and the easiest to forget, because the move itself compiles and the other suites
+stay green. Stage 2 pushed without it and CI caught a real boundary question the local run would have.
+
+
 1. Move the projects, keeping each `.csproj` file name unchanged.
 2. Fix the `ProjectReference` paths that pointed at them, and their entries in `Elsa.Server.slnx`.
 3. Add a profile to `tools/solution-filters/profiles.json` so the extension gets a generated filter,

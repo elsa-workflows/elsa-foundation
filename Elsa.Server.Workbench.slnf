@@ -2,6 +2,10 @@
   "solution": {
     "path": "Elsa.Server.slnx",
     "projects": [
+      "extensions/Agent/src/Api/Elsa.Agent.Api.csproj",
+      "extensions/Agent/src/Core/Elsa.Agent.Core.csproj",
+      "extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj",
+      "extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj",
       "src/Apps/Elsa.Workbench/Elsa.Workbench.csproj",
       "src/Elsa/Activities/Bpmn/Elsa.Activities.Bpmn.csproj",
       "src/Elsa/Activities/Bpmn/Interchange/Elsa.Activities.Bpmn.Interchange.csproj",
@@ -23,10 +27,6 @@
       "src/Elsa/Activities/Runtime/Elsa.Activities.Runtime.csproj",
       "src/Elsa/Activities/Scheduling/Elsa.Activities.Scheduling.csproj",
       "src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj",
-      "src/Elsa/Agent/Api/Elsa.Agent.Api.csproj",
-      "src/Elsa/Agent/Core/Elsa.Agent.Core.csproj",
-      "src/Elsa/Agent/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj",
-      "src/Elsa/Agent/Workflows/Elsa.Agent.Workflows.csproj",
       "src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj",
       "src/Elsa/Api/Capabilities/Elsa.Api.Capabilities.csproj",
       "src/Elsa/Attention/Api/Elsa.Attention.Api.csproj",

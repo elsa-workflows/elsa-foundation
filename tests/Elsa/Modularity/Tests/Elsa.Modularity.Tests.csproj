@@ -23,7 +23,7 @@
     <ProjectReference Include="..\..\..\..\src\Elsa\Modularity\Core\Elsa.Modularity.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
     <!-- Not composed by the Workbench; referenced so SecretFeatureSettingTests can pin their secret settings. -->
-    <ProjectReference Include="..\..\..\..\src\Elsa\Agent\Anthropic\Elsa.Agent.Anthropic.csproj" />
+    <ProjectReference Include="..\..\..\..\extensions\Agent\src\Anthropic\Elsa.Agent.Anthropic.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Workflows\Design\Reconciliation\Git\Elsa.Workflows.Design.Reconciliation.Git.csproj" />
   </ItemGroup>
 

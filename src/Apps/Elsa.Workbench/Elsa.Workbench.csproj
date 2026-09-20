@@ -40,10 +40,10 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\..\Elsa\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
-		<ProjectReference Include="..\..\Elsa\Agent\Core\Elsa.Agent.Core.csproj" />
-		<ProjectReference Include="..\..\Elsa\Agent\Api\Elsa.Agent.Api.csproj" />
-		<ProjectReference Include="..\..\Elsa\Agent\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
-		<ProjectReference Include="..\..\Elsa\Agent\Workflows\Elsa.Agent.Workflows.csproj" />
+		<ProjectReference Include="..\..\..\extensions\Agent\src\Core\Elsa.Agent.Core.csproj" />
+		<ProjectReference Include="..\..\..\extensions\Agent\src\Api\Elsa.Agent.Api.csproj" />
+		<ProjectReference Include="..\..\..\extensions\Agent\src\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
+		<ProjectReference Include="..\..\..\extensions\Agent\src\Workflows\Elsa.Agent.Workflows.csproj" />
 		<ProjectReference Include="..\..\Elsa\Attention\Core\Elsa.Attention.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Attention\Api\Elsa.Attention.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />

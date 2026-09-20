@@ -31,11 +31,11 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | ActivitiesSchedulingFeature | direct IShellFeature | Elsa.Activities.Scheduling | IShellFeature | [ActivitiesSchedulingFeature.cs](../../src/Elsa/Activities/Scheduling/ActivitiesSchedulingFeature.cs) |
 | ActivitiesScriptingFeature | direct IShellFeature | Elsa.Activities.Scripting | IShellFeature | [ActivitiesScriptingFeature.cs](../../src/Elsa/Activities/Scripting/ActivitiesScriptingFeature.cs) |
 | ActivitiesSequenceFeature | direct IShellFeature | Elsa.Activities.Sequence | IShellFeature | [ActivitiesSequenceFeature.cs](../../src/Elsa/Activities/Sequence/ActivitiesSequenceFeature.cs) |
-| AnthropicAgentFeature | direct IShellFeature | Elsa.Agent.Anthropic | IShellFeature | [AnthropicAgentFeature.cs](../../src/Elsa/Agent/Anthropic/AnthropicAgentFeature.cs) |
-| FoundationAgentApiFeature | direct IWebShellFeature | Elsa.Agent.Api | IWebShellFeature | [FoundationAgentApiFeature.cs](../../src/Elsa/Agent/Api/FoundationAgentApiFeature.cs) |
-| FoundationAgentAbstractionsFeature | direct IShellFeature | Elsa.Agent.Core | IShellFeature | [FoundationAgentAbstractionsFeature.cs](../../src/Elsa/Agent/Core/FoundationAgentAbstractionsFeature.cs) |
-| GitHubCopilotAgentFeature | direct IShellFeature | Elsa.Agent.GitHubCopilot | IShellFeature | [GitHubCopilotAgentFeature.cs](../../src/Elsa/Agent/GitHubCopilot/GitHubCopilotAgentFeature.cs) |
-| FoundationWorkflowsAgentFeature | direct IShellFeature | Elsa.Agent.Workflows | IShellFeature | [FoundationWorkflowsAgentFeature.cs](../../src/Elsa/Agent/Workflows/FoundationWorkflowsAgentFeature.cs) |
+| AnthropicAgentFeature | direct IShellFeature | Elsa.Agent.Anthropic | IShellFeature | [AnthropicAgentFeature.cs](../../extensions/Agent/src/Anthropic/AnthropicAgentFeature.cs) |
+| FoundationAgentApiFeature | direct IWebShellFeature | Elsa.Agent.Api | IWebShellFeature | [FoundationAgentApiFeature.cs](../../extensions/Agent/src/Api/FoundationAgentApiFeature.cs) |
+| FoundationAgentAbstractionsFeature | direct IShellFeature | Elsa.Agent.Core | IShellFeature | [FoundationAgentAbstractionsFeature.cs](../../extensions/Agent/src/Core/FoundationAgentAbstractionsFeature.cs) |
+| GitHubCopilotAgentFeature | direct IShellFeature | Elsa.Agent.GitHubCopilot | IShellFeature | [GitHubCopilotAgentFeature.cs](../../extensions/Agent/src/GitHubCopilot/GitHubCopilotAgentFeature.cs) |
+| FoundationWorkflowsAgentFeature | direct IShellFeature | Elsa.Agent.Workflows | IShellFeature | [FoundationWorkflowsAgentFeature.cs](../../extensions/Agent/src/Workflows/FoundationWorkflowsAgentFeature.cs) |
 | ApiCapabilitiesFeature | direct IWebShellFeature | Elsa.Api.Capabilities | IWebShellFeature | [ApiCapabilitiesFeature.cs](../../src/Elsa/Api/Capabilities/ApiCapabilitiesFeature.cs) |
 | AttentionApiFeature | direct IWebShellFeature | Elsa.Attention.Api | IWebShellFeature | [AttentionApiFeature.cs](../../src/Elsa/Attention/Api/AttentionApiFeature.cs) |
 | MemoryCacheFeature | direct IShellFeature | Elsa.Caching.Memory | IShellFeature | [MemoryCacheFeature.cs](../../src/Elsa/Caching/Memory/MemoryCacheFeature.cs) |

@@ -223,6 +223,19 @@
       "excludeWhenPackageReferencePrefixes": [
         "Testcontainers."
       ]
+    },
+    {
+      "outputPath": "Elsa.Server.Extensions.Agent.slnf",
+      "includeProjectPathPrefixes": [
+        "extensions/Agent/"
+      ],
+      "requiredRootPaths": [
+        "extensions/Agent/src/Core/Elsa.Agent.Core.csproj",
+        "extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj"
+      ],
+      "excludeWhenPackageReferencePrefixes": [
+        "Testcontainers."
+      ]
     }
   ]
 }
