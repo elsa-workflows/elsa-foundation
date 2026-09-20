@@ -13,8 +13,10 @@ public static class EfModuleCatalog
 
     /// <summary>
     /// Enumerates every <see cref="EfModuleAttribute"/> declared on <paramref name="assemblies"/>, one
-    /// <see cref="EfModuleDescriptor"/> per declaration. Refuses discovery — rather than silently picking
-    /// one — when two declarations share a canonical name case-insensitively, naming both sources.
+    /// <see cref="EfModuleDescriptor"/> per declaration. Refuses discovery — naming the declarations involved —
+    /// on two counts: two of them sharing a canonical name case-insensitively, rather than silently picking one; and a
+    /// <see cref="EfModuleAttribute.HistoryModule"/> that <see cref="EfMigrationsHistory.TableName"/> rejects,
+    /// so a bad declaration fails here rather than as a malformed history table mid-migrate.
     /// </summary>
     public static IReadOnlyList<EfModuleDescriptor> Discover(IEnumerable<Assembly> assemblies)
     {
@@ -40,12 +42,13 @@ public static class EfModuleCatalog
 
     /// <summary>
     /// Finds the descriptor in <paramref name="modules"/> whose <see cref="EfModuleDescriptor.Name"/>
-    /// matches <paramref name="name"/> case-insensitively, or <c>null</c> when none does.
+    /// matches <paramref name="name"/> case-insensitively, or <c>null</c> for a name no module declares. A
+    /// blank <paramref name="name"/> is a caller mistake rather than an unknown module, so it throws.
     /// </summary>
     public static EfModuleDescriptor? Find(IReadOnlyList<EfModuleDescriptor> modules, string name)
     {
         ArgumentNullException.ThrowIfNull(modules);
-        ArgumentNullException.ThrowIfNull(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         return modules.FirstOrDefault(descriptor => NameComparer.Equals(descriptor.Name, name));
     }

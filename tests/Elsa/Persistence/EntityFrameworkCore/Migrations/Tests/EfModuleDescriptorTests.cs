@@ -215,6 +215,19 @@ public sealed class EfModuleDescriptorTests
         Assert.Null(EfModuleCatalog.Find(descriptors, "No.Such.Module"));
     }
 
+    /// <summary>
+    /// A blank name is a malformed request, not the unknown module <see cref="EfModuleCatalog.Find"/> reports
+    /// as <c>null</c>, so it fails fast instead of falling through to "not found".
+    /// </summary>
+    [Fact]
+    public void Find_refuses_a_blank_name_rather_than_reporting_it_as_unknown()
+    {
+        var descriptors = Discover();
+
+        Assert.Throws<ArgumentException>(() => EfModuleCatalog.Find(descriptors, ""));
+        Assert.Throws<ArgumentException>(() => EfModuleCatalog.Find(descriptors, "   "));
+    }
+
     /// <summary>Builds a minimal in-memory assembly carrying one <see cref="EfModuleAttribute"/> declaration.</summary>
     private static Assembly BuildModuleAssembly(string assemblyName, string moduleName, string? historyModule = null)
     {
