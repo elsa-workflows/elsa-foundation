@@ -9,6 +9,8 @@ namespace Elsa.Persistence.EntityFramework;
 /// </summary>
 public static class EfModuleCatalog
 {
+    private static readonly StringComparer NameComparer = StringComparer.OrdinalIgnoreCase;
+
     /// <summary>
     /// Enumerates every <see cref="EfModuleAttribute"/> declared on <paramref name="assemblies"/>, one
     /// <see cref="EfModuleDescriptor"/> per declaration. Refuses discovery — rather than silently picking
@@ -24,7 +26,7 @@ public static class EfModuleCatalog
             .ToArray();
 
         var collision = descriptors
-            .GroupBy(descriptor => descriptor.Name, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(descriptor => descriptor.Name, NameComparer)
             .FirstOrDefault(group => group.Count() > 1);
 
         if (collision is not null)
@@ -36,12 +38,35 @@ public static class EfModuleCatalog
         return descriptors;
     }
 
+    /// <summary>
+    /// Finds the descriptor in <paramref name="modules"/> whose <see cref="EfModuleDescriptor.Name"/>
+    /// matches <paramref name="name"/> case-insensitively, or <c>null</c> when none does.
+    /// </summary>
+    public static EfModuleDescriptor? Find(IReadOnlyList<EfModuleDescriptor> modules, string name)
+    {
+        ArgumentNullException.ThrowIfNull(modules);
+        ArgumentNullException.ThrowIfNull(name);
+
+        return modules.FirstOrDefault(descriptor => NameComparer.Equals(descriptor.Name, name));
+    }
+
     private static EfModuleDescriptor Describe(Assembly assembly, EfModuleAttribute attribute)
     {
         if (string.IsNullOrWhiteSpace(attribute.Name))
             throw new InvalidOperationException($"{assembly.GetName().Name} declares an [EfModule] with no Name.");
         if (string.IsNullOrWhiteSpace(attribute.HistoryModule))
             throw new InvalidOperationException($"{assembly.GetName().Name} declares [EfModule(\"{attribute.Name}\")] with no HistoryModule.");
+
+        try
+        {
+            EfMigrationsHistory.TableName(attribute.HistoryModule);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new InvalidOperationException(
+                $"{assembly.GetName().Name} declares [EfModule(\"{attribute.Name}\")] with an invalid HistoryModule '{attribute.HistoryModule}': {ex.Message}",
+                ex);
+        }
 
         return new EfModuleDescriptor(
             attribute.Name,

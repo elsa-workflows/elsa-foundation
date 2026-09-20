@@ -190,8 +190,33 @@ public sealed class EfModuleDescriptorTests
         Assert.Contains(second.GetName().Name!, failure.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Discover_refuses_a_history_module_TableName_rejects_naming_the_assembly_and_module()
+    {
+        var assembly = BuildModuleAssembly("EfModuleDescriptorTests.BadHistoryModule", "Acme.Widgets", historyModule: "Bad.Name");
+
+        var failure = Assert.Throws<InvalidOperationException>(() => EfModuleCatalog.Discover([assembly]));
+        Assert.Contains(assembly.GetName().Name!, failure.Message, StringComparison.Ordinal);
+        Assert.Contains("Acme.Widgets", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Find_matches_a_first_party_module_name_case_insensitively_and_returns_null_for_an_unknown_name()
+    {
+        var descriptors = Discover();
+
+        var lower = EfModuleCatalog.Find(descriptors, "workflows.runtime");
+        var upper = EfModuleCatalog.Find(descriptors, "WORKFLOWS.RUNTIME");
+
+        Assert.NotNull(lower);
+        Assert.Same(lower, upper);
+        Assert.Equal(typeof(RuntimeDbContext), lower!.ContextType);
+
+        Assert.Null(EfModuleCatalog.Find(descriptors, "No.Such.Module"));
+    }
+
     /// <summary>Builds a minimal in-memory assembly carrying one <see cref="EfModuleAttribute"/> declaration.</summary>
-    private static Assembly BuildModuleAssembly(string assemblyName, string moduleName)
+    private static Assembly BuildModuleAssembly(string assemblyName, string moduleName, string? historyModule = null)
     {
         var builder = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName(assemblyName), AssemblyBuilderAccess.Run);
         var constructor = typeof(EfModuleAttribute).GetConstructor([typeof(string), typeof(Type)])!;
@@ -200,7 +225,7 @@ public sealed class EfModuleDescriptorTests
             constructor,
             [moduleName, typeof(object)],
             [historyModuleProperty],
-            [$"Elsa{moduleName.Replace(".", "", StringComparison.Ordinal)}"]));
+            [historyModule ?? $"Elsa{moduleName.Replace(".", "", StringComparison.Ordinal)}"]));
         return builder;
     }
 }
