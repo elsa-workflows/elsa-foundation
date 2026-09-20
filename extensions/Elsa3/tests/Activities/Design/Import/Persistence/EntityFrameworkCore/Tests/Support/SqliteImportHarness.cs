@@ -1,12 +1,14 @@
-using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework.Tests;
-using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.Support;
 
-/// <summary>A temporary SQLite file holding the import ledger and both Design lanes.</summary>
+/// <summary>
+/// A temporary SQLite file holding the import ledger and both Design lanes. The harness owns that file:
+/// disposing it disposes the database and deletes the file. An <see cref="ImportDatabase"/> opened directly
+/// with <see cref="ImportDatabase.Sqlite"/> owns only its contexts.
+/// </summary>
 internal sealed class SqliteImportHarness : IAsyncDisposable
 {
     private readonly string path;
@@ -15,7 +17,7 @@ internal sealed class SqliteImportHarness : IAsyncDisposable
     {
         this.path = path;
         ConnectionString = ConnectionStringFor(path);
-        Database = For(ConnectionString);
+        Database = ImportDatabase.Sqlite(ConnectionString);
     }
 
     public string ConnectionString { get; }
@@ -30,11 +32,6 @@ internal sealed class SqliteImportHarness : IAsyncDisposable
     }
 
     public static string ConnectionStringFor(string path) => $"Data Source={path}";
-
-    public static ImportDatabase For(string connectionString) => new(
-        interceptors => new Elsa3ImportSqliteDbContext(Options<Elsa3ImportSqliteDbContext>(connectionString, interceptors)),
-        interceptors => new ActivitiesDesignSqliteDbContext(Options<ActivitiesDesignSqliteDbContext>(connectionString, interceptors)),
-        interceptors => new WorkflowsDesignSqliteDbContext(Options<WorkflowsDesignSqliteDbContext>(connectionString, interceptors)));
 
     public static DbContextOptions<TContext> Options<TContext>(string connectionString, params IInterceptor[] interceptors)
         where TContext : DbContext =>

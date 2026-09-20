@@ -65,7 +65,7 @@ public sealed class EfSharedTransactionTests : IAsyncLifetime
     public async Task Split_target_is_refused_before_any_connection_opens()
     {
         var otherPath = Path.Combine(Path.GetTempPath(), $"elsa3-import-ef-unopened-{Guid.NewGuid():N}.db");
-        await using var other = SqliteImportHarness.For(SqliteImportHarness.ConnectionStringFor(otherPath));
+        await using var other = ImportDatabase.Sqlite(SqliteImportHarness.ConnectionStringFor(otherPath));
 
         var exception = await Assert.ThrowsAsync<EfSharedTransactionTargetMismatchException>(() =>
             EfSharedTransaction.BeginAsync([Db.Import(), other.Activities(), Db.Workflows()]));

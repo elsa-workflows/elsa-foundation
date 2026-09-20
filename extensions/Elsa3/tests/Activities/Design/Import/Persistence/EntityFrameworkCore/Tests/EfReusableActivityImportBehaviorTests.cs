@@ -47,7 +47,7 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
 
         Assert.Equal(1, upload.SourceVersionCount);
         Assert.Equal(clock.GetUtcNow().AddHours(1), upload.ExpiresAt);
-        await using var restarted = SqliteImportHarness.For(harness.ConnectionString);
+        await using var restarted = ImportDatabase.Sqlite(harness.ConnectionString);
         var service = restarted.Service(access, clock);
         Assert.Single((await service.AnalyzeAsync(upload.CollectionHandle, 0, 10, Scope)).Items);
         await Assert.ThrowsAsync<ReusableActivityImportNotFoundException>(async () =>
@@ -565,7 +565,7 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
     public async Task Split_database_targets_are_refused_before_any_write()
     {
         var otherPath = Path.Combine(Path.GetTempPath(), $"elsa3-import-ef-split-{Guid.NewGuid():N}.db");
-        var other = SqliteImportHarness.For(SqliteImportHarness.ConnectionStringFor(otherPath));
+        var other = ImportDatabase.Sqlite(SqliteImportHarness.ConnectionStringFor(otherPath));
         try
         {
             await other.CreateSchemaAsync();
@@ -620,7 +620,7 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
             Workflow("consumer", "consumer-v1", 1, false, Reference("consumer-to-a", "a-v1")));
         var applied = await Db.Service(access).ApplyAsync(upload.CollectionHandle, planId, ["a-v1", "consumer-v1"], "durable", Scope);
 
-        await using var restarted = SqliteImportHarness.For(harness.ConnectionString);
+        await using var restarted = ImportDatabase.Sqlite(harness.ConnectionString);
         var service = restarted.Service(access);
         Assert.Equal(applied.ReceiptId, (await service.GetStatusAsync("durable", Scope)).ReceiptId);
         Assert.Equal(ReusableActivityImportReceiptStatus.AlreadyImported,
