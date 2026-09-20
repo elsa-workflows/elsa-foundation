@@ -13,7 +13,8 @@ namespace Elsa.Persistence.EntityFramework.Tests;
 /// a module whose default connection name is not the shared <c>Elsa</c> finds nothing when a stack supplies
 /// only the shared entry, and a feature left on the default Sqlite provider picks up the shared entry even
 /// when it holds another engine's connection string. Both fail at shell activation rather than at review, so
-/// these guards resolve every EF feature of every committed composition through the real resolver.
+/// these guards resolve every EF feature the committed Workbench compositions compose — the two compose
+/// stacks, <c>shells.json</c> and <c>shells.baseline.json</c> — through the real resolver.
 /// </summary>
 /// <remarks>
 /// The catalog these guards resolve against is scanned out of source, so a feature it cannot see would be
@@ -36,7 +37,7 @@ public sealed partial class CommittedCompositionConnectionTests
         return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
     }
 
-    /// <summary>Every first-party source file, read once: four guards below scan the same text.</summary>
+    /// <summary>Every first-party source file, read once: the catalog and three guards below scan the same text.</summary>
     private static IReadOnlyList<SourceFile> Sources { get; } = new[] { "src", "extensions" }
         .Select(root => Path.Join(RepoRoot, root))
         .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
@@ -83,17 +84,16 @@ public sealed partial class CommittedCompositionConnectionTests
     };
 
     // The compose stacks run in Production, where shells.Production.json sits above the composition the stack
-    // mounts and adds features of its own. Resolve the same layering WorkbenchConfigurationTests does, so the
-    // features these guards see are the ones the container composes.
+    // mounts and adds features of its own. WorkbenchConfigurationTests layers the same shell files and
+    // environment; this adds appsettings.json underneath them, because connection resolution reads it and that
+    // class does not care about connections.
     [Theory]
     [InlineData("docker-compose.yml", "docker/compose/elsa-workbench.shells.json")]
     [InlineData("docker-compose.images.yml", "src/Apps/Elsa.Workbench/shells.json")]
     public void Every_ef_feature_a_production_compose_stack_composes_resolves_a_connection(string composeFile, string shellsJson) =>
         AssertEveryEfFeatureResolves(ComposeStack(composeFile, shellsJson), $"{composeFile} over {shellsJson}");
 
-    // The compositions a host runs directly, with no overlay and no environment: today every EF feature in
-    // them is Sqlite with no ConnectionStrings section, which is exactly why a Postgres edit here would slip
-    // past unnoticed without a guard.
+    // The compositions a host runs directly, with no overlay and no environment.
     [Theory]
     [InlineData("src/Apps/Elsa.Workbench/shells.json")]
     [InlineData("src/Apps/Elsa.Workbench/shells.baseline.json")]
@@ -101,6 +101,35 @@ public sealed partial class CommittedCompositionConnectionTests
         AssertEveryEfFeatureResolves(
             WorkbenchConfiguration().AddJsonFile(Path.Join(RepoRoot, shellsJson)).Build(),
             shellsJson);
+
+    /// <summary>
+    /// These two are the Sqlite compositions, and <c>appsettings.json</c> underneath them supplies a Sqlite
+    /// <c>ConnectionStrings:Elsa</c>. Resolution alone therefore cannot fail here: a feature switched to
+    /// PostgreSql would quietly resolve <c>Data Source=elsa.db</c> and only die inside the provider at
+    /// activation. Guard the property the files actually hold instead of inferring it from a resolution that
+    /// no longer throws.
+    /// </summary>
+    [Theory]
+    [InlineData("src/Apps/Elsa.Workbench/shells.json")]
+    [InlineData("src/Apps/Elsa.Workbench/shells.baseline.json")]
+    public void Every_ef_feature_a_committed_shell_composition_composes_selects_sqlite(string shellsJson)
+    {
+        var configuration = WorkbenchConfiguration().AddJsonFile(Path.Join(RepoRoot, shellsJson)).Build();
+        var failures = Features(configuration)
+            .Where(entry => EfFeatures.ContainsKey(entry.Key))
+            .Select(entry => (entry.Key, Provider: string.IsNullOrWhiteSpace(entry["Provider"]) ? EfFeatures[entry.Key] : entry["Provider"]!))
+            .Where(entry => EfRelationalProviderBinding.Normalize(entry.Provider) != "sqlite")
+            .Select(entry => $"  {entry.Key} selects {entry.Provider}.")
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            failures.Length == 0,
+            $"{shellsJson} is a Sqlite composition, and the connection it falls back to is a Sqlite file. " +
+            "A feature that selects another provider here needs a connection of that engine named on it, and a " +
+            "guard that checks the pair — see the compose stacks:" +
+            Environment.NewLine + string.Join(Environment.NewLine, failures));
+    }
 
     /// <summary>
     /// Every guard here filters composition entries through <see cref="EfFeatures"/>, so a feature the scan
@@ -255,31 +284,37 @@ public sealed partial class CommittedCompositionConnectionTests
     private static string? Failure(IServiceProvider services, IConfigurationSection entry)
     {
         var provider = string.IsNullOrWhiteSpace(entry["Provider"]) ? EfFeatures[entry.Key] : entry["Provider"]!;
-        var connectionName = string.IsNullOrWhiteSpace(entry["ConnectionName"]) ? ConnectionNameFor(entry.Key) : entry["ConnectionName"]!;
-        string resolved;
+        var source = string.IsNullOrWhiteSpace(entry["ConnectionString"])
+            ? $"ConnectionStrings:{(string.IsNullOrWhiteSpace(entry["ConnectionName"]) ? ConnectionNameFor(entry.Key) : entry["ConnectionName"]!)}"
+            : "its ConnectionString";
         try
         {
             // The module's own Sqlite file only stands in when nothing is configured, and which file that is
             // cannot change whether the entry resolves, so the shared default stands in for every module here.
-            resolved = EfConnectionDefaults.ResolveConnectionString(
+            var resolved = EfConnectionDefaults.ResolveConnectionString(
                 services,
                 entry.Key,
                 provider,
                 entry["ConnectionString"],
                 entry["ConnectionName"],
                 ConnectionNameFor(entry.Key));
+
+            // Name the keyword Sqlite rejected rather than the connection string itself: these settings are
+            // marked Secret, and a committed demo password has no business being echoed into a CI log.
+            // Select is what a module itself calls, so an unknown provider is refused here exactly as it would
+            // be at activation, rather than quietly failing the "is it Sqlite" comparison Normalize would allow.
+            return EfRelationalProviderBinding.Select(provider, entry.Key, true, false, false, false) && SqliteRefusal(resolved) is { } refusal
+                ? $"  {entry.Key}: selects the Sqlite provider, but {source} is not a Sqlite connection — {refusal} " +
+                  "Name the provider that connection belongs to, or point the feature at a connection of its own."
+                : null;
         }
-        catch (Exception exception)
+        // The two a composition can provoke: the resolver refuses a connection it cannot find, and Select
+        // refuses a provider name it does not know. Anything else is a defect in this test or in the code it
+        // calls, and is left to surface as itself rather than be reported as a bad composition.
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
         {
             return $"  {entry.Key}: {exception.Message}";
         }
-
-        // Name the keyword Sqlite rejected rather than the connection string itself: these settings are marked
-        // Secret, and a committed demo password has no business being echoed into a CI log.
-        return EfRelationalProviderBinding.Normalize(provider) == "sqlite" && SqliteRefusal(resolved) is { } refusal
-            ? $"  {entry.Key}: selects the Sqlite provider, but ConnectionStrings:{connectionName} is not a Sqlite connection — {refusal} " +
-              "Name the provider that connection belongs to, or point the feature at a connection of its own."
-            : null;
     }
 
     private static string? SqliteRefusal(string connectionString)
@@ -318,7 +353,7 @@ public sealed partial class CommittedCompositionConnectionTests
 
     // The initialiser is optional: a feature may declare `public string? Provider { get; set; }` and read the
     // unset value as Sqlite at its own call site.
-    [GeneratedRegex("""public\s+string\??\s+Provider\s*\{\s*get;\s*set;\s*\}\s*(?:=\s*"(?<provider>[^"]+)"\s*;)?""")]
+    [GeneratedRegex("""public\s+string\??\s+Provider\s*\{\s*get;\s*set;\s*\}\s*(?:=\s*"(?<provider>[^"]+)"\s*;|(?!\s*=))""")]
     private static partial Regex ProviderSetting();
 
     [GeneratedRegex("""const\s+string\s+DefaultConnectionName\s*=\s*"(?<name>[^"]+)"\s*;""")]

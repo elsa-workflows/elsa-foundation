@@ -276,7 +276,7 @@ docker compose logs -f elsa-workbench        # or: postgres, elsa-studio
 ```
 
 **Override the Postgres connection string** without editing the mounted `shells.json` — set the env
-var on the `elsa-workbench` service (there is a commented-out example in `docker-compose.yml`):
+var on the `elsa-workbench` service (`docker-compose.yml` sets it):
 
 ```
 ConnectionStrings__Elsa=Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa

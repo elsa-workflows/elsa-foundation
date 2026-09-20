@@ -18,7 +18,7 @@ public class EfOpenTelemetryFeature : IShellFeature
 {
     [ManifestSetting(DisplayName = "Provider", Description = "Relational provider: Sqlite, SqlServer, PostgreSql, or MySql.", Category = "Persistence")]
     public string Provider { get; set; } = "Sqlite";
-    [ManifestSetting(DisplayName = "Connection string", Description = "Optional explicit connection string. When omitted, ConnectionName or ConnectionStrings:ElsaOpenTelemetry is used — this module does not fall back to the shared Elsa connection every other module defaults to, so a host that keeps telemetry in the shared database sets ConnectionName to Elsa. Sqlite defaults to Data Source=elsa-opentelemetry.db.", Category = "Persistence", Secret = true)]
+    [ManifestSetting(DisplayName = "Connection string", Description = "Optional explicit connection string. When omitted, ConnectionName or ConnectionStrings:ElsaOpenTelemetry is used — this module does not fall back to the shared Elsa connection most modules default to, so a host that keeps telemetry in the shared database sets ConnectionName to Elsa. Sqlite defaults to Data Source=elsa-opentelemetry.db.", Category = "Persistence", Secret = true)]
     public string? ConnectionString { get; set; }
     [ManifestSetting(DisplayName = "Connection name", Description = "Named connection under ConnectionStrings when ConnectionString is omitted. Defaults to ElsaOpenTelemetry rather than the shared Elsa.", Category = "Persistence")]
     public string? ConnectionName { get; set; }
