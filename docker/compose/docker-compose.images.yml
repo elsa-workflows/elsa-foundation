@@ -28,6 +28,10 @@ services:
     image: elsaworkflows/elsa-workbench:latest
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      # Demo stacks have no migration step, so the host applies migrations on shell activation. The image's
+      # appsettings.Production.json validates instead, for deployments that apply them from CI/CD with
+      # tools/ef/module-migrate.sh and tools/ef/dual-migrate.sh before the host starts.
+      Elsa__Persistence__EntityFramework__Migrate__Policy: AutoMigrate
       # Elsa host management key accepted on the server's module-management API.
       # Server-side only. MUST match Studio's Studio__BackendModuleManagementApiKey.
       Elsa__ModuleManagement__ApiKey: elsa-docker-demo-key

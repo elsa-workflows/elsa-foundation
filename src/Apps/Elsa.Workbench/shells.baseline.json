@@ -37,7 +37,9 @@
           },
           "WorkflowsPublishing": {},
           "WorkflowsPublishingApi": {},
-          "WorkflowsPublishingEntityFrameworkCore": {},
+          "WorkflowsPublishingEntityFrameworkCore": {
+            "Provider": "PostgreSql"
+          },
           "WorkflowsRuntimeApi": {
             "WorkflowAlterationPayloadProtectionActiveKeyId": "development-demo-only",
             "WorkflowAlterationPayloadProtectionKeys": {
@@ -51,16 +53,25 @@
           },
           "WorkflowsRuntimeTriggers": {},
           "WorkflowsRuntimeEntityFrameworkCore": {
+            "Provider": "PostgreSql",
             "CacheWorkflowExecutables": true,
             "WorkflowExecutableCacheCapacity": 256,
             "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key",
             "HierarchyCursorSigningKey": "development-demo-only-hierarchy-cursor-signing-key"
           },
-          "ActivitiesDesignEntityFrameworkCore": {},
-          "WorkflowsDesignEntityFrameworkCore": {},
+          "ActivitiesDesignEntityFrameworkCore": {
+            "Provider": "PostgreSql"
+          },
+          "WorkflowsDesignEntityFrameworkCore": {
+            "Provider": "PostgreSql"
+          },
           "WorkflowsRuntimeDistributed": {},
-          "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence": {},
-          "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence": {
+            "Provider": "PostgreSql"
+          },
+          "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence": {
+            "Provider": "PostgreSql"
+          },
           "WorkflowsDashboardEntityFrameworkCore": {},
           "FoundationAgentAbstractions": {},
           "FoundationAgentApi": {},
