@@ -41,25 +41,27 @@ None of the three is reopened.
 
 ## Context
 
-Inventory snapshot: `main` at `f042a387bf611c3e1d68afc7d67157b69091ca48`.
+Inventory snapshot: `main` at `43d88cef44844e9f0153f222656189bc929abeb1`.
 
 **`tools/ef/module-migrate.sh script` already does most of the mechanical work, for a source
 checkout.** It enumerates every module context from the shared design-time tooling project, builds it
 once, and for each context runs `dotnet ef migrations script --idempotent`
-(`module-migrate.sh:115`) into `<output-dir>/<Module>/<Provider>.sql`. `script Sqlite` is refused
+(`module-migrate.sh:120`) into `<output-dir>/<Module>/<Provider>.sql`. `script Sqlite` is refused
 with exit code 2, because `SqliteHistoryRepository.GetEndIfScript` throws `NotSupportedException`
-(`module-migrate.sh:46-54`; `tools/ef/README.md:69-74`). `script-check` regenerates into a temporary
+(`module-migrate.sh:51-59`; `tools/ef/README.md:69-74`). `script-check` regenerates into a temporary
 directory and diffs it against the committed tree. None of this reaches a host built from packages:
-`apply` and `validate` take the connection string as positional argument 3
-(`module-migrate.sh:41`), so it is not true today that "credentials never appear in process
-arguments"; module resolution is `project="$(find src -name "$assembly.csproj" ...)"`
-(`module-migrate.sh:91`), which only searches `src`, so the `Elsa3ImportMySqlDbContext` and its three
-sibling contexts, now under `extensions/Elsa3/src` after the split in this HEAD commit, resolve no
-project at all; and the whole approach depends on `dotnet ef` against a **source** project and a
-**compile-time** design-time factory (`tools/ef/Elsa.EntityFrameworkCore.Tooling/ModuleDesignTimeFactories.cs`,
-49 factory lines, one per provider-derived context across 13 modules). A host assembled from Nuplane
-packages has neither a source checkout nor a startup project that references every module by
-`ProjectReference`.
+`apply` and `validate` still take the connection string as positional argument 3
+(`module-migrate.sh:46`), so it is not true today that "credentials never appear in process
+arguments." Module resolution used to search `src` alone, which left the `Elsa3ImportMySqlDbContext`
+and its three sibling contexts — now under `extensions/Elsa3/src` since [PR
+#1850](https://github.com/elsa-workflows/elsa-foundation/pull/1850) moved them — unable to resolve a
+project; [PR #1867](https://github.com/elsa-workflows/elsa-foundation/pull/1867) fixed that by
+resolving `module_roots=(src)` plus `extensions` when present (`module-migrate.sh:31-35,96`). What
+#1867 does not fix is the deeper limitation: the whole approach
+still depends on `dotnet ef` against a **source** project and a **compile-time** design-time factory
+(`tools/ef/Elsa.EntityFrameworkCore.Tooling/ModuleDesignTimeFactories.cs`, 49 factory lines, one per
+provider-derived context across 13 modules). A host assembled from Nuplane packages has neither a
+source checkout nor a startup project that references every module by `ProjectReference`.
 
 **`Elsa.Foundation.Host` is the host this tool has to serve, and it carries no EF at all.** Its
 `.csproj` references `CShells.AspNetCore`, `CShells.FastEndpoints`, `Nuplane`, `Nuplane.Loading`,
@@ -83,7 +85,7 @@ actually enables or disables the module (`SecretsEntityFrameworkCoreFeature.cs:1
 module name from the provider-suffixed `DbContext` class name independently — which is not a merely
 theoretical divergence: the test's own `ModuleContextCatalog.HistoryTable` derives
 `__EFMigrationsHistory_Runtime` by trimming the provider and `DbContext` suffix off the class name
-(`ModuleContextCatalog.cs:77-78`), while every real host uses `__EFMigrationsHistory_ElsaRuntime`
+(`ModuleContextCatalog.cs:91-92`), while every real host uses `__EFMigrationsHistory_ElsaRuntime`
 (`RuntimeEfModule.cs:11,19`). Nothing today would catch a module whose four identities quietly
 disagreed like this one already does.
 
@@ -167,7 +169,7 @@ scan finds nothing to flag for either project, and neither needs an admission re
 `AllowedEfConsumers` — which licenses *hosts* to carry EF, provider engines included
 (`EfCoreDependencyGuardTests.cs:20-38`), not how a module project is admitted. `EfToolingHost` itself
 lives inside `Elsa.Persistence.EntityFramework`, a project the guard already admits through the
-`Adr0072SecretsEfPilot` record (`EfCoreDependencyGuardTests.cs:716,729`); that record's expected
+`Adr0072SecretsEfPilot` record (`EfCoreDependencyGuardTests.cs:718,731`); that record's expected
 package set for the project — EF Core, Abstractions, Analyzers, and Relational only — does not need
 to grow, because the entry point needs only `IMigrator`, `IMigrationsAssembly`, and
 `IHistoryRepository`, all in `Microsoft.EntityFrameworkCore.Relational`, no `Design` package and no
@@ -229,7 +231,7 @@ unique across the host's closure. Every module's frozen `HistoryModuleName` (for
 operator selects, not what a database records.
 
 Reason: the only selector `module-migrate.sh` offers today is a regex over context class names
-(`filter="${4:-.*}"`, `module-migrate.sh:41-42`), which requires reading .NET type names to use the
+(`filter="${4:-.*}"`, `module-migrate.sh:46-47`), which requires reading .NET type names to use the
 tool at all, and which a package consumer cannot supply because it has no source tree to read those
 names from. The 13 names come from the D2 descriptors, not from class, feature, or package names, so
 renaming a context or repackaging a module later does not change what an operator types.
@@ -270,7 +272,7 @@ a script that is not safe to re-run.
 
 Reason: `SqliteHistoryRepository.GetEndIfScript` throws `NotSupportedException`, because SQLite has no
 conditional statement to wrap a migration in, so EF itself cannot produce an idempotent SQLite script
-(`module-migrate.sh:46-49`; `tools/ef/README.md:69-74`). Dropping `dotnet-ef` (D11) does not lift this
+(`module-migrate.sh:51-54`; `tools/ef/README.md:69-74`). Dropping `dotnet-ef` (D11) does not lift this
 constraint: `IMigrator.GenerateScript` with `MigrationsSqlGenerationOptions.Idempotent` goes through
 that same `SqliteHistoryRepository`, so the new tool hits the identical `NotSupportedException`
 however it drives EF. A plain script would sit in the same `NN-<slug>.sql` tree looking identical to
@@ -298,7 +300,7 @@ once one is added. Determinism matters because `script-check`'s existing analogu
 byte-for-byte comparison only works when nothing incidental — a path, a timestamp, a key order —
 changes between two runs that changed nothing real.
 
-Rejected: keeping the existing `<Module>/<Provider>.sql` tree (`module-migrate.sh:112-113`) and
+Rejected: keeping the existing `<Module>/<Provider>.sql` tree (`module-migrate.sh:117-118`) and
 ordering by argument order. A per-module subdirectory hides deployment order from a plain directory
 listing, and ordering by argument order would let two invocations of the same `--modules` set produce
 artifacts that differ only in file names — defeating `script-check`'s byte comparison.
@@ -310,7 +312,7 @@ give `apply` and `validate` a connection string. `--connection` does not exist.
 
 Reason: the issue requires that credentials stay out of process arguments, and today's tool does not
 meet that bar: `module-migrate.sh apply` and `validate` take the connection string as positional
-argument 3 (`module-migrate.sh:41`), so it lands in process arguments and shell history. The new front
+argument 3 (`module-migrate.sh:46`), so it lands in process arguments and shell history. The new front
 end passes only the environment variable's NAME to the worker process; the value itself travels by
 ordinary environment inheritance, and the worker's own request arrives as JSON on stdin, so nothing
 sensitive appears in any process's argv. The design-time factories already read `ELSA_EF_CONNECTION`
@@ -506,18 +508,21 @@ Costs and risks:
 - The proposed `Elsa.Modularity.EntityFramework` adapter needs a new admission record of its own in
   `EfCoreDependencyGuardTests` — a `SurfacePathPrefixes` entry plus an `ExpectedEfPackagesByProject`
   set restricted to EF Core and Relational, no provider engine — the same shape as the existing
-  `Adr0072SecretsEfPilot` and `Adr0073*` records (`EfCoreDependencyGuardTests.cs:673-688,716-786`). It
+  `Adr0072SecretsEfPilot` and `Adr0073*` records (`EfCoreDependencyGuardTests.cs:675-690,718-788`). It
   must not be added to `AllowedEfConsumers` (`EfCoreDependencyGuardTests.cs:20`), which licenses
   *hosts* to carry EF including every provider engine (`:21-38`) and would wrongly license the adapter
   to do the same. `dotnet-elsa` and its worker resolve no EF package at all, so neither needs a record
   or an allowlist entry. `Elsa.Persistence.EntityFramework`, which hosts `EfToolingHost`, is already
-  admitted by `Adr0072SecretsEfPilot` (`:716,729`); its expected package set for that project — EF
+  admitted by `Adr0072SecretsEfPilot` (`:718,731`); its expected package set for that project — EF
   Core, Abstractions, Analyzers, and Relational only — must not grow, because the entry point needs
   only `IMigrator`, `IMigrationsAssembly`, and `IHistoryRepository`, all in
-  `Microsoft.EntityFrameworkCore.Relational`, no `Design` package and no engine. This guard's project
-  scan already covers `src/**/*.csproj` (`:518-521`), where the new adapter lives; [PR
-  #1850](https://github.com/elsa-workflows/elsa-foundation/pull/1850) widened a different set of
-  architecture guards' scan roots to `extensions/` and is unrelated to this admission mechanism.
+  `Microsoft.EntityFrameworkCore.Relational`, no `Design` package and no engine. [PR
+  #1867](https://github.com/elsa-workflows/elsa-foundation/pull/1867) widened this guard's own project
+  scan from `LoadSrcProjects()` over `src/**/*.csproj` to `LoadModuleProjects()` over
+  `ModuleRoots.Resolve(RepoRoot, ModuleRoots.Production)` — `src` and `extensions`
+  (`EfCoreDependencyGuardTests.cs:518,521-523`; `ModuleRoots.Production` at
+  `tests/Elsa/Architecture/Support/ModuleRoots.cs:19`) — but the proposed adapter lives under `src/`
+  regardless, so it was already inside the scan before that widening and stays inside it after.
 - U1–U4 depend on a Nuplane release ahead of the pinned `0.0.9-preview.61`, and on an Elsa pin bump
   after that release ships; the Nuplane checkout this ADR verifies facts against is ten commits past
   a tag Elsa does not yet consume, so every dependent Elsa slice is blocked until that release and

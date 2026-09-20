@@ -209,3 +209,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [168-fastendpoints-retirement](../../specs/168-fastendpoints-retirement/spec.md) | Final FastEndpoints Retirement | Draft | - | 30 | 27 | retained |
 | [169-outbox-delivery-contention](../../specs/169-outbox-delivery-contention/spec.md) | Tolerate Concurrent Post-Commit Outbox Delivery Contention | Draft | - | 34 | 4 | superseded, out of scope |
 | [170-ef-payload-compression](../../specs/170-ef-payload-compression/spec.md) | Opt-in Compression for Large EF Payload Columns | In progress — accepted by the owner 2026-09-19; decoder unit implemented, encoder not yet reachable from configuration | - | 0 | 0 | deferred, out of scope |
+| [171-persistence-script-cli](../../specs/171-persistence-script-cli/spec.md) | `dotnet elsa persistence` — Package-Aware Migration SQL for Selected EF Modules | Draft | - | 0 | 0 | deferred, out of scope |
