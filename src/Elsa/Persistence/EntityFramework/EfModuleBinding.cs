@@ -19,14 +19,15 @@ public sealed record EfModuleBinding(
     public T Select<T>(string provider, T sqlite, T sqlServer, T postgreSql, T mySql) =>
         EfRelationalProviderBinding.Select(provider, Owner, sqlite, sqlServer, postgreSql, mySql);
 
-    /// <summary>Binds the named provider to the connection and schema resolved for this module.</summary>
+    /// <summary>Binds the named provider to the connection, schema and payload encoding resolved for this module.</summary>
     public void Apply(
         DbContextOptionsBuilder builder,
         IServiceProvider services,
         string provider,
         string? connectionString,
         string? connectionName,
-        string? schema = null) =>
+        string? schema = null)
+    {
         EfRelationalProviderBinding.Use(
             builder,
             provider,
@@ -41,6 +42,11 @@ public sealed record EfModuleBinding(
             HistoryTableName,
             MigrationsAssembly,
             EfSchema.Resolve(services, Owner, provider, schema));
+        // Null means plaintext with the default threshold, and binding nothing then keeps a host that configures
+        // nothing byte-identical to what it was: no extension, so no second model to cache.
+        if (EfPayloadCompressionSettings.Resolve(services, Owner) is { } compression)
+            builder.UseElsaPayloadCompression(compression);
+    }
 
     /// <summary>
     /// Registers one module's provider-derived context, pooled or not.
