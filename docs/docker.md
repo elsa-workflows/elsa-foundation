@@ -112,7 +112,7 @@ can override it. Standard .NET double-underscore (`__`) env keys override any co
 | `CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey` | HMAC key for durable recovery continuations: at least 32 UTF-8 bytes, identical on every node. Required whenever durable runtime persistence is composed; without it the default shell fails activation. | `elsa-docker-demo-recovery-continuation-key` |
 | `CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword` | Password for the `admin` account that `shells.Production.json` seeds. The overlay blanks it, and a seed username without a password fails default shell activation (`/health/ready` returns `503 shell_activation_failed`). | `Password123!` |
 | `CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey` | Base64 PKCS#8 RSA private key that signs access tokens; whitespace in the value is ignored. The overlay turns off OpenIddict development mode, so without a usable key the default shell fails activation (`/health/ready` returns `503 shell_activation_failed`). See [identity configuration](reference/identity-configuration.md#foundationidentityopeniddict). | a demo key committed in the compose files |
-| `ConnectionStrings__Elsa` | The one relational connection every EF module falls back to. Overrides the mounted `shells.json` without editing it. | *(commented out)* |
+| `ConnectionStrings__Elsa` | The relational connection every EF module falls back to **except** OpenTelemetry and the Elsa 3 import lane, which look for `ConnectionStrings__ElsaOpenTelemetry` and `ConnectionStrings__ElsaElsa3Import` unless the feature names a connection — see [Demo persistence composition](#demo-persistence-composition). Overrides `appsettings.json` and the mounted `shells.json` without editing either. | `Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa` |
 | `Elsa__Persistence__EntityFramework__Schema` | Optional database schema for every EF module's tables and history tables, for a deployment that shares a database with an application owning the default schema. Applied on SQL Server and PostgreSQL, ignored on SQLite, **refused on MySQL** — see below. | *(unset: the provider's own default)* |
 
 `Cors:AllowedOrigins` defaults (in `appsettings.json`) are localhost dev values for running the
@@ -134,7 +134,29 @@ server outside Docker; the compose file adds the Studio container origin.
 
 - Each EF module sets `"Provider": "PostgreSql"` and falls back to the one `ConnectionStrings:Elsa`
   connection, which `docker-compose.yml` supplies as `ConnectionStrings__Elsa`. A module can override
-  its own connection with a top-level `ConnectionString` property on its feature section.
+  its own connection with a top-level `ConnectionString` property on its feature section — but two
+  features share one context and must be changed together: `IdentityIamEntityFrameworkCore` and
+  `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore` both bind `IdentityIamDbContext`, and
+  registering them with different provider, connection, schema or pooling settings fails activation with
+  *"Identity IAM EF persistence is already registered with different options"*.
+
+  Two modules do **not** fall back to `ConnectionStrings:Elsa`: OpenTelemetry looks for
+  `ConnectionStrings:ElsaOpenTelemetry` and the Elsa 3 import lane for `ConnectionStrings:ElsaElsa3Import`.
+  A composition that supplies only the shared connection therefore has to say which connection those
+  modules use — the demo composition gives `DiagnosticsOpenTelemetryEntityFrameworkCore` a
+  `"ConnectionName": "Elsa"` — or the shell fails activation with *"EF requires ConnectionString or
+  ConnectionName, or ConnectionStrings:ElsaOpenTelemetry, for a non-Sqlite provider"*.
+
+- A feature the image's `shells.Production.json` composes, rather than the mounted `shells.json`, gets no
+  provider from that overlay and so keeps the `Sqlite` default every EF feature class declares — while
+  still resolving `ConnectionStrings:Elsa`, which here holds a PostgreSQL connection string that SQLite
+  cannot open. The three EF identity stores the overlay adds are therefore also listed in the demo
+  composition, purely to set `"Provider": "PostgreSql"` on them.
+
+  `CommittedCompositionConnectionTests` resolves the EF features of every committed composition through
+  the real resolver, so both of these fail in CI rather than at `docker compose up`. A feature it cannot
+  see would be skipped rather than checked, so it also fails when a composed `*EntityFrameworkCore*` entry
+  is missing from the catalog it scans out of source.
 
 - The stack leaves `Elsa__Persistence__EntityFramework__Schema` unset, so Elsa's tables land in the
   provider's default schema (`public` on PostgreSQL). Setting it puts every module's tables, and every

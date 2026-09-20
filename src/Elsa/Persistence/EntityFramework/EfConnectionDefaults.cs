@@ -4,8 +4,11 @@ namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
 /// Where a first-party EF module connects when a host names neither a connection string nor a connection
-/// name. Every module shares one connection by default, so a host configures <c>ConnectionStrings:Elsa</c>
-/// once and overrides a module only when it deliberately splits storage.
+/// name. Almost every module shares one connection by default, so a host configures
+/// <c>ConnectionStrings:Elsa</c> once and overrides a module only when it deliberately splits storage. Two
+/// modules pass a <c>defaultConnectionName</c> of their own instead — OpenTelemetry and the Elsa 3 import
+/// lane — so a host that wants them in the shared database names <c>Elsa</c> on those features rather than
+/// relying on this fallback.
 /// </summary>
 public static class EfConnectionDefaults
 {

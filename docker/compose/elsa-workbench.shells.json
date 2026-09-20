@@ -1,9 +1,9 @@
 {
   "//": "Curated DEMO shell composition for the docker-compose reference stack.",
   "//_purpose": "Mounted into the Elsa.Workbench container at /app/shells.json. It replaces the repo default (SQLite) composition with the EF Core persistence features bound to PostgreSQL. The repo default src/Apps/Elsa.Workbench/shells.json remains the local SQLite composition.",
-  "//_persistence": "Every EF module feature selects Provider=PostgreSql and resolves its connection from ConnectionStrings:Elsa, which docker-compose.yml supplies as ConnectionStrings__Elsa. Each module owns its own migrations and history table and applies them when the shell activates. A host that wants a module on its own database sets ConnectionString on that feature.",
+  "//_persistence": "Every EF module feature selects Provider=PostgreSql and resolves its connection from ConnectionStrings:Elsa, which docker-compose.yml supplies as ConnectionStrings__Elsa. Each module owns its own migrations and history table and applies them when the shell activates. A host that wants a module on its own database sets ConnectionString on that feature, except that IdentityIamEntityFrameworkCore and FoundationIdentityAspNetCoreIdentityEntityFrameworkCore bind one shared context and must carry identical provider, connection, schema and pooling settings or activation fails. Two things must be spelled out rather than left to a default, and CommittedCompositionConnectionTests fails when they are not: DiagnosticsOpenTelemetryEntityFrameworkCore is the one module enabled here that does not fall back to ConnectionStrings:Elsa (its own default name is ElsaOpenTelemetry; the Elsa 3 import lane is the other such module in the repo, and this composition does not enable it), so it names ConnectionName=Elsa; and a feature that shells.Production.json adds is only listed there, so it keeps the Sqlite provider every feature class defaults to and would take the Postgres connection string to Sqlite. Every such feature therefore also appears here with its provider.",
   "//_recoverykey": "WorkflowsRuntimeEntityFrameworkCore.RecoveryContinuationSigningKey and HierarchyCursorSigningKey are deliberately absent here. The compose stack runs in Production, where the image's shells.Production.json blanks any value in this file, so docker-compose.yml supplies them as env vars CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey and __HierarchyCursorSigningKey. The default shell refuses to activate without them.",
-  "//_identity": "First-party sign-in mirrors the repo default composition: the identity API and the ASP.NET Core Identity login provider are composed here, while shells.Production.json adds the EF identity stores, the admin seed and OpenIddict token issuance. The seed password and the token signing key are secrets that overlay blanks or requires, so docker-compose.yml supplies them as environment variables.",
+  "//_identity": "First-party sign-in mirrors the repo default composition: the identity API and the ASP.NET Core Identity login provider are composed here, while shells.Production.json supplies the admin seed and OpenIddict token issuance. The three EF identity stores the overlay composes are listed here too, purely to put them on Postgres with the rest of the stack; the overlay adds no provider, and a feature it alone lists would run on Sqlite against ConnectionStrings:Elsa. The seed password and the token signing key are secrets that overlay blanks or requires, so docker-compose.yml supplies them as environment variables.",
   "//_connectionstring": "docker-compose.yml points ConnectionStrings__Elsa at the compose 'postgres' service with demo-only credentials. Override it there rather than editing this file.",
   "CShells": {
     "Shells": {
@@ -27,7 +27,8 @@
           "DiagnosticsOpenTelemetry": {},
           "DiagnosticsOpenTelemetryEngineBridge": {},
           "DiagnosticsOpenTelemetryEntityFrameworkCore": {
-            "Provider": "PostgreSql"
+            "Provider": "PostgreSql",
+            "ConnectionName": "Elsa"
           },
           "DiagnosticsStructuredLogsEntityFrameworkCore": {
             "Provider": "PostgreSql"
@@ -45,6 +46,15 @@
             "AllowedReturnUrlOrigins": [
               "http://localhost:14000"
             ]
+          },
+          "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
+            "Provider": "PostgreSql"
+          },
+          "IdentityIamEntityFrameworkCore": {
+            "Provider": "PostgreSql"
+          },
+          "IdentityProviderConfigurationEntityFrameworkCore": {
+            "Provider": "PostgreSql"
           },
           "FoundationIdentityOidc": {
             "IsDefault": false

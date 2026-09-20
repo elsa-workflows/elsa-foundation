@@ -80,9 +80,4 @@ public sealed class EfConnectionDefaultsTests
             .AddInMemoryCollection(connections.Select(connection =>
                 new KeyValuePair<string, string?>($"ConnectionStrings:{connection.Name}", connection.Value)))
             .Build());
-
-    private sealed class ConfigurationServices(IConfiguration? configuration) : IServiceProvider
-    {
-        public object? GetService(Type serviceType) => serviceType == typeof(IConfiguration) ? configuration : null;
-    }
 }

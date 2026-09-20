@@ -9,6 +9,10 @@
     <PackageReference Include="CShells" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <!-- CommittedCompositionConnectionTests resolves the committed compositions the way a host does: the
+         shells.json layers through the JSON provider, and the compose environment through YamlDotNet. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+    <PackageReference Include="YamlDotNet" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
