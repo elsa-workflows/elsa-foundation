@@ -77,6 +77,7 @@
       "src/Elsa/Mediator/Elsa.Mediator.csproj",
       "src/Elsa/Modularity/Api/Elsa.Modularity.Api.csproj",
       "src/Elsa/Modularity/Core/Elsa.Modularity.Core.csproj",
+      "src/Elsa/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj",
       "src/Elsa/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj",
       "src/Elsa/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
       "src/Elsa/Pipelines/Core/Elsa.Pipelines.Core.csproj",
