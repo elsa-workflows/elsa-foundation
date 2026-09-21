@@ -67,6 +67,12 @@ internal static class Report
             case WorkerCommands.Script:
                 WriteScript(output, tooling.GetProperty("script"));
                 break;
+            case WorkerCommands.Apply:
+                WriteApply(output, tooling.GetProperty("apply"));
+                break;
+            case WorkerCommands.Validate:
+                WriteValidate(output, tooling.GetProperty("validate"));
+                break;
         }
 
         return response.ExitCode;
@@ -122,6 +128,41 @@ internal static class Report
         foreach (var file in script.GetProperty("files").EnumerateArray())
             output.WriteLine($"{Text(file, "file")}  {Text(file, "sha256")}  {Text(file, "module")}");
         output.WriteLine($"{Text(script, "manifest")}  {Text(script, "manifestSha256")}");
+    }
+
+    private static void WriteApply(TextWriter output, JsonElement apply)
+    {
+        var rows = apply.GetProperty("modules").EnumerateArray()
+            .Select(module => new[]
+            {
+                module.GetProperty("order").GetInt32().ToString("D2", System.Globalization.CultureInfo.InvariantCulture),
+                Text(module, "module"),
+                Text(module, "context"),
+                Text(module, "historyTable"),
+                $"{module.GetProperty("applied").GetArrayLength()}"
+            })
+            .ToArray();
+
+        output.WriteLine($"provider: {Text(apply, "provider")}   schema: {Text(apply, "schema", "(none)")}");
+        WriteTable(output, ["#", "MODULE", "CONTEXT", "HISTORY TABLE", "APPLIED"], rows);
+    }
+
+    private static void WriteValidate(TextWriter output, JsonElement validate)
+    {
+        var rows = validate.GetProperty("modules").EnumerateArray()
+            .Select(module => new[]
+            {
+                module.GetProperty("order").GetInt32().ToString("D2", System.Globalization.CultureInfo.InvariantCulture),
+                Text(module, "module"),
+                Text(module, "context"),
+                Text(module, "historyTable")
+            })
+            .ToArray();
+
+        output.WriteLine($"provider: {Text(validate, "provider")}   schema: {Text(validate, "schema", "(none)")}");
+        WriteTable(output, ["#", "MODULE", "CONTEXT", "HISTORY TABLE"], rows);
+        output.WriteLine();
+        output.WriteLine("No pending migrations.");
     }
 
     private static void WriteTable(TextWriter output, string[] headers, IReadOnlyList<string[]> rows)

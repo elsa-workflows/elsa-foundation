@@ -59,6 +59,30 @@ internal static class DotnetElsa
         return new(process.ExitCode, output.Result, error.Result);
     }
 
+    /// <summary>Runs the tool with <paramref name="stdin"/> written to and closed on its own stdin, for <c>--connection-stdin</c>.</summary>
+    public static async Task<CliRun> RunWithStdinAsync(string stdin, params string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo(DotnetMuxer.Path())
+        {
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        startInfo.ArgumentList.Add("exec");
+        startInfo.ArgumentList.Add(ToolAssembly);
+        foreach (var argument in arguments)
+            startInfo.ArgumentList.Add(argument);
+
+        using var process = Process.Start(startInfo)!;
+        await process.StandardInput.WriteAsync(stdin);
+        process.StandardInput.Close();
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        return new(process.ExitCode, await output, await error);
+    }
+
     private static string FindRepoRoot()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)

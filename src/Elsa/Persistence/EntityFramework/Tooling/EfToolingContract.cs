@@ -16,8 +16,8 @@ public static class EfToolingContract
 
     /// <summary>
     /// Case-sensitive camelCase, and an unmapped property is an error: a worker that sends a field this
-    /// build does not know — <c>connection</c>, say, from a later slice — must be told, not quietly given
-    /// an answer to a different question.
+    /// build does not know — a future slice's, say — must be told, not quietly given an answer to a
+    /// different question.
     /// </summary>
     internal static readonly JsonSerializerOptions Json = new()
     {
@@ -33,8 +33,10 @@ public static class EfToolingCommands
     public const string List = "list";
     public const string Plan = "plan";
     public const string Script = "script";
+    public const string Apply = "apply";
+    public const string Validate = "validate";
 
-    public static readonly string[] All = [List, Plan, Script];
+    public static readonly string[] All = [List, Plan, Script, Apply, Validate];
 }
 
 /// <summary>
@@ -91,6 +93,14 @@ public sealed class EfToolingRequest
 
     /// <summary>One entry per module assembly in the selection. Required for <c>script</c>, refused otherwise.</summary>
     public IReadOnlyList<EfToolingPackageFacts>? Packages { get; init; }
+
+    /// <summary>
+    /// The connection string <c>apply</c> and <c>validate</c> run against. Required for those two commands,
+    /// refused otherwise — <c>list</c>, <c>plan</c> and <c>script</c> never open a database (D7). This is
+    /// the one field this build never echoes back: not in a response, a refusal detail, or an exception
+    /// message.
+    /// </summary>
+    public string? Connection { get; init; }
 }
 
 /// <summary>Which modules a command runs against. Discriminated rather than inferred from a null list.</summary>
@@ -170,6 +180,12 @@ public sealed class EfToolingResponse
     public EfToolingScriptPayload? Script { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public EfToolingApplyPayload? Apply { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public EfToolingValidatePayload? Validate { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public EfToolingErrorPayload? Error { get; init; }
 }
 
@@ -230,6 +246,41 @@ public sealed class EfToolingScriptFile
     public string Module { get; init; } = "";
     public string File { get; init; } = "";
     public string Sha256 { get; init; } = "";
+}
+
+/// <summary>What <c>apply</c> applied against the selected database, per module (FR-053).</summary>
+public sealed class EfToolingApplyPayload
+{
+    public string Provider { get; init; } = "";
+    public string? Schema { get; init; }
+    public IReadOnlyList<EfToolingApplyEntry> Modules { get; init; } = [];
+}
+
+public sealed class EfToolingApplyEntry
+{
+    public int Order { get; init; }
+    public string Module { get; init; } = "";
+    public string Context { get; init; } = "";
+    public string HistoryTable { get; init; } = "";
+
+    /// <summary>The migrations that were pending before this run and are now applied. Empty means already up to date.</summary>
+    public IReadOnlyList<string> Applied { get; init; } = [];
+}
+
+/// <summary>What <c>validate</c> found against the selected database, per module (FR-052). Present only on success — a pending migration is refused instead.</summary>
+public sealed class EfToolingValidatePayload
+{
+    public string Provider { get; init; } = "";
+    public string? Schema { get; init; }
+    public IReadOnlyList<EfToolingValidateEntry> Modules { get; init; } = [];
+}
+
+public sealed class EfToolingValidateEntry
+{
+    public int Order { get; init; }
+    public string Module { get; init; } = "";
+    public string Context { get; init; } = "";
+    public string HistoryTable { get; init; } = "";
 }
 
 public sealed class EfToolingErrorPayload

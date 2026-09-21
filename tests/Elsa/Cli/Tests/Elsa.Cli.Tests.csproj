@@ -9,6 +9,9 @@
     <!-- The in-process comparison the packaged-host artifact is held to needs a provider engine of its
          own; everything else about the tool under test comes from the fixture host's closure. -->
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <!-- `apply`/`validate` (#1876) open a real SQLite database; this reads it back directly, to prove
+         `validate` applied nothing rather than trusting its exit code alone (FR-052). -->
+    <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />

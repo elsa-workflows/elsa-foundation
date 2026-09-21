@@ -75,7 +75,7 @@ public static class EfToolingHost
         {
             var parsed = await ReadAsync(request, cancellationToken);
             command = parsed.Command;
-            result = Execute(parsed, assemblies, cancellationToken);
+            result = await Execute(parsed, assemblies, cancellationToken);
         }
         catch (EfToolingRefusal refusal)
         {
@@ -136,7 +136,7 @@ public static class EfToolingHost
         Error = new() { Code = refusal.Code, Message = refusal.Message, Details = refusal.Details }
     };
 
-    private static EfToolingResponse Execute(EfToolingRequest request, IEnumerable<Assembly> assemblies, CancellationToken cancellationToken)
+    private static async Task<EfToolingResponse> Execute(EfToolingRequest request, IEnumerable<Assembly> assemblies, CancellationToken cancellationToken)
     {
         var command = ValidateEnvelope(request);
         ValidateFields(command, request);
@@ -158,9 +158,14 @@ public static class EfToolingHost
         ValidateProviderSupport(ordered, provider!);
         ValidateEngine(provider!);
 
-        return command == EfToolingCommands.Plan
-            ? Plan(ordered, provider!, schema, cancellationToken)
-            : Script(ordered, provider!, schema, request, cancellationToken);
+        return command switch
+        {
+            EfToolingCommands.Plan => Plan(ordered, provider!, schema, cancellationToken),
+            EfToolingCommands.Script => Script(ordered, provider!, schema, request, cancellationToken),
+            EfToolingCommands.Apply => await Apply(ordered, provider!, schema, request.Connection!, cancellationToken),
+            EfToolingCommands.Validate => await Validate(ordered, provider!, schema, request.Connection!, cancellationToken),
+            _ => throw new InvalidOperationException($"Unreachable: '{command}' passed envelope validation without a handler.")
+        };
     }
 
     private static string ValidateEnvelope(EfToolingRequest request)
@@ -192,6 +197,7 @@ public static class EfToolingHost
     {
         var list = command == EfToolingCommands.List;
         var script = command == EfToolingCommands.Script;
+        var opensDatabase = command is EfToolingCommands.Apply or EfToolingCommands.Validate;
         (string Name, bool Present, bool Allowed, bool Required)[] fields =
         [
             ("selection", request.Selection is not null, true, !list),
@@ -200,7 +206,8 @@ public static class EfToolingHost
             ("output", request.Output is not null, script, script),
             ("host", request.Host is not null, script, script),
             ("engine", request.Engine is not null, script, script),
-            ("packages", request.Packages is not null, script, script)
+            ("packages", request.Packages is not null, script, script),
+            ("connection", request.Connection is not null, opensDatabase, opensDatabase)
         ];
 
         var offenders = fields
@@ -546,7 +553,7 @@ public static class EfToolingHost
         var contextType = descriptor.RequireProviderContext(provider);
         try
         {
-            using var context = CreateContext(descriptor, contextType, provider, schema);
+            using var context = CreateContext(descriptor, contextType, provider, PlaceholderConnection(provider), schema);
             var ids = context.GetService<IMigrationsAssembly>().Migrations.Keys.ToArray();
             var script = generate
                 // Script and Idempotent together, exactly as `dotnet ef migrations script --idempotent`
@@ -564,17 +571,146 @@ public static class EfToolingHost
     }
 
     /// <summary>
-    /// Binds the module's own history table, migrations assembly and schema the same way a running host
-    /// does, so the SQL a DBA reviews records exactly what a runtime validate reads back. The connection
-    /// string is a placeholder — the same one design-time tooling uses — and nothing ever opens it.
+    /// <c>apply</c> runs each selected module's compiled migrations against <paramref name="connection"/>
+    /// through <see cref="EfDatabaseMigrator.ApplyAsync"/> — the same path a running host's
+    /// <c>EfModuleMigrator&lt;T&gt;</c> uses — one module at a time, in dependency order, stopping at the
+    /// first one that fails: a module after it may depend on the one that just failed to apply. This never
+    /// reads or writes <c>migration-plan.json</c> (that is <c>script</c>'s artifact, for a DBA to review);
+    /// it reads the host's own compiled migrations.
     /// </summary>
-    private static DbContext CreateContext(EfModuleDescriptor descriptor, Type contextType, string provider, string? schema)
+    private static async Task<EfToolingResponse> Apply(
+        IReadOnlyList<EfModuleDescriptor> modules,
+        string provider,
+        string? schema,
+        string connection,
+        CancellationToken cancellationToken)
+    {
+        ValidatePostMigration(modules);
+        var entries = new List<EfToolingApplyEntry>(modules.Count);
+        for (var index = 0; index < modules.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var descriptor = modules[index];
+            var order = index + 1;
+            var contextType = descriptor.RequireProviderContext(provider);
+            try
+            {
+                using var context = CreateContext(descriptor, contextType, provider, connection, schema);
+                var pending = (await context.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray();
+                await EfDatabaseMigrator.ApplyAsync(context, EfRelationalProviderBinding.ExpectedProviderName(provider), EfMigratePolicy.AutoMigrate, cancellationToken);
+                entries.Add(new()
+                {
+                    Order = order,
+                    Module = descriptor.Name,
+                    Context = contextType.Name,
+                    HistoryTable = descriptor.HistoryTableName,
+                    Applied = pending
+                });
+            }
+            catch (Exception failure) when (failure is not EfToolingRefusal and not OperationCanceledException)
+            {
+                throw EfToolingRefusal.DatabaseFailure(
+                    "module-apply-failed",
+                    Redact($"'{descriptor.Name}' could not be applied for {provider} from {contextType.Name}: {failure.Message}", connection));
+            }
+        }
+
+        return new()
+        {
+            ExitCode = EfToolingExitCode.Success,
+            Command = EfToolingCommands.Apply,
+            Apply = new() { Provider = provider, Schema = schema, Modules = entries }
+        };
+    }
+
+    /// <summary>
+    /// <c>validate</c> checks every selected module against <paramref name="connection"/> through
+    /// <see cref="EfDatabaseMigrator.ApplyAsync"/> under <see cref="EfMigratePolicy.Validate"/>, which only
+    /// reads <c>IHistoryRepository</c> and never migrates (FR-052). Every module is checked — not just the
+    /// first offender — so the refusal names every module with a pending migration, the same way every
+    /// other whole-selection refusal here does; nothing is applied whether one module is pending or all of
+    /// them are.
+    /// </summary>
+    private static async Task<EfToolingResponse> Validate(
+        IReadOnlyList<EfModuleDescriptor> modules,
+        string provider,
+        string? schema,
+        string connection,
+        CancellationToken cancellationToken)
+    {
+        ValidatePostMigration(modules);
+        var entries = new List<EfToolingValidateEntry>(modules.Count);
+        var offenders = new List<string>();
+        for (var index = 0; index < modules.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var descriptor = modules[index];
+            var order = index + 1;
+            var contextType = descriptor.RequireProviderContext(provider);
+            try
+            {
+                using var context = CreateContext(descriptor, contextType, provider, connection, schema);
+                try
+                {
+                    await EfDatabaseMigrator.ApplyAsync(context, EfRelationalProviderBinding.ExpectedProviderName(provider), EfMigratePolicy.Validate, cancellationToken);
+                }
+                catch (InvalidOperationException failure)
+                {
+                    // EfDatabaseMigrator's own fail-closed check (pending migrations), not a database
+                    // failure: this is exactly the negative result validate exists to report.
+                    offenders.Add(Redact(failure.Message, connection));
+                    continue;
+                }
+
+                entries.Add(new() { Order = order, Module = descriptor.Name, Context = contextType.Name, HistoryTable = descriptor.HistoryTableName });
+            }
+            catch (Exception failure) when (failure is not EfToolingRefusal and not OperationCanceledException)
+            {
+                throw EfToolingRefusal.DatabaseFailure(
+                    "module-validate-failed",
+                    Redact($"'{descriptor.Name}' could not be validated for {provider} from {contextType.Name}: {failure.Message}", connection));
+            }
+        }
+
+        if (offenders.Count > 0)
+        {
+            throw EfToolingRefusal.NegativeResult(
+                "pending-migrations",
+                "A selected module has a pending migration. Nothing was applied.",
+                [.. offenders.Order(StringComparer.Ordinal)]);
+        }
+
+        return new()
+        {
+            ExitCode = EfToolingExitCode.Success,
+            Command = EfToolingCommands.Validate,
+            Validate = new() { Provider = provider, Schema = schema, Modules = entries }
+        };
+    }
+
+    /// <summary>
+    /// Defense in depth against the one value this build must never surface (D7): whatever an underlying
+    /// exception's message says — a driver's own error can legitimately echo part of a connection string —
+    /// every occurrence of <paramref name="connection"/> itself is replaced before the text reaches a
+    /// refusal, a response, or anywhere else an operator or a log could read it.
+    /// </summary>
+    private static string Redact(string text, string connection) =>
+        string.IsNullOrEmpty(connection) ? text : text.Replace(connection, "<connection-redacted>", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Binds the module's own history table, migrations assembly and schema the same way a running host
+    /// does, so the SQL a DBA reviews (or the database <c>apply</c>/<c>validate</c> open) records exactly
+    /// what a runtime validate reads back. <c>plan</c> and <c>script</c> pass a placeholder connection —
+    /// the same one design-time tooling uses — and never open it; <c>apply</c> and <c>validate</c> pass the
+    /// real one and do.
+    /// </summary>
+    private static DbContext CreateContext(EfModuleDescriptor descriptor, Type contextType, string provider, string connection, string? schema)
     {
         var builder = (DbContextOptionsBuilder)Activator.CreateInstance(typeof(DbContextOptionsBuilder<>).MakeGenericType(contextType))!;
         EfRelationalProviderBinding.Use(
             builder,
             provider,
-            PlaceholderConnection(provider),
+            connection,
             descriptor.HistoryTableName,
             descriptor.Assembly.GetName().Name,
             schema);

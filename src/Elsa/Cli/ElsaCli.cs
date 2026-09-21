@@ -5,20 +5,22 @@ namespace Elsa.Cli;
 
 /// <summary>
 /// The <c>dotnet elsa</c> command surface. This slice ships <c>persistence list</c>, <c>plan</c>,
-/// <c>script</c> and <c>script-check</c>; <c>apply</c>, <c>validate</c> and <c>post-migrate</c> arrive with
-/// the slices that implement them, so an operator asking for one today is told it is unrecognized rather
+/// <c>script</c>, <c>script-check</c>, <c>apply</c> and <c>validate</c>; <c>post-migrate</c> arrives with
+/// the slice that implements it, so an operator asking for it today is told it is unrecognized rather
 /// than handed a command that does nothing.
 /// </summary>
 internal static class ElsaCli
 {
     public static RootCommand Build()
     {
-        var persistence = new Command("persistence", "Inspect and script a host's EF persistence modules.")
+        var persistence = new Command("persistence", "Inspect, script, apply and validate a host's EF persistence modules.")
         {
             List(),
             Plan(),
             Script(),
-            ScriptCheckCommand()
+            ScriptCheckCommand(),
+            Apply(),
+            Validate()
         };
 
         return new RootCommand("Elsa command-line tool.") { persistence };
@@ -109,6 +111,72 @@ internal static class ElsaCli
         return command;
     }
 
+    private static Command Apply()
+    {
+        var host = HostOption();
+        var packages = PackagesOption();
+        var modules = ModulesOption();
+        var all = AllOption();
+        var provider = ProviderOption();
+        var schema = SchemaOption();
+        var connectionEnv = ConnectionEnvOption();
+        var connectionStdin = ConnectionStdinOption();
+        var command = new Command("apply", "Run each selected module's compiled migrations against a database.")
+        {
+            host, packages, modules, all, provider, schema, connectionEnv, connectionStdin
+        };
+
+        command.SetAction((result, cancellationToken) => Guarded(async () =>
+        {
+            var layout = HostLayout.Resolve(result.GetRequiredValue(host));
+            var connection = await ResolveConnection(result, connectionEnv, connectionStdin, cancellationToken);
+            var request = Request(WorkerCommands.Apply, layout, result, packages) with
+            {
+                Selection = Selection(result, modules, all, required: true),
+                Provider = result.GetRequiredValue(provider),
+                Schema = Schema(result, schema),
+                ConnectionEnv = connection.Env,
+                Connection = connection.Value
+            };
+            return Report.Render(WorkerCommands.Apply, await WorkerProcess.RunAsync(layout, request, cancellationToken), Console.Out, Console.Error);
+        }, cancellationToken));
+
+        return command;
+    }
+
+    private static Command Validate()
+    {
+        var host = HostOption();
+        var packages = PackagesOption();
+        var modules = ModulesOption();
+        var all = AllOption();
+        var provider = ProviderOption();
+        var schema = SchemaOption();
+        var connectionEnv = ConnectionEnvOption();
+        var connectionStdin = ConnectionStdinOption();
+        var command = new Command("validate", "Fail if any selected module has a pending migration against a database. Applies nothing.")
+        {
+            host, packages, modules, all, provider, schema, connectionEnv, connectionStdin
+        };
+
+        command.SetAction((result, cancellationToken) => Guarded(async () =>
+        {
+            var layout = HostLayout.Resolve(result.GetRequiredValue(host));
+            var connection = await ResolveConnection(result, connectionEnv, connectionStdin, cancellationToken);
+            var request = Request(WorkerCommands.Validate, layout, result, packages) with
+            {
+                Selection = Selection(result, modules, all, required: true),
+                Provider = result.GetRequiredValue(provider),
+                Schema = Schema(result, schema),
+                ConnectionEnv = connection.Env,
+                Connection = connection.Value
+            };
+            return Report.Render(WorkerCommands.Validate, await WorkerProcess.RunAsync(layout, request, cancellationToken), Console.Out, Console.Error);
+        }, cancellationToken));
+
+        return command;
+    }
+
     private static Command ScriptCheckCommand()
     {
         var host = HostOption();
@@ -166,16 +234,19 @@ internal static class ElsaCli
         Required = true
     };
 
+    // Deliberately not `AllowMultipleArgumentsPerToken`: that setting makes a single `--packages`/`--modules`
+    // occurrence swallow every following token as a value of its own, including one that looks like a flag
+    // this build does not define — `--connection`, the one flag `apply`/`validate` must reject as a usage
+    // error (D7), among them. Repeated occurrences and comma-separated values inside one still work; only
+    // a bare space-separated run of extra tokens does not, and nothing here advertised that it did.
     private static Option<string[]> PackagesOption() => new("--packages")
     {
-        Description = "A package root to resolve module assemblies from. Repeatable.",
-        AllowMultipleArgumentsPerToken = true
+        Description = "A package root to resolve module assemblies from. Repeatable."
     };
 
     private static Option<string[]> ModulesOption() => new("--modules")
     {
-        Description = "Canonical module names, comma-separated or repeated.",
-        AllowMultipleArgumentsPerToken = true
+        Description = "Canonical module names, comma-separated or repeated."
     };
 
     private static Option<bool> AllOption() => new("--all") { Description = "Every module this host declares." };
@@ -203,6 +274,43 @@ internal static class ElsaCli
             : System.Environment.GetEnvironmentVariable("ELSA_EF_SCHEMA") is { Length: > 0 } configured
                 ? configured
                 : null;
+
+    private static Option<string> ConnectionEnvOption() => new("--connection-env")
+    {
+        Description = "The environment variable this process's own environment carries the connection string in. Default: ELSA_EF_CONNECTION.",
+        DefaultValueFactory = _ => "ELSA_EF_CONNECTION"
+    };
+
+    private static Option<bool> ConnectionStdinOption() => new("--connection-stdin")
+    {
+        Description = "Read the connection string from this process's own stdin instead of an environment variable."
+    };
+
+    /// <summary>
+    /// The connection <c>apply</c>/<c>validate</c> take (FR-030, D7): never a flag value, so it never lands
+    /// in a process argument or shell history. <c>--connection-stdin</c> reads the value from this tool's
+    /// own stdin — a stream distinct from the worker's stdin, which is a fresh pipe this process opens for
+    /// that child, not the console stream read here — and carries it to the worker inside the request that
+    /// already travels that pipe. Otherwise, only <c>--connection-env</c>'s NAME travels to the worker; the
+    /// value stays in this process's environment and reaches the worker by ordinary process-environment
+    /// inheritance, read there rather than here.
+    /// </summary>
+    private static async Task<(string? Env, string? Value)> ResolveConnection(
+        ParseResult result,
+        Option<string> connectionEnv,
+        Option<bool> connectionStdin,
+        CancellationToken cancellationToken)
+    {
+        if (result.GetValue(connectionStdin))
+        {
+            var value = (await Console.In.ReadToEndAsync(cancellationToken)).Trim();
+            if (value.Length == 0)
+                throw CliRefusal.Usage("connection-missing", "--connection-stdin was given but this process's stdin carried no connection string.");
+            return (null, value);
+        }
+
+        return (result.GetRequiredValue(connectionEnv), null);
+    }
 
     /// <summary>
     /// The environment whose shell-configuration overlay the provider-agreement check reads, recorded in
