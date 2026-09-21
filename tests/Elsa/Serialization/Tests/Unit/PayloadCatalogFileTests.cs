@@ -20,12 +20,21 @@ public sealed class PayloadCatalogFileTests : IDisposable
         Assert.Contains("the file does not exist.", exception.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void ReadArray_EmptyPath_ThrowsFactoryException()
+    /// <summary>
+    /// <c>null</c> is a separate row because the production line coalesces it: <c>exceptionFactory(path ??
+    /// string.Empty, ...)</c>. With only the <c>""</c> row the coalesce was dead - dropping it left the suite
+    /// green - and a null path would have reached the readers as a null
+    /// <c>InvalidActivity/WorkflowCatalogJsonException.FilePath</c>.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ReadArray_EmptyPath_ThrowsFactoryException(string? configured)
     {
         string? captured = null;
         var exception = Assert.Throws<InvalidOperationException>(() =>
-            PayloadCatalogFile.ReadArray<string>("", new StubSerializer(), (path, reason, inner) =>
+            PayloadCatalogFile.ReadArray<string>(configured!, new StubSerializer(), (path, reason, inner) =>
             {
                 captured = path;
                 return Factory(path, reason, inner);
@@ -35,7 +44,7 @@ public sealed class PayloadCatalogFileTests : IDisposable
         // The path handed to the factory becomes InvalidActivity/WorkflowCatalogJsonException.FilePath at the
         // call sites, and neither reader has an empty-path test of its own, so pin it here: without this a
         // regression that reported the wrong path for a misconfigured catalog would pass at both layers.
-        Assert.Equal(string.Empty, captured);
+        Assert.Equal(configured ?? string.Empty, captured);
     }
 
     [Fact]
