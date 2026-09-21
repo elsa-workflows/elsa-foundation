@@ -8,7 +8,7 @@
     concern and stays in Elsa.Workflows.Publishing.Api.
   -->
   <ItemGroup>
-    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>

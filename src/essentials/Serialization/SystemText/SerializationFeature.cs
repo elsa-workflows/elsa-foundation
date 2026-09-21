@@ -1,5 +1,5 @@
 using CShells.Features;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Events.Core.Extensions;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Handlers;

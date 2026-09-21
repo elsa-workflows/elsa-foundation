@@ -1,13 +1,13 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using Elsa.Modularity.Core.Models;
-using Elsa.Platform.PackageManifests;
+using Elsa.Specifications.PackageManifests;
 
 namespace Elsa.Modularity.Nuplane.Services;
 
 /// <summary>
 /// Shared mapping from a parsed <c>elsa-package.json</c> manifest onto the feature catalog, using the same
-/// <c>Elsa.Platform.PackageManifests</c> wire contract the generator that produces these files is built against.
+/// <c>Elsa.Specifications.PackageManifests</c> wire contract the generator that produces these files is built against.
 /// Used both by the package contributor (manifests inside installed Nuplane packages) and the bundled contributor
 /// (manifests emitted by feature projects the host references directly).
 /// </summary>

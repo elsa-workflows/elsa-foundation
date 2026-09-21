@@ -21,7 +21,7 @@ public sealed class SecretsEntityFrameworkCoreFeatureTests
         var setting = Assert.Single(
             property!.GetCustomAttributesData(),
             attribute => attribute.AttributeType.FullName ==
-                         "Elsa.Platform.PackageManifest.Generator.Hints.ManifestSettingAttribute");
+                         "Elsa.Specifications.PackageManifest.Generator.Hints.ManifestSettingAttribute");
 
         Assert.Contains(
             setting.NamedArguments,

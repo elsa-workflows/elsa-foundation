@@ -2,7 +2,7 @@ using System.Text.Json;
 using CShells.Features;
 using Elsa.Modularity.Core.Models;
 using Elsa.Modularity.Nuplane.Services;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 

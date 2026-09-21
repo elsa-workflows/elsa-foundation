@@ -1,5 +1,5 @@
 using CShells.Features;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using CShells.Lifecycle;
 using Elsa.Tasks.Core;
 using Elsa.Tasks.Services;

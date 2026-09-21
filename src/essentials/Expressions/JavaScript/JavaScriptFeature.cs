@@ -1,7 +1,7 @@
 ﻿using CShells.Features;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.JavaScript.Services;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Expressions.JavaScript;

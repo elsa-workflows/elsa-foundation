@@ -57,7 +57,7 @@ public sealed class RuntimeEntityFrameworkCoreFeatureTests : IDisposable
         foreach (var property in typeof(RuntimeEntityFrameworkCoreFeature).GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
             var setting = Assert.Single(property.GetCustomAttributesData(), data =>
-                data.AttributeType.FullName == "Elsa.Platform.PackageManifest.Generator.Hints.ManifestSettingAttribute");
+                data.AttributeType.FullName == "Elsa.Specifications.PackageManifest.Generator.Hints.ManifestSettingAttribute");
             Assert.Equal(secrets.Contains(property.Name), setting.NamedArguments.Any(argument => argument.MemberName == "Secret" && argument.TypedValue.Value is true));
         }
     }

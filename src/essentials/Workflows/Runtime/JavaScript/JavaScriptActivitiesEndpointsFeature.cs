@@ -2,7 +2,7 @@ using CShells.Features;
 using Elsa.Api.AspNetCore;
 using CShells.AspNetCore.Features;
 using Elsa.Foundation.Identity.Extensions;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.JavaScript.Authorization;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;

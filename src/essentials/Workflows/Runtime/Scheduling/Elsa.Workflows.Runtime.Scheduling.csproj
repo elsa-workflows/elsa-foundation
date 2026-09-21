@@ -6,7 +6,7 @@
     <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Cronos" />
-    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>

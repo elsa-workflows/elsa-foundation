@@ -1,6 +1,6 @@
 using CShells.Features;
 using Elsa.Agent.Workflows.Extensions;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Agent.Workflows;

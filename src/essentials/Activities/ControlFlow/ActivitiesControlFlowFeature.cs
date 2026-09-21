@@ -3,7 +3,7 @@ using Elsa.Activities.ControlFlow.Loops;
 using Elsa.Activities.If.Internal;
 using Elsa.Activities.Parallel.Internal;
 using Elsa.Activities.Switch.Internal;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;

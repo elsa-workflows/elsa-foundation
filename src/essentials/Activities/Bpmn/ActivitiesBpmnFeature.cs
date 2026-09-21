@@ -2,7 +2,7 @@ using CShells.Features;
 using Elsa.Activities.Bpmn.Contracts;
 using Elsa.Activities.Bpmn.Internal;
 using Elsa.Activities.Bpmn.Internal.Behaviors;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;

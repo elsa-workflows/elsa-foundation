@@ -7,7 +7,7 @@
          time. -->
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
 	  <PackageReference Include="CShells.Abstractions" />
-    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
