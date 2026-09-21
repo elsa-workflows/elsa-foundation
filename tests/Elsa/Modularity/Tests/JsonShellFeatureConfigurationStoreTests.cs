@@ -42,6 +42,11 @@ public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
                   "TenantFeature": {
                     "Value": "tenant"
                   }
+                },
+                "Configuration": {
+                  "Foo": {
+                    "Bar": "baz"
+                  }
                 }
               }
             }
@@ -95,6 +100,33 @@ public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
         Assert.Equal("tenant-a", snapshot.ShellId);
         Assert.True(snapshot.Features.ContainsKey("TenantFeature"));
         Assert.False(snapshot.Features.ContainsKey("Existing"));
+    }
+
+    [Fact]
+    public async Task LoadCarriesTheShellsConfigurationNodeWithNestedShapeIntact()
+    {
+        var snapshot = await CreateStore("tenant-a").LoadAsync();
+
+        Assert.Equal(JsonValueKind.Object, snapshot.Configuration.ValueKind);
+        Assert.Equal("baz", snapshot.Configuration.GetProperty("Foo").GetProperty("Bar").GetString());
+    }
+
+    [Fact]
+    public async Task LoadFallsBackToAnEmptyObjectWhenTheShellHasNoConfigurationNode()
+    {
+        var snapshot = await CreateStore("default").LoadAsync();
+
+        Assert.Equal(JsonValueKind.Object, snapshot.Configuration.ValueKind);
+        Assert.Empty(snapshot.Configuration.EnumerateObject());
+    }
+
+    [Fact]
+    public async Task LoadResolvesTheConfigurationNodeUsingTheSameCaseInsensitiveShellIdAsFeatures()
+    {
+        var snapshot = await CreateStore("Tenant-A").LoadAsync();
+
+        Assert.True(snapshot.Features.ContainsKey("TenantFeature"));
+        Assert.Equal("baz", snapshot.Configuration.GetProperty("Foo").GetProperty("Bar").GetString());
     }
 
     [Fact]
