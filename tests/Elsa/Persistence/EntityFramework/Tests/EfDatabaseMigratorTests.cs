@@ -47,13 +47,29 @@ public sealed class EfDatabaseMigratorTests
         var pending = (await fixture.Context.Database.GetPendingMigrationsAsync()).ToArray();
         Assert.Equal([EfTestMigrationIds.AddDescription], pending);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<EfPendingMigrationsException>(() =>
             EfDatabaseMigrator.ApplyAsync(fixture.Context, EfProviderNames.Sqlite, EfMigratePolicy.Validate));
         Assert.Contains(EfTestMigrationIds.AddDescription, exception.Message, StringComparison.Ordinal);
 
         await EfDatabaseMigrator.ApplyAsync(fixture.Context, EfProviderNames.Sqlite);
         await EfDatabaseMigrator.ApplyAsync(fixture.Context, EfProviderNames.Sqlite, EfMigratePolicy.Validate);
         Assert.Empty(await fixture.Context.Database.GetPendingMigrationsAsync());
+    }
+
+    /// <summary>
+    /// A genuine failure that happens to land on <see cref="InvalidOperationException"/> too — here, the
+    /// provider guard refusing before <c>GetPendingMigrationsAsync</c> is ever reached — must not be
+    /// mistaken for the dedicated pending-migrations signal: a caller classifying by type alone (as
+    /// <c>EfToolingHost.Validate</c> used to) would otherwise report an unreachable or misconfigured
+    /// database as "pending migrations" and point the operator at the wrong remedy.
+    /// </summary>
+    [Fact]
+    public async Task Validate_does_not_report_a_provider_mismatch_as_a_pending_migration()
+    {
+        await using var fixture = await SqliteMigratorFixture.CreateAsync();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            EfDatabaseMigrator.ApplyAsync(fixture.Context, EfProviderNames.PostgreSql, EfMigratePolicy.Validate));
+        Assert.IsNotType<EfPendingMigrationsException>(exception);
     }
 
     [Fact]

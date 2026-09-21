@@ -60,6 +60,31 @@ public sealed class PersistenceCliTests : IDisposable
             run.Output.Split('\n').Skip(1).Select(line => line.Split("  ")[0].Trim()).Where(name => name.Length > 0 && !name.EndsWith("module(s).", StringComparison.Ordinal)));
     }
 
+    /// <summary>
+    /// The comma-separated and repeated-flag forms this tool's <c>--modules</c> help text and the README
+    /// both promise still resolve to the same selection now that <c>AllowMultipleArgumentsPerToken</c> is
+    /// off (it used to swallow an unrecognized flag typed after <c>--modules</c>, which is why it was
+    /// removed) — pinned here so a future change to option wiring cannot silently break either form.
+    /// </summary>
+    [Fact]
+    public void Modules_comma_separated_and_repeated_forms_resolve_to_the_same_selection()
+    {
+        var commaSeparated = DotnetElsa.Run("persistence", "list", "--host", DotnetElsa.Host("Host"), "--modules", "Secrets,Workflows.Design");
+        var repeated = DotnetElsa.Run("persistence", "list", "--host", DotnetElsa.Host("Host"), "--modules", "Secrets", "--modules", "Workflows.Design");
+
+        Assert.Equal(ToolExitCode.Success, commaSeparated.ExitCode);
+        Assert.Equal(ToolExitCode.Success, repeated.ExitCode);
+        Assert.Equal(ListedModules(commaSeparated), ListedModules(repeated));
+        Assert.Equal(["Secrets", "Workflows.Design"], ListedModules(commaSeparated));
+    }
+
+    // README.md documents `--packages <dir>` as "Repeatable" only — it makes no comma-separated promise
+    // for --packages (unlike --modules, which splits each value on comma), and the repeated form is
+    // already exercised by PackageRootProbeTests, so no --packages test is added here.
+
+    private static string[] ListedModules(CliRun run) =>
+        [.. run.Output.Split('\n').Skip(1).Select(line => line.Split("  ")[0].Trim()).Where(name => name.Length > 0 && !name.EndsWith("module(s).", StringComparison.Ordinal))];
+
     /// <summary>A third-party module is indistinguishable in shape from a first-party one (User Story 6, scenario 1).</summary>
     [Fact]
     public void List_reports_a_third_party_module_the_same_way_it_reports_a_first_party_one()

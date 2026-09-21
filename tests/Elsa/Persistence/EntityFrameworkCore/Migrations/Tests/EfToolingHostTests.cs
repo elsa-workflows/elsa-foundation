@@ -347,6 +347,31 @@ public sealed class EfToolingHostTests : IDisposable
     }
 
     /// <summary>
+    /// An unreadable database is a database failure (exit 4), never the negative result <c>validate</c>
+    /// reports for a pending migration (exit 1): the two are classified by where the failure originates,
+    /// not by exception type alone, so an operator is never told to run <c>apply</c> against a database
+    /// that cannot be read at all. A file that exists but is not a database — rather than a missing
+    /// directory, which Sqlite's own history check treats as "nothing applied yet" and so genuinely does
+    /// report as pending — makes <c>GetPendingMigrationsAsync</c> itself throw, the same shape of failure
+    /// the classification in <c>EfToolingHost.Validate</c> exists to tell apart from a real pending
+    /// migration.
+    /// </summary>
+    [Fact]
+    public async Task Validate_reports_an_unreadable_database_as_a_database_failure_not_pending_migrations()
+    {
+        var db = Path.Join(root, "corrupt.db");
+        File.WriteAllText(db, "not a sqlite database");
+        var connection = $"Data Source={db}";
+
+        var validate = await RunAsync(ApplyRequest("validate", "Sqlite", ["Secrets"], connection));
+
+        Assert.Equal(EfToolingExitCode.DatabaseFailure, validate.ExitCode);
+        Assert.Equal("module-validate-failed", validate.Response.GetProperty("error").GetProperty("code").GetString());
+        var message = validate.Response.GetProperty("error").GetProperty("message").GetString()!;
+        Assert.DoesNotContain("apply", message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// D7's promise extends past the process boundary: the connection string must not appear in a
     /// refusal's message, even when the underlying failure is a real database one. A sentinel embedded in
     /// a connection string an unreachable path forces proves it, rather than trusting that no driver ever
@@ -364,6 +389,27 @@ public sealed class EfToolingHostTests : IDisposable
         var message = apply.Response.GetProperty("error").GetProperty("message").GetString()!;
         Assert.DoesNotContain(sentinel, message, StringComparison.Ordinal);
         Assert.DoesNotContain(connection, message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The exact-match replacement in <c>Redact</c> only catches a verbatim echo of the connection string
+    /// it was given. A driver that re-serialises, re-cases or re-quotes the string before embedding it in a
+    /// message — Npgsql, SqlClient and MySql's driver are not Sqlite, and none of them are proven not to —
+    /// would slip straight through it. This drives <c>Redact</c> itself (via reflection: it is a private
+    /// implementation detail with no other seam) with a message shaped exactly like that: the credential
+    /// echoed back re-cased and re-quoted, not as the exact connection string this call was given.
+    /// </summary>
+    [Fact]
+    public void Redact_scrubs_a_recased_and_requoted_echo_of_the_credential_a_driver_might_produce()
+    {
+        const string secret = "Secret-Value-4f2b91";
+        const string connection = $"Host=db;Username=u;Password={secret};Database=d";
+        var reformatted = $"Npgsql.NpgsqlException: Login failed [ConnectionString: Host=db;USERNAME=u;PWD=\"{secret}\";Database=d]";
+
+        var method = typeof(EfToolingHost).GetMethod("Redact", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var redacted = (string)method.Invoke(null, [reformatted, connection])!;
+
+        Assert.DoesNotContain(secret, redacted, StringComparison.Ordinal);
     }
 
     private static ApplyRequestBody ApplyRequest(string command, string provider, string[] modules, string connection) => new()

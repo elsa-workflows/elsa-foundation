@@ -109,7 +109,7 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
             var pending = (await olderContext.Database.GetPendingMigrationsAsync()).ToArray();
             Assert.Contains("20260911011058_WidenLookupKeys", pending);
 
-            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            var exception = await Assert.ThrowsAsync<EfPendingMigrationsException>(() =>
                 EfDatabaseMigrator.ApplyAsync(
                     olderContext,
                     SecretsPostgreSqlDbContext.ExpectedProviderName,

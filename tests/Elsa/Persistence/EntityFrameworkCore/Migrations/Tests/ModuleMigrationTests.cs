@@ -72,7 +72,7 @@ public sealed class ModuleMigrationTests : IDisposable
     {
         await using var context = ModuleContextCatalog.Create(typeof(WorkflowsDesignSqliteDbContext), ConnectionString);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<EfPendingMigrationsException>(() =>
             EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite, EfMigratePolicy.Validate));
         await EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite, EfMigratePolicy.AutoMigrate);
         await EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite, EfMigratePolicy.Validate);
@@ -106,7 +106,7 @@ public sealed class ModuleMigrationTests : IDisposable
         services.Configure<EfMigrateOptions>(options => options.Policy = EfMigratePolicy.Validate);
         await using var provider = services.BuildServiceProvider();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetRequiredService<IShellInitializer>().InitializeAsync());
+        await Assert.ThrowsAsync<EfPendingMigrationsException>(() => provider.GetRequiredService<IShellInitializer>().InitializeAsync());
     }
 
     [Fact]

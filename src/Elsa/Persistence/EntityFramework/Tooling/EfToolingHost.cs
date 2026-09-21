@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Elsa.Persistence.EntityFramework.Tooling;
 
@@ -654,10 +655,13 @@ public static class EfToolingHost
                 {
                     await EfDatabaseMigrator.ApplyAsync(context, EfRelationalProviderBinding.ExpectedProviderName(provider), EfMigratePolicy.Validate, cancellationToken);
                 }
-                catch (InvalidOperationException failure)
+                catch (EfPendingMigrationsException failure)
                 {
                     // EfDatabaseMigrator's own fail-closed check (pending migrations), not a database
-                    // failure: this is exactly the negative result validate exists to report.
+                    // failure: this is exactly the negative result validate exists to report. Caught by
+                    // this dedicated type, not InvalidOperationException, so a genuine connectivity,
+                    // credential or schema failure thrown by GetPendingMigrationsAsync before that check
+                    // is reached is not misreported as a pending migration.
                     offenders.Add(Redact(failure.Message, connection));
                     continue;
                 }
@@ -692,10 +696,26 @@ public static class EfToolingHost
     /// Defense in depth against the one value this build must never surface (D7): whatever an underlying
     /// exception's message says — a driver's own error can legitimately echo part of a connection string —
     /// every occurrence of <paramref name="connection"/> itself is replaced before the text reaches a
-    /// refusal, a response, or anywhere else an operator or a log could read it.
+    /// refusal, a response, or anywhere else an operator or a log could read it. The exact-match replacement
+    /// alone only catches a verbatim echo; a driver that re-serialises, re-cases or re-quotes the connection
+    /// string before including it in a message would slip through, so <see cref="CredentialPair"/> also
+    /// scrubs any <c>Password=</c>/<c>Pwd=</c> key/value pair, case-insensitively and bounded by the usual
+    /// <c>;</c> separator, regardless of how the rest of the text around it was reformatted. Anything less
+    /// regular than that — a reformatting this pattern does not recognise — is not something a fixed pattern
+    /// can chase, and is not the guarantee this defends: the guarantee that matters is that the value never
+    /// reaches <c>argv</c> in the first place, which is proved elsewhere.
     /// </summary>
-    private static string Redact(string text, string connection) =>
-        string.IsNullOrEmpty(connection) ? text : text.Replace(connection, "<connection-redacted>", StringComparison.Ordinal);
+    private static string Redact(string text, string connection)
+    {
+        if (!string.IsNullOrEmpty(connection))
+            text = text.Replace(connection, "<connection-redacted>", StringComparison.Ordinal);
+
+        return CredentialPair.Replace(text, match => $"{match.Groups["key"].Value}=<redacted>");
+    }
+
+    private static readonly Regex CredentialPair = new(
+        @"\b(?<key>password|pwd)\s*=\s*[^;]*",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     /// <summary>
     /// Binds the module's own history table, migrations assembly and schema the same way a running host
