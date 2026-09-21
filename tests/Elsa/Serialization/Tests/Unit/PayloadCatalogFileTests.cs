@@ -23,10 +23,19 @@ public sealed class PayloadCatalogFileTests : IDisposable
     [Fact]
     public void ReadArray_EmptyPath_ThrowsFactoryException()
     {
+        string? captured = null;
         var exception = Assert.Throws<InvalidOperationException>(() =>
-            PayloadCatalogFile.ReadArray<string>("", new StubSerializer(), Factory));
+            PayloadCatalogFile.ReadArray<string>("", new StubSerializer(), (path, reason, inner) =>
+            {
+                captured = path;
+                return Factory(path, reason, inner);
+            }));
 
         Assert.Contains("no file path was configured.", exception.Message, StringComparison.Ordinal);
+        // The path handed to the factory becomes InvalidActivity/WorkflowCatalogJsonException.FilePath at the
+        // call sites, and neither reader has an empty-path test of its own, so pin it here: without this a
+        // regression that reported the wrong path for a misconfigured catalog would pass at both layers.
+        Assert.Equal(string.Empty, captured);
     }
 
     [Fact]
@@ -78,11 +87,10 @@ public sealed class PayloadCatalogFileTests : IDisposable
             PayloadCatalogFile.ReadArray<string>("catalog.json", new StubSerializer(), null!));
     }
 
-    [Fact]
+    [SkippableFact]
     public void ReadArray_IoFailure_WrapsOriginalIoException()
     {
-        if (!OperatingSystem.IsLinux())
-            return;
+        Skip.IfNot(OperatingSystem.IsLinux(), "/proc/self/mem is the Linux-only way to force a read IOException.");
 
         const string path = "/proc/self/mem";
         Assert.True(File.Exists(path));
@@ -95,13 +103,11 @@ public sealed class PayloadCatalogFileTests : IDisposable
         Assert.IsType<IOException>(exception.InnerException);
     }
 
-    [Fact]
+    [SkippableFact]
     public void ReadArray_UnauthorizedFile_WrapsOriginalAccessFailure()
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
-            return;
-        if (Environment.IsPrivilegedProcess)
-            return;
+        Skip.IfNot(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(), "Unix file modes are the portable way to force an access failure.");
+        Skip.If(Environment.IsPrivilegedProcess, "A privileged process ignores the file mode this test sets.");
 
         var path = WriteTemp("""["alpha"]""");
         File.SetUnixFileMode(path, UnixFileMode.None);

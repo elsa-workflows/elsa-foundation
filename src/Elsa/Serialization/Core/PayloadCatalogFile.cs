@@ -5,6 +5,12 @@ namespace Elsa.Serialization.Core;
 /// <summary>
 /// Reads a JSON array of catalog models from disk through <see cref="IPayloadSerializer"/>.
 /// Domain readers keep their own exception types and logging; this helper has no logger.
+/// <para>
+/// The malformed-array reason still says "reconciliation models" because both current callers are
+/// reconcilers and that is the message they emitted before this helper existed; changing it here would
+/// alter an operator-visible diagnostic in what is otherwise a behaviour-preserving extraction. Give the
+/// reason its own parameter when a caller that is not a reconciler needs it.
+/// </para>
 /// </summary>
 public static class PayloadCatalogFile
 {

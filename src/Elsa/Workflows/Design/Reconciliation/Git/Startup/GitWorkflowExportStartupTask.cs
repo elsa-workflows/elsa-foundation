@@ -22,15 +22,10 @@ public sealed class GitWorkflowExportStartupTask(
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         var lockKey = nameof(GitWorkflowExportStartupTask);
-        await using var @lock = await distributedLockProvider.TryAcquireLockAsync(lockKey, TimeSpan.FromSeconds(30), cancellationToken);
+        var acquired = await distributedLockProvider.TryRunUnderDistributedLock(
+            lockKey, TimeSpan.FromSeconds(30), exporter.ExportAsync, cancellationToken);
 
-        if (@lock is null)
-        {
-            if (logger.IsEnabled(LogLevel.Information))
-                logger.LogInformation("Could not retrieve lock '{key}'; it was claimed by another instance", lockKey);
-            return;
-        }
-
-        await exporter.ExportAsync(cancellationToken);
+        if (!acquired && logger.IsEnabled(LogLevel.Information))
+            logger.LogInformation("Could not retrieve lock '{key}'; it was claimed by another instance", lockKey);
     }
 }
