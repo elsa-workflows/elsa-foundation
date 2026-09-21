@@ -95,12 +95,9 @@ public sealed class WorkbenchActivationGuardCompositionTests
     private static JsonObject BuildApplyRequestRedirectingProvider(string revision, JsonArray currentFeatures, string targetFeature, string provider)
     {
         var features = new JsonArray();
-        foreach (var feature in currentFeatures)
+        foreach (var feature in currentFeatures.Where(feature => (bool)feature!["enabled"]!))
         {
-            if (!(bool)feature!["enabled"]!)
-                continue;
-
-            var id = (string)feature["id"]!;
+            var id = (string)feature!["id"]!;
             var configuration = feature["configuration"]!.DeepClone()!.AsObject();
             if (string.Equals(id, targetFeature, StringComparison.Ordinal))
                 SetProvider(configuration, provider);
