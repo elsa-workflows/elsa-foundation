@@ -1,4 +1,5 @@
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
@@ -16,6 +17,9 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests;
 [Collection(PostgresContainerCollection.Name)]
 public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture fixture)
 {
+    /// <summary>The provider selector the CLI takes, which is the module's own <c>[EfModule]</c> provider name.</summary>
+    private const string Provider = "PostgreSql";
+
     [Fact]
     public void UseNpgsql_sets_the_provider_history_table_when_the_engine_is_loaded()
     {
@@ -95,11 +99,24 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
         Assert.Contains(SecretsPostgreSqlDbContext.ExpectedProviderName, exception.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The whole out-of-process operator path against a live PostgreSQL server (#1878): the real
+    /// <c>dotnet elsa persistence</c> tool — a separate process, against a built host's output — applies this
+    /// module's compiled migrations, refuses to exit 0 while the projection reindex it declares is still
+    /// outstanding, runs that repair under <c>post-migrate</c>, and leaves a database a fresh runtime
+    /// <c>Validate</c> accepts. Before #1878 this drove <c>tools/ef/dual-migrate.sh</c>.
+    /// </summary>
+    /// <remarks>
+    /// The connection hygiene is the reason this stays a real subprocess against a real server rather than an
+    /// in-process call: a driver, not this repository's code, is what would echo a credential back, and only a
+    /// live connection produces one. Both transports the tool accepts are exercised — the value in the child's
+    /// environment, then the value on its stdin — and both streams are checked on the refusal as well as on the
+    /// success, because a refusal message is exactly where an echoed connection string would surface.
+    /// </remarks>
     [SkippableFact]
     public async Task Real_operator_apply_then_fresh_runtime_validate_uses_the_postgres_artifact()
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
-        Skip.IfNot(DualMigrateProcessRunner.HasDotnetEf(), "dotnet-ef is not available.");
         var connectionString = await fixture.CreateIsolatedDatabaseAsync();
         byte[] originalToken;
 
@@ -125,43 +142,57 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
             originalToken = record.ConcurrencyToken.ToArray();
         }
 
-        var result = DualMigrateProcessRunner.RunFromExistingBuild(
-            ["apply", "--postgresql"],
-            new Dictionary<string, string?>
-            {
-                ["ELSA_SECRETS_EF_POSTGRESQL"] = connectionString,
-                ["ELSA_SECRETS_EF_SQLITE"] = null,
-                ["ELSA_SECRETS_EF_SQLSERVER"] = null,
-                ["ELSA_SECRETS_EF_REQUIRE_ALL"] = null
-            });
-        var password = new NpgsqlConnectionStringBuilder(connectionString).Password;
-        Assert.False(
-            ContainsSensitiveConnectionData(result.Output, connectionString, password),
-            "The operator wrote sensitive PostgreSQL connection data to stdout.");
-        Assert.False(
-            ContainsSensitiveConnectionData(result.Error, connectionString, password),
-            "The operator wrote sensitive PostgreSQL connection data to stderr.");
-        Assert.True(result.ExitCode == 0, $"The PostgreSQL operator exited {result.ExitCode}; captured output is suppressed.");
-        Assert.Contains("reindexed 1 row(s)", result.Output, StringComparison.Ordinal);
-        Assert.True(
-            result.Output.Contains(
-                "database update --context SecretsPostgreSqlDbContext",
-                StringComparison.Ordinal),
-            "The operator did not report the expected PostgreSQL context update.");
+        var applied = PersistenceCliProcessRunner.Run(
+            "apply",
+            Provider,
+            connectionString,
+            ConnectionTransport.Environment);
+        AssertNothingSensitiveWasWritten(applied, connectionString, "apply");
+
+        // A refusal, not a failure to apply: the schema moved forward and the declared data repair did not
+        // run by itself. Exiting 0 here would tell an operator the database was ready when it is not.
+        Assert.Equal(EfToolingExitCode.NegativeResult, applied.ExitCode);
+        Assert.Contains("post-migration-required", applied.Error, StringComparison.Ordinal);
+        Assert.Contains(nameof(SecretsProjectionReindex), applied.Error, StringComparison.Ordinal);
+        Assert.Contains(
+            EfPostMigrationActions.CommandFor(PersistenceCliProcessRunner.Module, Provider),
+            applied.Error,
+            StringComparison.Ordinal);
+
+        await using (var afterApply = CreateContext(connectionString))
+        {
+            var history = (await afterApply.Database.GetAppliedMigrationsAsync()).ToArray();
+            Assert.Contains("20260910210216_Initial", history);
+            Assert.Contains("20260911011058_WidenLookupKeys", history);
+            Assert.Empty(await afterApply.Database.GetPendingMigrationsAsync());
+            Assert.True(await TableExistsAsync(afterApply, SecretsEfModule.TableName));
+            Assert.True(await TableExistsAsync(afterApply, SecretsEfModule.HistoryTableName));
+            // …and the repair genuinely did not run: a row quietly reindexed by the audit would look exactly
+            // like a healthy apply from here on.
+            Assert.Equal("\u019B", (await afterApply.Secrets.AsNoTracking().SingleAsync()).TypeNameLookupKey);
+        }
+
+        var repaired = PersistenceCliProcessRunner.Run(
+            "post-migrate",
+            Provider,
+            connectionString,
+            ConnectionTransport.Stdin);
+        AssertNothingSensitiveWasWritten(repaired, connectionString, "post-migrate");
+
+        Assert.True(repaired.ExitCode == EfToolingExitCode.Success, repaired.Describe());
+        Assert.Contains(PersistenceCliProcessRunner.Module, repaired.Output, StringComparison.Ordinal);
+        Assert.Contains(nameof(SecretsProjectionReindex), repaired.Output, StringComparison.Ordinal);
+        // The count, not just the name: the action appears under DECLARED whether or not it ran, and
+        // "nothing required" on a database that still needs repairing is the report this must never give.
+        Assert.Contains("1 post-migration action(s) ran", repaired.Output, StringComparison.Ordinal);
 
         await using var context = CreateContext(connectionString);
         Assert.Equal(EfProviderNames.PostgreSql, context.Database.ProviderName);
         Assert.Same(typeof(SecretsPostgreSqlDbContext).Assembly, context.GetService<IMigrationsAssembly>().Assembly);
-        var applied = (await context.Database.GetAppliedMigrationsAsync()).ToArray();
-        Assert.Contains("20260910210216_Initial", applied);
-        Assert.Contains("20260911011058_WidenLookupKeys", applied);
-        Assert.Empty(await context.Database.GetPendingMigrationsAsync());
-        Assert.True(await TableExistsAsync(context, SecretsEfModule.TableName));
-        Assert.True(await TableExistsAsync(context, SecretsEfModule.HistoryTableName));
-        var repaired = await context.Secrets.AsNoTracking().SingleAsync();
-        Assert.Equal("\uA7DC", repaired.TypeNameLookupKey);
-        Assert.Equal("\uA7DC", SecretDocument.Parse(repaired.Payload).TypeNameLookupKey);
-        Assert.Equal(originalToken, repaired.ConcurrencyToken);
+        var row = await context.Secrets.AsNoTracking().SingleAsync();
+        Assert.Equal("\uA7DC", row.TypeNameLookupKey);
+        Assert.Equal("\uA7DC", SecretDocument.Parse(row.Payload).TypeNameLookupKey);
+        Assert.Equal(originalToken, row.ConcurrencyToken);
         await EfDatabaseMigrator.ApplyAsync(
             context,
             SecretsPostgreSqlDbContext.ExpectedProviderName,
@@ -246,6 +277,21 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
         parameter.Value = table;
         command.Parameters.Add(parameter);
         return Convert.ToBoolean(await command.ExecuteScalarAsync());
+    }
+
+    /// <summary>
+    /// Neither stream carried the connection string or its password. Asserted before any assertion that
+    /// reports a captured stream, so a failure below can never be the thing that prints the credential.
+    /// </summary>
+    private static void AssertNothingSensitiveWasWritten(CliResult run, string connectionString, string command)
+    {
+        var password = new NpgsqlConnectionStringBuilder(connectionString).Password;
+        Assert.False(
+            ContainsSensitiveConnectionData(run.Output, connectionString, password),
+            $"The operator wrote sensitive PostgreSQL connection data to stdout on '{command}'.");
+        Assert.False(
+            ContainsSensitiveConnectionData(run.Error, connectionString, password),
+            $"The operator wrote sensitive PostgreSQL connection data to stderr on '{command}'.");
     }
 
     private static bool ContainsSensitiveConnectionData(string text, string connectionString, string? password) =>

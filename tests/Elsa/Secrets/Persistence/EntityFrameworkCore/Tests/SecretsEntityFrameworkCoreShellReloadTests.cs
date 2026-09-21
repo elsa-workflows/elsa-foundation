@@ -29,6 +29,9 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
 {
     private const string ShellName = "secrets-ef-migrate";
 
+    /// <summary>The one migration this module's SQLite chain adds after <c>Initial</c>.</summary>
+    private const string WidenLookupKeys = "20260911010717_WidenLookupKeys";
+
     [Fact]
     public async Task AutoMigrate_applies_on_activation_and_again_after_reload_drops_the_schema()
     {
@@ -78,10 +81,21 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
         }
     }
 
-    [SkippableFact]
+    /// <summary>
+    /// The operator path a stale database is unblocked through, end to end (#1878): a Validate-policy shell
+    /// refuses to activate over a database left at <c>Initial</c>, the real <c>dotnet elsa persistence
+    /// apply</c> — a separate process, against a built host's output, with no source tree — brings it
+    /// forward, and a fresh host then activates against the very migration the refusal named.
+    /// </summary>
+    /// <remarks>
+    /// Run as a real subprocess rather than through <see cref="EfDatabaseMigrator"/> in process, because what
+    /// this proves is that the artifact an operator can actually produce unblocks the host: an in-process
+    /// equivalent would apply the same migrations from the same assembly and prove nothing about the tool.
+    /// Before #1878 this drove <c>tools/ef/dual-migrate.sh</c>, which the CLI replaced.
+    /// </remarks>
+    [Fact]
     public async Task Older_database_is_rejected_then_real_operator_apply_allows_fresh_validate()
     {
-        Skip.IfNot(DualMigrateProcessRunner.HasDotnetEf(), "dotnet-ef is not available.");
         var path = NewDbPath();
         try
         {
@@ -93,21 +107,19 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
                 var exception = await Assert.ThrowsAnyAsync<Exception>(() => registry.GetOrActivateAsync(ShellName));
                 var message = Flatten(exception);
                 Assert.Contains(nameof(SecretsSqliteDbContext), message, StringComparison.Ordinal);
-                Assert.Contains("20260911010717_WidenLookupKeys", message, StringComparison.Ordinal);
+                Assert.Contains(WidenLookupKeys, message, StringComparison.Ordinal);
             }
 
-            var result = DualMigrateProcessRunner.RunFromExistingBuild(
-                ["apply", "--sqlite"],
-                new Dictionary<string, string?>
-                {
-                    ["ELSA_SECRETS_EF_SQLITE"] = SqliteConnectionString(path),
-                    ["ELSA_SECRETS_EF_SQLSERVER"] = null,
-                    ["ELSA_SECRETS_EF_POSTGRESQL"] = null,
-                    ["ELSA_SECRETS_EF_REQUIRE_ALL"] = null
-                });
+            var result = PersistenceCliProcessRunner.Run("apply", "Sqlite", SqliteConnectionString(path));
+
             Assert.True(result.ExitCode == 0, result.Describe());
-            Assert.Contains("database update --context SecretsSqliteDbContext", result.Output, StringComparison.Ordinal);
-            Assert.Contains("20260911010717_WidenLookupKeys", result.Output, StringComparison.Ordinal);
+            Assert.Contains(PersistenceCliProcessRunner.Module, result.Output, StringComparison.Ordinal);
+            Assert.Contains(nameof(SecretsSqliteDbContext), result.Output, StringComparison.Ordinal);
+            Assert.Contains(SecretsEfModule.HistoryTableName, result.Output, StringComparison.Ordinal);
+            // Read back rather than taken from the report: what has to be true is that the migration the
+            // refusal named is recorded in this module's own history table, which is what a Validate host
+            // reads. A report saying so while the database disagreed is the failure worth catching.
+            Assert.Contains(WidenLookupKeys, await AppliedMigrationsAsync(path));
 
             await using var freshHost = await StartHostAsync(path, EfMigratePolicy.Validate);
             var freshRegistry = freshHost.Services.GetRequiredService<IShellRegistry>();
@@ -164,14 +176,22 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
 
     private static async Task CreateInitialSchemaAsync(string path)
     {
-        var options = new DbContextOptionsBuilder<SecretsSqliteDbContext>()
+        await using var context = Context(path);
+        await context.GetService<IMigrator>().MigrateAsync("20260910210210_Initial");
+    }
+
+    private static async Task<string[]> AppliedMigrationsAsync(string path)
+    {
+        await using var context = Context(path);
+        return [.. await context.Database.GetAppliedMigrationsAsync()];
+    }
+
+    private static SecretsSqliteDbContext Context(string path) => new(
+        new DbContextOptionsBuilder<SecretsSqliteDbContext>()
             .UseSqlite(SqliteConnectionString(path), sqlite => sqlite
                 .MigrationsAssembly(typeof(SecretsSqliteDbContext).Assembly.GetName().Name)
                 .MigrationsHistoryTable(SecretsEfModule.HistoryTableName))
-            .Options;
-        await using var context = new SecretsSqliteDbContext(options);
-        await context.GetService<IMigrator>().MigrateAsync("20260910210210_Initial");
-    }
+            .Options);
 
     private static async Task DropSecretsSchemaAsync(string path)
     {

@@ -404,9 +404,9 @@ same lock** or concurrent hosts race. Do not roll a second lock around `MigrateA
 `EfDatabaseMigrator.ApplyAsync` is the in-process path (feature enable and CShells reload).
 Out-of-process apply, fail-if-pending and post-migration repair go through
 `dotnet elsa persistence apply` / `validate` / `post-migrate`, which run the host's own compiled
-migrations inside its own closure. The older Secrets-only
-[tools/ef/dual-migrate.sh](../../../../tools/ef/dual-migrate.sh) still exists and is retired
-separately (FR-078).
+migrations inside its own closure. There is no second implementation of that path: #1878 retired the
+Secrets-only `tools/ef/dual-migrate.sh` (FR-078), and
+[tools/ef/module-migrate.sh](../../../../tools/ef/module-migrate.sh) is a thin shim over the same CLI.
 
 ## Provider packages stay in the host
 

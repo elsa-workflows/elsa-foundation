@@ -9,6 +9,15 @@ namespace Elsa.Architecture.Tests;
 /// ADR 0073 supersedes ADR 0072's bounded policy but preserves its admitted implementation as the
 /// reviewed starting surface; later EF replacements must extend the ratchet with their own evidence.
 /// </summary>
+/// <remarks>
+/// Until #1878 one test here held the Secrets <c>Tooling/</c> project to being the only Secrets EF package
+/// referencing a provider engine. With that project retired, no Secrets EF package carries one at all, and
+/// that stronger statement is enforced by two guards rather than by naming a project:
+/// <see cref="Policy_and_module_packages_stay_provider_free"/> pins the module's own declared packages, and
+/// <c>EfCoreDependencyGuardTests.Every_admitted_Secrets_pilot_project_resolves_only_its_reviewed_EF_closure</c>
+/// pins every admitted project's <i>resolved</i> closure in both directions — over exactly the project set
+/// <see cref="Pilot_paths_and_projects_are_the_reviewed_adr_0072_allowlist"/> holds fixed.
+/// </remarks>
 public sealed class SecretsEfPersistencePilotArchitectureTests
 {
     private static readonly string[] PolicyPackages =
@@ -36,14 +45,6 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "Microsoft.EntityFrameworkCore.Sqlite",
         "Microsoft.EntityFrameworkCore.SqlServer",
         "MySql.EntityFrameworkCore",
-        "Npgsql.EntityFrameworkCore.PostgreSQL"
-    ];
-
-    private static readonly string[] ToolingPackages =
-    [
-        "Microsoft.EntityFrameworkCore.Design",
-        "Microsoft.EntityFrameworkCore.SqlServer",
-        "Microsoft.EntityFrameworkCore.Sqlite",
         "Npgsql.EntityFrameworkCore.PostgreSQL"
     ];
 
@@ -135,11 +136,6 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsProjectionReindex.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsSearchKeys.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsUnicodeOrdinalIgnoreCaseV1.cs",
-        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/Program.cs",
-        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/SecretsDesignTimeConnection.cs",
-        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/SecretsPostgreSqlDesignTimeFactory.cs",
-        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/SecretsSqlServerDesignTimeFactory.cs",
-        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/SecretsSqliteDesignTimeFactory.cs",
         "tests/Elsa/Persistence/EntityFramework/BindingDriftTests/EfRelationalProviderBindingDriftTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/CommittedCompositionConnectionTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/ConfigurationServices.cs",
@@ -174,9 +170,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Support/SecretsPackageFeedProbeRunner.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/SqlServerContainerFixture.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/SqlServerEfSecretRepositoryTests.cs",
-        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/DualMigrateProcessRunnerLockTests.cs",
-        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsDesignTimeConnectionTests.cs",
-        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEfDualMigrateToolTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEfMigrationGeneratorTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEfModuleMigrationTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEntityFrameworkCoreFeatureTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEntityFrameworkCoreShellReloadTests.cs",
@@ -187,7 +181,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsProjectionReindexTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsSearchKeysTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SqliteEfSecretRepositoryTests.cs",
-        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/Support/DualMigrateProcessRunner.cs"
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/Support/PersistenceCliProcessRunner.cs"
     ];
 
     [Fact]
@@ -222,15 +216,6 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         Assert.Equal(ModulePackages, module);
         Assert.Empty(policy.Intersect(ForbiddenProviderPackages, StringComparer.Ordinal));
         Assert.Empty(module.Intersect(ForbiddenProviderPackages, StringComparer.Ordinal));
-    }
-
-    [Fact]
-    public void Tooling_project_is_the_only_secrets_ef_package_that_references_provider_engines()
-    {
-        var tooling = PackageIncludes(RepoPath(
-            "src", "Elsa", "Secrets", "Persistence", "EntityFrameworkCore", "Tooling",
-            "Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling.csproj"));
-        Assert.Equal(ToolingPackages, tooling);
     }
 
     [Fact]
