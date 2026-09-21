@@ -126,13 +126,18 @@ public sealed class NuplanePackageRootTests : IDisposable
     /// <summary>
     /// The other shape User Story 2's own Independent Test names: a host whose <c>--packages</c> root
     /// carries a <c>store-state.json</c> recording the active set, rather than relying on completion
-    /// markers alone. This drives a real state file through the CLI end to end, and checks the module it
-    /// names produces the same SQL as the already-tested marker-probe path for the same module.
+    /// markers alone. The install here is deliberately left without its <c>.nuplane-ready</c> marker, so
+    /// <see cref="NuplaneInstallRoot.Probe"/> — the marker-based fallback — cannot find it; only
+    /// <c>NuplaneLoader.FromStateAsync</c> reading <c>store-state.json</c> can. That the SQL it produces
+    /// matches the marker-probe path (a separate, completed install, proven elsewhere) shows the state-file
+    /// route resolves the same module the same way, not that either route alone was exercised. The second
+    /// half proves the state file is load-bearing: with it removed, the identical marker-less install is no
+    /// longer discovered at all.
     /// </summary>
     [Fact]
     public void A_module_recorded_in_a_store_state_file_is_discovered_and_scripted_the_same_way()
     {
-        Install("Acme.Widgets", "1.4.2", complete: true);
+        Install("Acme.Widgets", "1.4.2", complete: false);
         var installPath = Path.Join(packages.Path, "local", "Acme.Widgets", "1.4.2");
         WriteStateFile("Acme.Widgets", "1.4.2", installPath);
 
@@ -152,7 +157,7 @@ public sealed class NuplanePackageRootTests : IDisposable
         Assert.Equal(ToolExitCode.Success, script.ExitCode);
 
         // The already-tested --packages path (NuplaneInstallRoot.Probe, no state file): a second root with
-        // the same completed install and no store-state.json beside it.
+        // a completed install and no store-state.json beside it.
         using var probeRoot = new TempDirectory("elsa-cli-nuplane-probe-packages-");
         using var fromProbe = new TempDirectory("elsa-cli-nuplane-probe-artifact-");
         InstallInto(probeRoot.Path, "Acme.Widgets", "1.4.2", complete: true);
@@ -170,6 +175,16 @@ public sealed class NuplanePackageRootTests : IDisposable
             File.ReadAllBytes(fromState.File("01-acme-widgets.sql")).AsSpan()
                 .SequenceEqual(File.ReadAllBytes(fromProbe.File("01-acme-widgets.sql"))),
             "The SQL a store-state-resolved module produces differs from the SQL the same module produces through the --packages probe path.");
+
+        // Negative: the same root, minus the state file, has only the marker-less install left. The
+        // marker-based probe cannot see it either, so discovery must fail rather than silently fall back.
+        File.Delete(Path.Join(packages.Path, NuplaneInstallRoot.StateFileName));
+
+        var listWithoutState = DotnetElsa.Run("persistence", "list", "--host", DotnetElsa.Host("NuplaneHost"), "--packages", packages.Path);
+
+        Assert.Equal(ToolExitCode.ResolutionFailure, listWithoutState.ExitCode);
+        Assert.Contains("packages-empty", listWithoutState.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("Acme.Widgets", listWithoutState.Output, StringComparison.Ordinal);
     }
 
     /// <summary>Lays out one package the way Nuplane's own install store does: feed, id, version, and a completion marker.</summary>
