@@ -214,10 +214,11 @@ hash does not match.
 Nuplane also models a desired manifest (`Nuplane:Convergence:Manifest` — a file of
 `{ Id, Version, SourceHint, Sha512 }` entries). Since `0.0.11-preview.83`
 ([valence-works/nuplane#76](https://github.com/valence-works/nuplane/issues/76)),
-`DesiredManifestPackageSource` is always registered as an `IDesiredPackageSource`, but
-`ReconciliationService` skips it while `Nuplane:Convergence:Manifest:Enabled` is false, so it is
-available and opt-in rather than unregistered. It is not a prerequisite for feed-based deployment:
-exact-id include patterns plus the lock file cover pinning and integrity.
+`DesiredManifestPackageSource` is always registered as an `IDesiredPackageSource`, but the source
+itself is skipped unless `Nuplane:Convergence:Manifest:Enabled` is true AND
+`Nuplane:Convergence:Manifest:Path` is set, so it is available and opt-in rather than unregistered.
+It is not a prerequisite for feed-based deployment: exact-id include patterns plus the lock file
+cover pinning and integrity.
 
 ## What fails loudly
 
