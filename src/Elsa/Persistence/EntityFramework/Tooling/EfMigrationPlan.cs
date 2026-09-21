@@ -1,0 +1,193 @@
+using System.Buffers;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+
+namespace Elsa.Persistence.EntityFramework.Tooling;
+
+/// <summary>
+/// One module's place in a <c>script</c> run, shared by <c>plan</c> (which stops here) and <c>script</c>
+/// (which adds a file to it).
+/// </summary>
+internal sealed record EfModulePlanEntry(
+    int Order,
+    EfModuleDescriptor Descriptor,
+    string Context,
+    IReadOnlyList<string> MigrationIds)
+{
+    public string Module => Descriptor.Name;
+
+    public string Assembly => Descriptor.Assembly.GetName().Name!;
+
+    public string HistoryTable => Descriptor.HistoryTableName;
+
+    public IReadOnlyList<string> DependsOn => EfModuleOrder.Dependencies(Descriptor);
+
+    /// <summary>Null rather than an invented id when a module has no migrations for this provider yet.</summary>
+    public string? To => MigrationIds.Count == 0 ? null : MigrationIds[^1];
+}
+
+/// <summary>One module's generated file, held in memory until every module has one.</summary>
+internal sealed record EfModuleArtifact(EfModulePlanEntry Entry, string File, byte[] Content, EfToolingPackageFacts Package)
+{
+    public string Sha256 => EfMigrationPlan.Sha256(Content);
+}
+
+/// <summary>The top-level facts a manifest records that are not per module.</summary>
+internal sealed record EfMigrationPlanFacts(
+    string Provider,
+    EfToolingEngineFacts Engine,
+    string EfCoreVersion,
+    string? Schema,
+    EfToolingHostFacts Host);
+
+/// <summary>
+/// The deterministic artifact <c>script</c> writes: flat <c>NN-&lt;slug&gt;.sql</c> files plus one
+/// <c>migration-plan.json</c> (D6, FR-040, FR-047–FR-049). Determinism is the deliverable here, not a
+/// nicety — LF endings, UTF-8 without a byte-order mark, a fixed JSON key order, and no timestamp,
+/// absolute path, tool version or connection string anywhere — so every byte an operator commits is
+/// produced through this one type.
+/// </summary>
+internal static class EfMigrationPlan
+{
+    public const string FileName = "migration-plan.json";
+    public const int SchemaVersion = 1;
+    public const string Ordering = "dependsOn-then-name";
+
+    private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
+
+    /// <summary>The canonical name lower-cased with dots replaced by hyphens.</summary>
+    public static string Slug(string module) => module.Replace('.', '-').ToLowerInvariant();
+
+    public static string ScriptFileName(int order, string module) =>
+        string.Create(CultureInfo.InvariantCulture, $"{order:D2}-{Slug(module)}.sql");
+
+    /// <summary>
+    /// UTF-8 without a byte-order mark, LF endings, one trailing newline. EF builds its script with
+    /// <c>Environment.NewLine</c>, so an unnormalized run on Windows would commit CRLF and a run on Linux
+    /// LF for the same model — which is exactly the difference <c>script-check</c> would then report as a
+    /// hand edit.
+    /// </summary>
+    public static byte[] Utf8Lf(string content)
+    {
+        var normalized = content.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+        if (!normalized.EndsWith('\n'))
+            normalized += "\n";
+        return Utf8NoBom.GetBytes(normalized);
+    }
+
+    public static string Sha256(byte[] content) => Convert.ToHexStringLower(SHA256.HashData(content));
+
+    /// <summary>Renders the manifest in the fixed key order FR-047 and FR-048 name, in the same encoding as the SQL beside it.</summary>
+    public static byte[] Render(EfMigrationPlanFacts facts, IReadOnlyList<EfModuleArtifact> modules)
+    {
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = true, IndentCharacter = ' ', IndentSize = 2, NewLine = "\n" }))
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber("schemaVersion", SchemaVersion);
+            writer.WriteString("provider", facts.Provider);
+            writer.WriteStartObject("engine");
+            writer.WriteString("package", facts.Engine.Package);
+            writer.WriteString("version", facts.Engine.Version);
+            writer.WriteString("source", facts.Engine.Source);
+            writer.WriteEndObject();
+            writer.WriteString("efCoreVersion", facts.EfCoreVersion);
+            writer.WriteString("schema", facts.Schema);
+            writer.WriteBoolean("idempotent", true);
+            writer.WriteString("ordering", Ordering);
+            writer.WriteStartObject("host");
+            writer.WriteString("name", facts.Host.Name);
+            writer.WriteString("providerAgreement", facts.Host.ProviderAgreement);
+            writer.WriteString("shell", facts.Host.Shell);
+            writer.WriteString("environment", facts.Host.Environment);
+            writer.WriteEndObject();
+            writer.WriteStartArray("modules");
+            foreach (var module in modules)
+                WriteModule(writer, module);
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+
+        return [.. buffer.WrittenSpan, (byte)'\n'];
+    }
+
+    /// <summary>
+    /// Writes the artifact, once every file exists in memory. An output directory that already holds a
+    /// <c>.sql</c> file this run does not produce is refused rather than left behind: the files are numbered
+    /// for a DBA to apply in order, and a leftover from an earlier, wider selection would be applied as if
+    /// it belonged to this plan.
+    /// </summary>
+    public static void Write(string output, IReadOnlyList<EfModuleArtifact> modules, byte[] manifest)
+    {
+        var produced = modules.Select(module => module.File).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (Directory.Exists(output))
+        {
+            var stale = Directory.EnumerateFiles(output, "*.sql")
+                .Select(Path.GetFileName)
+                .OfType<string>()
+                .Where(name => !produced.Contains(name))
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            if (stale.Length > 0)
+            {
+                throw EfToolingRefusal.Usage(
+                    "output-not-clean",
+                    "The output directory holds SQL files this selection does not produce. " +
+                    "Clear the directory or script into an empty one: a numbered file left over from an earlier " +
+                    "selection is applied in order like any other.",
+                    stale);
+            }
+        }
+
+        try
+        {
+            Directory.CreateDirectory(output);
+            foreach (var module in modules)
+                File.WriteAllBytes(Path.Combine(output, module.File), module.Content);
+            File.WriteAllBytes(Path.Combine(output, FileName), manifest);
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+        {
+            throw EfToolingRefusal.Resolution("output-write-failed", $"The artifact could not be written: {failure.Message}");
+        }
+    }
+
+    private static void WriteModule(Utf8JsonWriter writer, EfModuleArtifact module)
+    {
+        var entry = module.Entry;
+        writer.WriteStartObject();
+        writer.WriteNumber("order", entry.Order);
+        writer.WriteString("module", entry.Module);
+        writer.WriteString("file", module.File);
+        writer.WriteString("sha256", module.Sha256);
+        writer.WriteStartObject("package");
+        writer.WriteString("id", module.Package.Id);
+        writer.WriteString("version", module.Package.Version);
+        writer.WriteString("source", module.Package.Source);
+        writer.WriteEndObject();
+        writer.WriteString("assembly", entry.Assembly);
+        writer.WriteString("context", entry.Context);
+        writer.WriteString("historyTable", entry.HistoryTable);
+        writer.WriteStartObject("migrations");
+        writer.WriteString("from", "0");
+        writer.WriteString("to", entry.To);
+        writer.WriteNumber("count", entry.MigrationIds.Count);
+        writer.WriteStartArray("ids");
+        foreach (var id in entry.MigrationIds)
+            writer.WriteStringValue(id);
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+        writer.WriteStartArray("dependsOn");
+        foreach (var dependency in entry.DependsOn)
+            writer.WriteStringValue(dependency);
+        writer.WriteEndArray();
+        // Every first-party module declares none today, and a module that declared one would have been
+        // refused before generation: emitting [] for a module with a real obligation would tell a DBA there
+        // is nothing left to run.
+        writer.WriteStartArray("postMigration");
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+    }
+}
