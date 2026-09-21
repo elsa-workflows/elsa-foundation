@@ -1,6 +1,7 @@
 using Acme.Widgets;
 using Elsa.Cli.Worker;
 using Elsa.Persistence.EntityFramework.Tooling;
+using Microsoft.Data.Sqlite;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -58,6 +59,31 @@ public sealed class PersistenceCliTests : IDisposable
             EveryModuleTheFixtureHostInstalls,
             run.Output.Split('\n').Skip(1).Select(line => line.Split("  ")[0].Trim()).Where(name => name.Length > 0 && !name.EndsWith("module(s).", StringComparison.Ordinal)));
     }
+
+    /// <summary>
+    /// The comma-separated and repeated-flag forms this tool's <c>--modules</c> help text and the README
+    /// both promise still resolve to the same selection now that <c>AllowMultipleArgumentsPerToken</c> is
+    /// off (it used to swallow an unrecognized flag typed after <c>--modules</c>, which is why it was
+    /// removed) — pinned here so a future change to option wiring cannot silently break either form.
+    /// </summary>
+    [Fact]
+    public void Modules_comma_separated_and_repeated_forms_resolve_to_the_same_selection()
+    {
+        var commaSeparated = DotnetElsa.Run("persistence", "list", "--host", DotnetElsa.Host("Host"), "--modules", "Secrets,Workflows.Design");
+        var repeated = DotnetElsa.Run("persistence", "list", "--host", DotnetElsa.Host("Host"), "--modules", "Secrets", "--modules", "Workflows.Design");
+
+        Assert.Equal(ToolExitCode.Success, commaSeparated.ExitCode);
+        Assert.Equal(ToolExitCode.Success, repeated.ExitCode);
+        Assert.Equal(ListedModules(commaSeparated), ListedModules(repeated));
+        Assert.Equal(["Secrets", "Workflows.Design"], ListedModules(commaSeparated));
+    }
+
+    // README.md documents `--packages <dir>` as "Repeatable" only — it makes no comma-separated promise
+    // for --packages (unlike --modules, which splits each value on comma), and the repeated form is
+    // already exercised by PackageRootProbeTests, so no --packages test is added here.
+
+    private static string[] ListedModules(CliRun run) =>
+        [.. run.Output.Split('\n').Skip(1).Select(line => line.Split("  ")[0].Trim()).Where(name => name.Length > 0 && !name.EndsWith("module(s).", StringComparison.Ordinal))];
 
     /// <summary>A third-party module is indistinguishable in shape from a first-party one (User Story 6, scenario 1).</summary>
     [Fact]
@@ -265,10 +291,15 @@ public sealed class PersistenceCliTests : IDisposable
         DotnetElsa.Run(
             ["persistence", "script", "--host", DotnetElsa.Host("MinimalHost"), "--provider", "PostgreSql", "--output", output.Path, .. selector]);
 
+    /// <summary>
+    /// <c>post-migrate</c> is the one command this build still does not implement (#1876 shipped
+    /// <c>apply</c>/<c>validate</c>); asking for it is a usage error rather than a command that quietly
+    /// does nothing.
+    /// </summary>
     [Fact]
     public void An_unrecognized_command_is_a_usage_error_rather_than_a_silent_no_op()
     {
-        var run = DotnetElsa.Run("persistence", "apply", "--host", DotnetElsa.Host("MinimalHost"));
+        var run = DotnetElsa.Run("persistence", "post-migrate", "--host", DotnetElsa.Host("MinimalHost"));
 
         Assert.Equal(ToolExitCode.Refusal, run.ExitCode);
         Assert.Contains("usage", run.Error, StringComparison.Ordinal);
@@ -304,6 +335,136 @@ public sealed class PersistenceCliTests : IDisposable
 
         Assert.Equal(ToolExitCode.Success, run.ExitCode);
         Assert.Equal("elsa_from_the_flag", Schema());
+    }
+
+    /// <summary>
+    /// The slice's own acceptance criterion (#1876): the same database, applied and then validated,
+    /// exits 0 both times. SQLite needs no container, which is what makes this reachable on a machine
+    /// where docker pulls are blocked.
+    /// </summary>
+    [Fact]
+    public void Apply_then_validate_against_the_same_sqlite_database_both_exit_zero()
+    {
+        var db = Path.Join(output.Path, "elsa-apply-validate.db");
+        var env = new Dictionary<string, string> { ["ELSA_EF_CONNECTION"] = $"Data Source={db}" };
+
+        var apply = DotnetElsa.Run(env, "persistence", "apply", "--host", DotnetElsa.Host("Host"), "--provider", "Sqlite", "--modules", "Secrets");
+
+        Assert.Equal(ToolExitCode.Success, apply.ExitCode);
+        Assert.True(File.Exists(db));
+
+        var validate = DotnetElsa.Run(env, "persistence", "validate", "--host", DotnetElsa.Host("Host"), "--provider", "Sqlite", "--modules", "Secrets");
+
+        Assert.Equal(ToolExitCode.Success, validate.ExitCode);
+        Assert.Contains("No pending migrations.", validate.Output, StringComparison.Ordinal);
+    }
+
+    /// <summary>Reading the connection off the named environment variable is the default, unnamed flag.</summary>
+    [Fact]
+    public void Apply_reads_a_custom_connection_env_name()
+    {
+        var db = Path.Join(output.Path, "elsa-custom-env.db");
+        var env = new Dictionary<string, string> { ["CONTOSO_CONNECTION"] = $"Data Source={db}" };
+
+        var apply = DotnetElsa.Run(
+            env,
+            "persistence", "apply",
+            "--host", DotnetElsa.Host("Host"),
+            "--provider", "Sqlite",
+            "--modules", "Secrets",
+            "--connection-env", "CONTOSO_CONNECTION");
+
+        Assert.Equal(ToolExitCode.Success, apply.ExitCode);
+        Assert.True(File.Exists(db));
+    }
+
+    /// <summary>Reading the connection off this process's own stdin, the only other way in (D7).</summary>
+    [Fact]
+    public async Task Apply_reads_the_connection_from_stdin()
+    {
+        var db = Path.Join(output.Path, "elsa-stdin.db");
+
+        var apply = await DotnetElsa.RunWithStdinAsync(
+            $"Data Source={db}",
+            "persistence", "apply",
+            "--host", DotnetElsa.Host("Host"),
+            "--provider", "Sqlite",
+            "--modules", "Secrets",
+            "--connection-stdin");
+
+        Assert.Equal(ToolExitCode.Success, apply.ExitCode);
+        Assert.True(File.Exists(db));
+    }
+
+    /// <summary>
+    /// Validate fails closed on a pending migration and applies nothing — proved by asserting the database
+    /// is unchanged, not merely by the exit code (FR-052).
+    /// </summary>
+    [Fact]
+    public void Validate_fails_and_applies_nothing_when_a_migration_is_pending()
+    {
+        var db = Path.Join(output.Path, "elsa-pending.db");
+        var env = new Dictionary<string, string> { ["ELSA_EF_CONNECTION"] = $"Data Source={db}" };
+
+        var validate = DotnetElsa.Run(env, "persistence", "validate", "--host", DotnetElsa.Host("Host"), "--provider", "Sqlite", "--modules", "Secrets");
+
+        Assert.Equal(ToolExitCode.NegativeResult, validate.ExitCode);
+        Assert.Contains("pending-migrations", validate.Error, StringComparison.Ordinal);
+        // Nothing was applied: not just the exit code, but the database itself carries no table at all —
+        // SQLite may create the file lazily on connect, but validate's own policy never migrates (FR-052).
+        Assert.Equal(0L, TableCount(db));
+    }
+
+    private static long TableCount(string sqliteDatabase)
+    {
+        if (!File.Exists(sqliteDatabase))
+            return 0;
+
+        using var connection = new SqliteConnection($"Data Source={sqliteDatabase}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT count(*) FROM sqlite_master WHERE type = 'table'";
+        return (long)command.ExecuteScalar()!;
+    }
+
+    /// <summary>
+    /// There is no <c>--connection</c> flag (D7): a script that passes one must be told, not silently
+    /// handed a command that ignored it.
+    /// </summary>
+    [Theory]
+    [InlineData("apply")]
+    [InlineData("validate")]
+    public void A_connection_flag_is_rejected_as_a_usage_error(string command)
+    {
+        var run = DotnetElsa.Run(
+            "persistence", command,
+            "--host", DotnetElsa.Host("Host"),
+            "--provider", "Sqlite",
+            "--modules", "Secrets",
+            "--connection", "Data Source=whatever.db");
+
+        Assert.Equal(ToolExitCode.Refusal, run.ExitCode);
+        Assert.Contains("usage", run.Error, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// D7's promise extends past the process boundary: the connection string must not appear anywhere an
+    /// operator can read, including a failure's own message. This forces a real failure — a SQLite path
+    /// that cannot be opened — with a sentinel embedded in the connection string, and checks both output
+    /// streams for it.
+    /// </summary>
+    [Fact]
+    public void A_connection_string_never_appears_in_any_output_even_on_failure()
+    {
+        const string sentinel = "SENTINEL-CREDENTIAL-4f2b91";
+        var connection = $"Data Source=/nonexistent-dir-{sentinel}/db.sqlite";
+        var env = new Dictionary<string, string> { ["ELSA_EF_CONNECTION"] = connection };
+
+        var apply = DotnetElsa.Run(env, "persistence", "apply", "--host", DotnetElsa.Host("Host"), "--provider", "Sqlite", "--modules", "Secrets");
+
+        Assert.Equal(ToolExitCode.DatabaseFailure, apply.ExitCode);
+        Assert.DoesNotContain(sentinel, apply.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(connection, apply.Text, StringComparison.Ordinal);
     }
 
     private string? Schema()

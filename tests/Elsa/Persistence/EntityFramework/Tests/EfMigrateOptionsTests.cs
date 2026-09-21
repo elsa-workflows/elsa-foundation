@@ -89,7 +89,7 @@ public sealed class EfMigrateOptionsTests : IDisposable
     {
         await using var provider = Migrations(Configured("Validate")).BuildServiceProvider();
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<EfPendingMigrationsException>(() =>
             provider.GetRequiredService<IShellInitializer>().InitializeAsync());
 
         Assert.Contains(EfTestMigrationIds.Initial, exception.Message, StringComparison.Ordinal);

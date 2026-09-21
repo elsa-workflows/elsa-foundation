@@ -268,18 +268,172 @@ public sealed class EfToolingHostTests : IDisposable
     }
 
     /// <summary>
-    /// A later slice adds <c>--connection</c>; a worker that sends it to this build must be told, not
-    /// quietly handed an offline answer to a question that asked for a live one. The message must also not
-    /// echo the value it refused.
+    /// A field a future slice invents; a worker that sends it to this build must be told, not quietly
+    /// handed an answer to a different question. The message must also not echo the value it refused.
     /// </summary>
     [Fact]
     public async Task An_unknown_request_property_is_refused_without_echoing_its_value()
     {
-        var run = await RunAsync("""{"version":1,"command":"list","connection":"Host=db;Password=hunter2"}""");
+        var run = await RunAsync("""{"version":1,"command":"list","totallyUnknownField":"Host=db;Password=hunter2"}""");
 
         var message = run.Response.GetProperty("error").GetProperty("message").GetString()!;
-        Assert.Contains("connection", message, StringComparison.Ordinal);
+        Assert.Contains("totallyUnknownField", message, StringComparison.Ordinal);
         Assert.DoesNotContain("hunter2", message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <c>connection</c> (#1876) is a real field now, but only <c>apply</c> and <c>validate</c> open a
+    /// database (D7); <c>list</c>, <c>plan</c> and <c>script</c> refuse it rather than silently ignoring
+    /// it, and the refusal names the field, never the value.
+    /// </summary>
+    [Fact]
+    public async Task Connection_is_refused_on_a_command_that_opens_no_database()
+    {
+        var run = await RunAsync("""{"version":1,"command":"list","connection":"Host=db;Password=hunter2"}""");
+
+        Assert.Equal(EfToolingExitCode.Refusal, run.ExitCode);
+        var message = run.Response.GetProperty("error").GetProperty("message").GetString()!;
+        Assert.DoesNotContain("hunter2", message, StringComparison.Ordinal);
+        Assert.Contains(Details(run.Response), detail => detail.Contains("'connection' is not accepted", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("apply")]
+    [InlineData("validate")]
+    public async Task Connection_is_required_by_apply_and_validate(string command)
+    {
+        var run = await RunAsync(new ApplyRequestBody { Command = command, Provider = "Sqlite", Selection = new() { Kind = "modules", Modules = ["Secrets"] } });
+
+        Assert.Equal(EfToolingExitCode.Refusal, run.ExitCode);
+        Assert.Contains(Details(run.Response), detail => detail.Contains("'connection' is required", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The slice's own acceptance criterion (#1876): <c>apply</c> followed by <c>validate</c> against the
+    /// same database exits 0 both times, and <c>apply</c> reports what it actually applied.
+    /// </summary>
+    [Fact]
+    public async Task Apply_then_validate_against_sqlite_round_trips_and_exits_zero()
+    {
+        var connection = $"Data Source={Path.Join(root, "apply-validate.db")}";
+
+        var apply = await RunAsync(ApplyRequest("apply", "Sqlite", ["Secrets"], connection));
+        Assert.Equal(EfToolingExitCode.Success, apply.ExitCode);
+        var applied = apply.Response.GetProperty("apply").GetProperty("modules")[0];
+        Assert.Equal("Secrets", applied.GetProperty("module").GetString());
+        Assert.True(applied.GetProperty("applied").GetArrayLength() > 0);
+
+        var validate = await RunAsync(ApplyRequest("validate", "Sqlite", ["Secrets"], connection));
+        Assert.Equal(EfToolingExitCode.Success, validate.ExitCode);
+        Assert.Equal("Secrets", validate.Response.GetProperty("validate").GetProperty("modules")[0].GetProperty("module").GetString());
+    }
+
+    /// <summary>
+    /// <c>validate</c> fails closed (exit 1) on a pending migration and applies nothing (FR-052) — proved
+    /// here by reading the database back, not merely by the exit code: no table exists at all, because
+    /// <see cref="EfMigratePolicy.Validate"/> never calls <c>MigrateAsync</c>.
+    /// </summary>
+    [Fact]
+    public async Task Validate_fails_closed_on_a_pending_migration_and_applies_nothing()
+    {
+        var db = Path.Join(root, "pending.db");
+        var connection = $"Data Source={db}";
+
+        var validate = await RunAsync(ApplyRequest("validate", "Sqlite", ["Secrets"], connection));
+
+        Assert.Equal(EfToolingExitCode.NegativeResult, validate.ExitCode);
+        Assert.Equal("pending-migrations", validate.Response.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(0L, TableCount(db));
+    }
+
+    /// <summary>
+    /// An unreadable database is a database failure (exit 4), never the negative result <c>validate</c>
+    /// reports for a pending migration (exit 1): the two are classified by where the failure originates,
+    /// not by exception type alone, so an operator is never told to run <c>apply</c> against a database
+    /// that cannot be read at all. A file that exists but is not a database — rather than a missing
+    /// directory, which Sqlite's own history check treats as "nothing applied yet" and so genuinely does
+    /// report as pending — makes <c>GetPendingMigrationsAsync</c> itself throw, the same shape of failure
+    /// the classification in <c>EfToolingHost.Validate</c> exists to tell apart from a real pending
+    /// migration.
+    /// </summary>
+    [Fact]
+    public async Task Validate_reports_an_unreadable_database_as_a_database_failure_not_pending_migrations()
+    {
+        var db = Path.Join(root, "corrupt.db");
+        File.WriteAllText(db, "not a sqlite database");
+        var connection = $"Data Source={db}";
+
+        var validate = await RunAsync(ApplyRequest("validate", "Sqlite", ["Secrets"], connection));
+
+        Assert.Equal(EfToolingExitCode.DatabaseFailure, validate.ExitCode);
+        Assert.Equal("module-validate-failed", validate.Response.GetProperty("error").GetProperty("code").GetString());
+        var message = validate.Response.GetProperty("error").GetProperty("message").GetString()!;
+        Assert.DoesNotContain("apply", message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// D7's promise extends past the process boundary: the connection string must not appear in a
+    /// refusal's message, even when the underlying failure is a real database one. A sentinel embedded in
+    /// a connection string an unreachable path forces proves it, rather than trusting that no driver ever
+    /// echoes one back.
+    /// </summary>
+    [Fact]
+    public async Task A_connection_string_never_appears_in_a_database_failure()
+    {
+        const string sentinel = "SENTINEL-4f2b91";
+        var connection = $"Data Source=/nonexistent-dir-{sentinel}/db.sqlite";
+
+        var apply = await RunAsync(ApplyRequest("apply", "Sqlite", ["Secrets"], connection));
+
+        Assert.Equal(EfToolingExitCode.DatabaseFailure, apply.ExitCode);
+        var message = apply.Response.GetProperty("error").GetProperty("message").GetString()!;
+        Assert.DoesNotContain(sentinel, message, StringComparison.Ordinal);
+        Assert.DoesNotContain(connection, message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The exact-match replacement in <see cref="EfToolingRedaction.Redact"/> only catches a verbatim echo
+    /// of the connection string it was given. A driver that re-serialises, re-cases or re-quotes the string
+    /// before embedding it in a message — Npgsql, SqlClient and MySql's driver are not Sqlite, and none of
+    /// them are proven not to — would slip straight through it. This drives
+    /// <see cref="EfToolingRedaction.Redact"/> directly, through the public seam it is exposed for exactly
+    /// this reason, with a message shaped exactly like that: the credential echoed back re-cased and
+    /// re-quoted, not as the exact connection string this call was given. It proves both halves of what
+    /// that pattern claims: the secret is gone, and the surrounding non-credential text does not get
+    /// mangled along with it.
+    /// </summary>
+    [Fact]
+    public void Redact_scrubs_a_recased_and_requoted_echo_of_the_credential_a_driver_might_produce()
+    {
+        const string secret = "Secret-Value-4f2b91";
+        const string connection = $"Host=db;Username=u;Password={secret};Database=d";
+        var reformatted = $"Npgsql.NpgsqlException: Login failed [ConnectionString: Host=db;USERNAME=u;PWD=\"{secret}\";Database=d]";
+
+        var redacted = EfToolingRedaction.Redact(reformatted, connection);
+
+        Assert.DoesNotContain(secret, redacted, StringComparison.Ordinal);
+        Assert.Contains("Host=db", redacted, StringComparison.Ordinal);
+        Assert.Contains("Database=d", redacted, StringComparison.Ordinal);
+    }
+
+    private static ApplyRequestBody ApplyRequest(string command, string provider, string[] modules, string connection) => new()
+    {
+        Command = command,
+        Provider = provider,
+        Selection = new() { Kind = "modules", Modules = modules },
+        Connection = connection
+    };
+
+    private static long TableCount(string sqliteDatabase)
+    {
+        if (!File.Exists(sqliteDatabase))
+            return 0;
+
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={sqliteDatabase}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT count(*) FROM sqlite_master WHERE type = 'table'";
+        return (long)command.ExecuteScalar()!;
     }
 
     [Fact]
@@ -685,5 +839,15 @@ public sealed class EfToolingHostTests : IDisposable
         public string? Id { get; init; }
         public string? Version { get; init; }
         public string? Source { get; init; }
+    }
+
+    private sealed record ApplyRequestBody
+    {
+        public int Version { get; init; } = 1;
+        public string Command { get; init; } = "apply";
+        public string? Provider { get; init; }
+        public SelectionBody? Selection { get; init; }
+        public string? Schema { get; init; }
+        public string? Connection { get; init; }
     }
 }

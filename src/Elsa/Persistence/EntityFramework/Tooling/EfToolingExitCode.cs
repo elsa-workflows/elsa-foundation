@@ -42,4 +42,12 @@ internal sealed class EfToolingRefusal(int exitCode, string code, string message
 
     public static EfToolingRefusal Resolution(string code, string message, IReadOnlyList<string>? details = null) =>
         new(EfToolingExitCode.ResolutionFailure, code, message, details);
+
+    /// <summary><c>validate</c> found a pending migration (FR-052): a negative result, not a refusal or a resolution failure.</summary>
+    public static EfToolingRefusal NegativeResult(string code, string message, IReadOnlyList<string>? details = null) =>
+        new(EfToolingExitCode.NegativeResult, code, message, details);
+
+    /// <summary><c>apply</c> or <c>validate</c> could not reach or read the database itself.</summary>
+    public static EfToolingRefusal DatabaseFailure(string code, string message, IReadOnlyList<string>? details = null) =>
+        new(EfToolingExitCode.DatabaseFailure, code, message, details);
 }

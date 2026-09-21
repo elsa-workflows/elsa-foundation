@@ -3,8 +3,8 @@
 #
 # Usage:
 #   bash tools/ef/module-migrate.sh pending [context-regex]
-#   bash tools/ef/module-migrate.sh apply <Sqlite|SqlServer|PostgreSql|MySql> <connection-string> [context-regex]
-#   bash tools/ef/module-migrate.sh validate <Sqlite|SqlServer|PostgreSql|MySql> <connection-string> [context-regex]
+#   bash tools/ef/module-migrate.sh apply <Sqlite|SqlServer|PostgreSql|MySql> [--connection-env NAME|--connection-stdin] [context-regex]
+#   bash tools/ef/module-migrate.sh validate <Sqlite|SqlServer|PostgreSql|MySql> [--connection-env NAME|--connection-stdin] [context-regex]
 #   bash tools/ef/module-migrate.sh script <Sqlite|SqlServer|PostgreSql|MySql> <output-dir> [context-regex]
 #   bash tools/ef/module-migrate.sh script-check <Sqlite|SqlServer|PostgreSql|MySql> <output-dir> [context-regex]
 #
@@ -15,7 +15,9 @@
 # pending needs no database: it fails when a module model changed without a regenerated migration.
 # apply runs `dotnet ef database update` per module context against one database; every module records its
 # own history table, which is the one a host started with
-# Elsa:Persistence:EntityFramework:Migrate:Policy=Validate reads.
+# Elsa:Persistence:EntityFramework:Migrate:Policy=Validate reads. The connection is never a command-line
+# argument: --connection-env NAME (default ELSA_EF_CONNECTION) reads it from that environment variable, and
+# --connection-stdin reads it from this script's own stdin instead. There is no --connection flag.
 # validate fails when any module context still has a pending migration in that database.
 # script needs no database either: it writes one idempotent .sql per module context to
 # <output-dir>/<Module>/<Provider>.sql, which is the artifact a DBA reviews and a pipeline runs.
@@ -43,7 +45,36 @@ usage() {
 command="${1:-}"
 case "$command" in
   pending) provider=""; connection=""; filter="${2:-.*}" ;;
-  apply|validate) [[ $# -ge 3 ]] || usage; provider="$2"; connection="$3"; filter="${4:-.*}" ;;
+  apply|validate)
+    [[ $# -ge 2 ]] || usage
+    provider="$2"
+    shift 2
+    # No positional connection argument (FR-050, FR-051): only its NAME travels here by default, and the
+    # value itself is read from this process's own environment or its own stdin, never typed as an
+    # argument. `--connection` is not accepted under any name — that shape is exactly what this converges
+    # away from.
+    connection_env="ELSA_EF_CONNECTION"
+    connection_stdin=0
+    while [[ $# -gt 0 && "$1" == --* ]]; do
+      case "$1" in
+        --connection-env) [[ $# -ge 2 ]] || usage; connection_env="$2"; shift 2 ;;
+        --connection-stdin) connection_stdin=1; shift ;;
+        --connection) echo "error: --connection is not accepted; use --connection-env or --connection-stdin." >&2; exit 2 ;;
+        *) usage ;;
+      esac
+    done
+    filter="${1:-.*}"
+    if [[ "$connection_stdin" -eq 1 ]]; then
+      # `read` exits non-zero at EOF even when it did read a line with no trailing newline — the normal
+      # shape of a connection piped in without an `echo` — so that alone must not trip `set -e`; an empty
+      # read (no input at all) is what actually gets refused, just below.
+      IFS= read -r connection || true
+      [[ -n "$connection" ]] || { echo "error: --connection-stdin was given but this process's stdin carried no connection string." >&2; exit 2; }
+    else
+      connection="${!connection_env:-}"
+      [[ -n "$connection" ]] || { echo "error: environment variable '$connection_env' is not set." >&2; exit 2; }
+    fi
+    ;;
   script|script-check) [[ $# -ge 3 ]] || usage; provider="$2"; connection=""; destination="$3"; filter="${4:-.*}" ;;
   *) usage ;;
 esac
@@ -54,7 +85,7 @@ esac
 if [[ "$command" == script* && "$provider" == "Sqlite" ]]; then
   echo "$command: SQLite cannot produce an idempotent script (EF throws NotSupportedException)." >&2
   echo "Script a server provider, and bring a SQLite database up to date with:" >&2
-  echo "  bash tools/ef/module-migrate.sh apply Sqlite \"<connection>\"" >&2
+  echo "  bash tools/ef/module-migrate.sh apply Sqlite --connection-env ELSA_EF_CONNECTION" >&2
   exit 2
 fi
 

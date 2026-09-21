@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Elsa.Persistence.EntityFramework.Tooling;
 
@@ -61,6 +62,36 @@ public static class EfToolingLineEndings
         if (!normalized.EndsWith('\n'))
             normalized += "\n";
         return Utf8NoBom.GetBytes(normalized);
+    }
+}
+
+/// <summary>
+/// Defense in depth against the one value this build must never surface (D7): whatever an underlying
+/// exception's message says — a driver's own error can legitimately echo part of a connection string —
+/// every occurrence of <paramref name="connection"/> itself is replaced before the text reaches a refusal,
+/// a response, or anywhere else an operator or a log could read it. The exact-match replacement alone only
+/// catches a verbatim echo; a driver that re-serialises, re-cases or re-quotes the connection string before
+/// including it in a message would slip through, so this also scrubs any <c>Password=</c>/<c>Pwd=</c>
+/// key/value pair, case-insensitively and bounded by the usual <c>;</c> separator, regardless of how the
+/// rest of the text around it was reformatted. Anything less regular than that — a reformatting this
+/// pattern does not recognise — is not something a fixed pattern can chase, and is not the guarantee this
+/// defends: the guarantee that matters is that the value never reaches <c>argv</c> in the first place,
+/// which is proved elsewhere. Public so this scrubbing can be verified directly, the way the rest of the
+/// <c>Tooling</c> namespace is an entry point other processes call into.
+/// </summary>
+public static class EfToolingRedaction
+{
+    private static readonly Regex CredentialPair = new(
+        @"\b(?<key>password|pwd)\s*=\s*[^;]*",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>Scrubs every occurrence of <paramref name="connection"/> and any <c>Password=</c>/<c>Pwd=</c> pair from <paramref name="text"/>.</summary>
+    public static string Redact(string text, string connection)
+    {
+        if (!string.IsNullOrEmpty(connection))
+            text = text.Replace(connection, "<connection-redacted>", StringComparison.Ordinal);
+
+        return CredentialPair.Replace(text, match => $"{match.Groups["key"].Value}=<redacted>");
     }
 }
 

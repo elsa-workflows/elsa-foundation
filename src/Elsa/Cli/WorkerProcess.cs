@@ -12,9 +12,9 @@ namespace Elsa.Cli;
 /// <para>
 /// The launch carries four arguments and nothing else: the host's runtimeconfig, the host's deps file, and
 /// the worker assembly. Everything the command actually asks for travels over stdin. That is not a style
-/// choice — process arguments are world-readable on every platform this runs on, and the commands that take
-/// a connection string arrive in a later slice. A design that passed the request as arguments would have to
-/// be unpicked then; this one has nowhere for a credential to leak into.
+/// choice — process arguments are world-readable on every platform this runs on, and <c>apply</c>/<c>validate</c>
+/// (#1876) take a connection string. This method's signature has nowhere for one to land: it is built from
+/// the host layout alone, never from a request.
 /// </para>
 /// <para>
 /// The worker's stderr is inherited rather than captured, so its warnings reach the operator as they happen,

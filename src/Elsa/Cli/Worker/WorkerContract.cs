@@ -34,14 +34,16 @@ public static class WorkerContract
     };
 }
 
-/// <summary>The commands this slice's worker backs; <c>apply</c>, <c>validate</c> and <c>post-migrate</c> arrive with their own slices.</summary>
+/// <summary>The commands this slice's worker backs; <c>post-migrate</c> arrives with its own slice.</summary>
 public static class WorkerCommands
 {
     public const string List = "list";
     public const string Plan = "plan";
     public const string Script = "script";
+    public const string Apply = "apply";
+    public const string Validate = "validate";
 
-    public static readonly string[] All = [List, Plan, Script];
+    public static readonly string[] All = [List, Plan, Script, Apply, Validate];
 }
 
 /// <summary>
@@ -93,6 +95,20 @@ public sealed record WorkerRequest
 
     /// <summary>The <c>--shell</c> the provider-agreement check used, once slice 9 adds one.</summary>
     public string? Shell { get; init; }
+
+    /// <summary>
+    /// The name of the environment variable <c>--connection-env</c> names (D7). Only its name travels here;
+    /// the worker reads the value from its own (inherited) environment, never from this front end's request.
+    /// Required by <c>apply</c>/<c>validate</c> unless <see cref="Connection"/> is given instead.
+    /// </summary>
+    public string? ConnectionEnv { get; init; }
+
+    /// <summary>
+    /// The connection string itself, read by this front end from its own stdin when <c>--connection-stdin</c>
+    /// was given (D7) — the one case where the value has nowhere to travel but this request. Never populated
+    /// from <c>--connection-env</c>, and never logged, echoed, or included in a refusal.
+    /// </summary>
+    public string? Connection { get; init; }
 }
 
 /// <summary>Which modules a command runs against, discriminated the same way the tooling contract discriminates it.</summary>

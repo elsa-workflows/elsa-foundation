@@ -66,6 +66,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/Elsa/Persistence/EntityFramework/EfPayloadCompressionOptions.cs",
         "src/Elsa/Persistence/EntityFramework/EfPayloadCompressionOptionsExtension.cs",
         "src/Elsa/Persistence/EntityFramework/EfPayloadCompressionSettings.cs",
+        "src/Elsa/Persistence/EntityFramework/EfPendingMigrationsException.cs",
         "src/Elsa/Persistence/EntityFramework/EfProviderBindingValidator.cs",
         "src/Elsa/Persistence/EntityFramework/EfProviderGuard.cs",
         "src/Elsa/Persistence/EntityFramework/EfProviderNames.cs",

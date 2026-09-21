@@ -37,10 +37,18 @@ internal static class DotnetElsa
     public static CliRun Run(params string[] arguments) => Run(environment: null, arguments);
 
     /// <summary>Runs the tool with extra environment variables, for the inputs an operator supplies that way.</summary>
-    public static CliRun Run(IReadOnlyDictionary<string, string>? environment, params string[] arguments)
+    public static CliRun Run(IReadOnlyDictionary<string, string>? environment, params string[] arguments) =>
+        RunAsync(environment, stdin: null, arguments).GetAwaiter().GetResult();
+
+    /// <summary>Runs the tool with <paramref name="stdin"/> written to and closed on its own stdin, for <c>--connection-stdin</c>.</summary>
+    public static Task<CliRun> RunWithStdinAsync(string stdin, params string[] arguments) =>
+        RunAsync(environment: null, stdin, arguments);
+
+    private static async Task<CliRun> RunAsync(IReadOnlyDictionary<string, string>? environment, string? stdin, string[] arguments)
     {
         var startInfo = new ProcessStartInfo(DotnetMuxer.Path())
         {
+            RedirectStandardInput = stdin is not null,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false
@@ -53,10 +61,15 @@ internal static class DotnetElsa
             startInfo.ArgumentList.Add(argument);
 
         using var process = Process.Start(startInfo)!;
+        if (stdin is not null)
+        {
+            await process.StandardInput.WriteAsync(stdin);
+            process.StandardInput.Close();
+        }
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();
-        process.WaitForExit();
-        return new(process.ExitCode, output.Result, error.Result);
+        await process.WaitForExitAsync();
+        return new(process.ExitCode, await output, await error);
     }
 
     private static string FindRepoRoot()

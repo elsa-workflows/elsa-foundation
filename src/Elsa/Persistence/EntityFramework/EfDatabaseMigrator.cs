@@ -29,7 +29,7 @@ public static class EfDatabaseMigrator
                 var pending = (await context.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray();
                 if (pending.Length == 0)
                     return;
-                throw new InvalidOperationException(
+                throw new EfPendingMigrationsException(
                     $"{context.GetType().Name} has pending migrations: {string.Join(", ", pending)}. " +
                     "Apply them out of process (tools/ef/module-migrate.sh) or set " +
                     $"{EfMigrateOptions.SectionName}:{nameof(EfMigrateOptions.Policy)} to {nameof(EfMigratePolicy.AutoMigrate)}.");

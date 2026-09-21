@@ -278,7 +278,7 @@ public sealed class SqliteEfSecretRepositoryTests
                 .MigrationsHistoryTable(SecretsEfModule.HistoryTableName))
             .Options;
         await using var context = new SecretsSqliteDbContext(options);
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<EfPendingMigrationsException>(() =>
             EfDatabaseMigrator.ApplyAsync(context, SecretsSqliteDbContext.ExpectedProviderName, EfMigratePolicy.Validate));
         Assert.Contains("pending migrations", exception.Message, StringComparison.OrdinalIgnoreCase);
     }

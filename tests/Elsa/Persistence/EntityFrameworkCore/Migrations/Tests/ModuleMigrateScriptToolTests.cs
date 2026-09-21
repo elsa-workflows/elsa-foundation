@@ -47,24 +47,55 @@ public sealed class ModuleMigrateScriptToolTests : IDisposable
               tool|build) exit 0 ;;
               run) printf '%s\n' '{{Catalog}}' ;;
               ef)
-                [[ "${2:-}" == "migrations" && "${3:-}" == "script" ]] || exit 97
-                context=""; file=""; project=""; idempotent=0
-                while [[ $# -gt 0 ]]; do
-                  case "$1" in
-                    --context) context="${2:?}"; shift 2 ;;
-                    --output) file="${2:?}"; shift 2 ;;
-                    --project) project="${2-}"; shift 2 ;;
-                    --idempotent) idempotent=1; shift ;;
-                    *) shift ;;
-                  esac
-                done
-                [[ $idempotent -eq 1 ]] || exit 96
-                # Real `dotnet ef` cannot operate on a project it was not given. Refusing here is what makes
-                # every test below an assertion that the script resolved the module, whatever root it lives in.
-                [[ -n "$project" && -f "$project" ]] || exit 94
-                printf 'script|%s|%s\n' "$context" "$file" >> "$ELSA_EF_TEST_CALLS"
-                # Deterministic stand-in for what EF writes: the same model must script the same bytes twice.
-                printf 'INSERT INTO __EFMigrationsHistory_%s VALUES (1);\n' "$context" > "$file"
+                case "${2:-}" in
+                  migrations)
+                    if [[ "${3:-}" == "script" ]]; then
+                      context=""; file=""; project=""; idempotent=0
+                      while [[ $# -gt 0 ]]; do
+                        case "$1" in
+                          --context) context="${2:?}"; shift 2 ;;
+                          --output) file="${2:?}"; shift 2 ;;
+                          --project) project="${2-}"; shift 2 ;;
+                          --idempotent) idempotent=1; shift ;;
+                          *) shift ;;
+                        esac
+                      done
+                      [[ $idempotent -eq 1 ]] || exit 96
+                      # Real `dotnet ef` cannot operate on a project it was not given. Refusing here is what
+                      # makes every test below an assertion that the script resolved the module, whatever
+                      # root it lives in.
+                      [[ -n "$project" && -f "$project" ]] || exit 94
+                      printf 'script|%s|%s\n' "$context" "$file" >> "$ELSA_EF_TEST_CALLS"
+                      # Deterministic stand-in for what EF writes: the same model must script the same bytes twice.
+                      printf 'INSERT INTO __EFMigrationsHistory_%s VALUES (1);\n' "$context" > "$file"
+                    elif [[ "${3:-}" == "list" ]]; then
+                      context=""
+                      while [[ $# -gt 0 ]]; do
+                        case "$1" in
+                          --context) context="${2:?}"; shift 2 ;;
+                          *) shift ;;
+                        esac
+                      done
+                      # The connection never travels as an argument (D7): it is recorded here from the
+                      # environment `dotnet ef` was actually invoked with, never from argv.
+                      printf 'validate|%s|%s\n' "$context" "${ELSA_EF_CONNECTION:-}" >> "$ELSA_EF_TEST_CALLS"
+                    else
+                      exit 97
+                    fi
+                    ;;
+                  database)
+                    [[ "${3:-}" == "update" ]] || exit 97
+                    context=""
+                    while [[ $# -gt 0 ]]; do
+                      case "$1" in
+                        --context) context="${2:?}"; shift 2 ;;
+                        *) shift ;;
+                      esac
+                    done
+                    printf 'apply|%s|%s\n' "$context" "${ELSA_EF_CONNECTION:-}" >> "$ELSA_EF_TEST_CALLS"
+                    ;;
+                  *) exit 97 ;;
+                esac
                 ;;
               *) exit 95 ;;
             esac
@@ -207,6 +238,72 @@ public sealed class ModuleMigrateScriptToolTests : IDisposable
             Assert.Contains($"module-migrate.sh {command} ", result.Error, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The interim fix this slice makes (FR-051): <c>apply</c>/<c>validate</c> no longer take the
+    /// connection as a positional argument, converging on <c>--connection-env</c>/<c>--connection-stdin</c>
+    /// the same way the new <c>dotnet-elsa</c> tool does (#1876).
+    /// </summary>
+    [SkippableFact]
+    public void Apply_reads_the_connection_from_a_named_environment_variable_never_argv()
+    {
+        const string sentinel = "Data Source=sentinel-4f2b91.db";
+        var result = RunWithEnvironment(
+            new Dictionary<string, string> { ["CONTOSO_CONNECTION"] = sentinel },
+            "apply", "PostgreSql", "--connection-env", "CONTOSO_CONNECTION", "AlphaPostgreSqlDbContext");
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.DoesNotContain(sentinel, result.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain(sentinel, result.Error, StringComparison.Ordinal);
+        Assert.Equal([$"apply|AlphaPostgreSqlDbContext|{sentinel}"], File.ReadAllLines(calls));
+    }
+
+    /// <summary>Defaults to <c>ELSA_EF_CONNECTION</c> (D7) when <c>--connection-env</c> is not given.</summary>
+    [SkippableFact]
+    public void Apply_defaults_the_connection_environment_variable_name()
+    {
+        const string sentinel = "Data Source=sentinel-default.db";
+        var result = RunWithEnvironment(
+            new Dictionary<string, string> { ["ELSA_EF_CONNECTION"] = sentinel },
+            "apply", "PostgreSql", "AlphaPostgreSqlDbContext");
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal([$"apply|AlphaPostgreSqlDbContext|{sentinel}"], File.ReadAllLines(calls));
+    }
+
+    [SkippableFact]
+    public void Validate_reads_the_connection_from_this_scripts_own_stdin()
+    {
+        const string sentinel = "Data Source=sentinel-stdin.db";
+
+        var result = RunWithStdin(sentinel, "validate", "PostgreSql", "--connection-stdin", "AlphaPostgreSqlDbContext");
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.DoesNotContain(sentinel, result.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain(sentinel, result.Error, StringComparison.Ordinal);
+        Assert.Equal([$"validate|AlphaPostgreSqlDbContext|{sentinel}"], File.ReadAllLines(calls));
+    }
+
+    /// <summary>There is no <c>--connection</c> flag (D7); a script that passes one is told, not silently handed a command that ignored it.</summary>
+    [SkippableFact]
+    public void A_connection_flag_is_rejected_and_nothing_runs()
+    {
+        var result = Run("apply", "PostgreSql", "--connection", "Data Source=whatever.db");
+
+        Assert.Equal(2, result.ExitCode);
+        Assert.Contains("--connection is not accepted", result.Error, StringComparison.Ordinal);
+        Assert.False(File.Exists(calls));
+    }
+
+    [SkippableFact]
+    public void Apply_refuses_when_the_named_environment_variable_is_not_set()
+    {
+        var result = Run("apply", "PostgreSql", "--connection-env", "CONTOSO_CONNECTION_NOT_SET");
+
+        Assert.Equal(2, result.ExitCode);
+        Assert.Contains("CONTOSO_CONNECTION_NOT_SET", result.Error, StringComparison.Ordinal);
+        Assert.False(File.Exists(calls));
+    }
+
     public void Dispose() => Directory.Delete(sandbox, recursive: true);
 
     private static string RealScript
@@ -250,18 +347,35 @@ public sealed class ModuleMigrateScriptToolTests : IDisposable
             File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }
 
-    private Result Run(params string[] arguments)
+    private Result Run(params string[] arguments) => Run(environment: null, stdin: null, arguments);
+
+    /// <summary>Runs with extra environment variables, for <c>--connection-env</c>.</summary>
+    private Result RunWithEnvironment(IReadOnlyDictionary<string, string> environment, params string[] arguments) =>
+        Run(environment, stdin: null, arguments);
+
+    /// <summary>Runs with <paramref name="stdin"/> written to and closed on this process's own stdin, for <c>--connection-stdin</c>.</summary>
+    private Result RunWithStdin(string stdin, params string[] arguments) => Run(environment: null, stdin, arguments);
+
+    private Result Run(IReadOnlyDictionary<string, string>? environment, string? stdin, params string[] arguments)
     {
         Skip.If(OperatingSystem.IsWindows(), "The recording shim requires bash and Unix executable permissions.");
         var start = new ProcessStartInfo("bash", [Path.Join(repository, "tools", "ef", "module-migrate.sh"), .. arguments])
         {
             WorkingDirectory = repository,
             RedirectStandardOutput = true,
-            RedirectStandardError = true
+            RedirectStandardError = true,
+            RedirectStandardInput = stdin is not null
         };
         start.Environment["PATH"] = $"{sandbox}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}";
         start.Environment["ELSA_EF_TEST_CALLS"] = calls;
+        foreach (var variable in environment ?? new Dictionary<string, string>())
+            start.Environment[variable.Key] = variable.Value;
         using var process = Process.Start(start) ?? throw new InvalidOperationException("bash did not start.");
+        if (stdin is not null)
+        {
+            process.StandardInput.Write(stdin);
+            process.StandardInput.Close();
+        }
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
         Assert.True(process.WaitForExit(120_000), "module-migrate.sh did not exit.");

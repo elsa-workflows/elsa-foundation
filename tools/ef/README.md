@@ -14,8 +14,8 @@ gains a context.
 ```bash
 bash tools/ef/generate-module-migrations.sh [context-regex]   # regenerate Initial after a model change
 bash tools/ef/module-migrate.sh pending                        # CI-safe: fails on an unmigrated model change
-bash tools/ef/module-migrate.sh apply PostgreSql "<connection>" # out-of-process apply, every module
-bash tools/ef/module-migrate.sh validate PostgreSql "<connection>"
+bash tools/ef/module-migrate.sh apply PostgreSql --connection-env ELSA_EF_CONNECTION # out-of-process apply, every module
+bash tools/ef/module-migrate.sh validate PostgreSql --connection-env ELSA_EF_CONNECTION
 bash tools/ef/module-migrate.sh script PostgreSql db/migrations  # reviewable SQL, no database needed
 bash tools/ef/module-migrate.sh script-check PostgreSql db/migrations # CI-safe: fails on edited/stale SQL
 ```
@@ -70,7 +70,7 @@ Every file is generated with `--idempotent`, which means:
 (`SqliteHistoryRepository.GetEndIfScript` throws `NotSupportedException`, because SQLite has no
 conditional statement to wrap a migration in), and a plain script would sit in the same tree looking like
 every other file while being unsafe to re-run. `script Sqlite` therefore exits 2 and says so. A SQLite
-database is brought up to date with `module-migrate.sh apply Sqlite "<connection>"`, or by a host on the
+database is brought up to date with `module-migrate.sh apply Sqlite --connection-env ELSA_EF_CONNECTION`, or by a host on the
 `AutoMigrate` default.
 
 Secrets ships only a MySQL context in this catalog; its historical SQLite, SQL Server and PostgreSQL
