@@ -7,6 +7,7 @@ namespace Elsa.Modularity.Nuplane.Services;
 public sealed class FeatureManagementService(
     IShellFeatureConfigurationStore shellStore,
     IEnumerable<IFeatureCatalogContributor> contributors,
+    IEnumerable<IFeatureActivationGuard> activationGuards,
     IRuntimeFeatureCatalogRefresher runtimeFeatureCatalogRefresher,
     IShellReloader shellReloader) : IFeatureManagementService
 {
@@ -22,6 +23,11 @@ public sealed class FeatureManagementService(
         var current = await BuildCatalogAsync(shell, cancellationToken);
         request = RestoreSecrets(request, shell);
         ValidateRequest(request, current);
+        // After validation and before the save, so a guard sees the request exactly as it would be stored —
+        // secrets restored — and a refusal costs nothing: no save, no catalog refresh, no shell reload
+        // (FR-060). A host that composes no guard keeps today's ordering, where the shell's own Validate-policy
+        // check refuses later, after shells.json has already been written (FR-070).
+        await EnsureActivationAllowedAsync(request, shell, cancellationToken);
 
         var changes = request.Features
             .Select(feature => new FeatureConfigurationChange(feature.Id, feature.Enabled, feature.Configuration.Clone()))
@@ -42,6 +48,25 @@ public sealed class FeatureManagementService(
         var catalog = await BuildCatalogAsync(saved, cancellationToken);
 
         return new FeatureApplyResult(catalog, featureDescriptorCount, reloadedShellCount);
+    }
+
+    /// <summary>
+    /// Runs every registered guard and refuses the whole request if any of them objects. Every guard runs
+    /// even once one has refused, so an operator is told about every feature that would have been refused
+    /// rather than discovering them one apply at a time.
+    /// </summary>
+    private async Task EnsureActivationAllowedAsync(
+        FeatureApplyRequest request,
+        ShellFeatureConfigurationSnapshot shell,
+        CancellationToken cancellationToken)
+    {
+        var context = new FeatureActivationContext(shell, request);
+        var refusals = new List<FeatureActivationRefusal>();
+        foreach (var guard in activationGuards)
+            refusals.AddRange((await guard.EvaluateAsync(context, cancellationToken)).Refusals);
+
+        if (refusals.Count > 0)
+            throw new FeatureActivationRefusedException(refusals);
     }
 
     private async Task<FeatureCatalogResponse> BuildCatalogAsync(ShellFeatureConfigurationSnapshot shell, CancellationToken cancellationToken)

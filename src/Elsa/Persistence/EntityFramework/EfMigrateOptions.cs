@@ -17,7 +17,43 @@ public sealed class EfMigrateOptions
     /// </summary>
     public const string SectionName = "Elsa:Persistence:EntityFramework:Migrate";
 
-    public EfMigratePolicy Policy { get; set; } = EfMigratePolicy.AutoMigrate;
+    /// <summary>What a host that configures nothing gets.</summary>
+    public const EfMigratePolicy DefaultPolicy = EfMigratePolicy.AutoMigrate;
+
+    public EfMigratePolicy Policy { get; set; } = DefaultPolicy;
+
+    /// <summary>
+    /// The policy <paramref name="configuration"/> names, or <see cref="DefaultPolicy"/> when it names none.
+    /// Exposed because not every reader of this key resolves it through the options pipeline: the
+    /// feature-activation guard runs in the host container, where no module has registered
+    /// <see cref="EfMigrateOptions"/> at all, and a guard that silently read the default there would allow
+    /// exactly the activations a Validate host configured it to refuse.
+    /// </summary>
+    public static EfMigratePolicy Resolve(IConfiguration? configuration) =>
+        TryResolve(configuration, out var policy) ? policy : DefaultPolicy;
+
+    /// <summary>
+    /// <see cref="Resolve"/> for a caller that must tell "configured" apart from "left unset", and so keep a
+    /// value set another way instead of overwriting it with the default. A value that names no policy is
+    /// refused rather than defaulted, in both.
+    /// </summary>
+    public static bool TryResolve(IConfiguration? configuration, out EfMigratePolicy policy)
+    {
+        policy = DefaultPolicy;
+        var configured = configuration?.GetSection(SectionName)[nameof(Policy)];
+        if (string.IsNullOrWhiteSpace(configured))
+            return false;
+
+        // TryParse alone accepts any number, including one no policy is defined for, so IsDefined does the refusing.
+        if (!Enum.TryParse(configured, ignoreCase: true, out policy) || !Enum.IsDefined(policy))
+        {
+            throw new InvalidOperationException(
+                $"Configuration '{SectionName}:{nameof(Policy)}' is '{configured}'. " +
+                $"Use '{nameof(EfMigratePolicy.AutoMigrate)}' or '{nameof(EfMigratePolicy.Validate)}'.");
+        }
+
+        return true;
+    }
 }
 
 /// <summary>
@@ -31,18 +67,7 @@ internal sealed class EfMigrateOptionsConfigurator(IServiceProvider services) : 
 {
     public void Configure(EfMigrateOptions options)
     {
-        var configured = services.GetService<IConfiguration>()?.GetSection(EfMigrateOptions.SectionName)[nameof(EfMigrateOptions.Policy)];
-        if (string.IsNullOrWhiteSpace(configured))
-            return;
-
-        // TryParse alone accepts any number, including one no policy is defined for, so IsDefined does the refusing.
-        if (!Enum.TryParse<EfMigratePolicy>(configured, ignoreCase: true, out var policy) || !Enum.IsDefined(policy))
-        {
-            throw new InvalidOperationException(
-                $"Configuration '{EfMigrateOptions.SectionName}:{nameof(EfMigrateOptions.Policy)}' is '{configured}'. " +
-                $"Use '{nameof(EfMigratePolicy.AutoMigrate)}' or '{nameof(EfMigratePolicy.Validate)}'.");
-        }
-
-        options.Policy = policy;
+        if (EfMigrateOptions.TryResolve(services.GetService<IConfiguration>(), out var policy))
+            options.Policy = policy;
     }
 }

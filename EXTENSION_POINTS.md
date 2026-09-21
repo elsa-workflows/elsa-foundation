@@ -59,7 +59,7 @@ not automatic constitution violations.
 | Caching (cache manager + change-token signaling) | [`src/Elsa/Caching/Memory/EXTENSION_POINTS.md`](src/Elsa/Caching/Memory/EXTENSION_POINTS.md) |
 | Serialization (JSON converter sources) | [`src/Elsa/Serialization/SystemText/EXTENSION_POINTS.md`](src/Elsa/Serialization/SystemText/EXTENSION_POINTS.md) |
 | Locking (distributed lock provider) | [`src/Elsa/Locking/FileSystem/EXTENSION_POINTS.md`](src/Elsa/Locking/FileSystem/EXTENSION_POINTS.md) |
-| Modularity API (shell feature-management surface) | [`src/Elsa/Modularity/Api/EXTENSION_POINTS.md`](src/Elsa/Modularity/Api/EXTENSION_POINTS.md) |
+| Modularity API (shell feature-management surface; feature-catalog contributors and activation guards) | [`src/Elsa/Modularity/Api/EXTENSION_POINTS.md`](src/Elsa/Modularity/Api/EXTENSION_POINTS.md) |
 
 ### Expressions
 
