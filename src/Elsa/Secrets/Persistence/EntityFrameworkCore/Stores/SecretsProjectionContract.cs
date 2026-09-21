@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,8 +30,8 @@ public static class SecretsProjectionContract
         throw new InvalidOperationException(
             "One or more Secrets rows do not use persisted projection " +
             $"'{SecretsSearchKeys.UnicodeOrdinalIgnoreCaseAlgorithmId}'. " +
-            "Quiesce writers and run the provider-specific 'bash tools/ef/dual-migrate.sh apply' " +
-            "command to reindex legacy rows before starting the host.");
+            $"Quiesce writers and run '{EfPostMigrationActions.Command}' for this host's provider to " +
+            "reindex legacy rows before starting the host.");
     }
 
     /// <summary>

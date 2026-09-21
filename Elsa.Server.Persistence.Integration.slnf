@@ -86,7 +86,6 @@
       "src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj",
       "src/Elsa/Secrets/Elsa.Secrets.csproj",
       "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj",
-      "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling.csproj",
       "src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj",
       "src/Elsa/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj",
       "src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj",

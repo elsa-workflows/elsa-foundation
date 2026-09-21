@@ -18,11 +18,14 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests;
 /// legacy rows reports nothing required at all.
 /// </summary>
 /// <remarks>
-/// Driven through <see cref="EfToolingHost"/>'s frozen JSON contract rather than the types underneath it,
-/// because the failure this seam exists to prevent is a command <i>exiting 0</i> while a repair is still
-/// outstanding, and only the response says what an operator was told. The negative direction is asserted
-/// as hard as the positive one: after an <c>apply</c> that refuses, the legacy row is read back and must
-/// still be legacy — an audit that quietly repaired would otherwise look exactly like a healthy run.
+/// Driven <i>in-process</i> through <see cref="EfToolingHost"/>'s frozen JSON contract rather than the types
+/// underneath it, because the failure this seam exists to prevent is a command <i>exiting 0</i> while a
+/// repair is still outstanding, and only the response says what an operator was told. The negative
+/// direction is asserted as hard as the positive one: after an <c>apply</c> that refuses, the legacy row is
+/// read back and must still be legacy — an audit that quietly repaired would otherwise look exactly like a
+/// healthy run. What this suite does not prove is the real <c>dotnet elsa persistence post-migrate</c>
+/// binary running out of process; that proof lives in
+/// <see cref="SecretsProjectionContractTests.Startup_audit_refuses_until_the_declared_reindex_has_run"/>.
 /// </remarks>
 public sealed class SecretsProjectionReindexTests : IAsyncDisposable
 {

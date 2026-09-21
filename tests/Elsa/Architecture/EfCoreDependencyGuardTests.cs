@@ -766,15 +766,6 @@ public sealed class EfCoreDependencyGuardTests
             {
                 ["src/Elsa/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"] = CorePackages(),
                 ["src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
-                ["src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling.csproj"] =
-                [
-                    .. CorePackages(),
-                    "Microsoft.EntityFrameworkCore.Design",
-                    "Microsoft.EntityFrameworkCore.SqlServer",
-                    "Microsoft.EntityFrameworkCore.Sqlite",
-                    "Microsoft.EntityFrameworkCore.Sqlite.Core",
-                    "Npgsql.EntityFrameworkCore.PostgreSQL"
-                ],
                 // Binds all four engines at the pinned versions so a provider upgrade that moved a Use* extension
                 // fails CI instead of a host; nothing here opens a connection.
                 ["tests/Elsa/Persistence/EntityFramework/BindingDriftTests/Elsa.Persistence.EntityFramework.BindingDriftTests.csproj"] =
@@ -796,14 +787,10 @@ public sealed class EfCoreDependencyGuardTests
                 [.. CorePackages(), "Npgsql.EntityFrameworkCore.PostgreSQL"],
                 ["tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer"],
+                // One engine, its own: the SqlServer and Npgsql this resolved before #1878 came in through
+                // the retired Secrets Tooling project, never from anything this suite loads.
                 ["tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj"] =
-                [
-                    .. CorePackages(),
-                    "Microsoft.EntityFrameworkCore.SqlServer",
-                    "Microsoft.EntityFrameworkCore.Sqlite",
-                    "Microsoft.EntityFrameworkCore.Sqlite.Core",
-                    "Npgsql.EntityFrameworkCore.PostgreSQL"
-                ]
+                [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
             };
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
