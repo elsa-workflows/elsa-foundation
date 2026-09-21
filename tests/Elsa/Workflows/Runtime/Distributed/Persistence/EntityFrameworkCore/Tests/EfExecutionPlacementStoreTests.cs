@@ -129,6 +129,29 @@ public sealed class EfExecutionPlacementStoreTests
         var winner = results.Single(result => result.Outcome == ExecutionPlacementClaimOutcome.Granted).Lease;
         Assert.Equal(2, winner.PlacementToken);
         AssertLeaseEqual(winner, await fixture.Store.FindAsync("wf-expired"));
+        // One takeover advances the row once, however many writes the losing racer's bounded retry had to attempt.
+        Assert.Equal(2, (await fixture.Context.PlacementLeases.AsNoTracking().SingleAsync()).Revision);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_transient_conflict_on_either_side_of_the_commit_takes_over_with_one_placement_token(bool afterCommit)
+    {
+        await using var fixture = await Fixture.CreateAsync("scope-a");
+        await fixture.Store.TryClaimAsync(Claim("node-a", "wf-ambiguous", Now, 1), Now);
+        var interceptor = afterCommit
+            ? FailAfterSaveInterceptor.WrappedDeadlock(failures: 1)
+            : (IInterceptor)FailingSaveInterceptor.WrappedDeadlock(failures: 1);
+        await using var contender = await fixture.ReopenAsync("scope-a", interceptor);
+        var takeoverAt = Now.AddSeconds(2);
+
+        var takeover = await contender.Store.TryClaimAsync(Claim("node-b", "wf-ambiguous", takeoverAt), takeoverAt);
+
+        Assert.Equal(ExecutionPlacementClaimOutcome.Granted, takeover.Outcome);
+        Assert.Equal(2, takeover.Lease.PlacementToken);
+        AssertLeaseEqual(takeover.Lease, await fixture.Store.FindAsync("wf-ambiguous"));
+        Assert.Equal(2, (await fixture.Context.PlacementLeases.AsNoTracking().SingleAsync()).Revision);
     }
 
     [Fact]
@@ -559,8 +582,14 @@ public sealed class EfExecutionPlacementStoreTests
     private sealed class CoordinatedMutationInterceptor : DbCommandInterceptor
     {
         private readonly TaskCompletionSource<bool> bothArrived = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int mutations;
         private int arrivals;
 
+        /// <summary>
+        /// The racers whose write met the rendezvous, so <c>2</c> means both claimants were released into the provider
+        /// at once. A write the store retries after a lost race reaches the interceptor once the barrier has already
+        /// released both racers, and is no third racer: the bounded compare-and-swap is allowed several writes per call.
+        /// </summary>
         public int Arrivals => Volatile.Read(ref arrivals);
 
         public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
@@ -598,13 +627,33 @@ public sealed class EfExecutionPlacementStoreTests
             if (!IsMutationCommand(command.CommandText))
                 return;
 
-            var arrival = Interlocked.Increment(ref arrivals);
-            if (arrival > 2)
+            if (Interlocked.Increment(ref mutations) > 2)
                 return;
+
+            var arrival = Interlocked.Increment(ref arrivals);
             if (arrival == 2)
                 bothArrived.TrySetResult(true);
             await bothArrived.Task.WaitAsync(cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Reports the first <paramref name="failures"/> saves as failures <em>after</em> the provider committed them: the
+    /// shape a deadlock, a lock timeout or a dropped connection around the commit gives a write that did land.
+    /// </summary>
+    private sealed class FailAfterSaveInterceptor(Func<Exception> failure, int failures) : SaveChangesInterceptor
+    {
+        private int saves;
+
+        /// <summary>Reports a committed save as a deadlock wrapped by SQL Server's execution strategy.</summary>
+        public static FailAfterSaveInterceptor WrappedDeadlock(int failures) =>
+            new(() => WrappedSaveFailure(new SqlException(Deadlock)), failures);
+
+        public override ValueTask<int> SavedChangesAsync(
+            SaveChangesCompletedEventData eventData,
+            int result,
+            CancellationToken cancellationToken = default) =>
+            Interlocked.Increment(ref saves) <= failures ? throw failure() : ValueTask.FromResult(result);
     }
 
     private sealed class FailOnceProviderInterceptor(bool mutationsOnly) : DbCommandInterceptor
