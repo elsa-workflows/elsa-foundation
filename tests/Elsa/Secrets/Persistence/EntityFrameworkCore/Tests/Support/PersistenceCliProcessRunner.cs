@@ -34,6 +34,14 @@ internal enum ConnectionTransport
 /// that copy. This tool only reads the host directory, so parallel callers with their own databases do not
 /// contend.
 /// </para>
+/// <para>
+/// A third near-identical CLI process runner alongside <c>tests/Elsa/Cli/Tests/DotnetElsa.cs</c> and
+/// <c>tests/Elsa/Persistence/EntityFrameworkCore/CliAcceptance/ProviderTests/DotnetElsaTool.cs</c> -- same
+/// repo-root walk, same muxer resolution, same <see cref="ProcessStartInfo"/>/timeout/capture shape. Left
+/// unshared on purpose: the three live in test projects with disjoint dependency closures, and a shared
+/// test-utility project for this would be disproportionate, the same reasoning already applied to the
+/// duplicated <c>TableCount</c> helper in #1876.
+/// </para>
 /// </remarks>
 internal static class PersistenceCliProcessRunner
 {

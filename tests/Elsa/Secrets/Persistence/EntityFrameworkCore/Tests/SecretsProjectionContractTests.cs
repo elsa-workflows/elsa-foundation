@@ -5,6 +5,7 @@ using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.Support;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -77,11 +78,13 @@ public sealed class SecretsProjectionContractTests
     /// starting — an audit that quietly reindexed would look exactly like a healthy start.
     /// </summary>
     /// <remarks>
-    /// The repair is driven through <see cref="SecretsProjectionReindex"/>, which is the only thing
-    /// <c>dotnet elsa persistence post-migrate</c> calls;
-    /// <see cref="SecretsProjectionReindexTests"/> owns that command's own end-to-end proof through
-    /// <c>EfToolingHost</c>'s frozen contract. What is proved here is the half neither of those covers: that
-    /// the refusal a running host raises at startup clears once the repair has been made.
+    /// The repair is driven through the real <c>dotnet elsa persistence post-migrate</c> binary, out of
+    /// process, via <see cref="PersistenceCliProcessRunner"/> — the same CLI subprocess
+    /// <see cref="SecretsEntityFrameworkCoreShellReloadTests"/> drives for <c>apply</c>. That closes the gap
+    /// <see cref="SecretsProjectionReindexTests"/> leaves: that suite proves <c>EfToolingHost</c>'s frozen
+    /// contract in process, not the shipped binary. What is proved here is the other half neither of those
+    /// covers: that the refusal a running host raises at startup clears once the real tool's repair has been
+    /// made.
     /// </remarks>
     [Fact]
     public async Task Startup_audit_refuses_until_the_declared_reindex_has_run()
@@ -124,8 +127,10 @@ public sealed class SecretsProjectionContractTests
                 await repairConnection.OpenAsync();
                 await using var repairContext = new SecretsSqliteDbContext(CreateOptions(repairConnection));
                 Assert.Equal("\u019B", (await repairContext.Secrets.AsNoTracking().SingleAsync()).TypeNameLookupKey);
-                await new SecretsProjectionReindex().RunAsync(repairContext);
             }
+
+            var repair = PersistenceCliProcessRunner.Run("post-migrate", "Sqlite", connectionString);
+            Assert.True(repair.ExitCode == 0, repair.Describe());
 
             await lifecycle.InitializeAsync();
 
