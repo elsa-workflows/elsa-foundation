@@ -16,10 +16,16 @@ public sealed record EfModuleDescriptor(
     Type? MySql,
     IReadOnlyList<string> DependsOn,
     IReadOnlyList<Type> PostMigration,
-    Assembly Assembly)
+    Assembly Assembly,
+    string? DisplayName = null,
+    string DefaultConnectionName = EfConnectionDefaults.ConnectionName,
+    string DefaultSqliteConnectionString = EfConnectionDefaults.SqliteConnectionString)
 {
     /// <summary>The frozen migrations-history table this module's host actually uses.</summary>
     public string HistoryTableName => EfMigrationsHistory.TableName(HistoryModule);
+
+    /// <summary>The operator-facing name a binding reports in errors: <see cref="DisplayName"/> when the module set one, otherwise <see cref="Name"/>.</summary>
+    public string Owner => DisplayName ?? Name;
 
     /// <summary>The provider-derived context <paramref name="provider"/> selects, or <c>null</c> when this module does not support it.</summary>
     public Type? ProviderContext(string provider) =>

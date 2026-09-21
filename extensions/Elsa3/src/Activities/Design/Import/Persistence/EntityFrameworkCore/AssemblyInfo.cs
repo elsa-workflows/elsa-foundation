@@ -2,9 +2,10 @@ using Elsa.Persistence.EntityFramework;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore;
 
 // The single, discoverable declaration of this module (ADR 0076 D2). EfModuleCatalog.Discover reads this,
-// not the hand-written EfModuleBinding each registration class still builds for itself (slice 2, #1872).
+// and EfModuleBinding.For derives the registration class's binding from it (#1872).
 // This module lives under extensions/, not src/, but is included in the vocabulary on the same terms as
-// every other module (spec 171 D2, D3).
+// every other module (spec 171 D2, D3). It names its own default connection instead of the shared "Elsa"
+// one (EfConnectionDefaults), because it must match whatever connection Activities and Workflows Design use.
 [assembly: EfModule(
     "Elsa3.Activities.Design.Import",
     typeof(Elsa3ImportDbContext),
@@ -12,4 +13,7 @@ using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore;
     Sqlite = typeof(Elsa3ImportSqliteDbContext),
     SqlServer = typeof(Elsa3ImportSqlServerDbContext),
     PostgreSql = typeof(Elsa3ImportPostgreSqlDbContext),
-    MySql = typeof(Elsa3ImportMySqlDbContext))]
+    MySql = typeof(Elsa3ImportMySqlDbContext),
+    DisplayName = "Elsa 3 import",
+    DefaultConnectionName = Elsa3ImportEfModule.DefaultConnectionName,
+    DefaultSqliteConnectionString = Elsa3ImportEfModule.DefaultSqliteConnectionString)]

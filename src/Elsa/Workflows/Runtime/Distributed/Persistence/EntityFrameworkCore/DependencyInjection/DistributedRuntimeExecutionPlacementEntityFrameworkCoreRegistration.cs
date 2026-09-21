@@ -10,12 +10,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Dep
 public static class DistributedRuntimeExecutionPlacementEntityFrameworkCoreRegistration
 {
     public const string StoreBackendName = ExecutionPlacementStoreBackend.EntityFramework;
-    private static readonly EfModuleBinding Binding = new(
-        "Distributed runtime execution placement",
-        ExecutionPlacementEfModule.HistoryTableName,
-        typeof(ExecutionPlacementDbContext).Assembly.GetName().Name,
-        ExecutionPlacementEfModule.DefaultConnectionName,
-        ExecutionPlacementEfModule.DefaultSqliteConnectionString);
+    private static readonly EfModuleBinding Binding = EfModuleBinding.For(typeof(ExecutionPlacementDbContext));
 
     public static IServiceCollection AddDistributedRuntimeExecutionPlacementEntityFrameworkCore(
         this IServiceCollection services,

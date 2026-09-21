@@ -12,12 +12,7 @@ namespace Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Depend
 
 public static class StructuredLogsEntityFrameworkCoreRegistration
 {
-    private static readonly EfModuleBinding Binding = new(
-        "Structured Logs",
-        StructuredLogsEfModule.HistoryTableName,
-        typeof(StructuredLogsDbContext).Assembly.GetName().Name,
-        StructuredLogsEfModule.DefaultConnectionName,
-        StructuredLogsEfModule.DefaultSqliteConnectionString);
+    private static readonly EfModuleBinding Binding = EfModuleBinding.For(typeof(StructuredLogsDbContext));
 
     public static IServiceCollection AddStructuredLogsEntityFrameworkCore(
         this IServiceCollection services,

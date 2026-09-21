@@ -14,12 +14,7 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInj
 public static class IdentityIamEntityFrameworkCoreRegistration
 {
     public const string StoreBackendName = "entity-framework";
-    private static readonly EfModuleBinding Binding = new(
-        "Identity IAM",
-        IdentityIamEfModule.HistoryTableName,
-        typeof(IdentityIamDbContext).Assembly.GetName().Name,
-        IdentityIamEfModule.DefaultConnectionName,
-        IdentityIamEfModule.DefaultSqliteConnectionString);
+    private static readonly EfModuleBinding Binding = EfModuleBinding.For(typeof(IdentityIamDbContext));
 
     /// <summary>
     /// Executes the complete registration validation against an isolated descriptor list so a

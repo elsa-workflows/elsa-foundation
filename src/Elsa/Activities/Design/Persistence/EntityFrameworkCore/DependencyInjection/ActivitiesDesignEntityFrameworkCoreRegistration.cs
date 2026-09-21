@@ -20,12 +20,7 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.DependencyInjec
 public static class ActivitiesDesignEntityFrameworkCoreRegistration
 {
     public const string StoreBackendName = "entity-framework";
-    private static readonly EfModuleBinding Binding = new(
-        "Activities Design",
-        ActivitiesDesignEfModule.HistoryTableName,
-        typeof(ActivitiesDesignDbContext).Assembly.GetName().Name,
-        ActivitiesDesignEfModule.DefaultConnectionName,
-        ActivitiesDesignEfModule.DefaultSqliteConnectionString);
+    private static readonly EfModuleBinding Binding = EfModuleBinding.For(typeof(ActivitiesDesignDbContext));
 
     public static IServiceCollection AddActivitiesDesignEntityFrameworkCore(this IServiceCollection services, ActivitiesDesignEntityFrameworkCoreOptions options)
     {

@@ -15,6 +15,29 @@ public sealed record EfModuleBinding(
     string DefaultConnectionName = EfConnectionDefaults.ConnectionName,
     string DefaultSqliteConnectionString = EfConnectionDefaults.SqliteConnectionString)
 {
+    /// <summary>
+    /// Derives a module's binding from its own <see cref="EfModuleAttribute"/> declaration, so a registration
+    /// states the binding once instead of constructing an equivalent of it by hand. <paramref name="contextType"/>
+    /// is the module's base context — the same type its <c>[EfModule]</c> attribute names.
+    /// </summary>
+    public static EfModuleBinding For(Type contextType)
+    {
+        ArgumentNullException.ThrowIfNull(contextType);
+
+        var descriptor = EfModuleCatalog.Discover([contextType.Assembly])
+            .SingleOrDefault(candidate => candidate.ContextType == contextType);
+        if (descriptor is null)
+            throw new InvalidOperationException(
+                $"{contextType.Assembly.GetName().Name} declares no [EfModule] whose base context is {contextType}.");
+
+        return new EfModuleBinding(
+            descriptor.Owner,
+            descriptor.HistoryTableName,
+            contextType.Assembly.GetName().Name,
+            descriptor.DefaultConnectionName,
+            descriptor.DefaultSqliteConnectionString);
+    }
+
     /// <summary>Picks what the module registers for the provider a host named.</summary>
     public T Select<T>(string provider, T sqlite, T sqlServer, T postgreSql, T mySql) =>
         EfRelationalProviderBinding.Select(provider, Owner, sqlite, sqlServer, postgreSql, mySql);

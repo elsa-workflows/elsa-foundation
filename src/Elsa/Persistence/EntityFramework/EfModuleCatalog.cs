@@ -81,6 +81,9 @@ public static class EfModuleCatalog
             attribute.MySql,
             attribute.DependsOn,
             attribute.PostMigration,
-            assembly);
+            assembly,
+            attribute.DisplayName,
+            attribute.DefaultConnectionName,
+            attribute.DefaultSqliteConnectionString);
     }
 }

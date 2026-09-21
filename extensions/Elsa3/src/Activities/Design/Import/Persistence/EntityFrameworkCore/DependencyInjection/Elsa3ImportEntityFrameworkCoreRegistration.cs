@@ -12,12 +12,7 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Depende
 /// <summary>Registers, repeats, or explicitly switches the Elsa 3 import persistence to EF Core.</summary>
 public static class Elsa3ImportEntityFrameworkCoreRegistration
 {
-    private static readonly EfModuleBinding Binding = new(
-        "Elsa 3 import",
-        Elsa3ImportEfModule.HistoryTableName,
-        typeof(Elsa3ImportDbContext).Assembly.GetName().Name,
-        Elsa3ImportEfModule.DefaultConnectionName,
-        Elsa3ImportEfModule.DefaultSqliteConnectionString);
+    private static readonly EfModuleBinding Binding = EfModuleBinding.For(typeof(Elsa3ImportDbContext));
 
     public static IServiceCollection AddElsa3ImportEntityFrameworkCore(
         this IServiceCollection services,

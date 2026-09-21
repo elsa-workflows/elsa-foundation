@@ -10,12 +10,7 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Depende
 
 public static class EfOpenTelemetryRegistration
 {
-    private static readonly EfModuleBinding Binding = new(
-        "OpenTelemetry",
-        EfOpenTelemetryModule.HistoryTableName,
-        typeof(OpenTelemetryDbContext).Assembly.GetName().Name,
-        EfOpenTelemetryModule.DefaultConnectionName,
-        EfOpenTelemetryModule.DefaultSqliteConnectionString);
+    private static readonly EfModuleBinding Binding = EfModuleBinding.For(typeof(EfOpenTelemetryDbContext));
 
     public static IServiceCollection AddOpenTelemetryEntityFrameworkCore(
         this IServiceCollection services,

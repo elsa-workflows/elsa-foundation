@@ -3,8 +3,8 @@ using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
 
 // The single, discoverable declaration of this assembly's two modules (ADR 0076 D2): [EfModule] is
 // AllowMultiple for exactly the two assemblies that carry two contexts, this one and Identity's.
-// EfModuleCatalog.Discover reads these, not the hand-written EfModuleBinding each registration class
-// still builds for itself (slice 2, #1872).
+// EfModuleCatalog.Discover reads these, and EfModuleBinding.For derives each registration class's
+// binding from them (#1872).
 [assembly: EfModule(
     "Workflows.Runtime.Distributed.Placement",
     typeof(ExecutionPlacementDbContext),
@@ -12,7 +12,8 @@ using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
     Sqlite = typeof(ExecutionPlacementSqliteDbContext),
     SqlServer = typeof(ExecutionPlacementSqlServerDbContext),
     PostgreSql = typeof(ExecutionPlacementPostgreSqlDbContext),
-    MySql = typeof(ExecutionPlacementMySqlDbContext))]
+    MySql = typeof(ExecutionPlacementMySqlDbContext),
+    DisplayName = "Distributed runtime execution placement")]
 
 [assembly: EfModule(
     "Workflows.Runtime.Distributed.CommandTransport",
@@ -21,4 +22,5 @@ using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
     Sqlite = typeof(ExecutionCommandTransportSqliteDbContext),
     SqlServer = typeof(ExecutionCommandTransportSqlServerDbContext),
     PostgreSql = typeof(ExecutionCommandTransportPostgreSqlDbContext),
-    MySql = typeof(ExecutionCommandTransportMySqlDbContext))]
+    MySql = typeof(ExecutionCommandTransportMySqlDbContext),
+    DisplayName = "Distributed runtime execution command transport")]

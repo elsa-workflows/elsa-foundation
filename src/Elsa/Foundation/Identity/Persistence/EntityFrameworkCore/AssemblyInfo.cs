@@ -3,8 +3,8 @@ using Elsa.Persistence.EntityFramework;
 
 // The single, discoverable declaration of this assembly's two modules (ADR 0076 D2): [EfModule] is
 // AllowMultiple for exactly the two assemblies that carry two contexts, this one and Runtime.Distributed's.
-// EfModuleCatalog.Discover reads these, not the hand-written EfModuleBinding each registration class
-// still builds for itself (slice 2, #1872).
+// EfModuleCatalog.Discover reads these, and EfModuleBinding.For derives each registration class's
+// binding from them (#1872).
 [assembly: EfModule(
     "Identity.Iam",
     typeof(IdentityIamDbContext),
@@ -12,7 +12,8 @@ using Elsa.Persistence.EntityFramework;
     Sqlite = typeof(IdentityIamSqliteDbContext),
     SqlServer = typeof(IdentityIamSqlServerDbContext),
     PostgreSql = typeof(IdentityIamPostgreSqlDbContext),
-    MySql = typeof(IdentityIamMySqlDbContext))]
+    MySql = typeof(IdentityIamMySqlDbContext),
+    DisplayName = "Identity IAM")]
 
 [assembly: EfModule(
     "Identity.ProviderConfiguration",
@@ -21,4 +22,5 @@ using Elsa.Persistence.EntityFramework;
     Sqlite = typeof(IdentityProviderConfigurationSqliteDbContext),
     SqlServer = typeof(IdentityProviderConfigurationSqlServerDbContext),
     PostgreSql = typeof(IdentityProviderConfigurationPostgreSqlDbContext),
-    MySql = typeof(IdentityProviderConfigurationMySqlDbContext))]
+    MySql = typeof(IdentityProviderConfigurationMySqlDbContext),
+    DisplayName = "Identity provider-configuration")]

@@ -51,4 +51,13 @@ public sealed class EfModuleAttribute(string name, Type contextType) : Attribute
     /// module sets this until it does.
     /// </summary>
     public Type[] PostMigration { get; init; } = [];
+
+    /// <summary>An operator-facing name, when the canonical <see cref="Name"/> alone would not read clearly.</summary>
+    public string? DisplayName { get; init; }
+
+    /// <summary>The <c>ConnectionStrings</c> entry this module falls back to when a host names neither a connection string nor a connection name.</summary>
+    public string DefaultConnectionName { get; init; } = EfConnectionDefaults.ConnectionName;
+
+    /// <summary>The SQLite connection string this module falls back to when nothing else resolves one.</summary>
+    public string DefaultSqliteConnectionString { get; init; } = EfConnectionDefaults.SqliteConnectionString;
 }

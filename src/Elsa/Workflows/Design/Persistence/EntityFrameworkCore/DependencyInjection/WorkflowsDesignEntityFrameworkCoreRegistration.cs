@@ -15,12 +15,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.DependencyInject
 
 public static class WorkflowsDesignEntityFrameworkCoreRegistration
 {
-    private static readonly EfModuleBinding Binding = new(
-        "Workflows Design",
-        WorkflowsDesignEfModule.HistoryTableName,
-        typeof(WorkflowsDesignDbContext).Assembly.GetName().Name,
-        WorkflowsDesignEfModule.DefaultConnectionName,
-        WorkflowsDesignEfModule.DefaultSqliteConnectionString);
+    private static readonly EfModuleBinding Binding = EfModuleBinding.For(typeof(WorkflowsDesignDbContext));
 
     public static IServiceCollection AddWorkflowsDesignEntityFrameworkCore(this IServiceCollection services, WorkflowsDesignEntityFrameworkCoreOptions options)
     {
