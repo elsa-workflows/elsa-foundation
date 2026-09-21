@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 130
 - Test projects: 106
 - Domains: 29
-- Direct cross-domain references: 671
+- Direct cross-domain references: 672
 
 ## Domains
 
@@ -258,7 +258,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests](../../tests/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Studio | Preferences.Persistence.EntityFrameworkCore.ProviderTests | test | Elsa.Studio.Preferences.Persistence.EntityFrameworkCore |
 | [Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests](../../tests/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/Tests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Studio | Preferences.Persistence.EntityFrameworkCore.Tests | test | Elsa.Studio.Preferences.Core<br>Elsa.Studio.Preferences.Persistence.EntityFrameworkCore |
 | [Elsa.Studio.Preferences.Tests](../../tests/Elsa/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj) | test | Elsa.Studio | Preferences.Tests | test | Elsa.Api.AspNetCore<br>Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Studio.Preferences.Api<br>Elsa.Studio.Preferences.Core<br>Elsa.Testing |
-| [Elsa.Tasks.Tests](../../tests/Elsa/Tasks/Tests/Elsa.Tasks.Tests.csproj) | test | Elsa.Tasks | Tests | test | Elsa.Tasks<br>Elsa.Tasks.Schedules |
+| [Elsa.Tasks.Tests](../../tests/Elsa/Tasks/Tests/Elsa.Tasks.Tests.csproj) | test | Elsa.Tasks | Tests | test | Elsa.Locking.Core<br>Elsa.Tasks<br>Elsa.Tasks.Schedules |
 | [Elsa.Testing](../../tests/Elsa/Testing/Elsa.Testing.csproj) | test | Elsa.Testing | (root) | test | Elsa.Primitives |
 | [Elsa.Workbench.Tests](../../tests/Elsa/Workbench/Tests/Elsa.Workbench.Tests.csproj) | test | Elsa.Workbench | - | test | Elsa.Workbench |
 | [Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests](../../tests/Elsa/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Workflows | Dashboard.Persistence.EntityFrameworkCore.ProviderTests | test | Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests |
@@ -680,6 +680,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Tasks](../../src/Elsa/Tasks/Elsa.Tasks.csproj) | Elsa.Tasks | [Elsa.Locking.Core](../../src/Elsa/Locking/Core/Elsa.Locking.Core.csproj) | Elsa.Locking |
 | [Elsa.Tasks](../../src/Elsa/Tasks/Elsa.Tasks.csproj) | Elsa.Tasks | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Tasks.Schedules](../../src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj) | Elsa.Tasks | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
+| [Elsa.Tasks.Tests](../../tests/Elsa/Tasks/Tests/Elsa.Tasks.Tests.csproj) | Elsa.Tasks | [Elsa.Locking.Core](../../src/Elsa/Locking/Core/Elsa.Locking.Core.csproj) | Elsa.Locking |
 | [Elsa.Testing](../../tests/Elsa/Testing/Elsa.Testing.csproj) | Elsa.Testing | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | Elsa.Workbench | [Elsa.Activities.Bpmn](../../src/Elsa/Activities/Bpmn/Elsa.Activities.Bpmn.csproj) | Elsa.Activities |
 | [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | Elsa.Workbench | [Elsa.Activities.Bpmn.Interchange](../../src/Elsa/Activities/Bpmn/Interchange/Elsa.Activities.Bpmn.Interchange.csproj) | Elsa.Activities |
