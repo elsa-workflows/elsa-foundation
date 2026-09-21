@@ -15,5 +15,11 @@ public sealed class ExecutionPlacementLeaseEntity
     public long ExpiresAtUtcTicks { get; set; }
     public int ExpiresAtOffsetMinutes { get; set; }
     public bool IsReleased { get; set; }
+
+    /// <summary>
+    /// Monotonic per row, never reused. <see cref="EfExecutionPlacementStore.IsStagedWrite"/> relies on that to
+    /// tell one committed write from another; a delete or purge path added here must preserve it or replayed
+    /// claims can mismatch.
+    /// </summary>
     public long Revision { get; set; }
 }

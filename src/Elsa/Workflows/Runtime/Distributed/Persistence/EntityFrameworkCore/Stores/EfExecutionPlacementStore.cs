@@ -277,6 +277,11 @@ public sealed class EfExecutionPlacementStore(
     /// <paramref name="stagedRevision"/>; carrying <paramref name="staged"/> whole identifies it as that attempt's.
     /// A different owner writes its own identity, and the same owner writing the same lease at the same revision is
     /// the same claim, which this result already describes.
+    ///
+    /// This match relies on <see cref="ExecutionPlacementLeaseEntity.Revision"/> being monotonic per row and never
+    /// reused, which holds today only because nothing deletes or recycles a <c>PlacementLeases</c> row. If a row
+    /// were ever hard-deleted, purged or reused for a new execution id and its revision reset, a staged revision
+    /// could match a different write, and a replayed claim could silently adopt it.
     /// </summary>
     private static bool IsStagedWrite(ExecutionPlacementLeaseEntity row, long stagedRevision, ExecutionPlacementLease staged) =>
         row.Revision == stagedRevision &&
