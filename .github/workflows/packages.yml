@@ -89,15 +89,14 @@ jobs:
       - name: Generate packable solution filter
         # Restrict build/pack to the library projects so the test tree (117 projects,
         # including Testcontainers-based integration tests) is not compiled just to pack.
-        # The host under src/Apps is excluded; project references pull in the full lib graph.
+        # The host under src/apps is excluded; project references pull in the full lib graph.
         #
-        # Both module roots are searched. Optional modules live under extensions/ (#1815), and a
-        # src-only search would drop every one of them from the release without failing: the pack
-        # would still succeed, just with fewer packages than the previous one. Test projects under
-        # either root are excluded by path, since extensions/<Name>/tests/ sits outside tests/.
+        # One root covers every module: required under src/essentials, optional under src/extensions (#1815).
+        # Test projects are excluded by path rather than by root, because an extension carries its own
+        # tests/ subtree inside src/ rather than under the repository's tests/.
         run: |
-          projects=$(find src extensions -name '*.csproj' \
-            -not -path 'src/Apps/*' -not -path '*/tests/*' \
+          projects=$(find src -name '*.csproj' \
+            -not -path 'src/apps/*' -not -path '*/tests/*' \
             | sort | sed 's|.*|"&"|' | paste -sd, -)
           printf '{"solution":{"path":"Elsa.Server.slnx","projects":[%s]}}' "$projects" > Elsa.Server.pack.slnf
 

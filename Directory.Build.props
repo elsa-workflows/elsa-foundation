@@ -7,10 +7,10 @@
     project can still override them locally. Two projects deliberately keep
     their own copies rather than inheriting:
 
-      - src/Elsa/Workflows/Design/CodeGeneration targets netstandard2.0 as a
+      - src/essentials/Workflows/Design/CodeGeneration targets netstandard2.0 as a
         Roslyn source generator and pins its own TargetFramework/ImplicitUsings.
 
-      - The former src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore
+      - The former src/essentials/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore
         tree was retired with issue #1482 together with its frozen oracle and ratchet.
 
     Still deliberately absent: Version. CI injects /p:Version.

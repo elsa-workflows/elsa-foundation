@@ -25,9 +25,8 @@ dotnet tool restore >/dev/null
 
 module_project() {
   local assembly="$1"
-  # Both module roots: most EF adapters belong to optional modules, which live under
-  # extensions/ (#1815). A src-only search would silently find nothing for those.
-  find src extensions -name "$assembly.csproj" -not -path '*/obj/*' | head -n 1
+  # One root covers every module: required under src/essentials, optional under src/extensions (#1815).
+  find src -name "$assembly.csproj" -not -path '*/obj/*' | head -n 1
 }
 
 output_dir() {
@@ -59,7 +58,7 @@ while IFS= read -r snapshot; do
   [[ "$name" =~ ^($filter)$ ]] || continue
   [[ "$snapshot" == */Secrets/* && "$name" != SecretsMySqlDbContext ]] && continue
   rm -rf "$(dirname "$snapshot")"
-done < <(find src extensions -name '*ModelSnapshot.cs' -path '*/EntityFrameworkCore/Migrations/*' -not -path '*/obj/*')
+done < <(find src -name '*ModelSnapshot.cs' -path '*/EntityFrameworkCore/Migrations/*' -not -path '*/obj/*')
 
 build_tooling
 rows=()

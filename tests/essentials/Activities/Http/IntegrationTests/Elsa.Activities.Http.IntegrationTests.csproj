@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <!-- Self-hosts a real ASP.NET Core request pipeline over TestServer so the inbound HttpEndpoint middleware,
+       the stimulus router, the workflow start dispatcher, and the in-process agent are exercised end to end. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Http\Elsa.Activities.Http.csproj" />
+    <!-- Elsa.Workflows.Runtime.Http provides the REAL route resolver, route-table startup task, and publish-time
+         index observer that keep the route table in step with the trigger index (exercised end to end here). The
+         IRouteTable/IRouteMatcher implementations are internal to Elsa.Http and composed via its HttpFeature's
+         reflective service loader, unsuitable for a focused fixture; production-equivalent doubles stand in for
+         just those two services (see RouteTableTestDoubles.cs). IRouteTable/IRouteMatcher/HttpRouteData contracts
+         come transitively via Elsa.Http.Core. -->
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Http\Elsa.Workflows.Runtime.Http.csproj" />
+    <!-- The real HttpRequestBodyParser (spec 089 C, T005) so a JSON body's ParsedContent is exercised end to end. -->
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Http\Elsa.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
+    <!-- The Sequence composite so spec 089 D scenario 2 can sequence two HttpEndpoints in one workflow. -->
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Events\Elsa.Events.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Expressions\Elsa.Expressions.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\Testing\Elsa.Activities.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

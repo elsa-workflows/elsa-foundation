@@ -22,10 +22,10 @@ general, spoof-proof runtime seam rather than a BPMN-private side channel.
 
 ## In scope
 
-- The BPMN runtime module (`src/Elsa/Activities/Bpmn/`): token engine, gateways, events, boundary
+- The BPMN runtime module (`src/essentials/Activities/Bpmn/`): token engine, gateways, events, boundary
   events, multi-instance, cycles, and the Phase 3 constructs (compensation, transactions/cancel
   events, escalation, event subprocesses, call activity, executable collaborations).
-- BPMN 2.0 XML + BPMNDI interchange (`src/Elsa/Activities/Bpmn/Interchange/`).
+- BPMN 2.0 XML + BPMNDI interchange (`src/essentials/Activities/Bpmn/Interchange/`).
 - Runtime seams motivated by the engine but designed provider-neutral (specs 112, 115, 119, 123).
 
 ## Out of scope

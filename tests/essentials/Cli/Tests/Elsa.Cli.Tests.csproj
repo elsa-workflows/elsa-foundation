@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The in-process comparison the packaged-host artifact is held to needs a provider engine of its
+         own; everything else about the tool under test comes from the fixture host's closure. -->
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <!-- `apply`/`validate` (#1876) open a real SQLite database; this reads it back directly, to prove
+         `validate` applied nothing rather than trusting its exit code alone (FR-052). -->
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\src\essentials\Cli\Elsa.Cli.csproj" />
+    <ProjectReference Include="..\Fixtures\Widgets\Acme.Widgets.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Built, never referenced: what these tests consume is each host's *build output* — a runtimeconfig,
+         a deps file and the assemblies beside them — exactly what an operator with no source tree has. -->
+    <ProjectReference Include="..\Fixtures\Host\Elsa.Cli.Fixtures.Host.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Fixtures\MinimalHost\Elsa.Cli.Fixtures.MinimalHost.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Fixtures\CollisionHost\Elsa.Cli.Fixtures.CollisionHost.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Fixtures\NuplaneHost\Elsa.Cli.Fixtures.NuplaneHost.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Fixtures\ShellsHost\Elsa.Cli.Fixtures.ShellsHost.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

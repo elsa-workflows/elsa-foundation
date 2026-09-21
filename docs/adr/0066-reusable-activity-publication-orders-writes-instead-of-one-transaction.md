@@ -38,7 +38,7 @@ tested this directly and concluded:
 
 Current implementations of the named commands are `EfActivityPublicationCommand` and
 `EfSourceActivityPublicationCommand` in
-`src/Elsa/Workflows/Publishing/Persistence/EntityFrameworkCore/Services/`. Groundwork class names
+`src/essentials/Workflows/Publishing/Persistence/EntityFrameworkCore/Services/`. Groundwork class names
 below are retained as the historical record of what the decision was written against.
 
 ## Context

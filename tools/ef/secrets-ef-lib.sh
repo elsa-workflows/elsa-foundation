@@ -5,7 +5,7 @@
 
 secrets_ef_init() {
   secrets_ef_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-  secrets_ef_module="src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj"
+  secrets_ef_module="src/essentials/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj"
   # The shared design-time startup project (#1878): it holds every provider engine and a
   # design-time factory per provider-derived context, including all four Secrets ones. The
   # Secrets-only Tooling project it replaced was retired with dual-migrate.sh.

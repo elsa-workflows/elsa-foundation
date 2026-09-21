@@ -1,14 +1,14 @@
 # Running Elsa.Workbench in Docker
 
-The workbench is a development and demo host, not the shipped Elsa product. This guide covers its container image (`src/Apps/Elsa.Workbench`) and the
+The workbench is a development and demo host, not the shipped Elsa product. This guide covers its container image (`src/apps/Elsa.Workbench`) and the
 `docker/compose/` reference stack that runs **PostgreSQL + Elsa.Workbench + Elsa Studio** with
 Postgres-backed persistence.
 
-- Image: `src/Apps/Elsa.Workbench/Dockerfile` (multi-stage, `net10.0`, non-root, port 8080)
+- Image: `src/apps/Elsa.Workbench/Dockerfile` (multi-stage, `net10.0`, non-root, port 8080)
 - Reference stack: `docker/compose/docker-compose.yml`
 - Curated demo composition: `docker/compose/elsa-workbench.shells.json`
 
-The repo default `src/Apps/Elsa.Workbench/shells.json` (SQLite) is intentionally left untouched; the
+The repo default `src/apps/Elsa.Workbench/shells.json` (SQLite) is intentionally left untouched; the
 compose stack mounts its own curated `shells.json` instead.
 
 > Just want to run the prebuilt images from Docker Hub with plain `docker run` (no checkout, no
@@ -61,7 +61,7 @@ The build context **must be the repository root** — the project references spa
 tree and the build needs repo-root `Directory.Packages.props`, the `.slnx`, and a NuGet config.
 
 ```bash
-docker build -f src/Apps/Elsa.Workbench/Dockerfile -t elsa-workbench:local .
+docker build -f src/apps/Elsa.Workbench/Dockerfile -t elsa-workbench:local .
 docker run --rm -p 13000:8080 \
   -e CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey=elsa-docker-demo-recovery-continuation-key \
   -e 'CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword=Password123!' \

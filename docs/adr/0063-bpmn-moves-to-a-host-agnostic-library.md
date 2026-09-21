@@ -7,7 +7,7 @@
 ## Context
 
 BPMN Phases 1 through 3 are complete: sixteen specs merged, roughly 9,100 lines of source and 11,900
-lines of tests under `src/Elsa/Activities/Bpmn/`. No ADR records why any of it is shaped the way it
+lines of tests under `src/essentials/Activities/Bpmn/`. No ADR records why any of it is shaped the way it
 is. The rationale lives in `specs/108-bpmn-container-activity/spec.md`, in
 `docs/program-goals/bpmn-engine.md`, and in doc comments that cite spec numbers. That is a gap on its
 own terms, and it is the reason this ADR exists at all.

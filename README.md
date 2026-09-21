@@ -16,7 +16,7 @@ Modules should stay opt-in. A shell composes only the capabilities it needs, and
 
 ## Start here
 
-- The process entry point is [`src/Apps/Elsa.Workbench/Program.cs`](src/Apps/Elsa.Workbench/Program.cs); which features it composes is decided by [`src/Apps/Elsa.Workbench/shells.json`](src/Apps/Elsa.Workbench/shells.json).
+- The process entry point is [`src/apps/Elsa.Workbench/Program.cs`](src/apps/Elsa.Workbench/Program.cs); which features it composes is decided by [`src/apps/Elsa.Workbench/shells.json`](src/apps/Elsa.Workbench/shells.json).
 - [How a workflow executes](docs/how-a-workflow-executes.md) traces one request from that entry point to a durable checkpoint, file by file.
 - [AGENTS.md](AGENTS.md) is the provider-neutral entrypoint for AI agents and engineers.
 - [docs/README.md](docs/README.md) routes to glossary, skills, maps, reports, and architecture orientation.
@@ -47,7 +47,7 @@ Management-client APIs are owned by their Elsa domains and can be composed direc
 `Elsa.Workbench` is a reference composition, not the implementation home of a server-wide management facade.
 
 The canonical areas are Workflow Design, Activity Design, Expressions, Publishing, Runtime, and
-[API Capabilities](src/Elsa/Api/Capabilities/README.md). An authenticated client loads one shell-relative
+[API Capabilities](src/essentials/Api/Capabilities/README.md). An authenticated client loads one shell-relative
 `GET /capabilities` document, then follows the advertised domain links. Omitted domain features advertise no
 capability and expose no routes; endpoint-level action permissions remain authoritative.
 

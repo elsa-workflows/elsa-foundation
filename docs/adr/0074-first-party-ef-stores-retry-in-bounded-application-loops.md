@@ -25,7 +25,7 @@ follow-up ADR that D6 anticipated. It constrains retry only; nothing else in ADR
 ## Context
 
 First-party EF stores retry lost write races and transient provider conflicts in one bounded
-application loop, `EfWriteRetry` in `src/Elsa/Persistence/EntityFramework/`, used by about 20 store
+application loop, `EfWriteRetry` in `src/essentials/Persistence/EntityFramework/`, used by about 20 store
 files with per-store attempt budgets. EF's own retrying execution strategy, `EnableRetryOnFailure`,
 is enabled nowhere, and that had never been recorded as a decision: it was simply how the code grew.
 

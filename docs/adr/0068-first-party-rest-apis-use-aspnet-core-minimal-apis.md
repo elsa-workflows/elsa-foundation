@@ -216,7 +216,7 @@ Convenience, familiarity, or avoiding a migration seam is not an exception. An a
 still uses the shared Foundation Identity policy path and standard security/ownership metadata.
 
 The canonical, machine-readable exception registry is
-`tests/Elsa/Architecture/Baselines/fastendpoints-transition-exceptions.json`, created and enforced by
+`tests/essentials/Architecture/Baselines/fastendpoints-transition-exceptions.json`, created and enforced by
 [#1346](https://github.com/elsa-workflows/elsa-foundation/issues/1346). Each entry identifies the
 owning module and feature, exact registration and route/method surface, capability-gap evidence,
 contract-test fixtures, linked approval issue or pull request, approving maintainer or architect,

@@ -512,7 +512,7 @@ The Configuration & Settings classification (framework §2.12) is deferred to th
 
 **framework §2.13 — Elsa specialization.** Elsa's current packaging is the snapshot in §E2.4 above. The framework rule (packaging cohesion follows dependency cohesion; packaging is application-level and revisable) governs. Framework §2.13 places the choice of how versions are shared with the application; Elsa's choice is recorded below.
 
-**The workbench is not the product.** `src/Apps/Elsa.Workbench` is a development and demo host used to build out modules. It is not the deliverable executable, and no product host has existed in any Elsa major version. A clean host is therefore a product specification rather than a refactor of the workbench, and the `Elsa.Server` name and the `elsaworkflows/elsa-server` image are reserved for it. The workbench publishes as `elsaworkflows/elsa-workbench`.
+**The workbench is not the product.** `src/apps/Elsa.Workbench` is a development and demo host used to build out modules. It is not the deliverable executable, and no product host has existed in any Elsa major version. A clean host is therefore a product specification rather than a refactor of the workbench, and the `Elsa.Server` name and the `elsaworkflows/elsa-server` image are reserved for it. The workbench publishes as `elsaworkflows/elsa-workbench`.
 
 **Two version lines.** Elsa uses neither whole-version sharing nor fully independent versioning, both of which framework §2.13 permits.
 

@@ -37,15 +37,15 @@ field, no new compiled type, and no new runtime execution path are required.
 ## Backend work
 
 The authored field `ActivityNode.Outputs : IEnumerable<ArgumentState>`
-([src/Elsa/Workflows/Design/Core/Models/ActivityNode.cs:29](../../src/Elsa/Workflows/Design/Core/Models/ActivityNode.cs))
+([src/essentials/Workflows/Design/Core/Models/ActivityNode.cs:29](../../src/essentials/Workflows/Design/Core/Models/ActivityNode.cs))
 already exists and round-trips. The binding ("output → variable") is an `ArgumentState` whose
 `Value.ExpressionType == "Variable"` carrying a `VariableReference`, with optional `Conversion` — identical
 to an input binding.
 
 1. **Wire capture compilation into the leaf path.**
-   [`ExecutableNodeCompiler.CompileNode`](../../src/Elsa/Workflows/Publishing/Api/Services/ExecutableNodeCompiler.cs)
+   [`ExecutableNodeCompiler.CompileNode`](../../src/essentials/Workflows/Publishing/Api/Services/ExecutableNodeCompiler.cs)
    hardcodes empty `outputCaptures` (~line 166). Instead invoke the existing
-   [`RuntimeOutputCaptureCompiler`](../../src/Elsa/Workflows/Publishing/Api/Services/RuntimeOutputCaptureCompiler.cs)
+   [`RuntimeOutputCaptureCompiler`](../../src/essentials/Workflows/Publishing/Api/Services/RuntimeOutputCaptureCompiler.cs)
    against `activity.Outputs`, the leaf activity's result-projection contracts (already built in
    `ExecutableNodeCompiler.cs` ~lines 311-330), and `state.Variables`.
 2. **Adapter for leaf projections.** `RuntimeOutputCaptureCompiler.CompileBoundaryOutputs` takes
@@ -55,7 +55,7 @@ to an input binding.
 3. **Thread the dependency + storage aggregation.** Inject `RuntimeOutputCaptureCompiler` into
    `ExecutableNodeCompiler` (today only `WorkflowExecutableCompiler` holds it) and include leaf captures in
    the storage-driver requirement aggregation
-   ([src/Elsa/Workflows/Publishing/Api/Services/WorkflowExecutableCompiler.cs](../../src/Elsa/Workflows/Publishing/Api/Services/WorkflowExecutableCompiler.cs) ~line 228, which already folds
+   ([src/essentials/Workflows/Publishing/Api/Services/WorkflowExecutableCompiler.cs](../../src/essentials/Workflows/Publishing/Api/Services/WorkflowExecutableCompiler.cs) ~line 228, which already folds
    `OutputCaptures.Values`).
 4. **Validation (mirror the boundary rules).** Workflow-scope Variable target only for v1,
    `TransientResource` source rejection (`VF-ACT-005`), variable existence + type/coercion compatibility at

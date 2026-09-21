@@ -11,7 +11,7 @@
 
 . "$PSScriptRoot/../_ElsaCommon.ps1"
 
-$script:ServerProject = (Resolve-Path "$PSScriptRoot/../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj").Path
+$script:ServerProject = (Resolve-Path "$PSScriptRoot/../../src/apps/Elsa.Workbench/Elsa.Workbench.csproj").Path
 
 # --- definition-file authoring -------------------------------------------------
 

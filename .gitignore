@@ -459,9 +459,9 @@ bench-*.sh
 bench-out-runner.sh
 
 # Contract-surface snapshot guard: the failing-run artifact written beside the committed baseline.
-tests/Elsa/Activities/Design/Tests/Contracts/*.actual.json
+tests/essentials/Activities/Design/Tests/Contracts/*.actual.json
 
 # Local development shell overlay. Program.cs loads shells.{Environment}.json, so this file lets a
 # developer point the Workbench at their own database (provider and connection) without changing the
 # committed SQLite composition. shells.Production.json stays committed.
-src/Apps/Elsa.Workbench/shells.Development.json
+src/apps/Elsa.Workbench/shells.Development.json

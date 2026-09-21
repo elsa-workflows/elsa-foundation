@@ -10,7 +10,7 @@ Re-run them whenever an activity contract changes so the report and its evidence
 ## Why source parsing rather than reflection
 
 The obvious implementation is to run the production reflection-only scanner
-(`ClrAssemblyScanner`, `src/Elsa/Activities/Design/Reconciliation/Clr/Services/ClrAssemblyScanner.cs`)
+(`ClrAssemblyScanner`, `src/essentials/Activities/Design/Reconciliation/Clr/Services/ClrAssemblyScanner.cs`)
 over the built assemblies. That is the better long-term answer and is the intended shape of the
 committed snapshot guard.
 

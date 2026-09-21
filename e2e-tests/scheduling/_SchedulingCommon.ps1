@@ -4,7 +4,7 @@
 .DESCRIPTION
     Dot-sources ../_ElsaCommon.ps1 and adds scheduling-specific node builders + wait helpers.
 
-    Execution models (from src/Elsa/Activities/Scheduling):
+    Execution models (from src/essentials/Activities/Scheduling):
       - Delay  : MID-FLOW suspend/resume. Suspends the instance for `Duration`; the hosted DurableTimerPumpTask
                  fires a bookmark at now+Duration (swept ~every 10s) to auto-resume it. No external stimulus.
       - Timer  : START trigger ([TriggerActivity]). The RecurringTriggerPumpTask starts a NEW instance every

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup><PackageReference Include="Microsoft.NET.Test.Sdk" /><PackageReference Include="xunit" /><PackageReference Include="xunit.runner.visualstudio" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Dashboard\Elsa.Workflows.Dashboard.csproj" /></ItemGroup>
+  <ItemGroup>
+    <!--
+      The dashboard wiring is asserted here rather than in a provider-specific test project
+      because that project references Testcontainers, which excludes it from the PR-time fast gate. The
+      defect these guard against (#1173) is a registration mistake, not a query one, so it needs no server
+      and belongs where CI actually runs it.
+    -->
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Testing\Elsa.Testing.csproj" />
+  </ItemGroup>
+
+</Project>

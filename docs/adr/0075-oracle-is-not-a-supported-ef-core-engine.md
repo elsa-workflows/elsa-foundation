@@ -141,7 +141,7 @@ this decision. Anyone revisiting this should argue about the standard in D4, not
 ### D3 — The unsupported status and the Elsa 3 route are stated where an operator reads them
 
 The four supported engines, Oracle's absence from that list, and the migration route are stated in
-[the EF persistence README](../../src/Elsa/Persistence/EntityFramework/README.md), beside the provider
+[the EF persistence README](../../src/essentials/Persistence/EntityFramework/README.md), beside the provider
 tables an operator already consults, not only here.
 
 The route is: export workflow definitions from Elsa 3 as JSON, install Elsa 4 fresh on one of the four

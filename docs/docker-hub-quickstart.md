@@ -159,7 +159,7 @@ definitions folder and enable the `JsonWorkflowReconciliation` feature:
 Each `*.json` file is an array of workflow-version envelopes; **pin `definitionId`** in every envelope
 (an omitted id is regenerated per restart, duplicating the definition) and use resolved `actver_*`
 activity ids — authoring rules and the id recipe live in the
-[feature README](../src/Elsa/Workflows/Design/Reconciliation/Json/README.md).
+[feature README](../src/essentials/Workflows/Design/Reconciliation/Json/README.md).
 
 > **Readiness:** deployment completes during shell activation. Wait on **`GET /health/ready`**
 > (200 = every definition imported and, with `PublishOnReconcile`, published). `GET /` returns 200
