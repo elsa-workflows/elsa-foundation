@@ -55,7 +55,8 @@ public sealed class ModularityFaultRendererTests
         Assert.True(await _renderer.TryWriteAsync(context, exception));
 
         context.Response.Body.Position = 0;
-        var body = await new StreamReader(context.Response.Body, Encoding.UTF8).ReadToEndAsync();
+        using var reader = new StreamReader(context.Response.Body, Encoding.UTF8);
+        var body = await reader.ReadToEndAsync();
         return (context.Response.StatusCode, JsonDocument.Parse(body).RootElement.Clone());
     }
 }
