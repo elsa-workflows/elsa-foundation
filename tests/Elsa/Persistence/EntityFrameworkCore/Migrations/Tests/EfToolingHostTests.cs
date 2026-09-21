@@ -421,7 +421,11 @@ public sealed class EfToolingHostTests : IDisposable
         var image = SyntheticEfModules.BuildImage(
             "Acme.Traversal.Modules",
             new SyntheticModule("Acme/Evil", "AcmeEvil", PostgreSql: typeof(SecretsPostgreSqlDbContext)));
-        var fixture = AssemblyLoadContext.Default.LoadFromStream(new MemoryStream(image));
+        Assembly fixture;
+        using (var imageStream = new MemoryStream(image))
+        {
+            fixture = AssemblyLoadContext.Default.LoadFromStream(imageStream);
+        }
         var output = Path.Join(root, "traversal");
         var request = new ScriptRequestBody
         {
@@ -589,7 +593,7 @@ public sealed class EfToolingHostTests : IDisposable
 
     private async Task<string> ScriptAsync(string provider, string[] modules, string name)
     {
-        var output = Path.Combine(root, provider, name);
+        var output = Path.Join(root, provider, name);
         var run = await RunAsync(ScriptRequest(provider, modules, output));
 
         Assert.Equal(EfToolingExitCode.Success, run.ExitCode);
