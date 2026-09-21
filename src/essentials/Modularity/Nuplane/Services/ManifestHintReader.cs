@@ -9,7 +9,7 @@ namespace Elsa.Modularity.Nuplane.Services;
 /// Reflects the source-only <c>Elsa.Specifications.PackageManifest.Generator.Hints</c> attributes off a feature CLR type
 /// so the runtime feature catalog can surface the same categories and settings that the pack-time manifest generator
 /// writes into <c>elsa-package.json</c>. Attributes are matched by full type name (they compile in as internal types),
-/// mirroring elsa-platform's <c>FeatureMetadataReader</c>/<c>SettingDiscoveryService</c>.
+/// mirroring elsa-specifications' <c>FeatureMetadataReader</c>/<c>SettingDiscoveryService</c>.
 /// </summary>
 public static class ManifestHintReader
 {
