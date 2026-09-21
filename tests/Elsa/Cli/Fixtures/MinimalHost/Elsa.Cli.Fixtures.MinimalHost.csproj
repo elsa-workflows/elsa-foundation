@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <Description>
+      A host carrying one third-party module and exactly one provider engine. Two things need a host that
+      small: a fast script/script-check cycle, and a host that genuinely pins no engine for three of the
+      four providers, which is what the resolution-failure refusal is about.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Widgets\Acme.Widgets.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -6,10 +6,10 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 
 ## Summary
 
-- Source projects: 128
-- Test projects: 96
-- Domains: 27
-- Direct cross-domain references: 636
+- Source projects: 130
+- Test projects: 103
+- Domains: 29
+- Direct cross-domain references: 655
 
 ## Domains
 
@@ -21,6 +21,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Architecture | 0 | 2 | test |
 | Elsa.Attention | 2 | 2 | contract<br>feature/implementation<br>test |
 | Elsa.Caching | 2 | 1 | contract<br>feature/implementation<br>test |
+| Elsa.Cli | 2 | 5 | feature/implementation<br>test |
 | Elsa.Diagnostics | 8 | 8 | contract<br>feature/implementation<br>test |
 | Elsa.Events | 3 | 1 | contract<br>feature/implementation<br>helper<br>test |
 | Elsa.Expressions | 9 | 3 | contract<br>feature/implementation<br>provider/implementation<br>test |
@@ -42,6 +43,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Workbench | 1 | 1 | host<br>test |
 | Elsa.Workflows | 31 | 24 | contract<br>feature/implementation<br>test |
 | Elsa3 | 4 | 3 | feature/implementation<br>test |
+| Other | 0 | 2 | test |
 
 ## Projects
 
@@ -90,6 +92,8 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Attention.Core](../../src/Elsa/Attention/Core/Elsa.Attention.Core.csproj) | source | Elsa.Attention | Core | contract | - |
 | [Elsa.Caching.Core](../../src/Elsa/Caching/Core/Elsa.Caching.Core.csproj) | source | Elsa.Caching | Core | contract | - |
 | [Elsa.Caching.Memory](../../src/Elsa/Caching/Memory/Elsa.Caching.Memory.csproj) | source | Elsa.Caching | Memory | feature/implementation | Elsa.Caching.Core |
+| [Elsa.Cli](../../src/Elsa/Cli/Elsa.Cli.csproj) | source | Elsa.Cli | (root) | feature/implementation | Elsa.Cli.Worker |
+| [Elsa.Cli.Worker](../../src/Elsa/Cli/Worker/Elsa.Cli.Worker.csproj) | source | Elsa.Cli | Worker | feature/implementation | - |
 | [Elsa.Diagnostics.ConsoleLogStreaming](../../src/Elsa/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj) | source | Elsa.Diagnostics | ConsoleLogStreaming | feature/implementation | - |
 | [Elsa.Diagnostics.OpenTelemetry.Core](../../src/Elsa/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj) | source | Elsa.Diagnostics | OpenTelemetry.Core | contract | - |
 | [Elsa.Diagnostics.OpenTelemetry](../../src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | source | Elsa.Diagnostics | OpenTelemetry | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Primitives |
@@ -206,6 +210,13 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Attention.Api.Tests](../../tests/Elsa/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj) | test | Elsa.Attention | Api.Tests | test | Elsa.Attention.Api<br>Elsa.Testing |
 | [Elsa.Attention.Core.Tests](../../tests/Elsa/Attention/Core/Tests/Elsa.Attention.Core.Tests.csproj) | test | Elsa.Attention | Core.Tests | test | Elsa.Attention.Core |
 | [Elsa.Caching.Tests](../../tests/Elsa/Caching/Tests/Elsa.Caching.Tests.csproj) | test | Elsa.Caching | Tests | test | Elsa.Caching.Core<br>Elsa.Caching.Memory |
+| [Acme.Widgets.Collision](../../tests/Elsa/Cli/Fixtures/Collision/Acme.Widgets.Collision.csproj) | test | Other | - | test | Elsa.Persistence.EntityFramework |
+| [Elsa.Cli.Fixtures.CollisionHost](../../tests/Elsa/Cli/Fixtures/CollisionHost/Elsa.Cli.Fixtures.CollisionHost.csproj) | test | Elsa.Cli | Fixtures.CollisionHost | test | Acme.Widgets<br>Acme.Widgets.Collision |
+| [Elsa.Cli.Fixtures.Host](../../tests/Elsa/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj) | test | Elsa.Cli | Fixtures.Host | test | Acme.Widgets<br>Elsa.Activities.Design.Persistence.EntityFrameworkCore<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore<br>Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore<br>Elsa.Foundation.Identity.Persistence.EntityFrameworkCore<br>Elsa.Secrets.Persistence.EntityFrameworkCore<br>Elsa.Studio.Preferences.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore<br>Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore |
+| [Elsa.Cli.Fixtures.MinimalHost](../../tests/Elsa/Cli/Fixtures/MinimalHost/Elsa.Cli.Fixtures.MinimalHost.csproj) | test | Elsa.Cli | Fixtures.MinimalHost | test | Acme.Widgets |
+| [Elsa.Cli.Fixtures.NuplaneHost](../../tests/Elsa/Cli/Fixtures/NuplaneHost/Elsa.Cli.Fixtures.NuplaneHost.csproj) | test | Elsa.Cli | Fixtures.NuplaneHost | test | Elsa.Persistence.EntityFramework |
+| [Acme.Widgets](../../tests/Elsa/Cli/Fixtures/Widgets/Acme.Widgets.csproj) | test | Other | - | test | Elsa.Persistence.EntityFramework |
+| [Elsa.Cli.Tests](../../tests/Elsa/Cli/Tests/Elsa.Cli.Tests.csproj) | test | Elsa.Cli | Tests | test | Acme.Widgets<br>Elsa.Cli<br>Elsa.Cli.Fixtures.CollisionHost<br>Elsa.Cli.Fixtures.Host<br>Elsa.Cli.Fixtures.MinimalHost<br>Elsa.Cli.Fixtures.NuplaneHost |
 | [Elsa.Diagnostics.ConsoleLogStreaming.Tests](../../tests/Elsa/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj) | test | Elsa.Diagnostics | ConsoleLogStreaming.Tests | test | Elsa.Diagnostics.ConsoleLogStreaming |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Diagnostics | OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests | test | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Diagnostics | OpenTelemetry.Persistence.EntityFrameworkCore.Tests | test | Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore |
@@ -276,6 +287,8 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 
 | From | From domain | To | To domain |
 |---|---|---|---|
+| [Acme.Widgets](../../tests/Elsa/Cli/Fixtures/Widgets/Acme.Widgets.csproj) | Other | [Elsa.Persistence.EntityFramework](../../src/Elsa/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
+| [Acme.Widgets.Collision](../../tests/Elsa/Cli/Fixtures/Collision/Acme.Widgets.Collision.csproj) | Other | [Elsa.Persistence.EntityFramework](../../src/Elsa/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
 | [Elsa.Activities.Behavioral.Tests](../../tests/Elsa/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj) | Elsa.Activities | [Elsa.Expressions.JavaScript](../../src/Elsa/Expressions/JavaScript/Elsa.Expressions.JavaScript.csproj) | Elsa.Expressions |
 | [Elsa.Activities.Behavioral.Tests](../../tests/Elsa/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj) | Elsa.Activities | [Elsa.Expressions.JavaScript.Jint](../../src/Elsa/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj) | Elsa.Expressions |
 | [Elsa.Activities.Behavioral.Tests](../../tests/Elsa/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj) | Elsa.Activities | [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | Elsa.Http |
@@ -494,6 +507,23 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Attention.Api](../../src/Elsa/Attention/Api/Elsa.Attention.Api.csproj) | Elsa.Attention | [Elsa.Foundation.Identity](../../src/Elsa/Foundation/Identity/Elsa.Foundation.Identity.csproj) | Elsa.Foundation |
 | [Elsa.Attention.Api](../../src/Elsa/Attention/Api/Elsa.Attention.Api.csproj) | Elsa.Attention | [Elsa.Foundation.Identity.Core](../../src/Elsa/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj) | Elsa.Foundation |
 | [Elsa.Attention.Api.Tests](../../tests/Elsa/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj) | Elsa.Attention | [Elsa.Testing](../../tests/Elsa/Testing/Elsa.Testing.csproj) | Elsa.Testing |
+| [Elsa.Cli.Fixtures.CollisionHost](../../tests/Elsa/Cli/Fixtures/CollisionHost/Elsa.Cli.Fixtures.CollisionHost.csproj) | Elsa.Cli | [Acme.Widgets](../../tests/Elsa/Cli/Fixtures/Widgets/Acme.Widgets.csproj) | Other |
+| [Elsa.Cli.Fixtures.CollisionHost](../../tests/Elsa/Cli/Fixtures/CollisionHost/Elsa.Cli.Fixtures.CollisionHost.csproj) | Elsa.Cli | [Acme.Widgets.Collision](../../tests/Elsa/Cli/Fixtures/Collision/Acme.Widgets.Collision.csproj) | Other |
+| [Elsa.Cli.Fixtures.Host](../../tests/Elsa/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj) | Elsa.Cli | [Acme.Widgets](../../tests/Elsa/Cli/Fixtures/Widgets/Acme.Widgets.csproj) | Other |
+| [Elsa.Cli.Fixtures.Host](../../tests/Elsa/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj) | Elsa.Cli | [Elsa.Activities.Design.Persistence.EntityFrameworkCore](../../src/Elsa/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj) | Elsa.Activities |
+| [Elsa.Cli.Fixtures.Host](../../tests/Elsa/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj) | Elsa.Cli | [Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj) | Elsa.Diagnostics |
+| [Elsa.Cli.Fixtures.Host](../../tests/Elsa/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj) | Elsa.Cli | [Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj) | Elsa.Diagnostics |
+| [Elsa.Cli.Fixtures.Host](../../tests/Elsa/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj) | Elsa.Cli | [Elsa.Foundation.Identity.Persistence.EntityFrameworkCore](../../src/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj) | Elsa.Foundation |
+| [Elsa.Cli.Fixtures.Host](../../tests/Elsa/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj) | Elsa.Cli | [Elsa.Secrets.Persistence.EntityFrameworkCore](../../src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj) | Elsa.Secrets |
+| [Elsa.Cli.Fixtures.Host](../../tests/Elsa/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj) | Elsa.Cli | [Elsa.Studio.Preferences.Persistence.EntityFrameworkCore](../../src/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj) | Elsa.Studio |
+| [Elsa.Cli.Fixtures.Host](../../tests/Elsa/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj) | Elsa.Cli | [Elsa.Workflows.Design.Persistence.EntityFrameworkCore](../../src/Elsa/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj) | Elsa.Workflows |
+| [Elsa.Cli.Fixtures.Host](../../tests/Elsa/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj) | Elsa.Cli | [Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore](../../src/Elsa/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj) | Elsa.Workflows |
+| [Elsa.Cli.Fixtures.Host](../../tests/Elsa/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj) | Elsa.Cli | [Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore](../../src/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj) | Elsa.Workflows |
+| [Elsa.Cli.Fixtures.Host](../../tests/Elsa/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj) | Elsa.Cli | [Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj) | Elsa.Workflows |
+| [Elsa.Cli.Fixtures.Host](../../tests/Elsa/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj) | Elsa.Cli | [Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore](../../extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj) | Elsa3 |
+| [Elsa.Cli.Fixtures.MinimalHost](../../tests/Elsa/Cli/Fixtures/MinimalHost/Elsa.Cli.Fixtures.MinimalHost.csproj) | Elsa.Cli | [Acme.Widgets](../../tests/Elsa/Cli/Fixtures/Widgets/Acme.Widgets.csproj) | Other |
+| [Elsa.Cli.Fixtures.NuplaneHost](../../tests/Elsa/Cli/Fixtures/NuplaneHost/Elsa.Cli.Fixtures.NuplaneHost.csproj) | Elsa.Cli | [Elsa.Persistence.EntityFramework](../../src/Elsa/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
+| [Elsa.Cli.Tests](../../tests/Elsa/Cli/Tests/Elsa.Cli.Tests.csproj) | Elsa.Cli | [Acme.Widgets](../../tests/Elsa/Cli/Fixtures/Widgets/Acme.Widgets.csproj) | Other |
 | [Elsa.Diagnostics.OpenTelemetry](../../src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | Elsa.Diagnostics | [Elsa.Api.AspNetCore](../../src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |
 | [Elsa.Diagnostics.OpenTelemetry](../../src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | Elsa.Diagnostics | [Elsa.Foundation.Identity](../../src/Elsa/Foundation/Identity/Elsa.Foundation.Identity.csproj) | Elsa.Foundation |
 | [Elsa.Diagnostics.OpenTelemetry](../../src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | Elsa.Diagnostics | [Elsa.Foundation.Identity.Core](../../src/Elsa/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj) | Elsa.Foundation |
