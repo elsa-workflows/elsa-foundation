@@ -13,6 +13,7 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
     name: "IdentityIamEntityFrameworkCore",
     DisplayName = "Identity IAM Entity Framework Core Persistence",
     Description = "Opt-in EF Core persistence for the complete tenant-local Identity IAM authority, including users, roles, applications, credentials, mappings, external identities, memberships, relationships, reservations, and mutation receipts. Schema provisioning remains host-owned.")]
+[UsesEfModule("Identity.Iam")]
 public class IdentityIamEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(DisplayName = "Provider", Description = "Relational provider for Identity IAM persistence: Sqlite, SqlServer, PostgreSql, or MySql. The host must reference that provider package.", Category = "Persistence")]

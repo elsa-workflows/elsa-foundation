@@ -15,6 +15,7 @@ namespace Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
     name: "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore",
     DisplayName = "Foundation Identity ASP.NET Core Identity Entity Framework Core",
     Description = "Opt-in ASP.NET Core Identity stores over the shared Foundation Identity EF authority. It does not add IdentityDbContext or a separate framework schema.")]
+[UsesEfModule("Identity.Iam")]
 public class AspNetCoreIdentityEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(DisplayName = "Provider", Description = "Relational provider for the shared Identity IAM context: Sqlite, SqlServer, PostgreSql, or MySql.", Category = "Persistence")]

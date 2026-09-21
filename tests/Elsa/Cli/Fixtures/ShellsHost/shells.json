@@ -1,0 +1,71 @@
+{
+  "//": "One shell per case the per-feature provider-agreement check has to get right (spec 171 FR-035-FR-039). Every shell here is authored the way a real host authors one: CShells:Shells:<name>:Features:<feature>:<setting>.",
+  "CShells": {
+    "Shells": {
+      "agree": {
+        "Name": "agree",
+        "Features": {
+          "WorkflowsRuntimeEntityFrameworkCore": { "Provider": "PostgreSql" },
+          "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence": { "Provider": "PostgreSql" },
+          "WorkflowsDesignEntityFrameworkCore": { "Provider": "PostgreSql" },
+          "WorkflowsDashboardEntityFrameworkCore": {}
+        }
+      },
+      "one-offender": {
+        "Name": "one-offender",
+        "Features": {
+          "WorkflowsRuntimeEntityFrameworkCore": { "Provider": "PostgreSql" },
+          "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence": { "Provider": "Sqlite" }
+        }
+      },
+      "unset-offender": {
+        "Name": "unset-offender",
+        "//": "User Story 1 scenario 5: one feature set to PostgreSql, another left at its own Sqlite default.",
+        "Features": {
+          "WorkflowsRuntimeEntityFrameworkCore": { "Provider": "PostgreSql" },
+          "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence": {}
+        }
+      },
+      "dashboard-only": {
+        "Name": "dashboard-only",
+        "//": "The one mapped feature with no Provider setting at all. It is skipped, not defaulted to Sqlite.",
+        "Features": {
+          "WorkflowsDashboardEntityFrameworkCore": {}
+        }
+      },
+      "disabled-offender": {
+        "Name": "disabled-offender",
+        "//": "A feature that would disagree, turned off. A feature a shell does not enable is ignored.",
+        "Features": {
+          "WorkflowsRuntimeEntityFrameworkCore": { "Provider": "PostgreSql" },
+          "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence": false
+        }
+      },
+      "overlay": {
+        "Name": "overlay",
+        "//": "Sqlite here, PostgreSql in shells.Production.json. Which one the check sees proves which files it read.",
+        "Features": {
+          "WorkflowsRuntimeEntityFrameworkCore": { "Provider": "Sqlite" }
+        }
+      },
+      "secrets": {
+        "Name": "secrets",
+        "//": "Carries a connection string, as a real shell does. Nothing but Provider may ever leave this file.",
+        "Features": {
+          "SecretsEntityFrameworkCore": {
+            "Provider": "Sqlite",
+            "ConnectionString": "Host=fixture-db;Username=elsa;Password=fixture-only-secret"
+          }
+        }
+      },
+      "array-shape": {
+        "Name": "array-shape",
+        "//": "CShells also accepts an array of feature entries. A host that authored this shape must not read as 'nothing enabled'.",
+        "Features": [
+          { "Name": "WorkflowsRuntimeEntityFrameworkCore", "Provider": "Sqlite" },
+          "WorkflowsDashboardEntityFrameworkCore"
+        ]
+      }
+    }
+  }
+}

@@ -27,19 +27,12 @@ internal static class ElsaCli
 
     private static Command List()
     {
-        var host = HostOption();
-        var packages = PackagesOption();
-        var modules = ModulesOption();
-        var all = AllOption();
-        var command = new Command("list", "List the EF modules this host declares.") { host, packages, modules, all };
+        var selectors = new Selectors();
+        var command = selectors.Build("list", "List the EF modules this host declares.");
 
         command.SetAction((result, cancellationToken) => Guarded(async () =>
         {
-            var layout = HostLayout.Resolve(result.GetRequiredValue(host));
-            var request = Request(WorkerCommands.List, layout, result, packages) with
-            {
-                Selection = Selection(result, modules, all, required: false)
-            };
+            var (layout, request) = selectors.Resolve(WorkerCommands.List, result, selectionRequired: false);
             return Report.Render(WorkerCommands.List, await WorkerProcess.RunAsync(layout, request, cancellationToken), Console.Out, Console.Error);
         }, cancellationToken));
 
@@ -48,23 +41,16 @@ internal static class ElsaCli
 
     private static Command Plan()
     {
-        var host = HostOption();
-        var packages = PackagesOption();
-        var modules = ModulesOption();
-        var all = AllOption();
+        var selectors = new Selectors();
         var provider = ProviderOption();
         var schema = SchemaOption();
-        var command = new Command("plan", "Report the migrations each selected module would apply, without writing anything.")
-        {
-            host, packages, modules, all, provider, schema
-        };
+        var command = selectors.Build("plan", "Report the migrations each selected module would apply, without writing anything.", provider, schema);
 
         command.SetAction((result, cancellationToken) => Guarded(async () =>
         {
-            var layout = HostLayout.Resolve(result.GetRequiredValue(host));
-            var request = Request(WorkerCommands.Plan, layout, result, packages) with
+            var (layout, resolved) = selectors.Resolve(WorkerCommands.Plan, result, selectionRequired: true);
+            var request = resolved with
             {
-                Selection = Selection(result, modules, all, required: true),
                 Provider = result.GetRequiredValue(provider),
                 Schema = Schema(result, schema)
             };
@@ -76,33 +62,24 @@ internal static class ElsaCli
 
     private static Command Script()
     {
-        var host = HostOption();
-        var packages = PackagesOption();
-        var modules = ModulesOption();
-        var all = AllOption();
+        var selectors = new Selectors();
         var provider = ProviderOption();
         var schema = SchemaOption();
-        var environment = EnvironmentOption();
         var output = new Option<string>("--output") { Description = "The directory the artifact is written to.", Required = true };
         // Accepted for compatibility with the surface the issue proposed. Scripting is always idempotent —
         // a non-idempotent file would sit in the same directory looking identical while being unsafe to
         // re-run — so the flag states what already holds rather than selecting between two behaviours.
         var idempotent = new Option<bool>("--idempotent") { Description = "Accepted and implied: every script is idempotent." };
-        var command = new Command("script", "Write per-module idempotent SQL and a migration plan for this host.")
-        {
-            host, packages, modules, all, provider, schema, output, environment, idempotent
-        };
+        var command = selectors.Build("script", "Write per-module idempotent SQL and a migration plan for this host.", provider, schema, output, idempotent);
 
         command.SetAction((result, cancellationToken) => Guarded(async () =>
         {
-            var layout = HostLayout.Resolve(result.GetRequiredValue(host));
-            var request = Request(WorkerCommands.Script, layout, result, packages) with
+            var (layout, resolved) = selectors.Resolve(WorkerCommands.Script, result, selectionRequired: true);
+            var request = resolved with
             {
-                Selection = Selection(result, modules, all, required: true),
                 Provider = result.GetRequiredValue(provider),
                 Schema = Schema(result, schema),
-                Output = Path.GetFullPath(result.GetRequiredValue(output)),
-                Environment = result.GetRequiredValue(environment)
+                Output = Path.GetFullPath(result.GetRequiredValue(output))
             };
             return Report.Render(WorkerCommands.Script, await WorkerProcess.RunAsync(layout, request, cancellationToken), Console.Out, Console.Error);
         }, cancellationToken));
@@ -117,26 +94,19 @@ internal static class ElsaCli
     /// </summary>
     private static Command OpensDatabase(string name, string description)
     {
-        var host = HostOption();
-        var packages = PackagesOption();
-        var modules = ModulesOption();
-        var all = AllOption();
+        var selectors = new Selectors();
         var provider = ProviderOption();
         var schema = SchemaOption();
         var connectionEnv = ConnectionEnvOption();
         var connectionStdin = ConnectionStdinOption();
-        var command = new Command(name, description)
-        {
-            host, packages, modules, all, provider, schema, connectionEnv, connectionStdin
-        };
+        var command = selectors.Build(name, description, provider, schema, connectionEnv, connectionStdin);
 
         command.SetAction((result, cancellationToken) => Guarded(async () =>
         {
-            var layout = HostLayout.Resolve(result.GetRequiredValue(host));
+            var (layout, resolved) = selectors.Resolve(name, result, selectionRequired: true);
             var connection = await ResolveConnection(result, connectionEnv, connectionStdin, cancellationToken);
-            var request = Request(name, layout, result, packages) with
+            var request = resolved with
             {
-                Selection = Selection(result, modules, all, required: true),
                 Provider = result.GetRequiredValue(provider),
                 Schema = Schema(result, schema),
                 ConnectionEnv = connection.Env,
@@ -167,17 +137,19 @@ internal static class ElsaCli
             try
             {
                 // Regenerated from the committed plan's own facts, never from a selection typed here: the
-                // plan is what the artifact claims to be, so it is what the check has to hold it to.
+                // plan is what the artifact claims to be, so it is what the check has to hold it to. That
+                // includes the shell and environment it names, so the provider-agreement check re-runs
+                // against exactly the configuration the committed artifact was produced from.
+                var selection = new WorkerSelection { Kind = WorkerSelection.ModulesKind, Modules = [.. plan.Modules.Select(module => module.Module)] };
                 var request = Request(WorkerCommands.Script, layout, result, packages) with
                 {
-                    Selection = new() { Kind = WorkerSelection.ModulesKind, Modules = [.. plan.Modules.Select(module => module.Module)] },
+                    Selection = selection,
                     Provider = plan.Provider,
                     Schema = plan.Schema,
                     Output = regenerated.FullName,
-                    HostName = plan.HostName,
-                    Shell = plan.HostShell,
-                    Environment = plan.HostEnvironment
+                    HostName = plan.HostName
                 };
+                request = WithHostConfiguration(request, layout, plan.HostEnvironment, plan.HostShell);
 
                 var response = await WorkerProcess.RunAsync(layout, request, cancellationToken);
                 if (response.ExitCode != ToolExitCode.Success)
@@ -197,6 +169,97 @@ internal static class ElsaCli
         }, cancellationToken));
 
         return command;
+    }
+
+    /// <summary>
+    /// The options every module-selecting command shares — where the host is, which modules to run against,
+    /// and which shell configuration to read them from — plus the one place that turns them into a request.
+    /// One instance per command, because System.CommandLine binds each <see cref="Option"/> to the command
+    /// it was added to.
+    /// </summary>
+    private sealed class Selectors
+    {
+        public Option<string> Host { get; } = HostOption();
+
+        public Option<string[]> Packages { get; } = PackagesOption();
+
+        public Option<string[]> Modules { get; } = ModulesOption();
+
+        public Option<bool> All { get; } = AllOption();
+
+        public Option<bool> FromHost { get; } = new("--from-host")
+        {
+            Description = "Every module this host's own enabled shell features declare a dependency on."
+        };
+
+        /// <summary>
+        /// Which shell's features are read (FR-028). With none given, every shell the host configures is
+        /// read: a disagreement in any of them is reported rather than silently skipped, and naming a shell
+        /// is how an operator narrows the check to the one the artifact is for.
+        /// </summary>
+        public Option<string?> Shell { get; } = new("--shell")
+        {
+            Description = "The shell whose features are read. Default: every shell this host configures."
+        };
+
+        /// <summary>
+        /// The environment whose shell-configuration overlay is read, recorded in the manifest either way
+        /// (FR-038, FR-047). It defaults to <c>Production</c> — ASP.NET Core's own default when a host sets
+        /// none — rather than to "no overlay", and never to this tool's own
+        /// <c>ASPNETCORE_ENVIRONMENT</c>/<c>DOTNET_ENVIRONMENT</c>, which are facts about this process and
+        /// not about the host it is inspecting.
+        /// </summary>
+        public Option<string> Environment { get; } = new("--environment")
+        {
+            Description = "The host environment whose shells.<environment>.json overlay is read. Default: Production.",
+            DefaultValueFactory = _ => "Production"
+        };
+
+        /// <summary>A command carrying every shared option, plus whatever else that command takes.</summary>
+        public Command Build(string name, string description, params Option[] extra)
+        {
+            var command = new Command(name, description);
+            foreach (var option in new Option[] { Host, Packages, Modules, All, FromHost, Shell, Environment }.Concat(extra))
+                command.Add(option);
+            return command;
+        }
+
+        public (HostLayout Layout, WorkerRequest Request) Resolve(string command, ParseResult result, bool selectionRequired)
+        {
+            var layout = HostLayout.Resolve(result.GetRequiredValue(Host));
+            var request = Request(command, layout, result, Packages) with
+            {
+                Selection = Selection(result, Modules, All, FromHost, selectionRequired)
+            };
+            return (layout, WithHostConfiguration(request, layout, result.GetRequiredValue(Environment), result.GetValue(Shell)));
+        }
+    }
+
+    /// <summary>
+    /// Reads the host's shell configuration and attaches what the provider-agreement check needs (FR-035,
+    /// FR-038). The check runs whenever that configuration is found, under any selector — <c>--from-host</c>
+    /// only makes it the selection as well — so this happens on every command, and its absence is recorded
+    /// rather than refused. It is refused only when the command asked for something that configuration alone
+    /// can answer: a named shell, or a selection made of the host's own features.
+    /// </summary>
+    private static WorkerRequest WithHostConfiguration(WorkerRequest request, HostLayout layout, string environment, string? shell)
+    {
+        var configuration = ShellConfiguration.Read(layout.Directory, environment);
+        if (configuration is null)
+        {
+            var files = $"neither '{ShellConfiguration.BaseFileName}' nor '{ShellConfiguration.OverlayFileName(environment)}' is beside the host at '{layout.Directory}'";
+            if (!string.IsNullOrWhiteSpace(shell))
+                throw CliRefusal.Resolution("shells-configuration-missing", $"--shell '{shell}' names a shell to read and {files}.");
+            if (request.Selection?.Kind == WorkerSelection.FromHostKind)
+                throw CliRefusal.Resolution("shells-configuration-missing", $"--from-host selects the modules this host's shell configuration enables, and {files}.");
+        }
+
+        return request with
+        {
+            Environment = environment,
+            Shell = shell,
+            Shells = configuration?.EnabledFeatures(shell)
+        };
     }
 
     private static Option<string> HostOption() => new("--host")
@@ -284,21 +347,9 @@ internal static class ElsaCli
     }
 
     /// <summary>
-    /// The environment whose shell-configuration overlay the provider-agreement check reads, recorded in
-    /// the manifest either way (FR-038, FR-047). It defaults to <c>Production</c> — ASP.NET Core's own
-    /// default when a host sets none — rather than to "no overlay", and never to this tool's own
-    /// environment variables, which are not the host's.
-    /// </summary>
-    private static Option<string> EnvironmentOption() => new("--environment")
-    {
-        Description = "The host environment the manifest records. Default: Production.",
-        DefaultValueFactory = _ => "Production"
-    };
-
-    /// <summary>
     /// The fields every command's request carries. <c>Environment</c> starts at the same default
-    /// <see cref="EnvironmentOption"/> declares, because the worker needs one on every command and only
-    /// <c>script</c> takes the flag that changes it.
+    /// <see cref="Selectors.Environment"/> declares, because the worker needs one on every command and
+    /// <see cref="WithHostConfiguration"/> then states the one actually used.
     /// </summary>
     private static WorkerRequest Request(string command, HostLayout layout, ParseResult result, Option<string[]> packages) => new()
     {
@@ -314,21 +365,30 @@ internal static class ElsaCli
     /// Exactly one selector, and no default (FR-028). <c>list</c> is the one command that selects nothing by
     /// default, because naming every module a host declares is what it is for.
     /// </summary>
-    private static WorkerSelection? Selection(ParseResult result, Option<string[]> modules, Option<bool> all, bool required)
+    private static WorkerSelection? Selection(
+        ParseResult result,
+        Option<string[]> modules,
+        Option<bool> all,
+        Option<bool> fromHost,
+        bool required)
     {
         var names = (result.GetValue(modules) ?? [])
             .SelectMany(value => value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .ToArray();
         var everything = result.GetValue(all);
+        var host = result.GetValue(fromHost);
 
-        if (names.Length > 0 && everything)
-            throw CliRefusal.Usage("invalid-selection", "--modules and --all cannot be given together; give exactly one.");
+        var given = new[] { names.Length > 0, everything, host }.Count(selector => selector);
+        if (given > 1)
+            throw CliRefusal.Usage("invalid-selection", "--modules, --all and --from-host cannot be combined; give exactly one.");
         if (names.Length > 0)
             return new() { Kind = WorkerSelection.ModulesKind, Modules = names };
         if (everything)
             return new() { Kind = WorkerSelection.AllKind };
+        if (host)
+            return new() { Kind = WorkerSelection.FromHostKind };
         if (required)
-            throw CliRefusal.Usage("invalid-selection", "Exactly one of --modules and --all is required; there is no default selection.");
+            throw CliRefusal.Usage("invalid-selection", "Exactly one of --modules, --all and --from-host is required; there is no default selection.");
 
         return null;
     }

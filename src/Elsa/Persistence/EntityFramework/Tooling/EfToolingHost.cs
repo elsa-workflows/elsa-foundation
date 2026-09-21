@@ -148,13 +148,23 @@ public static class EfToolingHost
         if (command == EfToolingCommands.Script && provider == "Sqlite")
             throw EfToolingRefusal.Usage("sqlite-script-refused", SqliteScriptRefusal);
 
-        var ordered = EfModuleOrder.Sort(Selected(request.Selection, Discover(assemblies)));
+        // Materialized once: the closure is now read twice — for module declarations and for feature
+        // classes — and a caller that handed over a one-shot sequence would otherwise have the second read
+        // find nothing, which would look exactly like a host that declares no feature at all.
+        var closure = assemblies as IReadOnlyCollection<Assembly> ?? [.. assemblies];
+
+        // The feature-to-module map is read only when the host's shell configuration was actually found:
+        // without it there is neither a `from-host` selection to resolve nor an agreement to check, and
+        // scanning a host's closure for feature classes would cost for no possible result.
+        var features = request.Shells is null ? [] : EfProviderAgreement.Discover(closure);
+        var ordered = EfModuleOrder.Sort(Selected(request.Selection, Discover(closure), request.Shells, features));
 
         if (command == EfToolingCommands.List)
             return ListModules(ordered);
 
         // Every input is validated before the first byte of output is written (FR-032), and before any
         // context is built, so a refusal names every offender rather than the module that happened to fail.
+        CheckProviderAgreement(request.Shells, features, ordered, provider!);
         var schema = NormalizeSchema(provider!, request.Schema);
         ValidateProviderSupport(ordered, provider!);
         ValidateEngine(provider!);
@@ -210,6 +220,7 @@ public static class EfToolingHost
             ("host", request.Host is not null, script, script),
             ("engine", request.Engine is not null, script, script),
             ("packages", request.Packages is not null, script, script),
+            ("shells", request.Shells is not null, true, request.Selection?.Kind == EfToolingSelection.FromHostKind),
             ("connection", request.Connection is not null, opensDatabase, opensDatabase)
         ];
 
@@ -260,7 +271,11 @@ public static class EfToolingHost
         }
     }
 
-    private static IReadOnlyList<EfModuleDescriptor> Selected(EfToolingSelection? selection, IReadOnlyList<EfModuleDescriptor> discovered)
+    private static IReadOnlyList<EfModuleDescriptor> Selected(
+        EfToolingSelection? selection,
+        IReadOnlyList<EfModuleDescriptor> discovered,
+        IReadOnlyList<EfToolingShellFeature>? shells,
+        IReadOnlyList<EfFeatureModuleUsage> features)
     {
         if (selection is null || selection.Kind == EfToolingSelection.AllKind)
         {
@@ -269,11 +284,19 @@ public static class EfToolingHost
             return discovered;
         }
 
+        if (selection.Kind == EfToolingSelection.FromHostKind)
+        {
+            if (selection.Modules is not null)
+                throw EfToolingRefusal.Usage("invalid-request", $"'selection.modules' is not accepted with selection kind '{EfToolingSelection.FromHostKind}'.");
+            return Resolve(FromHost(shells!, features), discovered);
+        }
+
         if (selection.Kind != EfToolingSelection.ModulesKind)
         {
             throw EfToolingRefusal.Usage(
                 "invalid-request",
-                $"Unknown selection kind '{selection.Kind}'. Expected '{EfToolingSelection.AllKind}' or '{EfToolingSelection.ModulesKind}'.");
+                $"Unknown selection kind '{selection.Kind}'. Expected '{EfToolingSelection.AllKind}', " +
+                $"'{EfToolingSelection.ModulesKind}' or '{EfToolingSelection.FromHostKind}'.");
         }
 
         var names = selection.Modules;
@@ -289,6 +312,11 @@ public static class EfToolingHost
         if (duplicates.Length > 0)
             throw EfToolingRefusal.Usage("invalid-request", "A module is selected more than once.", duplicates);
 
+        return Resolve(names, discovered);
+    }
+
+    private static IReadOnlyList<EfModuleDescriptor> Resolve(IReadOnlyList<string> names, IReadOnlyList<EfModuleDescriptor> discovered)
+    {
         var resolved = names.Select(name => (Name: name, Descriptor: EfModuleCatalog.Find(discovered, name))).ToArray();
         var unknown = resolved
             .Where(candidate => candidate.Descriptor is null)
@@ -298,6 +326,65 @@ public static class EfToolingHost
             throw EfToolingRefusal.Resolution("unknown-module", "A selected module does not resolve.", unknown);
 
         return [.. resolved.Select(candidate => candidate.Descriptor!)];
+    }
+
+    /// <summary>
+    /// The modules the host's enabled features map to through <see cref="UsesEfModuleAttribute"/>. An empty
+    /// result is refused rather than treated as "nothing to do": a run that selected the host's own features
+    /// and found none is a run whose artifact would silently describe nothing.
+    /// </summary>
+    private static IReadOnlyList<string> FromHost(IReadOnlyList<EfToolingShellFeature> shells, IReadOnlyList<EfFeatureModuleUsage> features)
+    {
+        var enabled = shells
+            .Select(entry => entry.Feature)
+            .Where(feature => !string.IsNullOrWhiteSpace(feature))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var modules = features
+            .Where(usage => enabled.Contains(usage.Feature))
+            .SelectMany(usage => usage.Modules)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        if (modules.Length == 0)
+        {
+            throw EfToolingRefusal.Resolution(
+                "from-host-selected-nothing",
+                $"'{EfToolingSelection.FromHostKind}' selected no module: none of the {shells.Count} feature(s) this host's " +
+                "shell configuration enables carries a [UsesEfModule] mapping to a module in this host's closure.");
+        }
+
+        return modules;
+    }
+
+    /// <summary>
+    /// The per-feature provider-agreement check (FR-035–FR-037, D4). It runs whenever the host's shell
+    /// configuration was found, under any selector, and refuses listing <i>every</i> offender: one feature
+    /// of a module agreeing never speaks for another feature of the same module.
+    /// </summary>
+    private static void CheckProviderAgreement(
+        IReadOnlyList<EfToolingShellFeature>? shells,
+        IReadOnlyList<EfFeatureModuleUsage> features,
+        IReadOnlyList<EfModuleDescriptor> modules,
+        string provider)
+    {
+        if (shells is null)
+            return;
+
+        var offenders = EfProviderAgreement.Check(
+            shells.Select(entry => (Shell: entry.Shell ?? "", Feature: entry.Feature ?? "", entry.Provider)),
+            features,
+            modules.Select(descriptor => descriptor.Name),
+            provider);
+        if (offenders.Count == 0)
+            return;
+
+        throw EfToolingRefusal.Resolution(
+            "provider-disagreement",
+            $"--provider is authoritative and {offenders.Count} enabled feature(s) of the selected modules are " +
+            $"configured for a different provider than {provider}. No other provider was tried, and nothing was written.",
+            [.. offenders.Select(offender => offender.ToString())]);
     }
 
     private static void ValidateProviderSupport(IReadOnlyList<EfModuleDescriptor> modules, string provider)

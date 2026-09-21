@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <Description>
+      A host that carries shell configuration beside its build output, which is what the per-feature
+      provider-agreement check reads (spec 171 FR-035). It references the module projects whose features
+      the check has to tell apart: the eight separately configured Workflows.Runtime features, the
+      Workflows.Design feature, the dashboard feature that declares no Provider setting at all, and Secrets,
+      whose feature reaches AddEfModuleMigrations through its registration class.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Two engines, so a run can agree with one and disagree with the other without the refusal being
+         "this host pins no engine" instead. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Dashboard\Persistence\EntityFrameworkCore\Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Copied, not embedded: the check reads these as files beside the host's output, exactly as a host
+         reads them at startup. -->
+    <Content Include="shells.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="shells.Production.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

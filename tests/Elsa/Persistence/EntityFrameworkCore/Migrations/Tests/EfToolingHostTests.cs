@@ -154,7 +154,7 @@ public sealed class EfToolingHostTests : IDisposable
             ["schemaVersion", "provider", "engine", "efCoreVersion", "schema", "idempotent", "ordering", "host", "modules"],
             Keys(plan));
         Assert.Equal(["package", "version", "source"], Keys(plan.GetProperty("engine")));
-        Assert.Equal(["name", "providerAgreement", "shell", "environment"], Keys(plan.GetProperty("host")));
+        Assert.Equal(["name", "providerAgreement", "providerAgreementNote", "shell", "environment"], Keys(plan.GetProperty("host")));
         Assert.Equal("dependsOn-then-name", plan.GetProperty("ordering").GetString());
         Assert.True(plan.GetProperty("idempotent").GetBoolean());
         Assert.Equal(JsonValueKind.Null, plan.GetProperty("schema").ValueKind);

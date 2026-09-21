@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,6 +20,8 @@ namespace Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore;
     DisplayName = "Workflows Dashboard EF Core",
     Description = "Routes workflow run-health and portfolio dashboard queries to the EF Core Runtime and Workflows Design projections.",
     DependsOn = new object[] { "WorkflowsRuntimeEntityFrameworkCore", "WorkflowsDesignEntityFrameworkCore" })]
+[UsesEfModule("Workflows.Design")]
+[UsesEfModule("Workflows.Runtime")]
 public sealed class WorkflowsDashboardEntityFrameworkCoreFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)

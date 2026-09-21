@@ -23,6 +23,12 @@
 
   <ItemGroup>
     <PackageReference Include="System.CommandLine" />
+    <!-- The provider-agreement check reads the host's shells.json plus its environment overlay (FR-035,
+         FR-038). It reads them through the same JSON configuration providers the host itself layers at
+         startup rather than a hand-rolled parser, so the two cannot disagree about what a file means.
+         Neither package is EF Core, an EF provider, or an Elsa persistence assembly, so FR-001 holds. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
   </ItemGroup>
 
   <ItemGroup>

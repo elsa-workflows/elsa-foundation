@@ -14,6 +14,7 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore;
     DisplayName = "Secrets Entity Framework Core Persistence",
     Description = "EF Core persistence for the secrets repository."
 )]
+[UsesEfModule("Secrets")]
 public class SecretsEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(
