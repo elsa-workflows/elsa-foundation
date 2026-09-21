@@ -292,17 +292,58 @@ public sealed class PersistenceCliTests : IDisposable
             ["persistence", "script", "--host", DotnetElsa.Host("MinimalHost"), "--provider", "PostgreSql", "--output", output.Path, .. selector]);
 
     /// <summary>
-    /// <c>post-migrate</c> is the one command this build still does not implement (#1876 shipped
-    /// <c>apply</c>/<c>validate</c>); asking for it is a usage error rather than a command that quietly
-    /// does nothing.
+    /// The command surface is closed (FR-024): a command no build implements is a usage error rather than
+    /// one that quietly does nothing.
     /// </summary>
     [Fact]
     public void An_unrecognized_command_is_a_usage_error_rather_than_a_silent_no_op()
     {
-        var run = DotnetElsa.Run("persistence", "post-migrate", "--host", DotnetElsa.Host("MinimalHost"));
+        var run = DotnetElsa.Run("persistence", "un-migrate", "--host", DotnetElsa.Host("MinimalHost"));
 
         Assert.Equal(ToolExitCode.Refusal, run.ExitCode);
         Assert.Contains("usage", run.Error, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Spec 171 User Story 5 through the real tool: on a database with no legacy rows, <c>post-migrate</c>
+    /// runs nothing and says so, and <c>apply</c> is not made to report a required action by it. The legacy
+    /// round trip itself is driven against the frozen tooling contract in the Secrets suite, where a legacy
+    /// row can be written; this is the command-surface half — that it exists, reaches the host, and reports.
+    /// </summary>
+    [Fact]
+    public void Post_migrate_reaches_the_host_and_reports_nothing_required_on_a_clean_database()
+    {
+        var db = Path.Join(output.Path, "elsa-post-migrate.db");
+        var env = new Dictionary<string, string> { ["ELSA_EF_CONNECTION"] = $"Data Source={db}" };
+
+        Assert.Equal(
+            ToolExitCode.Success,
+            DotnetElsa.Run(env, "persistence", "apply", "--host", DotnetElsa.Host("Host"), "--provider", "Sqlite", "--modules", "Secrets").ExitCode);
+
+        var run = DotnetElsa.Run(env, "persistence", "post-migrate", "--host", DotnetElsa.Host("Host"), "--provider", "Sqlite", "--modules", "Secrets");
+
+        Assert.Equal(ToolExitCode.Success, run.ExitCode);
+        Assert.Contains("SecretsProjectionReindex", run.Output, StringComparison.Ordinal);
+        Assert.Contains("Nothing required", run.Output, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <c>post-migrate</c> takes its connection the same way <c>apply</c> and <c>validate</c> do (FR-030,
+    /// D7), so a database it cannot reach is a database failure and never a clean exit.
+    /// </summary>
+    [Fact]
+    public void Post_migrate_needs_a_connection_and_never_exits_zero_without_one()
+    {
+        var run = DotnetElsa.Run(
+            new Dictionary<string, string>(),
+            "persistence", "post-migrate",
+            "--host", DotnetElsa.Host("Host"),
+            "--provider", "Sqlite",
+            "--modules", "Secrets",
+            "--connection-env", "ELSA_EF_CONNECTION_THAT_IS_NOT_SET");
+
+        Assert.Equal(ToolExitCode.Refusal, run.ExitCode);
+        Assert.Contains("connection-missing", run.Error, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -434,6 +475,7 @@ public sealed class PersistenceCliTests : IDisposable
     [Theory]
     [InlineData("apply")]
     [InlineData("validate")]
+    [InlineData("post-migrate")]
     public void A_connection_flag_is_rejected_as_a_usage_error(string command)
     {
         var run = DotnetElsa.Run(

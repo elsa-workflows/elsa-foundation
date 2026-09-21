@@ -34,7 +34,7 @@ public static class WorkerContract
     };
 }
 
-/// <summary>The commands this slice's worker backs; <c>post-migrate</c> arrives with its own slice.</summary>
+/// <summary>The commands this worker backs.</summary>
 public static class WorkerCommands
 {
     public const string List = "list";
@@ -42,8 +42,12 @@ public static class WorkerCommands
     public const string Script = "script";
     public const string Apply = "apply";
     public const string Validate = "validate";
+    public const string PostMigrate = "post-migrate";
 
-    public static readonly string[] All = [List, Plan, Script, Apply, Validate];
+    public static readonly string[] All = [List, Plan, Script, Apply, Validate, PostMigrate];
+
+    /// <summary>The commands that open the host's database and so need a connection (D7).</summary>
+    public static bool OpensDatabase(string command) => command is Apply or Validate or PostMigrate;
 }
 
 /// <summary>
@@ -99,7 +103,7 @@ public sealed record WorkerRequest
     /// <summary>
     /// The name of the environment variable <c>--connection-env</c> names (D7). Only its name travels here;
     /// the worker reads the value from its own (inherited) environment, never from this front end's request.
-    /// Required by <c>apply</c>/<c>validate</c> unless <see cref="Connection"/> is given instead.
+    /// Required by the commands that open a database unless <see cref="Connection"/> is given instead.
     /// </summary>
     public string? ConnectionEnv { get; init; }
 

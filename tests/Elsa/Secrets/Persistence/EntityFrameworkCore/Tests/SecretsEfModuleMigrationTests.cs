@@ -1,14 +1,25 @@
 using CShells.Lifecycle;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests;
 
-public sealed class SecretsEfMigrationHostedServiceTests
+/// <summary>
+/// Secrets migrates through the shared <see cref="EfModuleMigrator{TContext}"/> every other EF module uses
+/// (#1877), not through a hosted service of its own. This is the evidence that retiring
+/// <c>SecretsEfMigrationHostedService</c> dropped none of its behaviour: the provider guard it ran through
+/// <see cref="EfDatabaseMigrator.ApplyAsync"/>, the pair of lifecycle hooks — CShells'
+/// <see cref="IShellInitializer"/> and a plain host's <see cref="IHostedService"/>, one instance under both —
+/// its idempotence on repeat calls, and its apply-then-audit sequencing.
+/// </summary>
+public sealed class SecretsEfModuleMigrationTests
 {
     [Fact]
     public async Task AutoMigrate_applies_on_hosted_start_and_stays_idempotent_on_the_same_instance()
@@ -36,10 +47,8 @@ public sealed class SecretsEfMigrationHostedServiceTests
         await using var fixture = await MigrationHostFixture.CreateAsync(EfMigratePolicy.AutoMigrate);
         await fixture.Lifecycle.InitializeAsync(CancellationToken.None);
 
-        var reloaded = fixture.Provider.GetRequiredService<SecretsEfMigrationHostedService>();
-        await using var second = await MigrationHostFixture.CreateAsync(
-            EfMigratePolicy.AutoMigrate,
-            fixture.Path);
+        var reloaded = fixture.Provider.GetRequiredService<EfModuleMigrator<SecretsDbContext>>();
+        await using var second = await MigrationHostFixture.CreateAsync(EfMigratePolicy.AutoMigrate, fixture.Path);
         await second.Lifecycle.InitializeAsync(CancellationToken.None);
         Assert.True(await TableExistsAsync(second, SecretsEfModule.TableName));
         Assert.NotSame(fixture.Lifecycle, second.Lifecycle);
@@ -85,11 +94,42 @@ public sealed class SecretsEfMigrationHostedServiceTests
         await using var applied = await MigrationHostFixture.CreateAsync(EfMigratePolicy.AutoMigrate);
         await applied.Lifecycle.InitializeAsync(CancellationToken.None);
 
-        await using var validated = await MigrationHostFixture.CreateAsync(
-            EfMigratePolicy.Validate,
-            applied.Path);
+        await using var validated = await MigrationHostFixture.CreateAsync(EfMigratePolicy.Validate, applied.Path);
         await validated.Lifecycle.InitializeAsync(CancellationToken.None);
         Assert.True(await TableExistsAsync(validated, SecretsEfModule.TableName));
+    }
+
+    /// <summary>
+    /// The provider guard the retired hosted service ran by hand is the one
+    /// <see cref="EfDatabaseMigrator.ApplyAsync"/> already runs, on the expected provider name the
+    /// registration hands the migrator — the same value <c>SecretsEfMigrationHostedService</c> computed from
+    /// its own options. This asserts that input, and the declared action beside it, because what the guard
+    /// does with a mismatch is <see cref="EfProviderGuard"/>'s own tested behaviour, not this module's.
+    /// </summary>
+    [Fact]
+    public async Task The_registration_hands_the_migrator_the_expected_provider_and_the_declared_action()
+    {
+        await using var fixture = await MigrationHostFixture.CreateAsync();
+        var migration = fixture.Provider.GetRequiredService<EfModuleMigration<SecretsDbContext>>();
+
+        Assert.Equal(EfProviderNames.Sqlite, migration.ExpectedProviderName);
+        Assert.Equal("Secrets", migration.Module);
+        Assert.Equal("Sqlite", migration.Provider);
+        Assert.IsType<SecretsProjectionReindex>(Assert.Single(migration.PostMigration));
+    }
+
+    /// <summary>
+    /// The migrator reads the host-wide key, never a Secrets-only setting: an unset key keeps the
+    /// <see cref="EfMigratePolicy.AutoMigrate"/> default (FR-058).
+    /// </summary>
+    [Fact]
+    public async Task The_policy_comes_from_the_host_wide_key_and_defaults_to_AutoMigrate()
+    {
+        await using var fixture = await MigrationHostFixture.CreateAsync(policy: null);
+
+        Assert.Equal(EfMigratePolicy.AutoMigrate, fixture.Provider.GetRequiredService<IOptions<EfMigrateOptions>>().Value.Policy);
+        await fixture.Lifecycle.InitializeAsync(CancellationToken.None);
+        Assert.True(await TableExistsAsync(fixture, SecretsEfModule.TableName));
     }
 
     private static async Task<bool> TableExistsAsync(MigrationHostFixture fixture, string table)
@@ -103,27 +143,19 @@ public sealed class SecretsEfMigrationHostedServiceTests
         return count == 1;
     }
 
-    private sealed class MigrationHostFixture : IAsyncDisposable
+    private sealed class MigrationHostFixture(
+        string path,
+        string connectionString,
+        ServiceProvider provider,
+        EfModuleMigrator<SecretsDbContext> lifecycle) : IAsyncDisposable
     {
-        private MigrationHostFixture(
-            string path,
-            string connectionString,
-            ServiceProvider provider,
-            SecretsEfMigrationHostedService lifecycle)
-        {
-            Path = path;
-            ConnectionString = connectionString;
-            Provider = provider;
-            Lifecycle = lifecycle;
-        }
-
-        public string Path { get; }
-        public string ConnectionString { get; }
-        public ServiceProvider Provider { get; }
-        public SecretsEfMigrationHostedService Lifecycle { get; }
+        public string Path { get; } = path;
+        public string ConnectionString { get; } = connectionString;
+        public ServiceProvider Provider { get; } = provider;
+        public EfModuleMigrator<SecretsDbContext> Lifecycle { get; } = lifecycle;
 
         public static ValueTask<MigrationHostFixture> CreateAsync(
-            EfMigratePolicy policy,
+            EfMigratePolicy? policy = EfMigratePolicy.AutoMigrate,
             string? existingPath = null)
         {
             var path = existingPath ?? System.IO.Path.Join(
@@ -137,27 +169,23 @@ public sealed class SecretsEfMigrationHostedServiceTests
                 .AddSecretsEntityFrameworkCore(new SecretsEntityFrameworkCoreOptions
                 {
                     Provider = "Sqlite",
-                    ConnectionString = connectionString,
-                    MigratePolicy = policy
+                    ConnectionString = connectionString
                 });
-            var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-            var lifecycle = provider.GetRequiredService<SecretsEfMigrationHostedService>();
-            Assert.Same(lifecycle, Assert.Single(provider.GetServices<IHostedService>()));
-            Assert.Same(lifecycle, Assert.Single(provider.GetServices<IShellInitializer>()));
-            return ValueTask.FromResult(new MigrationHostFixture(path, connectionString, provider, lifecycle));
+            // The host-wide key, the same one every other module's migrator reads — never a feature setting.
+            if (policy is { } configured)
+                services.Configure<EfMigrateOptions>(options => options.Policy = configured);
+            var built = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+            var lifecycle = built.GetRequiredService<EfModuleMigrator<SecretsDbContext>>();
+            // One instance under both hooks, exactly as the retired hosted service was registered.
+            Assert.Same(lifecycle, Assert.Single(built.GetServices<IHostedService>().OfType<EfModuleMigrator<SecretsDbContext>>()));
+            Assert.Same(lifecycle, Assert.Single(built.GetServices<IShellInitializer>().OfType<EfModuleMigrator<SecretsDbContext>>()));
+            return ValueTask.FromResult(new MigrationHostFixture(path, connectionString, built, lifecycle));
         }
 
         public async ValueTask DisposeAsync()
         {
             await Provider.DisposeAsync();
-            DeleteSqliteFiles(Path);
+            TemporarySqliteDatabase.ClearPoolAndDeleteFiles(Path);
         }
-    }
-
-    internal static void DeleteSqliteFiles(string path)
-    {
-        File.Delete(path);
-        File.Delete($"{path}-wal");
-        File.Delete($"{path}-shm");
     }
 }

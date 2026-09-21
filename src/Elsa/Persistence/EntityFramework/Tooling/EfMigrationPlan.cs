@@ -15,7 +15,8 @@ internal sealed record EfModulePlanEntry(
     int Order,
     EfModuleDescriptor Descriptor,
     string Context,
-    IReadOnlyList<string> MigrationIds)
+    IReadOnlyList<string> MigrationIds,
+    IReadOnlyList<IEfPostMigrationAction> PostMigration)
 {
     public string Module => Descriptor.Name;
 
@@ -142,7 +143,7 @@ internal static class EfMigrationPlan
             writer.WriteEndObject();
             writer.WriteStartArray("modules");
             foreach (var module in modules)
-                WriteModule(writer, module);
+                WriteModule(writer, module, facts.Provider);
             writer.WriteEndArray();
             writer.WriteEndObject();
         }
@@ -189,7 +190,7 @@ internal static class EfMigrationPlan
                 $"Module '{module}' would write to '{name}', which is not a bare file name.");
     }
 
-    private static void WriteModule(Utf8JsonWriter writer, EfModuleArtifact module)
+    private static void WriteModule(Utf8JsonWriter writer, EfModuleArtifact module, string provider)
     {
         var entry = module.Entry;
         writer.WriteStartObject();
@@ -218,10 +219,21 @@ internal static class EfMigrationPlan
         foreach (var dependency in entry.DependsOn)
             writer.WriteStringValue(dependency);
         writer.WriteEndArray();
-        // Every first-party module declares none today, and a module that declared one would have been
-        // refused before generation: emitting [] for a module with a real obligation would tell a DBA there
-        // is nothing left to run.
+        // FR-048's {id, kind, requiredWhen, audit, run}. An empty array here means the module genuinely
+        // declares nothing — a module that declares an action this build cannot describe is refused before
+        // generation rather than recorded as having nothing left to run.
         writer.WriteStartArray("postMigration");
+        foreach (var action in entry.PostMigration)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("id", action.Id);
+            writer.WriteString("kind", action.Kind);
+            writer.WriteString("requiredWhen", action.RequiredWhen);
+            writer.WriteString("audit", action.Audit);
+            writer.WriteString("run", EfPostMigrationActions.CommandFor(entry.Module, provider));
+            writer.WriteEndObject();
+        }
+
         writer.WriteEndArray();
         writer.WriteEndObject();
     }

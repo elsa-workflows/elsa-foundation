@@ -4,10 +4,8 @@ using System.CommandLine;
 namespace Elsa.Cli;
 
 /// <summary>
-/// The <c>dotnet elsa</c> command surface. This slice ships <c>persistence list</c>, <c>plan</c>,
-/// <c>script</c>, <c>script-check</c>, <c>apply</c> and <c>validate</c>; <c>post-migrate</c> arrives with
-/// the slice that implements it, so an operator asking for it today is told it is unrecognized rather
-/// than handed a command that does nothing.
+/// The <c>dotnet elsa</c> command surface (FR-024): <c>persistence list</c>, <c>plan</c>, <c>script</c>,
+/// <c>script-check</c>, <c>apply</c>, <c>validate</c> and <c>post-migrate</c>.
 /// </summary>
 internal static class ElsaCli
 {
@@ -19,8 +17,9 @@ internal static class ElsaCli
             Plan(),
             Script(),
             ScriptCheckCommand(),
-            Apply(),
-            Validate()
+            OpensDatabase(WorkerCommands.Apply, "Run each selected module's compiled migrations against a database."),
+            OpensDatabase(WorkerCommands.Validate, "Fail if any selected module has a pending migration, or has a post-migration action that has not been run. Applies nothing."),
+            OpensDatabase(WorkerCommands.PostMigrate, "Run each selected module's required post-migration actions against a database. The only command that runs one.")
         };
 
         return new RootCommand("Elsa command-line tool.") { persistence };
@@ -111,7 +110,12 @@ internal static class ElsaCli
         return command;
     }
 
-    private static Command Apply()
+    /// <summary>
+    /// The three commands that open the host's database: identical apart from their name and what the host's
+    /// tooling does with the request, including their connection handling (FR-030, FR-050, D7), so they are
+    /// built once rather than diverging one flag at a time.
+    /// </summary>
+    private static Command OpensDatabase(string name, string description)
     {
         var host = HostOption();
         var packages = PackagesOption();
@@ -121,7 +125,7 @@ internal static class ElsaCli
         var schema = SchemaOption();
         var connectionEnv = ConnectionEnvOption();
         var connectionStdin = ConnectionStdinOption();
-        var command = new Command("apply", "Run each selected module's compiled migrations against a database.")
+        var command = new Command(name, description)
         {
             host, packages, modules, all, provider, schema, connectionEnv, connectionStdin
         };
@@ -130,7 +134,7 @@ internal static class ElsaCli
         {
             var layout = HostLayout.Resolve(result.GetRequiredValue(host));
             var connection = await ResolveConnection(result, connectionEnv, connectionStdin, cancellationToken);
-            var request = Request(WorkerCommands.Apply, layout, result, packages) with
+            var request = Request(name, layout, result, packages) with
             {
                 Selection = Selection(result, modules, all, required: true),
                 Provider = result.GetRequiredValue(provider),
@@ -138,40 +142,7 @@ internal static class ElsaCli
                 ConnectionEnv = connection.Env,
                 Connection = connection.Value
             };
-            return Report.Render(WorkerCommands.Apply, await WorkerProcess.RunAsync(layout, request, cancellationToken), Console.Out, Console.Error);
-        }, cancellationToken));
-
-        return command;
-    }
-
-    private static Command Validate()
-    {
-        var host = HostOption();
-        var packages = PackagesOption();
-        var modules = ModulesOption();
-        var all = AllOption();
-        var provider = ProviderOption();
-        var schema = SchemaOption();
-        var connectionEnv = ConnectionEnvOption();
-        var connectionStdin = ConnectionStdinOption();
-        var command = new Command("validate", "Fail if any selected module has a pending migration against a database. Applies nothing.")
-        {
-            host, packages, modules, all, provider, schema, connectionEnv, connectionStdin
-        };
-
-        command.SetAction((result, cancellationToken) => Guarded(async () =>
-        {
-            var layout = HostLayout.Resolve(result.GetRequiredValue(host));
-            var connection = await ResolveConnection(result, connectionEnv, connectionStdin, cancellationToken);
-            var request = Request(WorkerCommands.Validate, layout, result, packages) with
-            {
-                Selection = Selection(result, modules, all, required: true),
-                Provider = result.GetRequiredValue(provider),
-                Schema = Schema(result, schema),
-                ConnectionEnv = connection.Env,
-                Connection = connection.Value
-            };
-            return Report.Render(WorkerCommands.Validate, await WorkerProcess.RunAsync(layout, request, cancellationToken), Console.Out, Console.Error);
+            return Report.Render(name, await WorkerProcess.RunAsync(layout, request, cancellationToken), Console.Out, Console.Error);
         }, cancellationToken));
 
         return command;
@@ -287,7 +258,7 @@ internal static class ElsaCli
     };
 
     /// <summary>
-    /// The connection <c>apply</c>/<c>validate</c> take (FR-030, D7): never a flag value, so it never lands
+    /// The connection the database-opening commands take (FR-030, D7): never a flag value, so it never lands
     /// in a process argument or shell history. <c>--connection-stdin</c> reads the value from this tool's
     /// own stdin — a stream distinct from the worker's stdin, which is a fresh pipe this process opens for
     /// that child, not the console stream read here — and carries it to the worker inside the request that

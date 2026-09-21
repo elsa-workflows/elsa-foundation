@@ -13,11 +13,15 @@ CI job on a native PostgreSQL, and the SQL Server and MySQL legs of the EF conta
 
 ## Shell feature
 
-- **`SecretsEntityFrameworkCoreFeature`**: host-selected provider (`Sqlite` / `SqlServer` / `PostgreSql` / `MySql`), connection string or named connection, and `EfMigratePolicy`. The host must reference the matching EF provider engine; this package does not.
+- **`SecretsEntityFrameworkCoreFeature`**: host-selected provider (`Sqlite` / `SqlServer` / `PostgreSql` / `MySql`), connection string or named connection, schema and pooling. The host must reference the matching EF provider engine; this package does not. The migrate policy is **not** a setting here: it is the host-wide `Elsa:Persistence:EntityFramework:Migrate:Policy`. The obsolete `MigratePolicy` property remains for one release only so a still-configured value is refused rather than silently ignored — a shell that sets it fails to start (ADR 0076 D8, FR-058).
 
 ## Lifecycle
 
-- **`SecretsEfMigrationHostedService`**: one instance registered as `IHostedService` (plain hosts / tests) and CShells `IShellInitializer` (enable and reload). It calls `EfDatabaseMigrator.ApplyAsync` with the feature's `EfMigratePolicy`.
+- **`EfModuleMigrator<SecretsDbContext>`**: the shared migrator every EF module registers through `AddEfModuleMigrations<TContext>`, one instance registered as `IHostedService` (plain hosts / tests) and CShells `IShellInitializer` (enable and reload, `LifecyclePhase.Prepare`). It calls `EfDatabaseMigrator.ApplyAsync` with the host-wide `EfMigratePolicy` and then audits this module's declared post-migration actions. The Secrets-specific `SecretsEfMigrationHostedService` it replaces was retired in #1877.
+
+## Post-migration action
+
+- **`SecretsProjectionReindex`** (`IEfPostMigrationAction`): declared on this assembly's `[EfModule(... PostMigration = ...)]`. Its audit is read-only and runs after every apply under both migrate policies; a database with legacy projection rows fails closed naming `dotnet elsa persistence post-migrate --modules Secrets --provider <provider>`. Nothing ever runs the reindex automatically — `post-migrate` is the only caller of `RunAsync`.
 
 ## Derived contexts
 

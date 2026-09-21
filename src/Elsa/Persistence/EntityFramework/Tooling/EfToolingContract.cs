@@ -36,7 +36,10 @@ public static class EfToolingCommands
     public const string Apply = "apply";
     public const string Validate = "validate";
 
-    public static readonly string[] All = [List, Plan, Script, Apply, Validate];
+    /// <summary>The one command that ever calls <see cref="IEfPostMigrationAction.RunAsync"/> (ADR 0076 D8).</summary>
+    public const string PostMigrate = "post-migrate";
+
+    public static readonly string[] All = [List, Plan, Script, Apply, Validate, PostMigrate];
 }
 
 /// <summary>
@@ -95,10 +98,10 @@ public sealed class EfToolingRequest
     public IReadOnlyList<EfToolingPackageFacts>? Packages { get; init; }
 
     /// <summary>
-    /// The connection string <c>apply</c> and <c>validate</c> run against. Required for those two commands,
-    /// refused otherwise — <c>list</c>, <c>plan</c> and <c>script</c> never open a database (D7). This is
-    /// the one field this build never echoes back: not in a response, a refusal detail, or an exception
-    /// message.
+    /// The connection string <c>apply</c>, <c>validate</c> and <c>post-migrate</c> run against. Required for
+    /// those three commands, refused otherwise — <c>list</c>, <c>plan</c> and <c>script</c> never open a
+    /// database (D7). This is the one field this build never echoes back: not in a response, a refusal
+    /// detail, or an exception message.
     /// </summary>
     public string? Connection { get; init; }
 }
@@ -156,7 +159,7 @@ public sealed class EfToolingPackageFacts
     public string? Source { get; init; }
 }
 
-/// <summary>One response. Exactly one of the four payloads is present, and it is the one <see cref="Command"/> names.</summary>
+/// <summary>One response. Exactly one payload is present, and it is the one <see cref="Command"/> names.</summary>
 public sealed class EfToolingResponse
 {
     public int Version { get; init; } = EfToolingContract.Version;
@@ -184,6 +187,9 @@ public sealed class EfToolingResponse
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public EfToolingValidatePayload? Validate { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public EfToolingPostMigratePayload? PostMigrate { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public EfToolingErrorPayload? Error { get; init; }
@@ -281,6 +287,27 @@ public sealed class EfToolingValidateEntry
     public string Module { get; init; } = "";
     public string Context { get; init; } = "";
     public string HistoryTable { get; init; } = "";
+}
+
+/// <summary>What <c>post-migrate</c> did, per module (ADR 0076 D8). The one command that runs an action at all.</summary>
+public sealed class EfToolingPostMigratePayload
+{
+    public string Provider { get; init; } = "";
+    public string? Schema { get; init; }
+    public IReadOnlyList<EfToolingPostMigrateEntry> Modules { get; init; } = [];
+}
+
+public sealed class EfToolingPostMigrateEntry
+{
+    public int Order { get; init; }
+    public string Module { get; init; } = "";
+    public string Context { get; init; } = "";
+
+    /// <summary>Every action this module declares, whether or not it had work to do.</summary>
+    public IReadOnlyList<string> Declared { get; init; } = [];
+
+    /// <summary>The actions that audited as required and were therefore run. Empty means there was nothing to do.</summary>
+    public IReadOnlyList<string> Ran { get; init; } = [];
 }
 
 public sealed class EfToolingErrorPayload

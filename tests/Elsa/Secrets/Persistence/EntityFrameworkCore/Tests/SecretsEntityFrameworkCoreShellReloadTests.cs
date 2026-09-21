@@ -204,12 +204,15 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
         {
             shells
                 .WithAssemblies(typeof(SecretsEntityFrameworkCoreFeature).Assembly)
-                .AddShell(ShellName, shell => shell.WithFeature<SecretsEntityFrameworkCoreFeature>(feature =>
-                {
-                    feature.Provider = "Sqlite";
-                    feature.ConnectionString = SqliteConnectionString(path);
-                    feature.MigratePolicy = policy;
-                }));
+                .AddShell(ShellName, shell => shell
+                    // The host-wide key, on this shell's own Configuration node: the layer that survived the
+                    // retirement of the Secrets-only MigratePolicy setting (ADR 0076 D8).
+                    .WithConfiguration($"{EfMigrateOptions.SectionName}:{nameof(EfMigrateOptions.Policy)}", policy.ToString())
+                    .WithFeature<SecretsEntityFrameworkCoreFeature>(feature =>
+                    {
+                        feature.Provider = "Sqlite";
+                        feature.ConnectionString = SqliteConnectionString(path);
+                    }));
         });
 
         var app = builder.Build();

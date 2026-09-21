@@ -23,12 +23,37 @@ public static class SecretsProjectionContract
         SecretsDbContext context,
         CancellationToken cancellationToken = default)
     {
+        if (!await HasLegacyProjectionsAsync(context, cancellationToken))
+            return;
+
+        throw new InvalidOperationException(
+            "One or more Secrets rows do not use persisted projection " +
+            $"'{SecretsSearchKeys.UnicodeOrdinalIgnoreCaseAlgorithmId}'. " +
+            "Quiesce writers and run the provider-specific 'bash tools/ef/dual-migrate.sh apply' " +
+            "command to reindex legacy rows before starting the host.");
+    }
+
+    /// <summary>
+    /// The same read-only audit as <see cref="EnsureCurrentAsync"/>, reporting its verdict instead of throwing
+    /// it: <c>true</c> when any row still carries a legacy projection. This is what
+    /// <c>SecretsProjectionReindex.AuditAsync</c> calls, because an <c>IEfPostMigrationAction</c> has to
+    /// tell "required" apart from "the database could not be read" — and laundering the one
+    /// <see cref="InvalidOperationException"/> that means the former out of every other one that means the
+    /// latter is exactly the conflation that would report a broken database as a routine reindex.
+    /// </summary>
+    /// <exception cref="SecretsProjectionException">A row payload cannot be parsed or does not match its key.</exception>
+    public static async Task<bool> HasLegacyProjectionsAsync(
+        SecretsDbContext context,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(context);
         SeekCursor? after = null;
         while (true)
         {
             var records = await TakePageAsync(context.Secrets.AsNoTracking(), after, cancellationToken);
             var hasLegacyProjections = false;
+            // Every row in the page is read even once one is known legacy: a damaged row later in the same
+            // page must still surface as the SecretsProjectionException it is, not be hidden by an early exit.
             foreach (var record in records)
             {
                 if (!IsCurrent(record))
@@ -36,16 +61,10 @@ public static class SecretsProjectionContract
             }
 
             if (hasLegacyProjections)
-            {
-                throw new InvalidOperationException(
-                    "One or more Secrets rows do not use persisted projection " +
-                    $"'{SecretsSearchKeys.UnicodeOrdinalIgnoreCaseAlgorithmId}'. " +
-                    "Quiesce writers and run the provider-specific 'bash tools/ef/dual-migrate.sh apply' " +
-                    "command to reindex legacy rows before starting the host.");
-            }
+                return true;
 
             if (records.Count < BatchSize)
-                return;
+                return false;
 
             after = Cursor(records[^1]);
         }

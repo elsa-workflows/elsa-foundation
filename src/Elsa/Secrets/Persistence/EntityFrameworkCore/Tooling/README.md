@@ -49,7 +49,7 @@ come from `ELSA_SECRETS_EF_SQLITE`, `ELSA_SECRETS_EF_SQLSERVER`, and
 
 Each provider has an independent migration set and snapshot. Review all three generated outputs;
 `migrations has-pending-model-changes` detects source model/snapshot drift, while
-`database update` and runtime `MigratePolicy=Validate` use the database's
+`database update` and runtime `Elsa:Persistence:EntityFramework:Migrate:Policy=Validate` use the database's
 `__EFMigrationsHistory_ElsaSecrets` to detect unapplied compiled migrations. One check does not
 replace the other.
 
@@ -58,12 +58,13 @@ reindex of any projection fields written by the pre-contract Phase 1 runtime cas
 reindex derives fields from each stored `Secret` document, preserves its concurrency token, runs in
 bounded keyset transactions over `(TenantId, NormalizedName)`, and is idempotent. Host startup
 scans in bounded read-only keyset pages: it fails closed when a legacy row is
-found and tells the operator to rerun `apply`; it never rewrites secret rows implicitly.
+found and tells the operator to run `dotnet elsa persistence post-migrate --modules Secrets`; it
+never rewrites secret rows implicitly.
 
 Use the deployment sequence in [tools/ef/README.md](../../../../../../tools/ef/README.md): back
 up and quiesce writes, run `pending`, select exactly one provider and apply it with a short-lived
 least-privilege migration identity, verify migration history and table shape, then start the application with
-`MigratePolicy=Validate`. Keep `SecretsEntityFrameworkCore` disabled when this feature is
+`Elsa:Persistence:EntityFramework:Migrate:Policy=Validate`. Keep `SecretsEntityFrameworkCore` disabled when this feature is
 enabled. A failed apply stops the rollout; inspect migration history and table shape before retrying.
 
 Prefer additive/expand-contract migrations so an application rollback can be considered

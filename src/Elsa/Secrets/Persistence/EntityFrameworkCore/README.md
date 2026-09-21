@@ -48,8 +48,7 @@ second Secrets persistence backend throws an `InvalidOperationException` naming 
           "SecretsApi": {},
           "SecretsEntityFrameworkCore": {
             "Provider": "Sqlite",
-            "ConnectionString": "Data Source=elsa-secrets.db",
-            "MigratePolicy": "AutoMigrate"
+            "ConnectionString": "Data Source=elsa-secrets.db"
           }
         }
       }
@@ -68,9 +67,20 @@ lands, use a host-integrated package-feed composition rather than treating Found
 readiness as proof that the requested feed features activated.
 
 `ConnectionName` looks up `ConnectionStrings:<name>` when `ConnectionString` is omitted.
-`MigratePolicy` is `AutoMigrate` (default) or `Validate` (fail if pending). Both policies
-run when the feature is enabled **and** when CShells reloads the shell (`IShellInitializer`).
-A plain host uses the same instance as `IHostedService`.
+
+The migrate policy is the host-wide `Elsa:Persistence:EntityFramework:Migrate:Policy`
+(`AutoMigrate` by default, or `Validate` to fail when migrations are pending), the same key every
+other EF module reads — see
+[the persistence README](../../../Persistence/EntityFramework/README.md#choosing-the-policy-operator-setting).
+It applies when the feature is enabled **and** when CShells reloads the shell
+(`IShellInitializer`); a plain host uses the same instance as `IHostedService`. A shell that needs a
+different policy from its neighbours sets that key under its own `Configuration` node.
+
+> **Behaviour change (#1877).** The Secrets-only `SecretsEntityFrameworkCore:MigratePolicy` setting
+> is retired. A shell that still sets it to a non-null value **fails to start**, with a message
+> naming the host-wide key; move the value there. The property is kept for one release purely so
+> that refusal is possible — CShells' binder never reads a configuration key that has no matching
+> property, so deleting it would make a still-configured value silently invisible.
 
 ## Schema
 
@@ -96,13 +106,22 @@ portable bytes: .NET can consume different Unicode data on different operating s
 casing APIs are no longer used, so changing a host runtime or its Unicode data cannot silently
 change newly persisted keys.
 
-Before upgrading a database written by the pre-contract Phase 1 pilot, quiesce writers and run the
-provider-specific `dual-migrate.sh apply` command. After applying compiled migrations it reindexes
-the stored projection columns and document copies from the authoritative `Secret` payload in bounded
-keyset transactions over `(TenantId, NormalizedName)` while preserving concurrency tokens. Rows created on a host whose runtime casing data differed from this
-pinned table otherwise remain unreadable through canonical lookups. Host startup audits every row
-in bounded, read-only keyset pages over `(TenantId, NormalizedName)` and fails closed with the repair
-command instead of silently serving a partially readable store.
+Before upgrading a database written by the pre-contract Phase 1 pilot, quiesce writers, apply the
+migrations, and then run the declared post-migration action:
+
+```bash
+dotnet elsa persistence apply       --modules Secrets --provider <provider>
+dotnet elsa persistence post-migrate --modules Secrets --provider <provider>
+```
+
+`SecretsProjectionReindex` rewrites the stored projection columns and document copies from the
+authoritative `Secret` payload in bounded keyset transactions over `(TenantId, NormalizedName)`
+while preserving concurrency tokens. Rows created on a host whose runtime casing data differed from
+this pinned table otherwise remain unreadable through canonical lookups. Host startup — and
+`apply`/`validate` — audit every row in bounded, read-only keyset pages over
+`(TenantId, NormalizedName)` and fail closed naming `post-migrate` instead of silently serving a
+partially readable store. No command ever reindexes as a side effect; only `post-migrate` does
+(ADR 0076 D8).
 
 The mapping deviates from plain Unicode 16 only at the exact, exhaustively tested boundary `U+017F`
 and `U+16EBB` through `U+16ED3`. This module persists projected text rather than a separate
@@ -134,8 +153,9 @@ in this module, but the checks are different: `pending`
 compares the source model to its snapshot without reading database history, whereas runtime
 `Validate` checks whether the selected database has unapplied compiled migrations; both runtime
 policies also reject legacy projection bytes until the operator reindex completes. Recommended
-deployment order is `pending`, backup/quiesce, provider-specific `apply`, history/table-shape
-verification, then application startup with `MigratePolicy=Validate`.
+deployment order is `pending`, backup/quiesce, provider-specific `apply`, `dotnet elsa persistence
+post-migrate` for any action the apply reports as required, history/table-shape verification, then
+application startup with `Elsa:Persistence:EntityFramework:Migrate:Policy=Validate`.
 
 For deployment boundaries, use an explicit provider selector and matching connection, a
 short-lived least-privilege migration identity, and a least-privilege runtime identity after

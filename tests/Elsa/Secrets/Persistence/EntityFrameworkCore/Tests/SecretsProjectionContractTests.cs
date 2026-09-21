@@ -92,18 +92,21 @@ public sealed class SecretsProjectionContractTests
                 originalToken = record.ConcurrencyToken.ToArray();
             }
 
-            await using var provider = new ServiceCollection()
+            var services = new ServiceCollection()
                 .AddSecretsEntityFrameworkCore(new SecretsEntityFrameworkCoreOptions
                 {
                     Provider = "Sqlite",
-                    ConnectionString = connectionString,
-                    MigratePolicy = EfMigratePolicy.Validate
-                })
-                .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-            var lifecycle = provider.GetRequiredService<SecretsEfMigrationHostedService>();
-            var startupFailure = await Assert.ThrowsAsync<InvalidOperationException>(
+                    ConnectionString = connectionString
+                });
+            services.Configure<EfMigrateOptions>(options => options.Policy = EfMigratePolicy.Validate);
+            await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+            var lifecycle = provider.GetRequiredService<EfModuleMigrator<SecretsDbContext>>();
+            // The post-migration audit refuses startup and names the one command that repairs it; it never
+            // reindexes by itself, which is what leaves the row for dual-migrate below to repair.
+            var startupFailure = await Assert.ThrowsAsync<EfPostMigrationRequiredException>(
                 () => lifecycle.InitializeAsync());
-            Assert.Contains("dual-migrate.sh apply", startupFailure.Message, StringComparison.Ordinal);
+            Assert.Equal([nameof(SecretsProjectionReindex)], startupFailure.ActionIds);
+            Assert.Contains(EfPostMigrationActions.Command, startupFailure.Message, StringComparison.Ordinal);
 
             var result = DualMigrateProcessRunner.RunFromExistingBuild(
                 ["apply", "--sqlite"],

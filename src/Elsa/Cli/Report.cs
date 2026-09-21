@@ -27,7 +27,10 @@ internal static class Report
             "Only the modules on the cycle above are at fault.",
         ["dependency-missing"] =
             "Discovery fails closed for the whole selection rather than skipping a module another one depends on. " +
-            "Select the missing module too, or fix the declaration that names it."
+            "Select the missing module too, or fix the declaration that names it.",
+        ["post-migration-required"] =
+            "A post-migration action rewrites data, so nothing runs one as a side effect of another command. " +
+            "The migrations themselves are fine; run the command named above and then re-run this one."
     };
 
     public static int Render(string command, WorkerResponse response, TextWriter output, TextWriter error)
@@ -72,6 +75,9 @@ internal static class Report
                 break;
             case WorkerCommands.Validate:
                 WriteValidate(output, tooling.GetProperty("validate"));
+                break;
+            case WorkerCommands.PostMigrate:
+                WritePostMigrate(output, tooling.GetProperty("postMigrate"));
                 break;
         }
 
@@ -164,6 +170,37 @@ internal static class Report
         output.WriteLine();
         output.WriteLine("No pending migrations.");
     }
+
+    private static void WritePostMigrate(TextWriter output, JsonElement postMigrate)
+    {
+        var modules = postMigrate.GetProperty("modules").EnumerateArray().ToArray();
+        var rows = modules
+            .Select(module => new[]
+            {
+                module.GetProperty("order").GetInt32().ToString("D2", System.Globalization.CultureInfo.InvariantCulture),
+                Text(module, "module"),
+                // The names, not a count: an operator reading a run that did nothing still needs to see
+                // which actions were considered, or "0 ran" is indistinguishable from "nothing declared".
+                Names(module, "declared"),
+                Names(module, "ran")
+            })
+            .ToArray();
+
+        output.WriteLine($"provider: {Text(postMigrate, "provider")}   schema: {Text(postMigrate, "schema", "(none)")}");
+        WriteTable(output, ["#", "MODULE", "DECLARED", "RAN"], rows);
+        output.WriteLine();
+        var ran = modules.Sum(module => module.GetProperty("ran").GetArrayLength());
+        // "0 ran" is the ordinary answer on a database that needs nothing, not a sign the command did not
+        // work — it audits first and runs only what is required, so saying so plainly avoids a re-run.
+        output.WriteLine(ran == 0
+            ? "Nothing required: no post-migration action had work to do."
+            : $"{ran} post-migration action(s) ran; a re-audit reports nothing required.");
+    }
+
+    private static string Names(JsonElement element, string property) =>
+        element.GetProperty(property).GetArrayLength() == 0
+            ? "-"
+            : string.Join(", ", element.GetProperty(property).EnumerateArray().Select(name => name.GetString()));
 
     private static void WriteTable(TextWriter output, string[] headers, IReadOnlyList<string[]> rows)
     {
