@@ -1,6 +1,7 @@
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection;
 using System.Runtime.Loader;
@@ -37,7 +38,27 @@ public sealed class EfToolingHostTests : IDisposable
 
     private readonly string root = Directory.CreateTempSubdirectory("elsa-ef-tooling-").FullName;
 
-    public void Dispose() => Directory.Delete(root, recursive: true);
+    /// <summary>
+    /// Clears the connection pool before removing the directory, for the reason recorded on
+    /// <c>TemporarySqliteDatabase</c> in <c>tests/Elsa/Persistence/EntityFramework/Tests</c> (#1884):
+    /// Microsoft.Data.Sqlite pools connections, so a bare delete can still find the file handle held —
+    /// harmless on macOS/Linux, an <see cref="IOException"/> on Windows. This fixture owns a whole temp
+    /// directory rather than one database path, so it clears the pool and removes the tree itself instead
+    /// of delegating to that type's per-file teardown, which is also why that file is not compiled in here.
+    /// A residual lock is swallowed for the same reason it is there: teardown must never fail an
+    /// otherwise-green test.
+    /// </summary>
+    public void Dispose()
+    {
+        SqliteConnection.ClearAllPools();
+        try
+        {
+            Directory.Delete(root, recursive: true);
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
 
     public static TheoryData<string> Providers() => [.. ServerProviders];
 
@@ -193,7 +214,7 @@ public sealed class EfToolingHostTests : IDisposable
         var output = Path.Join(root, "sqlite");
         var run = await RunAsync(ScriptRequest("Sqlite", ["Secrets"], output));
 
-        Assert.Equal(EfToolingExitCode.Refusal, run.ExitCode);
+        AssertExit(EfToolingExitCode.Refusal, run);
         Assert.Equal("error", run.Response.GetProperty("status").GetString());
         Assert.Equal("sqlite-script-refused", run.Response.GetProperty("error").GetProperty("code").GetString());
         Assert.Equal(
@@ -217,7 +238,7 @@ public sealed class EfToolingHostTests : IDisposable
             Selection = new { Kind = "modules", Modules = new[] { "Secrets" } }
         });
 
-        Assert.Equal(EfToolingExitCode.Success, run.ExitCode);
+        AssertExit(EfToolingExitCode.Success, run);
         var module = Assert.Single(run.Response.GetProperty("plan").GetProperty("modules").EnumerateArray());
         using var context = ModuleContextCatalog.Create(typeof(SecretsSqliteDbContext), ModuleContextCatalog.PlaceholderConnection("Sqlite"));
         var expected = context.Database.GetMigrations().ToArray();
@@ -234,7 +255,7 @@ public sealed class EfToolingHostTests : IDisposable
     {
         var run = await RunAsync(new { Version = 1, Command = "list" });
 
-        Assert.Equal(EfToolingExitCode.Success, run.ExitCode);
+        AssertExit(EfToolingExitCode.Success, run);
         var modules = run.Response.GetProperty("list").GetProperty("modules").EnumerateArray().ToArray();
         Assert.Equal(
             Descriptors.Select(descriptor => descriptor.Name).Order(StringComparer.Ordinal),
@@ -254,7 +275,7 @@ public sealed class EfToolingHostTests : IDisposable
     {
         var run = await RunAsync(new { Version = 1, Command = "list", Provider = "PostgreSql" });
 
-        Assert.Equal(EfToolingExitCode.Refusal, run.ExitCode);
+        AssertExit(EfToolingExitCode.Refusal, run);
         Assert.Equal("invalid-request", run.Response.GetProperty("error").GetProperty("code").GetString());
         Assert.Equal(["'provider' is not accepted by 'list'."], Details(run.Response));
     }
@@ -271,7 +292,7 @@ public sealed class EfToolingHostTests : IDisposable
     {
         var run = await RunAsync(request);
 
-        Assert.Equal(exitCode, run.ExitCode);
+        AssertExit(exitCode, run);
         Assert.Equal("error", run.Response.GetProperty("status").GetString());
         Assert.Equal(code, run.Response.GetProperty("error").GetProperty("code").GetString());
     }
@@ -300,7 +321,7 @@ public sealed class EfToolingHostTests : IDisposable
     {
         var run = await RunAsync("""{"version":1,"command":"list","connection":"Host=db;Password=hunter2"}""");
 
-        Assert.Equal(EfToolingExitCode.Refusal, run.ExitCode);
+        AssertExit(EfToolingExitCode.Refusal, run);
         var message = run.Response.GetProperty("error").GetProperty("message").GetString()!;
         Assert.DoesNotContain("hunter2", message, StringComparison.Ordinal);
         Assert.Contains(Details(run.Response), detail => detail.Contains("'connection' is not accepted", StringComparison.Ordinal));
@@ -314,7 +335,7 @@ public sealed class EfToolingHostTests : IDisposable
     {
         var run = await RunAsync(new ApplyRequestBody { Command = command, Provider = "Sqlite", Selection = new() { Kind = "modules", Modules = ["Secrets"] } });
 
-        Assert.Equal(EfToolingExitCode.Refusal, run.ExitCode);
+        AssertExit(EfToolingExitCode.Refusal, run);
         Assert.Contains(Details(run.Response), detail => detail.Contains("'connection' is required", StringComparison.Ordinal));
     }
 
@@ -328,13 +349,13 @@ public sealed class EfToolingHostTests : IDisposable
         var connection = $"Data Source={Path.Join(root, "apply-validate.db")}";
 
         var apply = await RunAsync(ApplyRequest("apply", "Sqlite", ["Secrets"], connection));
-        Assert.Equal(EfToolingExitCode.Success, apply.ExitCode);
+        AssertExit(EfToolingExitCode.Success, apply);
         var applied = apply.Response.GetProperty("apply").GetProperty("modules")[0];
         Assert.Equal("Secrets", applied.GetProperty("module").GetString());
         Assert.True(applied.GetProperty("applied").GetArrayLength() > 0);
 
         var validate = await RunAsync(ApplyRequest("validate", "Sqlite", ["Secrets"], connection));
-        Assert.Equal(EfToolingExitCode.Success, validate.ExitCode);
+        AssertExit(EfToolingExitCode.Success, validate);
         Assert.Equal("Secrets", validate.Response.GetProperty("validate").GetProperty("modules")[0].GetProperty("module").GetString());
     }
 
@@ -351,7 +372,7 @@ public sealed class EfToolingHostTests : IDisposable
 
         var validate = await RunAsync(ApplyRequest("validate", "Sqlite", ["Secrets"], connection));
 
-        Assert.Equal(EfToolingExitCode.NegativeResult, validate.ExitCode);
+        AssertExit(EfToolingExitCode.NegativeResult, validate);
         Assert.Equal("pending-migrations", validate.Response.GetProperty("error").GetProperty("code").GetString());
         Assert.Equal(0L, TableCount(db));
     }
@@ -375,7 +396,7 @@ public sealed class EfToolingHostTests : IDisposable
 
         var validate = await RunAsync(ApplyRequest("validate", "Sqlite", ["Secrets"], connection));
 
-        Assert.Equal(EfToolingExitCode.DatabaseFailure, validate.ExitCode);
+        AssertExit(EfToolingExitCode.DatabaseFailure, validate);
         Assert.Equal("module-validate-failed", validate.Response.GetProperty("error").GetProperty("code").GetString());
         var message = validate.Response.GetProperty("error").GetProperty("message").GetString()!;
         Assert.DoesNotContain("apply", message, StringComparison.OrdinalIgnoreCase);
@@ -395,7 +416,7 @@ public sealed class EfToolingHostTests : IDisposable
 
         var apply = await RunAsync(ApplyRequest("apply", "Sqlite", ["Secrets"], connection));
 
-        Assert.Equal(EfToolingExitCode.DatabaseFailure, apply.ExitCode);
+        AssertExit(EfToolingExitCode.DatabaseFailure, apply);
         var message = apply.Response.GetProperty("error").GetProperty("message").GetString()!;
         Assert.DoesNotContain(sentinel, message, StringComparison.Ordinal);
         Assert.DoesNotContain(connection, message, StringComparison.Ordinal);
@@ -457,7 +478,7 @@ public sealed class EfToolingHostTests : IDisposable
 
         var run = await RunAsync(request);
 
-        Assert.Equal(EfToolingExitCode.ResolutionFailure, run.ExitCode);
+        AssertExit(EfToolingExitCode.ResolutionFailure, run);
         Assert.Equal("package-metadata-missing", run.Response.GetProperty("error").GetProperty("code").GetString());
         Assert.Equal(
             ["'Activities.Design' is in assembly 'Elsa.Activities.Design.Persistence.EntityFrameworkCore', which no 'packages' entry describes."],
@@ -476,7 +497,7 @@ public sealed class EfToolingHostTests : IDisposable
 
         var run = await RunAsync(request);
 
-        Assert.Equal(EfToolingExitCode.ResolutionFailure, run.ExitCode);
+        AssertExit(EfToolingExitCode.ResolutionFailure, run);
         Assert.Equal("engine-package-mismatch", run.Response.GetProperty("error").GetProperty("code").GetString());
         Assert.False(Directory.Exists(output));
     }
@@ -495,7 +516,7 @@ public sealed class EfToolingHostTests : IDisposable
 
         var run = await RunAsync(ScriptRequest("PostgreSql", Selection, output));
 
-        Assert.Equal(EfToolingExitCode.Success, run.ExitCode);
+        AssertExit(EfToolingExitCode.Success, run);
         Assert.Equal("SELECT 1;\n", File.ReadAllText(leftover));
     }
 
@@ -507,7 +528,7 @@ public sealed class EfToolingHostTests : IDisposable
 
         var run = await RunAsync(ScriptRequest("PostgreSql", Selection, output));
 
-        Assert.Equal(EfToolingExitCode.Success, run.ExitCode);
+        AssertExit(EfToolingExitCode.Success, run);
         AssertSameBytes(before, Artifact(output));
     }
 
@@ -521,7 +542,7 @@ public sealed class EfToolingHostTests : IDisposable
 
         var run = await RunAsync(new { Version = 1, Command = "list" }, [fixture]);
 
-        Assert.Equal(EfToolingExitCode.ResolutionFailure, run.ExitCode);
+        AssertExit(EfToolingExitCode.ResolutionFailure, run);
         Assert.Equal("dependency-cycle", run.Response.GetProperty("error").GetProperty("code").GetString());
         Assert.Equal(["Acme.Alpha -> Acme.Beta -> Acme.Alpha"], Details(run.Response));
     }
@@ -535,7 +556,7 @@ public sealed class EfToolingHostTests : IDisposable
 
         var run = await RunAsync(new { Version = 1, Command = "list" }, [fixture]);
 
-        Assert.Equal(EfToolingExitCode.ResolutionFailure, run.ExitCode);
+        AssertExit(EfToolingExitCode.ResolutionFailure, run);
         Assert.Equal("dependency-missing", run.Response.GetProperty("error").GetProperty("code").GetString());
         Assert.Equal(["'Acme.Gamma' depends on 'Acme.Missing', which is not in the selection."], Details(run.Response));
     }
@@ -571,7 +592,7 @@ public sealed class EfToolingHostTests : IDisposable
 
         var run = await RunAsync(request, [fixture]);
 
-        Assert.Equal(EfToolingExitCode.ResolutionFailure, run.ExitCode);
+        AssertExit(EfToolingExitCode.ResolutionFailure, run);
         Assert.Equal("post-migration-invalid", run.Response.GetProperty("error").GetProperty("code").GetString());
         var detail = Assert.Single(Details(run.Response));
         Assert.Contains($"'{declared.Name}'", detail, StringComparison.Ordinal);
@@ -605,7 +626,7 @@ public sealed class EfToolingHostTests : IDisposable
             },
             [fixture]);
 
-        Assert.Equal(EfToolingExitCode.ResolutionFailure, run.ExitCode);
+        AssertExit(EfToolingExitCode.ResolutionFailure, run);
         Assert.Equal("post-migration-invalid", run.Response.GetProperty("error").GetProperty("code").GetString());
     }
 
@@ -663,7 +684,7 @@ public sealed class EfToolingHostTests : IDisposable
 
         var run = await RunAsync(request, [fixture]);
 
-        Assert.Equal(EfToolingExitCode.ResolutionFailure, run.ExitCode);
+        AssertExit(EfToolingExitCode.ResolutionFailure, run);
         Assert.Equal("module-file-name-invalid", run.Response.GetProperty("error").GetProperty("code").GetString());
         Assert.False(Directory.Exists(output));
     }
@@ -694,7 +715,7 @@ public sealed class EfToolingHostTests : IDisposable
             Selection = new { Kind = "modules", Modules = new[] { "Acme.Epsilon" } }
         }, [fixture]);
 
-        Assert.Equal(EfToolingExitCode.ResolutionFailure, run.ExitCode);
+        AssertExit(EfToolingExitCode.ResolutionFailure, run);
         Assert.Equal("provider-unsupported-for-module", run.Response.GetProperty("error").GetProperty("code").GetString());
         Assert.Equal(["'Acme.Epsilon' declares no SqlServer context."], Details(run.Response));
     }
@@ -739,7 +760,7 @@ public sealed class EfToolingHostTests : IDisposable
 
         var exitCode = await EfToolingHost.RunAsync(request, response);
 
-        Assert.Equal(EfToolingExitCode.Success, exitCode);
+        AssertExit(EfToolingExitCode.Success, exitCode, response.ToArray());
         using var document = JsonDocument.Parse(response.ToArray());
         Assert.Equal(EfToolingExitCode.Success, document.RootElement.GetProperty("exitCode").GetInt32());
         var modules = document.RootElement.GetProperty("list").GetProperty("modules").EnumerateArray()
@@ -771,7 +792,7 @@ public sealed class EfToolingHostTests : IDisposable
         await task;
 
         var exitCode = (int)task.GetType().GetProperty("Result")!.GetValue(task)!;
-        Assert.Equal(EfToolingExitCode.Success, exitCode);
+        AssertExit(EfToolingExitCode.Success, exitCode, response.ToArray());
         Assert.NotEmpty(response.ToArray());
     }
 
@@ -802,7 +823,7 @@ public sealed class EfToolingHostTests : IDisposable
 
             var exitCode = await EfToolingHost.RunAsync(request, response);
 
-            Assert.Equal(EfToolingExitCode.Success, exitCode);
+            AssertExit(EfToolingExitCode.Success, exitCode, response.ToArray());
             using var document = JsonDocument.Parse(response.ToArray());
             var modules = document.RootElement.GetProperty("list").GetProperty("modules").EnumerateArray()
                 .Select(module => module.GetProperty("module").GetString())
@@ -820,7 +841,7 @@ public sealed class EfToolingHostTests : IDisposable
         var output = Path.Join(root, provider, name);
         var run = await RunAsync(ScriptRequest(provider, modules, output));
 
-        Assert.Equal(EfToolingExitCode.Success, run.ExitCode);
+        AssertExit(EfToolingExitCode.Success, run);
         Assert.Equal("migration-plan.json", run.Response.GetProperty("script").GetProperty("manifest").GetString());
         return output;
     }
@@ -864,6 +885,47 @@ public sealed class EfToolingHostTests : IDisposable
     }
 
     private static string[] Keys(JsonElement element) => [.. element.EnumerateObject().Select(property => property.Name)];
+
+    /// <summary>
+    /// Asserts an exit code and, when it differs, reports the refusal the host wrote beside it.
+    /// </summary>
+    /// <remarks>
+    /// The bare code does not diagnose its own failure. <see cref="EfToolingHost"/> flattens every non-refusal
+    /// exception raised while a module is applied or validated into <see cref="EfToolingExitCode.DatabaseFailure"/>,
+    /// so a failure reported as "expected 0, got 4" says only that something went wrong — which is exactly what
+    /// #1910 recorded, and why its cause could not be named afterwards (#1913). The refusal carries the module,
+    /// provider, context type and underlying message, and is safe to print: the connection string is scrubbed
+    /// before it reaches the response, pinned by <see cref="A_connection_string_never_appears_in_a_database_failure"/>.
+    /// </remarks>
+    private static void AssertExit(int expected, Run run) => AssertExit(expected, run.ExitCode, run.Response);
+
+    private static void AssertExit(int expected, int actual, JsonElement response)
+    {
+        if (actual != expected)
+            Assert.Fail($"Expected exit {expected}, got {actual}. {Describe(response)}");
+    }
+
+    /// <summary>The raw-stream overload; the response is parsed only when the assertion has already failed.</summary>
+    private static void AssertExit(int expected, int actual, byte[] response)
+    {
+        if (actual == expected)
+            return;
+        using var document = JsonDocument.Parse(response);
+        AssertExit(expected, actual, document.RootElement);
+    }
+
+    private static string Describe(JsonElement response)
+    {
+        if (!response.TryGetProperty("error", out var error))
+            return "The response carried no error payload.";
+        var code = error.TryGetProperty("code", out var value) ? value.GetString() : null;
+        var message = error.TryGetProperty("message", out var text) ? text.GetString() : null;
+        var details = error.TryGetProperty("details", out var list)
+            ? list.EnumerateArray().Select(detail => detail.GetString()).Where(detail => !string.IsNullOrWhiteSpace(detail)).ToArray()
+            : [];
+        var described = $"error.code='{code}' error.message='{message}'";
+        return details.Length == 0 ? described : $"{described} details=[{string.Join("; ", details)}]";
+    }
 
     private static string[] Details(JsonElement response) =>
         [.. response.GetProperty("error").GetProperty("details").EnumerateArray().Select(detail => detail.GetString()!)];
