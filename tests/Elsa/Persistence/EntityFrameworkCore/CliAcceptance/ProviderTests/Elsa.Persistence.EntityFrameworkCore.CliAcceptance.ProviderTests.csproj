@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Raw ADO clients for the double-apply step, plus the containers the migrations ProviderTests suite
+         already starts the same way (issue #1875: reuse ProviderDatabase.cs for container lifecycle). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="MySql.EntityFrameworkCore" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Testcontainers.MsSql" />
+    <PackageReference Include="Testcontainers.MySql" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Xunit.SkippableFact" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Container lifecycle, reused rather than duplicated (issue #1875 scope). -->
+    <Compile Include="..\..\Migrations\ProviderTests\ProviderDatabase.cs" Link="ProviderDatabase.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- WorkbenchProcess/WorkbenchShell/WorkbenchBuild, reused for the Migrate:Policy=Validate host-start step. -->
+    <ProjectReference Include="..\..\..\..\..\..\tests\Elsa\Workbench\Tests\Elsa.Workbench.Tests.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!--
+      Built, never referenced: the tool is run the real way, as a separate `dotnet exec` process against a
+      built host's output, the same pattern tests/Elsa/Cli/Tests/DotnetElsa.cs uses, so nothing from either
+      project is loaded into this test process.
+    -->
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Cli\Elsa.Cli.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\..\..\tests\Elsa\Cli\Fixtures\Host\Elsa.Cli.Fixtures.Host.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+</Project>
