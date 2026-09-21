@@ -90,11 +90,11 @@ internal static class WorkerRunner
         if (command == WorkerCommands.Script && provider == SqliteProvider)
             return await Respond(tooling, ScriptRequest(request, provider, [], Unused()), cancellationToken);
 
-        // `apply` and `validate` open the database directly and write no manifest, so neither needs the
-        // provider engine's package facts `ResolveEngine` exists to establish (FR-053) — the host's own
-        // tooling entry point already refuses a provider engine it cannot bind (D4), the same way it does
-        // for every other command.
-        if (command is WorkerCommands.Apply or WorkerCommands.Validate)
+        // `apply`, `validate` and `post-migrate` open the database directly and write no manifest, so none
+        // of them needs the provider engine's package facts `ResolveEngine` exists to establish (FR-053) —
+        // the host's own tooling entry point already refuses a provider engine it cannot bind (D4), the same
+        // way it does for every other command.
+        if (WorkerCommands.OpensDatabase(command))
         {
             return await Respond(
                 tooling,
@@ -293,7 +293,7 @@ internal static class WorkerRunner
         selection is null ? null : new { kind = selection.Kind, modules = selection.Modules };
 
     /// <summary>
-    /// Resolves the connection <c>apply</c>/<c>validate</c> pass to the host's tooling entry point (D7).
+    /// Resolves the connection the database-opening commands pass to the host's tooling entry point (D7).
     /// <see cref="WorkerRequest.Connection"/> — read by the front end from its own stdin under
     /// <c>--connection-stdin</c> — takes precedence when given; otherwise <see cref="WorkerRequest.ConnectionEnv"/>
     /// names a variable this worker process reads from its own environment, which it has by ordinary process
@@ -316,7 +316,7 @@ internal static class WorkerRunner
 
         throw WorkerRefusal.Usage(
             "connection-missing",
-            "'apply' and 'validate' need a connection, given with --connection-env or --connection-stdin.");
+            "'apply', 'validate' and 'post-migrate' need a connection, given with --connection-env or --connection-stdin.");
     }
 
     private static async Task<WorkerResponse> Respond(ToolingEntryPoint tooling, object request, CancellationToken cancellationToken)

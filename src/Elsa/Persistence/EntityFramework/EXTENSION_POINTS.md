@@ -25,13 +25,27 @@ both types.
 
 `EfMigratePolicy.AutoMigrate` runs `Database.MigrateAsync` (EF 9+ lock).
 `EfMigratePolicy.Validate` refuses to start when pending migrations exist.
-Secrets registers that apply on both `IHostedService` and CShells `IShellInitializer`
-so a feature enable or reload uses the same policy as a cold start.
+`EfModuleMigrator<TContext>` registers that apply on both `IHostedService` and CShells
+`IShellInitializer` — one instance under both — so a feature enable or reload uses the same policy as
+a cold start.
 
 Which one a deployment runs is an operator setting, not a code seam: `EfModuleMigrator<TContext>`
 reads `EfMigrateOptions`, bound from `Elsa:Persistence:EntityFramework:Migrate:Policy`
 (`EfMigrateOptions.SectionName`). A host that needs the policy decided in code can still
 `services.Configure<EfMigrateOptions>(…)` after composing the module.
+
+## Post-migration actions
+
+`IEfPostMigrationAction` is the seam for work a module needs *after* its migrations apply (ADR 0076
+D8). A module declares the types on its `[EfModule(... PostMigration = ...)]`; nothing is resolved
+from DI, because the `dotnet elsa persistence` worker has no container. `EfPostMigrationActions` is
+the one place a declaration becomes instances and the one place a set of them is audited, so the
+running host and the out-of-process tooling can never disagree about what a module owes.
+
+`AuditAsync` must be read-only and must throw rather than report "not required" for a database it
+could not read. `RunAsync` has exactly one caller, `dotnet elsa persistence post-migrate`: after
+applying migrations, `EfModuleMigrator<TContext>` audits under both policies and fails closed naming
+that command, and `apply`/`validate` do the same — no command ever runs an action as a side effect.
 
 ## Schema and pooling
 

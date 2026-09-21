@@ -1,11 +1,9 @@
-using CShells.Lifecycle;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore.DependencyInjection;
 
@@ -33,20 +31,12 @@ public static class SecretsEntityFrameworkCoreRegistration
         addContext(services, options);
 
         services.AddScoped<ISecretRepository>(sp => new EfSecretRepository(sp.GetRequiredService<SecretsDbContext>()));
-        AddMigrationLifecycle(services);
+        // The shared migrator every other EF module already uses (#1877): the same provider guard, the same
+        // pair of lifecycle hooks CShells and a plain host each drive, and the post-migration audit that
+        // replaces this module's hand-wired EnsureCurrentAsync call. The policy is the host-wide
+        // Elsa:Persistence:EntityFramework:Migrate:Policy, not a Secrets-only setting.
+        services.AddEfModuleMigrations<SecretsDbContext>(options.Provider);
         return services;
-    }
-
-    private static void AddMigrationLifecycle(IServiceCollection services)
-    {
-        if (services.Any(descriptor => descriptor.ServiceType == typeof(SecretsEfMigrationHostedService)))
-            return;
-
-        services.AddSingleton<SecretsEfMigrationHostedService>();
-        services.AddSingleton<IHostedService>(provider =>
-            provider.GetRequiredService<SecretsEfMigrationHostedService>());
-        services.AddSingleton<IShellInitializer>(provider =>
-            provider.GetRequiredService<SecretsEfMigrationHostedService>());
     }
 
     private static void AddContext<TContext>(IServiceCollection services, SecretsEntityFrameworkCoreOptions options)
@@ -84,5 +74,4 @@ public sealed class SecretsEntityFrameworkCoreOptions
 
     /// <summary>Reuse contexts from a pool instead of constructing one per scope.</summary>
     public bool Pooling { get; set; }
-    public EfMigratePolicy MigratePolicy { get; set; } = EfMigratePolicy.AutoMigrate;
 }

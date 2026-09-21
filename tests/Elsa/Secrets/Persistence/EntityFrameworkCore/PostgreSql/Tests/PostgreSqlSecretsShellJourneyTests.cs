@@ -147,6 +147,10 @@ public sealed class PostgreSqlSecretsShellJourneyTests(PostgresContainerFixture 
                     [ShellName] = new
                     {
                         Name = ShellName,
+                        // The host-wide key on this shell's own Configuration node: the Secrets-only
+                        // MigratePolicy setting is retired (ADR 0076 D8), and a shell that still sets it
+                        // refuses to start.
+                        Configuration = new { Elsa = new { Persistence = new { EntityFramework = new { Migrate = new { Policy = migratePolicy.ToString() } } } } },
                         Features = new Dictionary<string, object>
                         {
                             ["Secrets"] = new { },
@@ -154,8 +158,7 @@ public sealed class PostgreSqlSecretsShellJourneyTests(PostgresContainerFixture 
                             ["SecretsEntityFrameworkCore"] = new
                             {
                                 Provider = "PostgreSql",
-                                ConnectionString = connectionString,
-                                MigratePolicy = migratePolicy.ToString()
+                                ConnectionString = connectionString
                             }
                         }
                     }

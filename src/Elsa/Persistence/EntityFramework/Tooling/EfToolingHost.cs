@@ -9,9 +9,9 @@ namespace Elsa.Persistence.EntityFramework.Tooling;
 
 /// <summary>
 /// The one entry point the <c>dotnet elsa persistence</c> worker calls into, from inside the host's own
-/// dependency closure (ADR 0076 D1, FR-003). It backs <c>list</c>, <c>plan</c> and <c>script</c> over
-/// versioned JSON on two streams, so the worker needs no EF reference of its own and cannot skew from the
-/// host's EF version.
+/// dependency closure (ADR 0076 D1, FR-003). It backs <c>list</c>, <c>plan</c>, <c>script</c>, <c>apply</c>,
+/// <c>validate</c> and <c>post-migrate</c> over versioned JSON on two streams, so the worker needs no EF
+/// reference of its own and cannot skew from the host's EF version.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -22,9 +22,10 @@ namespace Elsa.Persistence.EntityFramework.Tooling;
 /// <see cref="EfRelationalProviderBinding"/>.
 /// </para>
 /// <para>
-/// Nothing here opens a database. <c>script</c> and <c>plan</c> configure their contexts with a
+/// <c>list</c>, <c>plan</c> and <c>script</c> open no database: they configure their contexts with a
 /// placeholder connection string, the same one design-time tooling uses, and generate <c>0 → head</c>
-/// idempotent SQL offline.
+/// idempotent SQL offline. <c>apply</c>, <c>validate</c> and <c>post-migrate</c> are the three that do
+/// open one, on the connection the request carries (D7) and never on one this build invents.
 /// </para>
 /// </remarks>
 public static class EfToolingHost
@@ -157,13 +158,15 @@ public static class EfToolingHost
         var schema = NormalizeSchema(provider!, request.Schema);
         ValidateProviderSupport(ordered, provider!);
         ValidateEngine(provider!);
+        var actions = PostMigrationActions(ordered);
 
         return command switch
         {
-            EfToolingCommands.Plan => Plan(ordered, provider!, schema, cancellationToken),
-            EfToolingCommands.Script => Script(ordered, provider!, schema, request, cancellationToken),
-            EfToolingCommands.Apply => await Apply(ordered, provider!, schema, request.Connection!, cancellationToken),
-            EfToolingCommands.Validate => await Validate(ordered, provider!, schema, request.Connection!, cancellationToken),
+            EfToolingCommands.Plan => Plan(ordered, provider!, schema, actions, cancellationToken),
+            EfToolingCommands.Script => Script(ordered, provider!, schema, actions, request, cancellationToken),
+            EfToolingCommands.Apply => await Apply(ordered, provider!, schema, actions, request.Connection!, cancellationToken),
+            EfToolingCommands.Validate => await Validate(ordered, provider!, schema, actions, request.Connection!, cancellationToken),
+            EfToolingCommands.PostMigrate => await PostMigrate(ordered, provider!, schema, actions, request.Connection!, cancellationToken),
             _ => throw new InvalidOperationException($"Unreachable: '{command}' passed envelope validation without a handler.")
         };
     }
@@ -197,7 +200,7 @@ public static class EfToolingHost
     {
         var list = command == EfToolingCommands.List;
         var script = command == EfToolingCommands.Script;
-        var opensDatabase = command is EfToolingCommands.Apply or EfToolingCommands.Validate;
+        var opensDatabase = command is EfToolingCommands.Apply or EfToolingCommands.Validate or EfToolingCommands.PostMigrate;
         (string Name, bool Present, bool Allowed, bool Required)[] fields =
         [
             ("selection", request.Selection is not null, true, !list),
@@ -346,10 +349,11 @@ public static class EfToolingHost
         IReadOnlyList<EfModuleDescriptor> modules,
         string provider,
         string? schema,
+        IReadOnlyDictionary<string, IReadOnlyList<IEfPostMigrationAction>> actions,
         CancellationToken cancellationToken)
     {
         var entries = modules
-            .Select((descriptor, index) => Build(descriptor, index + 1, provider, schema, generate: false, cancellationToken).Entry)
+            .Select((descriptor, index) => Build(descriptor, index + 1, provider, schema, actions, generate: false, cancellationToken).Entry)
             .ToArray();
 
         return new()
@@ -383,10 +387,10 @@ public static class EfToolingHost
         IReadOnlyList<EfModuleDescriptor> modules,
         string provider,
         string? schema,
+        IReadOnlyDictionary<string, IReadOnlyList<IEfPostMigrationAction>> actions,
         EfToolingRequest request,
         CancellationToken cancellationToken)
     {
-        ValidatePostMigration(modules);
         var engine = ValidateEngineFacts(request.Engine!, provider);
         var host = ValidateHostFacts(request.Host!);
         var packages = ValidatePackageFacts(request.Packages!);
@@ -413,7 +417,7 @@ public static class EfToolingHost
             .Select((descriptor, index) =>
             {
                 var order = index + 1;
-                var (entry, script) = Build(descriptor, order, provider, schema, generate: true, cancellationToken);
+                var (entry, script) = Build(descriptor, order, provider, schema, actions, generate: true, cancellationToken);
                 return new EfModuleArtifact(
                     entry,
                     EfMigrationPlan.ScriptFileName(order, descriptor.Name),
@@ -448,26 +452,33 @@ public static class EfToolingHost
     }
 
     /// <summary>
-    /// <c>IEfPostMigrationAction</c> does not exist yet, so this build cannot describe an action's
-    /// <c>kind</c>, <c>requiredWhen</c>, <c>audit</c> or <c>run</c>. Writing <c>postMigration: []</c> for a
-    /// module that declares one would tell a DBA there is nothing left to run after applying the SQL, which
-    /// is the one failure the post-migration seam exists to prevent — so a declaration is refused instead.
-    /// No first-party module declares one today.
+    /// Every selected module's declared <see cref="IEfPostMigrationAction"/>s, instantiated once for the whole
+    /// command (ADR 0076 D8). A declaration this build cannot honour is refused for the whole selection,
+    /// naming every offender: silently skipping one would leave a real obligation unaudited while <c>apply</c>
+    /// and <c>validate</c> still exited 0 and <c>migration-plan.json</c> still recorded <c>postMigration: []</c>,
+    /// telling a DBA there was nothing left to run.
     /// </summary>
-    private static void ValidatePostMigration(IReadOnlyList<EfModuleDescriptor> modules)
+    private static IReadOnlyDictionary<string, IReadOnlyList<IEfPostMigrationAction>> PostMigrationActions(
+        IReadOnlyList<EfModuleDescriptor> modules)
     {
-        var offenders = modules
-            .SelectMany(descriptor => descriptor.PostMigration.Select(action => $"'{descriptor.Name}' declares post-migration action '{action.Name}'."))
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-        if (offenders.Length > 0)
+        var resolved = new Dictionary<string, IReadOnlyList<IEfPostMigrationAction>>(StringComparer.OrdinalIgnoreCase);
+        var offenders = new List<string>();
+        foreach (var descriptor in modules)
+        {
+            EfPostMigrationActions.TryCreate(descriptor.Name, descriptor.PostMigration, out var actions, out var faults);
+            resolved[descriptor.Name] = actions;
+            offenders.AddRange(faults);
+        }
+
+        if (offenders.Count > 0)
         {
             throw EfToolingRefusal.Resolution(
-                "post-migration-unsupported",
-                "This build cannot describe a module's post-migration actions and will not record an empty " +
-                "list for a module that has one. Use a build that implements IEfPostMigrationAction.",
-                offenders);
+                "post-migration-invalid",
+                "A selected module declares a post-migration action this build cannot use.",
+                [.. offenders.Order(StringComparer.Ordinal)]);
         }
+
+        return resolved;
     }
 
     private static EfToolingEngineFacts ValidateEngineFacts(EfToolingEngineFacts engine, string provider)
@@ -546,6 +557,7 @@ public static class EfToolingHost
         int order,
         string provider,
         string? schema,
+        IReadOnlyDictionary<string, IReadOnlyList<IEfPostMigrationAction>> actions,
         bool generate,
         CancellationToken cancellationToken)
     {
@@ -560,7 +572,7 @@ public static class EfToolingHost
                 // composes them: Idempotent alone drops the batch separators each engine's own client needs.
                 ? context.GetService<IMigrator>().GenerateScript(null, null, MigrationsSqlGenerationOptions.Script | MigrationsSqlGenerationOptions.Idempotent)
                 : null;
-            return (new EfModulePlanEntry(order, descriptor, contextType.Name, ids), script);
+            return (new EfModulePlanEntry(order, descriptor, contextType.Name, ids, actions[descriptor.Name]), script);
         }
         catch (Exception failure) when (failure is not EfToolingRefusal and not OperationCanceledException)
         {
@@ -578,15 +590,24 @@ public static class EfToolingHost
     /// reads or writes <c>migration-plan.json</c> (that is <c>script</c>'s artifact, for a DBA to review);
     /// it reads the host's own compiled migrations.
     /// </summary>
+    /// <remarks>
+    /// Each module is audited for outstanding post-migration actions in the same pass, against the context
+    /// whose migrations just applied, but the refusal is deferred until every module has applied (ADR 0076
+    /// D8): a required action is a data step, not a schema dependency, so aborting the run over one would
+    /// leave the remaining modules' schemas unapplied for a reason that has nothing to do with them. Nothing
+    /// here ever runs an action — exiting 0 with one outstanding is the failure this audit exists to
+    /// prevent, and running it silently is the other.
+    /// </remarks>
     private static async Task<EfToolingResponse> Apply(
         IReadOnlyList<EfModuleDescriptor> modules,
         string provider,
         string? schema,
+        IReadOnlyDictionary<string, IReadOnlyList<IEfPostMigrationAction>> actions,
         string connection,
         CancellationToken cancellationToken)
     {
-        ValidatePostMigration(modules);
         var entries = new List<EfToolingApplyEntry>(modules.Count);
+        var outstanding = new List<string>();
         for (var index = 0; index < modules.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -598,6 +619,7 @@ public static class EfToolingHost
                 using var context = CreateContext(descriptor, contextType, provider, connection, schema);
                 var pending = (await context.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray();
                 await EfDatabaseMigrator.ApplyAsync(context, EfRelationalProviderBinding.ExpectedProviderName(provider), EfMigratePolicy.AutoMigrate, cancellationToken);
+                outstanding.AddRange(await RequiredActions(context, descriptor, provider, actions, cancellationToken));
                 entries.Add(new()
                 {
                     Order = order,
@@ -614,6 +636,8 @@ public static class EfToolingHost
                     EfToolingRedaction.Redact($"'{descriptor.Name}' could not be applied for {provider} from {contextType.Name}: {failure.Message}", connection));
             }
         }
+
+        RefusePostMigration(outstanding, "Migrations were applied.");
 
         return new()
         {
@@ -635,12 +659,13 @@ public static class EfToolingHost
         IReadOnlyList<EfModuleDescriptor> modules,
         string provider,
         string? schema,
+        IReadOnlyDictionary<string, IReadOnlyList<IEfPostMigrationAction>> actions,
         string connection,
         CancellationToken cancellationToken)
     {
-        ValidatePostMigration(modules);
         var entries = new List<EfToolingValidateEntry>(modules.Count);
         var offenders = new List<string>();
+        var outstanding = new List<string>();
         for (var index = 0; index < modules.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -665,6 +690,10 @@ public static class EfToolingHost
                     continue;
                 }
 
+                // A host under Migrate:Policy=Validate runs this same audit at startup and refuses to start
+                // when it reports something required, so reporting success here would tell an operator the
+                // host is ready when it is not (SC-005).
+                outstanding.AddRange(await RequiredActions(context, descriptor, provider, actions, cancellationToken));
                 entries.Add(new() { Order = order, Module = descriptor.Name, Context = contextType.Name, HistoryTable = descriptor.HistoryTableName });
             }
             catch (Exception failure) when (failure is not EfToolingRefusal and not OperationCanceledException)
@@ -683,12 +712,142 @@ public static class EfToolingHost
                 [.. offenders.Order(StringComparer.Ordinal)]);
         }
 
+        RefusePostMigration(outstanding, "Every selected module's migrations are already applied.");
+
         return new()
         {
             ExitCode = EfToolingExitCode.Success,
             Command = EfToolingCommands.Validate,
             Validate = new() { Provider = provider, Schema = schema, Modules = entries }
         };
+    }
+
+    /// <summary>
+    /// <c>post-migrate</c> is the only command that calls <see cref="IEfPostMigrationAction.RunAsync"/>
+    /// (ADR 0076 D8). It audits first and runs only what the audit reports as required, so a second run over
+    /// a database already repaired does nothing at all; then it audits again, and fails closed if anything
+    /// is still required, rather than reporting a repair that did not take. It applies no migration: a
+    /// module whose schema is not current is refused, because an action audited against a schema the module
+    /// has moved past is answering a question about a database that no longer exists.
+    /// </summary>
+    private static async Task<EfToolingResponse> PostMigrate(
+        IReadOnlyList<EfModuleDescriptor> modules,
+        string provider,
+        string? schema,
+        IReadOnlyDictionary<string, IReadOnlyList<IEfPostMigrationAction>> actions,
+        string connection,
+        CancellationToken cancellationToken)
+    {
+        var entries = new List<EfToolingPostMigrateEntry>(modules.Count);
+        var pendingMigrations = new List<string>();
+        var stillRequired = new List<string>();
+        for (var index = 0; index < modules.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var descriptor = modules[index];
+            var order = index + 1;
+            var declared = actions[descriptor.Name];
+            var contextType = descriptor.RequireProviderContext(provider);
+            try
+            {
+                using var context = CreateContext(descriptor, contextType, provider, connection, schema);
+                try
+                {
+                    await EfDatabaseMigrator.ApplyAsync(context, EfRelationalProviderBinding.ExpectedProviderName(provider), EfMigratePolicy.Validate, cancellationToken);
+                }
+                catch (EfPendingMigrationsException failure)
+                {
+                    pendingMigrations.Add(EfToolingRedaction.Redact(failure.Message, connection));
+                    continue;
+                }
+
+                var required = await EfPostMigrationActions.RequiredAsync(context, declared, cancellationToken);
+                foreach (var action in required)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await action.RunAsync(context, cancellationToken);
+                }
+
+                stillRequired.AddRange(
+                    (await EfPostMigrationActions.RequiredAsync(context, required, cancellationToken))
+                    .Select(action => $"'{descriptor.Name}' action '{action.Id}' still reports itself required after running."));
+
+                entries.Add(new()
+                {
+                    Order = order,
+                    Module = descriptor.Name,
+                    Context = contextType.Name,
+                    Declared = [.. declared.Select(action => action.Id)],
+                    Ran = [.. required.Select(action => action.Id)]
+                });
+            }
+            catch (Exception failure) when (failure is not EfToolingRefusal and not OperationCanceledException)
+            {
+                throw EfToolingRefusal.DatabaseFailure(
+                    "module-post-migrate-failed",
+                    EfToolingRedaction.Redact($"'{descriptor.Name}' post-migration could not be run for {provider} from {contextType.Name}: {failure.Message}", connection));
+            }
+        }
+
+        if (pendingMigrations.Count > 0)
+        {
+            throw EfToolingRefusal.NegativeResult(
+                "pending-migrations",
+                "A selected module has a pending migration, so its post-migration actions were not run. " +
+                "Apply the migrations first: dotnet elsa persistence apply.",
+                [.. pendingMigrations.Order(StringComparer.Ordinal)]);
+        }
+
+        if (stillRequired.Count > 0)
+        {
+            throw EfToolingRefusal.NegativeResult(
+                "post-migration-incomplete",
+                "A post-migration action ran and its own audit still reports it required.",
+                [.. stillRequired.Order(StringComparer.Ordinal)]);
+        }
+
+        return new()
+        {
+            ExitCode = EfToolingExitCode.Success,
+            Command = EfToolingCommands.PostMigrate,
+            PostMigrate = new() { Provider = provider, Schema = schema, Modules = entries }
+        };
+    }
+
+    /// <summary>
+    /// One module's outstanding actions, described for a refusal. Read-only: this audits and never runs
+    /// anything, which is what lets <c>apply</c> and <c>validate</c> call it.
+    /// </summary>
+    private static async Task<IReadOnlyList<string>> RequiredActions(
+        DbContext context,
+        EfModuleDescriptor descriptor,
+        string provider,
+        IReadOnlyDictionary<string, IReadOnlyList<IEfPostMigrationAction>> actions,
+        CancellationToken cancellationToken)
+    {
+        var required = await EfPostMigrationActions.RequiredAsync(context, actions[descriptor.Name], cancellationToken);
+        return
+        [
+            .. required.Select(action =>
+                $"'{descriptor.Name}' requires post-migration action '{action.Id}' ({action.RequiredWhen}). " +
+                $"Run: {EfPostMigrationActions.CommandFor(descriptor.Name, provider)}")
+        ];
+    }
+
+    /// <summary>
+    /// The one negative result (exit 1, FR-034) a required-but-unrun action produces, wherever it was
+    /// audited from. Naming <c>post-migrate</c> rather than running the action keeps a bounded-batch data
+    /// rewrite an operator's decision.
+    /// </summary>
+    private static void RefusePostMigration(IReadOnlyList<string> outstanding, string applied)
+    {
+        if (outstanding.Count == 0)
+            return;
+
+        throw EfToolingRefusal.NegativeResult(
+            "post-migration-required",
+            $"{applied} A selected module has a post-migration action that has not been run, and nothing here runs one.",
+            [.. outstanding.Order(StringComparer.Ordinal)]);
     }
 
     /// <summary>

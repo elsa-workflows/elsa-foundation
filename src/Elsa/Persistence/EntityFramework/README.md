@@ -75,6 +75,7 @@ Oracle container leg is the first of the three conditions ADR 0075 requires to r
 | `EfConnectionDefaults.ResolveConnectionString` | Explicit connection string, then a named `ConnectionStrings` entry (refused when missing or blank), then the module's default entry, then the SQLite file |
 | `EfModuleBinding` | A module's owner name, history table, migrations assembly and connection defaults; selects its per-dialect registration and binds its context |
 | `[EfModule]` / `EfModuleCatalog.Discover` / `Find` | The single, discoverable declaration of a module's canonical name, base context, per-provider derived contexts, frozen history name, dependencies and post-migration actions (ADR 0076 D2); `Discover` enumerates every declaration across a set of assemblies, first-party and third-party alike, and refuses — rather than carrying forward — a case-insensitive name collision, or a `HistoryModule` that `EfMigrationsHistory.TableName` rejects; `Find` looks one discovered module up by canonical name, case-insensitively, and is `null` when no module carries that name |
+| `IEfPostMigrationAction` / `EfPostMigrationActions` | A module's named, audited, never-auto-run work for *after* its migrations apply (ADR 0076 D8). Declared by `Type` on `[EfModule(... PostMigration = ...)]`, constructed with no DI and no arguments, given only the `DbContext`. `EfPostMigrationActions.Create` turns a declaration into instances and refuses one it cannot honour; `EnsureNotRequiredAsync` is the fail-closed audit every migrator runs. See [Post-migration actions](#post-migration-actions) |
 | `EfSharedTransaction` | Own one connection and one transaction for several module contexts that must commit together; refuse split targets and provider mismatches |
 | `EfRelationalExceptionClassifier` | Classifies provider failures without referencing provider engines. `IsSaveConflict` recognizes a race SaveChanges reported, `IsProviderFailure` any provider failure, and both see through the `InvalidOperationException` a non-retrying SQL Server or PostgreSQL execution strategy wraps around one. `FindSaveFailure` returns the `DbUpdateException` for code needing its entries or constraint name; `IsStoreBoundaryFailure` additionally takes a bare `InvalidOperationException`, for outermost boundaries only |
 | `EfProviderBindingValidator` | Fail a host closed at startup, in the CShells `Prepare` phase ahead of every module migrator, when a configured module's provider engine is missing or no longer exposes what the reflection binding calls |
@@ -357,6 +358,40 @@ RuntimeSqliteDbContext has pending migrations: 20260911000000_Initial. Apply the
 process (tools/ef/module-migrate.sh) or set Elsa:Persistence:EntityFramework:Migrate:Policy to AutoMigrate.
 ```
 
+## Post-migration actions
+
+Some repairs cannot be expressed as a migration — rewriting rows a changed projection algorithm left
+stale, for instance. A module declares them on its own `[EfModule]`:
+
+```csharp
+[assembly: EfModule("Secrets", typeof(SecretsDbContext), …, PostMigration = [typeof(SecretsProjectionReindex)])]
+```
+
+An action implements `IEfPostMigrationAction`: a concrete type with a public parameterless
+constructor, taking only the `DbContext` and using no DI, because the `dotnet elsa persistence`
+worker has no container to resolve from. It exposes `Id`, `Kind`, `RequiredWhen` and `Audit` — the
+four facts `migration-plan.json` records (FR-048) — plus `AuditAsync` and `RunAsync`.
+
+Two rules make this safe, and both are enforced rather than documented:
+
+- **`AuditAsync` never mutates, and never reports "not required" for a database it could not read.**
+  It runs after every apply, under both `EfMigratePolicy` values, and from `apply` and `validate`.
+  A failure propagates; it is never swallowed into a clean result.
+- **Nothing runs an action automatically.** `EfModuleMigrator<TContext>` audits and, if anything is
+  required, throws `EfPostMigrationRequiredException` naming the exact command:
+
+  ```
+  dotnet elsa persistence post-migrate --modules Secrets --provider Sqlite
+  ```
+
+  `post-migrate` is the only caller of `RunAsync`. It audits first, runs only what is required, then
+  re-audits and fails closed if anything still is.
+
+A declaration this build cannot use — a type that is not an action, one that needs constructor
+arguments, one that describes itself incompletely, or two sharing an `Id` — is refused by name at
+registration and by every tooling command, never skipped: a skipped action would leave a real
+obligation unaudited while every command still exited 0.
+
 ## Custom migrate loops
 
 `Database.MigrateAsync` already acquires `IHistoryRepository.AcquireDatabaseLockAsync`.
@@ -366,9 +401,11 @@ same lock** or concurrent hosts race. Do not roll a second lock around `MigrateA
 ## Dual apply
 
 `EfDatabaseMigrator.ApplyAsync` is the in-process path (feature enable and CShells reload).
-Out-of-process apply and fail-if-pending for the current Secrets implementation live in
-[tools/ef/dual-migrate.sh](../../../../tools/ef/dual-migrate.sh) (`dotnet ef database update`
-and `dotnet ef migrations has-pending-model-changes` per derived context).
+Out-of-process apply, fail-if-pending and post-migration repair go through
+`dotnet elsa persistence apply` / `validate` / `post-migrate`, which run the host's own compiled
+migrations inside its own closure. The older Secrets-only
+[tools/ef/dual-migrate.sh](../../../../tools/ef/dual-migrate.sh) still exists and is retired
+separately (FR-078).
 
 ## Provider packages stay in the host
 

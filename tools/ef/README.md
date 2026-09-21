@@ -189,10 +189,14 @@ The checks cover different failure classes:
   provider-specific connection environment variable and a reachable database. SQLite uses
   `ELSA_SECRETS_EF_SQLITE` when set; otherwise the script creates a temporary database and removes
   it on exit, which validates the artifact but does not update a deployment database.
-- Runtime `MigratePolicy=Validate` calls EF's pending-database-migration check and fails closed
-  when the database history is behind. Both runtime policies then audit the pinned projection
-  contract and fail closed when operator reindex is still required. Neither runtime path rewrites
-  legacy rows, and neither replaces the source/model `pending` check.
+- Runtime `Elsa:Persistence:EntityFramework:Migrate:Policy=Validate` calls EF's
+  pending-database-migration check and fails closed when the database history is behind. Both
+  runtime policies then audit the module's declared post-migration actions — for Secrets, the pinned
+  projection contract — and fail closed naming `dotnet elsa persistence post-migrate` when a repair
+  is still required. Neither runtime path rewrites legacy rows, and neither replaces the
+  source/model `pending` check. Since #1877 that audit is the general
+  `IEfPostMigrationAction` seam rather than a Secrets-specific call, and `dotnet elsa persistence
+  post-migrate` is the one command that runs a repair.
 
 ## Deployment and rollback boundary
 
@@ -206,7 +210,7 @@ with its least-privilege runtime identity.
 After `apply` succeeds, verify the selected database's
 `__EFMigrationsHistory_ElsaSecrets` contains the expected migration IDs and that the expected
 `elsa_secrets` table shape is present before deploying the application with
-`MigratePolicy=Validate`. If `pending` or `apply` fails, stop the rollout and inspect both the
+`Elsa:Persistence:EntityFramework:Migrate:Policy=Validate`. If `pending` or `apply` fails, stop the rollout and inspect both the
 provider schema and history before retrying; a failed command is not deployment proof.
 
 Prefer additive/expand-contract schema changes so an application binary can be rolled back only
@@ -216,4 +220,5 @@ fail or lose values longer than that. Use a verified backup restore or a forward
 schema recovery; treat application rollback and schema recovery as separate decisions.
 
 Runtime (in-process) apply after CShells enable or reload uses the same `EfMigratePolicy` /
-`EfDatabaseMigrator` path as a plain host. That is not a substitute for this out-of-process tool.
+`EfDatabaseMigrator` path as a plain host, through the shared `EfModuleMigrator<TContext>`. That is
+not a substitute for this out-of-process tool.

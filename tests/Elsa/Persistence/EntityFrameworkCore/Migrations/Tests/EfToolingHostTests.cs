@@ -171,7 +171,16 @@ public sealed class EfToolingHostTests : IDisposable
         Assert.Equal("__EFMigrationsHistory_ElsaSecrets", module.GetProperty("historyTable").GetString());
         Assert.Equal("0", module.GetProperty("migrations").GetProperty("from").GetString());
         Assert.Empty(module.GetProperty("dependsOn").EnumerateArray());
-        Assert.Empty(module.GetProperty("postMigration").EnumerateArray());
+        // FR-048: the declared action, not the empty array a build that could not describe one had to refuse.
+        var action = Assert.Single(module.GetProperty("postMigration").EnumerateArray());
+        Assert.Equal(["id", "kind", "requiredWhen", "audit", "run"], Keys(action));
+        Assert.Equal("SecretsProjectionReindex", action.GetProperty("id").GetString());
+        Assert.Equal("projection-reindex", action.GetProperty("kind").GetString());
+        Assert.Equal("legacy-projection-detected", action.GetProperty("requiredWhen").GetString());
+        Assert.Equal("SecretsProjectionContract.HasLegacyProjectionsAsync", action.GetProperty("audit").GetString());
+        Assert.Equal(
+            "dotnet elsa persistence post-migrate --modules Secrets --provider PostgreSql",
+            action.GetProperty("run").GetString());
 
         // The manifest's own hash is what a DBA and script-check compare, so it names the file it hashed.
         var sha = module.GetProperty("sha256").GetString();
@@ -282,9 +291,9 @@ public sealed class EfToolingHostTests : IDisposable
     }
 
     /// <summary>
-    /// <c>connection</c> (#1876) is a real field now, but only <c>apply</c> and <c>validate</c> open a
-    /// database (D7); <c>list</c>, <c>plan</c> and <c>script</c> refuse it rather than silently ignoring
-    /// it, and the refusal names the field, never the value.
+    /// <c>connection</c> (#1876) is a real field now, but only <c>apply</c>, <c>validate</c> and
+    /// <c>post-migrate</c> open a database (D7); <c>list</c>, <c>plan</c> and <c>script</c> refuse it rather
+    /// than silently ignoring it, and the refusal names the field, never the value.
     /// </summary>
     [Fact]
     public async Task Connection_is_refused_on_a_command_that_opens_no_database()
@@ -300,7 +309,8 @@ public sealed class EfToolingHostTests : IDisposable
     [Theory]
     [InlineData("apply")]
     [InlineData("validate")]
-    public async Task Connection_is_required_by_apply_and_validate(string command)
+    [InlineData("post-migrate")]
+    public async Task Connection_is_required_by_every_command_that_opens_a_database(string command)
     {
         var run = await RunAsync(new ApplyRequestBody { Command = command, Provider = "Sqlite", Selection = new() { Kind = "modules", Modules = ["Secrets"] } });
 
@@ -531,32 +541,92 @@ public sealed class EfToolingHostTests : IDisposable
     }
 
     /// <summary>
-    /// A module that declares a post-migration action would be recorded as <c>postMigration: []</c> by a
-    /// build that cannot describe one, telling a DBA there is nothing left to run. Refused instead.
+    /// A declaration this build cannot turn into an <see cref="IEfPostMigrationAction"/> is refused for the
+    /// whole selection, naming every offender. Skipping it instead would record <c>postMigration: []</c> for a
+    /// module that has a real obligation, telling a DBA there is nothing left to run — the one failure this
+    /// seam exists to prevent.
     /// </summary>
-    [Fact]
-    public async Task Script_refuses_a_module_that_declares_a_post_migration_action_this_build_cannot_describe()
+    [Theory]
+    [InlineData(typeof(Uri), "does not implement IEfPostMigrationAction")]
+    [InlineData(typeof(NoParameterlessConstructor), "has no public parameterless constructor")]
+    [InlineData(typeof(BlankIdentifiers), "leaves Id, Kind, RequiredWhen, Audit blank")]
+    public async Task Script_refuses_a_module_whose_declared_post_migration_action_this_build_cannot_use(Type declared, string reason)
     {
+        // A module name of its own per case: these assemblies stay loaded, and the two-arg RunAsync overload
+        // discovers every one of them at once, where two modules sharing a name is a refusal by design.
+        var module = $"Acme.Delta.{declared.Name}";
         var fixture = SyntheticEfModules.Build(
-            "Acme.PostMigration.Modules",
-            new SyntheticModule("Acme.Delta", "AcmeDelta", PostgreSql: typeof(object), PostMigration: [typeof(Uri)]));
-        var output = Path.Join(root, "post-migration");
+            $"Acme.PostMigration.{declared.Name}.Modules",
+            new SyntheticModule(module, $"AcmeDelta{declared.Name}", PostgreSql: typeof(object), PostMigration: [declared]));
+        var output = Path.Join(root, $"post-migration-{declared.Name}");
         var request = new ScriptRequestBody
         {
             Provider = "PostgreSql",
-            Selection = new() { Kind = "modules", Modules = ["Acme.Delta"] },
+            Selection = new() { Kind = "modules", Modules = [module] },
             Output = output,
             Host = new() { Name = "Elsa.Tooling.Tests", ProviderAgreement = "not-checked", Environment = "Production" },
             Engine = new() { Package = EfRelationalProviderBinding.ProviderPackageId("PostgreSql"), Version = "9.9.9-test", Source = "host-deps-file" },
-            Packages = [Package("Acme.PostMigration.Modules")]
+            Packages = [Package($"Acme.PostMigration.{declared.Name}.Modules")]
         };
 
         var run = await RunAsync(request, [fixture]);
 
         Assert.Equal(EfToolingExitCode.ResolutionFailure, run.ExitCode);
-        Assert.Equal("post-migration-unsupported", run.Response.GetProperty("error").GetProperty("code").GetString());
-        Assert.Equal(["'Acme.Delta' declares post-migration action 'Uri'."], Details(run.Response));
+        Assert.Equal("post-migration-invalid", run.Response.GetProperty("error").GetProperty("code").GetString());
+        var detail = Assert.Single(Details(run.Response));
+        Assert.Contains($"'{declared.Name}'", detail, StringComparison.Ordinal);
+        Assert.Contains(reason, detail, StringComparison.Ordinal);
         Assert.False(Directory.Exists(output));
+    }
+
+    /// <summary>
+    /// The same refusal reaches the commands that open a database, not just <c>script</c>: missing one would
+    /// let <c>apply --modules X</c> start refusing while <c>script</c> worked, or the reverse.
+    /// </summary>
+    [Theory]
+    [InlineData("plan")]
+    [InlineData("apply")]
+    [InlineData("validate")]
+    [InlineData("post-migrate")]
+    public async Task Every_command_refuses_a_declared_post_migration_action_this_build_cannot_use(string command)
+    {
+        var module = $"Acme.Epsilon.{command}";
+        var fixture = SyntheticEfModules.Build(
+            $"Acme.PostMigration.{command}.Modules",
+            new SyntheticModule(module, $"AcmeEpsilon{command.Replace("-", "")}", PostgreSql: typeof(object), PostMigration: [typeof(Uri)]));
+
+        var run = await RunAsync(
+            new ApplyRequestBody
+            {
+                Command = command,
+                Provider = "PostgreSql",
+                Selection = new() { Kind = "modules", Modules = [module] },
+                Connection = command is "plan" ? null : "Host=localhost;Database=unused"
+            },
+            [fixture]);
+
+        Assert.Equal(EfToolingExitCode.ResolutionFailure, run.ExitCode);
+        Assert.Equal("post-migration-invalid", run.Response.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    private sealed class NoParameterlessConstructor(string unused) : IEfPostMigrationAction
+    {
+        public string Id => unused;
+        public string Kind => "test";
+        public string RequiredWhen => "never";
+        public string Audit => "none";
+        public Task<bool> AuditAsync(DbContext context, CancellationToken cancellationToken = default) => Task.FromResult(false);
+        public Task RunAsync(DbContext context, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class BlankIdentifiers : IEfPostMigrationAction
+    {
+        public string Id => "";
+        public string Kind => "";
+        public string RequiredWhen => " ";
+        public string Audit => "";
+        public Task<bool> AuditAsync(DbContext context, CancellationToken cancellationToken = default) => Task.FromResult(false);
+        public Task RunAsync(DbContext context, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     /// <summary>

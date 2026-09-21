@@ -463,7 +463,7 @@ Illustrative only: `sha256`, `version`, and `efCoreVersion` values below are pla
           "id": "SecretsProjectionReindex",
           "kind": "projection-reindex",
           "requiredWhen": "legacy-projection-detected",
-          "audit": "SecretsProjectionContract.EnsureCurrentAsync",
+          "audit": "SecretsProjectionContract.HasLegacyProjectionsAsync",
           "run": "dotnet elsa persistence post-migrate --modules Secrets --provider PostgreSql"
         }
       ]

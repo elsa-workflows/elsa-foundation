@@ -208,6 +208,9 @@ public sealed class SecretsPersistenceHostJourneyTests
             "Shells": {
               "secrets-persistence": {
                 "Name": "secrets-persistence",
+                "Configuration": {
+                  "Elsa": { "Persistence": { "EntityFramework": { "Migrate": { "Policy": "{{migratePolicy}}" } } } }
+                },
                 "Features": {
                   "Secrets": {},
                   "SecretsJourneyEncryption": {
@@ -215,8 +218,7 @@ public sealed class SecretsPersistenceHostJourneyTests
                   },
                   "SecretsEntityFrameworkCore": {
                     "Provider": "Sqlite",
-                    "ConnectionString": "Data Source={{path.Replace("\\", "/")}};Cache=Shared;Pooling=False",
-                    "MigratePolicy": "{{migratePolicy}}"
+                    "ConnectionString": "Data Source={{path.Replace("\\", "/")}};Cache=Shared;Pooling=False"
                   }
                 }
               }
