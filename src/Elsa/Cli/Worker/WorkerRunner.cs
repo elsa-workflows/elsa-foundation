@@ -41,7 +41,7 @@ internal static class WorkerRunner
         {
             throw;
         }
-        catch (Exception failure)
+        catch (Exception failure) when (IsNonFatal(failure))
         {
             return new()
             {
@@ -50,6 +50,20 @@ internal static class WorkerRunner
             };
         }
     }
+
+    /// <summary>
+    /// True for anything worth reporting as a resolution failure; false for the handful of CLR exceptions
+    /// that mean the process itself is no longer trustworthy, which must propagate rather than be swallowed
+    /// into a tidy JSON response.
+    /// </summary>
+    private static bool IsNonFatal(Exception failure) => failure is not (
+        OutOfMemoryException or
+        StackOverflowException or
+        AccessViolationException or
+        AppDomainUnloadedException or
+        BadImageFormatException or
+        CannotUnloadAppDomainException or
+        ThreadAbortException);
 
     private static async Task<WorkerResponse> ExecuteAsync(WorkerRequest request, CancellationToken cancellationToken)
     {

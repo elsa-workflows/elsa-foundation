@@ -147,9 +147,9 @@ public static partial class ScriptCheck
         }
 
         var planned = plan.Modules.Select(module => module.File).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var file in Directory.EnumerateFiles(directory, "*.sql").Select(Path.GetFileName).Order(StringComparer.Ordinal))
-            if (file is not null && !planned.Contains(file))
-                yield return new(file, ScriptCheckFault.Orphan, $"present in the directory and {MigrationPlan.FileName} does not name it: stale or orphaned.");
+        foreach (var file in Directory.EnumerateFiles(directory, "*.sql").Select(Path.GetFileName).Order(StringComparer.Ordinal)
+                     .Where(file => file is not null && !planned.Contains(file)))
+            yield return new(file!, ScriptCheckFault.Orphan, $"present in the directory and {MigrationPlan.FileName} does not name it: stale or orphaned.");
     }
 
     private static Dictionary<string, string> Flatten(JsonElement element)
