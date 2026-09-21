@@ -46,6 +46,21 @@ internal static class ProviderFailures
             Interlocked.Increment(ref attempts) <= failures ? throw failure() : ValueTask.FromResult(result);
     }
 
+    /// <summary>Fails the first read with <paramref name="failure"/>, then lets reads through.</summary>
+    public sealed class FailingReadInterceptor(Func<Exception> failure) : DbCommandInterceptor
+    {
+        private int attempts;
+
+        public int Attempts => Volatile.Read(ref attempts);
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default) =>
+            Interlocked.Increment(ref attempts) == 1 ? throw failure() : ValueTask.FromResult(result);
+    }
+
     public sealed class SyntheticProviderException() : DbException("synthetic provider failure");
 
     /// <summary>Carries a SQL Server error number the way the shared classifier reads it, by type name and <c>Number</c>.</summary>
