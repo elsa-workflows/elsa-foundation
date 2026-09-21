@@ -59,9 +59,11 @@ public sealed class EfToolingHostTests : IDisposable
         catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
         {
             // A residual lock is tolerated; a missing directory is not. DirectoryNotFoundException derives
-            // from IOException, and tests here assert the host deleted nothing outside its own output tree
-            // (for example the leftover and idempotence cases), so swallowing it would hide exactly the
-            // over-deletion those tests exist to catch.
+            // from IOException, so the filter above would otherwise swallow it. Nothing today can raise it:
+            // the tooling host contains no Directory.Delete or File.Delete at all, and every path this class
+            // builds is a subdirectory of root. That is precisely why it rethrows rather than being tolerated
+            // - it is a canary for the host gaining a delete it should not have, not a guard on a live
+            // failure, and a silently missing temp directory would be the first sign of one.
             if (failure is DirectoryNotFoundException)
                 throw;
 
