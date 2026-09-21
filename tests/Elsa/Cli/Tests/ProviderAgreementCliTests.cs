@@ -29,7 +29,7 @@ public sealed class ProviderAgreementCliTests : IDisposable
         Assert.Equal("checked", HostFact("providerAgreement"));
         Assert.Equal("agree", HostFact("shell"));
         Assert.Equal("Production", HostFact("environment"));
-        Assert.Contains("environment-variable configuration overrides are invisible", HostFact("providerAgreementNote"), StringComparison.Ordinal);
+        Assert.Contains("environment-variable configuration overrides are invisible", run.Text, StringComparison.Ordinal);
     }
 
     /// <summary>User Story 1 scenario 5: the agreeing feature does not speak for the module.</summary>
@@ -54,6 +54,46 @@ public sealed class ProviderAgreementCliTests : IDisposable
         Assert.Equal(ToolExitCode.ResolutionFailure, run.ExitCode);
         Assert.Contains(Bookmarks, run.Text, StringComparison.Ordinal);
         Assert.DoesNotContain($"'{Runtime}'", run.Text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// With no <c>--shell</c>, <see cref="ShellConfiguration.EnabledFeatures(string?)"/> aggregates across
+    /// every shell the fixture configures, not just one — the front-end path a run naming <c>--shell</c>
+    /// never exercises. <c>Workflows.Runtime</c> is backed by a feature that several of this fixture's
+    /// shells configure, and three of them disagree with <c>--provider</c> in this default (Production)
+    /// environment: <c>array-shape</c> is left at its base file's <c>Sqlite</c> (no overlay), and
+    /// <c>one-offender</c>/<c>unset-offender</c> configure <c>Sqlite</c> for the bookmarks feature. A
+    /// disagreement in any one configured shell must still refuse, and must still name that shell.
+    /// </summary>
+    [Fact]
+    public void Omitting_shell_aggregates_every_configured_shell_and_refuses_on_any_disagreement()
+    {
+        var run = Script(shell: null, "PostgreSql", "--modules", "Workflows.Runtime");
+
+        Assert.Equal(ToolExitCode.ResolutionFailure, run.ExitCode);
+        Assert.Contains("provider-disagreement", run.Text, StringComparison.Ordinal);
+        Assert.Contains("shell 'array-shape'", run.Text, StringComparison.Ordinal);
+        Assert.Contains("shell 'one-offender'", run.Text, StringComparison.Ordinal);
+        Assert.Contains("shell 'unset-offender'", run.Text, StringComparison.Ordinal);
+        Assert.Contains($"'{Runtime}'", run.Text, StringComparison.Ordinal);
+        Assert.Contains("'Workflows.Runtime'", run.Text, StringComparison.Ordinal);
+        Assert.Contains("'Sqlite'", run.Text, StringComparison.Ordinal);
+        Assert.False(File.Exists(output.File(MigrationPlan.FileName)), "A refused run must write nothing.");
+    }
+
+    /// <summary>
+    /// The agreeing counterpart to the refusal above, proving the aggregated path also permits: no shell but
+    /// <c>agree</c> configures <c>WorkflowsDesignEntityFrameworkCore</c> at all, so aggregating across every
+    /// configured shell still finds only <c>agree</c>'s own agreeing value for <c>Workflows.Design</c>.
+    /// </summary>
+    [Fact]
+    public void Omitting_shell_aggregates_every_configured_shell_and_permits_when_none_disagree()
+    {
+        var run = Script(shell: null, "PostgreSql", "--modules", "Workflows.Design");
+
+        Assert.Equal(ToolExitCode.Success, run.ExitCode);
+        Assert.Equal("checked", HostFact("providerAgreement"));
+        Assert.Null(HostFact("shell"));
     }
 
     /// <summary>
@@ -244,8 +284,8 @@ public sealed class ProviderAgreementCliTests : IDisposable
         Assert.Contains("up to date", check.Text, StringComparison.Ordinal);
     }
 
-    private CliRun Script(string shell, string provider, params string[] selection) => DotnetElsa.Run(
-        ["persistence", "script", "--host", Host, "--provider", provider, .. selection, "--shell", shell, "--output", output.Path]);
+    private CliRun Script(string? shell, string provider, params string[] selection) => DotnetElsa.Run(
+        ["persistence", "script", "--host", Host, "--provider", provider, .. selection, .. shell is null ? [] : new[] { "--shell", shell }, "--output", output.Path]);
 
     private string? HostFact(string name)
     {

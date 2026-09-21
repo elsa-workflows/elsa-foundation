@@ -90,9 +90,9 @@ Which features are compared is decided by `[UsesEfModule("<module>")]` on the fe
   their migrations, and those are the ones compared.
 
 The manifest records `host.providerAgreement` as `checked` whenever that configuration was found, and
-`not-checked` only when none was found at all. It also states what the check cannot see: it reads those two
-files, not the process environment a running host additionally consults, so a live host's effective provider
-can differ from the one verified here.
+`not-checked` only when none was found at all. What the check cannot see is stated in the tool's own report
+output rather than in the manifest: it reads those two files, not the process environment a running host
+additionally consults, so a live host's effective provider can differ from the one verified here.
 
 ## Exit codes
 

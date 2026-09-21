@@ -138,7 +138,6 @@ internal static class EfMigrationPlan
             writer.WriteStartObject("host");
             writer.WriteString("name", facts.Host.Name);
             writer.WriteString("providerAgreement", facts.Host.ProviderAgreement);
-            writer.WriteString("providerAgreementNote", EfToolingProviderAgreement.Note);
             writer.WriteString("shell", facts.Host.Shell);
             writer.WriteString("environment", facts.Host.Environment);
             writer.WriteEndObject();

@@ -129,11 +129,24 @@ internal static class Report
         WriteTable(output, ["#", "MODULE", "CONTEXT", "HISTORY TABLE", "MIGRATIONS", "RANGE"], rows);
     }
 
+    /// <summary>
+    /// What the manifest's <c>host.providerAgreement</c> field cannot say for itself (FR-039): the check
+    /// reads <c>shells.json</c> plus its environment overlay, not a running host's own environment-variable
+    /// configuration overrides, so a live host's effective provider can differ from the one verified here.
+    /// Stated here, where an operator reading the run actually sees it, rather than as a manifest field —
+    /// the manifest's key set is frozen (FR-047).
+    /// </summary>
+    private const string ProviderAgreementNote =
+        "note: providerAgreement reflects shells.json plus its shells.<environment>.json overlay only. A " +
+        "running host's own environment-variable configuration overrides are invisible to this check, so " +
+        "its effective provider can differ from the one verified here.";
+
     private static void WriteScript(TextWriter output, JsonElement script)
     {
         foreach (var file in script.GetProperty("files").EnumerateArray())
             output.WriteLine($"{Text(file, "file")}  {Text(file, "sha256")}  {Text(file, "module")}");
         output.WriteLine($"{Text(script, "manifest")}  {Text(script, "manifestSha256")}");
+        output.WriteLine(ProviderAgreementNote);
     }
 
     private static void WriteApply(TextWriter output, JsonElement apply)
