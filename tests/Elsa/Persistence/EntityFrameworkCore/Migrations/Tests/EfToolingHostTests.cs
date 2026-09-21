@@ -64,6 +64,12 @@ public sealed class EfToolingHostTests : IDisposable
             // over-deletion those tests exist to catch.
             if (failure is DirectoryNotFoundException)
                 throw;
+
+            // Tolerated, but not silent. A swallowed teardown failure left no trace at all, so a leaked
+            // handle looked identical to a clean run; stderr keeps the run green while leaving the type and
+            // message in the log for whoever investigates the next flake.
+            Console.Error.WriteLine(
+                $"{nameof(EfToolingHostTests)} teardown could not remove '{root}': {failure.GetType().Name}: {failure.Message}");
         }
     }
 
