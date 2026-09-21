@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>
+      The EF Core adapter for the Modularity feature-activation guard (ADR 0076 D9): refuses to enable a
+      feature whose EF module has a pending migration while the host runs
+      Elsa:Persistence:EntityFramework:Migrate:Policy=Validate. Like the persistence policy package it
+      builds on, it references EF Core + Relational only — never a database provider engine — so that
+      Elsa.Modularity.Core and Elsa.Modularity.Nuplane stay free of EF altogether.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Core\Elsa.Modularity.Core.csproj" />
+    <ProjectReference Include="..\..\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -47,6 +47,12 @@ public sealed class ModularityFaultRenderer : IEndpointFaultRenderer
             case FeatureCatalogRevisionConflictException conflict:
                 await ModularityProblemWriting.WriteLegacyErrorAsync(context, conflict.Message, StatusCodes.Status409Conflict);
                 return true;
+            // An activation guard's refusal is a conflict with the host's current state — a schema that is
+            // behind, an engine that cannot bind — not a malformed request, so it is a 409 like the conflict
+            // above (ADR 0076 D9) and, deriving from InvalidOperationException too, ahead of that arm.
+            case FeatureActivationRefusedException refused:
+                await ModularityProblemWriting.WriteLegacyErrorAsync(context, refused.Message, StatusCodes.Status409Conflict);
+                return true;
             case ArgumentException argument:
                 await ModularityProblemWriting.WriteLegacyErrorAsync(context, argument.Message, StatusCodes.Status400BadRequest);
                 return true;

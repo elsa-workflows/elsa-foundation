@@ -9,7 +9,14 @@ namespace Elsa.Modularity.Core.Models;
 /// with anything a reader could recompute from that configuration and a guessed secret, such as an unkeyed hash.
 /// </param>
 /// <param name="Features">The enabled features and their stored configuration, secret values unmasked.</param>
+/// <param name="Configuration">
+/// The shell's own <c>Configuration</c> node, as CShells layers it over the host's configuration for every
+/// key a shell has not left unset — not the shell's feature settings, which <paramref name="Features"/>
+/// already carries. Left as the default <see cref="JsonElement"/> (not a JSON object) by a store that has
+/// no such node for this shell, or does not track one at all.
+/// </param>
 public sealed record ShellFeatureConfigurationSnapshot(
     string ShellId,
     string Revision,
-    IReadOnlyDictionary<string, JsonElement> Features);
+    IReadOnlyDictionary<string, JsonElement> Features,
+    JsonElement Configuration = default);

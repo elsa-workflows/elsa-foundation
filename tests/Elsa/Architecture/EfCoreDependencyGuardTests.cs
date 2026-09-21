@@ -300,6 +300,40 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     [Fact]
+    public void Every_admitted_activation_guard_project_resolves_only_its_reviewed_EF_closure()
+    {
+        var offenders = Adr0076ActivationGuardEf.ExpectedEfPackagesByProject
+            .SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
+            {
+                var resolved = ReadProjectEfPackages(project.Key, configuration);
+                var unexpected = FindUnexpectedEfPackages(resolved, project.Value)
+                    .Select(package => $"{project.Key} ({configuration}) unexpectedly resolves {package}");
+                var missing = FindUnexpectedEfPackages(project.Value, resolved)
+                    .Select(package => $"{project.Key} ({configuration}) no longer resolves reviewed package {package}");
+                return unexpected.Concat(missing);
+            }))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        Assert.True(offenders.Length == 0, Report("drift from the reviewed activation-guard EF closure", offenders));
+    }
+
+    /// <summary>
+    /// The adapter's reviewed closure is exact, so a provider engine appearing in it is flagged rather than
+    /// absorbed — proved here against the record itself, because a passing guard cannot show what it would
+    /// refuse (FR-063).
+    /// </summary>
+    [Fact]
+    public void The_activation_guard_closure_rejects_a_provider_engine()
+    {
+        var reviewed = Adr0076ActivationGuardEf.ExpectedEfPackagesByProject[Adr0076ActivationGuardEf.AdapterProject];
+
+        Assert.Equal(
+            ["Npgsql.EntityFrameworkCore.PostgreSQL"],
+            FindUnexpectedEfPackages([.. reviewed, "Npgsql.EntityFrameworkCore.PostgreSQL"], reviewed));
+    }
+
+    [Fact]
     public void Workbench_package_allowlist_rejects_an_unreviewed_transitive_wrapper()
     {
         const string assets = """
@@ -542,7 +576,8 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0073PublishingSnapshotReviewEf.IsProjectPath(relativePath) ||
                     Adr0073WorkflowsDesignEf.IsProjectPath(relativePath) ||
                     Adr0073ActivitiesDesignEf.IsProjectPath(relativePath) ||
-                    Adr0073Elsa3ImportEf.IsProjectPath(relativePath)));
+                    Adr0073Elsa3ImportEf.IsProjectPath(relativePath) ||
+                    Adr0076ActivationGuardEf.IsProjectPath(relativePath)));
         }
         return projects;
     }
@@ -687,6 +722,7 @@ public sealed class EfCoreDependencyGuardTests
                Adr0073WorkflowsDesignEf.IsSurfacePath(relativePath) ||
                Adr0073ActivitiesDesignEf.IsSurfacePath(relativePath) ||
                Adr0073Elsa3ImportEf.IsSurfacePath(relativePath) ||
+               Adr0076ActivationGuardEf.IsSurfacePath(relativePath) ||
                OpenIddictPersistenceArchitectureTests.IsWorkbenchVendorEfSource(relativePath);
     }
 
@@ -1215,6 +1251,52 @@ public sealed class EfCoreDependencyGuardTests
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
                 ["tests/Elsa/Workflows/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
+            };
+
+        public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
+
+        public static bool IsSurfacePath(string relativePath) =>
+            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
+
+        public static bool IsProjectPath(string relativePath) =>
+            ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
+
+        private static string[] CorePackages() =>
+        [
+            "Microsoft.EntityFrameworkCore",
+            "Microsoft.EntityFrameworkCore.Abstractions",
+            "Microsoft.EntityFrameworkCore.Analyzers",
+            "Microsoft.EntityFrameworkCore.Relational"
+        ];
+    }
+
+    /// <summary>
+    /// ADR 0076 D9's activation-guard adapter: the one project that bridges Modularity to EF, so that
+    /// Elsa.Modularity.Core and Elsa.Modularity.Nuplane keep no EF edge of their own. Admitted through its
+    /// own record rather than through <c>AllowedEfConsumers</c>, which licenses a host to carry provider
+    /// engines — the opposite of what this adapter may have (FR-063).
+    /// </summary>
+    internal static class Adr0076ActivationGuardEf
+    {
+        public static readonly string[] SurfacePathPrefixes =
+        [
+            "src/Elsa/Modularity/EntityFramework/",
+            "tests/Elsa/Modularity/EntityFramework/"
+        ];
+
+        public const string AdapterProject = "src/Elsa/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj";
+
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                // EF Core and Relational only: the guard reads a module's migrations history through EF's
+                // own abstractions, and binds the engine reflectively like every other Elsa package that
+                // never references one.
+                [AdapterProject] = CorePackages(),
+                // Its tests carry exactly one engine, which is also what makes their unbindable-provider
+                // case real rather than simulated.
+                ["tests/Elsa/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj"] =
+                [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
             };
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;

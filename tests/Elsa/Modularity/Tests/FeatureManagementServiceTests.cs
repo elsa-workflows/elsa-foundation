@@ -17,6 +17,8 @@ public sealed class FeatureManagementServiceTests
     private readonly FakeShellStore _store = new();
     private readonly FakeRuntimeRefresher _refresher = new();
     private readonly FakeShellReloader _reloader = new();
+    // Empty unless a test composes one: the ordinary host is the one that has no activation guard at all.
+    private readonly List<IFeatureActivationGuard> _guards = [];
 
     [Fact]
     public async Task CatalogMergesShellAndContributorFeatures()
@@ -201,7 +203,7 @@ public sealed class FeatureManagementServiceTests
     {
         var store = new FakeShellStore(StringComparer.Ordinal);
         store.Features[SecuredFeatureId] = Json($$"""{"SigningKey":"{{SigningKeyValue}}"}""");
-        var service = new FeatureManagementService(store, [SecuredFeature()], _refresher, _reloader);
+        var service = new FeatureManagementService(store, [SecuredFeature()], _guards, _refresher, _reloader);
         var catalog = await service.GetCatalogAsync();
 
         await service.ApplyAsync(new FeatureApplyRequest(
@@ -262,6 +264,111 @@ public sealed class FeatureManagementServiceTests
         Assert.Equal("slow", stored.GetProperty("Mode").GetString());
     }
 
+    /// <summary>
+    /// Spec 171 FR-060: a refusal stops the save, so nothing is stored, no catalog is refreshed and no
+    /// shell is reloaded — and the guard saw the request before any of that could happen.
+    /// </summary>
+    [Fact]
+    public async Task ApplyRefusedByAGuardSavesNothingAndRefreshesNothing()
+    {
+        var guard = new RefusingActivationGuard("NewFeature", "module 'Sample' has a pending migration");
+        _guards.Add(guard);
+        var service = CreateService(new ContributingFeatureCatalogContributor("NewFeature"));
+        var catalog = await service.GetCatalogAsync();
+
+        var exception = await Assert.ThrowsAsync<FeatureActivationRefusedException>(() =>
+            service.ApplyAsync(new FeatureApplyRequest(catalog.Revision, [new("NewFeature", true, Json("{}"))])));
+
+        Assert.Equal("module 'Sample' has a pending migration", exception.Message);
+        Assert.Equal("NewFeature", Assert.Single(exception.Refusals).Feature);
+        Assert.False(_store.Features.ContainsKey("NewFeature"));
+        Assert.Equal(0, _refresher.RefreshCount);
+        Assert.Equal(0, _reloader.ReloadCount);
+    }
+
+    /// <summary>Every guard is asked, so one apply reports every feature that would have been refused.</summary>
+    [Fact]
+    public async Task ApplyReportsEveryGuardsRefusals()
+    {
+        _guards.Add(new RefusingActivationGuard("First", "first reason"));
+        _guards.Add(new RefusingActivationGuard("Second", "second reason"));
+        var service = CreateService(
+            new ContributingFeatureCatalogContributor("First"),
+            new ContributingFeatureCatalogContributor("Second"));
+        var catalog = await service.GetCatalogAsync();
+
+        var exception = await Assert.ThrowsAsync<FeatureActivationRefusedException>(() =>
+            service.ApplyAsync(new FeatureApplyRequest(
+                catalog.Revision,
+                [new("First", true, Json("{}")), new("Second", true, Json("{}"))])));
+
+        Assert.Equal(new[] { "First", "Second" }, exception.Refusals.Select(refusal => refusal.Feature).ToArray());
+        Assert.Contains("first reason", exception.Message);
+        Assert.Contains("second reason", exception.Message);
+    }
+
+    /// <summary>
+    /// A guard that throws is not a guard that allowed the request: nothing is saved there either, and the
+    /// failure surfaces as itself rather than as a refusal it never made.
+    /// </summary>
+    [Fact]
+    public async Task ApplyDoesNotSaveWhenAGuardThrows()
+    {
+        _guards.Add(new ThrowingActivationGuard());
+        var service = CreateService(new ContributingFeatureCatalogContributor("NewFeature"));
+        var catalog = await service.GetCatalogAsync();
+
+        await Assert.ThrowsAsync<TimeoutException>(() =>
+            service.ApplyAsync(new FeatureApplyRequest(catalog.Revision, [new("NewFeature", true, Json("{}"))])));
+
+        Assert.False(_store.Features.ContainsKey("NewFeature"));
+        Assert.Equal(0, _refresher.RefreshCount);
+        Assert.Equal(0, _reloader.ReloadCount);
+    }
+
+    /// <summary>
+    /// FR-061's premise, which the EF guard's redaction obligation rests on: RestoreSecrets runs before
+    /// validation, so a guard reads the request's real, unmasked values and not the placeholder a client
+    /// round-tripped. A guard that assumed otherwise would probe a database with the placeholder as its
+    /// password and report it as unreachable.
+    /// </summary>
+    [Fact]
+    public async Task AGuardSeesTheRequestsRestoredSecretsRatherThanThePlaceholder()
+    {
+        _store.Features[SecuredFeatureId] = Json($$"""{"SigningKey":"{{SigningKeyValue}}"}""");
+        var guard = new CapturingActivationGuard();
+        _guards.Add(guard);
+        var service = CreateService(SecuredFeature());
+        var catalog = await service.GetCatalogAsync();
+
+        await service.ApplyAsync(new FeatureApplyRequest(
+            catalog.Revision,
+            catalog.Features.Where(x => x.Enabled).Select(x => new FeatureApplyItem(x.Id, true, x.Configuration)).ToArray()));
+
+        var seen = Assert.Single(guard.Context!.EnabledFeatures);
+        Assert.Equal(SecuredFeatureId, seen.Id);
+        Assert.Equal(SigningKeyValue, seen.Configuration.GetProperty("SigningKey").GetString());
+        Assert.Equal(catalog.Revision, guard.Context.Shell.Revision);
+    }
+
+    /// <summary>
+    /// FR-070: a host that composes no guard keeps today's ordering exactly — shells.json is written first,
+    /// and the shell's own Validate-policy check is what refuses later, after the save.
+    /// </summary>
+    [Fact]
+    public async Task ApplyWithNoGuardComposedSavesAsBefore()
+    {
+        var service = CreateService(new ContributingFeatureCatalogContributor("NewFeature"));
+        var catalog = await service.GetCatalogAsync();
+
+        await service.ApplyAsync(new FeatureApplyRequest(catalog.Revision, [new("NewFeature", true, Json("{}"))]));
+
+        Assert.Empty(_guards);
+        Assert.True(_store.Features.ContainsKey("NewFeature"));
+        Assert.Equal(1, _refresher.RefreshCount);
+        Assert.Equal(1, _reloader.ReloadCount);
+    }
+
     private static ContributingFeatureCatalogContributor SecuredFeature(string featureId = SecuredFeatureId) =>
         new(
             featureId,
@@ -283,7 +390,7 @@ public sealed class FeatureManagementServiceTests
     }
 
     private FeatureManagementService CreateService(params IFeatureCatalogContributor[] contributors) =>
-        new(_store, contributors, _refresher, _reloader);
+        new(_store, contributors, _guards, _refresher, _reloader);
 
     private static JsonElement Json(string json) =>
         JsonDocument.Parse(json).RootElement.Clone();
@@ -299,6 +406,29 @@ public sealed class FeatureManagementServiceTests
             feature.SourceKind = FeatureSourceKinds.Runtime;
             feature.Settings = Settings;
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RefusingActivationGuard(string feature, string reason) : IFeatureActivationGuard
+    {
+        public Task<FeatureActivationDecision> EvaluateAsync(FeatureActivationContext context, CancellationToken cancellationToken = default) =>
+            Task.FromResult(FeatureActivationDecision.Refused(new FeatureActivationRefusal(feature, reason)));
+    }
+
+    private sealed class ThrowingActivationGuard : IFeatureActivationGuard
+    {
+        public Task<FeatureActivationDecision> EvaluateAsync(FeatureActivationContext context, CancellationToken cancellationToken = default) =>
+            throw new TimeoutException("the guard could not decide");
+    }
+
+    private sealed class CapturingActivationGuard : IFeatureActivationGuard
+    {
+        public FeatureActivationContext? Context { get; private set; }
+
+        public Task<FeatureActivationDecision> EvaluateAsync(FeatureActivationContext context, CancellationToken cancellationToken = default)
+        {
+            Context = context;
+            return Task.FromResult(FeatureActivationDecision.Allowed);
         }
     }
 }

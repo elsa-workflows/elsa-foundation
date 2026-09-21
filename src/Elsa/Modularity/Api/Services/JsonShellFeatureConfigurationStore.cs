@@ -108,15 +108,32 @@ public sealed class JsonShellFeatureConfigurationStore(
         }
 
         var revision = CreateRevision(featuresNode.ToJsonString(JsonOptions));
-        return new ShellFeatureConfigurationSnapshot(CurrentShellId, revision, features);
+        var shellConfiguration = GetOptionalConfigurationNode(document.Document);
+        return new ShellFeatureConfigurationSnapshot(CurrentShellId, revision, features, shellConfiguration);
     }
 
-    private JsonObject GetFeaturesNode(JsonObject document, bool create)
+    private JsonObject GetFeaturesNode(JsonObject document, bool create) =>
+        GetObject(GetShellNode(document, create), "Features", create);
+
+    /// <summary>
+    /// The shell's own <c>Configuration</c> node — the same one <c>EfMigrateOptions</c> documents as
+    /// overriding the host's <c>Elsa:Persistence:EntityFramework:Migrate:Policy</c> — or an empty object
+    /// when the shell declares none. Unlike <see cref="GetFeaturesNode"/>, absence here is not an error: most
+    /// shells override nothing.
+    /// </summary>
+    private JsonElement GetOptionalConfigurationNode(JsonObject document)
+    {
+        var shell = GetShellNode(document, create: false);
+        return shell["Configuration"] is JsonObject configuration
+            ? JsonSerializer.Deserialize<JsonElement>(configuration.ToJsonString())
+            : s_emptyObject;
+    }
+
+    private JsonObject GetShellNode(JsonObject document, bool create)
     {
         var shells = GetObject(document, "CShells", create);
         shells = GetObject(shells, "Shells", create);
-        var shell = GetObjectCaseInsensitive(shells, CurrentShellId, create);
-        return GetObject(shell, "Features", create);
+        return GetObjectCaseInsensitive(shells, CurrentShellId, create);
     }
 
     private static JsonObject GetObject(JsonObject parent, string propertyName, bool create)
