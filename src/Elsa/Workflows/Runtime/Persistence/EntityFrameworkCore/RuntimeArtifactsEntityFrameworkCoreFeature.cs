@@ -16,6 +16,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
     DisplayName = "Workflows Runtime EF Core Executable Artifact Persistence",
     Description = "Opt-in EF Core persistence for runtime executable artifacts, templates and source references. It applies or validates the shared Runtime migrations on shell activation;",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
+[UsesEfModule("Workflows.Runtime")]
 public class RuntimeArtifactsEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(

@@ -11,6 +11,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 [ManifestFeatureCategory("Runtime")]
 [ManifestFeatureCategory("Persistence")]
 [ShellFeature(name: "WorkflowsRuntimeAlterationEntityFrameworkCorePersistence", DisplayName = "Workflows Runtime EF Core Alteration Persistence", Description = "Opt-in EF Core persistence for alteration plans and jobs.", DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
+[UsesEfModule("Workflows.Runtime")]
 public sealed class RuntimeWorkflowAlterationEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(DisplayName = "Provider", Description = "Relational provider: Sqlite, SqlServer, PostgreSql, or MySql.", Category = "Persistence")]

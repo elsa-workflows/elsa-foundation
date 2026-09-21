@@ -58,13 +58,23 @@ public static class EfToolingPackageSource
     public static readonly string[] All = [HostDepsFile, ResolvedNupkg];
 }
 
-/// <summary>What the provider-agreement check (FR-039, slice 9) reports about a run.</summary>
+/// <summary>What the per-feature provider-agreement check (FR-039) reports about a run.</summary>
 public static class EfToolingProviderAgreement
 {
     public const string Checked = "checked";
     public const string NotChecked = "not-checked";
 
     public static readonly string[] All = [Checked, NotChecked];
+
+    /// <summary>
+    /// What <c>providerAgreement</c> does <i>not</i> cover, stated in every manifest because FR-039 requires
+    /// the artifact itself to say it: the check reads files, and a running host also reads its process
+    /// environment, so a live host's effective provider can differ from the one verified here.
+    /// </summary>
+    public const string Note =
+        "providerAgreement reflects shells.json plus its shells.<environment>.json overlay only. A running " +
+        "host's own environment-variable configuration overrides are invisible to this check, so its " +
+        "effective provider can differ from the one verified here.";
 }
 
 /// <summary>One request. Every property is nullable so a missing one is refused with a message rather than bound to a default.</summary>
@@ -98,6 +108,16 @@ public sealed class EfToolingRequest
     public IReadOnlyList<EfToolingPackageFacts>? Packages { get; init; }
 
     /// <summary>
+    /// The host's enabled shell features, as the CLI read them from <c>shells.json</c> plus its
+    /// <c>--environment</c> overlay (FR-035). Present — even empty — exactly when that configuration was
+    /// found, which is what <c>providerAgreement: checked</c> means; absent when none was found at all.
+    /// Required by selection kind <c>from-host</c>, which has nothing to select from without it. Carries
+    /// each feature's <c>Provider</c> setting and nothing else: no other shell setting travels here, so no
+    /// connection string can (D7).
+    /// </summary>
+    public IReadOnlyList<EfToolingShellFeature>? Shells { get; init; }
+
+    /// <summary>
     /// The connection string <c>apply</c>, <c>validate</c> and <c>post-migrate</c> run against. Required for
     /// those three commands, refused otherwise — <c>list</c>, <c>plan</c> and <c>script</c> never open a
     /// database (D7). This is the one field this build never echoes back: not in a response, a refusal
@@ -109,14 +129,39 @@ public sealed class EfToolingRequest
 /// <summary>Which modules a command runs against. Discriminated rather than inferred from a null list.</summary>
 public sealed class EfToolingSelection
 {
-    /// <summary><c>all</c> or <c>modules</c>.</summary>
+    /// <summary><c>all</c>, <c>modules</c> or <c>from-host</c>.</summary>
     public string? Kind { get; init; }
 
-    /// <summary>The canonical <c>--modules</c> names, matched case-insensitively. Required for <c>modules</c>, refused for <c>all</c>.</summary>
+    /// <summary>The canonical <c>--modules</c> names, matched case-insensitively. Required for <c>modules</c>, refused for the other two kinds.</summary>
     public IReadOnlyList<string>? Modules { get; init; }
 
     public const string AllKind = "all";
     public const string ModulesKind = "modules";
+
+    /// <summary>Every module the host's enabled shell features map to through <c>[UsesEfModule]</c> (FR-028).</summary>
+    public const string FromHostKind = "from-host";
+}
+
+/// <summary>
+/// One feature a shell enables, reduced to what the provider-agreement check needs: which shell enabled it,
+/// the CShells feature name it was enabled under, and its configured <c>Provider</c> setting.
+/// </summary>
+/// <remarks>
+/// A feature the shell disables never reaches this list — an unenabled feature is ignored (FR-036) — and no
+/// setting other than <c>Provider</c> is carried, deliberately: shell configuration holds connection
+/// strings, and the narrowest possible projection of it is the one that cannot leak one into a request, a
+/// response, or a refusal.
+/// </remarks>
+public sealed class EfToolingShellFeature
+{
+    /// <summary>The shell that enables this feature.</summary>
+    public string? Shell { get; init; }
+
+    /// <summary>The CShells feature name, matched case-insensitively against <c>[ShellFeature]</c>.</summary>
+    public string? Feature { get; init; }
+
+    /// <summary>The configured <c>Provider</c> value, or <c>null</c> when the shell sets none (FR-037).</summary>
+    public string? Provider { get; init; }
 }
 
 /// <summary>The <c>host</c> block of <c>migration-plan.json</c> (FR-047).</summary>
@@ -124,7 +169,7 @@ public sealed class EfToolingHostFacts
 {
     public string? Name { get; init; }
 
-    /// <summary>One of <see cref="EfToolingProviderAgreement.All"/>; defaults to <c>not-checked</c>, which is what this slice can honestly claim.</summary>
+    /// <summary>One of <see cref="EfToolingProviderAgreement.All"/>. <c>checked</c> exactly when the host's shells configuration was found and compared; <c>not-checked</c> only when none was found at all.</summary>
     public string? ProviderAgreement { get; init; }
 
     public string? Shell { get; init; }

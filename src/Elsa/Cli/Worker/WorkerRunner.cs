@@ -80,7 +80,7 @@ internal static class WorkerRunner
             ToolVersion);
 
         if (command == WorkerCommands.List)
-            return await Respond(tooling, new { version = 1, command, selection = Selection(request.Selection) }, cancellationToken);
+            return await Respond(tooling, new { version = 1, command, selection = Selection(request.Selection), shells = Shells(request) }, cancellationToken);
 
         var provider = tooling.CanonicalProvider(request.Provider ?? throw WorkerRefusal.Usage("invalid-request", $"'{command}' needs a provider."));
 
@@ -105,6 +105,7 @@ internal static class WorkerRunner
                     provider,
                     schema = request.Schema,
                     selection = Selection(request.Selection),
+                    shells = Shells(request),
                     connection = ResolveConnection(request)
                 },
                 cancellationToken);
@@ -115,7 +116,7 @@ internal static class WorkerRunner
         {
             return await Respond(
                 tooling,
-                new { version = 1, command, provider, schema = request.Schema, selection = Selection(request.Selection) },
+                new { version = 1, command, provider, schema = request.Schema, selection = Selection(request.Selection), shells = Shells(request) },
                 cancellationToken);
         }
 
@@ -210,7 +211,7 @@ internal static class WorkerRunner
         CancellationToken cancellationToken)
     {
         var (exitCode, response) = await tooling.InvokeAsync(
-            new { version = 1, command = WorkerCommands.List, selection = Selection(request.Selection) },
+            new { version = 1, command = WorkerCommands.List, selection = Selection(request.Selection), shells = Shells(request) },
             cancellationToken);
         if (exitCode != ToolExitCode.Success)
             return ([], new() { ExitCode = exitCode, Tooling = response });
@@ -269,12 +270,14 @@ internal static class WorkerRunner
         schema = request.Schema,
         output = request.Output,
         selection = Selection(request.Selection),
+        shells = Shells(request),
         host = new
         {
             name = request.HostName,
-            // Slice 9 adds the per-feature comparison; until it does, claiming anything else would tell a
-            // reviewer a check ran that did not.
-            providerAgreement = "not-checked",
+            // "checked" states that the per-feature comparison ran, which it does exactly when the host's
+            // shells configuration was found beside it (FR-039). Claiming it for a run that found none
+            // would tell a reviewer a check ran that did not.
+            providerAgreement = request.Shells is null ? "not-checked" : "checked",
             shell = request.Shell,
             environment = request.Environment
         },
@@ -291,6 +294,17 @@ internal static class WorkerRunner
 
     private static object? Selection(WorkerSelection? selection) =>
         selection is null ? null : new { kind = selection.Kind, modules = selection.Modules };
+
+    /// <summary>
+    /// The host's enabled shell features as the tooling entry point reads them, or <c>null</c> when the
+    /// front end found no shells configuration beside the host — the one case that reports
+    /// <c>providerAgreement: not-checked</c>. An empty list is not that case: it means the configuration was
+    /// found and enables no feature this closure maps to a module.
+    /// </summary>
+    private static object[]? Shells(WorkerRequest request) =>
+        request.Shells is null
+            ? null
+            : [.. request.Shells.Select(feature => new { shell = feature.Shell, feature = feature.Feature, provider = feature.Provider })];
 
     /// <summary>
     /// Resolves the connection the database-opening commands pass to the host's tooling entry point (D7).

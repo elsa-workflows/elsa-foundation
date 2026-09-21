@@ -16,6 +16,7 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore;
     // The command enlists the Activities and Workflows Design EF contexts in its transaction, and this
     // feature registers neither; naming both lanes is what makes selecting it alone compose correctly.
     DependsOn = new object[] { "ActivitiesDesignEntityFrameworkCore", "WorkflowsDesignEntityFrameworkCore" })]
+[UsesEfModule("Elsa3.Activities.Design.Import")]
 public class Elsa3ImportActivitiesEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(DisplayName = "Provider", Description = "Sqlite, SqlServer, PostgreSql, or MySql. Must match the Design EF Core lanes.", Category = "Persistence")]

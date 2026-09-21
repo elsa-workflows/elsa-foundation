@@ -57,14 +57,42 @@ nothing.
 | `--host <dir>` | Required. The host's published or built output directory. |
 | `--packages <dir>` | Repeatable. A package root to resolve modules from; never populated by this tool. |
 | `--provider` | Required for `plan`, `script`, `apply` and `validate`, and authoritative: no command substitutes another. |
-| `--modules`, `--all` | Exactly one, for `plan`, `script`, `apply` and `validate`. `list` defaults to every module; `script-check` takes neither, because the committed plan is what it checks against. |
+| `--modules`, `--all`, `--from-host` | Exactly one, for `plan`, `script`, `apply` and `validate`. `--from-host` selects every module the host's own enabled shell features declare a dependency on. `list` defaults to every module; `script-check` takes none of them, because the committed plan is what it checks against. |
+| `--shell <name>` | The shell whose features are read. With none given, every shell the host configures is read. |
 | `--schema`, `--output` | `--output` is required for `script`. |
-| `--environment <name>` | Recorded in the manifest. Default `Production`. |
+| `--environment <name>` | Which `shells.<name>.json` overlay is read, and what the manifest records. Default `Production` — ASP.NET Core's own default, never this tool's own `ASPNETCORE_ENVIRONMENT`. |
 | `--idempotent` | Accepted and implied: every script is idempotent. |
 | `--connection-env <NAME>` | `apply`/`validate` only. Default `ELSA_EF_CONNECTION`. Reads the connection from this process's own named environment variable. |
 | `--connection-stdin` | `apply`/`validate` only. Reads the connection from this process's own stdin instead. |
 
 There is no `--connection` flag (D7): giving one is a usage error, not a silently ignored value.
+
+## Provider agreement
+
+`--provider` is authoritative (D4). Whenever the host's shell configuration is found beside its output —
+`shells.json` plus the `shells.<environment>.json` overlay when that file exists — the tool compares it
+against `--provider` and exits 3 on any disagreement, under **any** selector and not only `--from-host`.
+
+The comparison is **per feature, not per module**. `Workflows.Runtime` alone is backed by eight shell
+features that each carry their own `Provider` while registering against the same context, so taking any one
+of them for the module's would let a correctly configured feature mask a wrongly configured one. Every
+offender is listed, by feature name, the selected module(s) it backs, and its configured value; agreement by
+one feature of a module never speaks for another.
+
+Which features are compared is decided by `[UsesEfModule("<module>")]` on the feature class:
+
+- A feature that is not enabled in the shell is ignored.
+- A feature that declares a `Provider` setting and leaves it unset is compared as `Sqlite`, which is that
+  feature's own default.
+- A feature that declares **no** `Provider` setting at all — `WorkflowsDashboardEntityFrameworkCoreFeature`,
+  which reads two modules' contexts and registers migrations for neither — is skipped entirely. It is not
+  defaulted to `Sqlite`: the provider of the contexts it reads is decided by the features that register
+  their migrations, and those are the ones compared.
+
+The manifest records `host.providerAgreement` as `checked` whenever that configuration was found, and
+`not-checked` only when none was found at all. What the check cannot see is stated in the tool's own report
+output rather than in the manifest: it reads those two files, not the process environment a running host
+additionally consults, so a live host's effective provider can differ from the one verified here.
 
 ## Exit codes
 

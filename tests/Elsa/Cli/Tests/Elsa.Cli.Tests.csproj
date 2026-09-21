@@ -30,6 +30,7 @@
     <ProjectReference Include="..\Fixtures\MinimalHost\Elsa.Cli.Fixtures.MinimalHost.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Fixtures\CollisionHost\Elsa.Cli.Fixtures.CollisionHost.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Fixtures\NuplaneHost\Elsa.Cli.Fixtures.NuplaneHost.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Fixtures\ShellsHost\Elsa.Cli.Fixtures.ShellsHost.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

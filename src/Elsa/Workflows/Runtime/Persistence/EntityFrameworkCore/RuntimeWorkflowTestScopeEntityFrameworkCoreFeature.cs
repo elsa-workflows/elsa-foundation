@@ -11,6 +11,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 [ManifestFeatureCategory("Runtime")]
 [ManifestFeatureCategory("Persistence")]
 [ShellFeature(name: "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence", DisplayName = "Workflows Runtime EF Core Test-Scope Persistence", Description = "Opt-in EF Core persistence for workflow test scopes.", DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
+[UsesEfModule("Workflows.Runtime")]
 public sealed class RuntimeWorkflowTestScopeEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(DisplayName = "Provider", Description = "Relational provider: Sqlite, SqlServer, PostgreSql, or MySql.", Category = "Persistence")]

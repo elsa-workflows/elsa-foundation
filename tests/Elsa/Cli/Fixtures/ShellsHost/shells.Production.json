@@ -1,0 +1,12 @@
+{
+  "//": "The environment overlay a host layers on top of shells.json at startup. --environment defaults to Production, so this is the overlay a run with no --environment reads.",
+  "CShells": {
+    "Shells": {
+      "overlay": {
+        "Features": {
+          "WorkflowsRuntimeEntityFrameworkCore": { "Provider": "PostgreSql" }
+        }
+      }
+    }
+  }
+}

@@ -21,6 +21,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
     DisplayName = "Workflows Runtime EF Core Persistence",
     Description = "Persists the complete workflow runtime state (R01-R29) through EF Core on one relational database, and applies or validates its migrations on shell activation.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
+[UsesEfModule("Workflows.Runtime")]
 public class RuntimeEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(

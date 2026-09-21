@@ -13,6 +13,7 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
     name: "IdentityProviderConfigurationEntityFrameworkCore",
     DisplayName = "Identity Provider Configuration Entity Framework Core Persistence",
     Description = "Opt-in EF Core persistence for tenant and global Identity provider configurations. It replaces only the provider-configuration stores; schema provisioning is deferred.")]
+[UsesEfModule("Identity.ProviderConfiguration")]
 public class IdentityProviderConfigurationEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(DisplayName = "Provider", Description = "Relational provider for provider-configuration persistence: Sqlite, SqlServer, PostgreSql, or MySql. The host must reference that provider package.", Category = "Persistence")]

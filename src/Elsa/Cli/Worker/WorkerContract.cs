@@ -97,8 +97,17 @@ public sealed record WorkerRequest
     /// <summary>The <c>--environment</c> value the manifest records (FR-038, FR-047).</summary>
     public string? Environment { get; init; }
 
-    /// <summary>The <c>--shell</c> the provider-agreement check used, once slice 9 adds one.</summary>
+    /// <summary>The <c>--shell</c> the provider-agreement check was narrowed to, or <c>null</c> for every configured shell.</summary>
     public string? Shell { get; init; }
+
+    /// <summary>
+    /// The host's enabled shell features, read from <c>shells.json</c> plus its <c>--environment</c> overlay
+    /// (FR-035). Present — even empty — exactly when that configuration was found beside the host, which is
+    /// what the manifest's <c>providerAgreement: checked</c> states; <c>null</c> when none was found at all.
+    /// Each entry carries a feature's <c>Provider</c> setting and nothing else: no other shell setting is
+    /// lifted out of the file, so no connection string can travel here.
+    /// </summary>
+    public IReadOnlyList<WorkerShellFeature>? Shells { get; init; }
 
     /// <summary>
     /// The name of the environment variable <c>--connection-env</c> names (D7). Only its name travels here;
@@ -121,9 +130,26 @@ public sealed record WorkerSelection
     public const string AllKind = "all";
     public const string ModulesKind = "modules";
 
+    /// <summary>Every module the host's own enabled shell features map to through <c>[UsesEfModule]</c> (FR-028).</summary>
+    public const string FromHostKind = "from-host";
+
     public string? Kind { get; init; }
 
     public IReadOnlyList<string>? Modules { get; init; }
+}
+
+/// <summary>
+/// One feature a shell enables, reduced to what the provider-agreement check needs: the shell, the CShells
+/// feature name, and that feature's configured <c>Provider</c> setting (<c>null</c> when the shell sets
+/// none). A feature a shell disables never appears here — an unenabled feature is ignored (FR-036).
+/// </summary>
+public sealed record WorkerShellFeature
+{
+    public string? Shell { get; init; }
+
+    public string? Feature { get; init; }
+
+    public string? Provider { get; init; }
 }
 
 /// <summary>One response from the worker to the front end.</summary>
