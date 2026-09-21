@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><IsTestProject>true</IsTestProject></PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->
+    <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\UnorderedRowLimitGuard.cs" Link="UnorderedRowLimitGuard.cs" />
+    <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\TemporarySqliteDatabase.cs" Link="TemporarySqliteDatabase.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Wrapped provider failures this suite injects without a real server. -->
+    <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\ProviderFailures.cs" Link="ProviderFailures.cs" />
+  </ItemGroup>
+</Project>

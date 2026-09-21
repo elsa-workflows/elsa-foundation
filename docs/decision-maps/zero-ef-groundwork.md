@@ -260,7 +260,7 @@ The comparison lane assumes an EF implementation exists to compare against. For 
 
 ### Answer
 
-Far fewer than the removal narrative implies. **No runtime persistence seam has ever had an EF-Core-backed implementation.** Every runtime seam resolves to `InMemory*` by `TryAdd*` default and to `Groundwork*` through `AddGroundworkRuntimeStores`; there is no third registration. `git log --all --name-only -- "src/Elsa/Workflows/Runtime/**EFCore**"` is empty, so this is a permanent structural fact and not a deletion that already happened. The EF stores that did once exist were *design* persistence, removed under spec 093.
+Far fewer than the removal narrative implies. **No runtime persistence seam has ever had an EF-Core-backed implementation.** Every runtime seam resolves to `InMemory*` by `TryAdd*` default and to `Groundwork*` through `AddGroundworkRuntimeStores`; there is no third registration. `git log --all --name-only -- "src/essentials/Workflows/Runtime/**EFCore**"` is empty, so this is a permanent structural fact and not a deletion that already happened. The EF stores that did once exist were *design* persistence, removed under spec 093.
 
 The complete set of contracts with both an EF and a Groundwork implementation:
 

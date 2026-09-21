@@ -2,7 +2,7 @@
 """Extract the Elsa 4 (elsa-foundation) activity contract surface from C# source.
 
 Mirrors extract_elsa3.py so the two documents can be diffed directly. Reads the
-attribute model in src/Elsa/Activities/Runtime/Core/Attributes/:
+attribute model in src/essentials/Activities/Runtime/Core/Attributes/:
 ActivityInput, Output, ActivityOutcome, ActivityValueOutcomes, Required,
 TriggerActivity, ActivityChildSlot.
 """
@@ -13,7 +13,7 @@ import sys
 
 REPO = os.environ.get("ELSA_FOUNDATION_ROOT") or os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", ".."))
-ROOT = os.path.join(REPO, "src", "Elsa", "Activities")
+ROOT = os.path.join(REPO, "src", "essentials", "Activities")
 
 CLASS_TOKEN_RE = re.compile(
     r"(?:^|\n)\s*(?:public|internal)\s+(?:sealed\s+|abstract\s+|partial\s+|static\s+)*"

@@ -5,7 +5,7 @@
 > and how to model time-bounded waits without confusing handle validity with workflow behavior.
 > **Knowledge role:** worked reference. Canonical short definitions live in the
 > [Elsa glossary](glossary/elsa.md); runtime extension-point contracts live in
-> [`Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](../src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md).
+> [`Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](../src/essentials/Workflows/Runtime/EXTENSION_POINTS.md).
 
 ## Contract
 
@@ -97,14 +97,14 @@ suspend/resume cycle.
 
 ## Runtime evidence
 
-- [`BookmarkStimulusLookup`](../src/Elsa/Workflows/Runtime/Services/Bookmarks/BookmarkStimulusLookup.cs) applies
+- [`BookmarkStimulusLookup`](../src/essentials/Workflows/Runtime/Services/Bookmarks/BookmarkStimulusLookup.cs) applies
   the per-execution cutoff.
-- [`GlobalBookmarkStimulusLookup`](../src/Elsa/Workflows/Runtime/Services/Bookmarks/GlobalBookmarkStimulusLookup.cs)
+- [`GlobalBookmarkStimulusLookup`](../src/essentials/Workflows/Runtime/Services/Bookmarks/GlobalBookmarkStimulusLookup.cs)
   applies the same cutoff to cross-execution and type-scoped lookup.
-- [`BookmarkResumeDispatcher`](../src/Elsa/Workflows/Runtime/Services/Bookmarks/BookmarkResumeDispatcher.cs)
+- [`BookmarkResumeDispatcher`](../src/essentials/Workflows/Runtime/Services/Bookmarks/BookmarkResumeDispatcher.cs)
   evaluates lookup against the runtime clock and treats an expired bookmark as not found.
-- [`RuntimeDbContext`](../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeDbContext.cs)
+- [`RuntimeDbContext`](../src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeDbContext.cs)
   declares bookmark indexes by workflow execution and stimulus identity, not by expiration.
-- [`RuntimeBookmarkStimulusResumeDispatchTests`](../tests/Elsa/Workflows/Runtime/Tests/RuntimeBookmarkStimulusResumeDispatchTests.cs)
-  and [`GlobalBookmarkStimulusLookupTests`](../tests/Elsa/Workflows/Runtime/Tests/GlobalBookmarkStimulusLookupTests.cs)
+- [`RuntimeBookmarkStimulusResumeDispatchTests`](../tests/essentials/Workflows/Runtime/Tests/RuntimeBookmarkStimulusResumeDispatchTests.cs)
+  and [`GlobalBookmarkStimulusLookupTests`](../tests/essentials/Workflows/Runtime/Tests/GlobalBookmarkStimulusLookupTests.cs)
   pin the non-expired matching rule.

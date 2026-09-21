@@ -91,12 +91,12 @@
         "Elsa.Workflows.Runtime.Tests"
       ],
       "requiredRootPaths": [
-        "src/Elsa/Workflows/Runtime/Elsa.Workflows.Runtime.csproj",
-        "src/Elsa/Workflows/Publishing/Elsa.Workflows.Publishing.csproj",
-        "src/Elsa/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj",
-        "src/Elsa/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
-        "tests/Elsa/Architecture/ExtensionBoundary/Tests/Elsa.Architecture.ExtensionBoundary.Tests.csproj",
-        "tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj"
+        "src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime.csproj",
+        "src/essentials/Workflows/Publishing/Elsa.Workflows.Publishing.csproj",
+        "src/essentials/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj",
+        "src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
+        "tests/essentials/Architecture/ExtensionBoundary/Tests/Elsa.Architecture.ExtensionBoundary.Tests.csproj",
+        "tests/essentials/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj"
       ],
       "excludeRootPathContains": [
         "/Samples/"
@@ -108,12 +108,12 @@
     {
       "outputPath": "Elsa.Server.Workflows.Publishing.slnf",
       "includeProjectPathPrefixes": [
-        "src/Elsa/Workflows/Publishing/",
-        "tests/Elsa/Workflows/Publishing/"
+        "src/essentials/Workflows/Publishing/",
+        "tests/essentials/Workflows/Publishing/"
       ],
       "requiredRootPaths": [
-        "src/Elsa/Workflows/Publishing/Elsa.Workflows.Publishing.csproj",
-        "tests/Elsa/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj"
+        "src/essentials/Workflows/Publishing/Elsa.Workflows.Publishing.csproj",
+        "tests/essentials/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj"
       ],
       "excludeWhenPackageReferencePrefixes": [
         "Testcontainers."
@@ -122,22 +122,22 @@
     {
       "outputPath": "Elsa.Server.Workflows.Runtime.slnf",
       "includeProjectPathPrefixes": [
-        "src/Elsa/Activities/Runtime/",
-        "src/Elsa/Activities/DispatchWorkflow/Runtime/",
-        "src/Elsa/Activities/Graph/Runtime/",
-        "src/Elsa/Workflows/Runtime/",
-        "tests/Elsa/Activities/Runtime/",
-        "tests/Elsa/Activities/DispatchWorkflow/",
-        "tests/Elsa/Activities/Graph/",
-        "tests/Elsa/Workflows/Runtime/"
+        "src/essentials/Activities/Runtime/",
+        "src/essentials/Activities/DispatchWorkflow/Runtime/",
+        "src/essentials/Activities/Graph/Runtime/",
+        "src/essentials/Workflows/Runtime/",
+        "tests/essentials/Activities/Runtime/",
+        "tests/essentials/Activities/DispatchWorkflow/",
+        "tests/essentials/Activities/Graph/",
+        "tests/essentials/Workflows/Runtime/"
       ],
       "requiredRootPaths": [
-        "src/Elsa/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj",
-        "src/Elsa/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj",
-        "src/Elsa/Workflows/Runtime/Elsa.Workflows.Runtime.csproj",
-        "tests/Elsa/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj",
-        "tests/Elsa/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj",
-        "tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj"
+        "src/essentials/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj",
+        "src/essentials/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj",
+        "src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime.csproj",
+        "tests/essentials/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj",
+        "tests/essentials/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj",
+        "tests/essentials/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj"
       ],
       "excludeWhenPackageReferencePrefixes": [
         "Testcontainers."
@@ -146,22 +146,22 @@
     {
       "outputPath": "Elsa.Server.Workflows.Design.slnf",
       "includeProjectPathPrefixes": [
-        "src/Elsa/Activities/Design/",
-        "src/Elsa/Activities/DispatchWorkflow/Design/",
-        "src/Elsa/Activities/Graph/Design/",
-        "src/Elsa/Workflows/Design/",
-        "tests/Elsa/Activities/Design/",
-        "tests/Elsa/Activities/DispatchWorkflow/",
-        "tests/Elsa/Activities/Graph/",
-        "tests/Elsa/Workflows/Design/"
+        "src/essentials/Activities/Design/",
+        "src/essentials/Activities/DispatchWorkflow/Design/",
+        "src/essentials/Activities/Graph/Design/",
+        "src/essentials/Workflows/Design/",
+        "tests/essentials/Activities/Design/",
+        "tests/essentials/Activities/DispatchWorkflow/",
+        "tests/essentials/Activities/Graph/",
+        "tests/essentials/Workflows/Design/"
       ],
       "requiredRootPaths": [
-        "src/Elsa/Activities/DispatchWorkflow/Design/Elsa.Activities.DispatchWorkflow.Design.csproj",
-        "src/Elsa/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj",
-        "src/Elsa/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj",
-        "tests/Elsa/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj",
-        "tests/Elsa/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj",
-        "tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj"
+        "src/essentials/Activities/DispatchWorkflow/Design/Elsa.Activities.DispatchWorkflow.Design.csproj",
+        "src/essentials/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj",
+        "src/essentials/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj",
+        "tests/essentials/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj",
+        "tests/essentials/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj",
+        "tests/essentials/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj"
       ],
       "excludeWhenPackageReferencePrefixes": [
         "Testcontainers."
@@ -170,13 +170,13 @@
     {
       "outputPath": "Elsa.Server.Foundation.Identity.slnf",
       "includeProjectPathPrefixes": [
-        "src/Elsa/Foundation/Identity/",
-        "tests/Elsa/Foundation/Identity/"
+        "src/essentials/Foundation/Identity/",
+        "tests/essentials/Foundation/Identity/"
       ],
       "requiredRootPaths": [
-        "src/Elsa/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj",
-        "src/Elsa/Foundation/Identity/Elsa.Foundation.Identity.csproj",
-        "tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj"
+        "src/essentials/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj",
+        "src/essentials/Foundation/Identity/Elsa.Foundation.Identity.csproj",
+        "tests/essentials/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj"
       ],
       "excludeWhenPackageReferencePrefixes": [
         "Testcontainers."
@@ -186,14 +186,14 @@
       "outputPath": "Elsa.Server.Persistence.Integration.slnf",
       "includeProjectPathPrefixes": [
         "tests/",
-        "extensions/"
+        "src/extensions/"
       ],
       "requiredRootPaths": [
-        "tests/Elsa/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj",
-        "tests/Elsa/Persistence/EntityFrameworkCore/TransactionTopology/Tests/Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests.csproj",
-        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj",
-        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj",
-        "tests/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj"
+        "tests/essentials/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj",
+        "tests/essentials/Persistence/EntityFrameworkCore/TransactionTopology/Tests/Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests.csproj",
+        "tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj",
+        "tests/essentials/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj",
+        "tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj"
       ],
       "requirePackageReferencePrefixes": [
         "Testcontainers."
@@ -206,19 +206,19 @@
         "Elsa.Workbench.Tests"
       ],
       "requiredRootPaths": [
-        "src/Apps/Elsa.Workbench/Elsa.Workbench.csproj",
-        "tests/Elsa/Workbench/Tests/Elsa.Workbench.Tests.csproj"
+        "src/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+        "tests/essentials/Workbench/Tests/Elsa.Workbench.Tests.csproj"
       ]
     },
     {
       "outputPath": "Elsa.Server.Extensions.Elsa3.slnf",
       "includeProjectPathPrefixes": [
-        "extensions/Elsa3/"
+        "src/extensions/Elsa3/"
       ],
       "requiredRootPaths": [
-        "extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj",
-        "extensions/Elsa3/src/Mapping/Elsa3.Mapping.csproj",
-        "extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj"
+        "src/extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj",
+        "src/extensions/Elsa3/src/Mapping/Elsa3.Mapping.csproj",
+        "src/extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj"
       ],
       "excludeWhenPackageReferencePrefixes": [
         "Testcontainers."
@@ -227,11 +227,11 @@
     {
       "outputPath": "Elsa.Server.Extensions.Agent.slnf",
       "includeProjectPathPrefixes": [
-        "extensions/Agent/"
+        "src/extensions/Agent/"
       ],
       "requiredRootPaths": [
-        "extensions/Agent/src/Core/Elsa.Agent.Core.csproj",
-        "extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj"
+        "src/extensions/Agent/src/Core/Elsa.Agent.Core.csproj",
+        "src/extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj"
       ],
       "excludeWhenPackageReferencePrefixes": [
         "Testcontainers."

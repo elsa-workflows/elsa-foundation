@@ -199,7 +199,7 @@ then the W16/W17/W19/W21 parallel wave ([#465](https://github.com/elsa-workflows
   mechanical drop-in against the now-frozen contracts and the committed v1 golden fixture (document kind
   `executionCommandTransport`, protected by a drift test). W16's `TryAdvanceAsync` recurring-pump
   cluster-safety seam was **not** touched (out of required scope). New leaf seams catalogued in
-  [`EXTENSION_POINTS.md`](../../src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md) and glossary.
+  [`EXTENSION_POINTS.md`](../../src/essentials/Workflows/Runtime/EXTENSION_POINTS.md) and glossary.
 
 Phase 4 (W22–W32 + product track): **approved 2026-07-04** by Sipke per the
 [Phase 4 handoff](../reports/elsa-4-architecture-review-2026-07/phase-4-handoff.md) §3, with
@@ -290,7 +290,7 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
     (`ISecretResolver` → `ISecretValueResolver`, `ResolvePayloadAsync` off the facade, duplicate
     lifecycle-policy evaluation eliminated; swap-registration test proves resolver replaceable
     without touching the manager). Secrets golden-fixture gate: kind `secret` pinned at
-    `tests/Elsa/Secrets/Tests/Fixtures/v1/secret.json` (two-version fixture covering both
+    `tests/essentials/Secrets/Tests/Fixtures/v1/secret.json` (two-version fixture covering both
     payload wire variants, fake ciphertext only; drift + legacy-load tests per the Identity
     pattern; the computed `LatestActiveVersion` wire quirk deliberately pinned). #414 item 7
     fixed at ALL FOUR raw exception-log sites (Anthropic + 3 GitHubCopilot) — redacted
@@ -449,7 +449,7 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
   primitive unblocks this; see the "still open" increment in
   [docs/runtime-durable-resumption.md](../runtime-durable-resumption.md). Candidate new unit.
 - **Design endpoints bypass endpoint security** (from W4, pre-existing): 15 endpoints under
-  `src/Elsa/Activities/Design/Api/` and `src/Elsa/Workflows/Design/Api/` call
+  `src/essentials/Activities/Design/Api/` and `src/essentials/Workflows/Design/Api/` call
   `AllowAnonymous()` explicitly and serve anonymously even on secured shells. Candidate new
   unit (or fold into W18 identity work). **CLOSED via W29 disposition 2026-07-05:** the removal
   itself had already landed pre-W29 — the W4 D5 sweep replaced every design-endpoint
@@ -548,7 +548,7 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
 - **Secrets golden-fixture gate** (from W18): the Secrets Groundwork persistence has no fixture
   drift gate of its own (pre-existing gap flagged during MS-1; Identity got one, Secrets did not).
   **Done in W29:** Identity-style drift + legacy-load tests pin kind `secret`
-  (manifest `elsa-secrets` @ 1.0.0) against `tests/Elsa/Secrets/Tests/Fixtures/v1/secret.json`,
+  (manifest `elsa-secrets` @ 1.0.0) against `tests/essentials/Secrets/Tests/Fixtures/v1/secret.json`,
   covering both payload wire variants (encrypted metadata-only with a literal fake protected
   value, and plain value).
 - **MD-5 amendment + ADR 0033 ratification** (from W21): **both ratified 2026-07-04** at Phase 4

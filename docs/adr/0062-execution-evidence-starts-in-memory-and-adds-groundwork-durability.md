@@ -15,7 +15,7 @@ decision_context: Runtime Execution Evidence domain grill approved by Sipke
 > links in this repository.
 >
 > **Status of the work, as of 2026-09-16.** Neither half of the planned module layout was built as
-> written. `src/Elsa/Workflows/ExecutionEvidence/` is a single project rather than the `.Core` /
+> written. `src/essentials/Workflows/ExecutionEvidence/` is a single project rather than the `.Core` /
 > implementation / `.Api` split described below, and the only store is
 > `InMemoryExecutionEvidenceStore`. No durable execution-evidence provider exists, for any family.
 > This ADR remains `proposed`: it describes intent, not shipped behavior.

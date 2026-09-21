@@ -52,10 +52,10 @@ directory and diffs it against the committed tree. None of this reaches a host b
 `apply` and `validate` still take the connection string as positional argument 3
 (`module-migrate.sh:46`), so it is not true today that "credentials never appear in process
 arguments." Module resolution used to search `src` alone, which left the `Elsa3ImportMySqlDbContext`
-and its three sibling contexts — now under `extensions/Elsa3/src` since [PR
+and its three sibling contexts — now under `src/extensions/Elsa3/src` since [PR
 #1850](https://github.com/elsa-workflows/elsa-foundation/pull/1850) moved them, so lookup found no
 matching project there; [PR #1867](https://github.com/elsa-workflows/elsa-foundation/pull/1867)
-already made `module-migrate.sh` search `extensions/` as well, by setting `module_roots=(src)` plus
+already made `module-migrate.sh` search `src/extensions/` as well, by setting `module_roots=(src)` plus
 `extensions` when present (`module-migrate.sh:31-35,96`). That change does not reach the deeper
 limitation: the whole approach
 still depends on `dotnet ef` against a **source** project and a **compile-time** design-time factory
@@ -68,7 +68,7 @@ source checkout nor a startup project that references every module by `ProjectRe
 `Nuplane.Sources.Directory`, `Nuplane.Admin`, and exactly one project reference
 (`Elsa.Api.AspNetCore`, for typed endpoint metadata only); no EF package, no provider engine, and no
 Elsa feature implementation are compiled in
-(`src/Apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj`). Every module, its EF context, and its
+(`src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj`). Every module, its EF context, and its
 provider engine arrive at run time as Nuplane packages, discovered by CShells through
 `NuplaneAssemblyProvider`. A design-time factory approach cannot run against this host, because there
 is nothing to point `dotnet ef --startup-project` at.
@@ -76,7 +76,7 @@ is nothing to point `dotnet ef --startup-project` at.
 **A module's identity is scattered across at least four independent strings today**, none of which
 is a stable, host-usable name. The registration class hardcodes an `Owner` string passed into
 `EfModuleBinding` (for example `"Secrets"` in
-`src/Elsa/Secrets/Persistence/EntityFrameworkCore/DependencyInjection/SecretsEntityFrameworkCoreRegistration.cs:15-16`).
+`src/essentials/Secrets/Persistence/EntityFrameworkCore/DependencyInjection/SecretsEntityFrameworkCoreRegistration.cs:15-16`).
 The module's own `*EfModule` class carries a separately frozen `HistoryModuleName`
 (`SecretsEfModule.cs:7`, `"ElsaSecrets"`; `RuntimeEfModule.cs:11`, `"ElsaRuntime"`). The CShells
 `[ShellFeature(name: ...)]` attribute on the feature class is a third string, and it is the one that
@@ -95,7 +95,7 @@ after `EfDatabaseMigrator.ApplyAsync` inside `SecretsEfMigrationHostedService.Ap
 (`SecretsEfMigrationHostedService.cs:35-36`) — and `EnsureCurrentAsync` only audits: it throws when
 legacy rows remain (`SecretsProjectionContract.cs:22,40-44`) rather than rewriting anything. The
 out-of-process tooling's own `Program.cs` calls `SecretsProjectionContract.ReindexAsync` for a
-`reindex` verb (`src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/Program.cs:27`), and that is
+`reindex` verb (`src/essentials/Secrets/Persistence/EntityFrameworkCore/Tooling/Program.cs:27`), and that is
 the one path that actually rewrites rows (`SecretsProjectionContract.cs:54-58`). `tools/ef/dual-migrate.sh`
 drives that verb as part of its `apply` command (`dual-migrate.sh:2-6,24-26`). `tools/ef/README.md`'s
 own "What the checks mean" section states the same rule in general terms: "Neither runtime path
@@ -341,11 +341,11 @@ fallback to a different provider.
 
 The check reads the same layered configuration a host would: `shells.json`, then
 `shells.<environment>.json` when that file exists, the same overlay `Elsa.Workbench` applies
-(`src/Apps/Elsa.Workbench/Program.cs:85,91`). `--environment` defaults to `Production`, because
+(`src/apps/Elsa.Workbench/Program.cs:85,91`). `--environment` defaults to `Production`, because
 ASP.NET Core's own default `EnvironmentName` is `Production` whenever no environment variable sets
 it, and a host started with no configuration at all — the ordinary case — therefore reads
 `shells.Production.json` when the host ships one, as `Elsa.Workbench` does
-(`src/Apps/Elsa.Workbench/shells.Production.json`). The tool never reads `ASPNETCORE_ENVIRONMENT`
+(`src/apps/Elsa.Workbench/shells.Production.json`). The tool never reads `ASPNETCORE_ENVIRONMENT`
 from its own process: the tool's environment is not the host's, and inferring one from the other
 would be exactly the kind of silent cross-process assumption D10 refuses to make for packages. The
 manifest records the environment the check actually used.
@@ -444,7 +444,7 @@ separately from every other module enabled in the same shell. A host that config
 must move the value to the host-wide key; a shell that genuinely needs a different policy from its
 neighbors still can, because a shell's own `Configuration` node already layers over the host's for
 this key — "one shell can run `Validate` while another does not"
-(`src/Elsa/Persistence/EntityFramework/README.md`, section "Choosing the policy (operator
+(`src/essentials/Persistence/EntityFramework/README.md`, section "Choosing the policy (operator
 setting)") — just at the shell-configuration layer rather than the retired feature-setting layer.
 
 Failing loudly needs a specific mechanism, not just an intention. CShells only binds a configuration
@@ -478,13 +478,13 @@ rewrites legacy rows.
 
 ### D9 — The activation-guard contract lives in Modularity Core; its EF implementation lives in its own adapter project
 
-`IFeatureActivationGuard` (proposed) is added to `src/Elsa/Modularity/Core/Contracts/`, beside the
+`IFeatureActivationGuard` (proposed) is added to `src/essentials/Modularity/Core/Contracts/`, beside the
 existing `IFeatureCatalogContributor`, `IFeatureManagementService`, `IRuntimeFeatureCatalogRefresher`,
 and `IShellFeatureConfigurationStore`. `FeatureManagementService.ApplyAsync` calls the guards after
 `ValidateRequest` and before `shellStore.SaveAsync`. The implementation,
 `EfPendingMigrationActivationGuard` (proposed) — mapping features to modules via
 `[UsesEfModule("...")]` (proposed) on feature classes — lives in a new
-`src/Elsa/Modularity/EntityFramework/` adapter project, not inside the EF features themselves and not
+`src/essentials/Modularity/EntityFramework/` adapter project, not inside the EF features themselves and not
 inside `Elsa.Modularity.Nuplane`. Under `Validate`, a pending module refuses; under `AutoMigrate`, it
 passes. A refusal surfaces as an HTTP 409 problem response from the Modularity API — the same status
 `ModularityProblems` already returns for a revision conflict (`ModularityProblems.cs:48`) — naming the
@@ -653,7 +653,7 @@ Costs and risks:
 
 - A new packable tool, `Elsa.Cli` (proposed), is added under `src/`, not `tools/`, because
   `.github/workflows/packages.yml` packs `find src extensions -name '*.csproj' -not -path
-  'src/Apps/*' -not -path '*/tests/*'` (`packages.yml:99-101`): a project under `tools/` is invisible
+  'src/apps/*' -not -path '*/tests/*'` (`packages.yml:99-101`): a project under `tools/` is invisible
   to that pack and would never ship as `dotnet-elsa`.
 - `Tooling.EfToolingHost.RunAsync` (proposed) becomes a frozen compatibility surface the moment it
   ships: a host built against a release older than the one that adds it has no such entry point, and
@@ -666,7 +666,7 @@ Costs and risks:
   `EfMigrateOptions.cs:18`), the same key every other module's `EfModuleMigrator<T>` already reads.
   A shell that still needs Secrets on a different policy from its neighbors keeps that ability, since
   a shell's own `Configuration` node already layers over the host's for this key
-  (`src/Elsa/Persistence/EntityFramework/README.md`, section "Choosing the policy (operator
+  (`src/essentials/Persistence/EntityFramework/README.md`, section "Choosing the policy (operator
   setting)") — at the shell-configuration layer, not the retired feature-setting layer. Failing
   loudly for a host that still sets it needs a specific
   mechanism: CShells binds a configuration key onto a feature only when the feature type still has a
@@ -703,7 +703,7 @@ Costs and risks:
   scan from `LoadSrcProjects()` over `src/**/*.csproj` to `LoadModuleProjects()` over
   `ModuleRoots.Resolve(RepoRoot, ModuleRoots.Production)` — `src` and `extensions`
   (`EfCoreDependencyGuardTests.cs:518,521-523`; `ModuleRoots.Production` at
-  `tests/Elsa/Architecture/Support/ModuleRoots.cs:19`) — but the proposed adapter lives under `src/`
+  `tests/essentials/Architecture/Support/ModuleRoots.cs:19`) — but the proposed adapter lives under `src/`
   regardless, so it was already inside the scan before that widening and stays inside it after.
 - U1–U4 shipped upstream on 2026-09-20 as `0.0.11-preview.83` (Nuplane `main` at `e93ad89`); Elsa's
   own pin bump to the same version merged 2026-09-20 as

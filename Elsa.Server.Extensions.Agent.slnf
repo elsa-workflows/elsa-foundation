@@ -2,17 +2,17 @@
   "solution": {
     "path": "Elsa.Server.slnx",
     "projects": [
-      "extensions/Agent/src/Anthropic/Elsa.Agent.Anthropic.csproj",
-      "extensions/Agent/src/Api/Elsa.Agent.Api.csproj",
-      "extensions/Agent/src/Core/Elsa.Agent.Core.csproj",
-      "extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj",
-      "extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj",
-      "extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj",
-      "src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj",
-      "src/Elsa/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj",
-      "src/Elsa/Foundation/Identity/Elsa.Foundation.Identity.csproj",
-      "src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj",
-      "tests/Elsa/Testing/Elsa.Testing.csproj"
+      "src/essentials/Api/AspNetCore/Elsa.Api.AspNetCore.csproj",
+      "src/essentials/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj",
+      "src/essentials/Foundation/Identity/Elsa.Foundation.Identity.csproj",
+      "src/essentials/Primitives/Primitives/Elsa.Primitives.csproj",
+      "src/extensions/Agent/src/Anthropic/Elsa.Agent.Anthropic.csproj",
+      "src/extensions/Agent/src/Api/Elsa.Agent.Api.csproj",
+      "src/extensions/Agent/src/Core/Elsa.Agent.Core.csproj",
+      "src/extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj",
+      "src/extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj",
+      "src/extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj",
+      "tests/essentials/Testing/Elsa.Testing.csproj"
     ]
   }
 }

@@ -9,7 +9,7 @@
 
 ## Why
 
-`IPayloadSerializer` ([`JsonPayloadSerializer`](../src/Elsa/Serialization/SystemText/Services/JsonPayloadSerializer.cs))
+`IPayloadSerializer` ([`JsonPayloadSerializer`](../src/essentials/Serialization/SystemText/Services/JsonPayloadSerializer.cs))
 is the single, configured contract for domain payloads: it applies the agreed naming policy
 (camelCase, case-insensitive on read) and the registry of converters contributed at startup. When one
 component serializes with it and another deserializes with raw `JsonSerializer` defaults, the round-trip
@@ -58,7 +58,7 @@ boundary or the use needs options the payload serializer can't provide:
   startup-contributed converter registry of `IPayloadSerializer` would itself be an unstamped format
   change — the exact class of drift the module exists to eliminate.
 - **The reconciliation content hasher**
-  ([`DefaultActivityDefinitionHasher`](../src/Elsa/Activities/Design/Persistence/Core/Services/DefaultActivityDefinitionHasher.cs))
+  ([`DefaultActivityDefinitionHasher`](../src/essentials/Activities/Design/Persistence/Core/Services/DefaultActivityDefinitionHasher.cs))
   — it needs a canonical, sorted-key serialization that `IPayloadSerializer` does not produce, and only
   the SHA-256 of that JSON is ever persisted (the JSON itself is never read back).
 
@@ -70,7 +70,7 @@ bindings) must be able to evolve without silently breaking already-suspended wor
 
 - **EF Core migrations are the mechanism.** Each module owns its own migrations set and its own
   `__EFMigrationsHistory_*` table, applied or validated on shell activation according to the module's
-  `EfMigratePolicy`. See [`src/Elsa/Persistence/EntityFramework/README.md`](../src/Elsa/Persistence/EntityFramework/README.md)
+  `EfMigratePolicy`. See [`src/essentials/Persistence/EntityFramework/README.md`](../src/essentials/Persistence/EntityFramework/README.md)
   for the shared policy.
 - **Loud enforcement on read.** A pending model change, a missing migration, or a provider mismatch fails
   shell activation rather than serving a partially readable store.
@@ -129,7 +129,7 @@ scope for this wave — a heavy durable dedup store was explicitly out of scope.
 
 A published workflow compiles to a `WorkflowExecutable` artifact that persists through the same Runtime
 EF Core module as every other runtime state, written by
-[`EfWorkflowExecutableStore`](../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs)
+[`EfWorkflowExecutableStore`](../src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs)
 over the `IWorkflowExecutableStore` seam. Its payload carries the compiled workflow-scope variable
 declarations (`workflowVariables`, #972), the pinned activity contract, and the explicit input-nullability
 data required by typed value flow. The

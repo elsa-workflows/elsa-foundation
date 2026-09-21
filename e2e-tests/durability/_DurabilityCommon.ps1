@@ -13,13 +13,13 @@
     C# crash tests stub out (in-memory store + hand-driven sweep); only an e2e restart exercises the real substrate.
 
     Server restart uses `dotnet run --no-build` (the server must already be built) against the same content root,
-    so the SQLite files under src/Apps/Elsa.Workbench/ are reused. After a restart, re-authenticate (Connect-Elsa):
+    so the SQLite files under src/apps/Elsa.Workbench/ are reused. After a restart, re-authenticate (Connect-Elsa):
     the identity cookie does not necessarily survive a fresh process.
 #>
 . "$PSScriptRoot/../_ElsaCommon.ps1"
 
 $script:RepoRoot      = (Resolve-Path "$PSScriptRoot/../..").Path
-$script:ServerProject = Join-Path $script:RepoRoot "src/Apps/Elsa.Workbench/Elsa.Workbench.csproj"
+$script:ServerProject = Join-Path $script:RepoRoot "src/apps/Elsa.Workbench/Elsa.Workbench.csproj"
 
 # StimulusHash = "sha256:" + lowercase-hex(SHA256(utf8(eventName))).
 function Get-EventHash([string] $Name) {
@@ -79,7 +79,7 @@ function Stop-ElsaServer {
 function Start-ElsaServer {
     # Launches the ALREADY-BUILT server DLL directly (dotnet <dll>) rather than `dotnet run`, which would
     # re-evaluate this large solution's MSBuild graph on every relaunch (minutes). The content root is the
-    # project directory (set as the working dir) so the on-disk SQLite files under src/Apps/Elsa.Workbench/ are
+    # project directory (set as the working dir) so the on-disk SQLite files under src/apps/Elsa.Workbench/ are
     # reused across the restart; ASPNETCORE_URLS + ASPNETCORE_ENVIRONMENT replicate the `http` launch profile.
     param([int] $Port = 5095, [string] $Project = $script:ServerProject, [int] $TimeoutSec = 90)
     $projDir = Split-Path $Project

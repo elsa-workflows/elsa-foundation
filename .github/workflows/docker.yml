@@ -37,7 +37,6 @@ on:
       - Elsa.Server.slnx
       - NuGet.config
       - src/**
-      - extensions/**
 
 permissions:
   contents: read
@@ -52,7 +51,7 @@ jobs:
     # Pinned to an exact release, not the floating @v1. This workflow pins the
     # BuildKit and Buildx versions the build runs on, and a frontend older than
     # that BuildKit fails the build outright -- see the `# syntax=` pin in
-    # src/Apps/Elsa.Workbench/Dockerfile. On the floating tag an upstream
+    # src/apps/Elsa.Workbench/Dockerfile. On the floating tag an upstream
     # release moves BuildKit under us and breaks main with no change of ours;
     # pinned, that becomes a deliberate bump where both pins move together.
     uses: docker/github-builder/.github/workflows/build.yml@v1.16.0
@@ -63,7 +62,7 @@ jobs:
       output: image
       push: true
       context: .
-      file: src/Apps/Elsa.Workbench/Dockerfile
+      file: src/apps/Elsa.Workbench/Dockerfile
       platforms: linux/amd64,linux/arm64
       cache: true
       cache-mode: max
@@ -86,7 +85,7 @@ jobs:
     name: Build & push elsa-foundation-host
     # Same pinned reusable builder as the workbench job above (see the pinning note there):
     # the BuildKit/Buildx versions must match the `# syntax=` pin in
-    # src/Apps/Elsa.Foundation.Host/Dockerfile.
+    # src/apps/Elsa.Foundation.Host/Dockerfile.
     uses: docker/github-builder/.github/workflows/build.yml@v1.16.0
     permissions:
       contents: read
@@ -95,7 +94,7 @@ jobs:
       output: image
       push: true
       context: .
-      file: src/Apps/Elsa.Foundation.Host/Dockerfile
+      file: src/apps/Elsa.Foundation.Host/Dockerfile
       platforms: linux/amd64,linux/arm64
       cache: true
       cache-mode: max

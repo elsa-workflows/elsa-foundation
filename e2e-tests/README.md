@@ -10,8 +10,8 @@ exercise the real HTTP + persistence + runtime-pump path that unit/integration t
 Build and start the server (Development profile -> SQLite, seeded admin `admin` / `Password123!`):
 
 ```bash
-dotnet build src/Apps/Elsa.Workbench/Elsa.Workbench.csproj
-dotnet run --project src/Apps/Elsa.Workbench/Elsa.Workbench.csproj --launch-profile http
+dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj
+dotnet run --project src/apps/Elsa.Workbench/Elsa.Workbench.csproj --launch-profile http
 ```
 
 **There is no separate schema-deployment step.** Each EF Core module applies or validates its own
@@ -26,7 +26,7 @@ design and publishing modules on SQLite).
 - **Windows runner:** use `powershell -NoProfile -ExecutionPolicy Bypass -File <script>`. This machine has **no
   `pwsh`**; the `.EXAMPLE` lines show `pwsh` only as cross-platform shorthand.
 - **Rebuild gotcha:** after rebuilding the server from newer source, **delete the SQLite DBs first**
-  (`elsa.db*`, `elsa-diagnostics.db*` under `src/Apps/Elsa.Workbench/`; stop the server /
+  (`elsa.db*`, `elsa-diagnostics.db*` under `src/apps/Elsa.Workbench/`; stop the server /
   free port 5095 first), then start the server, which migrates the schema from empty. Old rows carry an older
   schema version a newer build refuses to read, which surfaces as spurious `500`s on publish.
 - **Opt-in features:** `scheduling/` requires `ActivitiesScheduling` + `WorkflowsRuntimeScheduling` +
@@ -232,8 +232,8 @@ reproduce. This is an architecture difference (like the removed flow-activity mo
 
 `Test-ChildWorkflow.ps1` needs the `DispatchWorkflow` activity, which the reference server did not compose.
 Enabling it (separate from the bug fixes below):
-- `src/Apps/Elsa.Workbench/Elsa.Workbench.csproj` - project refs to `Elsa.Activities.DispatchWorkflow.{Runtime,Design}`.
-- `src/Apps/Elsa.Workbench/shells.json` - features `ActivitiesDispatchWorkflowRuntime` + `ActivitiesDispatchWorkflowDesign`.
+- `src/apps/Elsa.Workbench/Elsa.Workbench.csproj` - project refs to `Elsa.Activities.DispatchWorkflow.{Runtime,Design}`.
+- `src/apps/Elsa.Workbench/shells.json` - features `ActivitiesDispatchWorkflowRuntime` + `ActivitiesDispatchWorkflowDesign`.
 - No `Program.cs` change needed: `.WithHostAssemblies()` discovers the referenced assemblies' shell features.
 
 Fire-and-forget (`WaitForCompletion=false`, used by the test) works: the parent completes immediately with

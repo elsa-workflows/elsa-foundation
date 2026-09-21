@@ -3,7 +3,7 @@
 Activity Definition authoring and reusable Activity Graph execution are separate host concerns.
 Compose only the features needed by the host. The canonical provider identities, schemas, constraints,
 and registered contributor implementations are documented in the
-[Activity Graph Design extension catalog](../../src/Elsa/Activities/Graph/Design/EXTENSION_POINTS.md)
+[Activity Graph Design extension catalog](../../src/essentials/Activities/Graph/Design/EXTENSION_POINTS.md)
 and [specification 092](../../specs/092-reusable-activity-definitions/spec.md).
 
 | Host role | Feature assembly in the catalog | Enabled shell feature |

@@ -19,17 +19,17 @@ A 2026-07-07 feasibility pass accepted "git as a GitOps source/sink reconciled i
 rejected "git as a replacement operational store" (git is a poor OLTP store: no cross-store txn,
 per-session working copies for concurrency, no efficient `ListAsync(filter)`, commit latency vs draft
 autosave). The reconciliation seam already exists and is empty:
-[`IWorkflowReconciliationSource`](../../src/Elsa/Workflows/Design/Reconciliation/Contracts/IWorkflowReconciliationSource.cs)
+[`IWorkflowReconciliationSource`](../../src/essentials/Workflows/Design/Reconciliation/Contracts/IWorkflowReconciliationSource.cs)
 names "git" in its doc, the abstract
-[`WorkflowsDesignReconciliationFeature`](../../src/Elsa/Workflows/Design/Reconciliation/WorkflowsDesignReconciliationFeature.cs)
+[`WorkflowsDesignReconciliationFeature`](../../src/essentials/Workflows/Design/Reconciliation/WorkflowsDesignReconciliationFeature.cs)
 is built to be extended by source-variant features, and
 [`specs/002`](../../specs/002-workflow-state-scope/spec.md) lists git as a trusted external source —
 but no concrete git source exists yet, and the workflow reconciliation lifecycle is not wired into
-any shell today ([`shells.baseline.json`](../../src/Apps/Elsa.Server/shells.baseline.json) enables
+any shell today ([`shells.baseline.json`](../../src/apps/Elsa.Server/shells.baseline.json) enables
 `ActivitiesDesignReconciliation` only).
 
 **Do not justify this on version history.** Elsa already has an immutable SemVer version model
-([`WorkflowDefinitionVersion`](../../src/Elsa/Workflows/Design/Persistence/Core/Entities/WorkflowDefinitionVersion.cs),
+([`WorkflowDefinitionVersion`](../../src/essentials/Workflows/Design/Persistence/Core/Entities/WorkflowDefinitionVersion.cs),
 write-once `StateSource`). Git's incremental value is narrower and real: **PR/diff review** of
 authored workflows, cross-environment **distribution/promotion**, an out-of-DB **canonical record**,
 and portable/offline authoring.
@@ -175,7 +175,7 @@ simply becomes deterministic.
 
 **Landed 2026-07-07 (commit `7275e0d8`, "refactor(git): extract shared Elsa.Git library from
 ExtensionBuilder"), pending merge into this branch/main.** The shared **public `Elsa.Git`** library
-now exists at `src/Elsa/Git/`, holding `IGitClient` + `GitClient` + `GitClientOptions` +
+now exists at `src/essentials/Git/`, holding `IGitClient` + `GitClient` + `GitClientOptions` +
 `AddGitClient()` (DI extension) together — a thin §2.17 mechanical utility (shells out to git,
 `GIT_TERMINAL_PROMPT=0`, zero domain deps). Contract+impl in one lib (the strict `.Core`+impl split of
 ADR 0033 is overkill for a ~100-line utility). It is a **true leaf project** (`net10.0`, only
@@ -225,7 +225,7 @@ Each role gets its own clone mode:
   (`SourceKind = "git"`), read from the working clone, emitting `WorkflowVersionReconciliationModel`
   entries (`State = Published`, `SourceCreatedAt` from `git log -1 --format=%cI -- {path}` — the
   commit that introduced the immutable version file). The existing
-  [`WorkflowVersionsReconcilingHandler`](../../src/Elsa/Workflows/Design/Reconciliation/Handlers/WorkflowVersionsReconcilingHandler.cs)
+  [`WorkflowVersionsReconcilingHandler`](../../src/essentials/Workflows/Design/Reconciliation/Handlers/WorkflowVersionsReconcilingHandler.cs)
   turns each model into the entity pair — no custom handler.
 - **`WorkflowVersionReconciliationModel` gains an optional `ContentHash`** (additive) so the source
   carries the canonical hash (D3) ahead of a persisted home; the reconciler enforces full Model X the

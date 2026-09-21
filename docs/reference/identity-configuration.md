@@ -23,7 +23,7 @@ unauthenticated API call is rejected with `401`. A host-chosen `DefaultScheme` a
 
 ## Development / demo defaults
 
-The checked-in `src/Apps/Elsa.Workbench/shells.json` enables the stack with `IsDevelopmentOrDemo: true`, which is
+The checked-in `src/apps/Elsa.Workbench/shells.json` enables the stack with `IsDevelopmentOrDemo: true`, which is
 intended **only** for local development and demos:
 
 ```jsonc
@@ -165,7 +165,7 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
     ```bash
     dotnet ef database update \
       --context OpenIddictIdentityDbContext \
-      --project src/Apps/Elsa.Workbench
+      --project src/apps/Elsa.Workbench
     ```
 
     The Elsa IAM schema is owned by `IdentityIamEntityFrameworkCore` and migrates separately from the

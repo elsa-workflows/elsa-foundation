@@ -114,7 +114,7 @@ registry.RegisterAll(@event.Converters);
 
 At runtime, `JsonPayloadSerializer` sync code accesses the populated `JsonPayloadConverterRegistry` directly.
 
-The removed `src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md` previously documented more examples of this contributor-interface + single-aggregating-handler shape; the path is retained here only as historical provenance.
+The removed `src/essentials/Persistence/EFCore/EXTENSION_POINTS.md` previously documented more examples of this contributor-interface + single-aggregating-handler shape; the path is retained here only as historical provenance.
 
 Legacy state: the historical implementation used `IPayloadSerializerConverterProvider`. Migration to the pattern above is tracked in the Unit A follow-up.
 

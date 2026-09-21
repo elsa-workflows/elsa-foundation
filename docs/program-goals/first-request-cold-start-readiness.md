@@ -27,7 +27,7 @@ Readiness](workspace-launch-readiness.md): a launchable workspace must also *sta
 1. **Instrument (this unit — spec 129).** Opt-in `Elsa.Boot` phase-timing diagnostic + deterministic schema
    op-count baseline + measurement recipe + baseline report. Measurement only. Gates units 2–5.
 2. **ReadyToRun publish (spec 134 — DELIVERED).** R2R added to the container publish path
-   (`src/Apps/Elsa.Server/Dockerfile`, per-RID via `TARGETARCH`, framework-dependent, Dockerfile-scoped so dev
+   (`src/apps/Elsa.Server/Dockerfile`, per-RID via `TARGETARCH`, framework-dependent, Dockerfile-scoped so dev
    builds are untouched) to cut the JIT-bound host-build + Kestrel-startup share. TieredPGO left at its default-on
    value (R2R composes with tiered compilation); InvariantGlobalization rejected (host does auth + culture-
    sensitive work). Measured honestly in `specs/134-container-readytorun-publish/research.md` — the deterministic
@@ -94,14 +94,14 @@ These items preserve the former queue and do not authorize measurement or timing
 - Spec: `specs/133-schema-admission-skip-and-batch/` (unit 3 skip-if-current; batching proposal for Groundwork)
 - Report: `docs/reports/cold-start-readiness-2026-07.md`
 - Upstream proposal: `docs/reports/cshells-initializer-observer-proposal.md`
-- Eager activation: `src/Apps/Elsa.Server/Boot/EagerShellActivation*.cs`
+- Eager activation: `src/apps/Elsa.Server/Boot/EagerShellActivation*.cs`
 - Charter/precedent: `docs/reports/runtime-http-performance-2026-07.md`
-- Instrument: `src/Apps/Elsa.Server/Boot/`, `src/Apps/Elsa.Server/Program.cs`
+- Instrument: `src/apps/Elsa.Server/Boot/`, `src/apps/Elsa.Server/Program.cs`
 - Recipe: `tools/performance/measure-cold-start.sh`
-- Deterministic guard: `tests/Elsa/Persistence/Groundwork/Tests/ColdStartSchemaOperationCountTests.cs`
-- Skip-if-current guard: `tests/Elsa/Persistence/Groundwork/Tests/GroundworkAdmissionSkipStampTests.cs`
-- Skip-if-current impl: `src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkAdmissionStampStore.cs`,
-  `src/Elsa/Persistence/Groundwork/Unified/Composition/GroundworkAdmissionSkipStamp.cs`
+- Deterministic guard: `tests/essentials/Persistence/Groundwork/Tests/ColdStartSchemaOperationCountTests.cs`
+- Skip-if-current guard: `tests/essentials/Persistence/Groundwork/Tests/GroundworkAdmissionSkipStampTests.cs`
+- Skip-if-current impl: `src/essentials/Persistence/Groundwork/Sqlite/SqliteGroundworkAdmissionStampStore.cs`,
+  `src/essentials/Persistence/Groundwork/Unified/Composition/GroundworkAdmissionSkipStamp.cs`
 
 ## Removal or completion conditions
 

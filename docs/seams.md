@@ -88,7 +88,7 @@ reusable graph activities execute inside the current workflow execution.
 
 ## 3. Bridge 1 — Activity compilation and invocation *(the worked example)*
 
-[`Elsa.Workflows.Publishing.Api`](../src/Elsa/Workflows/Publishing/Api) reads the authored contract and
+[`Elsa.Workflows.Publishing.Api`](../src/essentials/Workflows/Publishing/Api) reads the authored contract and
 compiles it into an executable node. Design tooling does not construct a live activity object.
 Transient activation is reserved for a pinned runtime invocation attempt.
 
@@ -211,4 +211,4 @@ stay where they are.
   `WorkflowExecutable`, at three separate scopes.
 - **Current value-flow design** — [`specs/095-value-flow-redesign/`](../specs/095-value-flow-redesign)
   and [ADR 0045](adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md).
-- **The worked bridge** — [`src/Elsa/Workflows/Publishing/Api/`](../src/Elsa/Workflows/Publishing/Api).
+- **The worked bridge** — [`src/essentials/Workflows/Publishing/Api/`](../src/essentials/Workflows/Publishing/Api).

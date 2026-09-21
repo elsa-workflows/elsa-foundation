@@ -129,7 +129,7 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 - **Build** the solution.
 - **Affected suites** pass, run as whole test projects.
-- **Architecture guard** passes: `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj`.
+- **Architecture guard** passes: `dotnet test tests/essentials/Architecture/Elsa.Architecture.Tests.csproj`.
 - **Generated-maps check** passes: `dotnet run --project tools/maps/Elsa.Maps.Generator -- check`.
 - **Diff review** is complete and its surviving findings are resolved.
 - **Bite-proof** wherever the change claims a behavioral difference: revert the fix, or mutate the code the new test covers, show the test going red, then restore and show it green. A test that passes both before and after the change proves nothing about the change.

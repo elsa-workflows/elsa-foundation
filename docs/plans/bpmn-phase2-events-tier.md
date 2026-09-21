@@ -92,9 +92,9 @@ Phase 1 landed as eight merged PRs in one day:
 | elsa-foundation-studio #447 | ui | BPMN create-workflow root + flow-condition editing |
 | elsa-foundation-studio #448 | ui | Import/Export BPMN toolbar actions, DI↔layout bridges |
 
-Key modules: `src/Elsa/Activities/Bpmn/` (runtime; `Interchange/` nested under it per the
+Key modules: `src/essentials/Activities/Bpmn/` (runtime; `Interchange/` nested under it per the
 domain-tree guard, parent csproj excludes it via the `Compile Remove` pattern),
-`tests/Elsa/Activities/Bpmn/{Tests,Interchange/Tests}`, studio
+`tests/essentials/Activities/Bpmn/{Tests,Interchange/Tests}`, studio
 `src/Elsa.Studio.Workflows/Client/src/bpmn/`.
 
 ## Phase 2 scope (approved by the program owner)
@@ -115,7 +115,7 @@ The events tier, in dependency order:
 3. **Timer/message/signal catch events** — NO new wait machinery: catch events compile to
    synthesized internal child activities (`BpmnIntermediateCatchEvent`) using the existing
    `ActivityBookmarkRequest` / `IDurableTimerScheduler` / stimulus-provider path (template:
-   `src/Elsa/Activities/Scheduling/Activities/Timer.cs` + `TimerStimulus`). Resume → ordinary
+   `src/essentials/Activities/Scheduling/Activities/Timer.cs` + `TimerStimulus`). Resume → ordinary
    `OnChildCompletedAsync`. BPMN start-event triggers ride `IActivityTriggerStimulusProvider`
    (template: `Event` + `EventTriggerStimulusProvider` in Primitives). Message correlation needs a
    delivery API — decide whether it lives in the BPMN module or as a shared runtime seam.
@@ -154,7 +154,7 @@ collaborations.
   state (they were deferred in Phase 1 — adding them alongside the schema growth is wise).
 - The state envelope will grow (event subscriptions, MI state, compensation log later): bump the
   payload additively; `StateSchemaVersion` stays 1 unless the shape breaks.
-- Tests ride `WorkflowExecutionHarness` (`tests/Elsa/Activities/Testing/`): `BpmnRuntimeFixture`
+- Tests ride `WorkflowExecutionHarness` (`tests/essentials/Activities/Testing/`): `BpmnRuntimeFixture`
   (BPMN tests project), `NewProbeNode` (exactly one outcome), `NewFaultingNode`, `ClrConstruction`
   for real CLR leaves (see `BpmnDecisionTests` for the contract-building recipe), and
   `RecordingStimulusRouter` for stimulus/bookmark scenarios.

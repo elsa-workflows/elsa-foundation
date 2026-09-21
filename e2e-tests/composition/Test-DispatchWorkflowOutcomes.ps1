@@ -16,9 +16,9 @@
     Coverage note. Two of the five declared outcomes are NOT reachable over REST today and are deliberately not
     attempted here:
       * 'Cancelled'      needs an instance-cancellation control-plane call; the runtime API exposes no such
-                         endpoint (see src/Elsa/Workflows/Runtime/Api/Endpoints).
+                         endpoint (see src/essentials/Workflows/Runtime/Api/Endpoints).
       * 'DispatchFailed' needs child-start delivery to exhaust its retries, which no REST surface can force.
-    Both are covered in-process by tests/Elsa/Activities/Behavioral/Tests (DispatchWorkflowDrive).
+    Both are covered in-process by tests/essentials/Activities/Behavioral/Tests (DispatchWorkflowDrive).
 
     The waited path is also exercised indirectly by bpmn/Test-BpmnCallActivity.ps1; this script removes the BPMN
     engine from between the assertion and the activity. Fire-and-forget alone is covered by ../Test-ChildWorkflow.ps1.

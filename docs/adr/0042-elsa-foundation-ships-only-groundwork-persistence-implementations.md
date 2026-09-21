@@ -67,7 +67,7 @@ vendor package, selected by the host, is out of scope.
 This is precise rather than a loophole, because OpenIddict's EF usage is fully self-contained:
 `OpenIddictIdentityDbContext` derives from plain `DbContext` rather than Elsa's base, and
 `Elsa.Foundation.Identity.OpenIddict.csproj` references **no Elsa EF project at all**. Every Elsa-authored
-EF store still goes, including `src/Elsa/Persistence/EFCore/` itself.
+EF store still goes, including `src/essentials/Persistence/EFCore/` itself.
 
 **What this obliges.** The EF-surface ratchet must stop targeting zero and instead hold a small explicit
 allowlist — `OpenIddict.EntityFrameworkCore` plus the `Microsoft.EntityFrameworkCore.*` packages its
@@ -93,7 +93,7 @@ dependency remains in `elsa-foundation`, its reference hosts, or its test graph"
 usage is entirely self-contained: `OpenIddictIdentityDbContext` derives from plain `DbContext` rather
 than Elsa's `ElsaDbContextBase`, and `Elsa.Foundation.Identity.OpenIddict.csproj` references **no Elsa EF
 project at all** — only `OpenIddict.EntityFrameworkCore` and the `Microsoft.EntityFrameworkCore.*`
-packages it needs. So Elsa's own EF infrastructure (`src/Elsa/Persistence/EFCore/`) remains deletable,
+packages it needs. So Elsa's own EF infrastructure (`src/essentials/Persistence/EFCore/`) remains deletable,
 and what survives is exactly one third-party component persisting its own data with its own vendor
 package.
 
@@ -102,7 +102,7 @@ Two ways to reconcile, both needing ratification rather than silent reinterpreta
 1. **Narrow the criterion** to *first-party* persistence: Elsa ships no EF-backed store of its own, and
    a third-party component persisting its own data with its own vendor package is out of scope. Given the
    containment above this is precise rather than a loophole — every Elsa-authored EF store still goes,
-   including `src/Elsa/Persistence/EFCore/`. The EF-surface ratchet would keep a small explicit
+   including `src/essentials/Persistence/EFCore/`. The EF-surface ratchet would keep a small explicit
    allowlist (`OpenIddict.EntityFrameworkCore` plus the EF packages its DbContext needs) instead of
    shrinking to zero.
 2. **Adopt `OpenIddict.MongoDb` instead**, which preserves literal zero-EF at the cost of requiring

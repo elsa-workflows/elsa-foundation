@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Every shipped activity module: this project drives all of them through one real workflow engine, and the
+         coverage assertions are only meaningful if the whole shipped library is in scope. -->
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Bpmn\Elsa.Activities.Bpmn.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Graph\Runtime\Elsa.Activities.Graph.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Http\Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Scripting\Elsa.Activities.Scripting.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
+
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Expressions\JavaScript\Elsa.Expressions.JavaScript.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Http\Elsa.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
+
+    <ProjectReference Include="..\..\Testing\Elsa.Activities.Testing.csproj" />
+  </ItemGroup>
+
+</Project>

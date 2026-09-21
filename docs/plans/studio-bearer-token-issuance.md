@@ -184,7 +184,7 @@ Notes:
 **C2. Endpoint tests.** Anonymous → 401; authenticated cookie principal → 200 `{ accessToken }` with the
 subject/tenant/scope claims flowing into `IssueAsync`; issued token validates on a protected API call (ties A+B+C).
 
-## 6. Workstream D — Enablement & app wiring (`src/Apps/Elsa.Server`)
+## 6. Workstream D — Enablement & app wiring (`src/apps/Elsa.Server`)
 
 **D1. Enable features** in `shells.json` for the default shell:
 `FoundationIdentityApi`, `FoundationIdentityOpenIddict`, `FoundationIdentityAspNetCoreIdentity` (in addition to

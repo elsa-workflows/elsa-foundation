@@ -16,11 +16,11 @@ composes — the parts the in-process C# crash tests stub out (in-memory store +
 `Restart-ElsaServer` kills the process on port 5095 and relaunches the **already-built server DLL directly**
 (`dotnet <…>/bin/Debug/net10.0/Elsa.Workbench.dll`) with `ASPNETCORE_URLS=http://localhost:5095` +
 `ASPNETCORE_ENVIRONMENT=Development`, working-dir = the project directory so the on-disk SQLite files under
-`src/Apps/Elsa.Workbench/` are reused. It launches the DLL directly (not `dotnet run`) because `dotnet run`
+`src/apps/Elsa.Workbench/` are reused. It launches the DLL directly (not `dotnet run`) because `dotnet run`
 re-evaluates this large solution's MSBuild graph on every relaunch (minutes); the DLL comes up in ~5-8s.
 
 Requirements / caveats:
-- **The server must already be built** (`dotnet build src/Apps/Elsa.Workbench`), since restart uses the compiled DLL.
+- **The server must already be built** (`dotnet build src/apps/Elsa.Workbench`), since restart uses the compiled DLL.
 - Restart control is **Windows/PowerShell-specific** (`Get-NetTCPConnection` + `Stop-Process`). `Test-RestartRecovery`
   accepts `-RestartServer:$false` to run the suspend→resume assertions **without** a restart (weaker, but portable to
   environments where the runner can't own the server process).

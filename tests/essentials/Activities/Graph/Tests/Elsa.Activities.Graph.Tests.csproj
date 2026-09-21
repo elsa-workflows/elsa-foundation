@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Graph\Design\Elsa.Activities.Graph.Design.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Graph\Runtime\Elsa.Activities.Graph.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Publishing\Core\Elsa.Workflows.Publishing.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Elsa.Workflows.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+  </ItemGroup>
+
+</Project>

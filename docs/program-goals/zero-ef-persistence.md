@@ -78,7 +78,7 @@ linked GitHub issue or another active program goal.
 - [Zero-EF Groundwork decision map](../decision-maps/zero-ef-groundwork.md)
 - [Targeted §E2.5 constitution review](../reports/zero-ef-constitution-review.md)
 - [Identity/OpenIddict Groundwork contract inventory](../reports/identity-openiddict-groundwork-contract-inventory.md)
-- [Temporary EF Core surface ratchet](../../tests/Elsa/Architecture/Baselines/README.md)
+- [Temporary EF Core surface ratchet](../../tests/essentials/Architecture/Baselines/README.md)
 - [Groundwork Persistence Readiness](groundwork-persistence-readiness.md)
 - [Constitution Readiness](constitution-readiness.md)
 - [Diagnostics Observability Readiness](diagnostics-observability-readiness.md)

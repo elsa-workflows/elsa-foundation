@@ -22,7 +22,7 @@ bash tools/ef/module-migrate.sh script-check db/migrations       # CI-safe: fail
 ```
 
 `apply`, `validate`, `script` and `script-check` are thin shims (#1878) over the `dotnet elsa persistence`
-CLI (`src/Elsa/Cli`, [spec 171](../../specs/171-persistence-script-cli/spec.md)) rather than a second
+CLI (`src/essentials/Cli`, [spec 171](../../specs/171-persistence-script-cli/spec.md)) rather than a second
 implementation of the same behavior; they no longer drive `dotnet ef` themselves. `pending` alone still does,
 because it needs no host closure, only this tooling project's own compiled model. `[modules]` selects by the
 CLI's own canonical module names (`dotnet elsa persistence list`), comma-separated — not the context-name
@@ -36,7 +36,7 @@ At runtime each EF shell feature registers `EfModuleMigrator<TContext>` for its 
 activation (`IShellInitializer`) and plain host start, applying migrations under `EfMigrateOptions.Policy =
 AutoMigrate` (the default) or refusing a stale database under `Validate`, which is the mode to use when an
 operator applies migrations out of process first. All Runtime participants share one context and one
-`__EFMigrationsHistory_ElsaRuntime` history. `tests/Elsa/Persistence/EntityFrameworkCore/Migrations` proves
+`__EFMigrationsHistory_ElsaRuntime` history. `tests/essentials/Persistence/EntityFrameworkCore/Migrations` proves
 the model/migration match on all four providers and a fresh install of every module into one database on
 SQLite (fast gate) and on SQL Server, PostgreSQL and MySQL (Testcontainers).
 
@@ -44,7 +44,7 @@ That policy is configuration, not code: set `Elsa:Persistence:EntityFramework:Mi
 variable `Elsa__Persistence__EntityFramework__Migrate__Policy`) to `Validate` in the deployment a pipeline
 migrates, and leave it unset everywhere else. A value that names neither policy fails the host rather than
 falling back to auto-migrate. See
-[src/Elsa/Persistence/EntityFramework/README.md](../../src/Elsa/Persistence/EntityFramework/README.md#choosing-the-policy-operator-setting).
+[src/essentials/Persistence/EntityFramework/README.md](../../src/essentials/Persistence/EntityFramework/README.md#choosing-the-policy-operator-setting).
 
 ## Reviewable SQL scripts (`script` / `script-check`)
 
@@ -60,7 +60,7 @@ bash tools/ef/module-migrate.sh script MySql db/migrations
 **Layout: flat, ordered `<output-dir>/NN-<slug>.sql` files plus one `migration-plan.json`** (#1878) — the
 CLI's own artifact, not the `<output-dir>/<Module>/<Provider>.sql` tree this script wrote before it became a
 shim: a DBA pipeline applies files in the order they are named, and the manifest is what `script-check` reads
-back rather than a directory listing. See the CLI's own [README](../../src/Elsa/Cli/README.md) for the exact
+back rather than a directory listing. See the CLI's own [README](../../src/essentials/Cli/README.md) for the exact
 shape.
 
 Every file is generated idempotent, which means:
@@ -129,14 +129,14 @@ model generates.
 
 ## Layout
 
-- **Module package** (`src/Elsa/<Domain>/Persistence/EntityFrameworkCore/`): `*DbContext` + derived
+- **Module package** (`src/essentials/<Domain>/Persistence/EntityFrameworkCore/`): `*DbContext` + derived
   provider contexts + `Migrations/<Provider>/`. References EF Core + Relational only. This is the
   assembly Nuplane loads at apply time.
 - **Design-time startup project** (`tools/ef/Elsa.EntityFrameworkCore.Tooling/`): one
   `ModuleDesignTimeFactory` line per provider-derived context, the provider PackageReferences, and
   `Microsoft.EntityFrameworkCore.Design`. One project for every module; #1878 retired the last
   module-owned one (Secrets').
-- **Policy package** (`src/Elsa/Persistence/EntityFramework/`): history table name, provider guard,
+- **Policy package** (`src/essentials/Persistence/EntityFramework/`): history table name, provider guard,
   AutoMigrate vs Validate. No provider engines.
 
 ## Command shape

@@ -93,7 +93,7 @@
     <PackageVersion Include="MySql.Data" Version="26.7.0" />
     <PackageVersion Include="MySql.EntityFrameworkCore" Version="10.0.9" />
     <!--
-      The endpoint-class framework this repository used to carry in src/Elsa/Api/Endpoints. The
+      The endpoint-class framework this repository used to carry in src/essentials/Api/Endpoints. The
       three ids version together: Elsa.Api.AspNetCore consumes the core, and the OpenApi and
       Testing companions are only meaningful against the same build of it.
     -->
