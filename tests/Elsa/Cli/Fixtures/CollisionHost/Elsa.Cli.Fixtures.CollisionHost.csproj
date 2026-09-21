@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <Description>
+      A host carrying two modules whose declared names collide case-insensitively. Discovery must refuse
+      this host's whole closure and name both assemblies, rather than pick one of them.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Widgets\Acme.Widgets.csproj" />
+    <ProjectReference Include="..\Collision\Acme.Widgets.Collision.csproj" />
+  </ItemGroup>
+
+</Project>

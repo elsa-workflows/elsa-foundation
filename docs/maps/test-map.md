@@ -6,9 +6,9 @@ Records direct test-project references and test source-file inventory; it does n
 
 ## Summary
 
-- Test projects: 96
-- Source projects directly referenced by at least one test project: 132
-- Source projects not directly referenced by test projects: 5
+- Test projects: 103
+- Source projects directly referenced by at least one test project: 139
+- Source projects not directly referenced by test projects: 6
 
 ## Test Projects
 
@@ -45,6 +45,13 @@ Records direct test-project references and test source-file inventory; it does n
 | [Elsa.Attention.Api.Tests](../../tests/Elsa/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj) | Elsa.Attention.Api<br>Elsa.Testing |
 | [Elsa.Attention.Core.Tests](../../tests/Elsa/Attention/Core/Tests/Elsa.Attention.Core.Tests.csproj) | Elsa.Attention.Core |
 | [Elsa.Caching.Tests](../../tests/Elsa/Caching/Tests/Elsa.Caching.Tests.csproj) | Elsa.Caching.Core<br>Elsa.Caching.Memory |
+| [Acme.Widgets.Collision](../../tests/Elsa/Cli/Fixtures/Collision/Acme.Widgets.Collision.csproj) | Elsa.Persistence.EntityFramework |
+| [Elsa.Cli.Fixtures.CollisionHost](../../tests/Elsa/Cli/Fixtures/CollisionHost/Elsa.Cli.Fixtures.CollisionHost.csproj) | Acme.Widgets<br>Acme.Widgets.Collision |
+| [Elsa.Cli.Fixtures.Host](../../tests/Elsa/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj) | Acme.Widgets<br>Elsa.Activities.Design.Persistence.EntityFrameworkCore<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore<br>Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore<br>Elsa.Foundation.Identity.Persistence.EntityFrameworkCore<br>Elsa.Secrets.Persistence.EntityFrameworkCore<br>Elsa.Studio.Preferences.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore<br>Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore |
+| [Elsa.Cli.Fixtures.MinimalHost](../../tests/Elsa/Cli/Fixtures/MinimalHost/Elsa.Cli.Fixtures.MinimalHost.csproj) | Acme.Widgets |
+| [Elsa.Cli.Fixtures.NuplaneHost](../../tests/Elsa/Cli/Fixtures/NuplaneHost/Elsa.Cli.Fixtures.NuplaneHost.csproj) | Elsa.Persistence.EntityFramework |
+| [Acme.Widgets](../../tests/Elsa/Cli/Fixtures/Widgets/Acme.Widgets.csproj) | Elsa.Persistence.EntityFramework |
+| [Elsa.Cli.Tests](../../tests/Elsa/Cli/Tests/Elsa.Cli.Tests.csproj) | Acme.Widgets<br>Elsa.Cli<br>Elsa.Cli.Fixtures.CollisionHost<br>Elsa.Cli.Fixtures.Host<br>Elsa.Cli.Fixtures.MinimalHost<br>Elsa.Cli.Fixtures.NuplaneHost |
 | [Elsa.Diagnostics.ConsoleLogStreaming.Tests](../../tests/Elsa/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj) | Elsa.Diagnostics.ConsoleLogStreaming |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests.csproj) | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests.csproj) | Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore |
@@ -146,6 +153,13 @@ Records direct test-project references and test source-file inventory; it does n
 | Elsa.Attention.Api.Tests | [GetAttentionItemsEndpointTests.cs](../../tests/Elsa/Attention/Api/Tests/GetAttentionItemsEndpointTests.cs) |
 | Elsa.Attention.Core.Tests | [AttentionAggregationServiceTests.cs](../../tests/Elsa/Attention/Core/Tests/AttentionAggregationServiceTests.cs) |
 | Elsa.Caching.Tests | [CacheManagerTests.cs](../../tests/Elsa/Caching/Tests/CacheManagerTests.cs)<br>[ChangeTokenSignalInvokerTests.cs](../../tests/Elsa/Caching/Tests/ChangeTokenSignalInvokerTests.cs)<br>[MemoryCacheFeatureRegistrationTests.cs](../../tests/Elsa/Caching/Tests/MemoryCacheFeatureRegistrationTests.cs) |
+| Acme.Widgets.Collision | [AssemblyInfo.cs](../../tests/Elsa/Cli/Fixtures/Collision/AssemblyInfo.cs)<br>[CollidingWidgetsDbContext.cs](../../tests/Elsa/Cli/Fixtures/Collision/CollidingWidgetsDbContext.cs) |
+| Elsa.Cli.Fixtures.CollisionHost | [Program.cs](../../tests/Elsa/Cli/Fixtures/CollisionHost/Program.cs) |
+| Elsa.Cli.Fixtures.Host | [Program.cs](../../tests/Elsa/Cli/Fixtures/Host/Program.cs) |
+| Elsa.Cli.Fixtures.MinimalHost | [Program.cs](../../tests/Elsa/Cli/Fixtures/MinimalHost/Program.cs) |
+| Elsa.Cli.Fixtures.NuplaneHost | [Program.cs](../../tests/Elsa/Cli/Fixtures/NuplaneHost/Program.cs) |
+| Acme.Widgets | [AssemblyInfo.cs](../../tests/Elsa/Cli/Fixtures/Widgets/AssemblyInfo.cs)<br>[20260101000000_Initial.cs](../../tests/Elsa/Cli/Fixtures/Widgets/Migrations/PostgreSql/20260101000000_Initial.cs)<br>[20260102000000_AddLabel.cs](../../tests/Elsa/Cli/Fixtures/Widgets/Migrations/PostgreSql/20260102000000_AddLabel.cs)<br>[20260101000000_Initial.cs](../../tests/Elsa/Cli/Fixtures/Widgets/Migrations/SqlServer/20260101000000_Initial.cs)<br>[WidgetsDbContext.cs](../../tests/Elsa/Cli/Fixtures/Widgets/WidgetsDbContext.cs) |
+| Elsa.Cli.Tests | [DotnetElsa.cs](../../tests/Elsa/Cli/Tests/DotnetElsa.cs)<br>[HostDepsFileTests.cs](../../tests/Elsa/Cli/Tests/HostDepsFileTests.cs)<br>[HostResolutionTests.cs](../../tests/Elsa/Cli/Tests/HostResolutionTests.cs)<br>[NuplanePackageRootTests.cs](../../tests/Elsa/Cli/Tests/NuplanePackageRootTests.cs)<br>[PackageRootProbeTests.cs](../../tests/Elsa/Cli/Tests/PackageRootProbeTests.cs)<br>[PersistenceCliTests.cs](../../tests/Elsa/Cli/Tests/PersistenceCliTests.cs)<br>[ScriptCheckClassificationTests.cs](../../tests/Elsa/Cli/Tests/ScriptCheckClassificationTests.cs)<br>[ScriptCheckCliTests.cs](../../tests/Elsa/Cli/Tests/ScriptCheckCliTests.cs)<br>[ToolingEntryPointTests.cs](../../tests/Elsa/Cli/Tests/ToolingEntryPointTests.cs)<br>[WorkerLaunchTests.cs](../../tests/Elsa/Cli/Tests/WorkerLaunchTests.cs) |
 | Elsa.Diagnostics.ConsoleLogStreaming.Tests | [ConsoleLogStreamingSetupTests.cs](../../tests/Elsa/Diagnostics/ConsoleLogStreaming/Tests/ConsoleLogStreamingSetupTests.cs) |
 | Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests | [OpenTelemetryProviderContainerFixtures.cs](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/ProviderTests/OpenTelemetryProviderContainerFixtures.cs)<br>[OpenTelemetryProviderSmokeTests.cs](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/ProviderTests/OpenTelemetryProviderSmokeTests.cs) |
 | Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests | [EfOpenTelemetryDurabilityTests.cs](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/EfOpenTelemetryDurabilityTests.cs)<br>[EfOpenTelemetryRetentionTests.cs](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/EfOpenTelemetryRetentionTests.cs)<br>[EfOpenTelemetryStoreTests.cs](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/EfOpenTelemetryStoreTests.cs)<br>[OpenTelemetryEntityFrameworkCoreFixture.cs](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/OpenTelemetryEntityFrameworkCoreFixture.cs) |
@@ -216,6 +230,7 @@ Records direct test-project references and test source-file inventory; it does n
 
 | Project | Domain |
 |---|---|
+| [Elsa.Cli.Worker](../../src/Elsa/Cli/Worker/Elsa.Cli.Worker.csproj) | Elsa.Cli |
 | [Elsa.Foundation.Identity.OpenIddict.Behavior](../../src/Elsa/Foundation/Identity/OpenIddict/Behavior/Elsa.Foundation.Identity.OpenIddict.Behavior.csproj) | Elsa.Foundation |
 | [Elsa.Git](../../src/Elsa/Git/Elsa.Git.csproj) | Elsa.Git |
 | [Elsa.Http.JavaScript](../../src/Elsa/Http/JavaScript/Elsa.Http.JavaScript.csproj) | Elsa.Http |

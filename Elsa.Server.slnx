@@ -111,6 +111,10 @@
     <Project Path="src/Elsa/Caching/Core/Elsa.Caching.Core.csproj" />
     <Project Path="src/Elsa/Caching/Memory/Elsa.Caching.Memory.csproj" />
   </Folder>
+  <Folder Name="/src/Elsa/Cli/">
+    <Project Path="src/Elsa/Cli/Elsa.Cli.csproj" />
+    <Project Path="src/Elsa/Cli/Worker/Elsa.Cli.Worker.csproj" />
+  </Folder>
   <Folder Name="/src/Elsa/Diagnostics/">
     <Project Path="src/Elsa/Diagnostics/Persistence/Elsa.Diagnostics.Persistence.csproj" />
     <Project Path="src/Elsa/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj" />
@@ -363,6 +367,17 @@
   </Folder>
   <Folder Name="/tests/Elsa/Caching/">
     <Project Path="tests/Elsa/Caching/Tests/Elsa.Caching.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Cli/">
+    <Project Path="tests/Elsa/Cli/Tests/Elsa.Cli.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Cli/Fixtures/">
+    <Project Path="tests/Elsa/Cli/Fixtures/Collision/Acme.Widgets.Collision.csproj" />
+    <Project Path="tests/Elsa/Cli/Fixtures/CollisionHost/Elsa.Cli.Fixtures.CollisionHost.csproj" />
+    <Project Path="tests/Elsa/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj" />
+    <Project Path="tests/Elsa/Cli/Fixtures/MinimalHost/Elsa.Cli.Fixtures.MinimalHost.csproj" />
+    <Project Path="tests/Elsa/Cli/Fixtures/NuplaneHost/Elsa.Cli.Fixtures.NuplaneHost.csproj" />
+    <Project Path="tests/Elsa/Cli/Fixtures/Widgets/Acme.Widgets.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Diagnostics/" />
   <Folder Name="/tests/Elsa/Diagnostics/ConsoleLogStreaming/">

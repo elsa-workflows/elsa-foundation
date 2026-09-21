@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <Description>
+      A second third-party module whose declared name collides case-insensitively with the first one's
+      (spec 171 User Story 6, scenario 3). Loaded only by the fixture host built to carry both, because
+      discovery must refuse the whole closure when it sees them together.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>dotnet-elsa</ToolCommandName>
+    <PackageId>dotnet-elsa</PackageId>
+    <Description>
+      The dotnet elsa command-line tool. It resolves nothing about persistence itself: every command runs
+      inside the target host's own dependency closure through a worker process (ADR 0076 D1), so the SQL it
+      produces is the SQL that host's own EF Core and provider engine produce.
+    </Description>
+    <PackageTags>$(PackageTags);cli;dotnet-tool;migrations</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The worker is its own project inside this one's directory, so the SDK's source glob would otherwise
+         compile it into the front end as well as reference it. -->
+    <Compile Remove="Worker\**" />
+    <None Remove="Worker\**" />
+    <EmbeddedResource Remove="Worker\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The worker ships inside this tool's own package and is launched from beside it. The reference also
+         gives both halves one definition of the protocol they speak. -->
+    <ProjectReference Include="Worker\Elsa.Cli.Worker.csproj" />
+  </ItemGroup>
+
+</Project>
