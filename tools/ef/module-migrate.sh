@@ -3,33 +3,46 @@
 #
 # Usage:
 #   bash tools/ef/module-migrate.sh pending [context-regex]
-#   bash tools/ef/module-migrate.sh apply <Sqlite|SqlServer|PostgreSql|MySql> [--connection-env NAME|--connection-stdin] [context-regex]
-#   bash tools/ef/module-migrate.sh validate <Sqlite|SqlServer|PostgreSql|MySql> [--connection-env NAME|--connection-stdin] [context-regex]
-#   bash tools/ef/module-migrate.sh script <Sqlite|SqlServer|PostgreSql|MySql> <output-dir> [context-regex]
-#   bash tools/ef/module-migrate.sh script-check <Sqlite|SqlServer|PostgreSql|MySql> <output-dir> [context-regex]
+#   bash tools/ef/module-migrate.sh apply <Sqlite|SqlServer|PostgreSql|MySql> [--connection-env NAME|--connection-stdin] [modules]
+#   bash tools/ef/module-migrate.sh validate <Sqlite|SqlServer|PostgreSql|MySql> [--connection-env NAME|--connection-stdin] [modules]
+#   bash tools/ef/module-migrate.sh script <Sqlite|SqlServer|PostgreSql|MySql> <output-dir> [modules]
+#   bash tools/ef/module-migrate.sh script-check <output-dir>
 #
-# ELSA_EF_SCHEMA applies and scripts into the schema a host configured, the same one
-# Elsa:Persistence:EntityFramework:Schema names. SQLite ignores it and MySQL refuses it. The schema itself
-# needs no setting up: EF's migrations-history script creates it on both providers that take one.
+# `apply`, `validate`, `script` and `script-check` are thin shims (#1878) over the `dotnet elsa persistence`
+# CLI (`src/Elsa/Cli`, spec 171): this script builds that CLI and the tooling project below — which
+# references every first-party module and every provider engine, the same project `pending` already builds —
+# and runs the CLI against that project's own build output as its `--host`. `pending` alone still drives
+# `dotnet ef` directly: it needs no host closure, only the tooling project's own compiled model, and the new
+# CLI has no equivalent command (migration generation still needs a source project either way).
 #
-# pending needs no database: it fails when a module model changed without a regenerated migration.
-# apply runs `dotnet ef database update` per module context against one database; every module records its
-# own history table, which is the one a host started with
-# Elsa:Persistence:EntityFramework:Migrate:Policy=Validate reads. The connection is never a command-line
-# argument: --connection-env NAME (default ELSA_EF_CONNECTION) reads it from that environment variable, and
-# --connection-stdin reads it from this script's own stdin instead. There is no --connection flag.
-# validate fails when any module context still has a pending migration in that database.
-# script needs no database either: it writes one idempotent .sql per module context to
-# <output-dir>/<Module>/<Provider>.sql, which is the artifact a DBA reviews and a pipeline runs.
-# SQLite is refused there: EF cannot generate an idempotent script for it.
-# script-check regenerates into a temporary directory and diffs it against <output-dir>, so a hand-edited
-# script, a model change with no regenerated script, or a stale file fails instead of reaching a DBA.
-# Secrets' historical SQLite, SQL Server and PostgreSQL chains are applied by tools/ef/dual-migrate.sh.
+# `modules` selects by the CLI's own canonical module names (`dotnet elsa persistence list`), comma-separated
+# or repeated; the default is every module (`--all`). This replaces a regex over DbContext class names: the
+# new CLI takes no such regex — a regex was never a name an operator could put in a deployment manifest or a
+# support ticket — and nothing in this repository passed one.
+#
+# ELSA_EF_SCHEMA applies and scripts into the schema a host configured, same as before: the CLI itself reads
+# it when `--schema` is not given, so this script does not have to.
+#
+# The connection is never a command-line argument: --connection-env NAME (default ELSA_EF_CONNECTION) reads
+# it from that environment variable, and --connection-stdin reads it from this script's own stdin. Both flags
+# travel straight through to the CLI's own identical flags, unexamined: this script never reads or holds the
+# connection value itself, and neither does the CLI's front end — only the worker process does, inside the
+# host closure. There is no --connection flag.
+#
+# script writes flat, numbered SQL files plus one migration-plan.json into <output-dir> (the CLI's own
+# layout) — no longer nested under <Module>/<Provider>.sql, the layout this script wrote before #1878.
+# SQLite is refused there, by the CLI, with the same alternative this script used to name itself.
+# script-check regenerates <output-dir>'s own committed plan and diffs against it; the CLI decides the
+# provider and the modules from that plan, so this command takes no provider or module selector of its own.
 set -euo pipefail
 
+invocation_dir="$PWD"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 cd "$root"
 tooling="tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj"
+tooling_dir="tools/ef/Elsa.EntityFrameworkCore.Tooling"
+cli_project="src/Elsa/Cli/Elsa.Cli.csproj"
+cli_dir="src/Elsa/Cli"
 # Required modules live under src/ and optional ones under extensions/ (#1815). Roots are filtered to
 # the ones that exist: `find` exits non-zero on a missing directory, and under `set -e` that would end
 # the run instead of reporting the one module it could not resolve.
@@ -38,13 +51,25 @@ if [[ -d extensions ]]; then module_roots+=(extensions); fi
 configuration="${ELSA_EF_CONFIGURATION:-Release}"
 
 usage() {
-  sed -n '4,9p' "${BASH_SOURCE[0]}" | sed 's/^# *//' >&2
+  sed -n '4,10p' "${BASH_SOURCE[0]}" | sed 's/^# *//' >&2
   exit 2
+}
+
+# A path an operator gave, resolved against the directory this script was invoked from — not against
+# $root, which the `cd` above already changed to — without requiring the path to exist. `--output` and
+# `script-check`'s directory travel to the CLI as-is; a relative one would otherwise resolve against this
+# script's own working directory instead of the operator's.
+absolute_path() {
+  local path="$1"
+  case "$path" in
+    /*) printf '%s\n' "$path" ;;
+    *) printf '%s\n' "$invocation_dir/$path" ;;
+  esac
 }
 
 command="${1:-}"
 case "$command" in
-  pending) provider=""; connection=""; filter="${2:-.*}" ;;
+  pending) filter="${2:-.*}" ;;
   apply|validate)
     [[ $# -ge 2 ]] || usage
     provider="$2"
@@ -63,122 +88,126 @@ case "$command" in
         *) usage ;;
       esac
     done
-    filter="${1:-.*}"
-    if [[ "$connection_stdin" -eq 1 ]]; then
-      # `read` exits non-zero at EOF even when it did read a line with no trailing newline — the normal
-      # shape of a connection piped in without an `echo` — so that alone must not trip `set -e`; an empty
-      # read (no input at all) is what actually gets refused, just below.
-      IFS= read -r connection || true
-      [[ -n "$connection" ]] || { echo "error: --connection-stdin was given but this process's stdin carried no connection string." >&2; exit 2; }
-    else
-      connection="${!connection_env:-}"
-      [[ -n "$connection" ]] || { echo "error: environment variable '$connection_env' is not set." >&2; exit 2; }
-    fi
+    modules="${1:-}"
     ;;
-  script|script-check) [[ $# -ge 3 ]] || usage; provider="$2"; connection=""; destination="$3"; filter="${4:-.*}" ;;
+  script)
+    [[ $# -ge 3 ]] || usage
+    provider="$2"
+    destination="$(absolute_path "$3")"
+    modules="${4:-}"
+    ;;
+  script-check)
+    [[ $# -ge 2 ]] || usage
+    destination="$(absolute_path "$2")"
+    ;;
   *) usage ;;
 esac
 
-# EF cannot express an idempotent script for SQLite: SqliteHistoryRepository.GetEndIfScript throws
-# NotSupportedException, because SQLite has no conditional statement to wrap a migration in. A plain
-# script would sit in the same tree looking identical while being unsafe to re-run, so refuse instead.
-if [[ "$command" == script* && "$provider" == "Sqlite" ]]; then
-  echo "$command: SQLite cannot produce an idempotent script (EF throws NotSupportedException)." >&2
-  echo "Script a server provider, and bring a SQLite database up to date with:" >&2
-  echo "  bash tools/ef/module-migrate.sh apply Sqlite --connection-env ELSA_EF_CONNECTION" >&2
-  exit 2
+if [[ "$command" == "pending" ]]; then
+  dotnet tool restore >/dev/null
+  log="$(mktemp)"
+  if ! dotnet build "$tooling" -c "$configuration" -v q -nologo >"$log" 2>&1; then
+    grep -E " error " "$log" | sort -u >&2 || cat "$log" >&2
+    exit 1
+  fi
+  rm -f "$log"
+
+  ef() {
+    local context="$1" project="$2"
+    shift 2
+    dotnet ef "$@" --context "$context" --project "$project" --startup-project "$tooling" \
+      --configuration "$configuration" --no-build
+  }
+
+  failed=0
+  count=0
+  while IFS='|' read -r context _ assembly _; do
+    [[ "$context" =~ ^($filter)$ ]] || continue
+    project="$(find "${module_roots[@]}" -name "$assembly.csproj" -not -path '*/obj/*' | head -n 1)"
+    count=$((count + 1))
+    if ! ef "$context" "$project" migrations has-pending-model-changes >/dev/null 2>&1; then
+      echo "pending model changes: $context" >&2
+      failed=1
+    fi
+  done < <(dotnet run --project "$tooling" -c "$configuration" --no-build -- list)
+
+  if [[ $count -eq 0 ]]; then
+    echo "No module context matched." >&2
+    exit 2
+  fi
+  if [[ $failed -ne 0 ]]; then
+    exit 1
+  fi
+  echo "pending: $count module context(s) OK"
+  exit 0
 fi
 
-# `dotnet ef --output` resolves against its own working directory, so scripts are written to absolute paths.
-case "$command" in
-  script)
-    mkdir -p "$destination"
-    destination="$(cd "$destination" && pwd -P)"
-    generated="$destination"
-    ;;
-  script-check)
-    [[ -d "$destination" ]] || { echo "No such directory: $destination" >&2; exit 2; }
-    destination="$(cd "$destination" && pwd -P)"
-    generated="$(mktemp -d)"
-    trap 'rm -rf "$generated"' EXIT
-    ;;
-esac
+# Everything below is the shim: `apply`, `validate`, `script` and `script-check` never call `dotnet ef`
+# themselves any more (#1878). They build `dotnet-elsa` and this same tooling project, then run the CLI
+# against the tooling project's own build output.
 
-dotnet tool restore >/dev/null
-log="$(mktemp)"
-if ! dotnet build "$tooling" -c "$configuration" -v q -nologo >"$log" 2>&1; then
-  grep -E " error " "$log" | sort -u >&2 || cat "$log" >&2
-  exit 1
-fi
-rm -f "$log"
-
-ef() {
-  local context="$1" project="$2"
-  shift 2
-  dotnet ef "$@" --context "$context" --project "$project" --startup-project "$tooling" \
-    --configuration "$configuration" --no-build
+build_quietly() {
+  local project="$1"
+  local log
+  log="$(mktemp)"
+  if ! dotnet build "$project" -c "$configuration" -v q -nologo >"$log" 2>&1; then
+    grep -E " error " "$log" | sort -u >&2 || cat "$log" >&2
+    rm -f "$log"
+    exit 1
+  fi
+  rm -f "$log"
 }
 
-failed=0
-count=0
-while IFS='|' read -r context row_provider assembly _; do
-  [[ "$context" =~ ^($filter)$ ]] || continue
-  [[ -z "$provider" || "$row_provider" == "$provider" ]] || continue
-  project="$(find "${module_roots[@]}" -name "$assembly.csproj" -not -path '*/obj/*' | head -n 1)"
-  count=$((count + 1))
-  case "$command" in
-    pending)
-      if ! ef "$context" "$project" migrations has-pending-model-changes >/dev/null 2>&1; then
-        echo "pending model changes: $context" >&2
-        failed=1
-      fi
-      ;;
-    apply)
-      echo "apply $context"
-      ELSA_EF_CONNECTION="$connection" ef "$context" "$project" database update >/dev/null
-      ;;
-    validate)
-      pending="$(ELSA_EF_CONNECTION="$connection" ef "$context" "$project" migrations list --no-color 2>/dev/null | grep -F '(Pending)' || true)"
-      if [[ -n "$pending" ]]; then
-        echo "pending migrations for $context: $pending" >&2
-        failed=1
-      fi
-      ;;
-    script|script-check)
-      # The same <Module>/<Provider> split the migrations themselves are stored under.
-      relative="${context%"$row_provider"DbContext}/$row_provider.sql"
-      mkdir -p "$(dirname "$generated/$relative")"
-      ef "$context" "$project" migrations script --idempotent --output "$generated/$relative" >/dev/null
-      if [[ "$command" == script ]]; then
-        echo "script $context -> ${destination#"$root/"}/$relative"
-      elif [[ ! -f "$destination/$relative" ]]; then
-        echo "missing script: ${destination#"$root/"}/$relative" >&2
-        failed=1
-      elif ! diff -u "$destination/$relative" "$generated/$relative" >&2; then
-        echo "out of date: ${destination#"$root/"}/$relative" >&2
-        failed=1
-      fi
-      ;;
-  esac
-done < <(dotnet run --project "$tooling" -c "$configuration" --no-build -- list)
+# The directory beside the just-built project's one <application>.deps.json, whatever its target
+# framework folder is named — so this never has to hardcode one.
+build_output_dir() {
+  local project_dir="$1"
+  local deps
+  deps="$(find "$project_dir/bin/$configuration" -mindepth 2 -maxdepth 2 -name '*.deps.json' -print -quit)"
+  if [[ -z "$deps" ]]; then
+    echo "error: '$project_dir' built with no *.deps.json under bin/$configuration." >&2
+    exit 1
+  fi
+  dirname "$deps"
+}
 
-# A module that was removed or renamed leaves a script nobody generates any more; only a full check can
-# tell that from a context the caller deliberately filtered out.
-if [[ "$command" == script-check && "$filter" == ".*" ]]; then
-  while IFS= read -r stale; do
-    [[ -n "$stale" ]] || continue
-    echo "stale script: ${destination#"$root/"}/${stale#./}" >&2
-    failed=1
-  done < <(comm -13 \
-    <(cd "$generated" && find . -name "$provider.sql" | sort) \
-    <(cd "$destination" && find . -name "$provider.sql" | sort))
-fi
+# Runs one `dotnet elsa` command. The connection, when this invocation opens a database, has already
+# travelled here as --connection-env's NAME or as this process's own --connection-stdin flag, never as a
+# value on this function's argument list.
+dotnet_elsa() {
+  build_quietly "$cli_project"
+  dotnet exec "$(build_output_dir "$cli_dir")/Elsa.Cli.dll" "$@"
+}
 
-if [[ $count -eq 0 ]]; then
-  echo "No module context matched." >&2
-  exit 2
-fi
-if [[ $failed -ne 0 ]]; then
-  exit 1
-fi
-echo "$command: $count module context(s) OK"
+# --modules "$modules" when a filter was given, --all otherwise. An array, not a string, so a module
+# list never round-trips through word-splitting.
+selection=(--all)
+[[ -z "${modules:-}" ]] || selection=(--modules "$modules")
+
+case "$command" in
+  apply|validate)
+    build_quietly "$tooling"
+    host="$(build_output_dir "$tooling_dir")"
+    connection_flags=(--connection-env "$connection_env")
+    [[ "$connection_stdin" -eq 0 ]] || connection_flags=(--connection-stdin)
+    dotnet_elsa persistence "$command" \
+      --host "$host" \
+      --provider "$provider" \
+      "${selection[@]}" \
+      "${connection_flags[@]}"
+    ;;
+  script)
+    build_quietly "$tooling"
+    host="$(build_output_dir "$tooling_dir")"
+    dotnet_elsa persistence script \
+      --host "$host" \
+      --provider "$provider" \
+      "${selection[@]}" \
+      --output "$destination"
+    ;;
+  script-check)
+    build_quietly "$tooling"
+    host="$(build_output_dir "$tooling_dir")"
+    dotnet_elsa persistence script-check "$destination" --host "$host"
+    ;;
+esac

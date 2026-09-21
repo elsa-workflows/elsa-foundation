@@ -9,7 +9,8 @@ Every first-party EF module ships one migration set per provider (Sqlite, SqlSer
 compiled into the module assembly under `Migrations/<Context>/<Provider>/`, with its own history table.
 `tools/ef/Elsa.EntityFrameworkCore.Tooling` is the shared design-time startup project: it holds the provider
 engines and one `ModuleDesignTimeFactory` line per provider-derived context. Add a line there when a module
-gains a context.
+gains a context. `module-migrate.sh` also builds this same project as the `--host` it points the
+`dotnet elsa persistence` CLI at (#1878) — every first-party module and every provider engine, in one place.
 
 ```bash
 bash tools/ef/generate-module-migrations.sh [context-regex]   # regenerate Initial after a model change
@@ -17,8 +18,15 @@ bash tools/ef/module-migrate.sh pending                        # CI-safe: fails 
 bash tools/ef/module-migrate.sh apply PostgreSql --connection-env ELSA_EF_CONNECTION # out-of-process apply, every module
 bash tools/ef/module-migrate.sh validate PostgreSql --connection-env ELSA_EF_CONNECTION
 bash tools/ef/module-migrate.sh script PostgreSql db/migrations  # reviewable SQL, no database needed
-bash tools/ef/module-migrate.sh script-check PostgreSql db/migrations # CI-safe: fails on edited/stale SQL
+bash tools/ef/module-migrate.sh script-check db/migrations       # CI-safe: fails on edited/stale SQL
 ```
+
+`apply`, `validate`, `script` and `script-check` are thin shims (#1878) over the `dotnet elsa persistence`
+CLI (`src/Elsa/Cli`, [spec 171](../../specs/171-persistence-script-cli/spec.md)) rather than a second
+implementation of the same behavior; they no longer drive `dotnet ef` themselves. `pending` alone still does,
+because it needs no host closure, only this tooling project's own compiled model. `[modules]` selects by the
+CLI's own canonical module names (`dotnet elsa persistence list`), comma-separated — not the context-name
+regex this script used to take — and defaults to every module.
 
 Elsa is pre-release with no production data, so a module keeps a single `Initial` migration per provider
 that is regenerated whenever its model changes; Secrets keeps its historical chain. The generator rewrites
@@ -49,12 +57,13 @@ bash tools/ef/module-migrate.sh script PostgreSql db/migrations
 bash tools/ef/module-migrate.sh script MySql db/migrations
 ```
 
-**Layout: `<output-dir>/<Module>/<Provider>.sql`** — one file per module context and provider, under the
-same `<Module>/<Provider>` split the compiled migrations use (`Migrations/<Module>/<Provider>/`), so a
-reviewer reads the same tree in both places. `<Module>` is the context name without its provider suffix
-(`RuntimeSqlServerDbContext` → `Runtime/SqlServer.sql`).
+**Layout: flat, ordered `<output-dir>/NN-<slug>.sql` files plus one `migration-plan.json`** (#1878) — the
+CLI's own artifact, not the `<output-dir>/<Module>/<Provider>.sql` tree this script wrote before it became a
+shim: a DBA pipeline applies files in the order they are named, and the manifest is what `script-check` reads
+back rather than a directory listing. See the CLI's own [README](../../src/Elsa/Cli/README.md) for the exact
+shape.
 
-Every file is generated with `--idempotent`, which means:
+Every file is generated idempotent, which means:
 
 - It is **safe to re-run**: each migration in it is wrapped in a check against that module's own
   migrations-history table, so a migration already recorded there is skipped rather than re-applied.
@@ -73,33 +82,28 @@ every other file while being unsafe to re-run. `script Sqlite` therefore exits 2
 database is brought up to date with `module-migrate.sh apply Sqlite --connection-env ELSA_EF_CONNECTION`, or by a host on the
 `AutoMigrate` default.
 
-Secrets ships only a MySQL context in this catalog; its historical SQLite, SQL Server and PostgreSQL
-chains belong to `tools/ef/dual-migrate.sh`.
-
 ### Keeping the committed SQL honest
 
-`script-check` regenerates into a temporary directory and diffs against the directory you pass. It checks
-every module context and then exits non-zero if any file differed, was missing, or was stale — a file no
-module context generates any more (that last check runs only for a full, unfiltered check). It prints the
-unified diff, so the failure says which statement moved:
+`script-check` regenerates the committed artifact from its own `migration-plan.json` and diffs against it —
+no `<Provider>` or module selector of its own, because the committed plan already says what it targets:
 
 ```bash
-bash tools/ef/module-migrate.sh script-check PostgreSql db/migrations
+bash tools/ef/module-migrate.sh script-check db/migrations
 ```
 
-A CI job would call exactly that, once per server provider, after `dotnet tool restore` — nothing else is
-wired up here. It catches the two silent failures that matter: SQL hand-edited after review, and a model
-change merged without a regenerated script. The second one is caught because the command builds the
-tooling project — and with it every module — before it scripts anything, so it compares against the
+A CI job would call exactly that, once per committed artifact directory, after `dotnet tool restore` —
+nothing else is wired up here. It catches the two silent failures that matter: SQL hand-edited after review,
+and a model change merged without a regenerated script. The second one is caught because the command builds
+the tooling project — and with it every module — before it checks anything, so it compares against the
 current model, not a stale assembly.
 
 ### Where the SQL is committed
 
-This repository does not commit generated `.sql`. A team that reviews SQL commits the tree the commands
-above write — conventionally `db/migrations/<Module>/<Provider>.sql` — because that is what makes the
-change reviewable: the schema diff shows up in the pull request next to the model change that caused it,
-a DBA approves the statements before anything runs, and `script-check` in CI proves the committed file is
-still the file the model generates.
+This repository does not commit generated `.sql`. A team that reviews SQL commits the directory `script`
+writes — conventionally `db/migrations/<provider>/` — because that is what makes the change reviewable: the
+schema diff shows up in the pull request next to the model change that caused it, a DBA approves the
+statements before anything runs, and `script-check` in CI proves the committed files are still what the
+model generates.
 
 ## Secrets pilot tooling
 
