@@ -392,12 +392,15 @@ public sealed class EfToolingHostTests : IDisposable
     }
 
     /// <summary>
-    /// The exact-match replacement in <c>Redact</c> only catches a verbatim echo of the connection string
-    /// it was given. A driver that re-serialises, re-cases or re-quotes the string before embedding it in a
-    /// message — Npgsql, SqlClient and MySql's driver are not Sqlite, and none of them are proven not to —
-    /// would slip straight through it. This drives <c>Redact</c> itself (via reflection: it is a private
-    /// implementation detail with no other seam) with a message shaped exactly like that: the credential
-    /// echoed back re-cased and re-quoted, not as the exact connection string this call was given.
+    /// The exact-match replacement in <see cref="EfToolingRedaction.Redact"/> only catches a verbatim echo
+    /// of the connection string it was given. A driver that re-serialises, re-cases or re-quotes the string
+    /// before embedding it in a message — Npgsql, SqlClient and MySql's driver are not Sqlite, and none of
+    /// them are proven not to — would slip straight through it. This drives
+    /// <see cref="EfToolingRedaction.Redact"/> directly, through the public seam it is exposed for exactly
+    /// this reason, with a message shaped exactly like that: the credential echoed back re-cased and
+    /// re-quoted, not as the exact connection string this call was given. It proves both halves of what
+    /// that pattern claims: the secret is gone, and the surrounding non-credential text does not get
+    /// mangled along with it.
     /// </summary>
     [Fact]
     public void Redact_scrubs_a_recased_and_requoted_echo_of_the_credential_a_driver_might_produce()
@@ -406,10 +409,11 @@ public sealed class EfToolingHostTests : IDisposable
         const string connection = $"Host=db;Username=u;Password={secret};Database=d";
         var reformatted = $"Npgsql.NpgsqlException: Login failed [ConnectionString: Host=db;USERNAME=u;PWD=\"{secret}\";Database=d]";
 
-        var method = typeof(EfToolingHost).GetMethod("Redact", BindingFlags.NonPublic | BindingFlags.Static)!;
-        var redacted = (string)method.Invoke(null, [reformatted, connection])!;
+        var redacted = EfToolingRedaction.Redact(reformatted, connection);
 
         Assert.DoesNotContain(secret, redacted, StringComparison.Ordinal);
+        Assert.Contains("Host=db", redacted, StringComparison.Ordinal);
+        Assert.Contains("Database=d", redacted, StringComparison.Ordinal);
     }
 
     private static ApplyRequestBody ApplyRequest(string command, string provider, string[] modules, string connection) => new()
