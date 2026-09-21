@@ -40,6 +40,7 @@ using Elsa.Mediator;
 using Elsa.Modularity.Api;
 using Elsa.Modularity.Api.Attention;
 using Elsa.Modularity.Core.Contracts;
+using Elsa.Modularity.EntityFramework.Extensions;
 using Elsa.Modularity.Nuplane.Extensions;
 using Elsa.Modularity.Nuplane.Services;
 using Elsa.Primitives.Hosting;
@@ -177,6 +178,9 @@ builder.Services.AddNuplaneFeatureCatalog();
 builder.Services.TryAddScoped<IModuleRegistryService, ModuleRegistryService>();
 builder.Services.TryAddScoped<IShellFeatureConfigurationStore, NullShellFeatureConfigurationStore>();
 builder.Services.TryAddScoped<IShellReloader, NullShellReloader>();
+// Composed on the host container, before AddCShellsAspNetCore, per the extension's own requirement: it must be
+// registered before any EF feature is enabled (ADR 0076 D9), which is why an EF feature cannot bring it itself.
+builder.Services.AddEfPendingMigrationActivationGuard();
 builder.Services.AddDynamicEndpointApiExplorerRefresh();
 
 builder.Services.AddCShellsAspNetCore(shells =>
