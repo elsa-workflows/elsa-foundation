@@ -85,6 +85,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/Elsa/Persistence/EntityFramework/IEfPostMigrationAction.cs",
         "src/Elsa/Persistence/EntityFramework/Tooling/EfMigrationPlan.cs",
         "src/Elsa/Persistence/EntityFramework/Tooling/EfModuleOrder.cs",
+        "src/Elsa/Persistence/EntityFramework/Tooling/EfMySqlIdempotentScript.cs",
         "src/Elsa/Persistence/EntityFramework/Tooling/EfProviderAgreement.cs",
         "src/Elsa/Persistence/EntityFramework/Tooling/EfToolingContract.cs",
         "src/Elsa/Persistence/EntityFramework/Tooling/EfToolingExitCode.cs",

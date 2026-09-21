@@ -508,7 +508,11 @@ public static class EfToolingHost
                 return new EfModuleArtifact(
                     entry,
                     EfMigrationPlan.ScriptFileName(order, descriptor.Name),
-                    EfToolingLineEndings.Utf8Lf(script!),
+                    // The MySQL rewrite (#1914) sits inside the normalizer's argument on purpose: everything
+                    // downstream — the per-file sha256, script-check's byte comparison, FR-043's determinism —
+                    // reads the artifact, so putting it anywhere later would leave all three describing text
+                    // no server could run. It is a no-op for every other provider.
+                    EfToolingLineEndings.Utf8Lf(EfMySqlIdempotentScript.Rewrite(provider, descriptor.Name, script!)),
                     packages[entry.Assembly]);
             })
             .ToArray();

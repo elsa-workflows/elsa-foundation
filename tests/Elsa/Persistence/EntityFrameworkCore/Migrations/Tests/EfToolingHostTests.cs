@@ -163,6 +163,70 @@ public sealed class EfToolingHostTests : IDisposable
     }
 
     /// <summary>
+    /// The MySQL counterpart of the test above, and the assertion whose absence let #1914 ship: MySql
+    /// appeared only in the determinism theories, so an artifact no MySQL server can execute stayed
+    /// byte-stable, reproducible and unrunnable through four merged slices. Every guard has to sit inside one
+    /// per-module stored procedure, because MySQL allows <c>IF … THEN</c> only inside a routine; the module's
+    /// own history table still guards each one, and is still created outside the procedure, where
+    /// <c>CREATE TABLE IF NOT EXISTS</c> is idempotent on its own.
+    /// </summary>
+    [Fact]
+    public async Task Script_hoists_every_mysql_guard_into_the_modules_own_stored_procedure()
+    {
+        var directory = await ScriptAsync("MySql", ["Secrets"], "mysql-idempotent");
+        var sql = Encoding.UTF8.GetString(Artifact(directory)["01-secrets.sql"]);
+
+        Assert.Contains("CREATE TABLE IF NOT EXISTS `__EFMigrationsHistory_ElsaSecrets`", sql, StringComparison.Ordinal);
+        Assert.Contains(
+            "DROP PROCEDURE IF EXISTS `elsa_migrate_secrets`;\nDELIMITER //\nCREATE PROCEDURE `elsa_migrate_secrets`()\nBEGIN\n",
+            sql,
+            StringComparison.Ordinal);
+        Assert.EndsWith(
+            "END //\nDELIMITER ;\nCALL `elsa_migrate_secrets`();\nDROP PROCEDURE `elsa_migrate_secrets`;\n",
+            sql,
+            StringComparison.Ordinal);
+
+        using var manifest = JsonDocument.Parse(Artifact(directory)["migration-plan.json"]);
+        var ids = manifest.RootElement.GetProperty("modules")[0].GetProperty("migrations").GetProperty("ids");
+        Assert.NotEmpty(ids.EnumerateArray());
+        foreach (var id in ids.EnumerateArray())
+        {
+            Assert.Contains(
+                $"    IF NOT EXISTS(SELECT * FROM `__EFMigrationsHistory_ElsaSecrets` WHERE `MigrationId` = '{id.GetString()}') THEN\n",
+                sql,
+                StringComparison.Ordinal);
+        }
+
+        // Nothing MySQL's grammar refuses is left at the top level: no bare BEGIN beyond the procedure's own
+        // body opener, no END;, and none of EF's transaction control, which MySQL's implicit DDL commit makes
+        // a promise the file cannot keep.
+        Assert.Equal(1, sql.Split('\n').Count(line => line == "BEGIN"));
+        Assert.DoesNotContain("\nEND;\n", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("\nSTART TRANSACTION;\n", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("\nCOMMIT;\n", sql, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// #1914's rewrite belongs to MySQL alone. SQL Server's idempotent script is where MySQL's generator
+    /// copied its top-level <c>IF NOT EXISTS</c> / <c>BEGIN</c> / <c>END;</c> from, and PostgreSQL's carries
+    /// a <c>BEGIN</c> of its own inside every <c>DO $EF$</c> block, so a rewrite whose provider gate slipped
+    /// would turn a perfectly good artifact into a stored procedure that still looked plausible. Each
+    /// provider's own transaction statement is asserted present, because that is the line the rewrite drops.
+    /// </summary>
+    [Theory]
+    [InlineData("SqlServer", "\nBEGIN TRANSACTION;\n")]
+    [InlineData("PostgreSql", "\nSTART TRANSACTION;\n")]
+    public async Task Script_leaves_a_provider_other_than_mysql_exactly_as_ef_generated_it(string provider, string transaction)
+    {
+        var sql = Encoding.UTF8.GetString(Artifact(await ScriptAsync(provider, ["Secrets"], "not-mysql"))["01-secrets.sql"]);
+
+        Assert.Contains(transaction, sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("DELIMITER", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("CREATE PROCEDURE", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("elsa_migrate_", sql, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// <c>Idempotent</c> without <c>Script</c> drops the batch separators <c>sqlcmd</c> needs, which no
     /// assertion about determinism would catch: the file would be byte-stable and unrunnable.
     /// </summary>

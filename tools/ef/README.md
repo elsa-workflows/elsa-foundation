@@ -75,6 +75,28 @@ Every file is generated idempotent, which means:
 - It needs **no database to generate**: the design-time factories bind a placeholder connection unless
   `ELSA_EF_CONNECTION` names a real one, and scripting never opens it.
 
+**MySQL scripts carry a stored procedure, and applying one needs routine privileges.** MySQL allows
+`IF … THEN` only inside a routine, so an idempotent MySQL script has nowhere else to put its per-migration
+guards: each file drops and recreates one `elsa_migrate_<module-slug>` procedure, calls it, and drops it
+again. That is inherent to idempotent SQL on MySQL, not a choice this tool made — Pomelo's generator does
+the same — but it is an operator-visible prerequisite. The identity applying a MySQL artifact needs, on the
+target database and in addition to the usual DDL rights:
+
+- **`CREATE ROUTINE`**, for the `CREATE PROCEDURE`.
+- **`ALTER ROUTINE`**, for the file's own leading `DROP PROCEDURE IF EXISTS` — which recovers a database
+  from a run that failed part-way — because MySQL checks that privilege before it checks whether the
+  routine exists. Without it the file fails on its first statement (`ERROR 1370`), before any DDL runs.
+- **`EXECUTE`** only on a server with `automatic_sp_privileges=0`; the default `ON` grants the definer
+  `EXECUTE` on the routine it just created, which is what the file's `CALL` uses.
+
+The file also carries no `START TRANSACTION`/`COMMIT`: MySQL commits implicitly on every DDL statement, so
+the pair EF emits would promise an atomicity the server cannot deliver. `DELIMITER` lines in the file are a
+client directive — the `mysql` CLI and MySQL Workbench consume them and never send them — so apply a MySQL
+artifact with a client that understands `DELIMITER`. Validated on `mysql:8.4.11`, which is the image every
+MySQL suite in this repository pins; the provider's stated floor is MySQL 8.0
+([spike](../../docs/reports/ef-core-persistence/mysql-provider-spike.md)), and nothing below 8.4.11 has
+been exercised here.
+
 **SQLite is refused, not scripted.** EF cannot generate an idempotent script for SQLite
 (`SqliteHistoryRepository.GetEndIfScript` throws `NotSupportedException`, because SQLite has no
 conditional statement to wrap a migration in), and a plain script would sit in the same tree looking like
@@ -193,8 +215,10 @@ The checks cover different failure classes:
 Name the provider and the modules explicitly, and point `--connection-env` at the variable carrying the
 target database's connection string. Before applying to a deployment database, take a backup, quiesce
 writes, and run `pending`. Use a short-lived least-privilege deployment identity with the DDL rights
-needed for that provider; after the schema is verified, run the application with its least-privilege
-runtime identity.
+needed for that provider — on MySQL that includes `CREATE ROUTINE` and `ALTER ROUTINE`, because an
+idempotent MySQL script applies its guards through a stored procedure (see above) — and after the schema is
+verified, run the application with its least-privilege runtime identity. `apply` and `validate` need no
+routine privileges on any provider: they run the compiled migrations through EF, not the scripted artifact.
 
 After `apply` succeeds, verify the selected database's per-module `__EFMigrationsHistory_*` tables
 contain the expected migration IDs and that the expected table shapes are present before deploying the
