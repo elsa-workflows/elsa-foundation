@@ -1,16 +1,15 @@
 ---
-status: proposed
+status: accepted
 date: 2026-09-19
 decision_context: Design of issue #1861, owner decisions taken during the design session on 2026-09-19.
 ---
 
 # Persistence tooling runs inside the host's closure
 
-Status: proposed (2026-09-19). Sipke Schoorstra approved the design direction for issue #1861 in
-session: assembly source (host output plus the Nuplane package root, driven through EF's `IMigrator`
-directly, with no `dotnet-ef`), the SQLite script refusal, the deliverable shape (spec, ADR, and a
-slice breakdown), and fixing Nuplane gaps in Nuplane when that is cleaner. Implementation has not
-started; this ADR and spec 171 are the design session's only artifacts.
+Status: accepted (2026-09-21). Sipke Schoorstra accepted ADR 0076 after the design it records — the
+out-of-process worker, the `[EfModule]` descriptor, and the two-gate activation guard — was
+implemented in slices 1 to 10 of issue #1861, merged 2026-09-20 and 2026-09-21; the optional slice 11
+stays open.
 
 Program goal: none/free-flow. [EF Core Persistence](../program-goals/ef-core-persistence.md) is
 complete as of 2026-09-16, and [Feature Composition Readiness](../program-goals/feature-composition-readiness.md)
@@ -115,14 +114,14 @@ never migrated, and the only backstop is `EfDatabaseMigrator`'s `Validate` excep
 **Nuplane facts driving D1, D12, and D13.** Checked against a local checkout of the
 `valence-works/nuplane` repository, branch `pr-67`, `git describe` = `0.0.10-10-g5c0e04e` — ten
 commits ahead of tag `0.0.10`, itself ahead of the pinned `Nuplane` package version,
-`0.0.9-preview.61` (`Directory.Packages.props:105`). **U1–U4 shipped upstream on 2026-09-20, published
-as `0.0.11-preview.83` from `valence-works/nuplane` `main` at `e93ad89`; Elsa still pins
-`0.0.9-preview.61` for all four packages (`Directory.Packages.props:105-108`).** What a dependent
-Elsa slice now waits on is only the Elsa pin bump, tracked by
-[#1893](https://github.com/elsa-workflows/elsa-foundation/issues/1893). Two readings are cited
+`0.0.9-preview.61` (`Directory.Packages.props:105`) at design time. **U1–U4 shipped upstream on
+2026-09-20, published as `0.0.11-preview.83` from `valence-works/nuplane` `main` at `e93ad89`; Elsa's
+own pin bump to `0.0.11-preview.83` merged 2026-09-20 as
+[PR #1903](https://github.com/elsa-workflows/elsa-foundation/pull/1903) (tracked by
+[#1893](https://github.com/elsa-workflows/elsa-foundation/issues/1893)).** Two readings are cited
 below and the distinction is stated once, here: a citation to a delivered API, or to where TFM and
 RID resolution live, is Nuplane `main` at `e93ad89`; every other `nuplane:` citation is `pr-67` as
-read at design time. Neither is what Elsa's pinned version does.
+read at design time, before either package version was pinned in Elsa.
 
 A `HostIntegrated` package loads into a custom, non-collectible load context,
 `HostIntegratedPackageGraphLoadContext` (`nuplane: src/Nuplane.Loading/HostIntegratedPackageGraphLoadContext.cs:6-12`),
@@ -579,10 +578,11 @@ point) were filed and delivered as Nuplane changes (2026-09-20) rather than buil
 workarounds. U3 (a pre-activation gate contract, D13) and U4 (registering
 `DesiredManifestPackageSource`) were filed and delivered the same way. This matches the owner's
 earlier stance on Groundwork gaps: fix them upstream when that is the cleaner design, rather than
-duplicating the fix inside Elsa. The decision has been carried out upstream; what remains on Elsa's
-side is consuming the delivered APIs after the pin bump
-([#1893](https://github.com/elsa-workflows/elsa-foundation/issues/1893)), not building any of the
-four itself. Elsa's worker does not parse `store-state.json` by hand, and does not reimplement TFM or
+duplicating the fix inside Elsa. The decision has been carried out upstream, and Elsa's own
+`Directory.Packages.props` pin bump to `0.0.11-preview.83` merged 2026-09-20 as
+[PR #1903](https://github.com/elsa-workflows/elsa-foundation/pull/1903)
+(tracked by [#1893](https://github.com/elsa-workflows/elsa-foundation/issues/1893)); Elsa built none
+of the four itself. Elsa's worker does not parse `store-state.json` by hand, and does not reimplement TFM or
 asset resolution.
 
 Reason: `StoreRegistry`, `StoreStateSerializer`, `StoreStateRecord`, and `ActivePackageDescriptor`
@@ -705,12 +705,13 @@ Costs and risks:
   (`EfCoreDependencyGuardTests.cs:518,521-523`; `ModuleRoots.Production` at
   `tests/Elsa/Architecture/Support/ModuleRoots.cs:19`) — but the proposed adapter lives under `src/`
   regardless, so it was already inside the scan before that widening and stays inside it after.
-- U1–U4 shipped upstream on 2026-09-20 as `0.0.11-preview.83` (Nuplane `main` at `e93ad89`); Elsa
-  still pins `0.0.9-preview.61` (Context, above). The one remaining dependency is the Elsa pin bump,
-  tracked by [#1893](https://github.com/elsa-workflows/elsa-foundation/issues/1893); it gates
+- U1–U4 shipped upstream on 2026-09-20 as `0.0.11-preview.83` (Nuplane `main` at `e93ad89`); Elsa's
+  own pin bump to the same version merged 2026-09-20 as
+  [PR #1903](https://github.com/elsa-workflows/elsa-foundation/pull/1903) (tracked by
+  [#1893](https://github.com/elsa-workflows/elsa-foundation/issues/1893)), unblocking
   [#1874](https://github.com/elsa-workflows/elsa-foundation/issues/1874) (slice 4, for Nuplane hosts)
   and the defence half of [#1880](https://github.com/elsa-workflows/elsa-foundation/issues/1880)
-  (slice 10), and nothing else in this ADR.
+  (slice 10); both merged along with the rest of Elsa slices 1–10 (Decision record, below).
 - R4 also surfaced three residual risks in the delivered loader, all absorbed by D1's worker design
   rather than left open: the load is irreversible for the process lifetime and not re-entrant
   (`nuplane: src/Nuplane.Loading/NuplaneHostIntegratedLoader.cs:29-33,37-41`), so the worker calls
@@ -735,3 +736,4 @@ Costs and risks:
 | 2026-09-19 | Four owner decisions taken | Assembly source is the host's own output plus the Nuplane package root, resolved through EF's `IMigrator` directly with no `dotnet-ef`; `script --provider Sqlite` stays refused; the deliverable is spec 171, this ADR, and an issue comment proposing the slice breakdown; Nuplane gaps (U1–U4) are fixed in Nuplane rather than worked around in Elsa, matching the owner's earlier stance on Groundwork gaps. |
 | 2026-09-19 | ADR 0076 proposed | This document records D1–D13 from the design session. No implementation has started, and no child issue, Nuplane issue, or label change follows from this ADR alone. |
 | 2026-09-20 | Upstream U1–U4 delivered | valence-works/nuplane#73–#76 delivered through PRs 79, 81, 80, 78 and published as `0.0.11-preview.83` (`e93ad89`); R4 settled (spec 171 research.md); D1, D10, D12, D13 and Consequences updated to the delivered state; no decision changed; the remaining dependency is the Elsa pin bump tracked by [#1893](https://github.com/elsa-workflows/elsa-foundation/issues/1893); U5 (valence-works/nuplane#77) still open. |
+| 2026-09-21 | ADR 0076 accepted; design implemented | Elsa slices 1–10 merged (PRs 1896, 1905, 1906, 1907, 1908, 1909, 1911, 1912, 1915, 1920); the Elsa `Directory.Packages.props` pin bump to `0.0.11-preview.83` merged as PR 1903 (tracked by [#1893](https://github.com/elsa-workflows/elsa-foundation/issues/1893)); the optional slice 11 ([#1881](https://github.com/elsa-workflows/elsa-foundation/issues/1881)) and research item R5 (spec 171 research.md) remain open. |
