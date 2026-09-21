@@ -3,6 +3,7 @@ using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection;
+using System.Runtime.Loader;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -84,6 +85,22 @@ public sealed class EfToolingHostTests : IDisposable
             if (typeof(EfToolingHost).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion is { } toolVersion)
                 Assert.DoesNotContain(toolVersion, text, StringComparison.Ordinal);
         }
+    }
+
+    /// <summary>
+    /// The normalizer that makes Windows output byte-identical to Linux output (spec 171 FR-043):
+    /// <c>EfToolingLineEndings.Utf8Lf</c> must fold both CRLF and a lone CR down to LF, add exactly one
+    /// trailing newline, and leave the line structure otherwise untouched. This is the direct, non-vacuous
+    /// counterpart to <see cref="Script_output_carries_no_cr_no_bom_no_absolute_path_and_no_timestamp"/>,
+    /// which is vacuous on Linux and macOS because EF's own <c>Environment.NewLine</c> is already LF there.
+    /// </summary>
+    [Fact]
+    public void Utf8Lf_folds_crlf_and_lone_cr_to_lf_and_preserves_line_structure()
+    {
+        var bytes = EfToolingLineEndings.Utf8Lf("line one\r\nline two\rline three\n");
+
+        Assert.DoesNotContain((byte)'\r', bytes);
+        Assert.Equal("line one\nline two\nline three\n", Encoding.UTF8.GetString(bytes));
     }
 
     /// <summary>
@@ -301,22 +318,21 @@ public sealed class EfToolingHostTests : IDisposable
     }
 
     /// <summary>
-    /// The files are numbered for a DBA to apply in order, so a leftover from an earlier, wider selection
-    /// would be applied as if it belonged to this plan. That is the one failure that looks like success.
+    /// Nothing already in the output directory is ever deleted, even a leftover this selection does not
+    /// produce: whether that leftover is stale is <c>script-check</c>'s call to make (FR-045), not
+    /// <c>script</c>'s.
     /// </summary>
     [Fact]
-    public async Task Script_refuses_an_output_directory_holding_sql_it_does_not_produce()
+    public async Task Script_leaves_a_sql_file_it_does_not_produce_untouched()
     {
-        var output = await ScriptAsync("PostgreSql", Selection, "stale");
-        var stale = Path.Combine(output, "04-gone.sql");
-        File.WriteAllText(stale, "SELECT 1;\n");
+        var output = await ScriptAsync("PostgreSql", Selection, "leftover");
+        var leftover = Path.Combine(output, "04-gone.sql");
+        File.WriteAllText(leftover, "SELECT 1;\n");
 
         var run = await RunAsync(ScriptRequest("PostgreSql", Selection, output));
 
-        Assert.Equal(EfToolingExitCode.Refusal, run.ExitCode);
-        Assert.Equal("output-not-clean", run.Response.GetProperty("error").GetProperty("code").GetString());
-        Assert.Equal(["04-gone.sql"], Details(run.Response));
-        Assert.Equal("SELECT 1;\n", File.ReadAllText(stale));
+        Assert.Equal(EfToolingExitCode.Success, run.ExitCode);
+        Assert.Equal("SELECT 1;\n", File.ReadAllText(leftover));
     }
 
     [Fact]
@@ -435,6 +451,105 @@ public sealed class EfToolingHostTests : IDisposable
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => EfToolingHost.RunAsync(request, response, ModuleContextCatalog.Modules, cancellation.Token));
         Assert.Empty(response.ToArray());
+    }
+
+    /// <summary>
+    /// The two-argument overload is the exact signature FR-003 freezes and the one #1874's worker invokes
+    /// reflectively; every other test in this file goes through the four-argument overload with an explicit
+    /// assembly list instead. This exercises the real module-discovery path — <c>AssemblyLoadContext.All</c>
+    /// over every assembly already loaded into this process — end to end over real streams. Scoped with a
+    /// <c>selection</c> to just the modules under test, rather than a bare <c>list</c>: other tests in this
+    /// process load synthetic assemblies with a deliberate dependency cycle or a dangling dependency into
+    /// the default load context, which never unloads, and an unscoped <c>list</c> validates every discovered
+    /// module's graph regardless of selection.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_two_arg_discovers_first_party_modules_and_returns_the_response_exit_code()
+    {
+        using var request = new MemoryStream(Encoding.UTF8.GetBytes(Serialize(new
+        {
+            Version = 1,
+            Command = "list",
+            Selection = new { Kind = "modules", Modules = Selection }
+        })));
+        using var response = new MemoryStream();
+
+        var exitCode = await EfToolingHost.RunAsync(request, response);
+
+        Assert.Equal(EfToolingExitCode.Success, exitCode);
+        using var document = JsonDocument.Parse(response.ToArray());
+        Assert.Equal(EfToolingExitCode.Success, document.RootElement.GetProperty("exitCode").GetInt32());
+        var modules = document.RootElement.GetProperty("list").GetProperty("modules").EnumerateArray()
+            .Select(module => module.GetProperty("module").GetString())
+            .ToArray();
+        Assert.Equal(Selection.Order(StringComparer.Ordinal), modules);
+    }
+
+    /// <summary>
+    /// The exact reflective call FR-003 promises the worker: locate the method by name and its two
+    /// <see cref="Stream"/> parameters, invoke it, and await the returned value as a plain <see cref="Task"/>.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_two_arg_works_through_the_reflective_call_the_worker_makes()
+    {
+        using var request = new MemoryStream(Encoding.UTF8.GetBytes(Serialize(new
+        {
+            Version = 1,
+            Command = "list",
+            Selection = new { Kind = "modules", Modules = Selection }
+        })));
+        using var response = new MemoryStream();
+
+        var method = typeof(EfToolingHost).GetMethod(nameof(EfToolingHost.RunAsync), [typeof(Stream), typeof(Stream)]);
+        Assert.NotNull(method);
+
+        var invoked = method!.Invoke(null, [request, response]);
+        var task = Assert.IsAssignableFrom<Task>(invoked);
+        await task;
+
+        var exitCode = (int)task.GetType().GetProperty("Result")!.GetValue(task)!;
+        Assert.Equal(EfToolingExitCode.Success, exitCode);
+        Assert.NotEmpty(response.ToArray());
+    }
+
+    /// <summary>
+    /// A Nuplane <c>HostIntegrated</c> package graph loads into an <see cref="AssemblyLoadContext"/> of its
+    /// own, not the default one, which is exactly why <c>LoadedAssemblies()</c> walks
+    /// <see cref="AssemblyLoadContext.All"/> instead of the default context alone. Proven here with a
+    /// synthetic module assembly loaded into a separate collectible context, scoped by selection for the
+    /// same reason as above.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_two_arg_discovers_a_module_loaded_into_a_non_default_assembly_load_context()
+    {
+        var context = new AssemblyLoadContext(nameof(RunAsync_two_arg_discovers_a_module_loaded_into_a_non_default_assembly_load_context), isCollectible: true);
+        try
+        {
+            var image = SyntheticEfModules.BuildImage("Acme.Isolated.Modules", new SyntheticModule("Acme.Zeta", "AcmeZeta", PostgreSql: typeof(object)));
+            using (var imageStream = new MemoryStream(image))
+                context.LoadFromStream(imageStream);
+
+            using var request = new MemoryStream(Encoding.UTF8.GetBytes(Serialize(new
+            {
+                Version = 1,
+                Command = "list",
+                Selection = new { Kind = "modules", Modules = new[] { "Acme.Zeta" } }
+            })));
+            using var response = new MemoryStream();
+
+            var exitCode = await EfToolingHost.RunAsync(request, response);
+
+            Assert.Equal(EfToolingExitCode.Success, exitCode);
+            using var document = JsonDocument.Parse(response.ToArray());
+            var modules = document.RootElement.GetProperty("list").GetProperty("modules").EnumerateArray()
+                .Select(module => module.GetProperty("module").GetString())
+                .ToArray();
+            Assert.Equal(new string?[] { "Acme.Zeta" }, modules);
+        }
+        finally
+        {
+            context.Unload();
+        }
     }
 
     private async Task<string> ScriptAsync(string provider, string[] modules, string name)

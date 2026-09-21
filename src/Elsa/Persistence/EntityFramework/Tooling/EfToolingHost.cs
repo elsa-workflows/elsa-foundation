@@ -397,7 +397,7 @@ public static class EfToolingHost
                 return new EfModuleArtifact(
                     entry,
                     EfMigrationPlan.ScriptFileName(order, descriptor.Name),
-                    EfMigrationPlan.Utf8Lf(script!),
+                    EfToolingLineEndings.Utf8Lf(script!),
                     packages[entry.Assembly]);
             })
             .ToArray();

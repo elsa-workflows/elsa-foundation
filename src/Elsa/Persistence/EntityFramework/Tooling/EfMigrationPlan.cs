@@ -43,6 +43,28 @@ internal sealed record EfMigrationPlanFacts(
     EfToolingHostFacts Host);
 
 /// <summary>
+/// UTF-8 without a byte-order mark, LF endings, one trailing newline — the exact normalization
+/// <c>script</c> applies to every file it writes. EF builds its script with <c>Environment.NewLine</c>, so
+/// an unnormalized run on Windows would commit CRLF and a run on Linux LF for the same model — which is
+/// exactly the difference <c>script-check</c> would then report as a hand edit. Public so the determinism
+/// this normalizer enforces can be verified directly, the way the rest of the <c>Tooling</c> namespace is
+/// an entry point other processes call into.
+/// </summary>
+public static class EfToolingLineEndings
+{
+    private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
+
+    /// <summary>Normalizes <paramref name="content"/> to UTF-8 without a byte-order mark and LF-only line endings.</summary>
+    public static byte[] Utf8Lf(string content)
+    {
+        var normalized = content.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+        if (!normalized.EndsWith('\n'))
+            normalized += "\n";
+        return Utf8NoBom.GetBytes(normalized);
+    }
+}
+
+/// <summary>
 /// The deterministic artifact <c>script</c> writes: flat <c>NN-&lt;slug&gt;.sql</c> files plus one
 /// <c>migration-plan.json</c> (D6, FR-040, FR-047–FR-049). Determinism is the deliverable here, not a
 /// nicety — LF endings, UTF-8 without a byte-order mark, a fixed JSON key order, and no timestamp,
@@ -55,27 +77,11 @@ internal static class EfMigrationPlan
     public const int SchemaVersion = 1;
     public const string Ordering = "dependsOn-then-name";
 
-    private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
-
     /// <summary>The canonical name lower-cased with dots replaced by hyphens.</summary>
     public static string Slug(string module) => module.Replace('.', '-').ToLowerInvariant();
 
     public static string ScriptFileName(int order, string module) =>
         string.Create(CultureInfo.InvariantCulture, $"{order:D2}-{Slug(module)}.sql");
-
-    /// <summary>
-    /// UTF-8 without a byte-order mark, LF endings, one trailing newline. EF builds its script with
-    /// <c>Environment.NewLine</c>, so an unnormalized run on Windows would commit CRLF and a run on Linux
-    /// LF for the same model — which is exactly the difference <c>script-check</c> would then report as a
-    /// hand edit.
-    /// </summary>
-    public static byte[] Utf8Lf(string content)
-    {
-        var normalized = content.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
-        if (!normalized.EndsWith('\n'))
-            normalized += "\n";
-        return Utf8NoBom.GetBytes(normalized);
-    }
 
     public static string Sha256(byte[] content) => Convert.ToHexStringLower(SHA256.HashData(content));
 
@@ -114,33 +120,12 @@ internal static class EfMigrationPlan
     }
 
     /// <summary>
-    /// Writes the artifact, once every file exists in memory. An output directory that already holds a
-    /// <c>.sql</c> file this run does not produce is refused rather than left behind: the files are numbered
-    /// for a DBA to apply in order, and a leftover from an earlier, wider selection would be applied as if
-    /// it belonged to this plan.
+    /// Writes the artifact, once every file exists in memory. Whether a stale <c>.sql</c> file already sits
+    /// in the output directory is <c>script-check</c>'s call to make (FR-045), not this command's: nothing
+    /// already in the directory is ever deleted or refused here.
     /// </summary>
     public static void Write(string output, IReadOnlyList<EfModuleArtifact> modules, byte[] manifest)
     {
-        var produced = modules.Select(module => module.File).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (Directory.Exists(output))
-        {
-            var stale = Directory.EnumerateFiles(output, "*.sql")
-                .Select(Path.GetFileName)
-                .OfType<string>()
-                .Where(name => !produced.Contains(name))
-                .Order(StringComparer.Ordinal)
-                .ToArray();
-            if (stale.Length > 0)
-            {
-                throw EfToolingRefusal.Usage(
-                    "output-not-clean",
-                    "The output directory holds SQL files this selection does not produce. " +
-                    "Clear the directory or script into an empty one: a numbered file left over from an earlier " +
-                    "selection is applied in order like any other.",
-                    stale);
-            }
-        }
-
         try
         {
             Directory.CreateDirectory(output);

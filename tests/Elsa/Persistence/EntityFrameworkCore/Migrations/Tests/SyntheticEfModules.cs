@@ -20,7 +20,14 @@ internal sealed record SyntheticModule(
 /// </summary>
 internal static class SyntheticEfModules
 {
-    public static Assembly Build(string assemblyName, params SyntheticModule[] modules)
+    public static Assembly Build(string assemblyName, params SyntheticModule[] modules) =>
+        Assembly.Load(BuildImage(assemblyName, modules));
+
+    /// <summary>
+    /// The raw assembly image, for a caller that needs to load it into an <see cref="System.Runtime.Loader.AssemblyLoadContext"/>
+    /// of its own rather than the default one <see cref="Build"/> loads into.
+    /// </summary>
+    public static byte[] BuildImage(string assemblyName, params SyntheticModule[] modules)
     {
         var attribute = typeof(EfModuleAttribute);
         var constructor = attribute.GetConstructor([typeof(string), typeof(Type)])!;
@@ -46,7 +53,7 @@ internal static class SyntheticEfModules
         builder.DefineDynamicModule(assemblyName);
         using var image = new MemoryStream();
         builder.Save(image);
-        return Assembly.Load(image.ToArray());
+        return image.ToArray();
 
         static PropertyInfo Property(string name) => typeof(EfModuleAttribute).GetProperty(name)!;
     }
