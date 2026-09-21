@@ -219,6 +219,61 @@ public sealed class EfPendingMigrationActivationGuardTests : IDisposable
     }
 
     /// <summary>
+    /// Finding 2: the guard evaluates every feature the request leaves enabled, not only the ones it turns
+    /// on, so a request that disables an unrelated feature is still refused by an already-enabled feature
+    /// whose module has a pending migration. Kept on purpose — refusing early beats saving a shell whose
+    /// reload would then fail, and disabling the offending feature is still how an operator recovers — but
+    /// unspecified by the FRs, so this pins it rather than leaving it to change silently.
+    /// </summary>
+    [Fact]
+    public async Task Refuses_a_request_that_only_disables_an_unrelated_feature_while_another_enabled_feature_has_a_pending_migration()
+    {
+        var connection = ConnectionTo(_harness.Database("pending"));
+
+        var decision = await _harness.Guard(EfMigratePolicy.Validate).EvaluateAsync(Request(
+            Enabled(SecretsFeature, connection: connection),
+            Disabled("SomeUnrelatedFeatureWithNoEfModule")));
+
+        var refusal = Assert.Single(decision.Refusals);
+        Assert.Equal(SecretsFeature, refusal.Feature);
+    }
+
+    /// <summary>
+    /// Finding 1: the guard's own container only ever carries the host's configuration (it is composed
+    /// there, not into any shell's), so the policy it must honor is the one a shell would actually resolve —
+    /// its own <c>Configuration</c> node when that node defines the <c>Migrate</c> section, the host's
+    /// otherwise (see <c>EfMigrateOptions</c>). A shell that declares AutoMigrate over a host running
+    /// Validate must not be falsely refused, and must not open the database to find that out.
+    /// </summary>
+    [Fact]
+    public async Task Allows_a_shell_that_declares_automigrate_over_a_host_running_validate_without_opening_the_database()
+    {
+        var connection = ConnectionTo(_harness.UnreadableDatabase("shell-automigrate"));
+
+        var decision = await _harness.Guard(EfMigratePolicy.Validate)
+            .EvaluateAsync(Request(EfMigratePolicy.AutoMigrate, Enabled(SecretsFeature, connection: connection)));
+
+        Assert.True(decision.IsAllowed);
+    }
+
+    /// <summary>
+    /// Finding 1's other direction: a shell that declares Validate over a host running AutoMigrate must be
+    /// refused here, rather than silently passing and falling back to the later, post-save Prepare-phase
+    /// refusal the spec treats as the worse path.
+    /// </summary>
+    [Fact]
+    public async Task Refuses_a_shell_that_declares_validate_over_a_host_running_automigrate()
+    {
+        var connection = ConnectionTo(_harness.Database("shell-validate"));
+
+        var decision = await _harness.Guard(EfMigratePolicy.AutoMigrate)
+            .EvaluateAsync(Request(EfMigratePolicy.Validate, Enabled(SecretsFeature, connection: connection)));
+
+        var refusal = Assert.Single(decision.Refusals);
+        Assert.Equal(SecretsFeature, refusal.Feature);
+    }
+
+    /// <summary>
     /// A cancelled request is not a refused one: reporting the operator's own cancellation as a refusal
     /// would name a schema problem that was never diagnosed.
     /// </summary>

@@ -21,9 +21,12 @@ namespace Elsa.Modularity.EntityFramework;
 /// Every refusal names the feature and the module and nothing else. The request this guard reads has had
 /// its secret settings restored to their real values before validation, so it is holding live connection
 /// strings (FR-061); the one realistic way one reaches an operator is a driver's own exception message
-/// echoing it back, so a failure to read a database contributes its <em>type</em> to the refusal and its
-/// message is dropped rather than trusted to a redaction pattern. This type writes no log line at all,
-/// for the same reason.
+/// echoing it back. The two failure paths that can carry one treat it differently: a database that cannot
+/// be reached or read contributes only its exception <em>type</em> to the refusal — that message is
+/// dropped outright, not trusted to a redaction pattern — while a connection or schema this build could
+/// not resolve contributes its own message, which never holds anything but configuration key names, but is
+/// still redacted before it travels (FR-061 declines to assume "this one cannot leak"). This type writes no
+/// log line at all, for the same reason.
 /// </para>
 /// <para>
 /// It checks pending migrations, not post-migration actions. A declared action is audited by
@@ -58,7 +61,7 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
             return FeatureActivationDecision.Allowed;
 
         var modules = EfModuleCatalog.Discover(loaded);
-        var policy = EfMigrateOptions.Resolve((IConfiguration?)services.GetService(typeof(IConfiguration)));
+        var policy = ResolveMigratePolicy(context.Shell);
         var probed = new Dictionary<string, Probe>(StringComparer.Ordinal);
         var refusals = new List<FeatureActivationRefusal>();
 
@@ -88,6 +91,40 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
         }
 
         return refusals.Count == 0 ? FeatureActivationDecision.Allowed : new(refusals);
+    }
+
+    /// <summary>
+    /// The migrate policy the way a shell would resolve it, not the way this guard's own container would:
+    /// this type is composed into the host container (see
+    /// <c>ModularityEntityFrameworkServiceCollectionExtensions</c>), so <c>services.GetService&lt;IConfiguration&gt;</c>
+    /// is the host's configuration only. <c>EfMigrateOptions</c> documents the real contract — in a CShells
+    /// host, a shell's own <c>Configuration</c> node wins over the host's whenever it defines the section at
+    /// all — so this asks <paramref name="shell"/> for that node and applies the same rule: if the shell's
+    /// <c>Migrate</c> section exists, it decides the policy on its own; otherwise the host's does. Both are
+    /// parsed through <see cref="EfMigrateOptions.Resolve"/>, so an unparseable value refuses identically
+    /// whichever layer it came from.
+    /// </summary>
+    private EfMigratePolicy ResolveMigratePolicy(ShellFeatureConfigurationSnapshot shell)
+    {
+        var shellConfiguration = BuildShellConfiguration(shell.Configuration);
+        if (shellConfiguration is not null && shellConfiguration.GetSection(EfMigrateOptions.SectionName).Exists())
+            return EfMigrateOptions.Resolve(shellConfiguration);
+
+        return EfMigrateOptions.Resolve((IConfiguration?)services.GetService(typeof(IConfiguration)));
+    }
+
+    /// <summary>
+    /// An <see cref="IConfiguration"/> over the shell's own <c>Configuration</c> node, or <see langword="null"/>
+    /// when the shell declares none — a store that tracks no such node, or a shell that overrides nothing,
+    /// looks the same here: there is no shell-level section to prefer over the host's.
+    /// </summary>
+    private static IConfiguration? BuildShellConfiguration(JsonElement configuration)
+    {
+        if (configuration.ValueKind is not JsonValueKind.Object)
+            return null;
+
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(configuration.GetRawText()));
+        return new ConfigurationBuilder().AddJsonStream(stream).Build();
     }
 
     /// <summary>

@@ -105,8 +105,35 @@ internal sealed class ActivationGuardHarness : IDisposable
     }
 
     public static FeatureActivationContext Request(params FeatureApplyItem[] features) =>
+        Request(shellMigratePolicy: null, features);
+
+    /// <summary>
+    /// A request against a shell whose own <c>Configuration</c> node names <paramref name="shellMigratePolicy"/>
+    /// for <c>Elsa:Persistence:EntityFramework:Migrate:Policy</c> — the layer CShells has win over the host's
+    /// same key, and <see cref="EfPendingMigrationActivationGuard"/> has to honor rather than the guard's own
+    /// (host) container.
+    /// </summary>
+    public static FeatureActivationContext Request(EfMigratePolicy? shellMigratePolicy, params FeatureApplyItem[] features) =>
         new(
-            new ShellFeatureConfigurationSnapshot("default", "revision-1", new Dictionary<string, JsonElement>()),
+            new ShellFeatureConfigurationSnapshot(
+                "default",
+                "revision-1",
+                new Dictionary<string, JsonElement>(),
+                shellMigratePolicy is { } policy
+                    ? JsonSerializer.SerializeToElement(new
+                    {
+                        Elsa = new
+                        {
+                            Persistence = new
+                            {
+                                EntityFramework = new
+                                {
+                                    Migrate = new { Policy = policy.ToString() }
+                                }
+                            }
+                        }
+                    })
+                    : default),
             new FeatureApplyRequest("revision-1", features));
 
     public static FeatureApplyItem Enabled(string feature, string provider = "Sqlite", string? connection = null, string? connectionName = null) =>
