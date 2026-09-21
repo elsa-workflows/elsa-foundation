@@ -71,6 +71,8 @@ public sealed class EfExecutionPlacementStore(
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         var id = EfDistributedIdentity.CreateId(scope, claim.WorkflowExecutionId);
+        ExecutionPlacementClaimResult? staged = null;
+        var stagedRevision = 0L;
 
         return await CompareAndSwapAsync(ClaimRetry, "claiming", claim.WorkflowExecutionId, async () =>
         {
@@ -79,6 +81,13 @@ public sealed class EfExecutionPlacementStore(
                 cancellationToken);
             if (current is not null)
                 EnsureIdentity(current, scope, claim.WorkflowExecutionId, id);
+
+            // A lost race can be reported for a write the provider already committed: a deadlock, a lock timeout or a
+            // dropped connection around the commit looks, to the client, exactly like one that never landed. Replaying
+            // that write would issue this claim a second placement token and report a takeover as a renewal, so an
+            // attempt that finds its predecessor's write settles the call with the result that attempt produced.
+            if (staged is not null && current is not null && IsStagedWrite(current, stagedRevision, staged.Lease))
+                return staged;
 
             var isLive = current is not null && IsLive(current, now);
 
@@ -105,6 +114,7 @@ public sealed class EfExecutionPlacementStore(
             if (current is null)
             {
                 context.PlacementLeases.Add(ToEntity(lease, scope, id, revision: 1));
+                stagedRevision = 1;
             }
             else
             {
@@ -116,10 +126,12 @@ public sealed class EfExecutionPlacementStore(
                 current.ExpiresAtOffsetMinutes = checked((int)lease.ExpiresAt.Offset.TotalMinutes);
                 current.IsReleased = false;
                 current.Revision = checked(current.Revision + 1);
+                stagedRevision = current.Revision;
             }
 
+            staged = new ExecutionPlacementClaimResult(outcome, lease);
             await context.SaveChangesAsync(cancellationToken);
-            return new ExecutionPlacementClaimResult(outcome, lease);
+            return staged;
         }, cancellationToken);
     }
 
@@ -258,6 +270,23 @@ public sealed class EfExecutionPlacementStore(
 
     private static bool IsLive(ExecutionPlacementLeaseEntity row, DateTimeOffset now) =>
         !row.IsReleased && ReadExpiresAt(row) > now;
+
+    /// <summary>
+    /// Whether <paramref name="row"/> is the write a previous attempt of this claim staged. The revision is the
+    /// compare-and-swap token and only ever moves forward by one, so exactly one write can have committed
+    /// <paramref name="stagedRevision"/>; carrying <paramref name="staged"/> whole identifies it as that attempt's.
+    /// A different owner writes its own identity, and the same owner writing the same lease at the same revision is
+    /// the same claim, which this result already describes.
+    /// </summary>
+    private static bool IsStagedWrite(ExecutionPlacementLeaseEntity row, long stagedRevision, ExecutionPlacementLease staged) =>
+        row.Revision == stagedRevision &&
+        !row.IsReleased &&
+        row.PlacementToken == staged.PlacementToken &&
+        StringComparer.Ordinal.Equals(row.OwnerId, staged.OwnerId) &&
+        row.AcquiredAt == staged.AcquiredAt &&
+        row.AcquiredAt.Offset == staged.AcquiredAt.Offset &&
+        row.ExpiresAtUtcTicks == staged.ExpiresAt.UtcTicks &&
+        row.ExpiresAtOffsetMinutes == checked((int)staged.ExpiresAt.Offset.TotalMinutes);
 
     private static DateTimeOffset ReadExpiresAt(ExecutionPlacementLeaseEntity row)
     {
