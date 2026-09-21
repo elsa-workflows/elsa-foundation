@@ -57,6 +57,12 @@ public sealed class EfToolingHostTests : IDisposable
         }
         catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
         {
+            // A residual lock is tolerated; a missing directory is not. DirectoryNotFoundException derives
+            // from IOException, and tests here assert the host deleted nothing outside its own output tree
+            // (for example the leftover and idempotence cases), so swallowing it would hide exactly the
+            // over-deletion those tests exist to catch.
+            if (failure is DirectoryNotFoundException)
+                throw;
         }
     }
 
@@ -894,8 +900,14 @@ public sealed class EfToolingHostTests : IDisposable
     /// exception raised while a module is applied or validated into <see cref="EfToolingExitCode.DatabaseFailure"/>,
     /// so a failure reported as "expected 0, got 4" says only that something went wrong — which is exactly what
     /// #1910 recorded, and why its cause could not be named afterwards (#1913). The refusal carries the module,
-    /// provider, context type and underlying message, and is safe to print: the connection string is scrubbed
-    /// before it reaches the response, pinned by <see cref="A_connection_string_never_appears_in_a_database_failure"/>.
+    /// provider, context type and underlying message. Printing it is safe for the paths these tests drive:
+    /// the apply, validate and post-migration refusals run their message through
+    /// <c>EfToolingRedaction.Redact</c>, which <see cref="A_connection_string_never_appears_in_a_database_failure"/>
+    /// pins with a sentinel. Two limits on that guarantee, so nobody reads it as unconditional: the test pins
+    /// <c>error.message</c> only, not the <c>details</c> this helper also prints (no database-failure path
+    /// populates details, and the one refusal that does redacts first); and <c>EfToolingHost</c>'s
+    /// internal-error handler builds its message straight from the exception without redacting. A future test
+    /// that drives an unexpected exception with a credentialed connection string would print it.
     /// </remarks>
     private static void AssertExit(int expected, Run run) => AssertExit(expected, run.ExitCode, run.Response);
 
