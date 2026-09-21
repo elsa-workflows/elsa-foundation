@@ -195,7 +195,7 @@ public sealed class SecretsProjectionReindexTests : IAsyncDisposable
 
     private async Task<(int ExitCode, JsonElement Body)> RunAsync(string command)
     {
-        var request = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(
+        using var request = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(
             new
             {
                 version = EfToolingContract.Version,
@@ -205,7 +205,7 @@ public sealed class SecretsProjectionReindexTests : IAsyncDisposable
                 connection = database.ConnectionString
             },
             RequestJson));
-        var response = new MemoryStream();
+        using var response = new MemoryStream();
         var exitCode = await EfToolingHost.RunAsync(request, response, [typeof(SecretsDbContext).Assembly]);
         using var document = JsonDocument.Parse(response.ToArray());
         return (exitCode, document.RootElement.Clone());
