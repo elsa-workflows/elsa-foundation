@@ -914,10 +914,21 @@ public sealed class EfToolingHostTests : IDisposable
         using var refusal = JsonDocument.Parse(
             """{"exitCode":4,"error":{"code":"module-apply-failed","message":"'Secrets' could not be applied.","details":["first","second"]}}""");
         var reported = Assert.ThrowsAny<XunitException>(() => AssertExit(EfToolingExitCode.Success, 4, refusal.RootElement)).Message;
-        Assert.Contains("module-apply-failed", reported, StringComparison.Ordinal);
-        Assert.Contains("'Secrets' could not be applied.", reported, StringComparison.Ordinal);
+        // Asserted with the label attached, not as bare substrings: printing the message under error.code and
+        // the code under error.message would satisfy two loose Contains checks and ship a swapped diagnostic.
+        Assert.Contains("error.code='module-apply-failed'", reported, StringComparison.Ordinal);
+        Assert.Contains("error.message=''Secrets' could not be applied.'", reported, StringComparison.Ordinal);
         Assert.Contains("first", reported, StringComparison.Ordinal);
         Assert.Contains("second", reported, StringComparison.Ordinal);
+
+        // The shape #1910 actually produced: a database failure with no details at all. No DatabaseFailure path
+        // in EfToolingHost populates details, so this - not the case above - is what the next occurrence looks
+        // like, and it was the one shape this test did not drive.
+        using var detailless = JsonDocument.Parse(
+            """{"exitCode":4,"error":{"code":"module-apply-failed","message":"'Secrets' could not be applied."}}""");
+        var bare = Assert.ThrowsAny<XunitException>(() => AssertExit(EfToolingExitCode.Success, 4, detailless.RootElement)).Message;
+        Assert.Contains("error.code='module-apply-failed'", bare, StringComparison.Ordinal);
+        Assert.DoesNotContain("details=", bare, StringComparison.Ordinal);
 
         using var clean = JsonDocument.Parse("""{"exitCode":0,"list":{"modules":[]}}""");
         var missing = Assert.ThrowsAny<XunitException>(() => AssertExit(EfToolingExitCode.Refusal, 0, clean.RootElement)).Message;
