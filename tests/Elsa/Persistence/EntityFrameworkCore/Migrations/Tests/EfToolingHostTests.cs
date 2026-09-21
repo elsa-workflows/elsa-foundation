@@ -181,7 +181,7 @@ public sealed class EfToolingHostTests : IDisposable
     [Fact]
     public async Task Script_refuses_sqlite_with_the_documented_message_and_writes_nothing()
     {
-        var output = Path.Combine(root, "sqlite");
+        var output = Path.Join(root, "sqlite");
         var run = await RunAsync(ScriptRequest("Sqlite", ["Secrets"], output));
 
         Assert.Equal(EfToolingExitCode.Refusal, run.ExitCode);
@@ -285,7 +285,7 @@ public sealed class EfToolingHostTests : IDisposable
     [Fact]
     public async Task Script_refuses_a_module_whose_package_facts_are_missing_and_writes_nothing()
     {
-        var output = Path.Combine(root, "no-packages");
+        var output = Path.Join(root, "no-packages");
         var request = ScriptRequest("PostgreSql", ["Secrets", "Activities.Design"], output) with
         {
             Packages = [Package("Elsa.Secrets.Persistence.EntityFrameworkCore")]
@@ -304,7 +304,7 @@ public sealed class EfToolingHostTests : IDisposable
     [Fact]
     public async Task Script_refuses_an_engine_package_that_is_not_the_one_the_provider_binds()
     {
-        var output = Path.Combine(root, "wrong-engine");
+        var output = Path.Join(root, "wrong-engine");
         var request = ScriptRequest("PostgreSql", ["Secrets"], output) with
         {
             Engine = new() { Package = "Pomelo.EntityFrameworkCore.MySql", Version = "9.9.9-test", Source = "host-deps-file" }
@@ -326,7 +326,7 @@ public sealed class EfToolingHostTests : IDisposable
     public async Task Script_leaves_a_sql_file_it_does_not_produce_untouched()
     {
         var output = await ScriptAsync("PostgreSql", Selection, "leftover");
-        var leftover = Path.Combine(output, "04-gone.sql");
+        var leftover = Path.Join(output, "04-gone.sql");
         File.WriteAllText(leftover, "SELECT 1;\n");
 
         var run = await RunAsync(ScriptRequest("PostgreSql", Selection, output));
@@ -386,7 +386,7 @@ public sealed class EfToolingHostTests : IDisposable
         var fixture = SyntheticEfModules.Build(
             "Acme.PostMigration.Modules",
             new SyntheticModule("Acme.Delta", "AcmeDelta", PostgreSql: typeof(object), PostMigration: [typeof(Uri)]));
-        var output = Path.Combine(root, "post-migration");
+        var output = Path.Join(root, "post-migration");
         var request = new ScriptRequestBody
         {
             Provider = "PostgreSql",
@@ -402,6 +402,41 @@ public sealed class EfToolingHostTests : IDisposable
         Assert.Equal(EfToolingExitCode.ResolutionFailure, run.ExitCode);
         Assert.Equal("post-migration-unsupported", run.Response.GetProperty("error").GetProperty("code").GetString());
         Assert.Equal(["'Acme.Delta' declares post-migration action 'Uri'."], Details(run.Response));
+        Assert.False(Directory.Exists(output));
+    }
+
+    /// <summary>
+    /// A third-party <c>[EfModule]</c> name is never slugged (spec 171 User Story 6): a name containing a
+    /// directory separator would otherwise reach <c>File.WriteAllBytes</c> as a rooted-looking path segment
+    /// and fail deep inside the write, surfacing as an opaque <c>internal-error</c> instead of a named
+    /// refusal.
+    /// </summary>
+    [Fact]
+    public async Task Script_refuses_a_module_name_that_produces_a_non_bare_file_name_and_writes_nothing()
+    {
+        // Loaded via AssemblyLoadContext.Default.LoadFromStream rather than SyntheticEfModules.Build's
+        // Assembly.Load(byte[]): the latter is not resolvable by simple name afterwards, and
+        // EfRelationalProviderBinding.Use configures the migrations assembly by name, which
+        // SecretsPostgreSqlDbContext's IMigrationsAssembly service resolves eagerly on first use.
+        var image = SyntheticEfModules.BuildImage(
+            "Acme.Traversal.Modules",
+            new SyntheticModule("Acme/Evil", "AcmeEvil", PostgreSql: typeof(SecretsPostgreSqlDbContext)));
+        var fixture = AssemblyLoadContext.Default.LoadFromStream(new MemoryStream(image));
+        var output = Path.Join(root, "traversal");
+        var request = new ScriptRequestBody
+        {
+            Provider = "PostgreSql",
+            Selection = new() { Kind = "modules", Modules = ["Acme/Evil"] },
+            Output = output,
+            Host = new() { Name = "Elsa.Tooling.Tests", ProviderAgreement = "not-checked", Environment = "Production" },
+            Engine = new() { Package = EfRelationalProviderBinding.ProviderPackageId("PostgreSql"), Version = "9.9.9-test", Source = "host-deps-file" },
+            Packages = [Package("Acme.Traversal.Modules")]
+        };
+
+        var run = await RunAsync(request, [fixture]);
+
+        Assert.Equal(EfToolingExitCode.ResolutionFailure, run.ExitCode);
+        Assert.Equal("module-file-name-invalid", run.Response.GetProperty("error").GetProperty("code").GetString());
         Assert.False(Directory.Exists(output));
     }
 

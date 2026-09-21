@@ -83,13 +83,14 @@ internal static class EfModuleOrder
         var current = unordered.Order(StringComparer.Ordinal).First();
         var path = new List<string>();
         var seen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        while (!seen.ContainsKey(current))
+        int cycleStartIndex;
+        while (!seen.TryGetValue(current, out cycleStartIndex))
         {
             seen[current] = path.Count;
             path.Add(byName[current].Name);
             current = dependencies[current].First(unordered.Contains);
         }
 
-        return string.Join(" -> ", path.Skip(seen[current]).Append(byName[current].Name));
+        return string.Join(" -> ", path.Skip(cycleStartIndex).Append(byName[current].Name));
     }
 }

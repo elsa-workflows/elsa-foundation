@@ -126,6 +126,9 @@ internal static class EfMigrationPlan
     /// </summary>
     public static void Write(string output, IReadOnlyList<EfModuleArtifact> modules, byte[] manifest)
     {
+        foreach (var module in modules)
+            ValidateBareFileName(module.Entry.Module, module.File);
+
         try
         {
             Directory.CreateDirectory(output);
@@ -137,6 +140,22 @@ internal static class EfMigrationPlan
         {
             throw EfToolingRefusal.Resolution("output-write-failed", $"The artifact could not be written: {failure.Message}");
         }
+    }
+
+    /// <summary>
+    /// Refuses rather than lets a rooted or directory-separator-carrying name reach
+    /// <see cref="File.WriteAllBytes(string,byte[])"/>, where it would either escape <paramref name="name"/>'s
+    /// intended output directory or fail deep inside the write with an opaque <c>internal-error</c>. First-party
+    /// module names can never trigger this — <see cref="ScriptFileName"/> always prefixes an ordinal and
+    /// <see cref="Slug"/> maps every <c>.</c> to <c>-</c> — but spec 171 User Story 6 admits third-party
+    /// modules, and nothing stops a third-party <c>[EfModule]</c> name from containing a directory separator.
+    /// </summary>
+    private static void ValidateBareFileName(string module, string name)
+    {
+        if (Path.IsPathRooted(name) || Path.GetFileName(name) != name)
+            throw EfToolingRefusal.Resolution(
+                "module-file-name-invalid",
+                $"Module '{module}' would write to '{name}', which is not a bare file name.");
     }
 
     private static void WriteModule(Utf8JsonWriter writer, EfModuleArtifact module)

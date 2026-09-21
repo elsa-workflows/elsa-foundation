@@ -88,7 +88,7 @@ public static class EfToolingHost
         {
             throw;
         }
-        catch (Exception failure)
+        catch (Exception failure) when (IsNonFatal(failure))
         {
             result = Failed(command, EfToolingRefusal.Resolution("internal-error", $"{failure.GetType().Name}: {failure.Message}"));
         }
@@ -98,6 +98,19 @@ public static class EfToolingHost
         await response.FlushAsync(cancellationToken);
         return result.ExitCode;
     }
+
+    /// <summary>
+    /// True for anything the internal-error handler should catch and report, false for CLR-fatal
+    /// exceptions that must propagate instead of being laundered into a JSON response.
+    /// </summary>
+    private static bool IsNonFatal(Exception failure) => failure is not (
+        OutOfMemoryException or
+        StackOverflowException or
+        AccessViolationException or
+        AppDomainUnloadedException or
+        BadImageFormatException or
+        CannotUnloadAppDomainException or
+        ThreadAbortException);
 
     private static IEnumerable<Assembly> LoadedAssemblies() =>
         AssemblyLoadContext.All.SelectMany(context => context.Assemblies).Distinct();
