@@ -11,6 +11,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Xunit;
+using Xunit.Sdk;
 
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
@@ -891,6 +892,29 @@ public sealed class EfToolingHostTests : IDisposable
     }
 
     private static string[] Keys(JsonElement element) => [.. element.EnumerateObject().Select(property => property.Name)];
+
+    /// <summary>
+    /// The helper only produces output when an assertion fails, so a green suite says nothing about it. These
+    /// two cases pin both branches of <see cref="Describe"/>: the refusal branch, which is what #1910 needed and
+    /// did not have, and the no-error branch, which is what runs when a test expects a refusal and gets success.
+    /// The assertions are deliberately on the presence of the code, message and details rather than on exact
+    /// formatting, so a reworded diagnostic does not become a failing test.
+    /// </summary>
+    [Fact]
+    public void AssertExit_reports_the_refusal_and_survives_a_response_without_one()
+    {
+        using var refusal = JsonDocument.Parse(
+            """{"exitCode":4,"error":{"code":"module-apply-failed","message":"'Secrets' could not be applied.","details":["first","second"]}}""");
+        var reported = Assert.ThrowsAny<XunitException>(() => AssertExit(EfToolingExitCode.Success, 4, refusal.RootElement)).Message;
+        Assert.Contains("module-apply-failed", reported, StringComparison.Ordinal);
+        Assert.Contains("'Secrets' could not be applied.", reported, StringComparison.Ordinal);
+        Assert.Contains("first", reported, StringComparison.Ordinal);
+        Assert.Contains("second", reported, StringComparison.Ordinal);
+
+        using var clean = JsonDocument.Parse("""{"exitCode":0,"list":{"modules":[]}}""");
+        var missing = Assert.ThrowsAny<XunitException>(() => AssertExit(EfToolingExitCode.Refusal, 0, clean.RootElement)).Message;
+        Assert.Contains("no error payload", missing, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// Asserts an exit code and, when it differs, reports the refusal the host wrote beside it.
