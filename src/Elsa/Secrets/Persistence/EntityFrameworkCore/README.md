@@ -130,26 +130,34 @@ migration/backfill, and compatibility tests; editing v1 in place is forbidden.
 
 ## Generate and apply migrations
 
-See [Tooling/README.md](Tooling/README.md) and [tools/ef/README.md](../../../../../tools/ef/README.md).
+See [tools/ef/README.md](../../../../../tools/ef/README.md). Nothing here uses a module-owned tooling
+project any more: #1878 retired it, and this module's design-time factories live in the shared
+`tools/ef/Elsa.EntityFrameworkCore.Tooling` startup project with every other module's.
 
 The repository pins `dotnet-ef` in `.config/dotnet-tools.json`; run `dotnet tool restore` from
 the repository root. An executable `.tools/dotnet-ef` is an explicit override for an operator
 checkout, while a stale global `dotnet-ef` is never preferred over the repository manifest.
-The script builds the tooling project once by default. CI or tests that already built the same
-checkout and configuration can set `ELSA_SECRETS_EF_SKIP_BUILD=1`; that caller owns artifact
-freshness, so operator checkouts should not set it casually.
+
+This module is the one that keeps a historical migration chain on Sqlite, SqlServer and PostgreSql, so a
+model change adds a named migration to each of those rather than regenerating an `Initial`:
+
+```bash
+bash tools/ef/generate-ef-migrations.sh <MigrationName>
+```
 
 Out of process (no host):
 
 ```bash
-bash tools/ef/dual-migrate.sh pending
-bash tools/ef/dual-migrate.sh apply --sqlite
+bash tools/ef/module-migrate.sh pending 'Secrets.*'
+bash tools/ef/module-migrate.sh apply Sqlite --connection-env ELSA_EF_CONNECTION Secrets
+dotnet elsa persistence post-migrate --host <host> --provider Sqlite --modules Secrets \
+  --connection-env ELSA_EF_CONNECTION
 ```
 
-`pending` is `dotnet ef migrations has-pending-model-changes` per derived context.
-`apply` runs `dotnet ef database update --context <Derived>` and then the managed projection
-reindexer for that same context. Runtime AutoMigrate / Validate uses the same compiled migrations
-in this module, but the checks are different: `pending`
+`pending` is `dotnet ef migrations has-pending-model-changes` per derived context. `apply` applies the
+compiled migrations missing from `__EFMigrationsHistory_ElsaSecrets`, then audits this module's declared
+projection reindex and fails closed naming `post-migrate` rather than running it. Runtime AutoMigrate /
+Validate uses the same compiled migrations in this module, but the checks are different: `pending`
 compares the source model to its snapshot without reading database history, whereas runtime
 `Validate` checks whether the selected database has unapplied compiled migrations; both runtime
 policies also reject legacy projection bytes until the operator reindex completes. Recommended
@@ -157,9 +165,9 @@ deployment order is `pending`, backup/quiesce, provider-specific `apply`, `dotne
 post-migrate` for any action the apply reports as required, history/table-shape verification, then
 application startup with `Elsa:Persistence:EntityFramework:Migrate:Policy=Validate`.
 
-For deployment boundaries, use an explicit provider selector and matching connection, a
-short-lived least-privilege migration identity, and a least-privilege runtime identity after
-verification. Keep `SecretsEntityFrameworkCore` disabled in the shell while this backend is
+For deployment boundaries, name the provider and the modules explicitly, point `--connection-env` at
+the variable carrying the target database's connection string, use a short-lived least-privilege
+migration identity, and a least-privilege runtime identity after verification. Keep `SecretsEntityFrameworkCore` disabled in the shell while this backend is
 enabled. Verify the `__EFMigrationsHistory_ElsaSecrets` history table and the `elsa_secrets` table
 shape before rollout; stop on any failure and inspect the database before retrying. Keep schema changes additive where
 possible and roll back application code only after compatibility is checked. Never blindly

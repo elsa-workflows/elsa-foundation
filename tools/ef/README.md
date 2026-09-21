@@ -1,4 +1,4 @@
-# generate-ef-migrations / dual-migrate
+# EF migration tooling
 
 Convention for first-party EF modules under accepted
 [ADR 0073](../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md).
@@ -9,7 +9,8 @@ Every first-party EF module ships one migration set per provider (Sqlite, SqlSer
 compiled into the module assembly under `Migrations/<Context>/<Provider>/`, with its own history table.
 `tools/ef/Elsa.EntityFrameworkCore.Tooling` is the shared design-time startup project: it holds the provider
 engines and one `ModuleDesignTimeFactory` line per provider-derived context. Add a line there when a module
-gains a context.
+gains a context. `module-migrate.sh` also builds this same project as the `--host` it points the
+`dotnet elsa persistence` CLI at (#1878) — every first-party module and every provider engine, in one place.
 
 ```bash
 bash tools/ef/generate-module-migrations.sh [context-regex]   # regenerate Initial after a model change
@@ -17,8 +18,15 @@ bash tools/ef/module-migrate.sh pending                        # CI-safe: fails 
 bash tools/ef/module-migrate.sh apply PostgreSql --connection-env ELSA_EF_CONNECTION # out-of-process apply, every module
 bash tools/ef/module-migrate.sh validate PostgreSql --connection-env ELSA_EF_CONNECTION
 bash tools/ef/module-migrate.sh script PostgreSql db/migrations  # reviewable SQL, no database needed
-bash tools/ef/module-migrate.sh script-check PostgreSql db/migrations # CI-safe: fails on edited/stale SQL
+bash tools/ef/module-migrate.sh script-check db/migrations       # CI-safe: fails on edited/stale SQL
 ```
+
+`apply`, `validate`, `script` and `script-check` are thin shims (#1878) over the `dotnet elsa persistence`
+CLI (`src/Elsa/Cli`, [spec 171](../../specs/171-persistence-script-cli/spec.md)) rather than a second
+implementation of the same behavior; they no longer drive `dotnet ef` themselves. `pending` alone still does,
+because it needs no host closure, only this tooling project's own compiled model. `[modules]` selects by the
+CLI's own canonical module names (`dotnet elsa persistence list`), comma-separated — not the context-name
+regex this script used to take — and defaults to every module.
 
 Elsa is pre-release with no production data, so a module keeps a single `Initial` migration per provider
 that is regenerated whenever its model changes; Secrets keeps its historical chain. The generator rewrites
@@ -49,12 +57,13 @@ bash tools/ef/module-migrate.sh script PostgreSql db/migrations
 bash tools/ef/module-migrate.sh script MySql db/migrations
 ```
 
-**Layout: `<output-dir>/<Module>/<Provider>.sql`** — one file per module context and provider, under the
-same `<Module>/<Provider>` split the compiled migrations use (`Migrations/<Module>/<Provider>/`), so a
-reviewer reads the same tree in both places. `<Module>` is the context name without its provider suffix
-(`RuntimeSqlServerDbContext` → `Runtime/SqlServer.sql`).
+**Layout: flat, ordered `<output-dir>/NN-<slug>.sql` files plus one `migration-plan.json`** (#1878) — the
+CLI's own artifact, not the `<output-dir>/<Module>/<Provider>.sql` tree this script wrote before it became a
+shim: a DBA pipeline applies files in the order they are named, and the manifest is what `script-check` reads
+back rather than a directory listing. See the CLI's own [README](../../src/Elsa/Cli/README.md) for the exact
+shape.
 
-Every file is generated with `--idempotent`, which means:
+Every file is generated idempotent, which means:
 
 - It is **safe to re-run**: each migration in it is wrapped in a check against that module's own
   migrations-history table, so a migration already recorded there is skipped rather than re-applied.
@@ -73,67 +82,65 @@ every other file while being unsafe to re-run. `script Sqlite` therefore exits 2
 database is brought up to date with `module-migrate.sh apply Sqlite --connection-env ELSA_EF_CONNECTION`, or by a host on the
 `AutoMigrate` default.
 
-Secrets ships only a MySQL context in this catalog; its historical SQLite, SQL Server and PostgreSQL
-chains belong to `tools/ef/dual-migrate.sh`.
-
 ### Keeping the committed SQL honest
 
-`script-check` regenerates into a temporary directory and diffs against the directory you pass. It checks
-every module context and then exits non-zero if any file differed, was missing, or was stale — a file no
-module context generates any more (that last check runs only for a full, unfiltered check). It prints the
-unified diff, so the failure says which statement moved:
+`script-check` regenerates the committed artifact from its own `migration-plan.json` and diffs against it —
+no `<Provider>` or module selector of its own, because the committed plan already says what it targets:
 
 ```bash
-bash tools/ef/module-migrate.sh script-check PostgreSql db/migrations
+bash tools/ef/module-migrate.sh script-check db/migrations
 ```
 
-A CI job would call exactly that, once per server provider, after `dotnet tool restore` — nothing else is
-wired up here. It catches the two silent failures that matter: SQL hand-edited after review, and a model
-change merged without a regenerated script. The second one is caught because the command builds the
-tooling project — and with it every module — before it scripts anything, so it compares against the
+A CI job would call exactly that, once per committed artifact directory, after `dotnet tool restore` —
+nothing else is wired up here. It catches the two silent failures that matter: SQL hand-edited after review,
+and a model change merged without a regenerated script. The second one is caught because the command builds
+the tooling project — and with it every module — before it checks anything, so it compares against the
 current model, not a stale assembly.
 
 ### Where the SQL is committed
 
-This repository does not commit generated `.sql`. A team that reviews SQL commits the tree the commands
-above write — conventionally `db/migrations/<Module>/<Provider>.sql` — because that is what makes the
-change reviewable: the schema diff shows up in the pull request next to the model change that caused it,
-a DBA approves the statements before anything runs, and `script-check` in CI proves the committed file is
-still the file the model generates.
-
-## Secrets pilot tooling
+This repository does not commit generated `.sql`. A team that reviews SQL commits the directory `script`
+writes — conventionally `db/migrations/<provider>/` — because that is what makes the change reviewable: the
+schema diff shows up in the pull request next to the model change that caused it, a DBA approves the
+statements before anything runs, and `script-check` in CI proves the committed files are still what the
+model generates.
 
 ## Layout
 
 - **Module package** (`src/Elsa/<Domain>/Persistence/EntityFrameworkCore/`): `*DbContext` + derived
   provider contexts + `Migrations/<Provider>/`. References EF Core + Relational only. This is the
   assembly Nuplane loads at apply time.
-- **Tooling project** (`.../EntityFrameworkCore/Tooling/`): `IDesignTimeDbContextFactory` per
-  derived context, provider PackageReferences, `Microsoft.EntityFrameworkCore.Design`.
+- **Design-time startup project** (`tools/ef/Elsa.EntityFrameworkCore.Tooling/`): one
+  `ModuleDesignTimeFactory` line per provider-derived context, the provider PackageReferences, and
+  `Microsoft.EntityFrameworkCore.Design`. One project for every module; #1878 retired the last
+  module-owned one (Secrets').
 - **Policy package** (`src/Elsa/Persistence/EntityFramework/`): history table name, provider guard,
   AutoMigrate vs Validate. No provider engines.
 
 ## Command shape
 
-Always pass `--startup-project` as the tooling project and `--project` as the module so generated
+Always pass `--startup-project` as the shared tooling project and `--project` as the module, so generated
 files compile into the assembly Nuplane loads at apply time.
 
 History table: `EfMigrationsHistory.TableName("<Module>")` → `__EFMigrationsHistory_<Module>`.
-Set it on the factory's `Use*` options (`MigrationsHistoryTable`), not as a magic base-context property.
+It comes from the module's own `[EfModule]` declaration, not from a magic base-context property.
 
-## Secrets
+## Secrets: the one historical migration chain
 
-See `src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/README.md`.
+Every module keeps a single regenerated `Initial` per provider except Secrets, which keeps its historical
+chain on Sqlite, SqlServer and PostgreSql (its MySQL set is regenerated with everything else). A model
+change there adds a named migration to each of those three chains:
 
 ```bash
 dotnet tool restore   # restores the pinned dotnet-ef 10.0.10 from .config/dotnet-tools.json
 # or: dotnet tool install dotnet-ef --version 10.0.10 --tool-path .tools
 
 bash tools/ef/generate-ef-migrations.sh <MigrationName>
-bash tools/ef/dual-migrate.sh pending
-bash tools/ef/dual-migrate.sh apply --sqlite
-bash tools/ef/dual-migrate.sh all
 ```
+
+That script is the only thing about Secrets that is special. It uses the same shared startup project and
+the same provider-free module assembly as every other module: #1878 retired the Secrets-only `Tooling/`
+project, and `dual-migrate.sh` with it.
 
 The helper resolves EF tooling in this order: an executable repository-local `.tools/dotnet-ef`,
 the repository-manifest `dotnet ef` after `dotnet tool restore`, and only then a `dotnet-ef`
@@ -141,81 +148,64 @@ executable on `PATH`. This prevents a stale global tool from silently overriding
 pinned version. The explicit `--tool-path .tools` installation is useful for a clean operator
 checkout; the manifest path is the normal CI path.
 
-## Dual-migrate (out of process / CI)
+## Applying out of process
 
-`tools/ef/dual-migrate.sh` is the Nuplane dual-migrate CI tool. It does not boot the host.
+Applying, validating and repairing any module — Secrets included — goes through the same commands:
 
-| Command | Hook | Needs a database |
-|---|---|---|
-| `pending` | `dotnet ef migrations has-pending-model-changes --context <Derived>` | no |
-| `apply` | `dotnet ef database update`, then managed legacy-projection reindex for `<Derived>` (factories read `ELSA_SECRETS_EF_*`) | yes |
+```bash
+bash tools/ef/module-migrate.sh pending 'Secrets.*'
+bash tools/ef/module-migrate.sh apply PostgreSql --connection-env ELSA_EF_CONNECTION Secrets
+bash tools/ef/module-migrate.sh validate PostgreSql --connection-env ELSA_EF_CONNECTION Secrets
+dotnet elsa persistence post-migrate --host <host> --provider PostgreSql --modules Secrets \
+  --connection-env ELSA_EF_CONNECTION
+```
 
-Both run for each derived Secrets context (`SecretsSqliteDbContext`,
-`SecretsSqlServerDbContext`, `SecretsPostgreSqlDbContext`).
-
-Apply connections:
-
-- Sqlite: `ELSA_SECRETS_EF_SQLITE` or a temp file.
-- SqlServer: `ELSA_SECRETS_EF_SQLSERVER`. Required for `apply --sqlserver`. Under
-  `--all` / default, skipped when unset unless `ELSA_SECRETS_EF_REQUIRE_ALL=1`.
-- PostgreSql: `ELSA_SECRETS_EF_POSTGRESQL` (same explicit-vs-all rule).
-
-`ELSA_SECRETS_EF_CONFIGURATION` selects the MSBuild configuration used for the one tooling build
-and every EF call; it defaults to `Release`. The script builds the tooling project once, then
-passes that configuration and `--no-build` to each EF command. A caller that has already built
-the same checkout and configuration may set `ELSA_SECRETS_EF_SKIP_BUILD=1` to avoid competing
-writes to loaded build outputs during a parallel test or CI process. That explicit caller assumes
-responsibility for artifact freshness; clean operator checkouts should keep the default one-build
-safety net. The repository test harness derives the active Debug/Release configuration from its
-assembly and declares the Tooling project as a build dependency before opting into this mode.
-
-`pending` is the CI-safe check for all three providers. The current Build & test job restores
-repository-local tools before build and test; if that job invokes this check, no extra restore is
-needed. Any other job must run `dotnet tool restore` (or install the explicit `.tools` tool) first.
+The connection is never an argument: `--connection-env NAME` reads it from the environment and
+`--connection-stdin` reads it from stdin. `post-migrate` has no shim command of its own; run the CLI
+against the host directly, which is what an operator with a packaged host does for all of these.
 
 ## What the checks mean
 
 The checks cover different failure classes:
 
-- `pending` runs `migrations has-pending-model-changes` for every derived context. It compares the
+- `pending` runs `migrations has-pending-model-changes` for every matched module context. It compares the
   current EF model with that context's committed model snapshot and does not inspect database
   history. A failure means a migration is missing from source; it is not proof that a database has
   unapplied migrations.
-- `apply` runs `database update` against the selected provider, applies compiled migrations
-  missing from `__EFMigrationsHistory_ElsaSecrets`, then reindexes projection fields in bounded
-  transactions. The repair targets fields
-  written by the pre-contract host-runtime casing algorithm, derives them from
-  the stored document, preserves concurrency tokens, and is idempotent. SQL Server and PostgreSQL require their
-  provider-specific connection environment variable and a reachable database. SQLite uses
-  `ELSA_SECRETS_EF_SQLITE` when set; otherwise the script creates a temporary database and removes
-  it on exit, which validates the artifact but does not update a deployment database.
+- `apply` applies the compiled migrations missing from each selected module's
+  `__EFMigrationsHistory_*` table, then audits that module's declared post-migration actions and fails
+  closed — naming `dotnet elsa persistence post-migrate` — when one is required. The migrations are
+  applied either way; what the refusal withholds is the claim that the database is ready.
+- `post-migrate` is the only command that runs a post-migration action. For Secrets that is the
+  projection reindex: it targets fields written by the pre-contract host-runtime casing algorithm,
+  derives them from the stored document in bounded transactions, preserves concurrency tokens, and is
+  idempotent.
 - Runtime `Elsa:Persistence:EntityFramework:Migrate:Policy=Validate` calls EF's
   pending-database-migration check and fails closed when the database history is behind. Both
   runtime policies then audit the module's declared post-migration actions — for Secrets, the pinned
   projection contract — and fail closed naming `dotnet elsa persistence post-migrate` when a repair
   is still required. Neither runtime path rewrites legacy rows, and neither replaces the
   source/model `pending` check. Since #1877 that audit is the general
-  `IEfPostMigrationAction` seam rather than a Secrets-specific call, and `dotnet elsa persistence
-  post-migrate` is the one command that runs a repair.
+  `IEfPostMigrationAction` seam rather than a Secrets-specific call.
 
 ## Deployment and rollback boundary
 
-Use an explicit provider selector (`apply --sqlite`, `apply --sqlserver`, or
-`apply --postgresql`) and set its matching `ELSA_SECRETS_EF_*` connection for the target database.
-Omitting `ELSA_SECRETS_EF_SQLITE` intentionally targets only the disposable fallback. Before
-applying to a deployment database, take a backup, quiesce writes, and run `pending`. Use a short-lived least-privilege deployment identity
-with the DDL rights needed for that provider; after the schema is verified, run the application
-with its least-privilege runtime identity.
+Name the provider and the modules explicitly, and point `--connection-env` at the variable carrying the
+target database's connection string. Before applying to a deployment database, take a backup, quiesce
+writes, and run `pending`. Use a short-lived least-privilege deployment identity with the DDL rights
+needed for that provider; after the schema is verified, run the application with its least-privilege
+runtime identity.
 
-After `apply` succeeds, verify the selected database's
-`__EFMigrationsHistory_ElsaSecrets` contains the expected migration IDs and that the expected
-`elsa_secrets` table shape is present before deploying the application with
-`Elsa:Persistence:EntityFramework:Migrate:Policy=Validate`. If `pending` or `apply` fails, stop the rollout and inspect both the
-provider schema and history before retrying; a failed command is not deployment proof.
+After `apply` succeeds, verify the selected database's per-module `__EFMigrationsHistory_*` tables
+contain the expected migration IDs and that the expected table shapes are present before deploying the
+application with `Elsa:Persistence:EntityFramework:Migrate:Policy=Validate`. If `apply` reports a required
+post-migration action, run it and re-run `validate`; a host under `Validate` refuses to start until it is
+clear. If `pending` or `apply` fails, stop the rollout and inspect both the provider schema and history
+before retrying; a failed command is not deployment proof.
 
 Prefer additive/expand-contract schema changes so an application binary can be rolled back only
 after compatibility is checked. Do not blindly run a down-migration as an application rollback:
-`WidenLookupKeys.Down` narrows SQL Server/PostgreSQL lookup columns back to 64 characters and can
+Secrets' `WidenLookupKeys.Down` narrows SQL Server/PostgreSQL lookup columns back to 64 characters and can
 fail or lose values longer than that. Use a verified backup restore or a forward migration for
 schema recovery; treat application rollback and schema recovery as separate decisions.
 

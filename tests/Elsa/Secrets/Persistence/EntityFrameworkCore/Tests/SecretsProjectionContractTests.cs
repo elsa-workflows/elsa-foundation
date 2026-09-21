@@ -44,7 +44,7 @@ public sealed class SecretsProjectionContractTests
 
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => SecretsProjectionContract.EnsureCurrentAsync(context));
-            Assert.Contains("dual-migrate.sh apply", exception.Message, StringComparison.Ordinal);
+            Assert.Contains(EfPostMigrationActions.Command, exception.Message, StringComparison.Ordinal);
             Assert.Contains(SecretsSearchKeys.UnicodeOrdinalIgnoreCaseAlgorithmId, exception.Message, StringComparison.Ordinal);
 
             Assert.Equal(1, await SecretsProjectionContract.ReindexAsync(context));
@@ -71,10 +71,24 @@ public sealed class SecretsProjectionContractTests
         }
     }
 
-    [SkippableFact]
-    public async Task Operator_apply_reindexes_legacy_rows_before_validate_startup()
+    /// <summary>
+    /// The host's own startup path, both ways round: a shell under <see cref="EfMigratePolicy.Validate"/>
+    /// refuses to initialize while the declared projection reindex is outstanding, naming the one command
+    /// that runs it, and initializes once that action has run. Nothing here repairs as a side effect of
+    /// starting — an audit that quietly reindexed would look exactly like a healthy start.
+    /// </summary>
+    /// <remarks>
+    /// The repair is driven through the real <c>dotnet elsa persistence post-migrate</c> binary, out of
+    /// process, via <see cref="PersistenceCliProcessRunner"/> — the same CLI subprocess
+    /// <see cref="SecretsEntityFrameworkCoreShellReloadTests"/> drives for <c>apply</c>. That closes the gap
+    /// <see cref="SecretsProjectionReindexTests"/> leaves: that suite proves <c>EfToolingHost</c>'s frozen
+    /// contract in process, not the shipped binary. What is proved here is the other half neither of those
+    /// covers: that the refusal a running host raises at startup clears once the real tool's repair has been
+    /// made.
+    /// </remarks>
+    [Fact]
+    public async Task Startup_audit_refuses_until_the_declared_reindex_has_run()
     {
-        Skip.IfNot(DualMigrateProcessRunner.HasDotnetEf(), "dotnet-ef is not available.");
         var path = Path.Join(Path.GetTempPath(), $"elsa-secrets-projection-tool-{Guid.NewGuid():N}.db");
         var connectionString = $"Data Source={path};Pooling=False";
         byte[] originalToken;
@@ -102,17 +116,22 @@ public sealed class SecretsProjectionContractTests
             await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             var lifecycle = provider.GetRequiredService<EfModuleMigrator<SecretsDbContext>>();
             // The post-migration audit refuses startup and names the one command that repairs it; it never
-            // reindexes by itself, which is what leaves the row for dual-migrate below to repair.
+            // reindexes by itself, which is what leaves the row for the repair below.
             var startupFailure = await Assert.ThrowsAsync<EfPostMigrationRequiredException>(
                 () => lifecycle.InitializeAsync());
             Assert.Equal([nameof(SecretsProjectionReindex)], startupFailure.ActionIds);
             Assert.Contains(EfPostMigrationActions.Command, startupFailure.Message, StringComparison.Ordinal);
 
-            var result = DualMigrateProcessRunner.RunFromExistingBuild(
-                ["apply", "--sqlite"],
-                new Dictionary<string, string?> { ["ELSA_SECRETS_EF_SQLITE"] = connectionString });
-            Assert.True(result.ExitCode == 0, result.Describe());
-            Assert.Contains("reindexed 1 row(s)", result.Output, StringComparison.Ordinal);
+            await using (var repairConnection = new SqliteConnection(connectionString))
+            {
+                await repairConnection.OpenAsync();
+                await using var repairContext = new SecretsSqliteDbContext(CreateOptions(repairConnection));
+                Assert.Equal("\u019B", (await repairContext.Secrets.AsNoTracking().SingleAsync()).TypeNameLookupKey);
+            }
+
+            var repair = PersistenceCliProcessRunner.Run("post-migrate", "Sqlite", connectionString);
+            Assert.True(repair.ExitCode == 0, repair.Describe());
+
             await lifecycle.InitializeAsync();
 
             await using var verifyConnection = new SqliteConnection(connectionString);
@@ -472,7 +491,7 @@ public sealed class SecretsProjectionContractTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
         Assert.IsNotType<SecretsProjectionException>(exception);
-        Assert.Contains("dual-migrate.sh apply", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(EfPostMigrationActions.Command, exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("\u019B", exception.Message, StringComparison.Ordinal);
 
         Assert.Equal(1, await SecretsProjectionContract.ReindexAsync(fixture.Context));
@@ -496,7 +515,7 @@ public sealed class SecretsProjectionContractTests
         Assert.Equal(normalizedName, exception.NormalizedName);
         Assert.Contains(tenantId, exception.Message, StringComparison.Ordinal);
         Assert.Contains(normalizedName, exception.Message, StringComparison.Ordinal);
-        Assert.Contains("dual-migrate.sh apply", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(EfPostMigrationActions.Command, exception.Message, StringComparison.Ordinal);
         Assert.Contains("not committed", exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(payloadFragment, exception.Message, StringComparison.Ordinal);
     }

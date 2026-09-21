@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Entities;
 
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
@@ -39,6 +40,6 @@ public sealed class SecretsProjectionException : InvalidOperationException
     private static string Describe(SecretRecord record, string reason) =>
         $"Secrets row tenant '{record.TenantId}' name '{record.NormalizedName}' {reason} " +
         "The current bounded batch was not committed. Correct the inconsistent row and rerun the " +
-        "idempotent provider-specific 'bash tools/ef/dual-migrate.sh apply' command, or delete the " +
-        "damaged row before starting the host.";
+        $"idempotent '{EfPostMigrationActions.Command}' command for this host's provider, or delete " +
+        "the damaged row before starting the host.";
 }

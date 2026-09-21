@@ -6,10 +6,10 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 
 ## Summary
 
-- Source projects: 131
+- Source projects: 130
 - Test projects: 106
 - Domains: 29
-- Direct cross-domain references: 668
+- Direct cross-domain references: 672
 
 ## Domains
 
@@ -35,7 +35,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Pipelines | 1 | 0 | contract |
 | Elsa.Primitives | 2 | 2 | feature/implementation<br>test |
 | Elsa.Samples | 0 | 1 | test |
-| Elsa.Secrets | 5 | 6 | contract<br>feature/implementation<br>test |
+| Elsa.Secrets | 4 | 6 | contract<br>feature/implementation<br>test |
 | Elsa.Serialization | 3 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Studio | 3 | 3 | contract<br>feature/implementation<br>test |
 | Elsa.Tasks | 3 | 1 | contract<br>feature/implementation<br>helper<br>test |
@@ -143,7 +143,6 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Secrets.Core](../../src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj) | source | Elsa.Secrets | Core | contract | Elsa.Primitives |
 | [Elsa.Secrets](../../src/Elsa/Secrets/Elsa.Secrets.csproj) | source | Elsa.Secrets | (root) | feature/implementation | Elsa.Attention.Core<br>Elsa.Expressions.Core<br>Elsa.Secrets.Core<br>Elsa.Serialization.Core |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore](../../src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj) | source | Elsa.Secrets | Persistence.EntityFrameworkCore | feature/implementation | Elsa.Persistence.EntityFramework<br>Elsa.Secrets.Core |
-| [Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling](../../src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling.csproj) | source | Elsa.Secrets | Persistence.EntityFrameworkCore.Tooling | feature/implementation | Elsa.Secrets.Persistence.EntityFrameworkCore |
 | [Elsa.Serialization.Core](../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj) | source | Elsa.Serialization | Core | contract | Elsa.Events.Core<br>Elsa.Primitives |
 | [Elsa.Serialization.Newtonsoft](../../src/Elsa/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj) | source | Elsa.Serialization | Newtonsoft | feature/implementation | Elsa.Serialization.Core |
 | [Elsa.Serialization.SystemText](../../src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj) | source | Elsa.Serialization | SystemText | feature/implementation | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core |
@@ -251,9 +250,9 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | Elsa.Samples | Nuplane.Activities.Tests | test | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Samples.Nuplane.Activities |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj) | test | Elsa.Secrets | Persistence.EntityFrameworkCore.MySql.Tests | test | Elsa.Secrets<br>Elsa.Secrets.Persistence.EntityFrameworkCore |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe.csproj) | test | Elsa.Secrets | Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe | test | Elsa.Persistence.EntityFramework<br>Elsa.Secrets<br>Elsa.Secrets.Core |
-| [Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj) | test | Elsa.Secrets | Persistence.EntityFrameworkCore.PostgreSql.Tests | test | Elsa.Secrets<br>Elsa.Secrets.Persistence.EntityFrameworkCore<br>Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe<br>Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling |
+| [Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj) | test | Elsa.Secrets | Persistence.EntityFrameworkCore.PostgreSql.Tests | test | Elsa.Cli<br>Elsa.Cli.Fixtures.Host<br>Elsa.Secrets<br>Elsa.Secrets.Persistence.EntityFrameworkCore<br>Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj) | test | Elsa.Secrets | Persistence.EntityFrameworkCore.SqlServer.Tests | test | Elsa.Secrets.Persistence.EntityFrameworkCore |
-| [Elsa.Secrets.Persistence.EntityFrameworkCore.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Secrets | Persistence.EntityFrameworkCore.Tests | test | Elsa.Secrets<br>Elsa.Secrets.Persistence.EntityFrameworkCore<br>Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling |
+| [Elsa.Secrets.Persistence.EntityFrameworkCore.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Secrets | Persistence.EntityFrameworkCore.Tests | test | Elsa.Cli<br>Elsa.Cli.Fixtures.Host<br>Elsa.Secrets<br>Elsa.Secrets.Persistence.EntityFrameworkCore |
 | [Elsa.Secrets.Tests](../../tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj) | test | Elsa.Secrets | Tests | test | Elsa.Api.AspNetCore<br>Elsa.Api.Compatibility.Testing<br>Elsa.Expressions<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Secrets<br>Elsa.Secrets.Api<br>Elsa.Secrets.Core<br>Elsa.Testing<br>Elsa.Workflows.Runtime |
 | [Elsa.Serialization.Tests](../../tests/Elsa/Serialization/Tests/Elsa.Serialization.Tests.csproj) | test | Elsa.Serialization | Tests | test | Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Serialization.SystemText |
 | [Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests](../../tests/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Studio | Preferences.Persistence.EntityFrameworkCore.ProviderTests | test | Elsa.Studio.Preferences.Persistence.EntityFrameworkCore |
@@ -651,6 +650,10 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Secrets.Core](../../src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj) | Elsa.Secrets | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore](../../src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj) | Elsa.Secrets | [Elsa.Persistence.EntityFramework](../../src/Elsa/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe.csproj) | Elsa.Secrets | [Elsa.Persistence.EntityFramework](../../src/Elsa/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
+| [Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj) | Elsa.Secrets | [Elsa.Cli](../../src/Elsa/Cli/Elsa.Cli.csproj) | Elsa.Cli |
+| [Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj) | Elsa.Secrets | [Elsa.Cli.Fixtures.Host](../../tests/Elsa/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj) | Elsa.Cli |
+| [Elsa.Secrets.Persistence.EntityFrameworkCore.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj) | Elsa.Secrets | [Elsa.Cli](../../src/Elsa/Cli/Elsa.Cli.csproj) | Elsa.Cli |
+| [Elsa.Secrets.Persistence.EntityFrameworkCore.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj) | Elsa.Secrets | [Elsa.Cli.Fixtures.Host](../../tests/Elsa/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj) | Elsa.Cli |
 | [Elsa.Secrets.Tests](../../tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj) | Elsa.Secrets | [Elsa.Api.AspNetCore](../../src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |
 | [Elsa.Secrets.Tests](../../tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj) | Elsa.Secrets | [Elsa.Api.Compatibility.Testing](../../tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj) | Elsa.Api |
 | [Elsa.Secrets.Tests](../../tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj) | Elsa.Secrets | [Elsa.Expressions](../../src/Elsa/Expressions/Elsa.Expressions.csproj) | Elsa.Expressions |

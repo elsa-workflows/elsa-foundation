@@ -223,9 +223,8 @@
   <Folder Name="/src/Elsa/Studio/Preferences/Persistence/">
     <Project Path="src/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
-  <Folder Name="/src/Elsa/Secrets/Persistence/EntityFrameworkCore/">
+  <Folder Name="/src/Elsa/Secrets/Persistence/">
     <Project Path="src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
-    <Project Path="src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Tasks/">
     <Project Path="src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj" />
