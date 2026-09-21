@@ -128,8 +128,9 @@ public sealed class ScriptCheckClassificationTests : IDisposable
     }
 
     /// <summary>
-    /// A manifest field a package upgrade does not explain — here the package id itself — is a difference
-    /// worth reporting, and calling it a version difference would misname it.
+    /// A manifest field a package upgrade does not explain — here the package id itself — still reports the
+    /// documented "manifest versions differ, SQL identical" headline (the spec names only two headlines), but
+    /// the detail line names exactly which field moved so it is never mistaken for a version bump.
     /// </summary>
     [Fact]
     public void A_manifest_field_no_upgrade_explains_is_reported_without_claiming_a_version_moved()
@@ -139,7 +140,7 @@ public sealed class ScriptCheckClassificationTests : IDisposable
 
         var report = Compare();
 
-        Assert.Equal("manifest differs, SQL identical", report.Headline);
+        Assert.Equal("manifest versions differ, SQL identical", report.Headline);
         Assert.Contains(report.Lines, line => line.Contains("modules[0].package.id", StringComparison.Ordinal));
     }
 

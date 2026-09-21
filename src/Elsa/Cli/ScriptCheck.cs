@@ -74,7 +74,7 @@ public static partial class ScriptCheck
         var versionsOnly = manifestDifferences.All(difference => IsVersionField(difference.Path));
         return new(
             ToolExitCode.NegativeResult,
-            versionsOnly ? "manifest versions differ, SQL identical" : "manifest differs, SQL identical",
+            "manifest versions differ, SQL identical",
             [
                 .. manifestDifferences.Select(difference => $"{difference.Path}: {difference.Committed} -> {difference.Regenerated}"),
                 versionsOnly

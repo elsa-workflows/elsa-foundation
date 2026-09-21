@@ -90,11 +90,11 @@ Twenty features, each in its own file, call `AddEfModuleMigrations<T>`, covering
 
 **Conclusion**: the worker cannot reimplement this loader cheaply or safely; it must reuse Nuplane's own composition (U2) to get provider binding that matches the real host. This is now met by the delivered `NuplaneHostIntegratedLoader` (U2).
 
-## R3 — OPEN: does the package-manifest generator skip a tool project?
+## R3 — RESOLVED: the package-manifest generator does not touch the tool project
 
-`.github/workflows/packages.yml:99` builds its pack set with `find src extensions -name '*.csproj'` (excluding `src/Apps/*` and `*/tests/*`), so a project physically under `src/` is packed. It is not yet verified whether the separate manifest-generation step (`Elsa.Platform.PackageManifest.Generator`, referenced by the `[ManifestFeatureCategory]` attributes seen on `SecretsEntityFrameworkCoreFeature`) has its own project-shape assumptions that would exclude a CLI/tool project such as the proposed `src/Elsa/Cli/Elsa.Cli.csproj` (a `PackAsTool`, no `[ShellFeature]`) from the manifest it emits. This would settle whether slice 4 needs a manifest-generator change alongside the new project, or whether the generator already skips non-feature projects cleanly.
+`.github/workflows/packages.yml:99` builds its pack set with `find src extensions -name '*.csproj'` (excluding `src/Apps/*` and `*/tests/*`), so a project physically under `src/` is packed. The open question was whether the separate manifest-generation step (`Elsa.Platform.PackageManifest.Generator`, referenced by the `[ManifestFeatureCategory]` attributes seen on `SecretsEntityFrameworkCoreFeature`) has its own project-shape assumptions that would exclude a CLI/tool project such as `src/Elsa/Cli/Elsa.Cli.csproj` (a `PackAsTool`, no `[ShellFeature]`) from the manifest it emits.
 
-**What would settle it**: reading the manifest generator's project-selection logic, or building `Elsa.Cli` against it once slice 4 exists and checking whether it appears (or correctly does not appear) in the generated manifest.
+Now settled by observation: `src/Elsa/Cli/Elsa.Cli.csproj` (delivered in #1874) carries no `PackageReference` and no `ProjectReference` to `Elsa.Platform.PackageManifest.Generator` — its only references are `System.CommandLine` and its own `Worker\Elsa.Cli.Worker.csproj` — and it packs as a clean `PackAsTool`/`ToolCommandName=dotnet-elsa` tool with `PackageId=dotnet-elsa`, no `[ShellFeature]` and no manifest artifacts. The generator never runs against this project, so slice 4 needed no manifest-generator change, and slice 11 (`elsa-package.json` / `extensions.efModules`, #1881) remains gated on a separate upstream generator change of its own, not on anything this project does.
 
 ## R4 — RESOLVED: Nuplane's offline mode does not load from state; `NuplaneHostIntegratedLoader.LoadFromStateAsync` does
 

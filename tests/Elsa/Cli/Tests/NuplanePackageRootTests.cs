@@ -123,13 +123,102 @@ public sealed class NuplanePackageRootTests : IDisposable
         Assert.Contains("packages-empty", run.Error, StringComparison.Ordinal);
     }
 
-    /// <summary>Lays out one package the way Nuplane's own install store does: feed, id, version, and a completion marker.</summary>
-    private void Install(string package, string version, bool complete)
+    /// <summary>
+    /// The other shape User Story 2's own Independent Test names: a host whose <c>--packages</c> root
+    /// carries a <c>store-state.json</c> recording the active set, rather than relying on completion
+    /// markers alone. This drives a real state file through the CLI end to end, and checks the module it
+    /// names produces the same SQL as the already-tested marker-probe path for the same module.
+    /// </summary>
+    [Fact]
+    public void A_module_recorded_in_a_store_state_file_is_discovered_and_scripted_the_same_way()
     {
-        var directory = Path.Join(packages.Path, "local", package, version, "lib", "net10.0");
+        Install("Acme.Widgets", "1.4.2", complete: true);
+        var installPath = Path.Join(packages.Path, "local", "Acme.Widgets", "1.4.2");
+        WriteStateFile("Acme.Widgets", "1.4.2", installPath);
+
+        var list = DotnetElsa.Run("persistence", "list", "--host", DotnetElsa.Host("NuplaneHost"), "--packages", packages.Path);
+
+        Assert.Equal(ToolExitCode.Success, list.ExitCode);
+        Assert.Contains("Acme.Widgets", list.Output, StringComparison.Ordinal);
+
+        using var fromState = new TempDirectory("elsa-cli-nuplane-state-artifact-");
+        var script = DotnetElsa.Run(
+            "persistence", "script",
+            "--host", DotnetElsa.Host("NuplaneHost"),
+            "--packages", packages.Path,
+            "--provider", "PostgreSql",
+            "--modules", "Acme.Widgets",
+            "--output", fromState.Path);
+        Assert.Equal(ToolExitCode.Success, script.ExitCode);
+
+        // The already-tested --packages path (NuplaneInstallRoot.Probe, no state file): a second root with
+        // the same completed install and no store-state.json beside it.
+        using var probeRoot = new TempDirectory("elsa-cli-nuplane-probe-packages-");
+        using var fromProbe = new TempDirectory("elsa-cli-nuplane-probe-artifact-");
+        InstallInto(probeRoot.Path, "Acme.Widgets", "1.4.2", complete: true);
+        Assert.Equal(
+            ToolExitCode.Success,
+            DotnetElsa.Run(
+                "persistence", "script",
+                "--host", DotnetElsa.Host("NuplaneHost"),
+                "--packages", probeRoot.Path,
+                "--provider", "PostgreSql",
+                "--modules", "Acme.Widgets",
+                "--output", fromProbe.Path).ExitCode);
+
+        Assert.True(
+            File.ReadAllBytes(fromState.File("01-acme-widgets.sql")).AsSpan()
+                .SequenceEqual(File.ReadAllBytes(fromProbe.File("01-acme-widgets.sql"))),
+            "The SQL a store-state-resolved module produces differs from the SQL the same module produces through the --packages probe path.");
+    }
+
+    /// <summary>Lays out one package the way Nuplane's own install store does: feed, id, version, and a completion marker.</summary>
+    private void Install(string package, string version, bool complete) =>
+        InstallInto(packages.Path, package, version, complete);
+
+    private static void InstallInto(string root, string package, string version, bool complete)
+    {
+        var directory = Path.Join(root, "local", package, version, "lib", "net10.0");
         Directory.CreateDirectory(directory);
         File.Copy(typeof(WidgetsDbContext).Assembly.Location, Path.Join(directory, $"{package}.dll"));
         if (complete)
-            File.WriteAllText(Path.Join(packages.Path, "local", package, version, NuplaneInstallRoot.ReadyMarker), "");
+            File.WriteAllText(Path.Join(root, "local", package, version, NuplaneInstallRoot.ReadyMarker), "");
+    }
+
+    /// <summary>
+    /// Writes a <c>store-state.json</c> by hand, in the shape <c>Nuplane.Store.State.StoreStateRecord</c> and
+    /// <c>Nuplane.Abstractions.ActivePackageDescriptor</c> serialize to (camelCase, no enum converter — the
+    /// default <c>Root</c> package role is left out rather than guessed as a numeric value): one active
+    /// version and one matching descriptor, which is exactly what <c>ActivePackageCatalogMapper.MapActivePackages</c>
+    /// requires to report a package as active. No graph activation record is written; with none present,
+    /// <c>NuplaneHostIntegratedLoader</c> falls back to grouping by the descriptor's own (default) graph
+    /// generation identity, which for one package is a graph of one.
+    /// </summary>
+    private void WriteStateFile(string packageId, string version, string installPath)
+    {
+        const string timestamp = "2026-09-21T00:00:00Z";
+        var json = JsonSerializer.Serialize(new
+        {
+            activeVersionById = new Dictionary<string, string> { [packageId] = version },
+            lastKnownGoodById = new Dictionary<string, string>(),
+            lastFailureById = new Dictionary<string, object>(),
+            lastSuccessfulSourceSnapshots = new Dictionary<string, object>(),
+            updatedAt = timestamp,
+            activePackageDescriptorsById = new Dictionary<string, object>
+            {
+                [packageId] = new
+                {
+                    packageId,
+                    version,
+                    feedName = "local",
+                    sourceName = "local",
+                    installPath,
+                    activatedAtUtc = timestamp,
+                    activationCorrelationId = "test-correlation"
+                }
+            },
+            activeGraphsById = new Dictionary<string, object>()
+        });
+        File.WriteAllText(Path.Join(packages.Path, NuplaneInstallRoot.StateFileName), json);
     }
 }
