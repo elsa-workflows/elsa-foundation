@@ -202,3 +202,90 @@ public sealed class ScriptCheckCliTests(CommittedArtifact artifact) : IClassFixt
         File.WriteAllText(path, plan.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n");
     }
 }
+
+/// <summary>
+/// The MySQL counterpart to <see cref="CommittedArtifact"/>. <c>MinimalHost</c> pins only PostgreSql's
+/// engine (it "genuinely pins no engine for three of the four providers", by its own fixture description),
+/// so it cannot generate a MySql artifact at all. The full packaged <c>Host</c> fixture can, but its own
+/// third-party module -- Acme.Widgets -- carries no MySql migrations either; the first-party <c>Secrets</c>
+/// module does, and is what #1914's own fix used to prove the rewrite.
+/// </summary>
+public sealed class MySqlCommittedArtifact : IDisposable
+{
+    private readonly TempDirectory pristine = new("elsa-cli-mysql-pristine-");
+
+    public MySqlCommittedArtifact()
+    {
+        var run = DotnetElsa.Run(
+            "persistence", "script",
+            "--host", DotnetElsa.Host("Host"),
+            "--provider", "MySql",
+            "--modules", "Secrets",
+            "--output", pristine.Path);
+        if (run.ExitCode != ToolExitCode.Success)
+            throw new InvalidOperationException($"The MySQL fixture artifact could not be generated: {run.Text}");
+    }
+
+    public void Dispose() => pristine.Dispose();
+
+    /// <summary>A fresh copy for one test to edit.</summary>
+    public TempDirectory Copy()
+    {
+        var copy = new TempDirectory("elsa-cli-mysql-committed-");
+        foreach (var file in Directory.EnumerateFiles(pristine.Path))
+            File.Copy(file, copy.File(Path.GetFileName(file)));
+        return copy;
+    }
+}
+
+/// <summary>
+/// <c>script-check</c> against a MySQL artifact (spec 171 User Story 4). MySQL is the one provider whose
+/// script passes through a rewrite -- <c>EfMySqlIdempotentScript</c>, #1914 -- before <c>script-check</c>'s
+/// byte comparison ever sees it: that fix's own description records both directions verified by hand (up to
+/// date on a fresh artifact; "SQL differs" after a hand edit inside the generated procedure body), but
+/// neither was pinned by a test. These two are.
+/// </summary>
+public sealed class ScriptCheckMySqlCliTests(MySqlCommittedArtifact artifact) : IClassFixture<MySqlCommittedArtifact>, IDisposable
+{
+    private const string ScriptFile = "01-secrets.sql";
+
+    private readonly TempDirectory committed = artifact.Copy();
+
+    public void Dispose() => committed.Dispose();
+
+    [Fact]
+    public void A_freshly_generated_mysql_artifact_passes()
+    {
+        var run = Check();
+
+        Assert.Equal(ToolExitCode.Success, run.ExitCode);
+        Assert.Contains("up to date", run.Output, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The edit lands inside the stored procedure the rewrite builds -- a column definition under the
+    /// module's own <c>CREATE PROCEDURE ... BEGIN</c> -- not merely anywhere in the file: the point is that
+    /// what <c>script-check</c> compares is the rewritten form the transform produces, not what EF originally
+    /// generated.
+    /// </summary>
+    [Fact]
+    public void A_hand_edit_inside_the_rewritten_procedure_body_fails_with_the_file_named()
+    {
+        var path = committed.File(ScriptFile);
+        var sql = File.ReadAllText(path);
+        Assert.Contains("CREATE PROCEDURE `elsa_migrate_secrets`()", sql, StringComparison.Ordinal);
+        var edited = sql.Replace("`Status` varchar(32) NOT NULL,", "`Status` varchar(64) NOT NULL,", StringComparison.Ordinal);
+        Assert.NotEqual(sql, edited);
+        File.WriteAllText(path, edited);
+
+        var run = Check();
+
+        Assert.Equal(ToolExitCode.NegativeResult, run.ExitCode);
+        Assert.Contains("SQL differs", run.Error, StringComparison.Ordinal);
+        Assert.Contains(ScriptFile, run.Error, StringComparison.Ordinal);
+        Assert.Contains("a statement changed", run.Error, StringComparison.Ordinal);
+    }
+
+    private CliRun Check() =>
+        DotnetElsa.Run("persistence", "script-check", committed.Path, "--host", DotnetElsa.Host("Host"));
+}

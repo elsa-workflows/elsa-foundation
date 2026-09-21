@@ -123,3 +123,22 @@ Both exit 1.
 `script` refuses SQLite outright (exit 2). EF cannot express an idempotent script for it — SQLite has no
 conditional statement to wrap a migration in — and a plain script would sit in the same directory looking
 identical to every other file while being unsafe to re-run.
+
+## MySQL
+
+A MySQL `.sql` file carries one `elsa_migrate_<module-slug>` stored procedure, which it creates, calls and
+drops. MySQL allows `IF … THEN` only inside a routine, so an idempotent MySQL script has nowhere else to
+put its per-migration guards; that is true of any correct idempotent MySQL script, not just this one. Two
+consequences for whoever applies it:
+
+- **`CREATE ROUTINE` and `ALTER ROUTINE` are required** on the target database, alongside the usual DDL
+  rights — `ALTER ROUTINE` for the file's own leading `DROP PROCEDURE IF EXISTS`, which MySQL
+  privilege-checks before it checks whether the routine exists, so a missing grant fails the file on its
+  first statement (`ERROR 1370`) rather than part-way through. `EXECUTE` is needed too only on a server
+  with `automatic_sp_privileges=0`. `apply` and `validate` need none of them — they run the compiled
+  migrations through EF rather than the scripted file.
+- **Apply it with a client that understands `DELIMITER`** (the `mysql` CLI, MySQL Workbench). `DELIMITER`
+  is a client directive that is never sent to the server; a raw ADO client has to consume it itself.
+
+The file carries no `START TRANSACTION`/`COMMIT`: MySQL commits implicitly on every DDL statement, so the
+pair EF emits would promise an atomicity the server cannot deliver.
