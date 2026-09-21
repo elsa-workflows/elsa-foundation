@@ -208,6 +208,12 @@ jobs:
           - suite: mysql-feasibility
             project: tests/Elsa/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj
             require: ''
+          # Issue #1875: dotnet-elsa persistence script against a built host, a raw ADO client applying the
+          # result twice per engine (proving idempotency), then a real Workbench process starting under
+          # Migrate:Policy=Validate against that same database.
+          - suite: cli-acceptance
+            project: tests/Elsa/Persistence/EntityFrameworkCore/CliAcceptance/ProviderTests/Elsa.Persistence.EntityFrameworkCore.CliAcceptance.ProviderTests.csproj
+            require: ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX
     steps:
       - name: Checkout
         uses: actions/checkout@v4
