@@ -137,14 +137,15 @@ public sealed class NuplaneRestoreCliTests : IDisposable
     }
 
     /// <summary>
-    /// Nuplane has no credential resolver, so it drops such a feed before the first network call. Restoring
-    /// from whatever feeds remain would assemble a partial set and script it as if it were the whole one,
-    /// so the run is refused instead, naming every feed at fault.
+    /// Nuplane's built-in <c>env</c> provider cannot resolve a reference to an environment variable this
+    /// process never set, so it drops such a feed before the first network call. Restoring from whatever
+    /// feeds remain would assemble a partial set and script it as if it were the whole one, so the run is
+    /// refused instead, naming every feed at fault.
     /// </summary>
     /// <remarks>
     /// The second half is D7's rule applied to the other kind of secret this tool can now see: the
-    /// credential value itself is configured in the host's <c>appsettings.json</c>, which only the worker
-    /// reads, so a sentinel embedded in it must appear on neither stream.
+    /// referenced environment variable's name is configured in the host's <c>appsettings.json</c>, which
+    /// only the worker reads, so a sentinel embedded in it must appear on neither stream.
     /// </remarks>
     [Fact]
     public void A_feed_that_configures_credentials_is_refused_by_name_and_its_credential_never_appears()
@@ -154,7 +155,7 @@ public sealed class NuplaneRestoreCliTests : IDisposable
             $$"""
                 "private-feed": {
                   "ServiceIndex": "https://example.invalid/v3/index.json",
-                  "Credentials": "{{sentinel}}",
+                  "Credentials": "secrets://env/{{sentinel}}",
                   "IncludePatterns": [ "Acme.Widgets [1.4.2]" ]
                 }
               """);
