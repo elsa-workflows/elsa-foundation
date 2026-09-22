@@ -17,6 +17,17 @@ internal static class WorkerRunner
     private const string SqliteProvider = "Sqlite";
 
     /// <summary>
+    /// How a host whose modules arrive as packages gets its provider engine onto disk (spec 172 D6). Every
+    /// EF module package declares the <c>ef-provider</c> capability in its <c>nuplane.json</c>, so the host
+    /// picks one option and Nuplane acquires that package as a root of its own; naming the engine package
+    /// explicitly in the closure still works, and still wins when both are present.
+    /// </summary>
+    private static readonly string PackageHostedEngine =
+        $"A host whose modules arrive as packages selects its provider engine with '{HostCapabilitySelection.Key}', " +
+        "set to one of Sqlite, SqlServer, PostgreSql or MySql; naming the engine package as an explicit root in the " +
+        "host's package closure also works, and wins over the selection. See docs/foundation-host-feeds.md.";
+
+    /// <summary>
     /// The tool's own version, named only in the refusal that reports a host pinning a persistence build
     /// too old to have an entry point. It never reaches an artifact (FR-043).
     /// </summary>
@@ -88,11 +99,23 @@ internal static class WorkerRunner
 
         var provider = tooling.CanonicalProvider(request.Provider ?? throw WorkerRefusal.Usage("invalid-request", $"'{command}' needs a provider."));
 
+        // The host's own engine selection, stated to the tooling entry point rather than acted on here: the
+        // comparison with --provider belongs beside the per-feature one, in the one place that owns the
+        // provider-disagreement refusal (ADR 0076 D4, spec 172 FR-004).
+        var capabilitySelection = HostCapabilitySelection.Find(request, deps);
+        if (capabilitySelection is not null && !tooling.SupportsCapabilitySelection)
+        {
+            throw ToolingEntryPoint.CapabilitySelectionUnsupported(
+                capabilitySelection, deps.ForAssembly(HostClosure.PersistenceAssemblyName)?.Version, ToolVersion);
+        }
+
         // SQLite cannot be scripted idempotently, and that refusal belongs to the one place that owns its
         // message. Checking for an engine first would answer a different question (exit 3, "no engine") for
-        // a request that is refused outright (exit 2) whether the engine is there or not.
+        // a request that is refused outright (exit 2) whether the engine is there or not. The selection
+        // still travels: the same place also owns the one refusal that outranks the SQLite rule, because a
+        // host whose closure selects PostgreSql was never a SQLite host at all.
         if (command == WorkerCommands.Script && provider == SqliteProvider)
-            return await Respond(tooling, ScriptRequest(request, provider, [], Unused()), cancellationToken);
+            return await Respond(tooling, ScriptRequest(request, provider, [], Unused(), capabilitySelection), cancellationToken);
 
         // `apply`, `validate` and `post-migrate` open the database directly and write no manifest, so none
         // of them needs the provider engine's package facts `ResolveEngine` exists to establish (FR-053) —
@@ -110,6 +133,7 @@ internal static class WorkerRunner
                     schema = request.Schema,
                     selection = Selection(request.Selection),
                     shells = Shells(request),
+                    capabilitySelection,
                     connection = ResolveConnection(request)
                 },
                 cancellationToken);
@@ -120,7 +144,16 @@ internal static class WorkerRunner
         {
             return await Respond(
                 tooling,
-                new { version = 1, command, provider, schema = request.Schema, selection = Selection(request.Selection), shells = Shells(request) },
+                new
+                {
+                    version = 1,
+                    command,
+                    provider,
+                    schema = request.Schema,
+                    selection = Selection(request.Selection),
+                    shells = Shells(request),
+                    capabilitySelection
+                },
                 cancellationToken);
         }
 
@@ -128,7 +161,10 @@ internal static class WorkerRunner
         if (listing is not null)
             return listing;
 
-        return await Respond(tooling, ScriptRequest(request, provider, ModulePackages(listed, deps, packages), engine), cancellationToken);
+        return await Respond(
+            tooling,
+            ScriptRequest(request, provider, ModulePackages(listed, deps, packages), engine, capabilitySelection),
+            cancellationToken);
     }
 
     private static string Validate(WorkerRequest request)
@@ -190,12 +226,8 @@ internal static class WorkerRunner
                 ? $"Then looked in {packageSet}."
                 : "Then looked for a package set: no --packages root was given and the host records no active one."
         };
-        if (hasPackageSet || deps.ForPackage("Nuplane") is not null)
-        {
-            details.Add(
-                "A host whose modules arrive as packages declares its provider engine nowhere: it must be named by hand " +
-                "in the host's package closure. See docs/foundation-host-feeds.md.");
-        }
+        if (hasPackageSet || deps.ForPackage(HostPackageRestore.NuplanePackageId) is not null)
+            details.Add(PackageHostedEngine);
 
         throw WorkerRefusal.Resolution(
             "provider-engine-unavailable",
@@ -241,8 +273,7 @@ internal static class WorkerRunner
                 tooling.DescribeBindingFailure(provider) ?? $"No package '{packageId}' is pinned by this host.",
                 "Start the host once so it reconciles, or re-run this command with --restore, which populates that " +
                 "state file from the host's own Nuplane configuration. Without --restore no command downloads anything.",
-                "A host whose modules arrive as packages declares its provider engine nowhere: it must be named by hand " +
-                "in the host's package closure. See docs/foundation-host-feeds.md."
+                PackageHostedEngine
             ]);
     }
 
@@ -309,7 +340,12 @@ internal static class WorkerRunner
         ];
     }
 
-    private static object ScriptRequest(WorkerRequest request, string provider, object[] packages, PackageFacts engine) => new
+    private static object ScriptRequest(
+        WorkerRequest request,
+        string provider,
+        object[] packages,
+        PackageFacts engine,
+        IReadOnlyList<string>? capabilitySelection) => new
     {
         version = 1,
         command = WorkerCommands.Script,
@@ -318,6 +354,7 @@ internal static class WorkerRunner
         output = request.Output,
         selection = Selection(request.Selection),
         shells = Shells(request),
+        capabilitySelection,
         host = new
         {
             name = request.HostName,

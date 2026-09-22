@@ -118,6 +118,19 @@ public sealed class EfToolingRequest
     public IReadOnlyList<EfToolingShellFeature>? Shells { get; init; }
 
     /// <summary>
+    /// The engine option(s) the host's own <c>appsettings.json</c> selects under
+    /// <see cref="EfProviderAgreement.CapabilityKey"/>, as the CLI worker read them (spec 172 FR-004, ADR
+    /// 0076 D4). Present only when that key is set, and refused on <c>list</c>, which asks for no provider
+    /// and therefore has nothing to compare. Absent means the host selects no engine that way, not that the
+    /// selection agrees.
+    /// </summary>
+    /// <remarks>
+    /// The option names travel, not the key's other children: <c>Version</c> and <c>Feed</c> say which
+    /// package to acquire, which is Nuplane's business and never this check's.
+    /// </remarks>
+    public IReadOnlyList<string>? CapabilitySelection { get; init; }
+
+    /// <summary>
     /// The connection string <c>apply</c>, <c>validate</c> and <c>post-migrate</c> run against. Required for
     /// those three commands, refused otherwise — <c>list</c>, <c>plan</c> and <c>script</c> never open a
     /// database (D7). This is the one field this build never echoes back: not in a response, a refusal

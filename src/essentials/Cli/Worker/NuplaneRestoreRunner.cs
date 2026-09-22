@@ -1,4 +1,5 @@
 using Nuplane;
+using Nuplane.Store.State;
 using System.Runtime.CompilerServices;
 
 namespace Elsa.Cli.Worker;
@@ -30,6 +31,15 @@ namespace Elsa.Cli.Worker;
 /// </remarks>
 internal static class NuplaneRestoreRunner
 {
+    /// <summary>
+    /// The prefix on every stage Nuplane records for a capability it could not resolve:
+    /// <c>capability-unselected</c>, <c>capability-unknown-option</c>, <c>capability-unpinned</c>,
+    /// <c>capability-conflict</c>, <c>capability-unresolved</c>, and whatever a later Nuplane adds beside
+    /// them. Matched by prefix on purpose — a stage this build has not heard of is still a capability
+    /// refusal, and reporting it as an unreachable feed would be the wrong answer told confidently.
+    /// </summary>
+    private const string CapabilityStagePrefix = "capability-";
+
     /// <summary>
     /// Restores the host's package set, or reports why it did not. Failures Nuplane reports rather than
     /// throws — a degraded cycle, a failed package, a feed refused for its credentials, a store another
@@ -73,10 +83,10 @@ internal static class NuplaneRestoreRunner
         if (desired.CredentialRefusedFeeds.Count > 0)
             return RestoreOutcome.CredentialsRefused([.. desired.CredentialRefusedFeeds], desired.StateFilePath, desired.InstallRoot);
 
-        return Describe(await NuplaneRestore.RestoreAsync(configuration, options, cancellationToken));
+        return await DescribeAsync(await NuplaneRestore.RestoreAsync(configuration, options, cancellationToken), cancellationToken);
     }
 
-    private static RestoreOutcome Describe(NuplaneRestoreResult result)
+    private static async Task<RestoreOutcome> DescribeAsync(NuplaneRestoreResult result, CancellationToken cancellationToken)
     {
         // Checked again after the cycle even though the pre-flight already answered it: the two compose the
         // same provider, so disagreement is impossible by construction — and silence would be the wrong way
@@ -100,9 +110,66 @@ internal static class NuplaneRestoreRunner
             };
         }
 
-        return result is { IsDegraded: false, FailedPackages.Count: 0 }
-            ? RestoreOutcome.Restored(result.ActivePackages.Count, result.StateFilePath, result.InstallRoot)
+        if (result is { IsDegraded: false, FailedPackages.Count: 0 })
+            return RestoreOutcome.Restored(result.ActivePackages.Count, result.StateFilePath, result.InstallRoot);
+
+        // A capability refusal is a failed package like any other in the result itself, so it would be
+        // reported as "this package could not be installed" — true, and useless: the package is on the feed,
+        // and what is actually missing is a decision the host has not made. The stage that says so is in the
+        // store's own failure record, which is where it is read from.
+        var capability = await CapabilityRefusalsAsync(result, cancellationToken);
+        return capability.Count > 0
+            ? RestoreOutcome.CapabilityRefused(capability, result.StateFilePath, result.InstallRoot)
             : RestoreOutcome.Degraded([.. result.FailedPackages], result.StateFilePath, result.InstallRoot);
+    }
+
+    /// <summary>
+    /// Every <c>capability-*</c> refusal this cycle recorded, as Nuplane worded it. Nuplane's own messages
+    /// name the capability, every declared option and the configuration key, so they are carried verbatim
+    /// rather than restated in worse words by a tool that knows less about the closure than the cycle did.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="NuplaneRestoreResult.FailedPackages"/> carries ids and no stages, so the stage is read from
+    /// the store state this restore just wrote — where <c>IFailureRecorder</c> persists it per package, with
+    /// the stage and the message. Joined on this cycle's own failed ids so that a failure an <em>earlier</em>
+    /// cycle recorded for a package this one installed cannot be reported as if it had just happened:
+    /// <c>LastFailureById</c> is a last-known record, not a log of this run.
+    /// </para>
+    /// <para>
+    /// A contributed request refused for want of a single-point pin reaches
+    /// <see cref="NuplaneRestoreResult.UnpinnedRequests"/> too, on a non-skipped degraded result. Both say
+    /// the same thing about the same package, and the store record is the one that names the key, so this is
+    /// the one read either way.
+    /// </para>
+    /// </remarks>
+    private static async Task<IReadOnlyList<string>> CapabilityRefusalsAsync(NuplaneRestoreResult result, CancellationToken cancellationToken)
+    {
+        if (result.FailedPackages.Count == 0)
+            return [];
+
+        StoreStateRecord state;
+        try
+        {
+            state = await NuplaneStore.ReadStateAsync(result.StateFilePath, cancellationToken);
+        }
+        // The state file is the cycle's own output; a torn or unreadable one means the cycle's failures
+        // cannot be classified, not that there were none. The plain degraded refusal still names the
+        // packages, so nothing is lost but the better message.
+        catch (Exception failure) when (failure is IOException or System.Text.Json.JsonException)
+        {
+            return [];
+        }
+
+        return
+        [
+            .. result.FailedPackages
+                .Select(state.LastFailureById.GetValueOrDefault)
+                .OfType<FailureRecord>()
+                .Where(failure => failure.Stage.StartsWith(CapabilityStagePrefix, StringComparison.Ordinal))
+                .OrderBy(failure => failure.PackageId, StringComparer.OrdinalIgnoreCase)
+                .Select(failure => $"{failure.PackageId} ({failure.Stage}): {failure.Message}")
+        ];
     }
 
     /// <summary>One unpinned request as the refusal lists it: <c>id version-request (feed)</c>.</summary>

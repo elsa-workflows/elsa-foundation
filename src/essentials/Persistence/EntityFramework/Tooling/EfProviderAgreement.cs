@@ -31,6 +31,25 @@ public sealed record EfProviderDisagreement(string Shell, string Feature, IReadO
 }
 
 /// <summary>
+/// The engine selection the host's package closure makes, when it does not contain the requested provider.
+/// </summary>
+/// <remarks>
+/// Not a feature and not a module: a second, independent offender source for the same refusal (spec 172
+/// FR-004). The per-feature offenders say which features would bind the wrong dialect; this one says the
+/// host would not have the requested engine on disk at all.
+/// </remarks>
+public sealed record EfCapabilitySelectionDisagreement(IReadOnlyList<string> Options)
+{
+    /// <summary>
+    /// The offender as a refusal detail line, naming the configuration key so the operator can find the one
+    /// place that decides which engine the closure carries.
+    /// </summary>
+    public override string ToString() =>
+        $"the host's package closure selects engine(s) {string.Join(", ", Options.Select(option => $"'{option}'"))} " +
+        $"via {EfProviderAgreement.CapabilityKey}.";
+}
+
+/// <summary>
 /// The per-feature provider-agreement check (spec 171 FR-035–FR-037, ADR 0076 D4): every shell feature
 /// that is enabled, maps through <see cref="UsesEfModuleAttribute"/> to a selected module, and declares a
 /// <c>Provider</c> setting of its own must be configured for the provider the command asked for.
@@ -54,6 +73,13 @@ public static class EfProviderAgreement
 {
     /// <summary>What an unset <c>Provider</c> setting resolves to on a feature that declares one (FR-037).</summary>
     public const string UnsetProvider = "Sqlite";
+
+    /// <summary>
+    /// The one configuration key a package-hosted host selects its EF provider engine with (spec 172 D3),
+    /// re-exported from <see cref="EfRelationalProviderBinding.CapabilitySelectionKey"/> so the check and
+    /// the binding failure that points at it can never name two different keys.
+    /// </summary>
+    public const string CapabilityKey = EfRelationalProviderBinding.CapabilitySelectionKey;
 
     private const string ProviderSettingName = "Provider";
 
@@ -120,6 +146,30 @@ public static class EfProviderAgreement
                 .OrderBy(offender => offender.Shell, StringComparer.Ordinal)
                 .ThenBy(offender => offender.Feature, StringComparer.Ordinal)
         ];
+    }
+
+    /// <summary>
+    /// The host's engine selection as an offender, or <c>null</c> when it contains
+    /// <paramref name="provider"/> — including a multi-engine selection, where containing the requested
+    /// engine is the whole of the agreement (spec 172 FR-004, ADR 0076 D4).
+    /// </summary>
+    /// <remarks>
+    /// <c>--provider</c> stays authoritative: a disagreement is reported, never resolved by taking the
+    /// selection for the provider. An empty or absent selection is not a disagreement — the host simply
+    /// selects no engine that way, and the engine may still arrive from the host's own
+    /// <c>&lt;PackageReference&gt;</c> or from an explicitly named root.
+    /// </remarks>
+    public static EfCapabilitySelectionDisagreement? CheckCapabilitySelection(IReadOnlyList<string>? selection, string provider)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(provider);
+        var options = selection?.Where(option => !string.IsNullOrWhiteSpace(option)).Select(option => option.Trim()).ToArray() ?? [];
+        if (options.Length == 0)
+            return null;
+
+        var requested = EfRelationalProviderBinding.Normalize(provider);
+        return options.Any(option => string.Equals(EfRelationalProviderBinding.Normalize(option), requested, StringComparison.Ordinal))
+            ? null
+            : new EfCapabilitySelectionDisagreement(options);
     }
 
     /// <summary>

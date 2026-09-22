@@ -17,6 +17,8 @@ public sealed class ToolingEntryPoint
 {
     private const string ToolingHostTypeName = "Elsa.Persistence.EntityFramework.Tooling.EfToolingHost";
     private const string ProviderBindingTypeName = "Elsa.Persistence.EntityFramework.EfRelationalProviderBinding";
+    private const string RequestTypeName = "Elsa.Persistence.EntityFramework.Tooling.EfToolingRequest";
+    private const string CapabilitySelectionField = "CapabilitySelection";
 
     /// <summary>Serialized the way the frozen tooling contract reads it: camelCase, and no null for a field a command would refuse.</summary>
     private static readonly JsonSerializerOptions RequestJson = new()
@@ -30,13 +32,31 @@ public sealed class ToolingEntryPoint
     private readonly MethodInfo describeBindingFailure;
     private readonly MethodInfo select;
 
-    private ToolingEntryPoint(MethodInfo runAsync, MethodInfo providerPackageId, MethodInfo describeBindingFailure, MethodInfo select)
+    private ToolingEntryPoint(
+        MethodInfo runAsync,
+        MethodInfo providerPackageId,
+        MethodInfo describeBindingFailure,
+        MethodInfo select,
+        bool supportsCapabilitySelection)
     {
         this.runAsync = runAsync;
         this.providerPackageId = providerPackageId;
         this.describeBindingFailure = describeBindingFailure;
         this.select = select;
+        SupportsCapabilitySelection = supportsCapabilitySelection;
     }
+
+    /// <summary>
+    /// Whether this host's tooling contract carries the <c>capabilitySelection</c> field (spec 172 FR-004).
+    /// </summary>
+    /// <remarks>
+    /// The contract refuses an unmapped request property on purpose, so sending the field to a build that
+    /// predates it would be refused as a malformed request — correct, but naming neither the key nor what to
+    /// do about it. Asked in advance so the worker can refuse in those terms instead. Never used to fall
+    /// back: a host that selects an engine and a build that cannot compare it is a run that must not
+    /// produce an artifact.
+    /// </remarks>
+    public bool SupportsCapabilitySelection { get; }
 
     /// <summary>
     /// Binds the entry point in <paramref name="persistence"/>, refusing when that build predates it
@@ -69,8 +89,26 @@ public sealed class ToolingEntryPoint
                 $"released beside this tool, {toolVersion}; upgrade the host's {HostClosure.PersistenceAssemblyName} to that version or newer.");
         }
 
-        return new(run, packageId, describe, canonical);
+        var capabilitySelection = persistence.GetType(RequestTypeName, throwOnError: false)
+            ?.GetProperty(CapabilitySelectionField, BindingFlags.Public | BindingFlags.Instance) is not null;
+
+        return new(run, packageId, describe, canonical, capabilitySelection);
     }
+
+    /// <summary>
+    /// The refusal for a host that selects its engine through the capability key while pinning a persistence
+    /// build that predates the check. Loud on purpose: the quiet alternative is an artifact generated for a
+    /// provider the host's closure never agreed to.
+    /// </summary>
+    public static WorkerRefusal CapabilitySelectionUnsupported(IReadOnlyList<string> options, string? pinnedVersion, string toolVersion) =>
+        WorkerRefusal.Resolution(
+            "host-tooling-capability-unaware",
+            $"This host selects its provider engine with '{HostCapabilitySelection.Key}' " +
+            $"({string.Join(", ", options.Select(option => $"'{option}'"))}), and the " +
+            $"{HostClosure.PersistenceAssemblyName} {pinnedVersion ?? "(version unknown)"} it pins predates the check " +
+            "that keeps --provider authoritative against that selection. Nothing is scripted from a selection this " +
+            $"host's own build cannot compare: upgrade its {HostClosure.PersistenceAssemblyName} to {toolVersion} or " +
+            "newer, or remove the key and name the engine as an explicit root in the host's package closure.");
 
     /// <summary>The canonical spelling of a provider name the operator may have aliased, decided by the host's own binding table.</summary>
     public string CanonicalProvider(string provider)

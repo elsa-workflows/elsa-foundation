@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <Description>
+      NuplaneHost without the provider engine. This is the shape spec 172 exists for: a host that carries
+      Nuplane and the persistence policy assembly, pins no EF provider engine of its own, and gets one
+      because the module packages in its feed declare the ef-provider capability and it selects an option
+      with Nuplane:Capabilities:ef-provider. Its deps file naming no engine is the whole point — it is what
+      makes the engine the restored package set's copy rather than one the host already had.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Nuplane" />
+    <PackageReference Include="Nuplane.Loading" />
+    <!-- What a host whose feeds are directories actually carries: the directory-feed module and the JSON
+         configuration provider that reads its own appsettings.json — the file the engine selection and the
+         feed declarations both live in. -->
+    <PackageReference Include="Nuplane.Sources.Directory" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
+  </ItemGroup>
+
+</Project>

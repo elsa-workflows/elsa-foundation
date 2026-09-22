@@ -21,6 +21,12 @@ internal enum RestoreVerdict
     /// <summary>Another process holds the store lock; nothing was read, resolved or written.</summary>
     StoreLocked,
 
+    /// <summary>
+    /// At least one package declares a capability the host has not resolvably selected, so the cycle refused
+    /// it rather than installing a module without the engine it binds (spec 172 FR-005).
+    /// </summary>
+    CapabilityRefused,
+
     /// <summary>The cycle completed without installing everything it wanted.</summary>
     Degraded
 }
@@ -58,6 +64,9 @@ internal sealed record RestoreOutcome(
     public static RestoreOutcome StoreLocked(string stateFile, string installRoot) =>
         new(RestoreVerdict.StoreLocked, 0, stateFile, installRoot, []);
 
+    public static RestoreOutcome CapabilityRefused(IReadOnlyList<string> refusals, string stateFile, string installRoot) =>
+        new(RestoreVerdict.CapabilityRefused, 0, stateFile, installRoot, refusals);
+
     public static RestoreOutcome Degraded(IReadOnlyList<string> failed, string stateFile, string installRoot) =>
         new(RestoreVerdict.Degraded, 0, stateFile, installRoot, failed);
 }
@@ -86,7 +95,7 @@ internal static class HostPackageRestore
     private const string DirectoryFeedPackageId = "Nuplane.Sources.Directory";
 
     /// <summary>The package whose presence makes a host one whose modules arrive as packages at all.</summary>
-    private const string NuplanePackageId = "Nuplane";
+    public const string NuplanePackageId = "Nuplane";
 
     /// <summary>
     /// Runs the restore, when <c>--restore</c> was given and this host is one that can be restored. Reports
@@ -176,6 +185,20 @@ internal static class HostPackageRestore
                     "is Nuplane's built-in 'env': secrets://env/NAME reads this process's environment, and every other " +
                     "provider — secrets://elsa/... included — is unresolvable here whatever the started host can do " +
                     "with it. Feeds whose credential reference could not be resolved:",
+                    outcome.Offenders);
+
+            // The one degraded cycle whose cause is a decision rather than a fault: the module packages are
+            // on the feed and the engine may well be too, and what is missing is the host saying which
+            // engine it wants. Reported as its own refusal so the fix names a configuration key instead of
+            // sending an operator to look for an unreachable feed.
+            case RestoreVerdict.CapabilityRefused:
+                throw WorkerRefusal.Resolution(
+                    "restore-capability-unresolved",
+                    $"These packages need a provider engine the host has not resolvably selected, so the restore into " +
+                    $"'{outcome.InstallRoot}' installed neither them nor an engine for them, and nothing is scripted from " +
+                    $"a partial set. Set '{HostCapabilitySelection.Key}' in this host's own " +
+                    $"'{HostAppSettings.BaseFileName}' to one of the options below, or name an engine package as an " +
+                    "explicit root in its package closure — an explicit root wins over the selection. Nuplane refused:",
                     outcome.Offenders);
 
             case RestoreVerdict.StoreLocked:
