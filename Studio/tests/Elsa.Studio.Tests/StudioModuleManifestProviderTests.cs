@@ -202,6 +202,32 @@ public sealed class StudioModuleManifestProviderTests
         AssertDisabled(weather.Diagnostics, "Elsa.Studio.Samples.WeatherForecast");
     }
 
+    /// <summary>
+    /// Regression guard for the compatibility gate against a CI-stamped host version.
+    /// Every other test here pins HostVersion/SdkVersion to "1.0.0", which is exactly why the
+    /// "^1.0.0" attribute default went unnoticed: modules declaring it failed the gate in any host
+    /// built from the published packages (packages.yml packs with /p:Version=4.0.0-preview.N), and
+    /// the client loader skips an incompatible module rather than loading it (Client/src/app/loader.ts).
+    /// No shipped module declares a version requirement, so none may be gated out by one.
+    /// </summary>
+    [Fact]
+    public async Task Modules_StayCompatible_WhenHostReportsACiStampedVersion()
+    {
+        var response = await GetRegistryAsync(options =>
+        {
+            options.HostVersion = "4.0.0-preview.123";
+            options.SdkVersion = "4.0.0-preview.123";
+        });
+
+        Assert.All(ExpectedModuleIds, id =>
+        {
+            var module = Assert.Single(response.Modules, x => x.Id == id);
+            Assert.Equal("compatible", module.Compatibility);
+            Assert.Equal("*", module.RequiredHostVersion);
+            Assert.Equal("*", module.RequiredSdkVersion);
+        });
+    }
+
     private static void AssertDisabled(IEnumerable<StudioModuleDiagnostic> diagnostics, string moduleId) =>
         Assert.Contains(diagnostics, x => x.ModuleId == moduleId && x.Status == StudioModuleDiagnosticStatuses.Disabled);
 

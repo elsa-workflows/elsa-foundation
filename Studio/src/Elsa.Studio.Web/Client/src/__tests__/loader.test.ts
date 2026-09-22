@@ -9,6 +9,9 @@ describe("studio module loader", () => {
     expect(isVersionRangeCompatible("*", "1.0.0")).toBe(true);
     expect(isVersionRangeCompatible("^1.0.0", "1.2.3")).toBe(true);
     expect(isVersionRangeCompatible("^2.0.0", "1.2.3")).toBe(false);
+    // The manifest default is "*", and the host advertises a CI-stamped version (packages.yml packs
+    // with /p:Version=4.0.0-preview.N). An unconstrained module must load against it.
+    expect(isVersionRangeCompatible("*", "4.0.0-preview.123")).toBe(true);
   });
 
   it("loads compatible modules and records failed imports without stopping later modules", async () => {
