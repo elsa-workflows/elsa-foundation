@@ -182,15 +182,29 @@ public sealed class EfModuleDescriptorTests
     public void Every_module_package_declares_an_ef_provider_capability_matching_its_EfModule_and_the_pinned_engines()
     {
         var descriptorsByAssembly = Discover().GroupBy(descriptor => descriptor.Assembly).ToDictionary(group => group.Key, group => group.ToArray());
+        var projectDirectoriesByAssembly = ModuleProjectDirectories.ToDictionary(entry => entry.Assembly, entry => entry.ProjectDirectory);
+        var catalogAssemblies = ModuleContextCatalog.Modules.ToHashSet();
 
-        foreach (var (assembly, projectDirectory) in ModuleProjectDirectories)
+        // Both directions, so ModuleProjectDirectories can only shrink or grow together with
+        // ModuleContextCatalog.Modules: a twelfth module added to the catalog without a table entry fails
+        // here by name, and so does a stale table entry for an assembly the catalog no longer carries.
+        foreach (var (assembly, _) in ModuleProjectDirectories)
+            Assert.True(
+                catalogAssemblies.Contains(assembly),
+                $"{assembly.GetName().Name} has a {nameof(ModuleProjectDirectories)} entry but is not in {nameof(ModuleContextCatalog)}.{nameof(ModuleContextCatalog.Modules)}.");
+
+        foreach (var assembly in ModuleContextCatalog.Modules)
         {
+            Assert.True(
+                projectDirectoriesByAssembly.TryGetValue(assembly, out var projectDirectory),
+                $"{assembly.GetName().Name} is in {nameof(ModuleContextCatalog)}.{nameof(ModuleContextCatalog.Modules)} but has no entry in {nameof(ModuleProjectDirectories)}.");
+
             var descriptors = descriptorsByAssembly[assembly];
             var expectedOptionNames = ModuleContextCatalog.Providers
                 .Where(provider => descriptors.Any(descriptor => descriptor.ProviderContext(provider) is not null))
                 .ToArray();
 
-            var directory = RepoPath(projectDirectory.Split('/'));
+            var directory = RepoPath(projectDirectory!.Split('/'));
             var metadataPath = Path.Join(directory, "nuplane.json");
             Assert.True(File.Exists(metadataPath), $"{projectDirectory} has no nuplane.json.");
 
