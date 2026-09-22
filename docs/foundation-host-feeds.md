@@ -45,8 +45,17 @@ Both kinds are registered by `AddNuplane` itself, which reads `Nuplane:Setup:Fee
 separate package (`Nuplane.Sources.Directory`) that `AddNuplane` cannot reach. There is no
 `AddRemoteFeedsFromConfiguration`, and none is needed.
 
-Add `Credentials` for a private feed. `Nuplane:FeedResolution` controls multi-feed behavior —
+Add `Credentials` for a private feed — a *reference* to its secret, never the secret; see
+[Feed credentials](#feed-credentials). `Nuplane:FeedResolution` controls multi-feed behavior —
 `FeedPriorities`, `StopOnFirstSuccessfulFeed`, `OfflineMode`, `PackageInstallRoot`.
+
+A relative `DirectoryPath` is resolved against the host's content root, because the host passes
+`nuplane.UseBasePath(builder.Environment.ContentRootPath)` where it composes Nuplane
+(`src/apps/Elsa.Foundation.Host/Program.cs`, and the same call in `Elsa.Workbench`). Without that call
+Nuplane resolves such a path against the process's own current directory, so a host started as a service
+from `/` would read `"DirectoryPath": "packages"` as `/packages` — an empty feed, and per
+[What fails loudly](#what-fails-loudly) an empty feed is the quiet failure. An absolute `DirectoryPath` is
+unaffected either way.
 
 ## Include patterns behave differently on the two shapes
 
@@ -219,6 +228,88 @@ itself is skipped unless `Nuplane:Convergence:Manifest:Enabled` is true AND
 `Nuplane:Convergence:Manifest:Path` is set, so it is available and opt-in rather than unregistered.
 It is not a prerequisite for feed-based deployment: exact-id include patterns plus the lock file
 cover pinning and integrity.
+
+## Feed credentials
+
+A private feed is configured with a **reference** to its secret, never with the secret:
+
+```json
+{
+  "Nuplane": {
+    "Setup": {
+      "Feeds": [
+        {
+          "Name": "private-feed",
+          "ServiceIndex": "https://packages.example.com/v3/index.json",
+          "Credentials": "secrets://elsa/feed-token",
+          "IncludePatterns": [ "Acme.Plugins.Widgets [1.4.2]" ]
+        }
+      ]
+    }
+  }
+}
+```
+
+The reference is `secrets://<provider>/<name>`. The provider segment selects a registered provider and is
+matched case-insensitively; everything after the first slash is the name. A `Credentials` value that is not
+of that shape fails options validation at startup, and the rejected value is never echoed — a host that
+pasted the token itself into `Credentials` is exactly the case that rule catches. Credentials are forbidden
+on a `file://` feed, and a credentialed feed has to be an HTTPS service index.
+
+**The two providers, and where each one works.**
+
+| Provider | Registered by | Reads | Works in |
+|---|---|---|---|
+| `env` | `AddNuplane`, always | That name in the process's environment | Anywhere Nuplane runs: a started host, and the host-free `dotnet elsa persistence --restore` pass |
+| `elsa` | `AddSecretsFeedCredentials()`, from `Elsa.Secrets.Nuplane` | That name in the Secrets module, through `ISecretValueResolver` | The container that composed both `AddNuplane` and the Secrets read path — and nowhere else |
+
+That last column is the whole of it, and it is a container rule rather than a preference. Nuplane resolves
+`IEnumerable<ISecretReferenceProvider>` out of the container `AddNuplane` was called on, once, and shares
+the instance across every feed and every cycle. So a host that composes Nuplane on its own container — which
+is what `Elsa.Foundation.Host` and `Elsa.Workbench` both do — has to register the provider *there*:
+
+```csharp
+builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
+{
+    nuplane.UseBasePath(builder.Environment.ContentRootPath);
+    nuplane.Services.AddSecretsFeedCredentials();   // and AddSecrets(...) on the same container
+});
+```
+
+Enabling the `SecretsNuplane` **shell feature** registers the same provider, but into that shell's own
+container, which is a different container: CShells builds each shell by copying the root's service
+descriptors into a fresh collection and adding the shell's features to that. So the feature claims `elsa`
+for a shell's own Nuplane composition, and does **not** claim it for the host's reconcile loop. Neither host
+composes the provider on its own container today, so `secrets://elsa/…` in either of their
+`appsettings.json` is refused by name — which is the reported outcome below, not a silent one.
+
+There is also a bootstrapping limit worth knowing before reaching for `elsa` on a package-hosted host: the
+Secrets module itself arrives as a package. A feed whose credential lives in Secrets cannot be the feed that
+delivers Secrets. `secrets://env/NAME` has no such ordering problem, which is why it stays the right answer
+for a host's first boot.
+
+**Secret shape.** Whatever the provider returns is either `user:password`, split at the first colon so a
+password may contain colons, or a bare token, which Nuplane sends as the password under a fixed placeholder
+user name — the form Azure Artifacts, Feedz and other token-issuing feeds accept. A value whose colon leaves
+either half empty is refused rather than sent half-formed. Both the version enumeration and the package
+download authenticate, each with credentials attached to that one feed; no process-global NuGet credential
+provider is installed, so one feed's secret is never offered to another.
+
+**When a reference cannot be resolved** — no registered provider claims its segment, the provider holds no
+value, or the referenced secret is expired, revoked or under another tenant — the feed is refused **by
+name**. It is not contacted at all: not for version enumeration, not for a download, and not even to serve a
+package an earlier authenticated run already installed from it. A running host fails the packages that could
+only have come from that feed, naming the feed in the failure; the `--restore` pass reports the feed and
+drops it before its first network call. With no provider able to resolve anything, behaviour is exactly what
+it was before credentials could be resolved at all.
+
+**What is never logged.** The reference is configuration and may appear in logs; the secret never does.
+Resolved secrets are wrapped so that logging, interpolating or including one in an exception prints `***`,
+and every refusal and failure message names the feed only — never the value, the reference, or the provider.
+Nothing resolved is written to the state file, and a resolved secret is cached for the duration of one
+reconciliation cycle and dropped with it. The `elsa` provider holds the same line on its own side: it
+returns the raw string to Nuplane and does nothing else with it, and a resolution that failed contributes
+its failure code at most.
 
 ## What fails loudly
 

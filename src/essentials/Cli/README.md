@@ -92,8 +92,10 @@ populate it from.
 startup — the same mechanism the provider-agreement check uses for `shells.json`. Nothing else is layered:
 no environment variables and no command line, because both would be facts about *this* process. A directory
 feed's configured path is resolved relative to the `--host` directory, which is where a started host
-resolves it from. Those two files are read **inside the worker**, so a feed's configured `Credentials`
-value never crosses the process boundary — it appears in no process argument, no request, and no message.
+resolves it from — `NuplaneRestoreOptions.BasePath` anchors it, so the pass leaves this process's own
+current directory exactly as the operator had it. Those two files are read **inside the worker**, so a
+feed's configured `Credentials` value never crosses the process boundary — it appears in no process
+argument, no request, and no message.
 
 **What it writes**, and it is the only thing in this tool that writes under a host's directories:
 
@@ -116,11 +118,21 @@ case, and the frozen `EfToolingHost` contract is untouched. A directory feed tak
 `.nupkg` filename and is pinned by construction; a remote feed needs its include patterns written as
 `Package [1.2.3]`.
 
-**Feed credentials are refused, by name.** Nuplane has no credential resolver yet, so a feed that
-configures `Credentials` is dropped before the first network call rather than contacted and rejected. Since
-restoring from whichever feeds remain would assemble a partial set and script it as if it were the whole
-one, the run is refused instead (exit 3, `restore-feed-credentials`), naming every such feed. The check
-runs on a write-nothing pre-flight, so nothing is downloaded first.
+**Feed credentials: `secrets://env/NAME` only.** A feed's `Credentials` value is a *reference* to a secret,
+never the secret, of the form `secrets://<provider>/<name>`. A restore composes **no host DI at all** — it
+runs through Nuplane's host-free entry point, with no shell, no container of the host's, and none of the
+host's own services — so the only provider it has is Nuplane's built-in `env`, which reads that name from
+this process's environment. That one works here exactly as it works in a started host.
+
+Every other provider does not, whatever the started host can do with it. In particular
+`secrets://elsa/<name>`, which a running host resolves out of the Secrets module, has nothing behind it in a
+restore: the module is not composed, so the reference resolves to nothing and the feed is refused by name.
+
+A feed whose reference could not be resolved is dropped before the first network call rather than contacted
+and rejected, and since restoring from whichever feeds remain would assemble a partial set and script it as
+if it were the whole one, the run is refused instead (exit 3, `restore-feed-credentials`), naming every such
+feed. The check runs on a write-nothing pre-flight, so nothing is downloaded first. The refusal names feeds
+only: not the reference, not the provider it named, and never a value.
 
 **Never under a running host.** The store lock is the whole mechanism, and it is Nuplane's: every
 reconcile cycle, a host's and a restore's alike, holds an exclusive handle on the lock file beside the
