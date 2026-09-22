@@ -39,20 +39,37 @@ internal static class DotnetElsa
 
     /// <summary>Runs the tool with extra environment variables, for the inputs an operator supplies that way.</summary>
     public static CliRun Run(IReadOnlyDictionary<string, string>? environment, params string[] arguments) =>
-        RunAsync(environment, stdin: null, arguments).GetAwaiter().GetResult();
+        RunAsync(environment, stdin: null, workingDirectory: null, arguments).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Runs the tool from <paramref name="workingDirectory"/>, for the assertions about what the tool
+    /// resolves against its own current directory rather than against the host it was given.
+    /// </summary>
+    /// <remarks>
+    /// Every other overload leaves the current directory inherited from the test host, which is already some
+    /// bin directory rather than any host. Naming it explicitly is what lets a test put a decoy where a
+    /// relative path would land if it were resolved against the process.
+    /// </remarks>
+    public static CliRun RunIn(string workingDirectory, params string[] arguments) =>
+        RunAsync(environment: null, stdin: null, workingDirectory, arguments).GetAwaiter().GetResult();
 
     /// <summary>Runs the tool with <paramref name="stdin"/> written to and closed on its own stdin, for <c>--connection-stdin</c>.</summary>
     public static Task<CliRun> RunWithStdinAsync(string stdin, params string[] arguments) =>
-        RunAsync(environment: null, stdin, arguments);
+        RunAsync(environment: null, stdin, workingDirectory: null, arguments);
 
-    private static async Task<CliRun> RunAsync(IReadOnlyDictionary<string, string>? environment, string? stdin, string[] arguments)
+    private static async Task<CliRun> RunAsync(
+        IReadOnlyDictionary<string, string>? environment,
+        string? stdin,
+        string? workingDirectory,
+        string[] arguments)
     {
         var startInfo = new ProcessStartInfo(DotnetMuxer.Path())
         {
             RedirectStandardInput = stdin is not null,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            UseShellExecute = false
+            UseShellExecute = false,
+            WorkingDirectory = workingDirectory ?? Directory.GetCurrentDirectory()
         };
         foreach (var variable in environment ?? new Dictionary<string, string>())
             startInfo.Environment[variable.Key] = variable.Value;

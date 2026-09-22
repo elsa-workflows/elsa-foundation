@@ -170,6 +170,12 @@ builder.Services.AddHostedService(services => services.GetRequiredService<Defaul
 
 builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
 {
+    // The content root, which is where this host's own appsettings.json was just read from. A relative
+    // configured DirectoryPath resolves against NuplaneBuilder.BasePath when something sets one, and against
+    // the process's current directory otherwise — so without this line a Workbench whose content root is set
+    // independently of where it was launched reads "DirectoryPath": "packages" out of one directory and
+    // looks for that folder under another. See src/apps/Elsa.Foundation.Host/Program.cs for the longer note.
+    nuplane.UseBasePath(builder.Environment.ContentRootPath);
     nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
     nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
 });

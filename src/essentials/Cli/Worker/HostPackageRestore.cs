@@ -12,7 +12,10 @@ internal enum RestoreVerdict
     /// <summary>At least one desired request names more than one version; nothing was resolved or written.</summary>
     Unpinned,
 
-    /// <summary>At least one configured feed declares credentials, which Nuplane cannot resolve.</summary>
+    /// <summary>
+    /// At least one configured feed declares a credential reference that could not be resolved, so the feed
+    /// is refused by name and nothing was restored.
+    /// </summary>
     CredentialsRefused,
 
     /// <summary>Another process holds the store lock; nothing was read, resolved or written.</summary>
@@ -167,9 +170,12 @@ internal static class HostPackageRestore
             case RestoreVerdict.CredentialsRefused:
                 throw WorkerRefusal.Resolution(
                     "restore-feed-credentials",
-                    "Nuplane cannot resolve feed credentials yet, so a feed that configures them is dropped before the " +
+                    "For these feeds the credential reference could not be resolved, so each was dropped before the " +
                     "first network call rather than contacted and rejected. This run is refused instead of restoring a " +
-                    "partial set from the feeds that remain. Feeds that configure credentials:",
+                    "partial set from the feeds that remain. A restore composes no host DI, so the only provider it has " +
+                    "is Nuplane's built-in 'env': secrets://env/NAME reads this process's environment, and every other " +
+                    "provider — secrets://elsa/... included — is unresolvable here whatever the started host can do " +
+                    "with it. Feeds whose credential reference could not be resolved:",
                     outcome.Offenders);
 
             case RestoreVerdict.StoreLocked:

@@ -32,6 +32,15 @@ var nuplaneConfiguration = configuration.GetSection("Nuplane");
 //   NuplaneAssemblyProvider hands to CShells for feature discovery.
 builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
 {
+    // The content root, which is where this host's own appsettings.json was just read from. A module-owned
+    // builder extension resolves its relative configured paths against NuplaneBuilder.BasePath when
+    // something sets one, and against the process's current directory otherwise — and those two are the
+    // same place only when the host happens to be started from its own directory. Without this line a host
+    // whose content root is set independently of where it was launched (ASPNETCORE_CONTENTROOT, a systemd
+    // unit, a container WORKDIR) reads "DirectoryPath": "packages" out of one directory and then looks for
+    // that folder under another, which presents as an empty feed with nothing saying why. Nuplane's core
+    // package never reads IHostEnvironment itself, which is why this stays the host's own line to write.
+    nuplane.UseBasePath(builder.Environment.ContentRootPath);
     nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
     nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
 

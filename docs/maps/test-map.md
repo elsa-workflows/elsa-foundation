@@ -6,8 +6,8 @@ Records direct test-project references and test source-file inventory; it does n
 
 ## Summary
 
-- Test projects: 106
-- Source projects directly referenced by at least one test project: 141
+- Test projects: 107
+- Source projects directly referenced by at least one test project: 142
 - Source projects not directly referenced by test projects: 6
 
 ## Test Projects
@@ -83,6 +83,7 @@ Records direct test-project references and test source-file inventory; it does n
 | [Elsa.Primitives.Hosting.Tests](../../tests/essentials/Primitives/Hosting/Tests/Elsa.Primitives.Hosting.Tests.csproj) | Elsa.Primitives.Hosting |
 | [Elsa.Primitives.Tests](../../tests/essentials/Primitives/Tests/Elsa.Primitives.Tests.csproj) | Elsa.Primitives |
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/essentials/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Samples.Nuplane.Activities |
+| [Elsa.Secrets.Nuplane.Tests](../../tests/essentials/Secrets/Nuplane/Tests/Elsa.Secrets.Nuplane.Tests.csproj) | Elsa.Secrets<br>Elsa.Secrets.Nuplane |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests](../../tests/essentials/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj) | Elsa.Secrets<br>Elsa.Secrets.Persistence.EntityFrameworkCore |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe](../../tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe.csproj) | Elsa.Persistence.EntityFramework<br>Elsa.Secrets<br>Elsa.Secrets.Core |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests](../../tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj) | Elsa.Cli<br>Elsa.Cli.Fixtures.Host<br>Elsa.Secrets<br>Elsa.Secrets.Persistence.EntityFrameworkCore<br>Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe |
@@ -194,6 +195,7 @@ Records direct test-project references and test source-file inventory; it does n
 | Elsa.Primitives.Hosting.Tests | [Base62Tests.cs](../../tests/essentials/Primitives/Hosting/Tests/Base62Tests.cs)<br>[IdentityFormatCompatibilityTests.cs](../../tests/essentials/Primitives/Hosting/Tests/IdentityFormatCompatibilityTests.cs)<br>[IdentityGeneratorRegistrationTests.cs](../../tests/essentials/Primitives/Hosting/Tests/IdentityGeneratorRegistrationTests.cs)<br>[IdentityGeneratorTests.cs](../../tests/essentials/Primitives/Hosting/Tests/IdentityGeneratorTests.cs)<br>[MutableClock.cs](../../tests/essentials/Primitives/Hosting/Tests/MutableClock.cs) |
 | Elsa.Primitives.Tests | [ObservationalTelemetryScopeTests.cs](../../tests/essentials/Primitives/Tests/Diagnostics/ObservationalTelemetryScopeTests.cs)<br>[StringExtensionsTests.cs](../../tests/essentials/Primitives/Tests/Extensions/StringExtensionsTests.cs)<br>[PageArgsTests.cs](../../tests/essentials/Primitives/Tests/Persistence/PageArgsTests.cs) |
 | Elsa.Samples.Nuplane.Activities.Tests | [SampleNuplaneActivitiesFeatureTests.cs](../../tests/essentials/Samples/Nuplane/Activities/Tests/SampleNuplaneActivitiesFeatureTests.cs) |
+| Elsa.Secrets.Nuplane.Tests | [SecretsCredentialedFeedTests.cs](../../tests/essentials/Secrets/Nuplane/Tests/SecretsCredentialedFeedTests.cs)<br>[SecretsFeedCredentialProviderTests.cs](../../tests/essentials/Secrets/Nuplane/Tests/SecretsFeedCredentialProviderTests.cs)<br>[CapturingLoggerProvider.cs](../../tests/essentials/Secrets/Nuplane/Tests/Support/CapturingLoggerProvider.cs)<br>[SecretsComposition.cs](../../tests/essentials/Secrets/Nuplane/Tests/Support/SecretsComposition.cs)<br>[TestNuGetFeedServer.cs](../../tests/essentials/Secrets/Nuplane/Tests/Support/TestNuGetFeedServer.cs) |
 | Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests | [MySqlContainerFixture.cs](../../tests/essentials/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/MySqlContainerFixture.cs)<br>[MySqlEfSecretRepositoryTests.cs](../../tests/essentials/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/MySqlEfSecretRepositoryTests.cs) |
 | Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe | [Program.cs](../../tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Program.cs) |
 | Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests | [PostgreSqlEfSecretRepositoryTests.cs](../../tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/PostgreSqlEfSecretRepositoryTests.cs)<br>[PostgreSqlSecretsShellJourneyTests.cs](../../tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/PostgreSqlSecretsShellJourneyTests.cs)<br>[PostgresContainerFixture.cs](../../tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/PostgresContainerFixture.cs)<br>[SecretsPackageFeedProbeTests.cs](../../tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/SecretsPackageFeedProbeTests.cs)<br>[SecretsPackageFeedProbeRunner.cs](../../tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Support/SecretsPackageFeedProbeRunner.cs) |
