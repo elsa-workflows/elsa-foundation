@@ -277,6 +277,23 @@ jobs:
               echo "  LEAKED src/ into $tgz" >&2
               exit 1
             fi
+            # Intra-monorepo dependencies must be ranges, never exact pins. An exact pin welds the
+            # four packages into a set: a fix to one cannot ship without republishing the others,
+            # and a consumer cannot take a newer dependency at all. prepare-npm-package.mjs emits a
+            # caret; this is the gate that stops a regression to `deps[name] = versionArg`.
+            manifest=$(tar -xzOf "$tgz" package/package.json)
+            pinned=$(node -e '
+              const pkg = JSON.parse(require("fs").readFileSync(0, "utf8"));
+              const bad = [];
+              for (const group of ["dependencies", "peerDependencies", "optionalDependencies"])
+                for (const [name, range] of Object.entries(pkg[group] ?? {}))
+                  if (name.startsWith("@elsa-workflows/") && !/^[\^~>]/.test(range)) bad.push(`${name}@${range}`);
+              process.stdout.write(bad.join(", "));
+            ' <<< "$manifest")
+            if [[ -n "$pinned" ]]; then
+              echo "  EXACT-PINNED intra-monorepo dependency in $tgz: $pinned" >&2
+              exit 1
+            fi
           done
           echo "All tarballs verified."
 

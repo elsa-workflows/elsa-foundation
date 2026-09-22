@@ -84,14 +84,24 @@ pkg.files = ["dist"];
 pkg.sideEffects = false;
 
 // Rewrite intra-monorepo workspace deps (workspace:*, workspace:^, workspace:~, workspace:<ver>)
-// to the exact version being published — all four packages publish together in one run, so they
-// pin to each other by exact version.
+// to a caret range on the version being published, NOT to that exact version.
+//
+// These packages publish together today, so an exact pin happens to resolve — but it welds them
+// into a set: `studio-workflows` at 4.0.0-preview.9 demanding exactly `studio-code-editor`
+// 4.0.0-preview.9 means a fix to one cannot ship without republishing the others, and a consumer
+// cannot take a newer dependency at all. That is the npm form of the dishonest floor described in
+// elsa-workflows/elsa-foundation#1144, one notch worse than the NuGet side, which at least derives
+// a `>=` range from the referenced project's version.
+//
+// A caret is the honest equivalent: it admits any later compatible version and still refuses a
+// major bump. Under the per-package versioning of #516 (major.minor shared, patch per package) it
+// is also the range that actually describes the requirement.
 for (const depKey of ["dependencies", "peerDependencies", "optionalDependencies"]) {
   const deps = pkg[depKey];
   if (!deps) continue;
   for (const [name, range] of Object.entries(deps)) {
     if (name.startsWith("@elsa-workflows/") && typeof range === "string" && range.startsWith("workspace:")) {
-      deps[name] = versionArg;
+      deps[name] = `^${versionArg}`;
     }
   }
 }
