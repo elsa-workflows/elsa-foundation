@@ -22,7 +22,7 @@ namespace Elsa.Secrets.Nuplane.Tests.Support;
 /// </remarks>
 internal sealed class TestNuGetFeedServer : IAsyncDisposable
 {
-    private readonly HttpListener listener = new();
+    private readonly HttpListener listener;
     private readonly CancellationTokenSource shutdown = new();
     private readonly Task serveLoop;
     private readonly byte[] packageBytes;
@@ -38,9 +38,7 @@ internal sealed class TestNuGetFeedServer : IAsyncDisposable
         packageBytes = Nupkg(packageId, version);
         expectedAuthorization = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($"{userName}:{password}"));
 
-        baseAddress = $"http://127.0.0.1:{FreePort()}/";
-        listener.Prefixes.Add(baseAddress);
-        listener.Start();
+        (listener, baseAddress) = Listen();
         serveLoop = Task.Run(ServeAsync);
     }
 
@@ -99,6 +97,32 @@ internal sealed class TestNuGetFeedServer : IAsyncDisposable
         }
 
         return buffer.ToArray();
+    }
+
+    /// <summary>A started listener on a free loopback port, and the address it answers on.</summary>
+    /// <remarks>
+    /// The probe below has to release the port before <see cref="HttpListener"/> can bind it, and on a loaded
+    /// machine another process can take it inside that window. Re-probing a few times is the whole fix.
+    /// Exhausting the attempts throws the bind failure rather than swallowing it, because a test that then
+    /// failed for some unrelated-looking reason is worse than one that says the port could not be taken.
+    /// </remarks>
+    private static (HttpListener Listener, string BaseAddress) Listen()
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            var candidate = new HttpListener();
+            var address = $"http://127.0.0.1:{FreePort()}/";
+            candidate.Prefixes.Add(address);
+            try
+            {
+                candidate.Start();
+                return (candidate, address);
+            }
+            catch (HttpListenerException) when (attempt < 5)
+            {
+                candidate.Close();
+            }
+        }
     }
 
     private static int FreePort()
