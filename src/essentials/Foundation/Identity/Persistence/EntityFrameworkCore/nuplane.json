@@ -1,10 +1,5 @@
 {
   "schemaVersion": 2,
-  "loading": {
-    "loadMode": "HostIntegrated",
-    "scope": "DependencyClosure",
-    "reason": "Registers shell DI services, hosted migration lifecycle services, EF contexts, and migrations."
-  },
   "capabilities": [
     {
       "name": "ef-provider",

@@ -20,4 +20,7 @@
     <ProjectReference Include="..\..\..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Update="nuplane.json" Pack="true" PackagePath="/" />
+  </ItemGroup>
 </Project>

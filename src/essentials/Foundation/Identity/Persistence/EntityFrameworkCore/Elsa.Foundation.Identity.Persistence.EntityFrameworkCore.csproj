@@ -23,4 +23,8 @@
     <ProjectReference Include="..\..\..\..\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="nuplane.json" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
 </Project>
