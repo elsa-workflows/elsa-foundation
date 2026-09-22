@@ -214,6 +214,7 @@
     <Project Path="src/essentials/Secrets/Api/Elsa.Secrets.Api.csproj" />
     <Project Path="src/essentials/Secrets/Core/Elsa.Secrets.Core.csproj" />
     <Project Path="src/essentials/Secrets/Elsa.Secrets.csproj" />
+    <Project Path="src/essentials/Secrets/Nuplane/Elsa.Secrets.Nuplane.csproj" />
   </Folder>
   <Folder Name="/src/essentials/Studio/" />
   <Folder Name="/src/essentials/Studio/Preferences/">
@@ -464,6 +465,9 @@
   </Folder>
   <Folder Name="/tests/essentials/Secrets/">
     <Project Path="tests/essentials/Secrets/Tests/Elsa.Secrets.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/essentials/Secrets/Nuplane/">
+    <Project Path="tests/essentials/Secrets/Nuplane/Tests/Elsa.Secrets.Nuplane.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/essentials/Secrets/Persistence/EntityFrameworkCore/">
     <Project Path="tests/essentials/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj" />
