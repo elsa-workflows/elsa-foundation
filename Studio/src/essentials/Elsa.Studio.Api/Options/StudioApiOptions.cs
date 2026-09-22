@@ -25,10 +25,14 @@ public sealed class StudioApiOptions
     /// nothing is configured. Prefers the informational version (which carries the full SemVer,
     /// including any pre-release suffix), then the file version, then the assembly version.
     /// </summary>
-    public static string ResolveAssemblyVersion()
-    {
-        var assembly = typeof(StudioApiOptions).Assembly;
+    public static string ResolveAssemblyVersion() => ResolveAssemblyVersion(typeof(StudioApiOptions).Assembly);
 
+    /// <summary>
+    /// The version stamped on <paramref name="assembly"/>, resolved the same way. Used for a module's
+    /// own version, which defaults to the version of the package that ships it.
+    /// </summary>
+    public static string ResolveAssemblyVersion(Assembly assembly)
+    {
         var informational = assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
             .InformationalVersion;

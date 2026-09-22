@@ -9,7 +9,7 @@ namespace Elsa.Studio.Weaver.Workflows;
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("AI")]
 [ManifestFeatureCategory("Workflows")]
-[StudioModule("weaver-workflows", "Weaver workflows", "1.0.0", "ai-context-providers", "ai-prompt-actions", "ai-proposal-renderers", "ai-tools", "weaver-workflows", HasStyles = false)]
+[StudioModule("weaver-workflows", "Weaver workflows", "ai-context-providers", "ai-prompt-actions", "ai-proposal-renderers", "ai-tools", "weaver-workflows", HasStyles = false)]
 [ShellFeature(
     name: "WeaverWorkflowsStudio",
     DisplayName = "Weaver workflows Studio module",

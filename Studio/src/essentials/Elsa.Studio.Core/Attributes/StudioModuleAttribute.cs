@@ -7,11 +7,10 @@ namespace Elsa.Studio.Core.Attributes;
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
 public sealed class StudioModuleAttribute : Attribute
 {
-    public StudioModuleAttribute(string slug, string displayName, string version, params string[] capabilities)
+    public StudioModuleAttribute(string slug, string displayName, params string[] capabilities)
     {
         Slug = slug;
         DisplayName = displayName;
-        Version = version;
         Capabilities = capabilities;
     }
 
@@ -21,8 +20,17 @@ public sealed class StudioModuleAttribute : Attribute
     /// <summary>Short human-readable name shown in the module registry.</summary>
     public string DisplayName { get; }
 
-    /// <summary>Module version used for cache-busting entry/style URLs.</summary>
-    public string Version { get; }
+    /// <summary>
+    /// Module version, used to cache-bust the entry and style URLs and shown in the module registry.
+    /// Defaults to the declaring assembly's informational version — i.e. the package version, which
+    /// already moves exactly when the module's own files change.
+    /// <para>
+    /// It used to be a required constructor argument holding a hand-maintained literal, and the
+    /// thirteen shipped modules had drifted to seven different values with nothing checking any of
+    /// them. Set this only for a module that genuinely needs a version independent of its package.
+    /// </para>
+    /// </summary>
+    public string? Version { get; set; }
 
     /// <summary>Capabilities this module contributes (e.g. "navigation", "routes", "http").</summary>
     public string[] Capabilities { get; }

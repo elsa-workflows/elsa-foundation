@@ -9,7 +9,7 @@ namespace Elsa.Studio.FeatureManagement;
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("Settings")]
 [ManifestFeatureCategory("Features")]
-[StudioModule("features", "Feature management", "1.0.10", "navigation", "routes", "http", "setting-editors")]
+[StudioModule("features", "Feature management", "navigation", "routes", "http", "setting-editors")]
 [ShellFeature(
     name: "FeatureManagement",
     DisplayName = "Feature management module",

@@ -19,7 +19,7 @@ namespace Elsa.Studio.ConsoleStream;
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("Diagnostics")]
 [ManifestFeatureCategory("Console")]
-[StudioModule("console-stream", "Console stream", "1.0.5", "navigation", "routes", "panels", "console-stream", "signalr", "diagnostics")]
+[StudioModule("console-stream", "Console stream", "navigation", "routes", "panels", "console-stream", "signalr", "diagnostics")]
 [ShellFeature(
     name: "ConsoleStream",
     DisplayName = "Console stream",

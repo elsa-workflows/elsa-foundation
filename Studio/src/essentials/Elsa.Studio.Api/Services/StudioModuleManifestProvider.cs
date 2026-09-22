@@ -102,15 +102,18 @@ public sealed class StudioModuleManifestProvider(
             if (handlerIds.Contains(moduleId))
                 continue;
 
-            var entry = $"/_content/{assemblyName}/studio/modules/{attr.Slug}/module.js?v={attr.Version}";
+            // A module's version defaults to the version of the package that ships it, so it moves
+            // exactly when the module's own files do. An explicit [StudioModule(Version = …)] wins.
+            var version = attr.Version ?? StudioApiOptions.ResolveAssemblyVersion(featureType.Assembly);
+            var entry = $"/_content/{assemblyName}/studio/modules/{attr.Slug}/module.js?v={version}";
             var styles = attr.HasStyles
-                ? ResolveStyles(assemblyName, attr.Slug, attr.Version)
+                ? ResolveStyles(assemblyName, attr.Slug, version)
                 : Array.Empty<string>();
 
             collection.Manifests.Add(new StudioModuleManifest(
                 moduleId,
                 attr.DisplayName,
-                attr.Version,
+                version,
                 entry,
                 styles,
                 attr.RequiredHostVersion,

@@ -9,7 +9,7 @@ namespace Elsa.Studio.Diagnostics.StructuredLogs;
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("Diagnostics")]
 [ManifestFeatureCategory("Structured Logs")]
-[StudioModule("structured-logs", "Structured logs", "1.0.4", "navigation", "routes", "panels", "http", "sse", "diagnostics")]
+[StudioModule("structured-logs", "Structured logs", "navigation", "routes", "panels", "http", "sse", "diagnostics")]
 [ShellFeature(
     name: "StructuredLogsStudio",
     DisplayName = "Structured logs module",

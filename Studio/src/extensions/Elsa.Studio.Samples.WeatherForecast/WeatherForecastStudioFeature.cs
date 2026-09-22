@@ -13,7 +13,7 @@ namespace Elsa.Studio.Samples.WeatherForecast;
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("Samples")]
 [ManifestFeatureCategory("Weather")]
-[StudioModule("weather", "Weather forecast sample", "1.0.1", "navigation", "routes", "http")]
+[StudioModule("weather", "Weather forecast sample", "navigation", "routes", "http")]
 [ShellFeature(
     name: "WeatherForecastSample",
     DisplayName = "Weather forecast sample module",

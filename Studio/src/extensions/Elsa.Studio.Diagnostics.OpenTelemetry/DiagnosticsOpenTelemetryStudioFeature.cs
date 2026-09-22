@@ -9,7 +9,7 @@ namespace Elsa.Studio.Diagnostics.OpenTelemetry;
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("Diagnostics")]
 [ManifestFeatureCategory("OpenTelemetry")]
-[StudioModule("open-telemetry", "OpenTelemetry", "1.0.1", "navigation", "routes", "http", "diagnostics", "otel", "traces", "metrics", "logs")]
+[StudioModule("open-telemetry", "OpenTelemetry", "navigation", "routes", "http", "diagnostics", "otel", "traces", "metrics", "logs")]
 [ShellFeature(
     name: "OpenTelemetryStudio",
     DisplayName = "OpenTelemetry module",

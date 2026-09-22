@@ -59,7 +59,6 @@ public sealed class StudioModuleManifestProviderTests
     {
         new("Elsa.Studio.Workflows", "Workflows",
             AssetPath: "/_content/Elsa.Studio.Workflows/studio/modules/workflows/",
-            Version: "1.0.8",
             Capabilities: ["navigation", "routes", "workflow-designer"]),
         new("Elsa.Studio.FeatureManagement", "Feature management",
             AssetPath: "/_content/Elsa.Studio.FeatureManagement/studio/modules/features/",
@@ -226,6 +225,23 @@ public sealed class StudioModuleManifestProviderTests
             Assert.Equal("*", module.RequiredHostVersion);
             Assert.Equal("*", module.RequiredSdkVersion);
         });
+    }
+
+    /// <summary>
+    /// A module's version is the version of the package that ships it, so it moves exactly when the
+    /// module's own files do. It used to be a hand-maintained literal in [StudioModule]; the thirteen
+    /// shipped modules had drifted to seven different values with nothing checking any of them.
+    /// </summary>
+    [Fact]
+    public async Task ModuleVersion_DefaultsToTheShippingAssemblyVersion()
+    {
+        var response = await GetModulesAsync();
+
+        var workflows = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
+        var expected = StudioApiOptions.ResolveAssemblyVersion(typeof(WorkflowsStudioFeature).Assembly);
+        Assert.Equal(expected, workflows.Version);
+        // The cache-bust travels with it, which is the whole point of deriving it.
+        Assert.Contains($"v={expected}", workflows.Entry);
     }
 
     private static void AssertDisabled(IEnumerable<StudioModuleDiagnostic> diagnostics, string moduleId) =>

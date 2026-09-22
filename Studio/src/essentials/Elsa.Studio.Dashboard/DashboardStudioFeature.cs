@@ -8,7 +8,7 @@ namespace Elsa.Studio.Dashboard;
 [ManifestRuntimeKind(ElsaRuntimeKinds.Studio)]
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("Dashboard")]
-[StudioModule("dashboard", "Dashboard", "1.0.0", "navigation", "routes", "dashboard-widgets")]
+[StudioModule("dashboard", "Dashboard", "navigation", "routes", "dashboard-widgets")]
 [ShellFeature(name: "DashboardStudio", DisplayName = "Dashboard", Description = "Hosts the customizable Studio dashboard.")]
 public sealed class DashboardStudioFeature : IShellFeature
 {

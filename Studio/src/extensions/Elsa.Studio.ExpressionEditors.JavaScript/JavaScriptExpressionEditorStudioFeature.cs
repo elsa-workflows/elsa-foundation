@@ -8,7 +8,7 @@ namespace Elsa.Studio.ExpressionEditors.JavaScript;
 [ManifestRuntimeKind(ElsaRuntimeKinds.Studio)]
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("Workflows")]
-[StudioModule("expression-editors/javascript", "JavaScript expression editor", "1.0.0", "expression-editors", "javascript")]
+[StudioModule("expression-editors/javascript", "JavaScript expression editor", "expression-editors", "javascript")]
 [ShellFeature(
     name: "JavaScriptExpressionEditorStudio",
     DisplayName = "JavaScript expression editor Studio module",

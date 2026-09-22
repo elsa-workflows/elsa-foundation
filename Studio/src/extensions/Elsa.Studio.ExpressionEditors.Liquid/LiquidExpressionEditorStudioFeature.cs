@@ -8,7 +8,7 @@ namespace Elsa.Studio.ExpressionEditors.Liquid;
 [ManifestRuntimeKind(ElsaRuntimeKinds.Studio)]
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("Workflows")]
-[StudioModule("expression-editors/liquid", "Liquid expression editor", "1.0.0", "expression-editors", "liquid")]
+[StudioModule("expression-editors/liquid", "Liquid expression editor", "expression-editors", "liquid")]
 [ShellFeature(
     name: "LiquidExpressionEditorStudio",
     DisplayName = "Liquid expression editor Studio module",

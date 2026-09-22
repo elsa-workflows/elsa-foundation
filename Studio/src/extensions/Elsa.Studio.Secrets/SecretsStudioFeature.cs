@@ -8,7 +8,7 @@ namespace Elsa.Studio.Secrets;
 [ManifestRuntimeKind(ElsaRuntimeKinds.Studio)]
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("Secrets")]
-[StudioModule("secrets", "Secrets", "1.0.0", "navigation", "routes", "http", "expression-editors", "secrets")]
+[StudioModule("secrets", "Secrets", "navigation", "routes", "http", "expression-editors", "secrets")]
 [ShellFeature(
     name: "SecretsStudio",
     DisplayName = "Secrets Studio module",

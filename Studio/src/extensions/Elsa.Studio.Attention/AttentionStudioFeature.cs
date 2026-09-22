@@ -8,7 +8,7 @@ namespace Elsa.Studio.Attention;
 [ManifestRuntimeKind(ElsaRuntimeKinds.Studio)]
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("Attention")]
-[StudioModule("attention", "Attention", "1.0.0", "dashboard-widgets", "http")]
+[StudioModule("attention", "Attention", "dashboard-widgets", "http")]
 [ShellFeature(name: "AttentionStudio", DisplayName = "Attention", Description = "Presents attention items in Studio.")]
 public sealed class AttentionStudioFeature : IShellFeature
 {
