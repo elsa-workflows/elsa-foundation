@@ -87,3 +87,4 @@ Numbers are not unique: the folder holds two independent sequences (an early Ext
 | 0074 | [First-party EF stores retry in bounded application loops, not EF's retrying execution strategy](0074-first-party-ef-stores-retry-in-bounded-application-loops.md) | Accepted |
 | 0075 | [Oracle is not a supported first-party EF Core engine](0075-oracle-is-not-a-supported-ef-core-engine.md) | Accepted |
 | 0076 | [Persistence tooling runs inside the host's closure](0076-persistence-tooling-runs-inside-the-host-closure.md) | Accepted |
+| 0077 | [A module upgrades in place only when its persisted schema is unchanged](0077-a-module-upgrades-in-place-only-when-its-persisted-schema-is-unchanged.md) | Proposed |
