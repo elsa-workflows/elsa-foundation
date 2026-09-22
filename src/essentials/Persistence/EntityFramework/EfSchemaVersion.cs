@@ -9,10 +9,19 @@ namespace Elsa.Persistence.EntityFramework;
 /// written by a module version this host does not run was reported as a corrupt envelope. ADR 0077
 /// separates them, because they are different events with different operator responses.
 /// <para>
-/// Call this <em>before</em> the integrity checks, not inside them. The schema version answers "can
-/// this build read this row at all", which has to be settled before "is this row internally
-/// consistent" means anything: a row from a version whose shape differs may legitimately fail an
-/// integrity check that only describes the shape this build writes.
+/// A new call site should check the version <em>before</em> the integrity checks, not alongside them.
+/// The schema version answers "can this build read this row at all", which has to be settled before
+/// "is this row internally consistent" means anything: a row from a version whose shape differs may
+/// legitimately fail an integrity check that only describes the shape this build writes.
+/// </para>
+/// <para>
+/// Most existing call sites do not yet do this. <see cref="Readable"/> and <see cref="NotReadable"/>
+/// were introduced as drop-ins that leave the clause they replaced exactly where it stood, so that
+/// separating the two diagnoses stayed reviewable across three dozen stores. Where an earlier clause
+/// in the same condition fails first, such a row is still reported as corruption, so #1950 is only
+/// fully answered for rows whose version is the one thing that differs. Hoisting the remaining checks
+/// is tracked as #1955; it changes short-circuit order in conditions that decode and hash row fields,
+/// which is a behavioural change to every affected store rather than a rename.
 /// </para>
 /// </remarks>
 public static class EfSchemaVersion
