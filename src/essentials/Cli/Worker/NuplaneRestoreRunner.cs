@@ -96,9 +96,18 @@ internal static class NuplaneRestoreRunner
 
         if (result.Skipped)
         {
-            return result.SkipReason == NuplaneRestoreSkipReason.UnpinnedRequests
-                ? RestoreOutcome.Unpinned([.. result.UnpinnedRequests.Select(Describe)], result.StateFilePath, result.InstallRoot)
-                : RestoreOutcome.StoreLocked(result.StateFilePath, result.InstallRoot);
+            return result.SkipReason switch
+            {
+                NuplaneRestoreSkipReason.UnpinnedRequests =>
+                    RestoreOutcome.Unpinned([.. result.UnpinnedRequests.Select(Describe)], result.StateFilePath, result.InstallRoot),
+                NuplaneRestoreSkipReason.StoreLockUnavailable =>
+                    RestoreOutcome.StoreLocked(result.StateFilePath, result.InstallRoot),
+                // A skip reason this build does not recognize is refused rather than guessed at: silently
+                // mapping it to "lock held" would misreport why the run did nothing for whatever Nuplane
+                // adds next.
+                _ => RestoreOutcome.Degraded(
+                    [$"Unrecognized restore skip reason '{result.SkipReason}'."], result.StateFilePath, result.InstallRoot)
+            };
         }
 
         return result is { IsDegraded: false, FailedPackages.Count: 0 }

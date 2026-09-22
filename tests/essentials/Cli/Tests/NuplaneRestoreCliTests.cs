@@ -89,7 +89,7 @@ public sealed class NuplaneRestoreCliTests : IDisposable
 
         Assert.Equal(ToolExitCode.Success, populated.ExitCode);
         Assert.DoesNotContain("restore:", populated.Error, StringComparison.Ordinal);
-        AssertSameBytes(output.Path, again.Path);
+        ArtifactAssert.SameBytes(output.Path, again.Path);
     }
 
     /// <summary>
@@ -209,6 +209,27 @@ public sealed class NuplaneRestoreCliTests : IDisposable
         Assert.Contains(Module, run.Output, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// "Anything less than the whole set is a refusal" (FR-086): a package the feed pins but cannot actually
+    /// hand over degrades the cycle, and a degraded cycle is refused rather than scripted from, the same as
+    /// a skipped one. This is a directory feed's own failure mode, not a network one, so it needs no remote
+    /// service to reach — the pinned <c>.nupkg</c> the feed indexes is unreadable, which is what a package a
+    /// feed "pins but does not actually contain a usable copy of" looks like for a local, file-backed feed.
+    /// </summary>
+    [Fact]
+    public void A_package_the_feed_cannot_actually_hand_over_refuses_rather_than_scripting_a_partial_set()
+    {
+        host.FeedCorrupt(Module, Version);
+        host.Configure(DirectoryFeed("packages"));
+
+        var run = Script(output.Path, "--restore");
+
+        Assert.Equal(ToolExitCode.ResolutionFailure, run.ExitCode);
+        Assert.Contains("restore-incomplete", run.Error, StringComparison.Ordinal);
+        Assert.Contains(Module, run.Error, StringComparison.Ordinal);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(output.Path));
+    }
+
     /// <summary>The keyed feed shape Nuplane recommends, pointed at a path relative to the host itself.</summary>
     private static string DirectoryFeed(string directory) =>
         $$"""
@@ -229,18 +250,6 @@ public sealed class NuplaneRestoreCliTests : IDisposable
             .. extra
         ]);
 
-    private static void AssertSameBytes(string expected, string actual)
-    {
-        var expectedFiles = Files(expected);
-        var actualFiles = Files(actual);
-
-        Assert.Equal(expectedFiles.Keys, actualFiles.Keys);
-        foreach (var (name, bytes) in expectedFiles)
-            Assert.True(bytes.AsSpan().SequenceEqual(actualFiles[name]), $"{name} differs between the restored and the already-populated run.");
-    }
-
-    private static SortedDictionary<string, byte[]> Files(string directory) =>
-        new(Directory.EnumerateFiles(directory).ToDictionary(Path.GetFileName, File.ReadAllBytes), StringComparer.Ordinal);
 }
 
 /// <summary>
@@ -305,6 +314,17 @@ internal sealed class RestoreHost : IDisposable
         }
 
         archive.CreateEntryFromFile(typeof(WidgetsDbContext).Assembly.Location, $"lib/net10.0/{packageId}.dll");
+    }
+
+    /// <summary>
+    /// Drops a file the feed indexes as <c>packageId</c>/<c>version</c> by name, but that is not a readable
+    /// package at all — the shape a pinned request resolves to a candidate for, but the cycle cannot
+    /// actually acquire.
+    /// </summary>
+    public void FeedCorrupt(string packageId, string version)
+    {
+        Directory.CreateDirectory(FeedDirectory);
+        File.WriteAllBytes(System.IO.Path.Join(FeedDirectory, $"{packageId}.{version}.nupkg"), [0x00, 0x01, 0x02, 0x03]);
     }
 
     private static string Settings(string feeds) =>
