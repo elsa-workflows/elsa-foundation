@@ -231,7 +231,7 @@ internal static class ActivityExecutionEfSupport
 
     public static void EnsureRowEnvelope(string schemaVersion, string scopeKey, string scope, string scopeHash, string expectedId, string actualId, long revision)
     {
-        if (!StringComparer.Ordinal.Equals(schemaVersion, RuntimeActivityExecutionEfModule.SchemaVersion) ||
+        if (EfSchemaVersion.NotReadable("RuntimeActivityExecution", schemaVersion, RuntimeActivityExecutionEfModule.SchemaVersion) ||
             !StringComparer.Ordinal.Equals(Decode(scopeKey), scope) ||
             !StringComparer.Ordinal.Equals(scopeHash, Hash(scope)) ||
             !StringComparer.Ordinal.Equals(expectedId, actualId) ||

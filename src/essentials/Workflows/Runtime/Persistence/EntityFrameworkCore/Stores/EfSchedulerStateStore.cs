@@ -119,7 +119,7 @@ public sealed class EfSchedulerStateStore(
             row.WorkflowExecutionIdOrderKey != EfRuntimeOperationalStoreSupport.Order(state.WorkflowExecutionId) ||
             row.Id != EfRuntimeOperationalStoreSupport.CompositeId(scope, state.WorkflowExecutionId) ||
             row.Collection != Collection ||
-            row.SchemaVersion != RuntimeOperationalStateEfModule.SchemaVersion)
+            EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion))
             throw new InvalidDataException("The scheduler-state row identity or projection is corrupt.");
         return state;
     }

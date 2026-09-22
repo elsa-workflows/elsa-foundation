@@ -541,7 +541,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
         string? expectedOutboxItemId = null)
     {
         if (row.Revision <= 0 ||
-            row.SchemaVersion != RuntimePostCommitOutboxEfModule.SchemaVersion ||
+            EfSchemaVersion.NotReadable("RuntimePostCommitOutbox", row.SchemaVersion, RuntimePostCommitOutboxEfModule.SchemaVersion) ||
             row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) ||
             row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))
         {

@@ -158,7 +158,7 @@ public sealed class EfDurableValueStateStore(
             row.DurableValueIdHash != EfRuntimeOperationalStoreSupport.Hash(state.DurableValueId) ||
             row.DurableValueIdOrderKey != EfRuntimeOperationalStoreSupport.Order(state.DurableValueId) ||
             row.Id != EfRuntimeOperationalStoreSupport.CompositeId(scope, state.WorkflowExecutionId, state.DurableValueId) ||
-            row.SchemaVersion != RuntimeOperationalStateEfModule.SchemaVersion)
+            EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion))
             throw new InvalidDataException("The durable-value row identity or projection is corrupt.");
         return state;
     }

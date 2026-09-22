@@ -309,7 +309,7 @@ public sealed class EfBookmarkStateStore(
     {
         try
         {
-            if (row.SchemaVersion != BookmarkStateEfModule.SchemaVersion || EfRelationalIdentity.Decode(row.ScopeKey) != scope || row.ScopeKeyHash != Hash(scope) ||
+            if (EfSchemaVersion.NotReadable("BookmarkState", row.SchemaVersion, BookmarkStateEfModule.SchemaVersion) || EfRelationalIdentity.Decode(row.ScopeKey) != scope || row.ScopeKeyHash != Hash(scope) ||
                 row.Id != (expectedId ?? CreateId(scope, row.WorkflowExecutionId, row.BookmarkId)) ||
                 row.WorkflowExecutionIdHash != Hash(row.WorkflowExecutionId) || row.BookmarkIdHash != Hash(row.BookmarkId) ||
                 row.WorkflowExecutionIdOrderKey != OrdinalKey(row.WorkflowExecutionId) || row.BookmarkIdOrderKey != OrdinalKey(row.BookmarkId) ||

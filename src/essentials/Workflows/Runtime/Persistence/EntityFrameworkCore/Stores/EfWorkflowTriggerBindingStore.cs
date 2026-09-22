@@ -312,7 +312,7 @@ public sealed class EfWorkflowTriggerBindingStore(
     { Validate(x); e.ScopeKey = Encode(scope); e.ScopeKeyHash = Hash(scope); e.TriggerBindingId = Encode(x.TriggerBindingId); e.TriggerBindingIdHash = Hash(x.TriggerBindingId); e.TriggerBindingIdOrderKey = Order(x.TriggerBindingId); e.ArtifactId = Encode(x.ArtifactId); e.ArtifactIdHash = Hash(x.ArtifactId); e.ArtifactIdOrderKey = Order(x.ArtifactId); e.DefinitionId = Encode(x.DefinitionId); e.ArtifactVersion = Encode(x.ArtifactVersion); e.ArtifactHash = Encode(x.ArtifactHash); e.ExecutableNodeId = Encode(x.ExecutableNodeId); e.StimulusType = Encode(x.StimulusType); e.StimulusHash = Encode(x.StimulusHash); e.StimulusLookupKey = Lookup(x.StimulusType, x.StimulusHash); e.StimulusTypeLookupKey = Lookup(x.StimulusType); e.CorrelationScope = x.CorrelationScope is null ? null : Encode(x.CorrelationScope); e.ActivationId = x.ActivationId is null ? null : Encode(x.ActivationId); e.ActivationIdHash = x.ActivationId is null ? null : Hash(x.ActivationId); e.ActivationIdOrderKey = x.ActivationId is null ? null : Order(x.ActivationId); e.SlotId = x.SlotId is null ? null : Encode(x.SlotId); e.Cardinality = (int)x.Cardinality; e.IsActive = x.IsActive; e.CreatedAtUtcTicks = x.CreatedAt.UtcTicks; e.CreatedAtOffsetMinutes = (int)x.CreatedAt.Offset.TotalMinutes; e.ContentJson = RuntimeArtifactJson.Serialize(x); e.SchemaVersion = RuntimeTriggerBindingEfModule.SchemaVersion; e.Revision = revision; }
     private static WorkflowTriggerBinding Read(WorkflowTriggerBindingEntity e, string scope, string? expectedId = null)
     {
-        if (e.Id != Id(scope, Decode(e.TriggerBindingId)) || e.ScopeKey != Encode(scope) || e.ScopeKeyHash != Hash(scope) || expectedId is not null && e.TriggerBindingId != Encode(expectedId) || e.SchemaVersion != RuntimeTriggerBindingEfModule.SchemaVersion || e.Revision <= 0)
+        if (e.Id != Id(scope, Decode(e.TriggerBindingId)) || e.ScopeKey != Encode(scope) || e.ScopeKeyHash != Hash(scope) || expectedId is not null && e.TriggerBindingId != Encode(expectedId) || EfSchemaVersion.NotReadable("RuntimeTriggerBinding", e.SchemaVersion, RuntimeTriggerBindingEfModule.SchemaVersion) || e.Revision <= 0)
             throw new InvalidDataException("The persisted EF trigger-binding row does not match its identity envelope.");
         WorkflowTriggerBinding x;
         try
@@ -341,7 +341,7 @@ public sealed class EfWorkflowTriggerBindingStore(
                state.ScopeKey == Encode(scope) && state.ScopeKeyHash == Hash(scope) &&
                state.ActivationId == Encode(activation) && state.ActivationIdHash == Hash(activation) &&
                state.ActivationIdOrderKey == Order(activation) &&
-               state.SchemaVersion == RuntimeTriggerBindingEfModule.SchemaVersion && state.Revision > 0 &&
+               EfSchemaVersion.Readable("RuntimeTriggerBinding", state.SchemaVersion, RuntimeTriggerBindingEfModule.SchemaVersion) && state.Revision > 0 &&
                state.BindingCount == bindings.Length &&
                state.ProjectionFingerprint == fingerprint && state.ContentJson == fingerprint &&
                bindings.All(binding => binding.ActivationId == activation && binding.IsActive == state.IsActive);

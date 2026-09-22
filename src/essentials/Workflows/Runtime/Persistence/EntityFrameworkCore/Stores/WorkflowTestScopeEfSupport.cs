@@ -48,7 +48,7 @@ internal static class WorkflowTestScopeEfSupport
             (expectedScopeId is null || StringComparer.Ordinal.Equals(record.Scope.ScopeId, expectedScopeId)) &&
             (tenant is null || StringComparer.Ordinal.Equals(tenant, accessScope)) &&
             row.Id == Id(accessScope, record.Scope.ScopeId) &&
-            row.SchemaVersion == RuntimeWorkflowTestScopeEfModule.SchemaVersion &&
+            EfSchemaVersion.Readable("RuntimeWorkflowTestScope", row.SchemaVersion, RuntimeWorkflowTestScopeEfModule.SchemaVersion) &&
             row.AccessScopeKey == EfRelationalIdentity.Encode(accessScope) &&
             row.AccessScopeKeyHash == EfRelationalIdentity.Hash(accessScope) &&
             row.ScopeId == EfRelationalIdentity.Encode(record.Scope.ScopeId) &&

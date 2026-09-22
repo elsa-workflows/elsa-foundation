@@ -411,7 +411,7 @@ public sealed class EfWorkflowAlterationStore(
             (expectedPlanId is null || StringComparer.Ordinal.Equals(plan.PlanId, expectedPlanId)) &&
             StringComparer.Ordinal.Equals(plan.AuthorityScope.TenantPartition, scope) &&
             row.Id == Id(scope, plan.PlanId) &&
-            row.SchemaVersion == RuntimeWorkflowAlterationEfModule.SchemaVersion &&
+            EfSchemaVersion.Readable("RuntimeWorkflowAlteration", row.SchemaVersion, RuntimeWorkflowAlterationEfModule.SchemaVersion) &&
             row.ScopeKey == EfRelationalIdentity.Encode(scope) &&
             row.ScopeKeyHash == EfRelationalIdentity.Hash(scope) &&
             row.PlanId == EfRelationalIdentity.Encode(plan.PlanId) &&
@@ -458,7 +458,7 @@ public sealed class EfWorkflowAlterationStore(
             (expectedJobId is null || StringComparer.Ordinal.Equals(job.JobId, expectedJobId)) &&
             StringComparer.Ordinal.Equals(job.TenantPartition, scope) &&
             row.Id == Id(scope, job.JobId) &&
-            row.SchemaVersion == RuntimeWorkflowAlterationEfModule.SchemaVersion &&
+            EfSchemaVersion.Readable("RuntimeWorkflowAlteration", row.SchemaVersion, RuntimeWorkflowAlterationEfModule.SchemaVersion) &&
             row.ScopeKey == EfRelationalIdentity.Encode(scope) &&
             row.ScopeKeyHash == EfRelationalIdentity.Hash(scope) &&
             row.JobId == EfRelationalIdentity.Encode(job.JobId) &&

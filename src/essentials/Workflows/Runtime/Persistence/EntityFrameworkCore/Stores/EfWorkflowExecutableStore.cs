@@ -602,7 +602,7 @@ public sealed class EfWorkflowExecutableStore(
             row.ArtifactId != Encode(expected) || row.ArtifactIdHash != Hash(expected) ||
             string.IsNullOrWhiteSpace(row.ArtifactHash) ||
             row.ArtifactHash.Length > RuntimeArtifactEfModule.HashMaximumLength ||
-            row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.ArtifactIdOrderKey != OrderKey(expected) ||
+            EfSchemaVersion.NotReadable("RuntimeArtifact", row.SchemaVersion, RuntimeArtifactEfModule.SchemaVersion) || row.ArtifactIdOrderKey != OrderKey(expected) ||
             string.IsNullOrWhiteSpace(row.IncarnationId))
             throw new InvalidDataException("The persisted workflow executable row is corrupt.");
         try
@@ -624,7 +624,7 @@ public sealed class EfWorkflowExecutableStore(
     {
         if (row.Id != id || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
             row.ArtifactId != Encode(expected) || row.ArtifactIdHash != Hash(expected) ||
-            row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.Revision <= 0 ||
+            EfSchemaVersion.NotReadable("RuntimeArtifact", row.SchemaVersion, RuntimeArtifactEfModule.SchemaVersion) || row.Revision <= 0 ||
             string.IsNullOrWhiteSpace(row.IncarnationId))
             throw new InvalidDataException("The persisted workflow executable coordination row is corrupt.");
 
