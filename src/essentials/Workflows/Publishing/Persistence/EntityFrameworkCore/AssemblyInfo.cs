@@ -1,4 +1,5 @@
 using Elsa.Persistence.EntityFramework;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 
 // The single, discoverable declaration of this module (ADR 0076 D2). EfModuleCatalog.Discover reads this,
@@ -12,3 +13,7 @@ using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
     PostgreSql = typeof(PublishingSnapshotReviewPostgreSqlDbContext),
     MySql = typeof(PublishingSnapshotReviewMySqlDbContext),
     DisplayName = "Publishing")]
+
+// Mirrors the [EfModule] name above into elsa-package.json's extensions.efModules (spec 171 slice 11,
+// #1881); EfModuleDescriptorTests guards that the two never drift apart.
+[assembly: ManifestExtension("efModules", "Workflows.Publishing")]
