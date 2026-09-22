@@ -1,6 +1,7 @@
 using Acme.Widgets;
 using Elsa.Cli.Worker;
 using System.IO.Compression;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Cli.Tests;
@@ -332,7 +333,7 @@ internal sealed class RestoreHost : IDisposable
 {
     private readonly TempDirectory root = new("elsa-cli-restore-host-");
 
-    public RestoreHost() => Copy(DotnetElsa.Host("NuplaneHost"), Path);
+    public RestoreHost(string fixture = "NuplaneHost") => Copy(DotnetElsa.Host(fixture), Path);
 
     /// <summary>The <c>--host</c> directory: a runtimeconfig, a deps file, and the assemblies beside them.</summary>
     public string Path => root.Path;
@@ -360,32 +361,69 @@ internal sealed class RestoreHost : IDisposable
         File.WriteAllText(System.IO.Path.Join(Path, $"appsettings.{environment}.json"), Settings(feeds));
 
     /// <summary>
+    /// Writes the host's own <c>appsettings.json</c> with a <c>Nuplane:Capabilities</c> section beside the
+    /// feeds — the shape spec 172 D3 defines, written verbatim rather than through a helper so a test reads
+    /// as the operator's file.
+    /// </summary>
+    public void Configure(string feeds, string capabilities) =>
+        File.WriteAllText(System.IO.Path.Join(Path, "appsettings.json"), Settings(feeds, capabilities));
+
+    /// <summary>
     /// Packs the fixture module into the host's own drop folder as a real <c>.nupkg</c> — a zip carrying a
     /// nuspec and one <c>lib/net10.0</c> assembly, which is all Nuplane extracts and reads. No fixture
     /// <c>.nupkg</c> is committed, because the assembly it wraps is a build output.
     /// </summary>
-    public void Feed(string packageId, string version)
-    {
-        Directory.CreateDirectory(FeedDirectory);
-        using var archive = ZipFile.Open(System.IO.Path.Join(FeedDirectory, $"{packageId}.{version}.nupkg"), ZipArchiveMode.Create);
-        using (var nuspec = new StreamWriter(archive.CreateEntry($"{packageId}.nuspec").Open()))
-        {
-            nuspec.Write(
-                $"""
-                 <?xml version="1.0" encoding="utf-8"?>
-                 <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
-                   <metadata>
-                     <id>{packageId}</id>
-                     <version>{version}</version>
-                     <authors>Acme</authors>
-                     <description>The fixture module, packed by the test that needs a feed to restore from.</description>
-                     <dependencies />
-                   </metadata>
-                 </package>
-                 """);
-        }
+    public void Feed(string packageId, string version) =>
+        Pack(packageId, version, [typeof(WidgetsDbContext).Assembly.Location], capabilities: null);
 
-        archive.CreateEntryFromFile(typeof(WidgetsDbContext).Assembly.Location, $"lib/net10.0/{packageId}.dll");
+    /// <summary>
+    /// The same module packed the way a real EF module package ships since spec 172 FR-001: with a
+    /// package-root <c>nuplane.json</c> declaring the <c>ef-provider</c> capability, one option per engine
+    /// it can bind, each pinned to the version this repository builds against.
+    /// </summary>
+    public void FeedWithEngineCapability(string packageId, string version) =>
+        Pack(packageId, version, [typeof(WidgetsDbContext).Assembly.Location], EngineCapabilityDeclaration);
+
+    /// <summary>
+    /// The engine package one <c>ef-provider</c> option names, packed from this test project's own resolved
+    /// copy of it — the same "copy what is already on disk into a nuspec and one <c>lib/net10.0</c> folder"
+    /// the module above is packed with. The runtime assembly travels beside the EF provider because a
+    /// generated script goes through the provider's real type mappings, which need it.
+    /// </summary>
+    public void FeedEngine(string option) =>
+        Pack(EngineId(option), EngineVersion(option), EngineAssemblies(option), capabilities: null);
+
+    /// <summary>The package id an <c>ef-provider</c> option names, as every module's declaration names it.</summary>
+    public static string EngineId(string option) => option switch
+    {
+        "Sqlite" => "Microsoft.EntityFrameworkCore.Sqlite",
+        "SqlServer" => "Microsoft.EntityFrameworkCore.SqlServer",
+        "PostgreSql" => "Npgsql.EntityFrameworkCore.PostgreSQL",
+        "MySql" => "MySql.EntityFrameworkCore",
+        _ => throw new ArgumentOutOfRangeException(nameof(option), option, "Not an ef-provider option.")
+    };
+
+    /// <summary>The version an <c>ef-provider</c> option is pinned to, matching <c>Directory.Packages.props</c>.</summary>
+    public static string EngineVersion(string option) => option switch
+    {
+        "Sqlite" or "SqlServer" => "10.0.10",
+        "PostgreSql" => "10.0.0",
+        "MySql" => "10.0.9",
+        _ => throw new ArgumentOutOfRangeException(nameof(option), option, "Not an ef-provider option.")
+    };
+
+    /// <summary>
+    /// One package's active descriptor out of the state file this host records, or <c>null</c> when it
+    /// records none for that id. Read as JSON rather than through Nuplane's reader for the same reason the
+    /// rest of this suite runs the tool out of process: what an operator can inspect is the file.
+    /// </summary>
+    public JsonElement? Recorded(string packageId)
+    {
+        using var state = JsonDocument.Parse(File.ReadAllBytes(StateFile));
+        return state.RootElement.GetProperty("activePackageDescriptorsById").EnumerateObject()
+            .Where(package => string.Equals(package.Name, packageId, StringComparison.OrdinalIgnoreCase))
+            .Select(package => (JsonElement?)package.Value.Clone())
+            .FirstOrDefault();
     }
 
     /// <summary>
@@ -399,10 +437,87 @@ internal sealed class RestoreHost : IDisposable
         File.WriteAllBytes(System.IO.Path.Join(FeedDirectory, $"{packageId}.{version}.nupkg"), [0x00, 0x01, 0x02, 0x03]);
     }
 
-    private static string Settings(string feeds) =>
+    /// <summary>
+    /// The declaration every EF module package ships (spec 172 FR-001), in the fixture module's own copy:
+    /// schema 2, one capability, one option per engine, each carrying that engine's package id and the exact
+    /// single-point version this repository pins.
+    /// </summary>
+    private static string EngineCapabilityDeclaration =>
+        $$"""
+          {
+            "schemaVersion": 2,
+            "capabilities": [
+              {
+                "name": "ef-provider",
+                "description": "The EF Core relational provider engine this module binds at run time.",
+                "options": [
+                  { "name": "Sqlite",     "packageId": "{{EngineId("Sqlite")}}",     "version": "[{{EngineVersion("Sqlite")}}]" },
+                  { "name": "SqlServer",  "packageId": "{{EngineId("SqlServer")}}",  "version": "[{{EngineVersion("SqlServer")}}]" },
+                  { "name": "PostgreSql", "packageId": "{{EngineId("PostgreSql")}}", "version": "[{{EngineVersion("PostgreSql")}}]" },
+                  { "name": "MySql",      "packageId": "{{EngineId("MySql")}}",      "version": "[{{EngineVersion("MySql")}}]" }
+                ]
+              }
+            ]
+          }
+          """;
+
+    /// <summary>
+    /// The assemblies an engine package hands over, taken from this test project's own output because it
+    /// references the same central pin the declaration names. A provider's generated SQL goes through its
+    /// real type mappings, so its ADO runtime travels with it.
+    /// </summary>
+    private static string[] EngineAssemblies(string option) => option switch
+    {
+        "PostgreSql" => [Beside("Npgsql.EntityFrameworkCore.PostgreSQL.dll"), Beside("Npgsql.dll")],
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(option), option, "Only the engine this test project resolves can be packed from its own output.")
+    };
+
+    private static string Beside(string assembly) => System.IO.Path.Join(AppContext.BaseDirectory, assembly);
+
+    /// <summary>
+    /// One <c>.nupkg</c>: a nuspec, the assemblies under <c>lib/net10.0</c>, and — for a package that
+    /// declares one — a package-root <c>nuplane.json</c>, which is exactly where a real module package
+    /// carries it (<c>&lt;None Update="nuplane.json" Pack="true" PackagePath="/" /&gt;</c>).
+    /// </summary>
+    private void Pack(string packageId, string version, IReadOnlyList<string> assemblies, string? capabilities)
+    {
+        Directory.CreateDirectory(FeedDirectory);
+        using var archive = ZipFile.Open(
+            System.IO.Path.Join(FeedDirectory, $"{packageId}.{version}.nupkg"),
+            ZipArchiveMode.Create);
+        using (var nuspec = new StreamWriter(archive.CreateEntry($"{packageId}.nuspec").Open()))
+        {
+            nuspec.Write(
+                $"""
+                 <?xml version="1.0" encoding="utf-8"?>
+                 <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+                   <metadata>
+                     <id>{packageId}</id>
+                     <version>{version}</version>
+                     <authors>Acme</authors>
+                     <description>Packed by the test that needs a feed to restore from.</description>
+                     <dependencies />
+                   </metadata>
+                 </package>
+                 """);
+        }
+
+        if (capabilities is not null)
+        {
+            using var declaration = new StreamWriter(archive.CreateEntry("nuplane.json").Open());
+            declaration.Write(capabilities);
+        }
+
+        foreach (var assembly in assemblies)
+            archive.CreateEntryFromFile(assembly, $"lib/net10.0/{System.IO.Path.GetFileName(assembly)}");
+    }
+
+    private static string Settings(string feeds, string? capabilities = null) =>
         $$"""
           {
             "Nuplane": {
+              {{(capabilities is null ? "" : $"\"Capabilities\": {capabilities},")}}
               "Setup": {
                 "Feeds": {
           {{feeds}}

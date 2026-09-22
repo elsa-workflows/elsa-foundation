@@ -15,6 +15,14 @@ namespace Elsa.Persistence.EntityFramework;
 public static class EfRelationalProviderBinding
 {
     /// <summary>
+    /// The one configuration key a host whose modules arrive as packages selects its engine with (spec 172
+    /// D3). Nuplane's own key, not an Elsa one: every EF module package declares the <c>ef-provider</c>
+    /// capability in its <c>nuplane.json</c>, and Nuplane is what turns the selection into a root package.
+    /// Defined here because this is the type that owns the engine vocabulary the options are named in.
+    /// </summary>
+    public const string CapabilitySelectionKey = "Nuplane:Capabilities:ef-provider";
+
+    /// <summary>
     /// One provider's reflection target: the extension type that carries the <c>Use*</c> overload, the overload's
     /// name, and the NuGet package a host adds to supply both. For all four default packs the engine assembly is
     /// named after its package, so <see cref="PackageId"/> also names the assembly to load. Binding and validation
@@ -271,9 +279,18 @@ public static class EfRelationalProviderBinding
         }
     }
 
+    /// <summary>
+    /// The two shapes a host can have, and the one sentence each needs. A compiled-in host adds the package
+    /// reference; a host whose modules arrive as packages selects the engine with one key and every EF module
+    /// package's <c>nuplane.json</c> turns that into a root (spec 172 D6) — naming the engine as an explicit
+    /// root still works and still wins. Both are stated, because this message is thrown from inside a
+    /// closure that cannot tell which host it is in.
+    /// </summary>
     private static InvalidOperationException EngineMissing(ProviderEngine engine) =>
         new($"assembly '{engine.PackageId}' is not loaded, so '{engine.ExtensionTypeName}.{engine.MethodName}' cannot be bound. " +
             $"Add <PackageReference Include=\"{engine.PackageId}\" /> to the host project. " +
+            $"A host whose modules arrive as packages instead sets {CapabilitySelectionKey} to one of Sqlite, " +
+            "SqlServer, PostgreSql or MySql (or names the engine package as an explicit root in its package closure). " +
             "The module and policy packages stay provider-free.");
 
     private static InvalidOperationException ExtensionMethodMissing(ProviderEngine engine, Type extensionType) =>

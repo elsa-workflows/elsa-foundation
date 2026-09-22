@@ -201,15 +201,121 @@ public sealed class EfProviderAgreementTests
         Assert.Contains("'shells' is required by 'list'.", Details(run.Response));
     }
 
+    /// <summary>
+    /// The second offender source (spec 172 FR-004, ADR 0076 D4): the engine the host's package closure
+    /// selects. <c>--provider</c> stays authoritative, so a selection that does not contain it is reported
+    /// rather than taken for the provider.
+    /// </summary>
+    [Fact]
+    public async Task An_engine_selection_that_does_not_contain_the_provider_is_an_offender()
+    {
+        var run = await PlanAsync("PostgreSql", ["Workflows.Runtime"], Enabled((Runtime, "PostgreSql")), ["Sqlite"]);
+
+        Assert.Equal(EfToolingExitCode.ResolutionFailure, run.ExitCode);
+        Assert.Equal("provider-disagreement", Code(run.Response));
+        var offender = Assert.Single(Details(run.Response));
+        Assert.Contains("'Sqlite'", offender, StringComparison.Ordinal);
+        Assert.Contains(EfProviderAgreement.CapabilityKey, offender, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// One refusal, both sources. The feature offenders and the selection are listed together rather than
+    /// the first one found short-circuiting the rest, for the same reason one feature never speaks for
+    /// another: an operator fixing one and re-running must not discover the second only then.
+    /// </summary>
+    [Fact]
+    public async Task Both_offender_sources_are_listed_in_one_refusal()
+    {
+        var run = await PlanAsync("PostgreSql", ["Workflows.Runtime"], Enabled((Bookmarks, "Sqlite")), ["MySql"]);
+
+        Assert.Equal(EfToolingExitCode.ResolutionFailure, run.ExitCode);
+        var offenders = Details(run.Response);
+        Assert.Equal(2, offenders.Length);
+        Assert.Contains(offenders, offender => offender.Contains(Bookmarks, StringComparison.Ordinal));
+        Assert.Contains(offenders, offender => offender.Contains(EfProviderAgreement.CapabilityKey, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The direction that must not be mistaken for the one above. A multi-engine host selects several
+    /// options on purpose, and the rule is containment, not equality — an alias spelling included, because
+    /// the option names go through the same binding table every other provider name does.
+    /// </summary>
+    [Theory]
+    [InlineData("PostgreSql")]
+    [InlineData("Sqlite", "PostgreSql")]
+    [InlineData("postgres")]
+    public async Task A_selection_that_contains_the_provider_agrees(params string[] selection)
+    {
+        var run = await PlanAsync("PostgreSql", ["Workflows.Runtime"], Enabled((Runtime, "PostgreSql")), selection);
+
+        Assert.Equal(EfToolingExitCode.Success, run.ExitCode);
+    }
+
+    /// <summary>
+    /// No selection is not an agreement and not a disagreement: a host that sets no such key gets its
+    /// engine from a <c>&lt;PackageReference&gt;</c> or an explicitly named root, and there is nothing to
+    /// compare. Absent and empty read the same way, so neither can silently refuse a correct host.
+    /// </summary>
+    [Fact]
+    public async Task An_absent_selection_compares_nothing()
+    {
+        var run = await PlanAsync("PostgreSql", ["Workflows.Runtime"], Enabled((Runtime, "PostgreSql")));
+
+        Assert.Equal(EfToolingExitCode.Success, run.ExitCode);
+    }
+
+    [Fact]
+    public async Task An_empty_selection_compares_nothing()
+    {
+        var run = await PlanAsync("PostgreSql", ["Workflows.Runtime"], Enabled((Runtime, "PostgreSql")), []);
+
+        Assert.Equal(EfToolingExitCode.Success, run.ExitCode);
+    }
+
+    /// <summary>
+    /// The selection is a fact about the host's package closure, not about its shells, so it is compared on
+    /// a host that carries no shell configuration at all — the one case the per-feature check reports as
+    /// <c>not-checked</c>. A check gated on <c>shells</c> would pass exactly this host in silence.
+    /// </summary>
+    [Fact]
+    public async Task A_selection_is_compared_on_a_host_with_no_shell_configuration()
+    {
+        var run = await RunAsync(new PlanRequestBody
+        {
+            Provider = "PostgreSql",
+            Selection = new() { Kind = "modules", Modules = ["Workflows.Runtime"] },
+            CapabilitySelection = ["Sqlite"]
+        });
+
+        Assert.Equal(EfToolingExitCode.ResolutionFailure, run.ExitCode);
+        Assert.Equal("provider-disagreement", Code(run.Response));
+        Assert.Contains(EfProviderAgreement.CapabilityKey, Assert.Single(Details(run.Response)), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <c>list</c> asks for no provider, so it has nothing to compare a selection with — and the contract is
+    /// closed in both directions, so it says so rather than ignoring the field.
+    /// </summary>
+    [Fact]
+    public async Task List_refuses_a_selection_it_could_not_compare()
+    {
+        var run = await RunAsync(new ListRequestBody { Selection = new() { Kind = "all" }, CapabilitySelection = ["Sqlite"] });
+
+        Assert.Equal(EfToolingExitCode.Refusal, run.ExitCode);
+        Assert.Contains("'capabilitySelection' is not accepted by 'list'.", Details(run.Response));
+    }
+
     private static ShellFeatureBody[] Enabled(params (string Feature, string? Provider)[] features) =>
         [.. features.Select(feature => new ShellFeatureBody { Shell = "default", Feature = feature.Feature, Provider = feature.Provider })];
 
-    private static Task<Run> PlanAsync(string provider, string[] modules, ShellFeatureBody[] shells) => RunAsync(new PlanRequestBody
-    {
-        Provider = provider,
-        Selection = new() { Kind = "modules", Modules = modules },
-        Shells = shells
-    });
+    private static Task<Run> PlanAsync(string provider, string[] modules, ShellFeatureBody[] shells, string[]? capabilitySelection = null) =>
+        RunAsync(new PlanRequestBody
+        {
+            Provider = provider,
+            Selection = new() { Kind = "modules", Modules = modules },
+            Shells = shells,
+            CapabilitySelection = capabilitySelection
+        });
 
     private static async Task<Run> RunAsync(object request)
     {
@@ -234,6 +340,7 @@ public sealed class EfProviderAgreementTests
         public string? Provider { get; init; }
         public SelectionBody? Selection { get; init; }
         public IReadOnlyList<ShellFeatureBody>? Shells { get; init; }
+        public IReadOnlyList<string>? CapabilitySelection { get; init; }
     }
 
     private sealed record ListRequestBody
@@ -242,6 +349,7 @@ public sealed class EfProviderAgreementTests
         public string Command { get; init; } = "list";
         public SelectionBody? Selection { get; init; }
         public IReadOnlyList<ShellFeatureBody>? Shells { get; init; }
+        public IReadOnlyList<string>? CapabilitySelection { get; init; }
     }
 
     private sealed record SelectionBody

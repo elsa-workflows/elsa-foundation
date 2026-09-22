@@ -56,6 +56,40 @@ public sealed class ToolingEntryPointTests
     }
 
     /// <summary>
+    /// The one constant the worker and the host's persistence assembly must spell identically while
+    /// referencing nothing of each other (ADR 0076 D1). A drift here would silently read an empty selection
+    /// out of a host that plainly made one, which is the failure that looks like agreement.
+    /// </summary>
+    [Fact]
+    public void The_worker_and_the_persistence_assembly_name_the_same_capability_key()
+    {
+        Assert.Equal(Elsa.Persistence.EntityFramework.EfRelationalProviderBinding.CapabilitySelectionKey, HostCapabilitySelection.Key);
+        Assert.Equal(EfProviderAgreement.CapabilityKey, HostCapabilitySelection.Key);
+    }
+
+    /// <summary>
+    /// The version-skew probe (spec 172 FR-004). The tooling contract refuses an unmapped request property,
+    /// so a build that predates the field must be found before the field is sent — and the refusal that
+    /// follows names the key rather than reporting a malformed request.
+    /// </summary>
+    [Fact]
+    public void A_persistence_build_carrying_the_capability_field_is_detected_and_one_without_it_refuses()
+    {
+        Assert.True(
+            ToolingEntryPoint.Resolve(typeof(EfToolingHost).Assembly, "4.0.0-preview.1", "4.0.0-preview.1").SupportsCapabilitySelection,
+            "This build's own tooling contract carries the field.");
+
+        var refusal = ToolingEntryPoint.CapabilitySelectionUnsupported(["PostgreSql"], "4.0.0-preview.1", "4.0.0-preview.999");
+
+        Assert.Equal(ToolExitCode.ResolutionFailure, refusal.ExitCode);
+        Assert.Equal("host-tooling-capability-unaware", refusal.Code);
+        Assert.Contains(HostCapabilitySelection.Key, refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("'PostgreSql'", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("4.0.0-preview.1", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("4.0.0-preview.999", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The fixture module is a third-party one, and the entry point it is discovered through is the host's
     /// own: nothing about this assembly is known to Elsa (spec 171 User Story 6).
     /// </summary>

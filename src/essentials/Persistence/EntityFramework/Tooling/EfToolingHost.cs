@@ -145,8 +145,22 @@ public static class EfToolingHost
         // The SQLite refusal depends on the command and the provider alone, so it lands before discovery
         // and long before the output directory is touched.
         var provider = command == EfToolingCommands.List ? null : Canonical(request.Provider!);
+
+        // Needs no discovery either — it compares two host facts — so it is decided here and reported in
+        // two places: on its own when the SQLite rule below would otherwise answer a different question,
+        // and beside the per-feature offenders for every other run.
+        var capability = provider is null ? null : EfProviderAgreement.CheckCapabilitySelection(request.CapabilitySelection, provider);
+
         if (command == EfToolingCommands.Script && provider == "Sqlite")
+        {
+            // A host whose closure selects another engine was never a SQLite host, so "SQLite cannot be
+            // scripted idempotently" would answer a question the operator should not have asked. The
+            // disagreement is the actual mistake and outranks the idempotency rule — and only for this
+            // offender source, because it alone is knowable before anything is discovered.
+            if (capability is not null)
+                throw ProviderDisagreement("Sqlite", [capability.ToString()]);
             throw EfToolingRefusal.Usage("sqlite-script-refused", SqliteScriptRefusal);
+        }
 
         // Materialized once: the closure is now read twice — for module declarations and for feature
         // classes — and a caller that handed over a one-shot sequence would otherwise have the second read
@@ -164,7 +178,7 @@ public static class EfToolingHost
 
         // Every input is validated before the first byte of output is written (FR-032), and before any
         // context is built, so a refusal names every offender rather than the module that happened to fail.
-        CheckProviderAgreement(request.Shells, features, ordered, provider!);
+        CheckProviderAgreement(request.Shells, features, ordered, provider!, capability);
         var schema = NormalizeSchema(provider!, request.Schema);
         ValidateProviderSupport(ordered, provider!);
         ValidateEngine(provider!);
@@ -221,6 +235,9 @@ public static class EfToolingHost
             ("engine", request.Engine is not null, script, script),
             ("packages", request.Packages is not null, script, script),
             ("shells", request.Shells is not null, true, request.Selection?.Kind == EfToolingSelection.FromHostKind),
+            // Optional everywhere it is accepted: absent means the host sets no such key, which is not the
+            // same answer as "the selection agrees" and must not be required into looking like one.
+            ("capabilitySelection", request.CapabilitySelection is not null, !list, false),
             ("connection", request.Connection is not null, opensDatabase, opensDatabase)
         ];
 
@@ -359,33 +376,46 @@ public static class EfToolingHost
     }
 
     /// <summary>
-    /// The per-feature provider-agreement check (FR-035–FR-037, D4). It runs whenever the host's shell
-    /// configuration was found, under any selector, and refuses listing <i>every</i> offender: one feature
-    /// of a module agreeing never speaks for another feature of the same module.
+    /// The provider-agreement check (FR-035–FR-037, spec 172 FR-004, D4), over both offender sources at
+    /// once. The per-feature half runs whenever the host's shell configuration was found, under any
+    /// selector, and lists <i>every</i> offender: one feature of a module agreeing never speaks for another
+    /// feature of the same module. The capability half runs whether or not that configuration was found —
+    /// it is a fact about the host's package closure, not about its shells — so a host with no
+    /// <c>shells.json</c> is still refused when its closure selects a different engine.
     /// </summary>
     private static void CheckProviderAgreement(
         IReadOnlyList<EfToolingShellFeature>? shells,
         IReadOnlyList<EfFeatureModuleUsage> features,
         IReadOnlyList<EfModuleDescriptor> modules,
-        string provider)
+        string provider,
+        EfCapabilitySelectionDisagreement? capability)
     {
-        if (shells is null)
+        var offenders = shells is null
+            ? []
+            : EfProviderAgreement.Check(
+                shells.Select(entry => (Shell: entry.Shell ?? "", Feature: entry.Feature ?? "", entry.Provider)),
+                features,
+                modules.Select(descriptor => descriptor.Name),
+                provider);
+        if (offenders.Count == 0 && capability is null)
             return;
 
-        var offenders = EfProviderAgreement.Check(
-            shells.Select(entry => (Shell: entry.Shell ?? "", Feature: entry.Feature ?? "", entry.Provider)),
-            features,
-            modules.Select(descriptor => descriptor.Name),
-            provider);
-        if (offenders.Count == 0)
-            return;
-
-        throw EfToolingRefusal.Resolution(
-            "provider-disagreement",
-            $"--provider is authoritative and {offenders.Count} enabled feature(s) of the selected modules are " +
-            $"configured for a different provider than {provider}. No other provider was tried, and nothing was written.",
-            [.. offenders.Select(offender => offender.ToString())]);
+        throw ProviderDisagreement(
+            provider,
+            [.. offenders.Select(offender => offender.ToString()), .. capability is null ? [] : new[] { capability.ToString() }]);
     }
+
+    /// <summary>
+    /// The one refusal both offender sources produce, so a run refused for either reason carries the same
+    /// code and the same exit code (D4).
+    /// </summary>
+    private static EfToolingRefusal ProviderDisagreement(string provider, IReadOnlyList<string> offenders) =>
+        EfToolingRefusal.Resolution(
+            "provider-disagreement",
+            $"--provider is authoritative and {offenders.Count} of this host's own provider decisions disagree with " +
+            $"{provider} — an enabled feature of a selected module, or the engine its package closure selects. " +
+            "No other provider was tried, and nothing was written.",
+            offenders);
 
     private static void ValidateProviderSupport(IReadOnlyList<EfModuleDescriptor> modules, string provider)
     {
