@@ -179,9 +179,11 @@ through PR 80) shipped `IPackageActivationGate`
 `Convergence:Manifest:Enabled` now has an effect. Spec 171's research item R4 — whether Nuplane's
 offline mode could serve as the worker's read path — is settled: offline mode only shapes feed
 candidate selection and does not gate reconciliation; a reconcile pass always rewrites
-`store-state.json` and can extract into or delete under the install root, so the worker must never
-reconcile; and the delivered `LoadFromStateAsync` is read-only and the only variant with grouping
-parity with the host, which is why D1 below calls it by name.
+`store-state.json` and extracts into the install root, so the worker must never reconcile unasked; and
+the delivered `LoadFromStateAsync` is read-only and the only variant with grouping parity with the
+host, which is why D1 below calls it by name. R5 — whether the tool may ever restore packages itself —
+was settled separately on 2026-09-21 and is D10's one opt-in exception, built on the host-free
+`NuplaneRestore` delivered upstream as `0.0.11-preview.84` (valence-works/nuplane#82).
 
 ## Decision
 
@@ -195,9 +197,10 @@ active package set through the delivered
 `Nuplane.Loading.NuplaneHostIntegratedLoader.LoadFromStateAsync`
 (`nuplane: src/Nuplane.Loading/NuplaneHostIntegratedLoader.cs:151`) — already present in the host's
 closure — instead of reimplementing assembly resolution; for a host that carries everything in its
-own deps file, it needs nothing extra. The worker never reconciles, because a reconcile pass always
-rewrites `store-state.json` and can extract into or delete under the install root — unacceptable for a
-process sharing the host's directories. It calls `LoadFromStateAsync` at most once per process: the
+own deps file, it needs nothing extra. The worker never reconciles on its own initiative, because a
+reconcile pass always rewrites `store-state.json` and extracts into the install root — unacceptable for
+a process sharing the host's directories unless the operator asked for it, which is what D10's opt-in
+`--restore` exception covers and nothing else does. It calls `LoadFromStateAsync` at most once per process: the
 load is irreversible for the process lifetime, which fits the short-lived worker this decision already
 chose but rules out a long-running one. It passes no `TargetFrameworkOverride`, because the worker
 already runs on the host's own runtimeconfig; RID-specific assets follow the worker's own runtime
@@ -537,13 +540,30 @@ same way `Elsa.Modularity.Core` does.
 
 Every command resolves the active package set already on disk: `store-state.json` for a Nuplane
 host, or `--packages <dir>` for an override directory carrying no state file, honoring the
-`.nuplane-ready` marker and skipping `.tmp/` either way. No command reconciles or fetches from a feed;
-an opt-in `--restore` remains an open research question (spec 171 research item R5) and nothing in
-this ADR adds one. Spec 171 research item R4 turned this from a design default into a hard rule for
+`.nuplane-ready` marker and skipping `.tmp/` either way. No command reconciles or fetches from a feed
+by default. Spec 171 research item R4 turned this from a design default into a hard rule for
 reconciliation specifically: a reconcile pass always rewrites `store-state.json`
-(`nuplane: src/Nuplane/Reconciliation/Middleware/CleanupMiddleware.cs:36`) and can extract into or
-delete under the install root (`nuplane: src/Nuplane/Feeds/PackageInstallStore.cs:79-142`), so no
-command may reconcile against directories shared with a host.
+(`nuplane: src/Nuplane/Reconciliation/Middleware/CleanupMiddleware.cs:36`) and extracts into the
+install root (`nuplane: src/Nuplane/Feeds/PackageInstallStore.cs:79-142`), so no command may reconcile
+against directories shared with a host on its own initiative. Re-read at `0.0.11-preview.84`
+(`e49642e`), that write set is narrower than this ADR first stated: one pass writes the state file,
+the store lock file beside it, and each acquired package plus a `.tmp/` staging directory under the
+install root, and it **deletes no installed package** — cleanup records decisions and removes nothing,
+and the only deletes are the pass's own staging directory and an extraction carrying no
+`.nuplane-ready` marker, which is not an installed package at all.
+
+**The one exception is opt-in and explicit.** The owner decided on 2026-09-21 (spec 171 research item
+R5, [#1927](https://github.com/elsa-workflows/elsa-foundation/issues/1927)) that the tool may touch the
+network when, and only when, the operator asks it to, with a `--restore` flag that is off by default
+and implied by nothing. It acts only on a host that records no package set at all, refuses any desired
+request that is not a single-point version pin, refuses a feed that declares credentials by name,
+refuses when it cannot take Nuplane's store lock — which is the whole of its running-host defense —
+and refuses a cycle that did not install everything asked for. Because it restores pins rather than
+ranges, the artifact that follows is byte-identical to a started host's for those same pins, so
+`migration-plan.json` records nothing about the restore, `script-check` needs no special case, and the
+frozen `EfToolingHost` contract is untouched. Spec 171 FR-083 to FR-086 specify it. What this decision
+still rules out is unchanged: an *implicit* restore, triggered by an empty install root or a stale
+state file rather than by the operator.
 
 Reason: the issue asks the tool to avoid silently falling back to a different provider or migration
 set, and an implicit restore is the same category of surprise applied to packages instead of
@@ -738,3 +758,4 @@ Costs and risks:
 | 2026-09-20 | Upstream U1–U4 delivered | valence-works/nuplane#73–#76 delivered through PRs 79, 81, 80, 78 and published as `0.0.11-preview.83` (`e93ad89`); R4 settled (spec 171 research.md); D1, D10, D12, D13 and Consequences updated to the delivered state; no decision changed; the remaining dependency is the Elsa pin bump tracked by [#1893](https://github.com/elsa-workflows/elsa-foundation/issues/1893); U5 (valence-works/nuplane#77) still open. |
 | 2026-09-21 | ADR 0076 accepted; design implemented | Elsa slices 1–10 merged (PRs 1896, 1905, 1906, 1907, 1908, 1909, 1911, 1912, 1915, 1920); the Elsa `Directory.Packages.props` pin bump to `0.0.11-preview.83` merged as PR 1903 (tracked by [#1893](https://github.com/elsa-workflows/elsa-foundation/issues/1893)); the optional slice 11 ([#1881](https://github.com/elsa-workflows/elsa-foundation/issues/1881)) and research item R5 (spec 171 research.md) remain open. |
 | 2026-09-22 | Slice 11 delivered | The upstream generator change (elsa-workflows/elsa-specifications#1, PR 2) published `Elsa.Specifications.PackageManifest.Generator` `0.0.1-preview.8`, adding the source-included `ManifestExtensionAttribute`; every module assembly's `[EfModule]` name is now mirrored by a sibling `[ManifestExtension("efModules", name)]`, so `elsa-package.json` lists a module's EF module name(s) under `extensions.efModules` (a plain string for one declaration, a sorted array for two or more) without hand-editing. `EfModuleDescriptorTests` guards the two declarations against drift. Research item R5 (spec 171 research.md) remains open. |
+| 2026-09-22 | R5 resolved; D10 gains one opt-in exception | The owner decided on 2026-09-21 that the tool may touch the network when, and only when, the operator asks it to. Delivered as `--restore` ([#1927](https://github.com/elsa-workflows/elsa-foundation/issues/1927), spec 171 FR-083 to FR-086): off by default and implied by nothing, acting only on a host that records no package set, single-point pins only, feeds with credentials refused by name, and Nuplane's store lock as the only running-host detection. It builds on `NuplaneRestore` (valence-works/nuplane#82), released as `0.0.11-preview.84` and pinned in Elsa by PR 1932 — so D12's rule held again: the host-free "reconcile, do not load" entry point was filed and fixed upstream rather than composed in Elsa, where it would have meant encoding six pieces of Nuplane's internals. No decision is changed; D10's implicit-restore rejection stands, and its write-set prose is narrowed to what `e49642e` actually does (cleanup deletes nothing). Slice 11 ([#1881](https://github.com/elsa-workflows/elsa-foundation/issues/1881)) was delivered the same day as PR 1934. |
