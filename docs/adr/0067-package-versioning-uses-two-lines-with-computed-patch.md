@@ -3,7 +3,7 @@ status: proposed
 date: 2026-08-07
 amended: 2026-09-22
 decision_context: FR-1 discussion on issue #1144, agreed by Joey Barten, Sipke Schoorstra and Frans van Ek
-amendment_context: patch derivation changed from commit height to last-published state after the rename hazard was measured; awaiting the same three-party agreement as the original
+amendment_context: patch derivation changed from commit height to last-published state after the rename hazard was measured; agreed on PR #1948 by Frans van Ek, Joey Barten and Sipke Schoorstra, the same three who agreed the original
 ---
 
 # Package versioning uses two version lines with a computed patch digit
