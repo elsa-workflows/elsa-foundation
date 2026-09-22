@@ -166,9 +166,14 @@ the closure, and regenerate it on every pin bump rather than hand-editing it; a 
 tens of entries.
 
 1. Write a throwaway project with one `PackageReference` per root at the pinned version. Include the EF
-   provider (`Npgsql.EntityFrameworkCore.PostgreSQL` or equivalent) if you use EF persistence: no Elsa
-   package depends on it, because `EfRelationalProviderBinding` binds it reflectively by
-   assembly-qualified type name, so nothing declares it and it must be named by hand.
+   provider (`Npgsql.EntityFrameworkCore.PostgreSQL` or equivalent) if you use EF persistence, so the
+   restore below resolves its closure — but you do **not** have to list the engine itself as a feed
+   root. Every EF persistence module package declares an `ef-provider` capability in its own
+   `nuplane.json`, one option per engine it can bind, each pinned to the version Elsa built against; the
+   host picks one option with `Nuplane:Capabilities:ef-provider` and Nuplane acquires that engine
+   package as a root of its own, with the rest of its closure following as ordinary dependencies. Naming
+   the engine package explicitly in a feed's `IncludePatterns` still works, and wins when both are
+   present. See [Selecting the EF provider engine](#selecting-the-ef-provider-engine).
 
 2. Give it a `NuGet.config` naming the same feeds the host will use, then let NuGet resolve the real
    closure — including the conditional and framework-specific edges a nuspec walk gets wrong:
@@ -189,6 +194,53 @@ tens of entries.
    **Then put every `Elsa.*` id back.** `Elsa.Api.AspNetCore` is in the host's `deps.json`, so a drop-list
    derived mechanically would prune the one Elsa package that is in there — the rule 2 shape again, and it
    surfaces as a `FeatureNotFoundException` naming a *feature* rather than the missing package.
+
+### Selecting the EF provider engine
+
+No Elsa package depends on an EF Core provider engine: `EfRelationalProviderBinding` binds it
+reflectively by assembly-qualified type name, so no nuspec edge names it and the dependency walk never
+acquires it. Every EF persistence module package therefore declares the choice instead, as a capability
+in its package-root `nuplane.json` — one option per engine it can bind, each carrying that engine's
+package id and the exact version Elsa built against. The host makes the choice with one key:
+
+```json
+"Nuplane": {
+  "Capabilities": { "ef-provider": "PostgreSql" }
+}
+```
+
+The option names are the same four `--provider` uses: `Sqlite`, `SqlServer`, `PostgreSql`, `MySql`. The
+environment-variable form is `Nuplane__Capabilities__ef-provider=PostgreSql`.
+
+- **Several engines.** A host that runs two on purpose selects both: `"PostgreSql,Sqlite"`. Each selected
+  option becomes its own root.
+- **A different patch.** The object form replaces the version the module declared, and can steer the
+  injected root at one feed: `{ "Option": "PostgreSql", "Version": "[10.0.1]", "Feed": "local-packages" }`.
+  A feed is a host fact, so it is the only place one can be named — package metadata cannot.
+- **Naming the engine by hand still works, and wins.** When one of the option packages is already an
+  explicit root — an include pattern, a directory-feed drop, a convergence manifest — the capability is
+  satisfied by that root, nothing is injected, and the only difference is one Information log line. If
+  that explicit root's version cannot satisfy the option's declared range, the declaring module is
+  refused (`capability-conflict`) naming both requests, rather than bound against a version it cannot
+  use; the root the operator asked for is still applied.
+- **No selection is a refusal, never a guess.** A module that declares the capability, with no selection
+  and no option package as an explicit root, fails resolution with stage `capability-unselected`, naming
+  the capability, every declared option and this key. The cycle is degraded and
+  `Reconciliation:StartupFailurePolicy` decides what that means for startup. Nuplane never picks an
+  engine, and the metadata has no default: a silently chosen engine surfaces much later as a reflection
+  error at shell load.
+
+In the cycle the injected engine is an ordinary root: acquired from a trusted feed under the same retry
+policy, evaluated against the lock file, applied in the same transaction, and recorded in
+`store-state.json` with `PackageRole = Root` and `SourceName = capability:ef-provider=PostgreSql`, which
+is what says the selection is where it came from. Changing the selection changes the graph, so the next
+cycle reconciles the previous engine out of the desired set and the new one in.
+
+**`--provider` stays authoritative** (ADR 0076 D4). `dotnet elsa persistence` reads this key out of the
+host's own `appsettings.json` plus its `--environment` overlay, and when the selection does not contain
+the engine `--provider` names, the command exits 3 and lists the selection beside any per-feature
+offenders. It never takes the selection for the provider and never falls back. A multi-engine selection
+that contains `--provider` agrees.
 
 ### Finding the root package for a feature
 
@@ -230,6 +282,19 @@ rather than hand-maintaining hashes:
 
 `Generate` writes the lock on first reconcile; `Enforce` and `Strict` then refuse a package whose
 hash does not match.
+
+An engine injected by [`Nuplane:Capabilities:ef-provider`](#selecting-the-ef-provider-engine) is pinned
+without appearing in any `IncludePatterns`: each module's declaration carries the exact single-point
+version Elsa built against, so the injected root is a single-point request by construction, and the
+`Version` override on the key replaces it with another one. That is what keeps
+`dotnet elsa persistence --restore` — which refuses anything naming more than one version — able to
+restore a host that never lists its engine. A contributed request's pinned-ness can only be judged
+inside the cycle, because the module declaring it has to be acquired before its declaration can be read,
+so an unpinned one is not the usual "nothing was resolved" skip: the cycle runs, refuses the
+contribution before fetching it (`capability-unpinned`), and the CLI reports it as
+`restore-capability-unresolved` naming the declaring module and the key. The injected root is subject to
+the lock file like any other root, and is never subject to `Nuplane:HostProvidedPackages`, which is
+consulted only for dependencies.
 
 Nuplane also models a desired manifest (`Nuplane:Convergence:Manifest` — a file of
 `{ Id, Version, SourceHint, Sha512 }` entries). Since `0.0.11-preview.83`
