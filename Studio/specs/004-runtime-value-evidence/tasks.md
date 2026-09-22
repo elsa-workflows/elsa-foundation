@@ -14,7 +14,7 @@
 
 - [x] T001 Verify current Studio worktree status and active feature metadata in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/.specify/feature.json`
 - [x] T002 [P] Verify Elsa foundation backend worktree status in `/Users/sipke/Projects/Elsa/elsa-foundation`
-- [x] T003 [P] Review current activity inspection rendering code in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx`
+- [x] T003 [P] Review current activity inspection rendering code in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx`
 - [x] T004 [P] Review current runtime payload capture policy code in `/Users/sipke/Projects/Elsa/elsa-foundation/src/Elsa/Workflows/Runtime/Core/Models/RuntimePayloadCapturePolicy.cs` and `/Users/sipke/Projects/Elsa/elsa-foundation/src/Elsa/Workflows/Runtime/Services/DefaultRuntimePayloadCapturePolicy.cs`
 
 ---
@@ -25,8 +25,8 @@
 
 - [x] T005 Add `DiagnosticSnapshot` to `RuntimePayloadCaptureMode` and preserve level ordering in `/Users/sipke/Projects/Elsa/elsa-foundation/src/Elsa/Workflows/Runtime/Core/Models/RuntimePayloadCapturePolicy.cs`
 - [x] T006 [P] Add Diagnostic Snapshot node models and snapshot limit options in `/Users/sipke/Projects/Elsa/elsa-foundation/src/Elsa/Workflows/Runtime/Core/Models/DiagnosticSnapshot.cs`
-- [x] T007 [P] Add Studio Diagnostic Snapshot TypeScript union types in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/workflowTypes.ts`
-- [x] T008 Add runtime diagnostics settings DTOs and evidence-level types in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/workflowTypes.ts`
+- [x] T007 [P] Add Studio Diagnostic Snapshot TypeScript union types in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes.ts`
+- [x] T008 Add runtime diagnostics settings DTOs and evidence-level types in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes.ts`
 - [x] T009 [P] Add backend tests for capture mode ordering and Diagnostic Snapshot model serialization in `/Users/sipke/Projects/Elsa/elsa-foundation/tests/Elsa/Workflows/Runtime/Tests/RuntimeDiagnosticSnapshotTests.cs`
 
 **Checkpoint**: Shared vocabulary exists for backend capture, API projection, and Studio rendering.
@@ -44,7 +44,7 @@
 - [x] T010 [P] [US1] Add backend snapshot bounds/redaction tests in `/Users/sipke/Projects/Elsa/elsa-foundation/tests/Elsa/Workflows/Runtime/Tests/RuntimeDiagnosticSnapshotTests.cs`
 - [x] T011 [P] [US1] Update backend default policy tests in `/Users/sipke/Projects/Elsa/elsa-foundation/tests/Elsa/Workflows/Runtime/Tests/RuntimeDiagnosticsHistoryIncidentContractTests.cs`
 - [x] T012 [P] [US1] Update backend activity execution capture tests in `/Users/sipke/Projects/Elsa/elsa-foundation/tests/Elsa/Activities/Runtime/Tests/WorkflowInvokeActivitySchedulerWorkHandlerTests.cs`
-- [x] T013 [P] [US1] Add Studio rendering tests for input/output Diagnostic Snapshot evidence in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/workflowActivityExecutionDetails.test.tsx`
+- [x] T013 [P] [US1] Add Studio rendering tests for input/output Diagnostic Snapshot evidence in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowActivityExecutionDetails.test.tsx`
 
 ### Implementation for User Story 1
 
@@ -52,9 +52,9 @@
 - [x] T015 [US1] Inject and use Diagnostic Snapshot generation for activity input/output capture in `/Users/sipke/Projects/Elsa/elsa-foundation/src/Elsa/Activities/Runtime/Services/ActivityOutputPublisher.cs`
 - [x] T016 [US1] Apply Diagnostic Snapshot generation in resume/parent activity capture paths in `/Users/sipke/Projects/Elsa/elsa-foundation/src/Elsa/Activities/Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs` and `/Users/sipke/Projects/Elsa/elsa-foundation/src/Elsa/Activities/Runtime/Services/WorkflowParentActivityCompletionSchedulerWorkHandler.cs`
 - [x] T017 [US1] Project Diagnostic Snapshot payloads through the activity execution inspection API view in `/Users/sipke/Projects/Elsa/elsa-foundation/src/Elsa/Workflows/Runtime/Api/Models/WorkflowExecutionViews.cs`
-- [x] T018 [US1] Update Studio activity inspection types for `snapshot`, `state`, input subjects, and output subjects in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/workflowTypes.ts`
-- [x] T019 [US1] Replace input-only payload rendering with input/output evidence sections and Diagnostic Snapshot tree rendering in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx`
-- [x] T020 [US1] Add token-governed styles for snapshot tree, markers, and compact evidence states in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/styles.css`
+- [x] T018 [US1] Update Studio activity inspection types for `snapshot`, `state`, input subjects, and output subjects in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes.ts`
+- [x] T019 [US1] Replace input-only payload rendering with input/output evidence sections and Diagnostic Snapshot tree rendering in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx`
+- [x] T020 [US1] Add token-governed styles for snapshot tree, markers, and compact evidence states in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/essentials/Elsa.Studio.Workflows/Client/src/styles.css`
 
 **Checkpoint**: User Story 1 is functional and independently testable.
 
@@ -69,17 +69,17 @@
 ### Tests for User Story 2
 
 - [x] T021 [P] [US2] Add backend settings API tests in `/Users/sipke/Projects/Elsa/elsa-foundation/tests/Elsa/Workflows/Runtime/Tests/RuntimeDiagnosticsSettingsApiTests.cs`
-- [x] T022 [P] [US2] Add Studio settings API hook tests in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/runtimeDiagnosticsSettings.test.tsx`
-- [x] T023 [P] [US2] Add Studio route/module registration tests for runtime diagnostics settings in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/module.test.tsx`
+- [x] T022 [P] [US2] Add Studio settings API hook tests in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/runtimeDiagnosticsSettings.test.tsx`
+- [x] T023 [P] [US2] Add Studio route/module registration tests for runtime diagnostics settings in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/module.test.tsx`
 
 ### Implementation for User Story 2
 
 - [x] T024 [US2] Add backend runtime diagnostics settings models and effective policy resolver in `/Users/sipke/Projects/Elsa/elsa-foundation/src/Elsa/Workflows/Runtime/Core/Models/RuntimeDiagnosticsSettings.cs`
 - [x] T025 [US2] Add backend runtime diagnostics settings endpoint handlers in `/Users/sipke/Projects/Elsa/elsa-foundation/src/Elsa/Workflows/Runtime/Api/Handlers`
-- [x] T026 [US2] Add Studio runtime diagnostics settings query/mutation helpers in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/api/workflows.ts`
-- [x] T027 [US2] Add Workflows runtime diagnostics settings page in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/RuntimeDiagnosticsSettingsPage.tsx`
-- [x] T028 [US2] Register the Workflows runtime diagnostics route and nav item in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/module.tsx`
-- [x] T029 [US2] Add token-governed settings page styles in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/styles.css`
+- [x] T026 [US2] Add Studio runtime diagnostics settings query/mutation helpers in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/essentials/Elsa.Studio.Workflows/Client/src/api/workflows.ts`
+- [x] T027 [US2] Add Workflows runtime diagnostics settings page in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/essentials/Elsa.Studio.Workflows/Client/src/RuntimeDiagnosticsSettingsPage.tsx`
+- [x] T028 [US2] Register the Workflows runtime diagnostics route and nav item in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/essentials/Elsa.Studio.Workflows/Client/src/module.tsx`
+- [x] T029 [US2] Add token-governed settings page styles in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/essentials/Elsa.Studio.Workflows/Client/src/styles.css`
 
 **Checkpoint**: User Story 2 is functional and independently testable.
 
@@ -95,14 +95,14 @@
 
 - [x] T030 [P] [US3] Add backend Host Policy cap and Full Payload gating tests in `/Users/sipke/Projects/Elsa/elsa-foundation/tests/Elsa/Workflows/Runtime/Tests/RuntimeDiagnosticsSettingsApiTests.cs`
 - [x] T031 [P] [US3] Add backend sensitive-name redaction tests in `/Users/sipke/Projects/Elsa/elsa-foundation/tests/Elsa/Workflows/Runtime/Tests/RuntimeDiagnosticSnapshotTests.cs`
-- [x] T032 [P] [US3] Add Studio redaction, truncation, and permission-hidden rendering tests in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/workflowActivityExecutionDetails.test.tsx`
+- [x] T032 [P] [US3] Add Studio redaction, truncation, and permission-hidden rendering tests in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowActivityExecutionDetails.test.tsx`
 
 ### Implementation for User Story 3
 
 - [x] T033 [US3] Enforce Host Policy caps and Full Payload permission state in `/Users/sipke/Projects/Elsa/elsa-foundation/src/Elsa/Workflows/Runtime/Core/Models/RuntimeDiagnosticsSettings.cs`
 - [x] T034 [US3] Enforce sensitive-source, sensitive-type, and sensitive-name redaction markers in `/Users/sipke/Projects/Elsa/elsa-foundation/src/Elsa/Workflows/Runtime/Services/DefaultDiagnosticSnapshotFactory.cs`
-- [x] T035 [US3] Render redaction, truncation, unsupported, error, malformed, and permission-hidden nodes in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx`
-- [x] T036 [US3] Disable or cap Full Payload controls and show limitation reasons in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/RuntimeDiagnosticsSettingsPage.tsx`
+- [x] T035 [US3] Render redaction, truncation, unsupported, error, malformed, and permission-hidden nodes in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx`
+- [x] T036 [US3] Disable or cap Full Payload controls and show limitation reasons in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/essentials/Elsa.Studio.Workflows/Client/src/RuntimeDiagnosticsSettingsPage.tsx`
 
 **Checkpoint**: User Story 3 is functional and independently testable.
 
@@ -116,13 +116,13 @@
 
 ### Tests for User Story 4
 
-- [x] T037 [P] [US4] Add Studio Runtime Payload Reference fixture rendering tests in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/workflowActivityExecutionDetails.test.tsx`
+- [x] T037 [P] [US4] Add Studio Runtime Payload Reference fixture rendering tests in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowActivityExecutionDetails.test.tsx`
 - [x] T038 [P] [US4] Add backend test proving generic snapshot capture does not emit payload reference leaves in `/Users/sipke/Projects/Elsa/elsa-foundation/tests/Elsa/Workflows/Runtime/Tests/RuntimeDiagnosticSnapshotTests.cs`
 
 ### Implementation for User Story 4
 
-- [x] T039 [US4] Add Runtime Payload Reference Diagnostic Snapshot leaf type to `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/workflowTypes.ts`
-- [x] T040 [US4] Render Runtime Payload Reference leaves as safe unavailable links/actions in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx`
+- [x] T039 [US4] Add Runtime Payload Reference Diagnostic Snapshot leaf type to `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes.ts`
+- [x] T040 [US4] Render Runtime Payload Reference leaves as safe unavailable links/actions in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx`
 - [x] T041 [US4] Document deferred reference provider/resolver issue seeds in `/Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/specs/004-runtime-value-evidence/spec.md`
 
 **Checkpoint**: User Story 4 is functional and independently testable with fixtures.
@@ -170,7 +170,7 @@
 ```bash
 Task: "Add backend snapshot bounds/redaction tests in /Users/sipke/Projects/Elsa/elsa-foundation/tests/Elsa/Workflows/Runtime/Tests/RuntimeDiagnosticSnapshotTests.cs"
 Task: "Update backend default policy tests in /Users/sipke/Projects/Elsa/elsa-foundation/tests/Elsa/Workflows/Runtime/Tests/RuntimeDiagnosticsHistoryIncidentContractTests.cs"
-Task: "Add Studio rendering tests for input/output Diagnostic Snapshot evidence in /Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/workflowActivityExecutionDetails.test.tsx"
+Task: "Add Studio rendering tests for input/output Diagnostic Snapshot evidence in /Users/sipke/.codex/worktrees/3255/elsa-foundation-studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowActivityExecutionDetails.test.tsx"
 ```
 
 ## Implementation Strategy

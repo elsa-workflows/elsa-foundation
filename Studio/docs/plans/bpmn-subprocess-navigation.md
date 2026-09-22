@@ -100,7 +100,7 @@ already receives.
 
 ## Test strategy
 
-Unit tests live in `src/Elsa.Studio.Workflows/Client/src/__tests__/`.
+Unit tests live in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/`.
 
 **`bpmnAdapter.test.ts`** (extend)
 
@@ -157,7 +157,7 @@ and worth adding.
 
 ```
 pnpm typecheck
-npx eslint src/Elsa.Studio.Workflows/Client/src
+npx eslint src/essentials/Elsa.Studio.Workflows/Client/src
 pnpm --filter @elsa-workflows/studio-workflows test
 pnpm check:bundle:workflows
 ```

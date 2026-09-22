@@ -36,7 +36,7 @@ Runtime diagnostics should capture bounded Diagnostic Snapshots for workflow and
 
 - **Modular UI contract**: Pass. The Studio slice stays inside the Workflows module and reuses Studio endpoint context, TanStack Query hooks, Workflows page patterns, inspector sections, and token-governed module CSS.
 - **Workbench pattern fit**: Pass. Runtime value evidence is a diagnostics/logs extension of the existing workflow run details master/detail workbench and Activity inspector.
-- **Typography and token discipline**: Pass. New CSS must extend `src/Elsa.Studio.Workflows/Client/src/styles.css` using `--studio-*` surface, text, border, focus, and status tokens.
+- **Typography and token discipline**: Pass. New CSS must extend `src/essentials/Elsa.Studio.Workflows/Client/src/styles.css` using `--studio-*` surface, text, border, focus, and status tokens.
 - **Accessible interaction**: Pass. Snapshot trees and settings controls must support keyboard expansion, focus visibility, disabled/loading/error states, labels, and screen-reader readable marker text.
 - **Real-screen proof**: Pass. Proof screen is `WorkflowInstanceDetailsPage` Activity tab with a selected completed activity, plus the Workflows runtime diagnostics settings page/section.
 
@@ -61,7 +61,7 @@ specs/004-runtime-value-evidence/
 ### Source Code (repository root)
 
 ```text
-src/Elsa.Studio.Workflows/
+src/essentials/Elsa.Studio.Workflows/
 ├── Client/src/
 │   ├── api/workflows.ts
 │   ├── workflowTypes.ts
@@ -74,7 +74,7 @@ src/Elsa.Studio.Workflows/
 │       └── module.test.tsx
 └── Elsa.Studio.Workflows.csproj
 
-src/Elsa.Studio.Web/
+src/apps/Elsa.Studio.Web/
 ├── Client/src/app/runtime.ts
 └── Program.cs
 

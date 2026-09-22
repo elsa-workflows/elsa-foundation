@@ -101,10 +101,10 @@ specs/094-activity-definition-graph-authoring/
 ### Studio Source
 
 ```text
-src/Elsa.Studio.Web/Client/src/sdk/
+src/apps/Elsa.Studio.Web/Client/src/sdk/
 └── index.ts
 
-src/Elsa.Studio.Workflows/Client/src/
+src/essentials/Elsa.Studio.Workflows/Client/src/
 ├── ActivityDefinitionCreateDialog.tsx
 ├── ActivityDefinitionDraftEditor.tsx
 ├── ActivityDefinitionContractEditor.tsx

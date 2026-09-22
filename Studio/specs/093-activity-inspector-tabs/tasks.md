@@ -18,7 +18,7 @@
 
 **Purpose**: Establish focused test fixtures without changing production behavior.
 
-- [x] T001 Create a reusable controlled activity-Inspector render/rerender harness and representative ordinary, intrinsic, variable-supporting, slot-owning, and reusable activity fixtures in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityInspectorTabs.test.tsx`
+- [x] T001 Create a reusable controlled activity-Inspector render/rerender harness and representative ordinary, intrinsic, variable-supporting, slot-owning, and reusable activity fixtures in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityInspectorTabs.test.tsx`
 - [x] T002 [P] Add an activity-Inspector browser fixture mode with long input content, output captures, scoped variables, slots, details, version data, availability context, and outer-panel controls in `tests/browser/src.tsx`
 
 **Checkpoint**: Test fixtures compile and can express every spec scenario; production UI remains unchanged.
@@ -29,9 +29,9 @@
 
 **Purpose**: Establish the shared inner navigation and panel semantics required by all stories.
 
-- [x] T003 Write failing tests for text-only tab labels, exact core order, tab/tabpanel ID linkage, selected state, roving tabindex, and Arrow/Home/End navigation in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityInspectorTabs.test.tsx`
-- [x] T004 Implement the activity Inspector tab ID type, ordered availability derivation, text-only tablist, shared keyboard behavior, and linked mounted tabpanels in `src/Elsa.Studio.Workflows/Client/src/workflow-editor/InspectorPanel.tsx`
-- [x] T005 Add token-driven single-row overflow and tab/panel shell styles without fixed-context or final body-scrolling behavior in `src/Elsa.Studio.Workflows/Client/src/styles.css`
+- [x] T003 Write failing tests for text-only tab labels, exact core order, tab/tabpanel ID linkage, selected state, roving tabindex, and Arrow/Home/End navigation in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityInspectorTabs.test.tsx`
+- [x] T004 Implement the activity Inspector tab ID type, ordered availability derivation, text-only tablist, shared keyboard behavior, and linked mounted tabpanels in `src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/InspectorPanel.tsx`
+- [x] T005 Add token-driven single-row overflow and tab/panel shell styles without fixed-context or final body-scrolling behavior in `src/essentials/Elsa.Studio.Workflows/Client/src/styles.css`
 
 **Checkpoint**: A selected activity exposes an accessible inner tab shell with mounted, linked panels and no content migration yet.
 
@@ -45,13 +45,13 @@
 
 ### Tests
 
-- [x] T006 [US1] Write failing tests for Inputs as the initial tab, no duplicate Properties heading, the no-configurable-inputs state, and intrinsic destination controls remaining in Inputs in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityInspectorTabs.test.tsx`
-- [x] T007 [P] [US1] Update the production Input-reference Inspector test to activate Inputs through the controlled tab contract while preserving current authoring behavior in `src/Elsa.Studio.Workflows/Client/src/__tests__/inputReferenceUi.test.tsx`
+- [x] T006 [US1] Write failing tests for Inputs as the initial tab, no duplicate Properties heading, the no-configurable-inputs state, and intrinsic destination controls remaining in Inputs in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityInspectorTabs.test.tsx`
+- [x] T007 [P] [US1] Update the production Input-reference Inspector test to activate Inputs through the controlled tab contract while preserving current authoring behavior in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/inputReferenceUi.test.tsx`
 
 ### Implementation
 
-- [x] T008 [US1] Add narrowly scoped heading and empty-label presentation options while preserving standalone defaults in `src/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel.tsx`
-- [x] T009 [US1] Route ordinary and intrinsic property editors into the Inputs tab with the agreed presentation options in `src/Elsa.Studio.Workflows/Client/src/workflow-editor/InspectorPanel.tsx`
+- [x] T008 [US1] Add narrowly scoped heading and empty-label presentation options while preserving standalone defaults in `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel.tsx`
+- [x] T009 [US1] Route ordinary and intrinsic property editors into the Inputs tab with the agreed presentation options in `src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/InspectorPanel.tsx`
 
 **Checkpoint**: User Story 1 passes independently on top of the foundational tab shell.
 
@@ -65,12 +65,12 @@
 
 ### Tests
 
-- [x] T010 [P] [US2] Update output-capture tests to select the Outputs tab and add failing assertions for the permanent second tab, absent duplicate heading, and explicit no-outputs state in `src/Elsa.Studio.Workflows/Client/src/__tests__/outputCaptureEditor.test.tsx`
+- [x] T010 [P] [US2] Update output-capture tests to select the Outputs tab and add failing assertions for the permanent second tab, absent duplicate heading, and explicit no-outputs state in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/outputCaptureEditor.test.tsx`
 
 ### Implementation
 
-- [x] T011 [P] [US2] Add narrowly scoped heading and empty-label presentation options while preserving output-capture behavior in `src/Elsa.Studio.Workflows/Client/src/ActivityOutputsPanel.tsx`
-- [x] T012 [US2] Route the existing output-capture editor into the permanent Outputs tab in `src/Elsa.Studio.Workflows/Client/src/workflow-editor/InspectorPanel.tsx`
+- [x] T011 [P] [US2] Add narrowly scoped heading and empty-label presentation options while preserving output-capture behavior in `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityOutputsPanel.tsx`
+- [x] T012 [US2] Route the existing output-capture editor into the permanent Outputs tab in `src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/InspectorPanel.tsx`
 
 **Checkpoint**: Inputs and Outputs form the complete stable P1 binding workflow.
 
@@ -84,13 +84,13 @@
 
 ### Tests
 
-- [x] T013 [US3] Replace obsolete long-layout/disclosure assertions with failing tests for conditional Variables/Slots order, Details identity content, permanent Version content, reusable version/source actions, and slot controls in `src/Elsa.Studio.Workflows/Client/src/__tests__/inspectorSlotActions.test.tsx`
-- [x] T014 [P] [US3] Add failing tests proving container declarations appear only in Variables and intrinsic destinations remain excluded from that tab in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityInspectorTabs.test.tsx`
+- [x] T013 [US3] Replace obsolete long-layout/disclosure assertions with failing tests for conditional Variables/Slots order, Details identity content, permanent Version content, reusable version/source actions, and slot controls in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/inspectorSlotActions.test.tsx`
+- [x] T014 [P] [US3] Add failing tests proving container declarations appear only in Variables and intrinsic destinations remain excluded from that tab in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityInspectorTabs.test.tsx`
 
 ### Implementation
 
-- [x] T015 [US3] Move scoped-variable declarations, slot navigation/replacement, Node ID/Activity Type, and activity/reusable version content into their contracted tabpanels in `src/Elsa.Studio.Workflows/Client/src/workflow-editor/InspectorPanel.tsx`
-- [x] T016 [US3] Remove obsolete long-page margins/disclosure rules and normalize Variables, Slots, Details, and Version panel spacing with existing tokens in `src/Elsa.Studio.Workflows/Client/src/styles.css`
+- [x] T015 [US3] Move scoped-variable declarations, slot navigation/replacement, Node ID/Activity Type, and activity/reusable version content into their contracted tabpanels in `src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/InspectorPanel.tsx`
+- [x] T016 [US3] Remove obsolete long-page margins/disclosure rules and normalize Variables, Slots, Details, and Version panel spacing with existing tokens in `src/essentials/Elsa.Studio.Workflows/Client/src/styles.css`
 
 **Checkpoint**: Every pre-existing Inspector capability is reachable in the fixed context or exactly one inner tab.
 
@@ -104,14 +104,14 @@
 
 ### Tests
 
-- [x] T017 [US4] Write failing controlled-state tests for valid-tab preservation, conditional-tab fallback to Inputs, outer-panel round-trip restoration, per-tab scroll retention, activity-change scroll reset, and transient control reset in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityInspectorTabs.test.tsx`
+- [x] T017 [US4] Write failing controlled-state tests for valid-tab preservation, conditional-tab fallback to Inputs, outer-panel round-trip restoration, per-tab scroll retention, activity-change scroll reset, and transient control reset in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityInspectorTabs.test.tsx`
 - [x] T018 [P] [US4] Add failing browser assertions for fixed activity context, independent vertical body scrolling, minimum-width horizontal tab reachability, no page overflow, keyboard navigation, and outer-panel restoration in `tests/browser/activity-inspector-tabs.spec.ts`
 
 ### Implementation
 
-- [x] T019 [US4] Own active activity-tab state at editor-session scope, normalize it against selected capabilities, key per-activity Inspector view state, and pass the controlled contract in `src/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor.tsx`
-- [x] T020 [US4] Place activity name, scope-owner hint, availability warning, and inner tablist in fixed context while retaining mounted panels and resetting slot-picker state per activity in `src/Elsa.Studio.Workflows/Client/src/workflow-editor/InspectorPanel.tsx`
-- [x] T021 [US4] Implement fixed-context and independent tabpanel scrolling plus constrained-width overflow behavior using existing token aliases in `src/Elsa.Studio.Workflows/Client/src/styles.css`
+- [x] T019 [US4] Own active activity-tab state at editor-session scope, normalize it against selected capabilities, key per-activity Inspector view state, and pass the controlled contract in `src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor.tsx`
+- [x] T020 [US4] Place activity name, scope-owner hint, availability warning, and inner tablist in fixed context while retaining mounted panels and resetting slot-picker state per activity in `src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/InspectorPanel.tsx`
+- [x] T021 [US4] Implement fixed-context and independent tabpanel scrolling plus constrained-width overflow behavior using existing token aliases in `src/essentials/Elsa.Studio.Workflows/Client/src/styles.css`
 - [x] T022 [US4] Complete the browser fixture interactions and selectors needed by the focused Playwright proof in `tests/browser/src.tsx`
 
 **Checkpoint**: All four user stories and state-lifecycle acceptance scenarios pass.
@@ -122,11 +122,11 @@
 
 **Purpose**: Prove compatibility, quality, visual fit, and landed-main state.
 
-- [x] T023 Update any remaining Inspector tests whose assertions encode the removed long-page headings or Version disclosure in `src/Elsa.Studio.Workflows/Client/src/__tests__/`
+- [x] T023 Update any remaining Inspector tests whose assertions encode the removed long-page headings or Version disclosure in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/`
 - [x] T024 Run the focused component suite from `specs/093-activity-inspector-tabs/quickstart.md` and record/fix all failures
 - [x] T025 Run Workflows typecheck/build plus repository lint and CSS lint from `specs/093-activity-inspector-tabs/quickstart.md` and record/fix all failures
 - [x] T026 Run the focused Chromium browser test and review light and black-glass screenshots at normal/minimum widths in `tests/browser/activity-inspector-tabs.spec.ts`
-- [x] T027 Perform an independent correctness/accessibility/architecture review of changes under `src/Elsa.Studio.Workflows/Client/src/` and `tests/browser/` and resolve every material finding
+- [x] T027 Perform an independent correctness/accessibility/architecture review of changes under `src/essentials/Elsa.Studio.Workflows/Client/src/` and `tests/browser/` and resolve every material finding
 - [x] T028 Mark completed tasks and record final verification evidence in `specs/093-activity-inspector-tabs/tasks.md`
 - [x] T029 Commit the changes listed in `specs/093-activity-inspector-tabs/tasks.md`, push `codex/activity-inspector-tabs`, open a draft organization PR against `main`, wait for required checks, address review/CI failures, mark ready, and merge via Model B
 - [ ] T030 Fetch `origin/main` after merge and audit the landed commit against every FR/SC and quickstart command in `specs/093-activity-inspector-tabs/`

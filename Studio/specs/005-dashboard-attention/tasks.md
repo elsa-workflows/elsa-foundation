@@ -6,11 +6,11 @@
 
 ## Phase 1: Setup and module scaffolding
 
-- [X] T001 Add Studio Dashboard, Attention, and Workflows Dashboard projects/packages to `Elsa.Studio.slnx`, `pnpm-workspace.yaml`, `src/Elsa.Studio.Web/Elsa.Studio.Web.csproj`, and `src/Elsa.Studio.Web/Program.cs`
-- [X] T002 [P] Scaffold `src/Elsa.Studio.Dashboard/`, `src/Elsa.Studio.Attention/`, and `src/Elsa.Studio.Workflows.Dashboard/` with feature, manifest handler, client package, Vite, TypeScript, and test configuration
+- [X] T001 Add Studio Dashboard, Attention, and Workflows Dashboard projects/packages to `Elsa.Studio.slnx`, `pnpm-workspace.yaml`, `src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj`, and `src/apps/Elsa.Studio.Web/Program.cs`
+- [X] T002 [P] Scaffold `src/essentials/Elsa.Studio.Dashboard/`, `src/extensions/Elsa.Studio.Attention/`, and `src/extensions/Elsa.Studio.Workflows.Dashboard/` with feature, manifest handler, client package, Vite, TypeScript, and test configuration
 - [X] T003 Add Foundation Attention, Studio Preferences, Attention satellite, and Workflows Dashboard projects to `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/Elsa.Server.slnx`, `Elsa.Server.test.slnf`, and `src/Apps/Elsa.Server/Elsa.Server.csproj` (`Elsa.Server.test.slnf` does not exist in this repository; all test projects are in `Elsa.Server.slnx`.)
 - [X] T004 [P] Scaffold Foundation projects under `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Attention/`, `src/Elsa/Studio/Preferences/`, `src/Elsa/Workflows/Runtime/Attention/`, `src/Elsa/Secrets/Attention/`, `src/Elsa/Modularity/Attention/`, and `src/Elsa/Workflows/Dashboard/`
-- [X] T005 Update Studio and Foundation first-party feature catalogs and shell configuration in `src/Elsa.Studio.Web/shells.json`, `src/Elsa.Studio.Web/appsettings.json`, and `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Apps/Elsa.Server/shells.json`
+- [X] T005 Update Studio and Foundation first-party feature catalogs and shell configuration in `src/apps/Elsa.Studio.Web/shells.json`, `src/apps/Elsa.Studio.Web/appsettings.json`, and `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Apps/Elsa.Server/shells.json`
 
 ## Phase 2: Foundational Dashboard and Preferences
 
@@ -18,19 +18,19 @@
 
 - [X] T006 [P] Add preference namespace/store/API contract tests in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/tests/Elsa/Studio/Preferences/Tests/`
 - [X] T007 [P] Add Groundwork preference persistence contract tests for SQLite and PostgreSQL in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/tests/Elsa/Studio/Preferences/Persistence/Groundwork/Tests/`
-- [X] T008 [P] Add clean-break Dashboard Widget SDK contract tests in `src/Elsa.Studio.Web/Client/src/__tests__/registry.test.ts` and `src/Elsa.Studio.Dashboard/Client/src/__tests__/widgetContract.test.tsx`
-- [X] T009 [P] Add Studio runtime host-ID and auth-disabled session tests in `tests/Elsa.Studio.Tests/StudioRuntimeScriptTests.cs` and `src/Elsa.Studio.Web/Client/src/__tests__/app-auth.test.tsx`
+- [X] T008 [P] Add clean-break Dashboard Widget SDK contract tests in `src/apps/Elsa.Studio.Web/Client/src/__tests__/registry.test.ts` and `src/essentials/Elsa.Studio.Dashboard/Client/src/__tests__/widgetContract.test.tsx`
+- [X] T009 [P] Add Studio runtime host-ID and auth-disabled session tests in `tests/Elsa.Studio.Tests/StudioRuntimeScriptTests.cs` and `src/apps/Elsa.Studio.Web/Client/src/__tests__/app-auth.test.tsx`
 - [X] T010 Implement registered namespace, document, quota, revision, validation, Dashboard/Attention namespace definitions, and store contracts in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Studio/Preferences/Core/`
 - [X] T011 Implement authenticated GET/conditional PUT preference endpoints in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Studio/Preferences/Api/`
 - [X] T012 Implement Groundwork preference manifests/repository and SQLite/PostgreSQL composition in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Studio/Preferences/Persistence/Groundwork/` and `src/Elsa/Persistence/Groundwork/Unified/GroundworkUnifiedManifest.cs`
-- [X] T013 Add stable `Studio:HostId` and Dashboard runtime defaults to `src/Elsa.Studio.Web/StudioRuntimeScript.cs`, `src/Elsa.Studio.Web/Client/src/app/runtime.ts`, and Studio appsettings
-- [X] T014 Ensure auth-disabled rendering supplies an explicit anonymous session in `src/Elsa.Studio.Web/Client/src/auth/` and scope helpers include host/backend/subject/tenant identity
-- [X] T015 Move generic setting editor selection and built-in editors from `src/Elsa.Studio.FeatureManagement/Client/src/module.tsx` into mandatory shared infrastructure under `src/Elsa.Studio.Web/StudioUi/src/`
-- [X] T016 Replace `StudioDashboardWidgetContribution` in `src/Elsa.Studio.Web/Client/src/sdk/index.ts` with the host-framed optional-loader/settings contract from `contracts/dashboard-widget-sdk.md`
-- [X] T017 Implement the scoped Preferences API client and device-local fallback in `src/Elsa.Studio.Dashboard/Client/src/dashboardPreferences.ts`
-- [X] T018 Implement managed widget loading, cancellation, timeout, cache/refresh timing, and isolated runtime states in `src/Elsa.Studio.Dashboard/Client/src/useDashboardWidgets.ts`
-- [X] T019 Implement host-owned frame, semantic grid, settings dialog, and token CSS in `src/Elsa.Studio.Dashboard/Client/src/WidgetFrame.tsx`, `DashboardPage.tsx`, and `styles.css`
-- [X] T020 Register `/`, `/dashboard`, and `/overview` navigation/routes from `src/Elsa.Studio.Dashboard/Client/src/module.tsx` and remove Dashboard-specific rendering from `src/Elsa.Studio.Web/Client/src/app/App.tsx`
+- [X] T013 Add stable `Studio:HostId` and Dashboard runtime defaults to `src/apps/Elsa.Studio.Web/StudioRuntimeScript.cs`, `src/apps/Elsa.Studio.Web/Client/src/app/runtime.ts`, and Studio appsettings
+- [X] T014 Ensure auth-disabled rendering supplies an explicit anonymous session in `src/apps/Elsa.Studio.Web/Client/src/auth/` and scope helpers include host/backend/subject/tenant identity
+- [X] T015 Move generic setting editor selection and built-in editors from `src/extensions/Elsa.Studio.FeatureManagement/Client/src/module.tsx` into mandatory shared infrastructure under `src/apps/Elsa.Studio.Web/StudioUi/src/`
+- [X] T016 Replace `StudioDashboardWidgetContribution` in `src/apps/Elsa.Studio.Web/Client/src/sdk/index.ts` with the host-framed optional-loader/settings contract from `contracts/dashboard-widget-sdk.md`
+- [X] T017 Implement the scoped Preferences API client and device-local fallback in `src/essentials/Elsa.Studio.Dashboard/Client/src/dashboardPreferences.ts`
+- [X] T018 Implement managed widget loading, cancellation, timeout, cache/refresh timing, and isolated runtime states in `src/essentials/Elsa.Studio.Dashboard/Client/src/useDashboardWidgets.ts`
+- [X] T019 Implement host-owned frame, semantic grid, settings dialog, and token CSS in `src/essentials/Elsa.Studio.Dashboard/Client/src/WidgetFrame.tsx`, `DashboardPage.tsx`, and `styles.css`
+- [X] T020 Register `/`, `/dashboard`, and `/overview` navigation/routes from `src/essentials/Elsa.Studio.Dashboard/Client/src/module.tsx` and remove Dashboard-specific rendering from `src/apps/Elsa.Studio.Web/Client/src/app/App.tsx`
 - [X] T021 Delete `src/Elsa.Studio.Samples.Dashboard/` and remove all sample feature, workspace, manifest, test, and configuration references
 - [X] T022 Run focused Slice 1 tests and builds for Foundation Preferences, `@elsa-workflows/studio-dashboard`, Studio Web, and `tests/Elsa.Studio.Tests/Elsa.Studio.Tests.csproj`
 
@@ -42,7 +42,7 @@
 - [X] T024 [P] [US1] Add Attention endpoint request/error/security tests in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/tests/Elsa/Attention/Api/Tests/`
 - [X] T025 [P] [US1] Add tenant-isolated Secrets repository and migration tests in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/tests/Elsa/Secrets/`
 - [X] T026 [P] [US1] Add contributor contract tests in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/tests/Elsa/Workflows/Runtime/Attention/Tests/`, `tests/Elsa/Secrets/Attention/Tests/`, and `tests/Elsa/Modularity/Attention/Tests/`
-- [X] T027 [P] [US1] Add Attention widget tests for correlation, filters, snooze, escalation, partial failure, bounds, all-clear, permissions, and sizes in `src/Elsa.Studio.Attention/Client/src/__tests__/`
+- [X] T027 [P] [US1] Add Attention widget tests for correlation, filters, snooze, escalation, partial failure, bounds, all-clear, permissions, and sizes in `src/extensions/Elsa.Studio.Attention/Client/src/__tests__/`
 - [X] T028 [US1] Implement normalized Attention models, contributor registry, aggregation service, options, validation, and permission evaluation in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Attention/Core/`
 - [X] T029 [US1] Implement the filtered generic Attention endpoint and per-contributor envelopes in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Attention/Api/`
 - [X] T030 [US1] Add authoritative `TenantId` to Secrets models/contracts and tenant-filter all repository/API operations in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Secrets/`
@@ -51,10 +51,10 @@
 - [X] T033 [P] [US1] Implement expired/revoked/soon-expiring Secrets contributor in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Secrets/Attention/`
 - [X] T034 [P] [US1] Implement failed/incompatible/diagnostic-bearing Modularity contributor in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Modularity/Attention/`
 - [X] T035 [US1] Register Attention Core/API and contributors independently in Foundation Server and expose the optional Studio-host Attention capability through `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Apps/Elsa.Server/Program.cs`, `Elsa.Server.csproj`, `shells.json`, and Studio runtime composition. The Studio host defaults the optional local API off; remote Foundation APIs remain independently addressable.
-- [X] T036 [US1] Implement Attention API client, normalized merge/correlation/sort logic, and scoped query keys in `src/Elsa.Studio.Attention/Client/src/attentionApi.ts`
-- [X] T037 [US1] Implement versioned Attention snoozes through Studio Preferences in `src/Elsa.Studio.Attention/Client/src/attentionPreferences.ts`
-- [X] T038 [US1] Implement wide/full Attention widget UI with All/Critical/Snoozed filters and navigation-only actions in `src/Elsa.Studio.Attention/Client/src/AttentionWidget.tsx`
-- [X] T039 [US1] Register the ordinary Attention Dashboard Widget and module manifest in `src/Elsa.Studio.Attention/Client/src/module.tsx` and `src/Elsa.Studio.Attention/Handlers/`
+- [X] T036 [US1] Implement Attention API client, normalized merge/correlation/sort logic, and scoped query keys in `src/extensions/Elsa.Studio.Attention/Client/src/attentionApi.ts`
+- [X] T037 [US1] Implement versioned Attention snoozes through Studio Preferences in `src/extensions/Elsa.Studio.Attention/Client/src/attentionPreferences.ts`
+- [X] T038 [US1] Implement wide/full Attention widget UI with All/Critical/Snoozed filters and navigation-only actions in `src/extensions/Elsa.Studio.Attention/Client/src/AttentionWidget.tsx`
+- [X] T039 [US1] Register the ordinary Attention Dashboard Widget and module manifest in `src/extensions/Elsa.Studio.Attention/Client/src/module.tsx` and `src/extensions/Elsa.Studio.Attention/Handlers/`
 - [X] T040 [US1] Run focused Slice 2 commands documented in `specs/005-dashboard-attention/quickstart.md` and record results in `specs/005-dashboard-attention/tasks.md`
 
 ## Phase 4: User Story 2 — Monitor Workflow Run Health (P2)
@@ -63,13 +63,13 @@
 
 - [X] T041 [P] [US2] Add provider-neutral Run Health contract fixtures and endpoint tests in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/tests/Elsa/Workflows/Dashboard/Tests/`
 - [X] T042 [P] [US2] Add in-memory and provider-dialect Groundwork run aggregate adapter coverage under `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/tests/Elsa/Workflows/Dashboard/Tests/`; the SQLite acceptance fixture persists 125 executions and the shared bounded SQL adapter supplies SQLite/PostgreSQL dialects.
-- [X] T043 [P] [US2] Add Studio Run Health loader/settings/rendering tests in `src/Elsa.Studio.Workflows.Dashboard/Client/src/__tests__/runHealth.test.tsx`
+- [X] T043 [P] [US2] Add Studio Run Health loader/settings/rendering tests in `src/extensions/Elsa.Studio.Workflows.Dashboard/Client/src/__tests__/runHealth.test.tsx`
 - [X] T044 [US2] Implement run snapshot models, validation, outcome mapping, range/time-zone buckets, rates, and top-failure query contract in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Dashboard/`
 - [X] T045 [US2] Implement exact in-memory and Groundwork run adapters in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Dashboard/` and `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/`, wired through unified persistence composition
 - [X] T046 [US2] Add provider-neutral execution-origin/test-run data in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Runtime/Core/Models/` and matching Groundwork persistence mappings
 - [X] T047 [US2] Implement the independently authorized Run Health endpoint in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Dashboard/`
-- [X] T048 [US2] Implement Run Health API client, 24h/7d/30d settings, loader, KPI/trend/top-failure body, and medium/wide/full layouts in `src/Elsa.Studio.Workflows.Dashboard/Client/src/`
-- [X] T049 [US2] Register the Workflow Run Health Dashboard Widget in `src/Elsa.Studio.Workflows.Dashboard/Client/src/module.tsx`
+- [X] T048 [US2] Implement Run Health API client, 24h/7d/30d settings, loader, KPI/trend/top-failure body, and medium/wide/full layouts in `src/extensions/Elsa.Studio.Workflows.Dashboard/Client/src/`
+- [X] T049 [US2] Register the Workflow Run Health Dashboard Widget in `src/extensions/Elsa.Studio.Workflows.Dashboard/Client/src/module.tsx`
 - [X] T050 [US2] Run focused Run Health commands documented in `specs/005-dashboard-attention/quickstart.md` and record results in `specs/005-dashboard-attention/tasks.md`
 
 ## Phase 5: User Story 3 — Understand the Workflow Portfolio (P3)
@@ -78,24 +78,24 @@
 
 - [X] T051 [P] [US3] Add provider-neutral Portfolio contract fixtures and endpoint tests in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/tests/Elsa/Workflows/Dashboard/Tests/`
 - [X] T052 [P] [US3] Add EF Core SQLite and provider-dialect Groundwork Portfolio adapter coverage: EF coverage lives with the existing Design EF test surface, while the Groundwork SQLite 105-definition acceptance fixture exercises the shared SQLite/PostgreSQL adapter.
-- [X] T053 [P] [US3] Add Studio Portfolio loader/rendering tests in `src/Elsa.Studio.Workflows.Dashboard/Client/src/__tests__/portfolio.test.tsx`
+- [X] T053 [P] [US3] Add Studio Portfolio loader/rendering tests in `src/extensions/Elsa.Studio.Workflows.Dashboard/Client/src/__tests__/portfolio.test.tsx`
 - [X] T054 [US3] Implement Portfolio snapshot/query contracts and bounded derived-validation orchestration in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Dashboard/`
 - [X] T055 [US3] Implement exact in-memory, EF Core SQLite, and Groundwork SQLite/PostgreSQL Portfolio adapters in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Dashboard/`, `src/Elsa/Workflows/Design/Persistence/EFCore/`, and unified Groundwork composition without expanding the EF project surface
 - [X] T056 [US3] Implement the independently authorized Workflow Portfolio endpoint in `/Users/sipke/.codex/worktrees/dashboard-attention/elsa-foundation/src/Elsa/Workflows/Dashboard/`
-- [X] T057 [US3] Implement Portfolio API client, loader, overlapping KPI body, and small/medium layouts in `src/Elsa.Studio.Workflows.Dashboard/Client/src/`
-- [X] T058 [US3] Register the Workflow Portfolio Dashboard Widget in `src/Elsa.Studio.Workflows.Dashboard/Client/src/module.tsx`
+- [X] T057 [US3] Implement Portfolio API client, loader, overlapping KPI body, and small/medium layouts in `src/extensions/Elsa.Studio.Workflows.Dashboard/Client/src/`
+- [X] T058 [US3] Register the Workflow Portfolio Dashboard Widget in `src/extensions/Elsa.Studio.Workflows.Dashboard/Client/src/module.tsx`
 - [X] T059 [US3] Run focused Portfolio commands documented in `specs/005-dashboard-attention/quickstart.md` and record results in `specs/005-dashboard-attention/tasks.md`
 
 ## Phase 6: User Story 4 — Personalize a Reliable Dashboard (P4)
 
 **Independent test**: Reorder, resize, hide, restore, configure, and refresh widgets across sessions/scopes; verify Host Policy, migration fallback, dynamic module lifecycle, and accessible responsive states.
 
-- [X] T060 [P] [US4] Add Dashboard preference concurrency, migration-reset, unknown-widget, auto-add, host-pin, and cross-scope tests in `src/Elsa.Studio.Dashboard/Client/src/__tests__/preferences.test.tsx` (covered in `widgetContract.test.tsx` to reuse the SDK fixture without duplicate setup)
-- [X] T061 [P] [US4] Add keyboard layout, responsive frame, inactive-refresh, per-widget retry, and dynamic registry lifecycle tests in `src/Elsa.Studio.Dashboard/Client/src/__tests__/DashboardPage.test.tsx`
-- [X] T062 [US4] Implement keyboard move/resize/hide/restore controls, hidden-widget manager, and new-widget auto-add preference in `src/Elsa.Studio.Dashboard/Client/src/DashboardPage.tsx`
-- [X] T063 [US4] Implement host-pinned visibility and settings migration/reset notices in `src/Elsa.Studio.Dashboard/Client/src/dashboardPreferences.ts` and `WidgetFrame.tsx`
-- [X] T064 [US4] Implement global/per-widget refresh controls, last/next refresh labels, inactive-surface suspension, and scoped cleanup in `src/Elsa.Studio.Dashboard/Client/src/useDashboardWidgets.ts`
-- [X] T065 [US4] Verify module reload removes widgets/aborts loaders and returns retained preferences through `src/Elsa.Studio.Web/Client/src/app/App.tsx` registry rebuild integration tests
+- [X] T060 [P] [US4] Add Dashboard preference concurrency, migration-reset, unknown-widget, auto-add, host-pin, and cross-scope tests in `src/essentials/Elsa.Studio.Dashboard/Client/src/__tests__/preferences.test.tsx` (covered in `widgetContract.test.tsx` to reuse the SDK fixture without duplicate setup)
+- [X] T061 [P] [US4] Add keyboard layout, responsive frame, inactive-refresh, per-widget retry, and dynamic registry lifecycle tests in `src/essentials/Elsa.Studio.Dashboard/Client/src/__tests__/DashboardPage.test.tsx`
+- [X] T062 [US4] Implement keyboard move/resize/hide/restore controls, hidden-widget manager, and new-widget auto-add preference in `src/essentials/Elsa.Studio.Dashboard/Client/src/DashboardPage.tsx`
+- [X] T063 [US4] Implement host-pinned visibility and settings migration/reset notices in `src/essentials/Elsa.Studio.Dashboard/Client/src/dashboardPreferences.ts` and `WidgetFrame.tsx`
+- [X] T064 [US4] Implement global/per-widget refresh controls, last/next refresh labels, inactive-surface suspension, and scoped cleanup in `src/essentials/Elsa.Studio.Dashboard/Client/src/useDashboardWidgets.ts`
+- [X] T065 [US4] Verify module reload removes widgets/aborts loaders and returns retained preferences through `src/apps/Elsa.Studio.Web/Client/src/app/App.tsx` registry rebuild integration tests
 - [X] T066 [US4] Run focused Dashboard personalization commands documented in `specs/005-dashboard-attention/quickstart.md` and record results in `specs/005-dashboard-attention/tasks.md` (14 tests, typecheck, production build, and CSS policy pass on 2026-07-13)
 
 ## Phase 7: Polish, tracking, and full verification

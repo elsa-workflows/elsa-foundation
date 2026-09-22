@@ -105,7 +105,7 @@ specs/094-publication-review-ux/
 ### Source Code
 
 ```text
-src/Elsa.Studio.Workflows/Client/src/
+src/essentials/Elsa.Studio.Workflows/Client/src/
 ├── api/
 │   ├── capabilities.ts
 │   └── publishing.ts

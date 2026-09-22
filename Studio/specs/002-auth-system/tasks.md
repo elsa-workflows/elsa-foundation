@@ -15,7 +15,7 @@
 - [X] T001 Create `Elsa.Foundation.Identity.Abstractions` project with Authentication/Iam/Authorization/Ownership folders
 - [X] T002 [P] Define `OwnershipMode`, `ProviderCapabilities`, and effective-capability computation
 - [X] T003 [P] Define the shared `Permission` catalog contract (`IPermissionCatalog`) and namespaced default keys
-- [X] T004 [P] Add Studio auth SDK workspace under `src/Elsa.Studio.Web/Client/src/auth/`
+- [X] T004 [P] Add Studio auth SDK workspace under `src/apps/Elsa.Studio.Web/Client/src/auth/`
 
 ---
 

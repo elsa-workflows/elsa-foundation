@@ -8,7 +8,7 @@ This contract refines the activity execution inspection response used by the Wor
 
 `GET /runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}`
 
-Studio currently calls this endpoint through `getActivityExecutionInspection` in `src/Elsa.Studio.Workflows/Client/src/api/workflows.ts`.
+Studio currently calls this endpoint through `getActivityExecutionInspection` in `src/essentials/Elsa.Studio.Workflows/Client/src/api/workflows.ts`.
 
 ## Response Shape
 

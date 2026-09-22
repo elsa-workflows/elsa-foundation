@@ -18,11 +18,11 @@ Implement a first-party Studio Extension Builder module that lets trusted users 
 
 **Storage**: Server-side only through `/_elsa/extension-builder`; UI holds transient selected workspace/project/file, dirty editor buffer, build polling/log state, and operation feedback.
 
-**Testing**: Vitest + jsdom in `src/Elsa.Studio.Web/Client`.
+**Testing**: Vitest + jsdom in `src/apps/Elsa.Studio.Web/Client`.
 
 **Target Platform**: Elsa Studio web client served by the existing Studio host and configured backend endpoint.
 
-**Project Type**: Frontend web application module inside `src/Elsa.Studio.Web/Client`.
+**Project Type**: Frontend web application module inside `src/apps/Elsa.Studio.Web/Client`.
 
 **Performance Goals**: Keep navigation responsive for typical trusted-team workspaces; poll build/runtime state without manual refresh; avoid blocking large log/file renders by using dense scrollable panels.
 
@@ -74,7 +74,7 @@ specs/[###-feature]/
 -->
 
 ```text
-src/Elsa.Studio.Web/Client/
+src/apps/Elsa.Studio.Web/Client/
 ├── src/app/App.tsx
 ├── src/app/modules/
 │   ├── ExtensionBuilderPage.tsx

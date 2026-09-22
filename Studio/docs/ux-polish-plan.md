@@ -2,7 +2,7 @@
 
 A comparative UX review of **Elsa 4 Studio** (Vite + React 19, custom `--wf-*` CSS, `@xyflow/react`) against the more polished **Elsa 3 designer** (Next.js + Tailwind + shadcn/ui), with a prioritized backlog for closing the gap.
 
-- **Target to improve:** `elsa-foundation-studio` — workflow editor at `src/Elsa.Studio.Workflows/Client/src/styles.css` + `module.tsx`; host shell at `src/Elsa.Studio.Web/Client/src/app/`.
+- **Target to improve:** `elsa-foundation-studio` — workflow editor at `src/essentials/Elsa.Studio.Workflows/Client/src/styles.css` + `module.tsx`; host shell at `src/apps/Elsa.Studio.Web/Client/src/app/`.
 - **Reference:** `elsa-foundation-designer` — shadcn/Radix component layer, OKLCH tokens, sonner toasts.
 - **Constraint:** This is a plan only. No application code is changed by this document.
 

@@ -5,7 +5,7 @@ import type { Plugin } from "vite";
  *
  * The host links module stylesheets by enumerating static web assets that match
  * `^module(\d*)\.css$` flat in `wwwroot/studio/modules/<slug>/` — see `ModuleStylePattern`
- * in `src/Elsa.Studio.Api/Services/StudioModuleManifestProvider.cs`. Any emitted CSS asset
+ * in `src/essentials/Elsa.Studio.Api/Services/StudioModuleManifestProvider.cs`. Any emitted CSS asset
  * outside that naming is silently never served (the PR #440 bug: `cssCodeSplit` output
  * drifted from a hardcoded single `module.css` link). The producer side of the contract is
  * `assetFileNames: "module[extname]"` in `vite.module.base.ts`; this plugin fails the build
@@ -43,7 +43,7 @@ export function moduleCssContractPlugin(): Plugin {
         this.error(
           `Emitted stylesheet(s) violate the module CSS naming contract: ${violations.join(", ")}. ` +
             `The host only serves stylesheets matching module(\\d*).css flat in the module directory ` +
-            `(ModuleStylePattern in src/Elsa.Studio.Api/Services/StudioModuleManifestProvider.cs); ` +
+            `(ModuleStylePattern in src/essentials/Elsa.Studio.Api/Services/StudioModuleManifestProvider.cs); ` +
             `anything else is silently dropped. Keep assetFileNames as "module[extname]" ` +
             `(vite.module.base.ts) or update the host contract in lockstep.`
         );

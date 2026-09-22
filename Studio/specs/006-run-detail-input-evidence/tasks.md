@@ -39,22 +39,22 @@
 
 **Independent test**: Every supported compiled binding plus arbitrary authored expression types and an unknown Studio API discriminator pair by ReferenceKey without parsing `summary`.
 
-- [X] T024 Extend Studio SDK/activity catalog/runtime types for `referenceKey`, source sidecar, compiled binding, and additive evidence fields in `src/Elsa.Studio.Web/Client/src/sdk/index.ts` and `src/Elsa.Studio.Workflows/Client/src/workflowTypes.ts`
-- [X] T025 [P] [US2] Add failing pure union-row tests covering canonical, one-sided, compiled-only/source-unavailable, duplicate, and legacy records in `src/Elsa.Studio.Workflows/Client/src/__tests__/inputInspectionRows.test.ts`
-- [X] T026 [US2] Implement pure ReferenceKey-scoped input union derivation in `src/Elsa.Studio.Workflows/Client/src/inputInspectionRows.ts`
+- [X] T024 Extend Studio SDK/activity catalog/runtime types for `referenceKey`, source sidecar, compiled binding, and additive evidence fields in `src/apps/Elsa.Studio.Web/Client/src/sdk/index.ts` and `src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes.ts`
+- [X] T025 [P] [US2] Add failing pure union-row tests covering canonical, one-sided, compiled-only/source-unavailable, duplicate, and legacy records in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/inputInspectionRows.test.ts`
+- [X] T026 [US2] Implement pure ReferenceKey-scoped input union derivation in `src/essentials/Elsa.Studio.Workflows/Client/src/inputInspectionRows.ts`
 - [X] T027 [P] [US2] Add failing SDK admission/order/Host Policy and generic fallback tests for optional read-only expression source rendering
 - [X] T028 [US2] Add optional `sourceRenderer` to the existing public `StudioExpressionEditorContribution`, host registry declarations/tests, and JavaScript/Liquid module contributions in their owning modules; keep generic fallback in Workflows
-- [X] T029 [P] [US2] Add compact/expanded paired-input component tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/workflowActivityExecutionDetails.test.tsx`
-- [X] T030 [US2] Retain canonical compiled bindings and pinned Source Reference authored sidecar without summary parsing in `src/Elsa.Studio.Workflows/Client/src/executableGraph.ts` and the Run detail data loader
-- [X] T031 [US2] Implement compact/expanded input rows and preserve runtime-only Outputs in `src/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx`
+- [X] T029 [P] [US2] Add compact/expanded paired-input component tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowActivityExecutionDetails.test.tsx`
+- [X] T030 [US2] Retain canonical compiled bindings and pinned Source Reference authored sidecar without summary parsing in `src/essentials/Elsa.Studio.Workflows/Client/src/executableGraph.ts` and the Run detail data loader
+- [X] T031 [US2] Implement compact/expanded input rows and preserve runtime-only Outputs in `src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx`
 
 ## Phase 5: User Story 3 — Provenance and security boundaries (P2)
 
 **Independent test**: All phases, four source/evidence permission combinations, sensitive inputs, compatibility states, and per-input failures render safely.
 
 - [X] T032 [P] [US3] Add Studio tests for replay-deduplicated ordered history, protected-state matrix, metadata-only/unavailable/redacted evidence, failures, issue correlation, and no protected DOM content
-- [X] T033 [US3] Render “Evaluated at runtime”, latest sequence, phase-labelled history, safe failures, compiled-only/source-unavailable, and explicit anomaly/protected states in `src/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx`
-- [X] T034 [US3] Reorder activity content to summary, Inputs, Outputs, collapsed Execution details in `src/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx`
+- [X] T033 [US3] Render “Evaluated at runtime”, latest sequence, phase-labelled history, safe failures, compiled-only/source-unavailable, and explicit anomaly/protected states in `src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx`
+- [X] T034 [US3] Reorder activity content to summary, Inputs, Outputs, collapsed Execution details in `src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx`
 
 ## Phase 6: User Story 1 — Full-height Run workbench (P1)
 
@@ -62,18 +62,18 @@
 
 - [X] T035 [P] [US1] Add Vitest assertions for Run-specific route classes/layout state and regressions protecting list/designer/executable-inspector layouts
 - [X] T036 [P] [US1] Add Playwright geometry proof in `tests/browser/workflow-run-detail-layout.spec.ts` for workbench/console bounding rectangles and desktop/medium/narrow transitions
-- [X] T037 [US1] Add a route-specific `wf-page--run-workbench` variant and carry `min-height: 0` through `src/Elsa.Studio.Workflows/Client/src/workflow-editor/pages.tsx` and a narrowly targeted host rule in `src/Elsa.Studio.Web/Client/src/app/styles.css`
-- [X] T038 [US1] Replace viewport-derived sizing with intrinsic header/toolbar plus `minmax(0, 1fr)` workbench allocation and internal scroll ownership in `src/Elsa.Studio.Workflows/Client/src/styles.css`
-- [X] T039 [US1] Create `src/Elsa.Studio.Workflows/Client/src/workflow-editor/useRunDetailLayout.ts` with Run-specific storage keys, 400px default, 340px min, dynamic `min(640px, 50%, width - 10px - 480px)` max, and 42px rail; do not change shared designer defaults
+- [X] T037 [US1] Add a route-specific `wf-page--run-workbench` variant and carry `min-height: 0` through `src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/pages.tsx` and a narrowly targeted host rule in `src/apps/Elsa.Studio.Web/Client/src/app/styles.css`
+- [X] T038 [US1] Replace viewport-derived sizing with intrinsic header/toolbar plus `minmax(0, 1fr)` workbench allocation and internal scroll ownership in `src/essentials/Elsa.Studio.Workflows/Client/src/styles.css`
+- [X] T039 [US1] Create `src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useRunDetailLayout.ts` with Run-specific storage keys, 400px default, 340px min, dynamic `min(640px, 50%, width - 10px - 480px)` max, and 42px rail; do not change shared designer defaults
 
 ## Phase 7: User Story 4 — Container-responsive inspector (P2)
 
 **Independent test**: Container-only resize crosses desktop ≥830, medium 480–829, and narrow <480 with correct focus and no implicit columns.
 
 - [X] T040 [P] [US4] Add mode-transition tests for exact boundaries, default clamping, selection/removal, persistence, modal drawer dismissal/focus trap/restore, and narrow Back behavior
-- [X] T041 [US4] Implement container observation and exact responsive state transitions in `src/Elsa.Studio.Workflows/Client/src/workflow-editor/useRunDetailLayout.ts`
-- [X] T042 [US4] Implement medium labelled modal drawer (close/Escape/backdrop/inert/focus restore) and narrow non-modal canvas/inspector focus views in `src/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx`
-- [X] T043 [US4] Reset explicit grid placement/resize controls per mode and add overlay/focus styles using Studio tokens in `src/Elsa.Studio.Workflows/Client/src/styles.css`
+- [X] T041 [US4] Implement container observation and exact responsive state transitions in `src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useRunDetailLayout.ts`
+- [X] T042 [US4] Implement medium labelled modal drawer (close/Escape/backdrop/inert/focus restore) and narrow non-modal canvas/inspector focus views in `src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx`
+- [X] T043 [US4] Reset explicit grid placement/resize controls per mode and add overlay/focus styles using Studio tokens in `src/essentials/Elsa.Studio.Workflows/Client/src/styles.css`
 
 ## Phase 8: Integration and proof
 

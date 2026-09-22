@@ -12,10 +12,10 @@
 
 **Purpose**: Prepare the shared UI workspace and documentation entry points.
 
-- [ ] T001 Create shared UI directory structure in src/Elsa.Studio.Web/Client/src/app/ui/
-- [ ] T002 [P] Add UI system README in src/Elsa.Studio.Web/Client/src/app/ui/README.md
+- [ ] T001 Create shared UI directory structure in src/apps/Elsa.Studio.Web/Client/src/app/ui/
+- [ ] T002 [P] Add UI system README in src/apps/Elsa.Studio.Web/Client/src/app/ui/README.md
 - [ ] T003 [P] Add implementation tracking notes in specs/001-ui-system/implementation-notes.md
-- [ ] T004 [P] Review package dependency requirements in package.json and src/Elsa.Studio.Web/Client/package.json
+- [ ] T004 [P] Review package dependency requirements in package.json and src/apps/Elsa.Studio.Web/Client/package.json
 
 ---
 
@@ -25,17 +25,17 @@
 
 **CRITICAL**: No user story implementation should bypass these shared foundations.
 
-- [ ] T005 Define Studio token CSS in src/Elsa.Studio.Web/Client/src/app/ui/tokens.css
-- [ ] T006 Update global shell style imports in src/Elsa.Studio.Web/Client/src/app/styles.css
-- [ ] T007 [P] Implement shared status chip primitive in src/Elsa.Studio.Web/Client/src/app/ui/feedback/StatusChip.tsx
-- [ ] T008 [P] Implement shared alert/empty/loading/error primitives in src/Elsa.Studio.Web/Client/src/app/ui/feedback/FeedbackStates.tsx
-- [ ] T009 [P] Implement shared field and setting group primitives in src/Elsa.Studio.Web/Client/src/app/ui/forms/Field.tsx
-- [ ] T010 [P] Implement shared tabs primitive in src/Elsa.Studio.Web/Client/src/app/ui/layout/Tabs.tsx
-- [ ] T011 [P] Implement shared toolbar/search/action primitives in src/Elsa.Studio.Web/Client/src/app/ui/layout/Toolbar.tsx
-- [ ] T012 Implement shared inspector/drawer primitives in src/Elsa.Studio.Web/Client/src/app/ui/inspector/Inspector.tsx
-- [ ] T013 Implement shared resource list/data grid shell primitives in src/Elsa.Studio.Web/Client/src/app/ui/data-grid/DataGrid.tsx
-- [ ] T014 Add shared UI exports in src/Elsa.Studio.Web/Client/src/app/ui/index.ts
-- [ ] T015 Add Vitest coverage for shared primitive states in src/Elsa.Studio.Web/Client/src/app/ui/__tests__/primitives.test.tsx
+- [ ] T005 Define Studio token CSS in src/apps/Elsa.Studio.Web/Client/src/app/ui/tokens.css
+- [ ] T006 Update global shell style imports in src/apps/Elsa.Studio.Web/Client/src/app/styles.css
+- [ ] T007 [P] Implement shared status chip primitive in src/apps/Elsa.Studio.Web/Client/src/app/ui/feedback/StatusChip.tsx
+- [ ] T008 [P] Implement shared alert/empty/loading/error primitives in src/apps/Elsa.Studio.Web/Client/src/app/ui/feedback/FeedbackStates.tsx
+- [ ] T009 [P] Implement shared field and setting group primitives in src/apps/Elsa.Studio.Web/Client/src/app/ui/forms/Field.tsx
+- [ ] T010 [P] Implement shared tabs primitive in src/apps/Elsa.Studio.Web/Client/src/app/ui/layout/Tabs.tsx
+- [ ] T011 [P] Implement shared toolbar/search/action primitives in src/apps/Elsa.Studio.Web/Client/src/app/ui/layout/Toolbar.tsx
+- [ ] T012 Implement shared inspector/drawer primitives in src/apps/Elsa.Studio.Web/Client/src/app/ui/inspector/Inspector.tsx
+- [ ] T013 Implement shared resource list/data grid shell primitives in src/apps/Elsa.Studio.Web/Client/src/app/ui/data-grid/DataGrid.tsx
+- [ ] T014 Add shared UI exports in src/apps/Elsa.Studio.Web/Client/src/app/ui/index.ts
+- [ ] T015 Add Vitest coverage for shared primitive states in src/apps/Elsa.Studio.Web/Client/src/app/ui/__tests__/primitives.test.tsx
 - [ ] T016 Run pnpm --filter @elsa-workflows/studio-web test
 
 **Checkpoint**: Shared UI foundation can render representative resource, settings, feedback, and inspector states.
@@ -50,15 +50,15 @@
 
 ### Tests for User Story 1
 
-- [ ] T017 [P] [US1] Add sample workbench rendering test in src/Elsa.Studio.Web/Client/src/app/ui/__tests__/workbench.test.tsx
-- [ ] T018 [P] [US1] Add token availability test in src/Elsa.Studio.Web/Client/src/__tests__/ui-tokens.test.ts
+- [ ] T017 [P] [US1] Add sample workbench rendering test in src/apps/Elsa.Studio.Web/Client/src/app/ui/__tests__/workbench.test.tsx
+- [ ] T018 [P] [US1] Add token availability test in src/apps/Elsa.Studio.Web/Client/src/__tests__/ui-tokens.test.ts
 
 ### Implementation for User Story 1
 
-- [ ] T019 [US1] Refactor ShellFrame in src/Elsa.Studio.Web/Client/src/app/App.tsx to consume shared shell/page primitives where stable
-- [ ] T020 [US1] Replace metric-card/admin-card defaults in src/Elsa.Studio.Web/Client/src/app/styles.css with workbench summary/resource styles
-- [ ] T021 [US1] Add module author usage examples in src/Elsa.Studio.Web/Client/src/app/ui/README.md
-- [ ] T022 [US1] Validate shared primitive export boundaries in src/Elsa.Studio.Web/Client/src/app/ui/index.ts
+- [ ] T019 [US1] Refactor ShellFrame in src/apps/Elsa.Studio.Web/Client/src/app/App.tsx to consume shared shell/page primitives where stable
+- [ ] T020 [US1] Replace metric-card/admin-card defaults in src/apps/Elsa.Studio.Web/Client/src/app/styles.css with workbench summary/resource styles
+- [ ] T021 [US1] Add module author usage examples in src/apps/Elsa.Studio.Web/Client/src/app/ui/README.md
+- [ ] T022 [US1] Validate shared primitive export boundaries in src/apps/Elsa.Studio.Web/Client/src/app/ui/index.ts
 - [ ] T023 [US1] Run pnpm --filter @elsa-workflows/studio-web build
 
 **Checkpoint**: The host shell and sample UI primitives establish the Workbench language.
@@ -73,15 +73,15 @@
 
 ### Tests for User Story 2
 
-- [ ] T024 [P] [US2] Update feature management tests in src/Elsa.Studio.FeatureManagement/Client/src/__tests__/module.test.ts
-- [ ] T025 [P] [US2] Add setting editor state tests in src/Elsa.Studio.FeatureManagement/Client/src/__tests__/settings.test.tsx
+- [ ] T024 [P] [US2] Update feature management tests in src/extensions/Elsa.Studio.FeatureManagement/Client/src/__tests__/module.test.ts
+- [ ] T025 [P] [US2] Add setting editor state tests in src/extensions/Elsa.Studio.FeatureManagement/Client/src/__tests__/settings.test.tsx
 
 ### Implementation for User Story 2
 
-- [ ] T026 [US2] Refactor FeatureManagementPage layout in src/Elsa.Studio.FeatureManagement/Client/src/module.tsx to shared split inspector primitives
-- [ ] T027 [US2] Replace feature row/status/toggle styling in src/Elsa.Studio.FeatureManagement/Client/src/styles.css with shared token-compatible styles
-- [ ] T028 [US2] Implement dirty state and sticky action footer behavior in src/Elsa.Studio.FeatureManagement/Client/src/module.tsx
-- [ ] T029 [US2] Normalize feature warnings, errors, and validation through shared alert/field primitives in src/Elsa.Studio.FeatureManagement/Client/src/module.tsx
+- [ ] T026 [US2] Refactor FeatureManagementPage layout in src/extensions/Elsa.Studio.FeatureManagement/Client/src/module.tsx to shared split inspector primitives
+- [ ] T027 [US2] Replace feature row/status/toggle styling in src/extensions/Elsa.Studio.FeatureManagement/Client/src/styles.css with shared token-compatible styles
+- [ ] T028 [US2] Implement dirty state and sticky action footer behavior in src/extensions/Elsa.Studio.FeatureManagement/Client/src/module.tsx
+- [ ] T029 [US2] Normalize feature warnings, errors, and validation through shared alert/field primitives in src/extensions/Elsa.Studio.FeatureManagement/Client/src/module.tsx
 - [ ] T030 [US2] Run pnpm --filter @elsa-workflows/studio-feature-management test
 - [ ] T031 [US2] Run pnpm --filter @elsa-workflows/studio-feature-management build
 
@@ -99,17 +99,17 @@
 
 - [ ] T032 [P] [US3] Add backend module registry model tests in tests/Elsa.Studio.Tests/StudioModuleManifestProviderTests.cs
 - [ ] T033 [P] [US3] Add module management API tests in tests/Elsa.Studio.Tests/StudioModuleManagementEndpointTests.cs
-- [ ] T034 [P] [US3] Add module management client tests in src/Elsa.Studio.Web/Client/src/__tests__/module-management.test.tsx
+- [ ] T034 [P] [US3] Add module management client tests in src/apps/Elsa.Studio.Web/Client/src/__tests__/module-management.test.tsx
 
 ### Implementation for User Story 3
 
-- [ ] T035 [US3] Define module management response models in src/Elsa.Studio.Api/Models/StudioModuleRegistryResponse.cs
-- [ ] T036 [US3] Extend backend module metadata aggregation in src/Elsa.Studio.Api/Services/StudioModuleManifestProvider.cs or a new service
-- [ ] T037 [US3] Add module management endpoint registration in src/Elsa.Studio.Api/Extensions/StudioApiEndpointRouteBuilderExtensions.cs
-- [ ] T038 [US3] Add module management SDK types in src/Elsa.Studio.Web/Client/src/sdk/index.ts
-- [ ] T039 [US3] Implement Modules route in src/Elsa.Studio.Web/Client/src/app/App.tsx
-- [ ] T040 [US3] Implement module registry grid and inspector in src/Elsa.Studio.Web/Client/src/app/modules/ModuleManagementPage.tsx
-- [ ] T041 [US3] Add contribution list and diagnostics timeline UI in src/Elsa.Studio.Web/Client/src/app/modules/ModuleDiagnostics.tsx
+- [ ] T035 [US3] Define module management response models in src/essentials/Elsa.Studio.Api/Models/StudioModuleRegistryResponse.cs
+- [ ] T036 [US3] Extend backend module metadata aggregation in src/essentials/Elsa.Studio.Api/Services/StudioModuleManifestProvider.cs or a new service
+- [ ] T037 [US3] Add module management endpoint registration in src/essentials/Elsa.Studio.Api/Extensions/StudioApiEndpointRouteBuilderExtensions.cs
+- [ ] T038 [US3] Add module management SDK types in src/apps/Elsa.Studio.Web/Client/src/sdk/index.ts
+- [ ] T039 [US3] Implement Modules route in src/apps/Elsa.Studio.Web/Client/src/app/App.tsx
+- [ ] T040 [US3] Implement module registry grid and inspector in src/apps/Elsa.Studio.Web/Client/src/app/modules/ModuleManagementPage.tsx
+- [ ] T041 [US3] Add contribution list and diagnostics timeline UI in src/apps/Elsa.Studio.Web/Client/src/app/modules/ModuleDiagnostics.tsx
 - [ ] T042 [US3] Run pnpm --filter @elsa-workflows/studio-web test
 - [ ] T043 [US3] Run dotnet test
 
@@ -125,13 +125,13 @@
 
 ### Tests for User Story 4
 
-- [ ] T044 [P] [US4] Add shell command bar rendering tests in src/Elsa.Studio.Web/Client/src/__tests__/shell-command-bar.test.tsx
+- [ ] T044 [P] [US4] Add shell command bar rendering tests in src/apps/Elsa.Studio.Web/Client/src/__tests__/shell-command-bar.test.tsx
 
 ### Implementation for User Story 4
 
-- [ ] T045 [US4] Implement top command bar primitive in src/Elsa.Studio.Web/Client/src/app/ui/shell/TopCommandBar.tsx
-- [ ] T046 [US4] Move global search/backend status/theme/source actions into TopCommandBar in src/Elsa.Studio.Web/Client/src/app/App.tsx
-- [ ] T047 [US4] Normalize page-local actions through StudioToolbar in src/Elsa.Studio.Web/Client/src/app/App.tsx and src/Elsa.Studio.FeatureManagement/Client/src/module.tsx
+- [ ] T045 [US4] Implement top command bar primitive in src/apps/Elsa.Studio.Web/Client/src/app/ui/shell/TopCommandBar.tsx
+- [ ] T046 [US4] Move global search/backend status/theme/source actions into TopCommandBar in src/apps/Elsa.Studio.Web/Client/src/app/App.tsx
+- [ ] T047 [US4] Normalize page-local actions through StudioToolbar in src/apps/Elsa.Studio.Web/Client/src/app/App.tsx and src/extensions/Elsa.Studio.FeatureManagement/Client/src/module.tsx
 - [ ] T048 [US4] Run pnpm --filter @elsa-workflows/studio-web test
 
 **Checkpoint**: Shell command behavior is consistent across host and module pages.

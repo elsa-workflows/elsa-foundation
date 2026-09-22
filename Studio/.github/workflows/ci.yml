@@ -45,7 +45,7 @@ jobs:
       # Fixed seeds catch order-dependent tests deterministically: a PR that introduces one fails on
       # every run, never at random on a later PR (#512).
       - name: Unit tests (Workflows, shuffled)
-        working-directory: src/Elsa.Studio.Workflows/Client
+        working-directory: src/essentials/Elsa.Studio.Workflows/Client
         env:
           SHUFFLE_SEEDS: "1 11 29"
         run: |

@@ -70,7 +70,7 @@ dotnet test
 ## Run
 
 ```bash
-dotnet run --project src/Elsa.Studio.Web/Elsa.Studio.Web.csproj
+dotnet run --project src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj
 ```
 
 Open:
@@ -136,7 +136,7 @@ Preview builds (`4.0.0-preview.<n>`) publish to the elsa-4 feedz.io npm feed on 
 ```bash
 pnpm install --frozen-lockfile
 pnpm build
-docker build -f src/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
+docker build -f src/apps/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
 docker run --rm -p 8080:8080 \
   -e Studio__BackendBaseUrl=https://your-elsa-server:443 \
   elsa-studio-web:local

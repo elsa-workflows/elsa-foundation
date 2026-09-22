@@ -71,7 +71,7 @@ specs/001-ui-system/
 ### Source Code (repository root)
 
 ```text
-src/Elsa.Studio.Web/Client/src/app/
+src/apps/Elsa.Studio.Web/Client/src/app/
 ├── components/
 │   ├── ThemeProvider.tsx
 │   └── ThemeSwitcher.tsx
@@ -87,14 +87,14 @@ src/Elsa.Studio.Web/Client/src/app/
 ├── App.tsx                     # shell composition consumes shared primitives
 └── styles.css                  # reduced to global/reset and legacy bridge
 
-src/Elsa.Studio.Web/Client/src/sdk/
+src/apps/Elsa.Studio.Web/Client/src/sdk/
 └── index.ts                    # exposes module-facing UI contracts only when stable
 
-src/Elsa.Studio.FeatureManagement/Client/src/
+src/extensions/Elsa.Studio.FeatureManagement/Client/src/
 ├── module.tsx                  # migrates to shared UI primitives
 └── styles.css                  # reduced or removed after migration
 
-src/Elsa.Studio.Api/
+src/essentials/Elsa.Studio.Api/
 ├── Models/                     # module management response contracts
 └── Services/                   # backend module metadata/manifest aggregation
 

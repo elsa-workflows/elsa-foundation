@@ -47,7 +47,7 @@ jobs:
         run: pnpm build
 
       - name: Verify Studio frontend assets
-        run: test -f src/Elsa.Studio.Web/wwwroot/studio/index.html
+        run: test -f src/apps/Elsa.Studio.Web/wwwroot/studio/index.html
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -82,7 +82,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: src/Elsa.Studio.Web/Dockerfile
+          file: src/apps/Elsa.Studio.Web/Dockerfile
           # PRs never push, so don't spend minutes emulating arm64 under QEMU for a discarded build.
           platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           push: ${{ github.event_name != 'pull_request' }}

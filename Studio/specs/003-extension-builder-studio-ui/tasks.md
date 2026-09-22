@@ -20,10 +20,10 @@
 
 **Purpose**: Establish the route/client/test seams used by every story.
 
-- [X] T001 Add built-in Extension Builder navigation/route wiring in `src/Elsa.Studio.Web/Client/src/app/App.tsx`
-- [X] T002 [P] Create typed Extension Builder API contract/client in `src/Elsa.Studio.Web/Client/src/app/modules/extensionBuilderApi.ts`
-- [X] T003 [P] Create Extension Builder page shell in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
-- [X] T004 [P] Create focused test harness and fixtures in `src/Elsa.Studio.Web/Client/src/__tests__/extension-builder.test.tsx`
+- [X] T001 Add built-in Extension Builder navigation/route wiring in `src/apps/Elsa.Studio.Web/Client/src/app/App.tsx`
+- [X] T002 [P] Create typed Extension Builder API contract/client in `src/apps/Elsa.Studio.Web/Client/src/app/modules/extensionBuilderApi.ts`
+- [X] T003 [P] Create Extension Builder page shell in `src/apps/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
+- [X] T004 [P] Create focused test harness and fixtures in `src/apps/Elsa.Studio.Web/Client/src/__tests__/extension-builder.test.tsx`
 
 ---
 
@@ -33,10 +33,10 @@
 
 **CRITICAL**: No user story work can begin until this phase is complete.
 
-- [X] T005 Implement `GetCapabilities` loading and unauthorized/error states in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
-- [X] T006 Implement shared operation feedback, refresh, selected workspace/project/file state, and dirty-buffer guard helpers in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
-- [X] T007 [P] Add Extension Builder workbench styling using existing Studio tokens in `src/Elsa.Studio.Web/Client/src/app/styles.css`
-- [X] T008 [P] Add navigation grouping assertions for `/extension-builder` in `src/Elsa.Studio.Web/Client/src/__tests__/overview.test.tsx`
+- [X] T005 Implement `GetCapabilities` loading and unauthorized/error states in `src/apps/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
+- [X] T006 Implement shared operation feedback, refresh, selected workspace/project/file state, and dirty-buffer guard helpers in `src/apps/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
+- [X] T007 [P] Add Extension Builder workbench styling using existing Studio tokens in `src/apps/Elsa.Studio.Web/Client/src/app/styles.css`
+- [X] T008 [P] Add navigation grouping assertions for `/extension-builder` in `src/apps/Elsa.Studio.Web/Client/src/__tests__/overview.test.tsx`
 
 **Checkpoint**: Foundation ready - user story implementation can now begin.
 
@@ -50,15 +50,15 @@
 
 ### Tests for User Story 1
 
-- [X] T009 [P] [US1] Test trusted capabilities, workspace/project rendering, create form defaults, and action gating in `src/Elsa.Studio.Web/Client/src/__tests__/extension-builder.test.tsx`
-- [X] T010 [P] [US1] Test build/promote/runtime happy path calls canonical endpoints in `src/Elsa.Studio.Web/Client/src/__tests__/extension-builder.test.tsx`
+- [X] T009 [P] [US1] Test trusted capabilities, workspace/project rendering, create form defaults, and action gating in `src/apps/Elsa.Studio.Web/Client/src/__tests__/extension-builder.test.tsx`
+- [X] T010 [P] [US1] Test build/promote/runtime happy path calls canonical endpoints in `src/apps/Elsa.Studio.Web/Client/src/__tests__/extension-builder.test.tsx`
 
 ### Implementation for User Story 1
 
-- [X] T011 [US1] Implement workspace/project browser with create workspace and create project from templates in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
-- [X] T012 [US1] Implement project file tree, file read, editor buffer, save flow, and build guard in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
-- [X] T013 [US1] Implement build submission, status/log polling, artifact display, and build history state in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
-- [X] T014 [US1] Implement promotion action and runtime status refresh in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
+- [X] T011 [US1] Implement workspace/project browser with create workspace and create project from templates in `src/apps/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
+- [X] T012 [US1] Implement project file tree, file read, editor buffer, save flow, and build guard in `src/apps/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
+- [X] T013 [US1] Implement build submission, status/log polling, artifact display, and build history state in `src/apps/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
+- [X] T014 [US1] Implement promotion action and runtime status refresh in `src/apps/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
 
 **Checkpoint**: User Story 1 is fully functional and independently testable.
 
@@ -72,13 +72,13 @@
 
 ### Tests for User Story 2
 
-- [X] T015 [P] [US2] Test dirty editor state, save affordance, diagnostic rendering, and diagnostic-to-file navigation in `src/Elsa.Studio.Web/Client/src/__tests__/extension-builder.test.tsx`
+- [X] T015 [P] [US2] Test dirty editor state, save affordance, diagnostic rendering, and diagnostic-to-file navigation in `src/apps/Elsa.Studio.Web/Client/src/__tests__/extension-builder.test.tsx`
 
 ### Implementation for User Story 2
 
-- [X] T016 [US2] Add create/delete file controls scoped by `canEditFiles` in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
-- [X] T017 [US2] Add structured diagnostics list, severity chips, source-location navigation, and editor line hinting in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
-- [X] T018 [US2] Add build history selection and log/diagnostic replay for previous builds in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
+- [X] T016 [US2] Add create/delete file controls scoped by `canEditFiles` in `src/apps/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
+- [X] T017 [US2] Add structured diagnostics list, severity chips, source-location navigation, and editor line hinting in `src/apps/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
+- [X] T018 [US2] Add build history selection and log/diagnostic replay for previous builds in `src/apps/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
 
 **Checkpoint**: User Stories 1 and 2 both work independently.
 
@@ -92,12 +92,12 @@
 
 ### Tests for User Story 3
 
-- [X] T019 [P] [US3] Test `Duplicate`, `InvalidManifest`, `DependencyPolicy`, and `MalformedPackage` guidance in `src/Elsa.Studio.Web/Client/src/__tests__/extension-builder.test.tsx`
+- [X] T019 [P] [US3] Test `Duplicate`, `InvalidManifest`, `DependencyPolicy`, and `MalformedPackage` guidance in `src/apps/Elsa.Studio.Web/Client/src/__tests__/extension-builder.test.tsx`
 
 ### Implementation for User Story 3
 
-- [X] T020 [US3] Implement category-specific promotion result messages in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
-- [X] T021 [US3] Ensure promote is disabled unless a successful build artifact exists in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
+- [X] T020 [US3] Implement category-specific promotion result messages in `src/apps/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
+- [X] T021 [US3] Ensure promote is disabled unless a successful build artifact exists in `src/apps/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
 
 **Checkpoint**: Promotion failure UX is independently testable.
 
@@ -111,12 +111,12 @@
 
 ### Tests for User Story 4
 
-- [X] T022 [P] [US4] Test runtime state messaging, retry reconciliation, rollback gating, and rollback endpoint calls in `src/Elsa.Studio.Web/Client/src/__tests__/extension-builder.test.tsx`
+- [X] T022 [P] [US4] Test runtime state messaging, retry reconciliation, rollback gating, and rollback endpoint calls in `src/apps/Elsa.Studio.Web/Client/src/__tests__/extension-builder.test.tsx`
 
 ### Implementation for User Story 4
 
-- [X] T023 [US4] Implement runtime inspector states and contributed capability list in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
-- [X] T024 [US4] Implement retry reconciliation and rollback actions gated by `canRollback` in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
+- [X] T023 [US4] Implement runtime inspector states and contributed capability list in `src/apps/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
+- [X] T024 [US4] Implement retry reconciliation and rollback actions gated by `canRollback` in `src/apps/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
 
 **Checkpoint**: Runtime recovery is independently testable.
 
@@ -130,12 +130,12 @@
 
 ### Tests for User Story 5
 
-- [X] T025 [P] [US5] Test generic .NET template selection and no-contributions runtime messaging in `src/Elsa.Studio.Web/Client/src/__tests__/extension-builder.test.tsx`
+- [X] T025 [P] [US5] Test generic .NET template selection and no-contributions runtime messaging in `src/apps/Elsa.Studio.Web/Client/src/__tests__/extension-builder.test.tsx`
 
 ### Implementation for User Story 5
 
-- [X] T026 [US5] Ensure generic templates are selectable and rendered alongside primary Elsa templates in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
-- [X] T027 [US5] Render honest no-contributions runtime messaging in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
+- [X] T026 [US5] Ensure generic templates are selectable and rendered alongside primary Elsa templates in `src/apps/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
+- [X] T027 [US5] Render honest no-contributions runtime messaging in `src/apps/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
 
 **Checkpoint**: Generic .NET projects follow the same path as Elsa projects.
 
@@ -185,8 +185,8 @@
 ## Parallel Example: User Story 1
 
 ```bash
-Task: "Test trusted capabilities, workspace/project rendering, create form defaults, and action gating in src/Elsa.Studio.Web/Client/src/__tests__/extension-builder.test.tsx"
-Task: "Test build/promote/runtime happy path calls canonical endpoints in src/Elsa.Studio.Web/Client/src/__tests__/extension-builder.test.tsx"
+Task: "Test trusted capabilities, workspace/project rendering, create form defaults, and action gating in src/apps/Elsa.Studio.Web/Client/src/__tests__/extension-builder.test.tsx"
+Task: "Test build/promote/runtime happy path calls canonical endpoints in src/apps/Elsa.Studio.Web/Client/src/__tests__/extension-builder.test.tsx"
 ```
 
 ---

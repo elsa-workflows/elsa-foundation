@@ -2,7 +2,7 @@
 
 ## Decision: Implement as a built-in Studio Web route
 
-**Rationale**: `src/Elsa.Studio.Web/Client/src/app/App.tsx` already owns built-in routes for Modules and Package feeds while external modules contribute through `api.navigation.add` and `api.routes.add`. Extension Builder is a first-party trusted-team surface tightly coupled to backend capability discovery and should sit beside these operational screens.
+**Rationale**: `src/apps/Elsa.Studio.Web/Client/src/app/App.tsx` already owns built-in routes for Modules and Package feeds while external modules contribute through `api.navigation.add` and `api.routes.add`. Extension Builder is a first-party trusted-team surface tightly coupled to backend capability discovery and should sit beside these operational screens.
 
 **Alternatives considered**: A separate module package would exercise contribution loading but add build/package overhead and duplicate routing seams for a feature that must ship with the host. A standalone shell would violate the constitution and fragment navigation.
 

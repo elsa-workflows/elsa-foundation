@@ -3,7 +3,7 @@ import type {
   ActivityUpgradeApplyReceipt,
   ActivityUpgradeApplyResult,
   ActivityUpgradePlan
-} from "../../src/Elsa.Studio.Workflows/Client/src/activityUpgradeTypes";
+} from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityUpgradeTypes";
 
 test("broad upgrades select only explicit roots, show the authoritative closure, and preserve atomic-failure evidence", async ({ page }) => {
   const requests: unknown[] = [];

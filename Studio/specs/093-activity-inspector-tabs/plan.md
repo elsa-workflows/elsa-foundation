@@ -96,7 +96,7 @@ specs/093-activity-inspector-tabs/
 ### Source Code
 
 ```text
-src/Elsa.Studio.Workflows/Client/src/
+src/essentials/Elsa.Studio.Workflows/Client/src/
 ├── ActivityPropertiesPanel.tsx
 ├── ActivityOutputsPanel.tsx
 ├── styles.css

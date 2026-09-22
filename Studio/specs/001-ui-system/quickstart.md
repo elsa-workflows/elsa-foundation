@@ -17,7 +17,7 @@ dotnet test
 ## Run the Studio shell
 
 ```bash
-dotnet run --project src/Elsa.Studio.Web/Elsa.Studio.Web.csproj
+dotnet run --project src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj
 ```
 
 Open the Studio shell and validate:

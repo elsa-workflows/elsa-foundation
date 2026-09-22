@@ -98,7 +98,7 @@ specs/003-agentic-studio-experience/
 
 ```text
 # elsa-foundation-studio (this repo)
-src/Elsa.Studio.Web/Client/src/app/
+src/apps/Elsa.Studio.Web/Client/src/app/
 ├── App.tsx                         # assistant entry point and shell mounting
 ├── registry.ts                     # module API creation, agent registry wiring
 ├── ui/                             # shared Workbench primitives/tokens
@@ -110,13 +110,13 @@ src/Elsa.Studio.Web/Client/src/app/
     ├── agentClient.ts
     └── agentContext.ts
 
-src/Elsa.Studio.Web/Client/src/sdk/
+src/apps/Elsa.Studio.Web/Client/src/sdk/
 └── index.ts                        # module-facing agent contribution contracts
 
-src/Elsa.Studio.Web/Client/src/__tests__/
+src/apps/Elsa.Studio.Web/Client/src/__tests__/
 └── *agent*.test.ts(x)              # SDK, shell, filtering, disabled states
 
-src/Elsa.Studio.Api/
+src/essentials/Elsa.Studio.Api/
 └── planned agent proxy/manifest extensions only where Studio host must expose
     module contribution metadata; provider calls remain in elsa-foundation.
 

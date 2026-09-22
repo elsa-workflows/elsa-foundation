@@ -9,19 +9,19 @@
 ## Phase 1: Setup (Shared Infrastructure)
 
 - [x] T001 Confirm the current Workflows and Studio UI test baselines with focused commands from `specs/005-dictionary-editor/quickstart.md`
-- [x] T002 [P] Add typed dictionary metadata contract tests in `src/Elsa.Studio.Web/Client/src/app/ui/__tests__/kit.test.tsx`
-- [x] T003 [P] Add dictionary helper test scaffolding in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityProperties.test.ts`
+- [x] T002 [P] Add typed dictionary metadata contract tests in `src/apps/Elsa.Studio.Web/Client/src/app/ui/__tests__/kit.test.tsx`
+- [x] T003 [P] Add dictionary helper test scaffolding in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityProperties.test.ts`
 
 ---
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-- [x] T004 Add dictionary UI metadata types to `src/Elsa.Studio.Web/Client/src/sdk/index.ts`
-- [x] T005 Implement explicit CLR dictionary recognition and generic argument parsing in `src/Elsa.Studio.Workflows/Client/src/activityProperties.ts`
-- [x] T006 Implement ordered rows, key comparison, typed value validation, and strict duplicate-aware JSON helpers in `src/Elsa.Studio.Workflows/Client/src/dictionaryEditorModel.ts`
-- [x] T007 Implement stable workflow/activity/property session draft storage in `src/Elsa.Studio.Workflows/Client/src/dictionaryEditorSession.ts`
-- [x] T008 [P] Add shared action-notice failing tests in `src/Elsa.Studio.Web/Client/src/app/ui/__tests__/kit.test.tsx`
-- [x] T009 Implement and export the shared action notice in `src/Elsa.Studio.Web/Client/src/app/ui/feedback/ActionNotice.tsx` and `src/Elsa.Studio.Web/Client/src/app/ui/shared.ts`
+- [x] T004 Add dictionary UI metadata types to `src/apps/Elsa.Studio.Web/Client/src/sdk/index.ts`
+- [x] T005 Implement explicit CLR dictionary recognition and generic argument parsing in `src/essentials/Elsa.Studio.Workflows/Client/src/activityProperties.ts`
+- [x] T006 Implement ordered rows, key comparison, typed value validation, and strict duplicate-aware JSON helpers in `src/essentials/Elsa.Studio.Workflows/Client/src/dictionaryEditorModel.ts`
+- [x] T007 Implement stable workflow/activity/property session draft storage in `src/essentials/Elsa.Studio.Workflows/Client/src/dictionaryEditorSession.ts`
+- [x] T008 [P] Add shared action-notice failing tests in `src/apps/Elsa.Studio.Web/Client/src/app/ui/__tests__/kit.test.tsx`
+- [x] T009 Implement and export the shared action notice in `src/apps/Elsa.Studio.Web/Client/src/app/ui/feedback/ActionNotice.tsx` and `src/apps/Elsa.Studio.Web/Client/src/app/ui/shared.ts`
 
 **Checkpoint**: Dictionary parsing, validation, session drafts, and reusable notice are independently tested.
 
@@ -33,11 +33,11 @@
 
 **Independent Test**: Create three entries from empty using keyboard only, remove one, undo it, and verify object value and order.
 
-- [x] T010 [P] [US1] Add inline interaction and focus tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/dictionaryValueEditor.test.tsx`
-- [x] T011 [US1] Implement inline rows, typed editor delegation, add/remove, cap, keyboard flow, and Undo in `src/Elsa.Studio.Workflows/Client/src/DictionaryValueEditor.tsx`
-- [x] T012 [US1] Integrate Literal dictionary admission ahead of collection/text fallbacks in `src/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel.tsx`
-- [x] T013 [US1] Add token-driven inline and responsive dictionary styles in `src/Elsa.Studio.Workflows/Client/src/styles.css`
-- [x] T014 [US1] Verify the independent inline journey with `src/Elsa.Studio.Workflows/Client/src/__tests__/dictionaryValueEditor.test.tsx`
+- [x] T010 [P] [US1] Add inline interaction and focus tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/dictionaryValueEditor.test.tsx`
+- [x] T011 [US1] Implement inline rows, typed editor delegation, add/remove, cap, keyboard flow, and Undo in `src/essentials/Elsa.Studio.Workflows/Client/src/DictionaryValueEditor.tsx`
+- [x] T012 [US1] Integrate Literal dictionary admission ahead of collection/text fallbacks in `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel.tsx`
+- [x] T013 [US1] Add token-driven inline and responsive dictionary styles in `src/essentials/Elsa.Studio.Workflows/Client/src/styles.css`
+- [x] T014 [US1] Verify the independent inline journey with `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/dictionaryValueEditor.test.tsx`
 
 ---
 
@@ -47,9 +47,9 @@
 
 **Independent Test**: Create invalid drafts, move between inline/expanded and activities, then fix/discard them while confirming the committed object remains safe.
 
-- [x] T015 [P] [US2] Add draft lifecycle and external replacement tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/dictionaryValueEditor.test.tsx`
-- [x] T016 [US2] Connect row validation and session draft lifecycle in `src/Elsa.Studio.Workflows/Client/src/DictionaryValueEditor.tsx` and `src/Elsa.Studio.Workflows/Client/src/dictionaryEditorSession.ts`
-- [x] T017 [US2] Add Activity Properties integration coverage for metadata, session persistence, and syntax transitions in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityPropertyGroups.test.tsx`
+- [x] T015 [P] [US2] Add draft lifecycle and external replacement tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/dictionaryValueEditor.test.tsx`
+- [x] T016 [US2] Connect row validation and session draft lifecycle in `src/essentials/Elsa.Studio.Workflows/Client/src/DictionaryValueEditor.tsx` and `src/essentials/Elsa.Studio.Workflows/Client/src/dictionaryEditorSession.ts`
+- [x] T017 [US2] Add Activity Properties integration coverage for metadata, session persistence, and syntax transitions in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityPropertyGroups.test.tsx`
 
 ---
 
@@ -59,10 +59,10 @@
 
 **Independent Test**: Filter and edit a 100-entry dictionary in the modal without changing stored order; verify focus isolation and restoration.
 
-- [x] T018 [P] [US3] Add expanded Table, filtering, tab memory, and modal focus tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/dictionaryExpressionEditor.test.tsx`
-- [x] T019 [US3] Harden focus isolation/restoration and dictionary expanded admission in `src/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel.tsx`
-- [x] T020 [US3] Implement expanded Table filtering, tab memory, error summary, and Add-filter behavior in `src/Elsa.Studio.Workflows/Client/src/DictionaryValueEditor.tsx`
-- [x] T021 [US3] Add token-driven modal table/filter/error styles in `src/Elsa.Studio.Workflows/Client/src/styles.css`
+- [x] T018 [P] [US3] Add expanded Table, filtering, tab memory, and modal focus tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/dictionaryExpressionEditor.test.tsx`
+- [x] T019 [US3] Harden focus isolation/restoration and dictionary expanded admission in `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel.tsx`
+- [x] T020 [US3] Implement expanded Table filtering, tab memory, error summary, and Add-filter behavior in `src/essentials/Elsa.Studio.Workflows/Client/src/DictionaryValueEditor.tsx`
+- [x] T021 [US3] Add token-driven modal table/filter/error styles in `src/essentials/Elsa.Studio.Workflows/Client/src/styles.css`
 
 ---
 
@@ -72,10 +72,10 @@
 
 **Independent Test**: Enter valid and invalid JSON, detect duplicate/type errors, format/copy, close/reopen, and prove only valid objects commit.
 
-- [x] T022 [P] [US4] Add strict JSON, duplicate, type, format/copy, and guard tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/dictionaryExpressionEditor.test.tsx`
-- [x] T023 [US4] Implement JSON code-editor tab, diagnostics, formatting, copying, and guarded transitions in `src/Elsa.Studio.Workflows/Client/src/DictionaryValueEditor.tsx`
-- [x] T024 [US4] Integrate the dictionary surface for structured Object syntax in `src/Elsa.Studio.Workflows/Client/src/objectExpressionEditor.tsx`
-- [x] T025 [US4] Prove Literal/Object integration and non-dictionary syntax regressions in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityPropertyGroups.test.tsx`
+- [x] T022 [P] [US4] Add strict JSON, duplicate, type, format/copy, and guard tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/dictionaryExpressionEditor.test.tsx`
+- [x] T023 [US4] Implement JSON code-editor tab, diagnostics, formatting, copying, and guarded transitions in `src/essentials/Elsa.Studio.Workflows/Client/src/DictionaryValueEditor.tsx`
+- [x] T024 [US4] Integrate the dictionary surface for structured Object syntax in `src/essentials/Elsa.Studio.Workflows/Client/src/objectExpressionEditor.tsx`
+- [x] T025 [US4] Prove Literal/Object integration and non-dictionary syntax regressions in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityPropertyGroups.test.tsx`
 
 ---
 
@@ -85,9 +85,9 @@
 
 **Independent Test**: Exercise scalar, contributed, nullable, and complex values using keyboard-only and read-only workflows.
 
-- [x] T026 [P] [US5] Add typed/complex/read-only tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/dictionaryValueEditor.test.tsx` and `src/Elsa.Studio.Workflows/Client/src/__tests__/dictionaryExpressionEditor.test.tsx`
-- [x] T027 [US5] Implement complex value summaries and expandable per-row JSON details in `src/Elsa.Studio.Workflows/Client/src/DictionaryValueEditor.tsx`
-- [x] T028 [US5] Complete accessible labels, descriptions, disabled states, error focus, and read-only behavior in `src/Elsa.Studio.Workflows/Client/src/DictionaryValueEditor.tsx`
+- [x] T026 [P] [US5] Add typed/complex/read-only tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/dictionaryValueEditor.test.tsx` and `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/dictionaryExpressionEditor.test.tsx`
+- [x] T027 [US5] Implement complex value summaries and expandable per-row JSON details in `src/essentials/Elsa.Studio.Workflows/Client/src/DictionaryValueEditor.tsx`
+- [x] T028 [US5] Complete accessible labels, descriptions, disabled states, error focus, and read-only behavior in `src/essentials/Elsa.Studio.Workflows/Client/src/DictionaryValueEditor.tsx`
 
 ---
 

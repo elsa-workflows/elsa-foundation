@@ -12,7 +12,7 @@ artifacts/
 .pnpm-store/
 
 # Local dev-only visual harness for the studio client
-src/Elsa.Studio.Web/Client/harness/
+src/apps/Elsa.Studio.Web/Client/harness/
 
 # Git / VCS
 .git/

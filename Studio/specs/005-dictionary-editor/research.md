@@ -2,7 +2,7 @@
 
 ## Decision 1: Integrate through the activity property editor pipeline
 
-**Decision**: Add dictionary recognition and rendering at the existing activity-input property seam in `src/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel.tsx`. `PropertyRow` remains responsible for syntax selection, read-only state, expression transitions, inline rendering, and launching the expanded surface. A string-keyed dictionary is treated as a structured collection editor before the generic collection repeater or scalar property editor is selected.
+**Decision**: Add dictionary recognition and rendering at the existing activity-input property seam in `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel.tsx`. `PropertyRow` remains responsible for syntax selection, read-only state, expression transitions, inline rendering, and launching the expanded surface. A string-keyed dictionary is treated as a structured collection editor before the generic collection repeater or scalar property editor is selected.
 
 The dictionary experience is available for the `Literal` and admitted structured `Object` modes. Other syntaxes continue to resolve their registered expression editor contributions. The dictionary editor is considered a collection editor for layout purposes so the inline syntax-picker overlay cannot cover a multi-row table. Unlike the current generic collection repeater, it is explicitly expandable in both supported modes.
 
@@ -16,7 +16,7 @@ The dictionary experience is available for the `Literal` and admitted structured
 
 ## Decision 2: Reuse and harden the existing expanded property modal
 
-**Decision**: Extend `ExpandedPropertyEditor` in `ActivityPropertiesPanel.tsx` and its `.wf-property-editor-*` styles in `src/Elsa.Studio.Workflows/Client/src/styles.css` rather than introduce a drawer or a second dictionary-specific overlay. Extracting a reusable Workflows modal shell is appropriate if it keeps the existing property-editor appearance and call site.
+**Decision**: Extend `ExpandedPropertyEditor` in `ActivityPropertiesPanel.tsx` and its `.wf-property-editor-*` styles in `src/essentials/Elsa.Studio.Workflows/Client/src/styles.css` rather than introduce a drawer or a second dictionary-specific overlay. Extracting a reusable Workflows modal shell is appropriate if it keeps the existing property-editor appearance and call site.
 
 As part of this feature, harden the modal to:
 
@@ -40,7 +40,7 @@ As part of this feature, harden the modal to:
 
 ## Decision 3: Use the shared tab keyboard behavior, but own linked panel IDs locally
 
-**Decision**: Reuse `StudioTabs`/`useTablistKeyboard` behavior from `src/Elsa.Studio.Web/Client/src/app/ui/layout/Tabs.tsx` for the expanded **Table** and **JSON** tabs. Preserve its automatic activation, roving `tabIndex`, Arrow key wrapping, and Home/End behavior. Render correctly linked `role="tabpanel"` regions from the dictionary editor using IDs generated in the same component.
+**Decision**: Reuse `StudioTabs`/`useTablistKeyboard` behavior from `src/apps/Elsa.Studio.Web/Client/src/app/ui/layout/Tabs.tsx` for the expanded **Table** and **JSON** tabs. Preserve its automatic activation, roving `tabIndex`, Arrow key wrapping, and Home/End behavior. Render correctly linked `role="tabpanel"` regions from the dictionary editor using IDs generated in the same component.
 
 **Rationale**: The shared tabs already implement the WAI-ARIA keyboard interaction used elsewhere in Studio and are exported through `@elsa-workflows/studio-ui`.
 
@@ -53,7 +53,7 @@ As part of this feature, harden the modal to:
 
 ## Decision 4: Reuse StudioCodeEditor for raw JSON
 
-**Decision**: Render the raw dictionary tab with `StudioCodeEditor` from `@elsa-workflows/studio-code-editor`, a JSON language adapter, an `elsa://` document URI, explicit `ariaLabel`, read-only propagation, and `StudioCodeDiagnostic` entries. Use `ObjectExpandedEditor` in `src/Elsa.Studio.Workflows/Client/src/objectExpressionEditor.tsx` as the interaction precedent: editor text is local draft state, valid values emit through `onChange`, and invalid text remains private.
+**Decision**: Render the raw dictionary tab with `StudioCodeEditor` from `@elsa-workflows/studio-code-editor`, a JSON language adapter, an `elsa://` document URI, explicit `ariaLabel`, read-only propagation, and `StudioCodeDiagnostic` entries. Use `ObjectExpandedEditor` in `src/essentials/Elsa.Studio.Workflows/Client/src/objectExpressionEditor.tsx` as the interaction precedent: editor text is local draft state, valid values emit through `onChange`, and invalid text remains private.
 
 Dictionary JSON parsing is stricter than the existing Object editor:
 
@@ -92,7 +92,7 @@ Clear a record when the user explicitly discards it or when the property's exter
 
 ## Decision 6: Add a shared, domain-neutral ActionNotice primitive
 
-**Decision**: Add a reusable action notice under the shared UI feedback seam, conceptually `src/Elsa.Studio.Web/Client/src/app/ui/feedback/ActionNotice.tsx`, and export it from `app/ui/shared.ts` for `@elsa-workflows/studio-ui` consumers. Its API accepts a message, optional action label/callback, dismiss behavior, and placement class. The primitive owns:
+**Decision**: Add a reusable action notice under the shared UI feedback seam, conceptually `src/apps/Elsa.Studio.Web/Client/src/app/ui/feedback/ActionNotice.tsx`, and export it from `app/ui/shared.ts` for `@elsa-workflows/studio-ui` consumers. Its API accepts a message, optional action label/callback, dismiss behavior, and placement class. The primitive owns:
 
 - an eight-second lifetime;
 - pausing the timer on hover and keyboard focus;
@@ -113,7 +113,7 @@ The caller owns semantic reversibility. Dictionary removal supplies an inverse o
 
 ## Decision 7: Extend token-governed Workflows styling and shared primitives
 
-**Decision**: Add dictionary-specific styles to `src/Elsa.Studio.Workflows/Client/src/styles.css`, adjacent to the existing property-row, expanded-property-editor, and Object JSON editor styles. Use `--studio-*` tokens or the module's existing `--wf-*` aliases only. Reuse `StudioButton` and `StudioSearchInput` from `@elsa-workflows/studio-ui` for common controls.
+**Decision**: Add dictionary-specific styles to `src/essentials/Elsa.Studio.Workflows/Client/src/styles.css`, adjacent to the existing property-row, expanded-property-editor, and Object JSON editor styles. Use `--studio-*` tokens or the module's existing `--wf-*` aliases only. Reuse `StudioButton` and `StudioSearchInput` from `@elsa-workflows/studio-ui` for common controls.
 
 The inline editor renders at most five committed entries plus current draft rows. At narrow inspector widths, key and value fields stack, their visible labels remain present, and remove stays at the upper right. The expanded modal retains a two-column key/value table. Filtering changes visibility only; it never changes insertion order. Invalid and incomplete rows remain visible under filtering.
 
@@ -129,7 +129,7 @@ The existing modal selectors (`.wf-property-editor-*`), property form selectors 
 
 ## Decision 8: Reuse the robust clipboard fallback
 
-**Decision**: Reuse or extract the behavior of `copyTextToClipboard` from `src/Elsa.Studio.Workflows/Client/src/workflow-editor/editorHelpers.ts` for **Copy JSON**. It uses `navigator.clipboard.writeText` when available and falls back to a temporary read-only textarea plus `document.execCommand("copy")`.
+**Decision**: Reuse or extract the behavior of `copyTextToClipboard` from `src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorHelpers.ts` for **Copy JSON**. It uses `navigator.clipboard.writeText` when available and falls back to a temporary read-only textarea plus `document.execCommand("copy")`.
 
 **Rationale**: Several modules call the optional Clipboard API directly, but this helper already handles browsers or test environments where it is unavailable. Copy success is announced through ActionNotice; copy failure remains an actionable error and must not report false success.
 

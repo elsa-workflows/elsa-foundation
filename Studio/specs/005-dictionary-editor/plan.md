@@ -59,14 +59,14 @@ specs/005-dictionary-editor/
 ### Source Code (repository root)
 
 ```text
-src/Elsa.Studio.Web/Client/src/
+src/apps/Elsa.Studio.Web/Client/src/
 ├── sdk/index.ts
 └── app/ui/
     ├── feedback/ActionNotice.tsx
     ├── shared.ts
     └── __tests__/kit.test.tsx
 
-src/Elsa.Studio.Workflows/Client/src/
+src/essentials/Elsa.Studio.Workflows/Client/src/
 ├── activityProperties.ts
 ├── ActivityPropertiesPanel.tsx
 ├── DictionaryValueEditor.tsx

@@ -12,7 +12,7 @@
 
 **Purpose**: Establish clean baselines and the coordinated repository boundary.
 
-- [x] T001 Run and record the focused Workflows baseline tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/`
+- [x] T001 Run and record the focused Workflows baseline tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/`
 - [x] T002 Run and record the existing Foundation Activity Graph tests in `elsa-foundation/tests/Elsa/Activities/Graph/Tests/`
 - [x] T003 [P] Add the accepted domain terms to `CONTEXT.md` and architectural decisions to `docs/adr/0012-*.md` through `docs/adr/0018-*.md`
 
@@ -22,17 +22,17 @@
 
 **Purpose**: Create the controlled adapter/workspace boundary required by every graph-authoring story.
 
-- [x] T004 [P] Add failing adapter round-trip and unknown-field preservation tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityGraphDocumentAdapter.test.ts`
-- [x] T005 [P] Add failing resource-scope contribution tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/graphAuthoringContributions.test.ts`
-- [x] T006 Define graph resource kinds and controlled document adapter types in `src/Elsa.Studio.Workflows/Client/src/graph-authoring/graphDocumentAdapter.ts`
-- [x] T007 Implement the Activity Graph payload/layout adapter in `src/Elsa.Studio.Workflows/Client/src/activityGraphDocumentAdapter.ts`
-- [x] T008 Extend graph-authoring contribution metadata in `src/Elsa.Studio.Web/Client/src/sdk/index.ts` and host registration in `src/Elsa.Studio.Workflows/Client/src/module.tsx`
-- [x] T009 Add failing workspace interaction and accessibility tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/graphAuthoringWorkspace.test.tsx`
-- [x] T010 Extract controlled canvas, palette, breadcrumb, scope, and inspector composition into `src/Elsa.Studio.Workflows/Client/src/graph-authoring/GraphAuthoringWorkspace.tsx`
-- [x] T011 Extract adapter-driven canvas mechanics into `src/Elsa.Studio.Workflows/Client/src/graph-authoring/useGraphAuthoringCanvas.ts`
-- [x] T012 Extract the resource-neutral inspector shell into `src/Elsa.Studio.Workflows/Client/src/graph-authoring/GraphAuthoringInspector.tsx`
-- [x] T013 Adapt `src/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor.tsx` to host `GraphAuthoringWorkspace` without lifecycle or UX changes
-- [x] T014 Run existing workflow adapter, document, history, serialization, UX, and accessibility tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/`
+- [x] T004 [P] Add failing adapter round-trip and unknown-field preservation tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityGraphDocumentAdapter.test.ts`
+- [x] T005 [P] Add failing resource-scope contribution tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/graphAuthoringContributions.test.ts`
+- [x] T006 Define graph resource kinds and controlled document adapter types in `src/essentials/Elsa.Studio.Workflows/Client/src/graph-authoring/graphDocumentAdapter.ts`
+- [x] T007 Implement the Activity Graph payload/layout adapter in `src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphDocumentAdapter.ts`
+- [x] T008 Extend graph-authoring contribution metadata in `src/apps/Elsa.Studio.Web/Client/src/sdk/index.ts` and host registration in `src/essentials/Elsa.Studio.Workflows/Client/src/module.tsx`
+- [x] T009 Add failing workspace interaction and accessibility tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/graphAuthoringWorkspace.test.tsx`
+- [x] T010 Extract controlled canvas, palette, breadcrumb, scope, and inspector composition into `src/essentials/Elsa.Studio.Workflows/Client/src/graph-authoring/GraphAuthoringWorkspace.tsx`
+- [x] T011 Extract adapter-driven canvas mechanics into `src/essentials/Elsa.Studio.Workflows/Client/src/graph-authoring/useGraphAuthoringCanvas.ts`
+- [x] T012 Extract the resource-neutral inspector shell into `src/essentials/Elsa.Studio.Workflows/Client/src/graph-authoring/GraphAuthoringInspector.tsx`
+- [x] T013 Adapt `src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor.tsx` to host `GraphAuthoringWorkspace` without lifecycle or UX changes
+- [x] T014 Run existing workflow adapter, document, history, serialization, UX, and accessibility tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/`
 
 **Checkpoint**: Workflow authoring uses the controlled workspace with no observable regression, and Activity Graph documents round-trip through the adapter.
 
@@ -46,16 +46,16 @@
 
 ### Tests for User Story 1
 
-- [x] T015 [P] [US1] Add failing provider-collapse/latest-format/composition request tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityDefinitionCreation.test.tsx`
-- [x] T016 [P] [US1] Add failing category normalization, authorization-source, keyboard, and free-form tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityCategoryCombobox.test.tsx`
+- [x] T015 [P] [US1] Add failing provider-collapse/latest-format/composition request tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityDefinitionCreation.test.tsx`
+- [x] T016 [P] [US1] Add failing category normalization, authorization-source, keyboard, and free-form tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityCategoryCombobox.test.tsx`
 
 ### Implementation for User Story 1
 
-- [x] T017 [US1] Add provider capability collapsing and latest compatible schema selection in `src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionCreateDialog.tsx`
-- [x] T018 [US1] Add Flowchart, Sequence, and BPMN composition cards using shared root templates in `src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionCreateDialog.tsx`
-- [x] T019 [US1] Add authorized catalog-backed category suggestion derivation in `src/Elsa.Studio.Workflows/Client/src/activityCategories.ts`
-- [x] T020 [US1] Replace Category with an accessible creatable combobox in `src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionCreateDialog.tsx`
-- [x] T021 [US1] Add token-driven creation/composition/combobox styles in `src/Elsa.Studio.Workflows/Client/src/styles.css`
+- [x] T017 [US1] Add provider capability collapsing and latest compatible schema selection in `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionCreateDialog.tsx`
+- [x] T018 [US1] Add Flowchart, Sequence, and BPMN composition cards using shared root templates in `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionCreateDialog.tsx`
+- [x] T019 [US1] Add authorized catalog-backed category suggestion derivation in `src/essentials/Elsa.Studio.Workflows/Client/src/activityCategories.ts`
+- [x] T020 [US1] Replace Category with an accessible creatable combobox in `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionCreateDialog.tsx`
+- [x] T021 [US1] Add token-driven creation/composition/combobox styles in `src/essentials/Elsa.Studio.Workflows/Client/src/styles.css`
 
 **Checkpoint**: Creation is independently usable and never exposes schema revisions as a product choice.
 
@@ -69,18 +69,18 @@
 
 ### Tests for User Story 2
 
-- [x] T022 [P] [US2] Add failing root-scope, palette, selection, property, nested-scope, connection, and layout tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityGraphImplementationEditor.test.tsx`
-- [x] T023 [P] [US2] Extend exact-revision autosave, conflict, recovery, navigation, and external-replacement tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityDefinitionAuthoring.test.tsx`
-- [x] T024 [P] [US2] Add failing Activity Graph undo/redo and reset-boundary tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityGraphHistory.test.ts`
+- [x] T022 [P] [US2] Add failing root-scope, palette, selection, property, nested-scope, connection, and layout tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityGraphImplementationEditor.test.tsx`
+- [x] T023 [P] [US2] Extend exact-revision autosave, conflict, recovery, navigation, and external-replacement tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityDefinitionAuthoring.test.tsx`
+- [x] T024 [P] [US2] Add failing Activity Graph undo/redo and reset-boundary tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityGraphHistory.test.ts`
 
 ### Implementation for User Story 2
 
-- [x] T025 [US2] Replace the bespoke root editor with the adapter-backed workspace host in `src/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor.tsx`
-- [x] T026 [US2] Add graph-root scope-owner variables/composition behavior in `src/Elsa.Studio.Workflows/Client/src/activityGraphDocumentAdapter.ts` and `src/Elsa.Studio.Workflows/Client/src/graph-authoring/GraphAuthoringInspector.tsx`
-- [x] T027 [US2] Adapt public-input and graph-variable expression references in `src/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor.tsx`
-- [x] T028 [US2] Wire shared property/expression editors and filtered graph host contributions through `src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionsPage.tsx` and `src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDraftEditor.tsx`
-- [x] T029 [US2] Implement local document history whose restores flow through provider `onChange` in `src/Elsa.Studio.Workflows/Client/src/activityGraphHistory.ts`
-- [x] T030 [US2] Reset Activity Graph history on conflict, migration, recovery, and accepted external replacement in `src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDraftEditor.tsx`
+- [x] T025 [US2] Replace the bespoke root editor with the adapter-backed workspace host in `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor.tsx`
+- [x] T026 [US2] Add graph-root scope-owner variables/composition behavior in `src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphDocumentAdapter.ts` and `src/essentials/Elsa.Studio.Workflows/Client/src/graph-authoring/GraphAuthoringInspector.tsx`
+- [x] T027 [US2] Adapt public-input and graph-variable expression references in `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor.tsx`
+- [x] T028 [US2] Wire shared property/expression editors and filtered graph host contributions through `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionsPage.tsx` and `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDraftEditor.tsx`
+- [x] T029 [US2] Implement local document history whose restores flow through provider `onChange` in `src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphHistory.ts`
+- [x] T030 [US2] Reset Activity Graph history on conflict, migration, recovery, and accepted external replacement in `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDraftEditor.tsx`
 
 **Checkpoint**: Activity Graph editing provides shared designer behavior without workflow lifecycle controls.
 
@@ -96,18 +96,18 @@
 
 - [x] T031 [P] [US3] Add failing Foundation provider validation tests for target convergence and source uniqueness in `elsa-foundation/tests/Elsa/Activities/Graph/Tests/GraphActivityProviderTests.cs`
 - [x] T032 [P] [US3] Add failing Foundation descriptor/runtime tests for convergent boundary outcomes in `elsa-foundation/tests/Elsa/Activities/Graph/Tests/GraphActivityExecutionTests.cs`
-- [x] T033 [P] [US3] Update Studio mapping tests for target reuse, source uniqueness, and emitted-target coverage in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityGraphOutcomeMappings.test.ts`
-- [x] T034 [P] [US3] Add public multi-outcome default/emission tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityContractAuthoring.test.ts`
-- [x] T035 [P] [US3] Add boundary output expression and required/optional validation tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityGraphImplementationEditor.test.tsx`
+- [x] T033 [P] [US3] Update Studio mapping tests for target reuse, source uniqueness, and emitted-target coverage in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityGraphOutcomeMappings.test.ts`
+- [x] T034 [P] [US3] Add public multi-outcome default/emission tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityContractAuthoring.test.ts`
+- [x] T035 [P] [US3] Add boundary output expression and required/optional validation tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityGraphImplementationEditor.test.tsx`
 
 ### Implementation for User Story 3
 
 - [x] T036 [US3] Permit repeated public boundary targets while retaining source uniqueness in `elsa-foundation/src/Elsa/Activities/Graph/Design/Services/GraphActivityProvider.cs`
 - [x] T037 [US3] Permit convergent boundary names in `elsa-foundation/src/Elsa/Activities/Graph/Runtime/Models/GraphActivityDescriptor.cs`
-- [x] T038 [US3] Remove target-reuse prohibition and retain emitted-target coverage in `src/Elsa.Studio.Workflows/Client/src/activityGraphOutcomeMappings.ts` and `src/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor.tsx`
-- [x] T039 [US3] Ensure new public outcomes default to emitted for every provider in `src/Elsa.Studio.Workflows/Client/src/activityContractAuthoring.ts`
-- [x] T040 [US3] Recompose public inputs, outputs, outcomes, contract proposals, and mappings under Public Interface in `src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDraftEditor.tsx`
-- [x] T041 [US3] Add boundary output mappings using shared expression/reference editors in `src/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor.tsx`
+- [x] T038 [US3] Remove target-reuse prohibition and retain emitted-target coverage in `src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphOutcomeMappings.ts` and `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor.tsx`
+- [x] T039 [US3] Ensure new public outcomes default to emitted for every provider in `src/essentials/Elsa.Studio.Workflows/Client/src/activityContractAuthoring.ts`
+- [x] T040 [US3] Recompose public inputs, outputs, outcomes, contract proposals, and mappings under Public Interface in `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDraftEditor.tsx`
+- [x] T041 [US3] Add boundary output mappings using shared expression/reference editors in `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor.tsx`
 
 **Checkpoint**: Foundation and Studio agree on multi-outcome and convergent-boundary semantics.
 
@@ -121,15 +121,15 @@
 
 ### Tests for User Story 4
 
-- [x] T042 [P] [US4] Add failing serialization, validation, unknown-field, and layout reconciliation tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityDefinitionDraftJson.test.ts`
-- [x] T043 [P] [US4] Add failing Code tab Apply/Reset/dirty/invalid/navigation/action-gating tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityDefinitionDraftCodeView.test.tsx`
+- [x] T042 [P] [US4] Add failing serialization, validation, unknown-field, and layout reconciliation tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityDefinitionDraftJson.test.ts`
+- [x] T043 [P] [US4] Add failing Code tab Apply/Reset/dirty/invalid/navigation/action-gating tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityDefinitionDraftCodeView.test.tsx`
 
 ### Implementation for User Story 4
 
-- [x] T044 [US4] Implement authoring projection serialization, parsing, semantic validation, and layout reconciliation in `src/Elsa.Studio.Workflows/Client/src/activityDefinitionDraftJson.ts`
-- [x] T045 [US4] Implement the controlled JSON buffer and Apply/Reset UI in `src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDraftCodeView.tsx`
-- [x] T046 [US4] Add Designer/Public Interface/Code view state and JSON dirty/invalid gates in `src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDraftEditor.tsx`
-- [x] T047 [US4] Add Code view and dirty-state token styles in `src/Elsa.Studio.Workflows/Client/src/styles.css`
+- [x] T044 [US4] Implement authoring projection serialization, parsing, semantic validation, and layout reconciliation in `src/essentials/Elsa.Studio.Workflows/Client/src/activityDefinitionDraftJson.ts`
+- [x] T045 [US4] Implement the controlled JSON buffer and Apply/Reset UI in `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDraftCodeView.tsx`
+- [x] T046 [US4] Add Designer/Public Interface/Code view state and JSON dirty/invalid gates in `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDraftEditor.tsx`
+- [x] T047 [US4] Add Code view and dirty-state token styles in `src/essentials/Elsa.Studio.Workflows/Client/src/styles.css`
 
 **Checkpoint**: Visual and JSON editing share one applied draft and one exact-revision persistence path.
 
@@ -143,15 +143,15 @@
 
 ### Tests for User Story 5
 
-- [x] T048 [P] [US5] Add diagnostic grouping/focus/return and JSON-gate tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityDefinitionDiagnostics.test.tsx`
-- [x] T049 [P] [US5] Extend test-run gating and runtime result tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityDefinitionTestRuns.test.ts`
-- [x] T050 [P] [US5] Add legacy schema edit/migration-gating tests in `src/Elsa.Studio.Workflows/Client/src/__tests__/activityGraphImplementationEditor.test.tsx`
+- [x] T048 [P] [US5] Add diagnostic grouping/focus/return and JSON-gate tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityDefinitionDiagnostics.test.tsx`
+- [x] T049 [P] [US5] Extend test-run gating and runtime result tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityDefinitionTestRuns.test.ts`
+- [x] T050 [P] [US5] Add legacy schema edit/migration-gating tests in `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityGraphImplementationEditor.test.tsx`
 
 ### Implementation for User Story 5
 
-- [x] T051 [US5] Recompose graph/contract/provider/JSON diagnostics as a collapsible bottom surface in `src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDiagnosticsPanel.tsx`
-- [x] T052 [US5] Integrate Activity Definition Inspector and Runtime supporting surfaces in `src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDraftEditor.tsx`
-- [x] T053 [US5] Preserve explicit schema 1 editing and reviewed migration guidance in `src/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor.tsx` and `src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionProviderMigrationDialog.tsx`
+- [x] T051 [US5] Recompose graph/contract/provider/JSON diagnostics as a collapsible bottom surface in `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDiagnosticsPanel.tsx`
+- [x] T052 [US5] Integrate Activity Definition Inspector and Runtime supporting surfaces in `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDraftEditor.tsx`
+- [x] T053 [US5] Preserve explicit schema 1 editing and reviewed migration guidance in `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor.tsx` and `src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionProviderMigrationDialog.tsx`
 
 **Checkpoint**: Authors can move from diagnostics to a successful activity-specific test run without encountering workflow lifecycle controls.
 

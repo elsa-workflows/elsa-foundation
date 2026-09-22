@@ -115,7 +115,7 @@ specs/006-run-detail-input-evidence/
 ### Elsa Foundation Studio
 
 ```text
-src/Elsa.Studio.Workflows/Client/src/
+src/essentials/Elsa.Studio.Workflows/Client/src/
 ├── workflowTypes.ts
 ├── styles.css
 └── workflow-editor/
@@ -125,7 +125,7 @@ src/Elsa.Studio.Workflows/Client/src/
     ├── useRunDetailLayout.ts
     └── *.test.ts(x)
 
-src/Elsa.Studio.Web/Client/src/app/styles.css
+src/apps/Elsa.Studio.Web/Client/src/app/styles.css
 tests/                                 # route/browser coverage where appropriate
 ```
 

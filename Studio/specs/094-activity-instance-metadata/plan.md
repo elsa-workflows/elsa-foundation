@@ -76,7 +76,7 @@ docs/adr/
 ### Studio source
 
 ```text
-src/Elsa.Studio.Web/Client/src/app/
+src/apps/Elsa.Studio.Web/Client/src/app/
 ├── ui/identity/CopyableIdentifier.tsx
 ├── ui/shared.ts
 ├── modules/workflows/

@@ -14,7 +14,7 @@ import { StatusChip, StudioToolbar, StudioToolbarGroup, StudioDataGrid } from "@
  */
 import "./theme.css";
 // External consumers: import "@elsa-workflows/studio-ui/tokens.css";
-import "../../../src/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
+import "../../../src/apps/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
 import "./studio-components.css";
 import "./page.css";
 

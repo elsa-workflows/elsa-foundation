@@ -90,7 +90,7 @@ src/Elsa.Foundation.Identity.Legacy/            # Elsa Identity compatibility ad
 src/Elsa.Foundation.Identity.Api/               # management API endpoints (/_elsa/identity/*)
 
 # elsa-foundation-studio (this repo)
-src/Elsa.Studio.Web/Client/src/auth/            # provider-agnostic auth SDK
+src/apps/Elsa.Studio.Web/Client/src/auth/            # provider-agnostic auth SDK
 ├── AuthProvider.tsx
 ├── useAuthSession.ts
 ├── usePermissions.ts

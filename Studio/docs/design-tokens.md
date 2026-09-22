@@ -17,12 +17,12 @@ alias onto it), never layer 1 directly.
 | Layer | Vocabulary | Who owns it | Where |
 | --- | --- | --- | --- |
 | **1 — primitives** | `--background`, `--primary`, `--radius`, `--ring`, … | the **host** supplies these; `ThemeProvider` rewrites them per theme/mode at runtime | host `app/styles.css` `:root`; a standalone consumer supplies them itself (see `examples/*/src/theme.css`) |
-| **2 — semantic** | `--studio-*` | the shared token layer; each is an alias onto a layer-1 primitive | `src/Elsa.Studio.Web/Client/src/app/ui/tokens.css` |
+| **2 — semantic** | `--studio-*` | the shared token layer; each is an alias onto a layer-1 primitive | `src/apps/Elsa.Studio.Web/Client/src/app/ui/tokens.css` |
 
 Layer 2 is almost entirely aliases (`--studio-bg: var(--background)`), so remapping layer 1
 re-themes every `--studio-*` token at once. The published `@elsa-workflows/studio-ui/tokens.css`
 ships layer 2 plus a light-theme layer-1 snapshot so it resolves standalone
-(`src/Elsa.Studio.Web/StudioUi/scripts/build-tokens.mjs`).
+(`src/apps/Elsa.Studio.Web/StudioUi/scripts/build-tokens.mjs`).
 
 ### What a host must supply (layer 1)
 
@@ -216,7 +216,7 @@ rule 1.) `Elsa.Studio.Secrets` follows the same shape with `--studio-*`-first fa
 ## Enforcement
 
 `pnpm lint:css` runs `elsa/no-raw-color-literal` over module Client CSS
-(`src/*/Client/src/**/*.css`, excluding the host shell `src/Elsa.Studio.Web/**`, which owns the
+(`src/*/Client/src/**/*.css`, excluding the host shell `src/apps/Elsa.Studio.Web/**`, which owns the
 theme palette). It is wired into `pnpm lint` so it runs in the same flow as ESLint. Host theme
 definition files (`app/ui/tokens.css`, `app/styles.css`, `app/themes/**`) are where literals
 legitimately live and are excluded.

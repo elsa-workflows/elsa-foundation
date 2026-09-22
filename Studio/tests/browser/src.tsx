@@ -1,26 +1,26 @@
 import React, { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ActivityPropertiesPanel } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel";
-import { ActivityDefinitionsPage } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionsPage";
-import { ActivityUpgradeWorkbenchPage } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityUpgradeWorkbenchPage";
-import { Elsa3ReusableImportPage } from "../../src/Elsa.Studio.Workflows/Client/src/Elsa3ReusableImportPage";
+import { ActivityPropertiesPanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel";
+import { ActivityDefinitionsPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionsPage";
+import { ActivityUpgradeWorkbenchPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityUpgradeWorkbenchPage";
+import { Elsa3ReusableImportPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/Elsa3ReusableImportPage";
 import {
   activityGraphImplementationEditorContribution,
   activityGraphSchema2ImplementationEditorContribution
-} from "../../src/Elsa.Studio.Workflows/Client/src/activityGraphContribution";
+} from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphContribution";
 import {
   ActivityGraphImplementationEditor,
   ActivityGraphPublicInterfaceEditor
-} from "../../src/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor";
-import { ActivityDefinitionCreateDialog } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionCreateDialog";
-import { ActivityDefinitionDraftCodeView } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDraftCodeView";
-import { ActivityDefinitionDiagnosticsPanel } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDiagnosticsPanel";
-import { ActivityDefinitionTestRunDialog } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityDefinitionTestRunDialog";
-import { WorkflowLazyBoundary } from "../../src/Elsa.Studio.Workflows/Client/src/WorkflowLazyBoundary";
-import { WorkflowDefinitions } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowDefinitions";
-import { setDialogs } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
-import { useRunDetailLayout } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/useRunDetailLayout";
+} from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor";
+import { ActivityDefinitionCreateDialog } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionCreateDialog";
+import { ActivityDefinitionDraftCodeView } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDraftCodeView";
+import { ActivityDefinitionDiagnosticsPanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDiagnosticsPanel";
+import { ActivityDefinitionTestRunDialog } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionTestRunDialog";
+import { WorkflowLazyBoundary } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/WorkflowLazyBoundary";
+import { WorkflowDefinitions } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowDefinitions";
+import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
+import { useRunDetailLayout } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useRunDetailLayout";
 import {
   createEndpointContext,
   type StudioActivityDescriptor,
@@ -35,32 +35,32 @@ import type {
   ActivityExecutionStateSummary,
   ActivityNode,
   WorkflowDraft
-} from "../../src/Elsa.Studio.Workflows/Client/src/workflowTypes";
-import { listActivities, listRecommendedActivityDefinitions, useFullActivityDefinitionVersion } from "../../src/Elsa.Studio.Workflows/Client/src/api/activityDesign";
-import { runExecutable } from "../../src/Elsa.Studio.Workflows/Client/src/api/runtime";
-import { getDraft, updateDraft } from "../../src/Elsa.Studio.Workflows/Client/src/api/workflowDesign";
-import { createActivityNode, getActivityDisplay, type ChildSlot } from "../../src/Elsa.Studio.Workflows/Client/src/workflowAdapter";
-import { decorateReusableCatalog, projectRecommendedPalette } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/useWorkflowEditorData";
-import { ActivityPalettePanel } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/ActivityPalettePanel";
-import { InspectorPanel } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/InspectorPanel";
-import { ActivityVersionChangeDialog } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/ActivityVersionChangeDialog";
-import { PublicationReviewDialog } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/PublicationReviewDialog";
-import { createPublicationReview, type PublicationReviewState, type PublicationVersionSelection } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/publicationReview";
-import type { PublicationIntent } from "../../src/Elsa.Studio.Workflows/Client/src/api/publishing";
-import { JavaScriptExpandedEditor, JavaScriptInlineEditor } from "../../src/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/module";
-import { LiquidExpandedEditor, LiquidInlineEditor } from "../../src/Elsa.Studio.ExpressionEditors.Liquid/Client/src/module";
+} from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
+import { listActivities, listRecommendedActivityDefinitions, useFullActivityDefinitionVersion } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/activityDesign";
+import { runExecutable } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/runtime";
+import { getDraft, updateDraft } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/workflowDesign";
+import { createActivityNode, getActivityDisplay, type ChildSlot } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter";
+import { decorateReusableCatalog, projectRecommendedPalette } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useWorkflowEditorData";
+import { ActivityPalettePanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/ActivityPalettePanel";
+import { InspectorPanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/InspectorPanel";
+import { ActivityVersionChangeDialog } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/ActivityVersionChangeDialog";
+import { PublicationReviewDialog } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/PublicationReviewDialog";
+import { createPublicationReview, type PublicationReviewState, type PublicationVersionSelection } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/publicationReview";
+import type { PublicationIntent } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/publishing";
+import { JavaScriptExpandedEditor, JavaScriptInlineEditor } from "../../src/extensions/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/module";
+import { LiquidExpandedEditor, LiquidInlineEditor } from "../../src/extensions/Elsa.Studio.ExpressionEditors.Liquid/Client/src/module";
 import {
   applyActivityVersionChange,
   findActivityOccurrence,
   validateActivityVersionChangePrecondition
-} from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/activityVersionChangeModel";
-import { WorkflowActivityExecutionDetails } from "../../src/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
+} from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/activityVersionChangeModel";
+import { WorkflowActivityExecutionDetails } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
 import type {
   ActivityDefinitionDraftView,
   ActivityDefinitionVersionView
-} from "../../src/Elsa.Studio.Workflows/Client/src/activityDefinitionTypes";
-import "../../src/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
-import "../../src/Elsa.Studio.Workflows/Client/src/styles.css";
+} from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityDefinitionTypes";
+import "../../src/apps/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
+import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
 import "./fixture.css";
 
 const searchParams = new URLSearchParams(window.location.search);
