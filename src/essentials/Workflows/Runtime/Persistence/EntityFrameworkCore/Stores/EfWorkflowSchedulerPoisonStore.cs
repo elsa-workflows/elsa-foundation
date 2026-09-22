@@ -167,7 +167,7 @@ public sealed class EfWorkflowSchedulerPoisonStore(
         try
         {
             if (row.Revision <= 0 ||
-                row.SchemaVersion != RuntimeSchedulerPoisonEfModule.SchemaVersion ||
+                EfSchemaVersion.NotReadable("RuntimeSchedulerPoison", row.SchemaVersion, RuntimeSchedulerPoisonEfModule.SchemaVersion) ||
                 row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) ||
                 row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))
                 throw new InvalidDataException("The scheduler-poison row scope, schema, or revision projection is corrupt.");

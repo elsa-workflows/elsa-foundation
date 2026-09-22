@@ -495,7 +495,7 @@ public sealed class EfRecurringTriggerScheduleStore(
 
     private static RecurringTriggerSchedule Read(RecurringTriggerScheduleEntity row, string scope, string? expectedId = null)
     {
-        if (row.Id != Id(scope, Decode(row.ScheduleId)) || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) || expectedId is not null && row.ScheduleId != Encode(expectedId) || row.SchemaVersion != RuntimeOperationalStateEfModule.SchemaVersion || row.Revision <= 0)
+        if (row.Id != Id(scope, Decode(row.ScheduleId)) || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) || expectedId is not null && row.ScheduleId != Encode(expectedId) || EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) || row.Revision <= 0)
             throw new InvalidDataException("The persisted EF recurring-trigger schedule row does not match its identity envelope.");
         RecurringTriggerSchedule schedule;
         try { schedule = RuntimeArtifactJson.Deserialize<RecurringTriggerSchedule>(row.ContentJson); }
@@ -569,7 +569,7 @@ public sealed class EfRecurringTriggerScheduleStore(
 
     private static ProjectionStateSnapshot ReadState(RecurringTriggerScheduleProjectionStateEntity entity, string scope, string? expectedActivation = null)
     {
-        if (entity.Id != ProjectionId(scope, Decode(entity.ActivationId)) || entity.ScopeKey != Encode(scope) || entity.ScopeKeyHash != Hash(scope) || expectedActivation is not null && entity.ActivationId != Encode(expectedActivation) || entity.ActivationIdHash != Hash(Decode(entity.ActivationId)) || entity.ActivationIdOrderKey != Order(Decode(entity.ActivationId)) || entity.ArtifactId is null && (entity.ArtifactIdHash is not null || entity.ArtifactIdOrderKey is not null) || entity.ArtifactId is not null && (entity.ArtifactIdHash != Hash(Decode(entity.ArtifactId)) || entity.ArtifactIdOrderKey != Order(Decode(entity.ArtifactId))) || entity.SchemaVersion != RuntimeOperationalStateEfModule.SchemaVersion || entity.Revision <= 0)
+        if (entity.Id != ProjectionId(scope, Decode(entity.ActivationId)) || entity.ScopeKey != Encode(scope) || entity.ScopeKeyHash != Hash(scope) || expectedActivation is not null && entity.ActivationId != Encode(expectedActivation) || entity.ActivationIdHash != Hash(Decode(entity.ActivationId)) || entity.ActivationIdOrderKey != Order(Decode(entity.ActivationId)) || entity.ArtifactId is null && (entity.ArtifactIdHash is not null || entity.ArtifactIdOrderKey is not null) || entity.ArtifactId is not null && (entity.ArtifactIdHash != Hash(Decode(entity.ArtifactId)) || entity.ArtifactIdOrderKey != Order(Decode(entity.ArtifactId))) || EfSchemaVersion.NotReadable("RuntimeOperationalState", entity.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) || entity.Revision <= 0)
             throw new InvalidDataException("The persisted EF recurring-schedule projection state does not match its identity envelope.");
         ProjectionStateContent content;
         string[] ids;

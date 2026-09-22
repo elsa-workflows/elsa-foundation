@@ -14,6 +14,7 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
+using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Stores;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.Support;
 using Elsa3.Models;
@@ -426,6 +427,36 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
         await Assert.ThrowsAsync<ReusableActivityImportNotFoundException>(async () => await store.FindReceiptAsync("corrupt-receipt", new("tenant-b", "user-a")));
         Assert.Null(await store.FindReceiptAsync("corrupt-receipt", new("tenant-a", "user-b")));
         Assert.Equal(1, (await Db.CountAsync()).Receipts);
+    }
+
+    /// <summary>
+    /// A row written by a module version this build does not run is not damaged data. Before ADR 0077 the
+    /// import codec fused the two and reported skew as an unsupported-envelope failure, which sent an
+    /// operator looking for corruption during what was a deploy-sequencing mistake (#1950).
+    /// </summary>
+    /// <remarks>
+    /// This module wraps every store read in <see cref="ReusableActivityImportPersistenceException"/>, so
+    /// the skew arrives as the inner exception rather than escaping. Asserting that shape here records it:
+    /// the diagnosis survives, but a caller has to unwrap to reach it.
+    /// </remarks>
+    [Fact]
+    public async Task Import_rows_written_by_an_unknown_module_version_report_skew_not_corruption()
+    {
+        var store = Db.OperationStore(access);
+        var service = Db.Service(access);
+        var upload = await service.UploadAsync(Json(Workflow("skew", "skew-v1", 1, true, Leaf("root"))), null, Scope);
+        await using (var import = Db.Import())
+            await import.Collections.Where(row => row.HandleHash == EfRelationalIdentity.Hash(upload.CollectionHandle))
+                .ExecuteUpdateAsync(set => set.SetProperty(row => row.SchemaVersion, "2.0.0"));
+
+        var wrapped = await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(
+            async () => await store.FindCollectionAsync(upload.CollectionHandle, Scope));
+
+        var skew = Assert.IsType<EfSchemaVersionSkewException>(wrapped.InnerException);
+        Assert.Equal("Elsa3Import", skew.Module);
+        Assert.Equal("2.0.0", skew.Found);
+        Assert.Equal(Elsa3ImportEfModule.SchemaVersion, skew.Expected);
+        Assert.DoesNotContain("corrupt", skew.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

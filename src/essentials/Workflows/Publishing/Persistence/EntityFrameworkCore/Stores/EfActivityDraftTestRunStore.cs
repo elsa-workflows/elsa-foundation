@@ -211,7 +211,7 @@ public sealed class EfActivityDraftTestRunStore(
             !StringComparer.Ordinal.Equals(row.TenantIdHash, EfPublishingStoreSupport.TenantHash(scope)))
             throw new InvalidOperationException("The persisted activity Test Run receipt scope projection is corrupt.");
         EfPublishingStoreSupport.EnsureProjection(testRunId, row.TestRunIdHash, row.TestRunIdOrderKey, nameof(row.TestRunId));
-        if (!StringComparer.Ordinal.Equals(row.SchemaVersion, PublishingLedgerEfModule.ContentSchemaVersion))
+        if (EfSchemaVersion.NotReadable("PublishingLedger", row.SchemaVersion, PublishingLedgerEfModule.ContentSchemaVersion))
             throw new InvalidOperationException($"Malformed persisted publication state: activity Test Run receipt schema version '{row.SchemaVersion}' is not supported.");
 
         var receipt = PublishingEfJson.Deserialize<ActivityDraftTestRunReceipt>(row.Content, "activity Test Run receipt");

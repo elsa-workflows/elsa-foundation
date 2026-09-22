@@ -502,7 +502,7 @@ public sealed class EfSchedulerWorkQueueStore(
         string? expectedWorkflowExecutionId = null,
         string? expectedWorkItemId = null)
     {
-        if (row.Revision <= 0 || row.SchemaVersion != RuntimeOperationalStateEfModule.SchemaVersion ||
+        if (row.Revision <= 0 || EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) ||
             row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) ||
             row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))
             throw new InvalidDataException("The scheduler-work row scope, schema, or revision projection is corrupt.");

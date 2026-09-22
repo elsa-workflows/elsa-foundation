@@ -283,7 +283,7 @@ public sealed class EfWorkflowActivationAuthority(
             row.SourceId != (slot.Source?.SourceId is null ? null : Encode(slot.Source.SourceId)) ||
             row.UpdatedAtUtcTicks != slot.UpdatedAt.UtcTicks ||
             row.UpdatedAtOffsetMinutes != (int)slot.UpdatedAt.Offset.TotalMinutes ||
-            row.SchemaVersion != RuntimeActivationSlotEfModule.SchemaVersion || row.Revision <= 0 || slot.Revision != row.Revision)
+            EfSchemaVersion.NotReadable("RuntimeActivationSlot", row.SchemaVersion, RuntimeActivationSlotEfModule.SchemaVersion) || row.Revision <= 0 || slot.Revision != row.Revision)
             throw new InvalidDataException("The persisted EF activation-slot row does not match its identity envelope or authoritative content.");
         ValidateSource(slot.Source);
         if (slot.ActiveActivationId is null && slot.Source is not null)

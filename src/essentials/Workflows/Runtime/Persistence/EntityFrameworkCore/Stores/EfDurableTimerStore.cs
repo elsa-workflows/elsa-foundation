@@ -402,7 +402,7 @@ public sealed class EfDurableTimerStore(
         string? expectedTimerId = null)
     {
         if (row.Revision <= 0 ||
-            row.SchemaVersion != RuntimeOperationalStateEfModule.SchemaVersion ||
+            EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) ||
             row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) ||
             row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))
             throw new InvalidDataException("The durable-timer row scope, schema, or revision projection is corrupt.");

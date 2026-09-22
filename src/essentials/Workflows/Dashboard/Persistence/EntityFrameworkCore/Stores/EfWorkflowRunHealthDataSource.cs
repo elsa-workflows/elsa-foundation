@@ -184,7 +184,7 @@ public sealed class EfWorkflowRunHealthDataSource(
     {
         try
         {
-            if (row.Revision <= 0 || row.SchemaVersion != RuntimeOperationalStateEfModule.SchemaVersion)
+            if (row.Revision <= 0 || EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion))
                 throw new InvalidDataException("The workflow run-health row envelope is corrupt.");
 
             var workflowExecutionId = Decode(row.WorkflowExecutionId);

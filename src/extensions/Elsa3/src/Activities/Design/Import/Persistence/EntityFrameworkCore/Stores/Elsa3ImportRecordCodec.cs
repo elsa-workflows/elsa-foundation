@@ -10,6 +10,10 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Stores;
 /// Maps import ledger rows to domain values and back. Every read proves the row against its lossless
 /// material: the canonical JSON must hash to the stored content hash, and every lookup projection must agree
 /// with the decoded residual and with the JSON. Any disagreement is corruption and fails closed.
+/// <para>
+/// A row's schema version is proved first and separately (ADR 0077). A version this build does not read is
+/// a deployment-sequencing problem rather than damaged data, so it is reported as skew, not as corruption.
+/// </para>
 /// </summary>
 internal static class Elsa3ImportRecordCodec
 {
@@ -146,8 +150,7 @@ internal static class Elsa3ImportRecordCodec
         string bindingId,
         string? tenantId)
     {
-        if (!StringComparer.Ordinal.Equals(record.SchemaVersion, Elsa3ImportEfModule.SchemaVersion))
-            throw new InvalidDataException($"The Elsa 3 import definition binding row has unsupported schema version '{record.SchemaVersion}'.");
+        EfSchemaVersion.EnsureReadable("Elsa3Import", record.SchemaVersion, Elsa3ImportEfModule.SchemaVersion);
         EnsureResidual(record.BindingId, bindingId, "definition binding");
         if (!StringComparer.Ordinal.Equals(DecodeNullable(record.TenantId, "tenant"), tenantId) ||
             !StringComparer.Ordinal.Equals(record.TenantKey, TenantKey(tenantId)))
@@ -190,8 +193,7 @@ internal static class Elsa3ImportRecordCodec
 
     private static void EnsureEnvelope(string schemaVersion, string contentJson, string contentHash)
     {
-        if (!StringComparer.Ordinal.Equals(schemaVersion, Elsa3ImportEfModule.SchemaVersion))
-            throw new InvalidDataException($"The Elsa 3 import row has unsupported schema version '{schemaVersion}'.");
+        EfSchemaVersion.EnsureReadable("Elsa3Import", schemaVersion, Elsa3ImportEfModule.SchemaVersion);
         if (string.IsNullOrEmpty(contentJson) || !StringComparer.Ordinal.Equals(contentHash, Hash(contentJson)))
             throw new InvalidDataException("The Elsa 3 import row content does not match its content hash.");
     }

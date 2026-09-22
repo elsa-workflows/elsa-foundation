@@ -285,7 +285,7 @@ public sealed class EfWorkflowExecutionStateStore(
 
     private static WorkflowExecutionState ReadCheckedCore(WorkflowExecutionStateEntity row, string scope, string expectedId)
     {
-        if (row.SchemaVersion != RuntimeWorkflowExecutionEfModule.SchemaVersion || row.Id != CreateId(scope, expectedId) || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) || row.Revision <= 0)
+        if (EfSchemaVersion.NotReadable("RuntimeWorkflowExecution", row.SchemaVersion, RuntimeWorkflowExecutionEfModule.SchemaVersion) || row.Id != CreateId(scope, expectedId) || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) || row.Revision <= 0)
             throw new InvalidDataException("The persisted workflow execution state envelope is corrupt.");
         WorkflowExecutionState state;
         try

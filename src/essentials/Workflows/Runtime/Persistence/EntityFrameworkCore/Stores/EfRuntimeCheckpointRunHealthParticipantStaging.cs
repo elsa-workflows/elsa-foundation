@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -109,7 +110,7 @@ internal static class EfRuntimeCheckpointRunHealthParticipantStaging
         try
         {
             if (row.Revision <= 0 ||
-                row.SchemaVersion != RuntimeOperationalStateEfModule.SchemaVersion ||
+                EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) ||
                 row.Id != EfRuntimeOperationalStoreSupport.CompositeId(scope, expectedWorkflowExecutionId) ||
                 row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) ||
                 row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))

@@ -131,9 +131,18 @@ public sealed class EfActivityPublicationReceiptStoreTests : IAsyncLifetime
         await context.ActivityPublicationReceipts.Where(row => row.IdempotencyKey == EfRelationalIdentity.Encode("drift-schema"))
             .ExecuteUpdateAsync(row => row.SetProperty(x => x.SchemaVersion, "2"));
 
+        // Damaged material: the row claims a version this build writes, so its contents should have been
+        // internally consistent and are not. That is corruption, and still reports as corruption.
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.FindAsync("tenant-a", "drift-status").AsTask());
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.FindAsync("tenant-a", "drift-content").AsTask());
-        await Assert.ThrowsAsync<InvalidOperationException>(() => store.FindAsync("tenant-a", "drift-schema").AsTask());
+
+        // A version this build does not run wrote this row. Nothing here is damaged, so reporting it as
+        // corruption sent an operator looking for data damage that does not exist (ADR 0077, #1950).
+        var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(
+            () => store.FindAsync("tenant-a", "drift-schema").AsTask());
+        Assert.Equal("PublishingLedger", skew.Module);
+        Assert.Equal("2", skew.Found);
+        Assert.Equal(PublishingLedgerEfModule.ContentSchemaVersion, skew.Expected);
     }
 
     internal static ActivityPublicationReceipt Receipt(string? tenantId, string key) => new(

@@ -520,7 +520,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             if (row.Id != CreateId(expectedScope, expectedId) ||
                 row.SourceReferenceId != Encode(expectedId) ||
                 row.SourceReferenceIdHash != Hash(expectedId) ||
-                row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion ||
+                EfSchemaVersion.NotReadable("RuntimeArtifact", row.SchemaVersion, RuntimeArtifactEfModule.SchemaVersion) ||
                 row.SourceReferenceIdOrderKey != OrderKey(expectedId) ||
                 row.ScopeKey != Encode(expectedScope) ||
                 row.ScopeKeyHash != Hash(expectedScope) ||

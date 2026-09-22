@@ -480,7 +480,7 @@ public sealed class EfExecutionLivenessStateStore(
         var valid = (expectedWorkflow is null || state.WorkflowExecutionId == expectedWorkflow) &&
                     (expectedOperational is null || state.ExecutionLivenessStateId == expectedOperational) &&
                     row.Id == EfRuntimeOperationalStoreSupport.CompositeId(scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId) &&
-                    row.SchemaVersion == RuntimeOperationalStateEfModule.SchemaVersion &&
+                    EfSchemaVersion.Readable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) &&
                     row.WorkflowExecutionId == EfRuntimeOperationalStoreSupport.Encode(state.WorkflowExecutionId) && row.WorkflowExecutionIdHash == EfRuntimeOperationalStoreSupport.Hash(state.WorkflowExecutionId) && row.WorkflowExecutionIdOrderKey == EfRuntimeOperationalStoreSupport.Order(state.WorkflowExecutionId) &&
                     row.OperationalStateId == EfRuntimeOperationalStoreSupport.Encode(state.ExecutionLivenessStateId) && row.OperationalStateIdHash == EfRuntimeOperationalStoreSupport.Hash(state.ExecutionLivenessStateId) && row.OperationalStateIdOrderKey == EfRuntimeOperationalStoreSupport.Order(state.ExecutionLivenessStateId) &&
                     row.InterruptedStatus == (state.InterruptedExecution is { } interrupted ? (int)interrupted.Status : null) && row.InterruptedAtUtcTicks == state.InterruptedExecution?.InterruptedAt.UtcTicks &&
