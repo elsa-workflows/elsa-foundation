@@ -119,7 +119,7 @@ The dependency walk skips anything `IsHostProvidedDependency` believes the host 
    prefixes (since Nuplane `0.0.11-preview.91`, [valence-works/nuplane#90](https://github.com/valence-works/nuplane/issues/90)).
    Unconfigured, it defaults to Nuplane's own two contract ids, `Nuplane.Abstractions` and
    `Nuplane.Loading.Abstractions` — nothing else. Earlier Nuplane versions hard-coded this list
-   instead: the CShells and Nuplane `*.Abstractions` packages, fifteen `Elsa.*` ids (`Elsa.Api.Common`,
+   instead: the CShells and Nuplane `*.Abstractions` packages, thirteen `Elsa.*` ids (`Elsa.Api.Common`,
    `Elsa.Caching`, `Elsa.Common`, `Elsa.Expressions`, `Elsa.Features`, `Elsa.KeyValues`, `Elsa.Mediator`,
    `Elsa.Resilience`, `Elsa.Resilience.Core`, `Elsa.Tenants`, `Elsa.Workflows.Core`,
    `Elsa.Workflows.Management`, `Elsa.Workflows.Runtime`), and the whole `Microsoft.Extensions.` prefix.
