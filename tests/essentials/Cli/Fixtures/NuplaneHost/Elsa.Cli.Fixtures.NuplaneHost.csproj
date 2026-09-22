@@ -14,6 +14,12 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="Nuplane" />
     <PackageReference Include="Nuplane.Loading" />
+    <!-- What a host whose feeds are directories actually carries, and what a restore pass needs out of its
+         closure: the directory-feed module (core AddNuplane skips every feed declaring a directory path)
+         and the JSON configuration provider that reads its own appsettings.json. Elsa.Foundation.Host has
+         both — the module by PackageReference, the provider from the ASP.NET Core shared framework. -->
+    <PackageReference Include="Nuplane.Sources.Directory" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,3 +1,4 @@
+using Elsa.Cli.Worker;
 using Xunit;
 
 namespace Elsa.Cli.Tests;
@@ -39,5 +40,33 @@ public sealed class WorkerLaunchTests
         Assert.Equal(
             [host.RuntimeConfig, host.DepsFile, "/tools/dotnet-elsa/Elsa.Cli.Worker.dll"],
             arguments.Where(argument => !argument.StartsWith("--", StringComparison.Ordinal) && argument != "exec"));
+    }
+
+    /// <summary>
+    /// <c>--restore</c> gives the tool a second kind of secret to keep out of the launch: a feed's
+    /// configured <c>Credentials</c> reference. This pins that the request has nowhere for one to land —
+    /// the flag travels as a bare boolean, and everything the restore actually needs (which feeds, which
+    /// patterns, which credentials) is read by the worker out of the host's own <c>appsettings.json</c>,
+    /// on the other side of the process boundary.
+    /// </summary>
+    /// <remarks>
+    /// Asserted as the whole field set rather than as an absence, for the same reason
+    /// <see cref="The_launch_is_built_from_the_host_layout_alone"/> counts the arguments: a later edit that
+    /// adds a field which could carry feed configuration has to change this list, and changing it is the
+    /// moment to ask whether the value belongs on this side of the boundary at all. Only
+    /// <see cref="WorkerRequest.Connection"/> carries a secret, and D7 already accounts for it.
+    /// </remarks>
+    [Fact]
+    public void A_restore_travels_as_a_flag_and_the_request_has_nowhere_for_a_feed_credential_to_land()
+    {
+        var fields = typeof(WorkerRequest).GetProperties().Select(property => property.Name).Order(StringComparer.Ordinal);
+
+        Assert.Equal(
+            [
+                "Command", "Connection", "ConnectionEnv", "DepsFile", "Environment", "HostDirectory", "HostName",
+                "Output", "PackageRoots", "Provider", "Restore", "Schema", "Selection", "Shell", "Shells", "Version"
+            ],
+            fields);
+        Assert.Equal(typeof(bool), typeof(WorkerRequest).GetProperty(nameof(WorkerRequest.Restore))!.PropertyType);
     }
 }

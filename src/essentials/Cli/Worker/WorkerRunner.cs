@@ -56,7 +56,7 @@ internal static class WorkerRunner
     /// that mean the process itself is no longer trustworthy, which must propagate rather than be swallowed
     /// into a tidy JSON response.
     /// </summary>
-    private static bool IsNonFatal(Exception failure) => failure is not (
+    internal static bool IsNonFatal(Exception failure) => failure is not (
         OutOfMemoryException or
         StackOverflowException or
         AccessViolationException or
@@ -69,6 +69,10 @@ internal static class WorkerRunner
     {
         var command = Validate(request);
         var deps = HostDepsFile.Read(request.DepsFile!);
+        // Opt-in, and the only step in this worker that may write under the host's directories. It runs
+        // before the set is read, because what it writes is exactly what the read then finds; without
+        // --restore it does nothing at all and no other flag sets it (ADR 0076 D10).
+        await HostPackageRestore.RunAsync(request, deps, cancellationToken);
         var packages = await NuplanePackageSet.LoadAsync(request.PackageRoots, request.HostDirectory!, cancellationToken);
         foreach (var failure in packages.Failures.OrderBy(entry => entry.Key, StringComparer.Ordinal))
             Console.Error.WriteLine($"warning: package '{failure.Key}' could not be loaded: {failure.Value}");
@@ -175,6 +179,7 @@ internal static class WorkerRunner
             return resolved;
 
         var depsFile = Path.GetFileName(request.DepsFile!);
+        NeverReconciled(provider, packageId, depsFile, tooling, deps, packages, request);
         var hasPackageSet = packages.Count > 0;
         var packageSet = hasPackageSet ? $"the resolved package set ({packages.Count} packages)" : "any resolved package set";
         var binding = tooling.DescribeBindingFailure(provider) ?? $"No package '{packageId}' is pinned by this host.";
@@ -197,6 +202,48 @@ internal static class WorkerRunner
             $"The {provider} provider engine is in neither the host's dependency file ('{depsFile}') nor {packageSet}. " +
             $"The engine could not be bound: {binding} No other provider was tried.",
             details);
+    }
+
+    /// <summary>
+    /// The one shape of "nothing resolved" that is not a missing engine at all: a host whose modules and
+    /// engine arrive as packages, which has never reconciled, so there is no package set to look in. Before
+    /// <c>--restore</c> existed this surfaced as <c>provider-engine-unavailable</c>, naming an engine the
+    /// operator had pinned correctly and never naming the state file that is actually absent.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not raised where the set is loaded: an empty set is also the correct answer for a host
+    /// that carries every module in its own deps file (FR-007), and for <c>list</c> against a Nuplane host
+    /// that has nothing installed yet — which reports zero modules rather than refusing. It is only once a
+    /// command needs something out of that set, and the set is absent rather than merely empty, that the
+    /// never-reconciled host is the thing to say.
+    /// </remarks>
+    private static void NeverReconciled(
+        string provider,
+        string packageId,
+        string depsFile,
+        ToolingEntryPoint tooling,
+        HostDepsFile deps,
+        NuplanePackageSet packages,
+        WorkerRequest request)
+    {
+        var stateFile = NuplaneInstallRoot.DefaultStateFile(request.HostDirectory!);
+        if (packages.Count > 0 || request.PackageRoots.Count > 0 || deps.ForPackage("Nuplane") is null || File.Exists(stateFile))
+            return;
+
+        throw WorkerRefusal.Resolution(
+            "packages-never-reconciled",
+            $"This host resolves its modules and its provider engine from a Nuplane package set, and it has never " +
+            $"recorded one: '{stateFile}' does not exist, so nothing is installed for the {provider} provider engine " +
+            "to be found in. No other provider was tried.",
+            [
+                $"Looked in the host's dependency file '{depsFile}' for package '{packageId}', which does not pin it.",
+                $"Then looked for this host's active package set: no --packages root was given and '{Path.GetFileName(stateFile)}' is not there.",
+                tooling.DescribeBindingFailure(provider) ?? $"No package '{packageId}' is pinned by this host.",
+                "Start the host once so it reconciles, or re-run this command with --restore, which populates that " +
+                "state file from the host's own Nuplane configuration. Without --restore no command downloads anything.",
+                "A host whose modules arrive as packages declares its provider engine nowhere: it must be named by hand " +
+                "in the host's package closure. See docs/foundation-host-feeds.md."
+            ]);
     }
 
     /// <summary>
