@@ -431,3 +431,17 @@ packages in `Elsa.Workbench` only, and asserts each admitted module project's EF
 `UseSqlServer` call to a module project would therefore fail the guard as an unexpectedly resolved package, and
 splitting each module into four provider-specific projects would turn thirteen module projects into fifty-two and
 needs its own ADR. Reflection stays the binding; the two guards above cover what a typed call would have caught.
+
+## Declaring the `ef-provider` Nuplane capability
+
+Every EF module package ships a package-root `nuplane.json` (schema 2) declaring capability `ef-provider`, one
+option per non-null provider on its `[EfModule]` — see Nuplane's Package-Authoring wiki, section "Capability
+metadata" — so a package-hosted host selects its engine with `Nuplane:Capabilities:ef-provider` instead of naming
+the engine by hand in the closure. Each option's `packageId` is `EfRelationalProviderBinding.ProviderPackageId`
+for that provider and its `version` is the central pin in `Directory.Packages.props`, written as the single-point
+range `[x.y.z]` (spec 172 D1, D5; #1938, child of #1936). The file is hand-written, not generated at pack time:
+`EfModuleDescriptorTests.Every_module_package_declares_an_ef_provider_capability_matching_its_EfModule_and_the_pinned_engines`
+reads every declaring project's `nuplane.json` from the repo and fails when a module's declared providers, an
+engine's package id, or its pinned version drifts from the file (spec 172 D2), the same way
+`Every_module_assembly_mirrors_its_EfModule_names_into_a_ManifestExtension_efModules_declaration` guards the
+`efModules` manifest mirror above.
