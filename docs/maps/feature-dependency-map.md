@@ -6,10 +6,10 @@ Records CShells feature identity, public feature properties, and dependency evid
 
 ## Summary
 
-- Feature classes: 104
+- Feature classes: 105
 - Concrete features missing explicit ShellFeature ID: 1
 - Duplicate explicit feature IDs: 0
-- Feature-bearing source projects: 85
+- Feature-bearing source projects: 86
 - IConfiguration feature-registration shape observed from: `src/apps/Elsa.Workbench/appsettings.json`
 
 ## IConfiguration Shape Evidence
@@ -85,6 +85,7 @@ No duplicate explicit feature IDs were discovered.
 | SecretsAttention | SecretsAttentionFeature | False | Elsa.Secrets | - | sensitive or deployment-specific value signal | [SecretsAttentionFeature.cs](../../src/essentials/Secrets/Attention/SecretsAttentionFeature.cs) |
 | Secrets | SecretsFeature | False | Elsa.Secrets | - | sensitive or deployment-specific value signal | [SecretsFeature.cs](../../src/essentials/Secrets/Features/SecretsFeature.cs) |
 | SecretsApi | SecretsApiFeature | False | Elsa.Secrets.Api | - | sensitive or deployment-specific value signal | [SecretsApiFeature.cs](../../src/essentials/Secrets/Api/Features/SecretsApiFeature.cs) |
+| SecretsNuplane | SecretsNuplaneFeature | False | Elsa.Secrets.Nuplane | TenantId: string | sensitive or deployment-specific value signal | [SecretsNuplaneFeature.cs](../../src/essentials/Secrets/Nuplane/Features/SecretsNuplaneFeature.cs) |
 | SecretsEntityFrameworkCore | SecretsEntityFrameworkCoreFeature | False | Elsa.Secrets.Persistence.EntityFrameworkCore | ConnectionName: string?<br>ConnectionString: string?<br>MigratePolicy: string?<br>Pooling: bool<br>Provider: string<br>Schema: string? | code default<br>sensitive or deployment-specific value signal | [SecretsEntityFrameworkCoreFeature.cs](../../src/essentials/Secrets/Persistence/EntityFrameworkCore/SecretsEntityFrameworkCoreFeature.cs) |
 | Serialization.Newtonsoft | NewtonsoftSerializationFeature | False | Elsa.Serialization.Newtonsoft | - | - | [NewtonsoftSerializationFeature.cs](../../src/essentials/Serialization/Newtonsoft/NewtonsoftSerializationFeature.cs) |
 | Serialization | SerializationFeature | False | Elsa.Serialization.SystemText | - | - | [SerializationFeature.cs](../../src/essentials/Serialization/SystemText/SerializationFeature.cs) |
@@ -196,6 +197,7 @@ Rows below are dependency evidence, not final policy. Feature-project references
 | SecretsAttention | Elsa.Secrets | - | Elsa.Attention.Core<br>Elsa.Expressions.Core<br>Elsa.Secrets.Core<br>Elsa.Serialization.Core | CShells.Abstractions 0.0.29-preview.147<br>Elsa.Specifications.PackageManifest.Generator 0.0.1-preview.8<br>Microsoft.Extensions.Configuration.Abstractions 10.0.10<br>Microsoft.Extensions.DependencyInjection 10.0.10<br>Microsoft.Extensions.Logging.Abstractions 10.0.10<br>Microsoft.Extensions.Options 10.0.10 |
 | Secrets | Elsa.Secrets | - | Elsa.Attention.Core<br>Elsa.Expressions.Core<br>Elsa.Secrets.Core<br>Elsa.Serialization.Core | CShells.Abstractions 0.0.29-preview.147<br>Elsa.Specifications.PackageManifest.Generator 0.0.1-preview.8<br>Microsoft.Extensions.Configuration.Abstractions 10.0.10<br>Microsoft.Extensions.DependencyInjection 10.0.10<br>Microsoft.Extensions.Logging.Abstractions 10.0.10<br>Microsoft.Extensions.Options 10.0.10 |
 | SecretsApi | Elsa.Secrets.Api | Elsa.Foundation.Identity (FoundationIdentityAbstractions)<br>Elsa.Secrets (Secrets, SecretsAttention) | Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity.Core<br>Elsa.Secrets.Core | CShells.Abstractions 0.0.29-preview.147<br>CShells.AspNetCore.Abstractions 0.0.29-preview.147<br>Elsa.Specifications.PackageManifest.Generator 0.0.1-preview.8<br>Microsoft.AspNetCore.OpenApi 10.0.10<br>Microsoft.Extensions.DependencyInjection 10.0.10<br>NativeEndpoints 1.0.0-preview.6 |
+| SecretsNuplane | Elsa.Secrets.Nuplane | - | Elsa.Secrets.Core | CShells.Abstractions 0.0.29-preview.147<br>Elsa.Specifications.PackageManifest.Generator 0.0.1-preview.8<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.10<br>Nuplane 0.0.11-preview.88 |
 | SecretsEntityFrameworkCore | Elsa.Secrets.Persistence.EntityFrameworkCore | - | Elsa.Persistence.EntityFramework<br>Elsa.Secrets.Core | CShells.Abstractions 0.0.29-preview.147<br>Elsa.Specifications.PackageManifest.Generator 0.0.1-preview.8<br>Microsoft.EntityFrameworkCore 10.0.10<br>Microsoft.EntityFrameworkCore.Relational 10.0.10<br>Microsoft.Extensions.Configuration.Abstractions 10.0.10<br>Microsoft.Extensions.DependencyInjection 10.0.10<br>Microsoft.Extensions.Hosting.Abstractions 10.0.10 |
 | Serialization.Newtonsoft | Elsa.Serialization.Newtonsoft | - | Elsa.Serialization.Core | CShells.Abstractions 0.0.29-preview.147<br>Elsa.Specifications.PackageManifest.Generator 0.0.1-preview.8<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.10<br>Newtonsoft.Json 13.0.4 |
 | Serialization | Elsa.Serialization.SystemText | - | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core | CShells.Abstractions 0.0.29-preview.147<br>Elsa.Specifications.PackageManifest.Generator 0.0.1-preview.8<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.10<br>Microsoft.Extensions.Logging.Abstractions 10.0.10 |

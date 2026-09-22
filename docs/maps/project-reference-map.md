@@ -6,9 +6,9 @@ Records direct project references only.
 
 ## Summary
 
-- Source projects: 130
-- Test projects: 106
-- Direct project references: 1112
+- Source projects: 131
+- Test projects: 107
+- Direct project references: 1115
 
 ## Projects
 
@@ -94,6 +94,7 @@ Records direct project references only.
 | [Elsa.Secrets.Api](../../src/essentials/Secrets/Api/Elsa.Secrets.Api.csproj) | source | Elsa.Secrets | - | default | Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Secrets<br>Elsa.Secrets.Core |
 | [Elsa.Secrets.Core](../../src/essentials/Secrets/Core/Elsa.Secrets.Core.csproj) | source | Elsa.Secrets | - | default | Elsa.Primitives |
 | [Elsa.Secrets](../../src/essentials/Secrets/Elsa.Secrets.csproj) | source | Elsa.Secrets | - | default | Elsa.Attention.Core<br>Elsa.Expressions.Core<br>Elsa.Secrets.Core<br>Elsa.Serialization.Core |
+| [Elsa.Secrets.Nuplane](../../src/essentials/Secrets/Nuplane/Elsa.Secrets.Nuplane.csproj) | source | Elsa.Secrets | - | default | Elsa.Secrets.Core |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore](../../src/essentials/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj) | source | Elsa.Secrets | - | default | Elsa.Persistence.EntityFramework<br>Elsa.Secrets.Core |
 | [Elsa.Serialization.Core](../../src/essentials/Serialization/Core/Elsa.Serialization.Core.csproj) | source | Elsa.Serialization | - | default | Elsa.Events.Core<br>Elsa.Primitives |
 | [Elsa.Serialization.Newtonsoft](../../src/essentials/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj) | source | Elsa.Serialization | - | default | Elsa.Serialization.Core |
@@ -213,6 +214,7 @@ Records direct project references only.
 | [Elsa.Primitives.Hosting.Tests](../../tests/essentials/Primitives/Hosting/Tests/Elsa.Primitives.Hosting.Tests.csproj) | test | Elsa.Primitives | - | default | Elsa.Primitives.Hosting |
 | [Elsa.Primitives.Tests](../../tests/essentials/Primitives/Tests/Elsa.Primitives.Tests.csproj) | test | Elsa.Primitives | - | default | Elsa.Primitives |
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/essentials/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | Elsa.Samples | - | default | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Samples.Nuplane.Activities |
+| [Elsa.Secrets.Nuplane.Tests](../../tests/essentials/Secrets/Nuplane/Tests/Elsa.Secrets.Nuplane.Tests.csproj) | test | Elsa.Secrets | - | false | Elsa.Secrets<br>Elsa.Secrets.Nuplane |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests](../../tests/essentials/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj) | test | Elsa.Secrets | - | default | Elsa.Secrets<br>Elsa.Secrets.Persistence.EntityFrameworkCore |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe](../../tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe.csproj) | test | Elsa.Secrets | - | default | Elsa.Persistence.EntityFramework<br>Elsa.Secrets<br>Elsa.Secrets.Core |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests](../../tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj) | test | Elsa.Secrets | - | default | Elsa.Cli<br>Elsa.Cli.Fixtures.Host<br>Elsa.Secrets<br>Elsa.Secrets.Persistence.EntityFrameworkCore<br>Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe |
@@ -275,7 +277,7 @@ Records direct project references only.
 | Elsa.Pipelines | 1 | 0 |
 | Elsa.Primitives | 2 | 2 |
 | Elsa.Samples | 0 | 1 |
-| Elsa.Secrets | 4 | 6 |
+| Elsa.Secrets | 5 | 7 |
 | Elsa.Serialization | 3 | 1 |
 | Elsa.Studio | 3 | 3 |
 | Elsa.Tasks | 3 | 1 |
