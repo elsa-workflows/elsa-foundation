@@ -115,20 +115,24 @@ an exact single-point range. Generate that list from a `dotnet restore` of your 
 
 The dependency walk skips anything `IsHostProvidedDependency` believes the host already supplies:
 
-1. A **hard-coded contract allowlist** — the CShells and Nuplane `*.Abstractions` packages, plus these
-   Elsa ids: `Elsa.Api.Common`, `Elsa.Caching`, `Elsa.Common`, `Elsa.Expressions`, `Elsa.Features`,
-   `Elsa.KeyValues`, `Elsa.Mediator`, `Elsa.Resilience`, `Elsa.Resilience.Core`, `Elsa.Tenants`,
-   `Elsa.Workflows.Core`, `Elsa.Workflows.Management`, `Elsa.Workflows.Runtime`.
-2. Anything whose id starts with `Microsoft.Extensions.` — the whole family, by prefix. Only a handful
-   of those ids appear in the host's `deps.json`; the rest come from the shared framework, so do not
-   try to reconcile the two lists.
-3. Anything present in the host's own `*.deps.json` at a version satisfying the range.
+1. An entry in `Nuplane:HostProvidedPackages` — a plain list of package ids and `Prefix.`-style
+   prefixes (since Nuplane `0.0.11-preview.91`, [valence-works/nuplane#90](https://github.com/valence-works/nuplane/issues/90)).
+   Unconfigured, it defaults to Nuplane's own two contract ids, `Nuplane.Abstractions` and
+   `Nuplane.Loading.Abstractions` — nothing else. Earlier Nuplane versions hard-coded this list
+   instead: the CShells and Nuplane `*.Abstractions` packages, thirteen `Elsa.*` ids (`Elsa.Api.Common`,
+   `Elsa.Caching`, `Elsa.Common`, `Elsa.Expressions`, `Elsa.Features`, `Elsa.KeyValues`, `Elsa.Mediator`,
+   `Elsa.Resilience`, `Elsa.Resilience.Core`, `Elsa.Tenants`, `Elsa.Workflows.Core`,
+   `Elsa.Workflows.Management`, `Elsa.Workflows.Runtime`), and the whole `Microsoft.Extensions.` prefix.
+   That fixed list is gone; a host that needs any of those ids treated as already-supplied now has to
+   name them under `Nuplane:HostProvidedPackages`.
+2. Anything present in the host's own `*.deps.json` at a version satisfying the range — unchanged by
+   `#90`, and still independent of rule 1.
 
-Rule 1 is the trap for this host. That list assumes a host that compiles Elsa in — and
-`Elsa.Foundation.Host` deliberately compiles in **no Elsa feature at all**, so it supplies none of
-them. Pinning `Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore` acquires 15 packages,
-`IsDegraded=False`, and `Elsa.Workflows.Runtime` is not among them — while its sibling
-`Elsa.Workflows.Runtime.Core`, which is not on the list, is. The shell then fails at load:
+Rule 1 used to be the trap for this host: the hard-coded list assumed a host that compiles Elsa in, and
+`Elsa.Foundation.Host` deliberately compiles in **no Elsa feature at all**, so it supplied none of
+them. Pinning `Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore` used to acquire 15 packages,
+`IsDegraded=False`, with `Elsa.Workflows.Runtime` missing from them — while its sibling
+`Elsa.Workflows.Runtime.Core`, which was never on the list, arrived. The shell then failed at load:
 
 ```
 Failed to load types from assembly Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.
@@ -136,7 +140,7 @@ System.IO.FileNotFoundException: Could not load file or assembly 'Elsa.Workflows
 Shell 'default' requested 1 feature(s) that are not available: WorkflowsRuntimeEntityFrameworkCore
 ```
 
-Rule 3 has a subtler edge: a package genuinely in the host's `deps.json` is correctly not downloaded,
+Rule 2 has a subtler edge: a package genuinely in the host's `deps.json` is correctly not downloaded,
 but it is loaded in the host's default context. A feed package only sees it if it is also listed in
 `Nuplane:Loading:SharedAssemblies` — acquisition-skipping and assembly-sharing are two separate lists
 that are not kept in step. `NativeEndpoints` behaves this way, and a feature depending on it fails
@@ -148,8 +152,12 @@ The checks above apply only to **dependencies**, never to roots — which is why
 explicitly always acquires it, and why the full-closure list is the reliable shape. It also makes a
 deployment reproducible.
 
-Note that `Microsoft.EntityFrameworkCore.*` and `Npgsql.*` are *not* covered by rule 2 (which is
-`Microsoft.Extensions.` only), so EF and its provider do arrive through the feed normally.
+Note that `Microsoft.Extensions.*` is no longer skipped by a fixed prefix rule either: since
+`0.0.11-preview.91` it is acquired from the feed like any other dependency unless it is also present in
+the host's own `deps.json` (rule 2) or the host explicitly adds the `Microsoft.Extensions.` prefix to
+`Nuplane:HostProvidedPackages` (rule 1). `Microsoft.EntityFrameworkCore.*` and `Npgsql.*` were never
+covered by the old prefix rule either way, so EF and its provider have always arrived through the feed
+normally.
 
 ### Generating the closure
 
@@ -173,13 +181,13 @@ tens of entries.
    genuinely provides, then split the rest across your feeds by origin.
 
    Derive that drop-list from the host image's own `*.deps.json` rather than copying one from elsewhere —
-   it is exactly the set rule 3 above already skips, and it changes as the host's own references change.
+   it is exactly the set rule 2 above already skips, and it changes as the host's own references change.
    For the host as it ships today that means the `Microsoft.Extensions.*`, `CShells.*`, `Nuplane*` and
    `NuGet.*` families plus `FastEndpoints`, `Newtonsoft.Json` and `JetBrains.Annotations` — but check,
    do not assume.
 
    **Then put every `Elsa.*` id back.** `Elsa.Api.AspNetCore` is in the host's `deps.json`, so a drop-list
-   derived mechanically would prune the one Elsa package that is in there — the rule 3 shape again, and it
+   derived mechanically would prune the one Elsa package that is in there — the rule 2 shape again, and it
    surfaces as a `FeatureNotFoundException` naming a *feature* rather than the missing package.
 
 ### Finding the root package for a feature
