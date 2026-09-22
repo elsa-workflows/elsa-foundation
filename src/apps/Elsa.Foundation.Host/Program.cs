@@ -32,6 +32,12 @@ var nuplaneConfiguration = configuration.GetSection("Nuplane");
 //   NuplaneAssemblyProvider hands to CShells for feature discovery.
 builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
 {
+    // The host's own directory, not the process's. A module-owned builder extension resolves its relative
+    // configured paths against NuplaneBuilder.BasePath when something sets one, and against the current
+    // directory otherwise — so without this line a host started as a service from / reads
+    // "DirectoryPath": "packages" as /packages and finds an empty feed with nothing saying why. Nuplane's
+    // core package never reads IHostEnvironment itself, which is why this stays the host's line to write.
+    nuplane.UseBasePath(builder.Environment.ContentRootPath);
     nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
     nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
 

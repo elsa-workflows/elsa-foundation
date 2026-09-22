@@ -47,9 +47,13 @@ internal static class NuplaneRestoreRunner
         var configuration = HostAppSettings.Read(target.HostDirectory, target.Environment);
         var options = new NuplaneRestoreOptions
         {
-            // Every Nuplane path default resolves under the host rather than under this tool: the install
-            // root at BasePath/.nuplane/packages — which is what a started host, resolving against its own
-            // AppContext.BaseDirectory, uses too, so no InstallRoot override is needed or wanted.
+            // Every Nuplane path resolves under the host rather than under this tool, and this one option is
+            // what does it: the install root at BasePath/.nuplane/packages — which is what a started host,
+            // resolving against its own AppContext.BaseDirectory, uses too, so no InstallRoot override is
+            // needed or wanted — and, since 0.0.11-preview.88, a relative configured DirectoryPath as well,
+            // because the restore composition assigns this to NuplaneBuilder.BasePath before ConfigureBuilder
+            // runs. That is why this process's own current directory is left exactly as the operator had it:
+            // moving it for the pass, which is what the tool used to do, no longer changes any answer.
             BasePath = target.HostDirectory,
             // Pinned rather than defaulted, because this tool reads exactly one state file
             // (NuplaneInstallRoot.DefaultStateFile) and a restore that wrote anywhere else would report
@@ -63,27 +67,13 @@ internal static class NuplaneRestoreRunner
         if (target.HasDirectoryFeedModule)
             options.ConfigureBuilder = NuplaneDirectoryFeeds.Register;
 
-        // A host resolves a directory feed's configured path against its own current directory, which for a
-        // published host is the directory --host names. This process's current directory is the operator's,
-        // so it is moved for the duration of the restore and put back afterwards; every other path this run
-        // uses is already absolute.
-        var restoringFrom = Directory.GetCurrentDirectory();
-        Directory.SetCurrentDirectory(target.HostDirectory);
-        try
-        {
-            // Writes nothing and contacts no remote feed, so a feed that configures credentials — which
-            // Nuplane cannot resolve — is named before anything is downloaded rather than after.
-            var desired = await NuplaneRestore.DescribeDesiredAsync(configuration, options, cancellationToken);
-            if (desired.CredentialRefusedFeeds.Count > 0)
-                return RestoreOutcome.CredentialsRefused([.. desired.CredentialRefusedFeeds], desired.StateFilePath, desired.InstallRoot);
+        // Writes nothing and contacts no remote feed, so a feed whose credential reference cannot be
+        // resolved is named before anything is downloaded rather than after.
+        var desired = await NuplaneRestore.DescribeDesiredAsync(configuration, options, cancellationToken);
+        if (desired.CredentialRefusedFeeds.Count > 0)
+            return RestoreOutcome.CredentialsRefused([.. desired.CredentialRefusedFeeds], desired.StateFilePath, desired.InstallRoot);
 
-            var result = await NuplaneRestore.RestoreAsync(configuration, options, cancellationToken);
-            return Describe(result);
-        }
-        finally
-        {
-            Directory.SetCurrentDirectory(restoringFrom);
-        }
+        return Describe(await NuplaneRestore.RestoreAsync(configuration, options, cancellationToken));
     }
 
     private static RestoreOutcome Describe(NuplaneRestoreResult result)

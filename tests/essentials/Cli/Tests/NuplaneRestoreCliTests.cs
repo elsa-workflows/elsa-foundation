@@ -144,8 +144,11 @@ public sealed class NuplaneRestoreCliTests : IDisposable
     /// </summary>
     /// <remarks>
     /// The second half is D7's rule applied to the other kind of secret this tool can now see: the
-    /// referenced environment variable's name is configured in the host's <c>appsettings.json</c>, which
-    /// only the worker reads, so a sentinel embedded in it must appear on neither stream.
+    /// referenced environment variable's <em>name</em> is configured in the host's <c>appsettings.json</c>,
+    /// which only the worker reads, so a sentinel embedded in it must appear on neither stream. What it
+    /// deliberately does not cover is a credential <em>value</em>, which never exists on this path at all —
+    /// <see cref="A_resolvable_credential_value_never_appears_when_no_provider_claims_its_reference"/> is
+    /// the test for that.
     /// </remarks>
     [Fact]
     public void A_feed_that_configures_credentials_is_refused_by_name_and_its_credential_never_appears()
@@ -167,6 +170,74 @@ public sealed class NuplaneRestoreCliTests : IDisposable
         Assert.Contains("private-feed", run.Error, StringComparison.Ordinal);
         Assert.DoesNotContain(sentinel, run.Text, StringComparison.Ordinal);
         Assert.False(Directory.Exists(host.NuplaneDirectory), "A refused restore wrote under the host.");
+    }
+
+    /// <summary>
+    /// The never-echo-a-value guarantee, with a value that really exists. The variable is set to a sentinel
+    /// and the reference names a provider nothing claims, so the run is refused for the provider rather than
+    /// for the value — and the value, which this process is holding the whole time and Nuplane's own
+    /// built-in provider could have read, is on neither stream.
+    /// </summary>
+    /// <remarks>
+    /// An unknown provider rather than an absent variable on purpose: with <c>secrets://env/NAME</c> and the
+    /// variable set, the restore would succeed as far as contacting <c>example.invalid</c>, and the refusal
+    /// under test would never be reached. This way the value is resolvable by every mechanism except the one
+    /// the reference names, which is the only arrangement where "the value was available and still never
+    /// printed" means anything.
+    /// </remarks>
+    [Fact]
+    public void A_resolvable_credential_value_never_appears_when_no_provider_claims_its_reference()
+    {
+        const string variable = "ELSA_CLI_RESTORE_FEED_TOKEN";
+        const string sentinel = "SENTINEL-FEED-CREDENTIAL-VALUE-51c07f";
+        host.Configure(
+            $$"""
+                "private-feed": {
+                  "ServiceIndex": "https://example.invalid/v3/index.json",
+                  "Credentials": "secrets://nosuch/{{variable}}",
+                  "IncludePatterns": [ "Acme.Widgets [1.4.2]" ]
+                }
+              """);
+
+        var run = DotnetElsa.Run(
+            new Dictionary<string, string> { [variable] = sentinel },
+            "persistence", "list", "--host", host.Path, "--restore");
+
+        Assert.Equal(ToolExitCode.ResolutionFailure, run.ExitCode);
+        Assert.Contains("restore-feed-credentials", run.Error, StringComparison.Ordinal);
+        Assert.Contains("private-feed", run.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain(sentinel, run.Text, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(host.NuplaneDirectory), "A refused restore wrote under the host.");
+    }
+
+    /// <summary>
+    /// The proof that the pass no longer moves this process's current directory: a relative
+    /// <c>DirectoryPath</c> is anchored to <c>--host</c> by <c>NuplaneRestoreOptions.BasePath</c> alone.
+    /// </summary>
+    /// <remarks>
+    /// The discriminating part is the decoy. The tool runs from a directory that has a <c>packages</c> folder
+    /// of its own, holding a file the feed would index as the same id and version but that is not a readable
+    /// package — so a run that resolved <c>"DirectoryPath": "packages"</c> against its own current directory
+    /// finds a candidate it cannot acquire and refuses (<c>restore-incomplete</c>), rather than finding
+    /// nothing and refusing for some other reason. Only a run anchored to the host reaches the real package.
+    /// </remarks>
+    [Fact]
+    public void A_relative_directory_feed_resolves_under_the_host_rather_than_under_the_current_directory()
+    {
+        host.Feed(Module, Version);
+        host.Configure(DirectoryFeed("packages"));
+        using var elsewhere = new TempDirectory("elsa-cli-restore-elsewhere-");
+        Directory.CreateDirectory(Path.Join(elsewhere.Path, "packages"));
+        File.WriteAllBytes(Path.Join(elsewhere.Path, "packages", $"{Module}.{Version}.nupkg"), [0x00, 0x01, 0x02, 0x03]);
+
+        var run = DotnetElsa.RunIn(elsewhere.Path, "persistence", "list", "--host", host.Path, "--restore");
+
+        Assert.Equal(ToolExitCode.Success, run.ExitCode);
+        Assert.Contains("restore: 1 package(s) installed under", run.Error, StringComparison.Ordinal);
+        Assert.Contains(Module, run.Output, StringComparison.Ordinal);
+        Assert.True(
+            File.Exists(Path.Join(host.InstallRoot, "local-packages", Module, Version, NuplaneInstallRoot.ReadyMarker)),
+            "The package was not extracted from the feed directory beside the host.");
     }
 
     /// <summary>

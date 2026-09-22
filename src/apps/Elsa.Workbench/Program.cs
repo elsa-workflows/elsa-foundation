@@ -170,6 +170,11 @@ builder.Services.AddHostedService(services => services.GetRequiredService<Defaul
 
 builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
 {
+    // The host's own directory, not the process's: a relative configured DirectoryPath resolves against
+    // NuplaneBuilder.BasePath when something sets one, and against the current directory otherwise. Without
+    // this line a Workbench started from anywhere but its own output directory reads
+    // "DirectoryPath": "packages" somewhere else entirely and finds an empty feed.
+    nuplane.UseBasePath(builder.Environment.ContentRootPath);
     nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
     nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
 });
