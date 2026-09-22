@@ -18,13 +18,16 @@ over time.
 **There is no compatibility rule today. There is an unstated assumption of a single writer version**,
 and two mechanisms that enforce it by accident rather than by design.
 
-**A version a reader does not recognise is reported as corruption.** Ten runtime modules declare a
-`SchemaVersion` constant, all currently `1.0.0` — `BookmarkStateEfModule`,
-`RuntimeActivationSlotEfModule`, `RuntimeActivityExecutionEfModule`, `RuntimeArtifactEfModule`,
-`RuntimeOperationalStateEfModule`, `RuntimePostCommitOutboxEfModule`, `RuntimeSchedulerPoisonEfModule`,
-`RuntimeTriggerBindingEfModule`, plus `PublishingPolicyProjectionEfModule` and
-`PublishingLedgerEfModule.ContentSchemaVersion`. The field is checked for equality **alongside hash and
-order-key integrity checks**:
+**A version a reader does not recognise is reported as corruption.** Fifteen EF modules declare a
+schema-version constant. Fourteen check it on a read path: twelve runtime modules
+(`BookmarkStateEfModule`, `RuntimeActivationSlotEfModule`, `RuntimeActivityExecutionEfModule`,
+`RuntimeArtifactEfModule`, `RuntimeOperationalStateEfModule`, `RuntimePostCommitOutboxEfModule`,
+`RuntimeSchedulerPoisonEfModule`, `RuntimeTriggerBindingEfModule`, `RuntimeWorkflowAlterationEfModule`,
+`RuntimeWorkflowDispatchEfModule`, `RuntimeWorkflowExecutionEfModule`, `RuntimeWorkflowTestScopeEfModule`),
+plus `PublishingLedgerEfModule.ContentSchemaVersion` and `Elsa3ImportEfModule`. All are `1.0.0` except
+`ContentSchemaVersion`, which is `1`. The fifteenth, `PublishingPolicyProjectionEfModule.SchemaVersion`,
+is declared but neither written nor read, so those tables carry no version at all. The field is checked
+for equality **alongside hash and order-key integrity checks**:
 
 ```csharp
 if (row.Revision <= 0 || row.SchemaVersion != RuntimeOperationalStateEfModule.SchemaVersion)
@@ -70,8 +73,8 @@ normally, and resumption across pods works, because persisted runtime state is g
 independent release.
 
 **Additive-only within a major is the stated destination, not this decision.** Reaching it means
-changing ten modules' read paths and splitting `SchemaVersion` into envelope integrity and a readable
-range, so that a reader tolerates unknown columns and refuses only an unrecognised major.
+changing fourteen modules' read paths and splitting `SchemaVersion` into envelope integrity and a
+readable range, so that a reader tolerates unknown columns and refuses only an unrecognised major.
 
 ## How this composes with runtime module installation
 
@@ -103,8 +106,8 @@ ragged activation is harmless and runtime installation works on a cluster.
 ## Considered options
 
 - **Additive-only within a major, now.** The end state, and what independent release means to an
-  operator. Rejected as immediate work, not as a destination: it changes ten modules' read paths and
-  the meaning of a field, which is a larger change than the rule it would support.
+  operator. Rejected as immediate work, not as a destination: it changes fourteen modules' read paths
+  and the meaning of a field, which is a larger change than the rule it would support.
 - **Detect and refuse, permanently.** Every schema change coordinated, forever. Rejected because it
   permanently caps what independent release can promise, and the ragged-activation gap above shows the
   cap falls exactly where runtime installation is most valuable.
