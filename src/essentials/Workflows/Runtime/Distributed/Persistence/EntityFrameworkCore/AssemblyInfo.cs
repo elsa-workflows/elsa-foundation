@@ -1,10 +1,13 @@
 using Elsa.Persistence.EntityFramework;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
 
 // The single, discoverable declaration of this assembly's two modules (ADR 0076 D2): [EfModule] is
 // AllowMultiple for exactly the two assemblies that carry two contexts, this one and Identity's.
 // EfModuleCatalog.Discover reads these, and EfModuleBinding.For derives each registration class's
-// binding from them (#1872).
+// binding from them (#1872). Each one's name is mirrored below into elsa-package.json's
+// extensions.efModules (spec 171 slice 11, #1881); EfModuleDescriptorTests guards that the two never
+// drift apart.
 [assembly: EfModule(
     "Workflows.Runtime.Distributed.Placement",
     typeof(ExecutionPlacementDbContext),
@@ -24,3 +27,6 @@ using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
     PostgreSql = typeof(ExecutionCommandTransportPostgreSqlDbContext),
     MySql = typeof(ExecutionCommandTransportMySqlDbContext),
     DisplayName = "Distributed runtime execution command transport")]
+
+[assembly: ManifestExtension("efModules", "Workflows.Runtime.Distributed.Placement")]
+[assembly: ManifestExtension("efModules", "Workflows.Runtime.Distributed.CommandTransport")]

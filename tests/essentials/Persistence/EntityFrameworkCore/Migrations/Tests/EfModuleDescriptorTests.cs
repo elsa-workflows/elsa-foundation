@@ -29,6 +29,12 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 /// </summary>
 public sealed class EfModuleDescriptorTests
 {
+    // ManifestExtensionAttribute (Elsa.Specifications.PackageManifest.Generator.Hints) compiles as internal
+    // into each module assembly separately, so it is matched by full type name and read reflectively — the
+    // same way ManifestHintReader reads the generator's other hint attributes — rather than referenced.
+    private const string ManifestExtensionAttributeFullName = "Elsa.Specifications.PackageManifest.Generator.Hints.ManifestExtensionAttribute";
+    private const string EfModulesExtensionKey = "efModules";
+
     // Read directly from each module's own frozen constant and base context, not re-derived, so this
     // guard catches the exact drift the descriptor exists to prevent.
     private static readonly (string Name, Type Context, string HistoryModule)[] Expected =
@@ -100,6 +106,46 @@ public sealed class EfModuleDescriptorTests
             .Where(group => group.Count() > 1)
             .Select(group => $"{group.Key} <- {string.Join(", ", group.Select(describe))}")
             .ToArray();
+
+    /// <summary>
+    /// Spec 171 slice 11 (#1881, ADR 0076 D2): each module assembly also carries one
+    /// <c>[ManifestExtension("efModules", "&lt;Name&gt;")]</c> per <c>[EfModule]</c> declaration, so the pack-time
+    /// generator mirrors the descriptor's name(s) into <c>elsa-package.json</c>'s <c>extensions.efModules</c>. The
+    /// name is written twice — once on each attribute — so this test, not a third shared constant, is what keeps
+    /// them from drifting apart: it fails if a module's mirrored names are missing any declared name, or carry one
+    /// no <c>[EfModule]</c> declares.
+    /// </summary>
+    [Fact]
+    public void Every_module_assembly_mirrors_its_EfModule_names_into_a_ManifestExtension_efModules_declaration()
+    {
+        var descriptorNamesByAssembly = Discover()
+            .GroupBy(descriptor => descriptor.Assembly)
+            .ToDictionary(group => group.Key, group => group.Select(descriptor => descriptor.Name).ToHashSet(StringComparer.Ordinal));
+
+        foreach (var assembly in ModuleContextCatalog.Modules)
+        {
+            var declared = descriptorNamesByAssembly.TryGetValue(assembly, out var names) ? names : [];
+            var mirrored = ReadManifestExtensionEfModules(assembly);
+
+            var missing = declared.Except(mirrored).ToArray();
+            var extra = mirrored.Except(declared).ToArray();
+            Assert.True(
+                missing.Length == 0 && extra.Length == 0,
+                $"{assembly.GetName().Name}: [EfModule] declares {string.Join(", ", declared)}, but " +
+                $"[ManifestExtension(\"efModules\", ...)] mirrors {string.Join(", ", mirrored)} " +
+                $"(missing: {string.Join(", ", missing)}; extra not declared: {string.Join(", ", extra)}).");
+        }
+    }
+
+    /// <summary>Reflects <c>[ManifestExtension("efModules", value)]</c> off <paramref name="assembly"/> by full type name (the
+    /// attribute is internal and compiles separately into every module assembly), mirroring how <c>ManifestHintReader</c>
+    /// reads the generator's other hint attributes without referencing the generator package from this test project.</summary>
+    private static HashSet<string> ReadManifestExtensionEfModules(Assembly assembly) =>
+        assembly.GetCustomAttributesData()
+            .Where(attribute => attribute.AttributeType.FullName == ManifestExtensionAttributeFullName)
+            .Where(attribute => attribute.ConstructorArguments is [{ Value: string key }, { Value: string }] && key == EfModulesExtensionKey)
+            .Select(attribute => (string)attribute.ConstructorArguments[1].Value!)
+            .ToHashSet(StringComparer.Ordinal);
 
     [Fact]
     public void Secrets_declares_all_four_providers()

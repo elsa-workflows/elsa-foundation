@@ -1,4 +1,5 @@
 using Elsa.Persistence.EntityFramework;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore;
 
 // The single, discoverable declaration of this module (ADR 0076 D2). EfModuleCatalog.Discover reads this,
@@ -17,3 +18,7 @@ using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore;
     DisplayName = "Elsa 3 import",
     DefaultConnectionName = Elsa3ImportEfModule.DefaultConnectionName,
     DefaultSqliteConnectionString = Elsa3ImportEfModule.DefaultSqliteConnectionString)]
+
+// Mirrors the [EfModule] name above into elsa-package.json's extensions.efModules (spec 171 slice 11,
+// #1881); EfModuleDescriptorTests guards that the two never drift apart.
+[assembly: ManifestExtension("efModules", "Elsa3.Activities.Design.Import")]
