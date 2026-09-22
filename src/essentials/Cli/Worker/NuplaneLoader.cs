@@ -6,19 +6,27 @@ using System.Runtime.CompilerServices;
 namespace Elsa.Cli.Worker;
 
 /// <summary>
-/// Every Nuplane call the worker makes, and the only file in this project that names a Nuplane type.
+/// Every Nuplane call the worker makes to <em>read and load</em> a host's package set.
 /// </summary>
 /// <remarks>
 /// <para>
 /// The worker compiles against Nuplane and ships none of it: the assemblies are excluded from its own
 /// output and resolve out of the host's deps file, so a Nuplane host loads exactly the copy it runs itself
 /// (ADR 0076 D1) and a host with no Nuplane never loads one at all. That only holds while no Nuplane type
-/// is mentioned outside this file, because the runtime resolves a method's types when it compiles that
-/// method — which is why the caller decides whether there is a package set to load before calling in here.
+/// is mentioned outside the files that are reached after a caller has decided a Nuplane host is present,
+/// because the runtime resolves a method's types when it compiles that method — which is why the caller
+/// decides whether there is a package set to load before calling in here. Three files carry that licence:
+/// this one, <see cref="NuplaneRestoreRunner"/>, and <see cref="NuplaneDirectoryFeeds"/>.
 /// </para>
 /// <para>
-/// Nothing here reconciles, downloads or writes (ADR 0076 D10): a reconcile pass rewrites the host's state
-/// file and can delete under its install root, which a tool sharing those directories may not do.
+/// Nothing on this path reconciles, downloads or writes (ADR 0076 D10). One reconcile pass writes the
+/// host's <c>store-state.json</c> unconditionally, the store lock file beside it, and each acquired
+/// package's extracted contents plus a <c>.tmp</c> staging directory under the install root; it deletes no
+/// installed package — cleanup during a cycle records decisions and removes nothing, and the only deletes
+/// are its own staging directory and an extraction that never completed, which carries no
+/// <c>.nuplane-ready</c> marker. A tool sharing a host's directories still does none of that unless the
+/// operator asks for it with <c>--restore</c>, which is <see cref="HostPackageRestore"/>'s job and no other
+/// command's.
 /// </para>
 /// </remarks>
 internal static class NuplaneLoader
@@ -27,6 +35,14 @@ internal static class NuplaneLoader
     private const int StateReadAttempts = 5;
 
     private static readonly TimeSpan StateReadDelay = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>
+    /// The host's active package set, read through Nuplane's own reader and nothing else (FR-072). A state
+    /// file that is not there is an empty set, which is how the reader itself reports one.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static Task<IReadOnlyList<ActivePackage>> ReadActiveAsync(string stateFile, CancellationToken cancellationToken) =>
+        ReadStateAsync(stateFile, cancellationToken);
 
     /// <summary>
     /// Reads the host's active set through Nuplane's own reader and loads it through the entry point that

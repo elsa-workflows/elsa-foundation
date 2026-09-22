@@ -1,6 +1,7 @@
 using Elsa.Cli;
 using System.Diagnostics;
 using System.Reflection;
+using Xunit;
 
 namespace Elsa.Cli.Tests;
 
@@ -91,4 +92,24 @@ public sealed class TempDirectory : IDisposable
     public string File(string name) => System.IO.Path.Join(Path, name);
 
     public void Dispose() => Directory.Delete(Path, recursive: true);
+}
+
+/// <summary>
+/// Byte-for-byte comparison of two artifact directories, for the tests that assert one run produced exactly
+/// what another already produced.
+/// </summary>
+internal static class ArtifactAssert
+{
+    public static void SameBytes(string expected, string actual)
+    {
+        var expectedFiles = Files(expected);
+        var actualFiles = Files(actual);
+
+        Assert.Equal(expectedFiles.Keys, actualFiles.Keys);
+        foreach (var (name, bytes) in expectedFiles)
+            Assert.True(bytes.AsSpan().SequenceEqual(actualFiles[name]), $"{name} differs between the two runs.");
+    }
+
+    private static SortedDictionary<string, byte[]> Files(string directory) =>
+        new(Directory.EnumerateFiles(directory).ToDictionary(file => Path.GetFileName(file), File.ReadAllBytes), StringComparer.Ordinal);
 }

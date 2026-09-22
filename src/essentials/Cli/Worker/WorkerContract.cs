@@ -84,6 +84,15 @@ public sealed record WorkerRequest
     /// <summary>Every <c>--packages</c> root, in the order given. Empty means "resolve from the host alone".</summary>
     public IReadOnlyList<string> PackageRoots { get; init; } = [];
 
+    /// <summary>
+    /// Whether <c>--restore</c> was given (ADR 0076 D10's opt-in exception). The only field that lets this
+    /// tool write under the host's directories, and the only one that lets it touch a network. It is a bare
+    /// boolean on purpose: what to restore, and from where, is read by the worker out of the host's own
+    /// <c>appsettings.json</c>, so a feed's configured credential reference has nowhere to travel — not
+    /// this request, not a process argument, not an environment variable this front end sets.
+    /// </summary>
+    public bool Restore { get; init; }
+
     /// <summary>Which modules to run against; <c>null</c> on <c>list</c> means every module in the closure.</summary>
     public WorkerSelection? Selection { get; init; }
 

@@ -149,7 +149,7 @@ public sealed class PersistenceCliTests : IDisposable
         var exitCode = await EfToolingHost.RunAsync(requestStream, responseStream, [typeof(WidgetsDbContext).Assembly], CancellationToken.None);
 
         Assert.Equal(0, exitCode);
-        AssertSameBytes(inProcess.Path, output.Path);
+        ArtifactAssert.SameBytes(inProcess.Path, output.Path);
     }
 
     [Fact]
@@ -160,7 +160,7 @@ public sealed class PersistenceCliTests : IDisposable
         Assert.Equal(ToolExitCode.Success, Script("MinimalHost", output.Path, "PostgreSql", "Acme.Widgets").ExitCode);
         Assert.Equal(ToolExitCode.Success, Script("MinimalHost", second.Path, "PostgreSql", "Acme.Widgets").ExitCode);
 
-        AssertSameBytes(output.Path, second.Path);
+        ArtifactAssert.SameBytes(output.Path, second.Path);
     }
 
     [Fact]
@@ -525,16 +525,4 @@ public sealed class PersistenceCliTests : IDisposable
             .. modules is null ? (string[])["--all"] : ["--modules", modules]
         ]);
 
-    private static void AssertSameBytes(string expected, string actual)
-    {
-        var expectedFiles = Files(expected);
-        var actualFiles = Files(actual);
-
-        Assert.Equal(expectedFiles.Keys, actualFiles.Keys);
-        foreach (var (name, bytes) in expectedFiles)
-            Assert.True(bytes.AsSpan().SequenceEqual(actualFiles[name]), $"{name} differs between the two runs.");
-    }
-
-    private static SortedDictionary<string, byte[]> Files(string directory) =>
-        new(Directory.EnumerateFiles(directory).ToDictionary(file => Path.GetFileName(file), File.ReadAllBytes), StringComparer.Ordinal);
 }

@@ -122,10 +122,11 @@ internal static class ElsaCli
     {
         var host = HostOption();
         var packages = PackagesOption();
+        var restore = RestoreOption();
         var directory = new Argument<string>("directory") { Description = "The committed artifact directory to check." };
         var command = new Command("script-check", "Regenerate a committed artifact from its own plan and report any difference.")
         {
-            directory, host, packages
+            directory, host, packages, restore
         };
 
         command.SetAction((result, cancellationToken) => Guarded(async () =>
@@ -141,7 +142,7 @@ internal static class ElsaCli
                 // includes the shell and environment it names, so the provider-agreement check re-runs
                 // against exactly the configuration the committed artifact was produced from.
                 var selection = new WorkerSelection { Kind = WorkerSelection.ModulesKind, Modules = [.. plan.Modules.Select(module => module.Module)] };
-                var request = Request(WorkerCommands.Script, layout, result, packages) with
+                var request = Request(WorkerCommands.Script, layout, result, packages, restore) with
                 {
                     Selection = selection,
                     Provider = plan.Provider,
@@ -183,6 +184,8 @@ internal static class ElsaCli
 
         public Option<string[]> Packages { get; } = PackagesOption();
 
+        public Option<bool> Restore { get; } = RestoreOption();
+
         public Option<string[]> Modules { get; } = ModulesOption();
 
         public Option<bool> All { get; } = AllOption();
@@ -219,7 +222,7 @@ internal static class ElsaCli
         public Command Build(string name, string description, params Option[] extra)
         {
             var command = new Command(name, description);
-            foreach (var option in new Option[] { Host, Packages, Modules, All, FromHost, Shell, Environment }.Concat(extra))
+            foreach (var option in new Option[] { Host, Packages, Restore, Modules, All, FromHost, Shell, Environment }.Concat(extra))
                 command.Add(option);
             return command;
         }
@@ -227,7 +230,7 @@ internal static class ElsaCli
         public (HostLayout Layout, WorkerRequest Request) Resolve(string command, ParseResult result, bool selectionRequired)
         {
             var layout = HostLayout.Resolve(result.GetRequiredValue(Host));
-            var request = Request(command, layout, result, Packages) with
+            var request = Request(command, layout, result, Packages, Restore) with
             {
                 Selection = Selection(result, Modules, All, FromHost, selectionRequired)
             };
@@ -276,6 +279,19 @@ internal static class ElsaCli
     private static Option<string[]> PackagesOption() => new("--packages")
     {
         Description = "A package root to resolve module assemblies from. Repeatable."
+    };
+
+    /// <summary>
+    /// The one flag that lets this tool write under the host's directories and reach a feed (ADR 0076 D10's
+    /// opt-in exception, FR-083). Off by default and implied by nothing: every other flag leaves the
+    /// "never downloads" rule exactly as it was, and this one only acts on a host that records no package
+    /// set at all.
+    /// </summary>
+    private static Option<bool> RestoreOption() => new("--restore")
+    {
+        Description =
+            "Populate this host's package set from its own Nuplane configuration first, when it records none. " +
+            "Single-point version pins only. Off by default; no other flag implies it."
     };
 
     private static Option<string[]> ModulesOption() => new("--modules")
@@ -351,15 +367,42 @@ internal static class ElsaCli
     /// <see cref="Selectors.Environment"/> declares, because the worker needs one on every command and
     /// <see cref="WithHostConfiguration"/> then states the one actually used.
     /// </summary>
-    private static WorkerRequest Request(string command, HostLayout layout, ParseResult result, Option<string[]> packages) => new()
+    /// <remarks>
+    /// Also the one place the <c>--restore</c>/<c>--packages</c> combination is refused, because it is the
+    /// one place both are read. A <c>--packages</c> root is an already-assembled set with nothing to
+    /// populate it from, so the pair is a usage error rather than a flag that would be quietly ignored —
+    /// the same rule the tool applies to a <c>--connection</c> that does not exist (D7).
+    /// </remarks>
+    private static WorkerRequest Request(
+        string command,
+        HostLayout layout,
+        ParseResult result,
+        Option<string[]> packages,
+        Option<bool> restore)
     {
-        Command = command,
-        HostDirectory = layout.Directory,
-        HostName = layout.Name,
-        DepsFile = layout.DepsFile,
-        PackageRoots = [.. (result.GetValue(packages) ?? []).Select(Path.GetFullPath)],
-        Environment = "Production"
-    };
+        var roots = (result.GetValue(packages) ?? []).Select(Path.GetFullPath).ToArray();
+        var wantsRestore = result.GetValue(restore);
+        if (wantsRestore && roots.Length > 0)
+        {
+            throw CliRefusal.Usage(
+                "restore-with-packages",
+                "--restore and --packages cannot be combined: a --packages root is an already-assembled package set, " +
+                "and no command populates one. Give --restore to populate this host's own set, or --packages to read " +
+                "one that is already there.",
+                [.. roots.Select(root => $"'{root}' was given as a --packages root.")]);
+        }
+
+        return new()
+        {
+            Command = command,
+            HostDirectory = layout.Directory,
+            HostName = layout.Name,
+            DepsFile = layout.DepsFile,
+            PackageRoots = roots,
+            Restore = wantsRestore,
+            Environment = "Production"
+        };
+    }
 
     /// <summary>
     /// Exactly one selector, and no default (FR-028). <c>list</c> is the one command that selects nothing by

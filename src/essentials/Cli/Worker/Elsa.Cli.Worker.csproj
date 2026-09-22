@@ -20,10 +20,22 @@
     <!-- Compile-time only, and deliberately so (ADR 0076 D1/D12): the worker runs on the host's deps file,
          so every Nuplane assembly it calls must be the host's own copy. Copying these beside the worker
          would put a second, tool-pinned Nuplane in the probing path; excluding the runtime assets means a
-         Nuplane host supplies them and a host with no Nuplane never loads them, because nothing outside
-         NuplanePackageSet touches a Nuplane type. -->
+         Nuplane host supplies them and a host with no Nuplane never loads them, because the only files
+         that touch a Nuplane type — NuplaneLoader, NuplaneRestoreRunner, NuplaneDirectoryFeeds — are
+         reached only once a caller has decided this host carries the matching package.
+         Nuplane.Sources.Directory is the same arrangement one level down: a host whose feeds are
+         directories carries it, the core package deliberately does not reference it, and the worker's one
+         call site is entered only when the host's own deps file lists it. -->
     <PackageReference Include="Nuplane" ExcludeAssets="runtime" PrivateAssets="all" />
     <PackageReference Include="Nuplane.Loading" ExcludeAssets="runtime" PrivateAssets="all" />
+    <PackageReference Include="Nuplane.Sources.Directory" ExcludeAssets="runtime" PrivateAssets="all" />
+    <!-- Same rule, same reason: the restore pass reads the host's own appsettings.json through the
+         configuration providers the host itself composes, not a second JSON reader of this tool's. Both
+         assemblies come out of the host's closure — Nuplane already depends on Microsoft.Extensions.
+         Configuration, and a host that reads an appsettings.json carries the JSON provider — so nothing
+         here pins a second copy. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration" ExcludeAssets="runtime" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" ExcludeAssets="runtime" PrivateAssets="all" />
   </ItemGroup>
 
 </Project>

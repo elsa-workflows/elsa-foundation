@@ -33,8 +33,9 @@ stream distinct from the worker's, which is a fresh pipe this process opens for 
 inside the request that already travels the worker's stdin.
 
 For a host whose modules arrive as packages, the worker boots that host's own Nuplane loader rather than
-resolving assemblies itself. It never reconciles and never downloads: a reconcile pass rewrites the host's
-state file and can delete under its install root.
+resolving assemblies itself. It reads and never writes, unless the operator asks for
+[`--restore`](#restoring-a-hosts-package-set---restore): a reconcile pass rewrites the host's state file and
+extracts into its install root, which no other command may do to directories it shares with a host.
 
 ## Commands
 
@@ -56,6 +57,7 @@ nothing.
 |---|---|
 | `--host <dir>` | Required. The host's published or built output directory. |
 | `--packages <dir>` | Repeatable. A package root to resolve modules from; never populated by this tool. |
+| `--restore` | Off by default and implied by nothing. Populates *this host's own* package set from its own Nuplane configuration, once, when it records none. Single-point version pins only. Cannot be combined with `--packages` (exit 2). See [Restoring a host's package set](#restoring-a-hosts-package-set---restore). |
 | `--provider` | Required for `plan`, `script`, `apply` and `validate`, and authoritative: no command substitutes another. |
 | `--modules`, `--all`, `--from-host` | Exactly one, for `plan`, `script`, `apply` and `validate`. `--from-host` selects every module the host's own enabled shell features declare a dependency on. `list` defaults to every module; `script-check` takes none of them, because the committed plan is what it checks against. |
 | `--shell <name>` | The shell whose features are read. With none given, every shell the host configures is read. |
@@ -66,6 +68,72 @@ nothing.
 | `--connection-stdin` | `apply`/`validate` only. Reads the connection from this process's own stdin instead. |
 
 There is no `--connection` flag (D7): giving one is a usage error, not a silently ignored value.
+
+## Restoring a host's package set (`--restore`)
+
+Every command reads the package set already on disk and downloads nothing
+([ADR 0076](../../../docs/adr/0076-persistence-tooling-runs-inside-the-host-closure.md), D10). `--restore`
+is the one exception, and the operator has to ask for it: **no other flag implies it, and without it
+nothing about this tool changes.**
+
+The case it serves is a host that has never run. A fresh host pointed at a remote feed has an empty install
+root and no `store-state.json`, so there is nothing for `list`, `plan` or `script` to resolve against. That
+is now reported as itself — `packages-never-reconciled`, exit 3, naming the state file that is absent —
+rather than as a missing provider engine.
+
+**When it acts.** Only when `--packages` was not given *and* the host's own
+`<host>/.nuplane/store-state.json` records no active package. A host that already records a set is left
+exactly as it is; the run says so in one line on stderr and proceeds normally. `--restore` together with
+`--packages` is a usage error (exit 2): a `--packages` root is an already-assembled set, with nothing to
+populate it from.
+
+**What it reads.** The host's own `appsettings.json` plus its `appsettings.<environment>.json` overlay
+(`--environment`, default `Production`), through the same JSON configuration providers the host layers at
+startup — the same mechanism the provider-agreement check uses for `shells.json`. Nothing else is layered:
+no environment variables and no command line, because both would be facts about *this* process. A directory
+feed's configured path is resolved relative to the `--host` directory, which is where a started host
+resolves it from. Those two files are read **inside the worker**, so a feed's configured `Credentials`
+value never crosses the process boundary — it appears in no process argument, no request, and no message.
+
+**What it writes**, and it is the only thing in this tool that writes under a host's directories:
+
+| Path | What lands there |
+|---|---|
+| `<host>/.nuplane/store-state.json` | The active package set, rewritten by the cycle. Written at this exact path even when the host's configuration names another, because it is the one path this tool reads back. |
+| `<host>/.nuplane/store-state.json.lock` | The store lock, held for the cycle and released after it. |
+| `<host>/.nuplane/packages/` | Each acquired package, extracted, plus a `.tmp/` staging directory. Whatever the host's own `Nuplane:FeedResolution:PackageInstallRoot` names is used instead when it names one. |
+
+No installed package is deleted. A cycle's cleanup records decisions and removes nothing; the only deletes
+are its own staging directory and an extraction that never completed — one carrying no `.nuplane-ready`
+marker, which is not an installed package at all.
+
+**Single-point pins only.** Any desired request that names more than one version — a bare package id, a
+range such as `[1.0.0,2.0.0)`, a floating `1.*` — refuses the run (exit 2, `restore-unpinned`) and lists
+every offender before anything is resolved, downloaded, installed or written. This is what makes the
+artifact honest: a restored artifact is byte-identical to the one a started host produces for those same
+pins, so `migration-plan.json` records nothing about having been restored, `script-check` needs no special
+case, and the frozen `EfToolingHost` contract is untouched. A directory feed takes its version from each
+`.nupkg` filename and is pinned by construction; a remote feed needs its include patterns written as
+`Package [1.2.3]`.
+
+**Feed credentials are refused, by name.** Nuplane has no credential resolver yet, so a feed that
+configures `Credentials` is dropped before the first network call rather than contacted and rejected. Since
+restoring from whichever feeds remain would assemble a partial set and script it as if it were the whole
+one, the run is refused instead (exit 3, `restore-feed-credentials`), naming every such feed. The check
+runs on a write-nothing pre-flight, so nothing is downloaded first.
+
+**Never under a running host.** The store lock is the whole mechanism, and it is Nuplane's: every
+reconcile cycle, a host's and a restore's alike, holds an exclusive handle on the lock file beside the
+state file. A restore that cannot take it does nothing at all — no read, no resolve, no write — and exits 3
+(`restore-store-locked`) saying another process holds the lock, which usually means the host is running.
+There is no other liveness detection, and none is attempted.
+
+**Anything less than the whole set is a refusal.** A degraded cycle, or any package that could not be
+installed, exits 3 (`restore-incomplete`) listing the failures. A partial package set is never scripted
+from.
+
+On success the run prints one line on stderr — how many packages were installed, where, and which state
+file records them — and then proceeds exactly as if the state file had been there all along.
 
 ## Provider agreement
 
