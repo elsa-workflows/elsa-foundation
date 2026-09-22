@@ -49,13 +49,16 @@ Add `Credentials` for a private feed — a *reference* to its secret, never the 
 [Feed credentials](#feed-credentials). `Nuplane:FeedResolution` controls multi-feed behavior —
 `FeedPriorities`, `StopOnFirstSuccessfulFeed`, `OfflineMode`, `PackageInstallRoot`.
 
-A relative `DirectoryPath` is resolved against the host's content root, because the host passes
+A relative `DirectoryPath` is resolved against the host's **content root** — the same directory this
+`appsettings.json` was read from — because the host passes
 `nuplane.UseBasePath(builder.Environment.ContentRootPath)` where it composes Nuplane
 (`src/apps/Elsa.Foundation.Host/Program.cs`, and the same call in `Elsa.Workbench`). Without that call
-Nuplane resolves such a path against the process's own current directory, so a host started as a service
-from `/` would read `"DirectoryPath": "packages"` as `/packages` — an empty feed, and per
-[What fails loudly](#what-fails-loudly) an empty feed is the quiet failure. An absolute `DirectoryPath` is
-unaffected either way.
+Nuplane resolves such a path against the *process's current directory* instead, and the two are the same
+place only when the host is started from its own directory. A deployment that sets the content root
+independently of where the process is launched — `ASPNETCORE_CONTENTROOT`, a systemd unit, a container
+`WORKDIR` — then reads this file out of one directory and looks for `packages` under another. That presents
+as an empty feed, and per [What fails loudly](#what-fails-loudly) an empty feed is the quiet failure. An
+absolute `DirectoryPath` is unaffected either way.
 
 ## Include patterns behave differently on the two shapes
 
