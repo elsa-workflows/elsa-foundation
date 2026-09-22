@@ -18,4 +18,7 @@
     <ProjectReference Include="..\..\Elsa.Diagnostics.OpenTelemetry.csproj" />
     <ProjectReference Include="..\..\Core\Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Update="nuplane.json" Pack="true" PackagePath="/" />
+  </ItemGroup>
 </Project>

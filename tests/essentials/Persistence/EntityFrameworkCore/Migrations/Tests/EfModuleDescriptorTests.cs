@@ -1,5 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Text.Json;
+using System.Xml.Linq;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore;
@@ -146,6 +148,124 @@ public sealed class EfModuleDescriptorTests
             .Where(attribute => attribute.ConstructorArguments is [{ Value: string key }, { Value: string }] && key == EfModulesExtensionKey)
             .Select(attribute => (string)attribute.ConstructorArguments[1].Value!)
             .ToHashSet(StringComparer.Ordinal);
+
+    // One project directory per module assembly (ADR 0076 D2: eleven module projects carry thirteen
+    // [EfModule] declarations; Identity and Workflows.Runtime.Distributed each carry two in one project).
+    // Repo-relative, not derived from the assembly's bin/obj output path, for the same reason
+    // SecretsEfPersistencePilotArchitectureTests reads project files from the repo rather than from disk
+    // layout: it is the source, not the build output, that a guard test must hold to account.
+    private static readonly (Assembly Assembly, string ProjectDirectory)[] ModuleProjectDirectories =
+    [
+        (typeof(ActivitiesDesignDbContext).Assembly, "src/essentials/Activities/Design/Persistence/EntityFrameworkCore"),
+        (typeof(EfOpenTelemetryDbContext).Assembly, "src/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore"),
+        (typeof(StructuredLogsDbContext).Assembly, "src/essentials/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore"),
+        (typeof(IdentityIamDbContext).Assembly, "src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore"),
+        (typeof(SecretsDbContext).Assembly, "src/essentials/Secrets/Persistence/EntityFrameworkCore"),
+        (typeof(StudioPreferencesDbContext).Assembly, "src/essentials/Studio/Preferences/Persistence/EntityFrameworkCore"),
+        (typeof(WorkflowsDesignDbContext).Assembly, "src/essentials/Workflows/Design/Persistence/EntityFrameworkCore"),
+        (typeof(PublishingSnapshotReviewDbContext).Assembly, "src/essentials/Workflows/Publishing/Persistence/EntityFrameworkCore"),
+        (typeof(ExecutionPlacementDbContext).Assembly, "src/essentials/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore"),
+        (typeof(RuntimeDbContext).Assembly, "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore"),
+        (typeof(Elsa3ImportDbContext).Assembly, "src/extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore")
+    ];
+
+    /// <summary>
+    /// Spec 172 D1, D2 (#1938, child of #1936): every EF module package declares capability <c>ef-provider</c> in a
+    /// package-root <c>nuplane.json</c> (schema 2), one option per non-null <c>[EfModule]</c> provider property, so
+    /// a package-hosted host can select its engine instead of naming it by hand in the closure. This guard reads
+    /// the truth from the three places it already lives — <c>[EfModule]</c> (via <see cref="Discover"/>),
+    /// <see cref="EfRelationalProviderBinding.ProviderPackageId"/>, and the central pin in
+    /// <c>Directory.Packages.props</c> — so a provider added or dropped, an engine id renamed, or a pin bumped
+    /// without the declaring file following, fails here.
+    /// </summary>
+    [Fact]
+    public void Every_module_package_declares_an_ef_provider_capability_matching_its_EfModule_and_the_pinned_engines()
+    {
+        var descriptorsByAssembly = Discover().GroupBy(descriptor => descriptor.Assembly).ToDictionary(group => group.Key, group => group.ToArray());
+        var projectDirectoriesByAssembly = ModuleProjectDirectories.ToDictionary(entry => entry.Assembly, entry => entry.ProjectDirectory);
+        var catalogAssemblies = ModuleContextCatalog.Modules.ToHashSet();
+
+        // Both directions, so ModuleProjectDirectories can only shrink or grow together with
+        // ModuleContextCatalog.Modules: a twelfth module added to the catalog without a table entry fails
+        // here by name, and so does a stale table entry for an assembly the catalog no longer carries.
+        foreach (var (assembly, _) in ModuleProjectDirectories)
+            Assert.True(
+                catalogAssemblies.Contains(assembly),
+                $"{assembly.GetName().Name} has a {nameof(ModuleProjectDirectories)} entry but is not in {nameof(ModuleContextCatalog)}.{nameof(ModuleContextCatalog.Modules)}.");
+
+        foreach (var assembly in ModuleContextCatalog.Modules)
+        {
+            Assert.True(
+                projectDirectoriesByAssembly.TryGetValue(assembly, out var projectDirectory),
+                $"{assembly.GetName().Name} is in {nameof(ModuleContextCatalog)}.{nameof(ModuleContextCatalog.Modules)} but has no entry in {nameof(ModuleProjectDirectories)}.");
+
+            var descriptors = descriptorsByAssembly[assembly];
+            var expectedOptionNames = ModuleContextCatalog.Providers
+                .Where(provider => descriptors.Any(descriptor => descriptor.ProviderContext(provider) is not null))
+                .ToArray();
+
+            var directory = RepoPath(projectDirectory!.Split('/'));
+            var metadataPath = Path.Join(directory, "nuplane.json");
+            Assert.True(File.Exists(metadataPath), $"{projectDirectory} has no nuplane.json.");
+
+            using var metadata = JsonDocument.Parse(File.ReadAllText(metadataPath));
+            Assert.Equal(2, metadata.RootElement.GetProperty("schemaVersion").GetInt32());
+
+            var capability = Assert.Single(metadata.RootElement.GetProperty("capabilities").EnumerateArray());
+            Assert.Equal("ef-provider", capability.GetProperty("name").GetString());
+
+            var options = capability.GetProperty("options").EnumerateArray()
+                .ToDictionary(option => option.GetProperty("name").GetString()!, option => option, StringComparer.Ordinal);
+
+            Assert.Equal(
+                expectedOptionNames.OrderBy(name => name, StringComparer.Ordinal),
+                options.Keys.OrderBy(name => name, StringComparer.Ordinal));
+
+            foreach (var provider in expectedOptionNames)
+            {
+                var packageId = EfRelationalProviderBinding.ProviderPackageId(provider);
+                var option = options[provider];
+                Assert.Equal(packageId, option.GetProperty("packageId").GetString());
+                Assert.Equal($"[{PinnedVersion(packageId)}]", option.GetProperty("version").GetString());
+            }
+
+            var csprojPath = Assert.Single(Directory.EnumerateFiles(directory, "*.csproj"));
+            var project = XDocument.Load(csprojPath);
+            var metadataItem = Assert.Single(project.Descendants("None"), element =>
+                string.Equals(element.Attribute("Update")?.Value, "nuplane.json", StringComparison.Ordinal));
+            Assert.Equal("true", metadataItem.Attribute("Pack")?.Value);
+            Assert.Equal("/", metadataItem.Attribute("PackagePath")?.Value);
+        }
+    }
+
+    /// <summary>The central pin for <paramref name="packageId"/> in <c>Directory.Packages.props</c>, not hardcoded here so an engine bump fails this test instead of silently drifting from it.</summary>
+    private static string PinnedVersion(string packageId) => PackageVersionPins.Value[packageId];
+
+    private static readonly Lazy<IReadOnlyDictionary<string, string>> PackageVersionPins = new(() =>
+        XDocument.Load(RepoPath("Directory.Packages.props"))
+            .Descendants("PackageVersion")
+            .ToDictionary(
+                element => element.Attribute("Include")!.Value,
+                element => element.Attribute("Version")!.Value,
+                StringComparer.Ordinal));
+
+    private static string RepoPath(params string[] segments) => Path.Join([RepoRoot, ..segments]);
+
+    private static string RepoRoot
+    {
+        get
+        {
+            var directory = new DirectoryInfo(AppContext.BaseDirectory);
+            while (directory is not null)
+            {
+                if (File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
+                    return directory.FullName;
+                directory = directory.Parent;
+            }
+
+            throw new DirectoryNotFoundException("Could not find repository root.");
+        }
+    }
 
     [Fact]
     public void Secrets_declares_all_four_providers()
