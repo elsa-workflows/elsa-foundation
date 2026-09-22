@@ -1,7 +1,9 @@
 ---
 status: proposed
 date: 2026-08-07
+amended: 2026-09-22
 decision_context: FR-1 discussion on issue #1144, agreed by Joey Barten, Sipke Schoorstra and Frans van Ek
+amendment_context: patch derivation changed from commit height to last-published state after the rename hazard was measured; awaiting the same three-party agreement as the original
 ---
 
 # Package versioning uses two version lines with a computed patch digit
@@ -42,9 +44,17 @@ selected on cross-domain reach and low churn.
 the repository, with the patch digit per package. A domain's `.Core` ships with its domain, because a
 domain is a delivery unit.
 
-**The patch digit is computed, not authored.** Per-package patch is the count of commits touching
-that package's own files since the release tag, resolved through the dependency map because project
-directories nest. No `<Version>` element is hand-edited anywhere.
+**The patch digit is computed, not authored.** No `<Version>` element is hand-edited anywhere.
+
+*Amended 2026-09-22.* The patch was originally the count of commits touching a package's own files
+since the release tag. It is now derived from the package's **last published version, recorded per
+package id in the dependency map**: a package whose own files changed since it was last published
+increments its patch; an unchanged package keeps its number and is not published. Paths take no part
+in the computation.
+
+The change is confined to how the digit is derived. Everything else this decision records — the two
+lines, selective publishing, derived floors with an upper bound, release-shaped previews, and the
+absence of authored version elements — is unaffected, and the reasons for them are untouched.
 
 **Publishing is selective.** Only packages whose own files changed are published. Unchanged packages
 keep their last published version, so dependency floors are never restamped for a change the package
@@ -89,9 +99,30 @@ propagates through the reverse closure.
   that a published identity would freeze, and the host whose pin list would define it does not exist
   yet. Elsa §E already holds back `Elsa.Foundation.Core` on the same reasoning.
 - **Git-height versioning tooling** such as Nerdbank.GitVersioning was declined in FR-1 on
-  directory-scoping and tool-dependency grounds. The computed patch here uses `git rev-list` with
-  ownership resolved through the dependency map, which answers both objections without adding a tool
-  to the publishing pipeline.
+  directory-scoping and tool-dependency grounds. The commit-height patch this decision originally
+  adopted used `git rev-list` with ownership resolved through the dependency map, which answered both
+  objections without adding a tool to the publishing pipeline.
+- **Commit height over a package's own files**, this decision's original mechanism, was replaced on
+  2026-09-22 because **`git rev-list` does not follow renames**. Ownership resolution through the
+  dependency map addressed directory *nesting*, which is what the original wording anticipated; it
+  does not address a directory *moving*. Measured on this repository against the Elsa 3 move: a
+  baseline at the move's parent commit gives an identical count (8 against a true 8), a baseline 25
+  commits earlier gives 8 against a true 11, and at 80 commits the digit runs **backwards** — computed
+  8 where 9 was already published. A published version that decreases is not recoverable by the
+  monotonicity gate alone, because the gate can only reject the build, not supply the right number.
+  Renames are not a tail risk here: `git log --follow` shows `Elsa.Agent.Core` has already moved
+  through `src/Elsa/Foundation/Agent/Abstractions`, `src/Elsa/Agent/Abstractions`,
+  `src/Elsa/Agent/Core` and `extensions/Agent/src/Core`.
+- **Declared lineage**, keeping commit height but having each packable project record its prior
+  directories so the count spans them, was considered and held in reserve. It preserves the property
+  that a version is a pure function of (commit, package) with no external state, at the cost of a
+  declaration on every move and a guard to enforce it. It remains the fallback if the dependency map's
+  role in publishing is later judged too load-bearing.
+- **`git log --follow` auto-discovery** of a package's historical directories was rejected. It works,
+  but it is similarity-heuristic — its output for `Elsa.Agent.Core` includes an almost certainly
+  spurious `src/Elsa/Foundation/Identity/Abstractions` — git's documentation cautions against it for
+  complex histories, and a shipped version number must not depend on a heuristic that can vary between
+  git versions.
 
 ## Consequences
 
@@ -105,8 +136,17 @@ propagates through the reverse closure.
   ownership for the patch computation and generates the `SharedAssemblies` list and the host
   compatibility manifest.
 - A revert increments the patch rather than decrementing it, which is correct because the content
-  changed again. Version numbers are stable only against a stable history, so rewriting `main` would
-  renumber.
+  changed again.
+- The patch is **monotonic by construction**: it is always one past the last published value, rather
+  than a count that happens to increase. Change detection is a boolean, so a rename marks a package
+  changed and bumps it — eager, never wrong — where a count would have silently undercounted.
+- Version numbers remain stable only against a stable history. Rewriting `main` renumbers, because the
+  last-published record and the change detection both read history. No scheme considered here survives
+  a rewrite.
+- Publishing now depends on the dependency map being **correct**, not merely present: a stale or wrong
+  last-published record yields a wrong version. This deepens an existing dependency rather than adding
+  one, since the map already resolves floors and change detection and already carries a freshness
+  gate.
 - Consumers hold a release number rather than a package version. A generated release manifest records
   which package versions constitute a given release.
 - Line A membership is not fully settled. Six packages sit in a band the selection rule does not
