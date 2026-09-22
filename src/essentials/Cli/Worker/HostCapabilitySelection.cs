@@ -75,19 +75,30 @@ public static class HostCapabilitySelection
         {
             throw WorkerRefusal.Resolution(
                 "capability-selection-unreadable",
-                $"This host pins Nuplane and has an '{HostAppSettings.BaseFileName}', so it may select its provider engine " +
-                $"with '{Key}' — and that file could not be read, because this host does not provide all of the " +
-                $"configuration assemblies it takes: {failure.Message} " +
+                $"This host pins Nuplane and carries {Files(environment)} at '{hostDirectory}', so it may select its " +
+                $"provider engine with '{Key}' — and that configuration could not be read, because this host does not " +
+                $"provide all of the configuration assemblies it takes: {failure.Message} " +
                 $"Without it '--provider' cannot be checked against the selection, so nothing is scripted from it.");
         }
-        catch (Exception failure) when (failure is InvalidOperationException or IOException or System.Text.Json.JsonException or FormatException)
+        // InvalidDataException is named explicitly because it does not derive from IOException, and it is
+        // exactly what the JSON configuration provider raises for a file it cannot parse — the single most
+        // likely way this read fails at all. FormatException is the same failure from the provider versions
+        // that wrap it that way instead.
+        catch (Exception failure) when (failure is InvalidOperationException or IOException or InvalidDataException or System.Text.Json.JsonException or FormatException)
         {
             throw WorkerRefusal.Resolution(
                 "capability-selection-unreadable",
-                $"This host's own '{HostAppSettings.BaseFileName}' could not be read, so '{Key}' could not be compared " +
-                $"with '--provider': {failure.GetType().Name}: {failure.Message} Nothing is scripted from it.");
+                $"This host's own {Files(environment)} at '{hostDirectory}' could not be read, so '{Key}' could not be " +
+                $"compared with '--provider': {failure.GetType().Name}: {failure.Message} Nothing is scripted from it.");
         }
     }
+
+    /// <summary>
+    /// The two files the selection could have come from, named together because either can be the one that
+    /// failed to read: the layering is what the host itself does, so the refusal cannot point at one of them.
+    /// </summary>
+    private static string Files(string environment) =>
+        $"'{HostAppSettings.BaseFileName}'/'{HostAppSettings.OverlayFileName(environment)}'";
 
     /// <summary>
     /// The selection exactly as Nuplane's own <c>CapabilitySelectionConfigurationReader</c> reads it: the

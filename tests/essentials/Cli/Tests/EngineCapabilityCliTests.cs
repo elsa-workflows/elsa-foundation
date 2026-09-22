@@ -246,6 +246,34 @@ public sealed class EngineCapabilityCliTests : IDisposable
         Assert.Empty(Directory.EnumerateFileSystemEntries(output.Path));
     }
 
+    /// <summary>
+    /// The other way the comparison could quietly not happen: the host's configuration is there and cannot
+    /// be read at all, so whether it selects an engine is unknown. Unknown is refused, because the
+    /// alternative is an artifact for a provider this host may never have agreed to, produced in silence.
+    /// </summary>
+    /// <remarks>
+    /// The package set is restored from a well-formed file first and only then is the file corrupted, so the
+    /// run under test gets all the way past resolution to the one read this test is about — and the
+    /// configuration provider the host itself composes is what fails on it, rather than a parser of the
+    /// tool's own. Deliberately no <c>--restore</c>: that pass reads the same file, and it would refuse
+    /// first, for a reason of its own.
+    /// </remarks>
+    [Fact]
+    public void A_configuration_that_cannot_be_read_at_all_is_refused_rather_than_read_as_no_selection()
+    {
+        host.Configure(ModuleFeed, $"{{ \"ef-provider\": \"{Option}\" }}");
+        Assert.Equal(ToolExitCode.Success, DotnetElsa.Run("persistence", "list", "--host", host.Path, "--restore").ExitCode);
+        File.WriteAllText(Path.Join(host.Path, "appsettings.json"), "{ \"Nuplane\": { this is not JSON ");
+
+        var run = Script(output.Path);
+
+        Assert.Equal(ToolExitCode.ResolutionFailure, run.ExitCode);
+        Assert.Contains("capability-selection-unreadable", run.Text, StringComparison.Ordinal);
+        Assert.Contains(host.Path, run.Text, StringComparison.Ordinal);
+        Assert.Contains(Key, run.Text, StringComparison.Ordinal);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(output.Path));
+    }
+
     /// <summary>The module's own feed pattern, which deliberately never matches an engine package.</summary>
     private static string ModuleFeed =>
         """
