@@ -12,8 +12,9 @@
     "test:browser:expression-matrix": "playwright test --config tests/browser/playwright.expression-matrix.config.ts",
     "test:browser:performance": "playwright test --config tests/browser/playwright.performance.config.ts",
     "typecheck": "pnpm -r typecheck",
-    "lint": "eslint . && pnpm lint:css",
-    "lint:css": "stylelint \"src/*/Client/src/**/*.css\" \"!src/Elsa.Studio.Web/**\""
+    "lint": "eslint . && pnpm lint:css && pnpm lint:layout",
+    "lint:css": "stylelint \"src/*/Client/src/**/*.css\" \"src/*/*/Client/src/**/*.css\" \"!src/Elsa.Studio.Web/**\" \"!src/apps/**\"",
+    "lint:layout": "node scripts/check-module-layout.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

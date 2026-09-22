@@ -105,6 +105,22 @@ describe("DashboardPage", () => {
     expect(view.container.textContent).not.toContain("Workflow runs");
     flushSync(() => view.root.unmount());
   });
+
+  // An essentials-only Studio has Dashboard but none of the widget-contributing modules —
+  // Attention and Workflows.Dashboard are both extensions (#515). The host owns the widget
+  // registry, so Dashboard simply renders an empty one; that has to stay a designed state
+  // rather than a blank panel, because it is what a minimal install looks like.
+  it("renders its empty state when no module contributes a widget", async () => {
+    const api = stubApi();
+    const { container, root } = render(api);
+    await waitUntil(() => container.querySelector(".dashboard-empty") !== null);
+
+    expect(container.textContent).toContain("No dashboard widgets are available.");
+    expect(container.querySelectorAll("article.dashboard-widget")).toHaveLength(0);
+    // The page chrome still renders, so the route is usable rather than dead.
+    expect(container.querySelector("h2")?.textContent).toBe("Dashboard");
+    flushSync(() => root.unmount());
+  });
 });
 
 function render(api: ReturnType<typeof stubApi>) {
