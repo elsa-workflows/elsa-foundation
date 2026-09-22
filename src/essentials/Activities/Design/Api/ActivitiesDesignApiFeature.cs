@@ -16,7 +16,7 @@ using Elsa.Api.Capabilities.Extensions;
 using Elsa.Events.Core.Extensions;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Mediator.Core.Extensions;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;

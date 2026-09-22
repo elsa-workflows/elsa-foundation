@@ -1,5 +1,5 @@
 ﻿using CShells.Features;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Http.Core.Contracts;
 using Elsa.Primitives.Extensions;
 using Elsa.Tasks.Core;

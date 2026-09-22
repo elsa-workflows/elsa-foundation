@@ -4,7 +4,7 @@ using Elsa.Activities.Graph.Runtime.Services;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 

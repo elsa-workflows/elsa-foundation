@@ -1,5 +1,5 @@
 using CShells.Features;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Caching.Core;
 using Elsa.Caching.Memory.Options;
 using Elsa.Caching.Memory.Services;

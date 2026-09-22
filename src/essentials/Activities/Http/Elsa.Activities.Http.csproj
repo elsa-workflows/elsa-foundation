@@ -9,7 +9,7 @@
     <PackageReference Include="CShells.AspNetCore.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Microsoft.Extensions.Options" />
-    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>

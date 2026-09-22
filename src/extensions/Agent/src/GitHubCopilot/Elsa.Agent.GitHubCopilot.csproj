@@ -6,7 +6,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="CShells.Abstractions" />
-		<PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+		<PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
 		<PackageReference Include="GitHub.Copilot.SDK" />
 		<PackageReference Include="Microsoft.Extensions.AI.Abstractions" />
 		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />

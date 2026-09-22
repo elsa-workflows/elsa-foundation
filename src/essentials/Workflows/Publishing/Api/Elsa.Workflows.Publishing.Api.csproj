@@ -8,7 +8,7 @@
     exactly why §E2.2 (Runtime must not depend on Design) is preserved — the bridge is a third party.
   -->
   <ItemGroup>
-    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>

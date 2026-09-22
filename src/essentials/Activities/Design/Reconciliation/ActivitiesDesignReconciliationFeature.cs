@@ -1,5 +1,5 @@
 using CShells.Features;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Handlers;
 using Elsa.Activities.Design.Reconciliation.Options;

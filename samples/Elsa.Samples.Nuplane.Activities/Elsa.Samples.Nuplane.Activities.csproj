@@ -14,7 +14,7 @@
 
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" GeneratePathProperty="true" />
-    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
 
   <Target Name="AddCShellsAbstractionsToPackageManifestReferences" BeforeTargets="GenerateElsaPackageManifest">

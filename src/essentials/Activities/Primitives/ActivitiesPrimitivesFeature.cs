@@ -1,5 +1,5 @@
 using CShells.Features;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Primitives.Activation;
 using Elsa.Activities.Primitives.Services;

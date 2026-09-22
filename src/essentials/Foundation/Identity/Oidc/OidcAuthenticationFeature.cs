@@ -1,6 +1,6 @@
 using CShells.Features;
 using Elsa.Foundation.Identity.Oidc.Extensions;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Foundation.Identity.Oidc;

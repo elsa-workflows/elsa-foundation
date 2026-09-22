@@ -1,5 +1,5 @@
 using CShells.Features;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.Newtonsoft.Services;
 using Microsoft.Extensions.DependencyInjection;

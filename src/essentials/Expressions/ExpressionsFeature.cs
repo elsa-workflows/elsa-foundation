@@ -1,5 +1,5 @@
 using CShells.Features;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Expressions.Contracts;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Options;

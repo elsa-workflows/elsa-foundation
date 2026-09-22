@@ -6,7 +6,7 @@ using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Http.Options;
 using Elsa.Activities.Http.Services;
 using Elsa.Http.Core.Options;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;

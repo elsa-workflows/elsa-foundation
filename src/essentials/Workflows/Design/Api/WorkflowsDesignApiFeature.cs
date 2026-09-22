@@ -5,7 +5,7 @@ using Elsa.Events.Core.Extensions;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Api.AspNetCore;
 using Elsa.Mediator.Core.Extensions;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Capabilities;

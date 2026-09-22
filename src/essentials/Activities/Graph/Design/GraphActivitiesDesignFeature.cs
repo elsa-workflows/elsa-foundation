@@ -1,7 +1,7 @@
 using CShells.Features;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Graph.Design.Services;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 

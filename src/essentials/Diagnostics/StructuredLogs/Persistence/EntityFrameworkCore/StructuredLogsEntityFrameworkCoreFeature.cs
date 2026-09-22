@@ -1,7 +1,7 @@
 using Elsa.Persistence.EntityFramework;
 using CShells.Features;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.DependencyInjection;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore;

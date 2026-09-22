@@ -1,6 +1,6 @@
 using CShells.Features;
 using Elsa.Git;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Design.Reconciliation.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Git.Contracts;

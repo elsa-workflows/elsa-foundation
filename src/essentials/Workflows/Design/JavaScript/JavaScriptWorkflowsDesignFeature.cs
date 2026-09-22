@@ -1,5 +1,5 @@
 ﻿using CShells.Features;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
 using Elsa.Workflows.Design.JavaScript.Contributors;
 using Microsoft.Extensions.DependencyInjection;

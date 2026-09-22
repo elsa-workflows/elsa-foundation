@@ -2,7 +2,7 @@ using CShells.Features;
 using Elsa.Agent.Anthropic.Extensions;
 using Elsa.Agent.Anthropic.Options;
 using Elsa.Agent.Core.Extensions;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Agent.Anthropic;

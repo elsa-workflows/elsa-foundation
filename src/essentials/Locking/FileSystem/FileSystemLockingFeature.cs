@@ -1,5 +1,5 @@
 using CShells.Features;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Locking.FileSystem.Options;
 using Medallion.Threading.FileSystem;
 using Microsoft.Extensions.DependencyInjection;

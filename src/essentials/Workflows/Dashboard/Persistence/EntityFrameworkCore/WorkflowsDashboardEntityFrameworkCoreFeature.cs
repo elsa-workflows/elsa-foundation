@@ -1,6 +1,6 @@
 using CShells.Features;
 using Elsa.Persistence.EntityFramework;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 

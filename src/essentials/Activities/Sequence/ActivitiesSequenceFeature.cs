@@ -1,7 +1,7 @@
 using CShells.Features;
 using Elsa.Activities.Sequence.Internal;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;

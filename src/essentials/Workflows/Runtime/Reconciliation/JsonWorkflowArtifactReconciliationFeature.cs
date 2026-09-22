@@ -1,5 +1,5 @@
 using CShells.Features;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Reconciliation.Contracts;
 using Elsa.Workflows.Runtime.Reconciliation.Core.Contracts;
 using Elsa.Workflows.Runtime.Reconciliation.Core.Options;

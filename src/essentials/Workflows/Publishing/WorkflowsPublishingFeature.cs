@@ -2,7 +2,7 @@ using CShells.Features;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Events.Core.Extensions;
 using Elsa.Mediator.Core.Extensions;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;

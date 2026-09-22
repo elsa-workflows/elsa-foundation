@@ -1,7 +1,7 @@
 using CShells.Features;
 using CShells.AspNetCore.Features;
 using Elsa.Api.AspNetCore;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Workflows.Runtime.Services.Executions;

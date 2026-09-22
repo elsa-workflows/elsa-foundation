@@ -3,7 +3,7 @@ using CShells.Features;
 using Elsa.Api.AspNetCore;
 using Elsa.Events.Core.Extensions;
 using Elsa.Foundation.Identity.Extensions;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Primitives.Exceptions;
 using Elsa3.Activities.Design.Import.Authorization;
 using Elsa3.Activities.Design.Import.Contracts;

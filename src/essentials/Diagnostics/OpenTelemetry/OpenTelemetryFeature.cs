@@ -7,7 +7,7 @@ using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Endpoints;
 using Elsa.Diagnostics.OpenTelemetry.Extensions;
 using Elsa.Foundation.Identity.Extensions;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

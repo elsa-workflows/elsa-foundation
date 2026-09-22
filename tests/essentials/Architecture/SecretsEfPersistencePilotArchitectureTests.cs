@@ -32,7 +32,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     private static readonly string[] ModulePackages =
     [
         "CShells.Abstractions",
-        "Elsa.Platform.PackageManifest.Generator",
+        "Elsa.Specifications.PackageManifest.Generator",
         "Microsoft.EntityFrameworkCore",
         "Microsoft.EntityFrameworkCore.Relational",
         "Microsoft.Extensions.Configuration.Abstractions",
