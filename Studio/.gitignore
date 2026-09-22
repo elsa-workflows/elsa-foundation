@@ -7,10 +7,9 @@ test-results/
 dist/
 build/
 coverage/
-# Generated Vite output. Both depths are listed so the pattern keeps matching across the
-# src/essentials|apps|extensions/ split (#515) — a module whose wwwroot stops being ignored
-# starts committing its build output, silently. scripts/check-module-layout.mjs asserts this.
-src/*/wwwroot/
+# Generated Vite output, one level per tier (src/essentials|apps|extensions/<Module>/wwwroot).
+# A module whose wwwroot stops being ignored starts committing its build output, silently,
+# so scripts/check-module-layout.mjs asserts this holds for every module on disk.
 src/*/*/wwwroot/
 .DS_Store
 *.log

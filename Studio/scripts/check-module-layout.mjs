@@ -154,6 +154,11 @@ const fail = (assertion, detail) => failures.push({ assertion, detail });
       if (!existsSync(join(repoRoot, required)))
         fail("tiers", `${required} is missing while other tier folders exist — half-migrated tree`);
 
+    // Every module must be in a tier. A module added at the pre-split depth would be missed by
+    // the selectors this file checks, which are now narrowed to `src/<tier>/<Module>/`.
+    for (const path of projects.concat(packages).filter(p => p.startsWith("src/") && !tier(p)))
+      fail("tiers", `${path} is not under src/essentials, src/apps or src/extensions`);
+
     for (const project of projects.filter(p => tier(p) === "essentials")) {
       const includes = [...read(project).matchAll(/<ProjectReference\s+Include="([^"]+)"/g)].map(m => m[1]);
       for (const include of includes) {
