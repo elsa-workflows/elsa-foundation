@@ -154,10 +154,21 @@ the host's copy, whatever version the feed package was built against, so each ho
 `appsettings.json` also declares, under `Nuplane:HostProvidedPackages`, the package of every assembly it
 lists in `Nuplane:Loading:SharedAssemblies` — restating Nuplane's two defaults, because a configured list
 replaces them. `HostProvidedPackagesGuardTests` (`tests/essentials/Architecture`) fails the build when a
-shared assembly's package is not declared. The declaration is what makes the version check apply: a feed
-package that needs a newer version of a declared package than the host's `deps.json` carries is refused
-at reconciliation (see [What fails loudly](#what-fails-loudly)) instead of being bound to the older copy
-and failing later at a missing member.
+shared assembly's package is neither declared nor exempted by name. The declaration is what makes the
+version check apply: a feed package that needs a newer version of a declared package than the host's
+`deps.json` carries is refused at reconciliation (see [What fails loudly](#what-fails-loudly)) instead of
+being bound to the older copy and failing later at a missing member.
+
+`Elsa.Foundation.Host` is fully declared: it shares only the three `CShells.*.Abstractions` assemblies, and
+declares all three. `Elsa.Workbench` declares its two CShells shares but carries a named exemption for its
+Elsa ones (`Elsa.Primitives`, `Elsa.Workflows.Runtime.Core` and the rest of its `SharedAssemblies`). A
+Workbench built from source records its own Elsa packages as `1.0.0`, while Elsa feed packages are built
+against `4.0.0-preview.N` and require at least that, so declaring those packages would refuse every Elsa
+feed package that depends on one. Until then those shares are unchecked, which is the late-failure shape
+this section describes. The exemption lives in the guard with its reason beside each entry, the guard fails
+if an exempted assembly stops being shared, and it lifts once source builds carry real versions
+([ADR 0067](adr/0067-package-versioning-uses-two-lines-with-computed-patch.md),
+[#1144](https://github.com/elsa-workflows/elsa-foundation/issues/1144)).
 
 Neither case is caught by the version range or the lock file, because nothing was resolved to check.
 
