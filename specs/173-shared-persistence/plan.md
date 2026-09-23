@@ -16,7 +16,7 @@ Use a generic final-settings preparation hook in CShells so Elsa sees global and
 
 **Language/Version**: C# 14 / .NET 10 in Elsa; upstream CShells retains its existing target-framework matrix.
 
-**Primary Dependencies**: Existing Microsoft configuration/JSON/DI libraries, CShells abstractions, EF Core/Relational policy and module metadata. No provider engines in the pure resolver or modularity adapter; CLI and worker remain EF-free.
+**Primary Dependencies**: Microsoft configuration/JSON/environment/DI libraries, CShells public composition/discovery APIs, EF Core/Relational policy and module metadata. The existing EF tooling owner gains explicit JSON/environment provider references and CShells for hostless composition; the pure resolver receives detached inputs. No provider engines in the pure resolver or modularity adapter; CLI and worker remain EF-free.
 
 **Storage**: Authored host/shell JSON and existing configuration providers. Live proof uses PostgreSQL databases and module-owned migrations. No schema/data relocation is introduced.
 
@@ -60,6 +60,9 @@ specs/173-shared-persistence/
   research.md
   plan.md
   decisions/tooling-target-verification.md
+  decisions/tooling-configuration-context.md
+  decisions/tooling-target-selection.md
+  decisions/authored-persistence.md
   checklists/requirements.md
   # data-model.md, contracts/, quickstart.md and tasks.md follow research closure
 ```
@@ -81,7 +84,9 @@ specs/173-shared-persistence/
 
 [R1-R5](research.md) record ownership, lifecycle, management, tooling and evidence. R2 is resolved into an upstream prerequisite. R3 selects explicit pre-mutation refusal in the legacy feature editor for resource-mode compositions while retaining file/shell reload; resource-aware operations remain required under #1964.
 
-R4 now has the owner decision. Finish and review the explicit host-context input and negotiated tooling protocol before publishing #1968 as implementable. CShells #134 is complete with published-package verification. This specification is now the single active delivery item.
+R4 has the owner decision. The decisions now define the authored root/shell hierarchy, effective legacy-field presence, explicit source modes, declared target groups and no-selector semantic preflight. Independent review approved one opaque host-owned source snapshot reused by internal list and script, atomic capability negotiation, canonical worker selectors and typed error redaction. A published-package probe confirmed the null-presence distinction and public hostless discovery/dependency APIs.
+
+Finish review of the host-default composer declaration and freeze factory/context-aware invocation signatures, then produce the Phase 1 model/contracts/quickstart and task breakdown before publishing #1968 as implementable. Source-file parsing alone must not silently omit Workbench's ConfigureAllShells choices. CShells #134 is complete with published-package verification. This specification remains the single active delivery item.
 
 ## Delivery and validation gates
 

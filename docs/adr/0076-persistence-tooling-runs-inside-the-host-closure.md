@@ -11,10 +11,11 @@ out-of-process worker, the `[EfModule]` descriptor, and the two-gate activation 
 implemented in slices 1 to 10 of issue #1861, merged 2026-09-20 and 2026-09-21; the optional slice 11
 stays open.
 
-Program goal: none/free-flow. [EF Core Persistence](../program-goals/ef-core-persistence.md) is
-complete as of 2026-09-16, and [Feature Composition Readiness](../program-goals/feature-composition-readiness.md)
-scopes Feature Composition Explorer readiness and dependency/settings classification, not operations
-tooling. This decision does not reopen either bucket.
+The original decision belonged to none/free-flow. [EF Core Persistence](../program-goals/ef-core-persistence.md)
+was complete as of 2026-09-16 and is not reopened here. The 2026-09-23 resource-verification extension
+belongs to [Runtime Composition & Configuration](../program-goals/feature-composition-readiness.md),
+the program that subsequently expanded the former Feature Composition Readiness bucket, through
+specification #1967 under program [#1959](https://github.com/elsa-workflows/elsa-foundation/issues/1959).
 
 Tracking:
 
@@ -434,6 +435,25 @@ environment variable is already the pattern the rest of the tooling relies on.
 
 Rejected: a `--connection` flag. It is exactly the positional-argument shape the issue calls out as
 the thing to fix, carried forward under a new name.
+
+Resource-verification extension (owner direction approved 2026-09-23, specification
+[#1967](https://github.com/elsa-workflows/elsa-foundation/issues/1967)): resource-aware live tooling
+may look up a resource's expected named connection inside an explicitly selected host configuration
+context solely to compare it strictly with the independently supplied environment/stdin value.
+An unresolved expectation or mismatch refuses before database access. The expectation never supplies
+a missing actual connection. This adds no raw connection argument, secret store or database identity
+discovery mechanism. Offline commands do not perform the expected-value lookup.
+
+The source context must state what was checked. The proposed Workbench file and explicitly selected
+environment modes describe supplied configuration, not observation of a separately running host's
+environment; the original file-only provider-agreement note in D4 is not a claim of parity across
+those contexts. Neither connection value, a connection hash, a configuration snapshot nor raw
+source/exception details may appear in exported evidence. Strict equality intentionally does not
+infer equivalence for differently formatted strings or separate migration credentials. Concrete
+context transport, redacted failures and compatibility gates are specified and reviewed under
+[specification 173](../../specs/173-shared-persistence/decisions/tooling-target-verification.md)
+before resource-mode implementation is approved. The legacy connection-input contract remains as
+stated above.
 
 ### D8 — Post-migration actions are declared, audited at startup, and never auto-run
 

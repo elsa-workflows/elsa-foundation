@@ -89,7 +89,7 @@ As a developer or operator, I can inspect where each effective persistence choic
 ### Functional Requirements
 
 - **FR-001**: A named relational resource MUST define its provider and connection reference together. Selecting a resource MUST apply that pair atomically.
-- **FR-002**: An enabled enrolled consumer MUST select its explicit feature binding when present, otherwise its shell default, otherwise legacy configuration. Resource definitions alone MUST NOT select a resource.
+- **FR-002**: An enabled enrolled consumer MUST select its explicit shell feature binding when present, otherwise its effective shell default, otherwise legacy configuration. The effective shell default is an explicit shell default or, when absent, the root default. Resource definitions alone MUST NOT select a resource.
 - **FR-003**: The first supported shared-resource layout MUST cover all enabled enrolled Runtime, Workflows Design, Activities Design and Publishing consumers identified by #1965. Enrollment MUST use stable feature identities and explicit ownership metadata, not property-name resemblance.
 - **FR-004**: The supported exception layout MUST bind both Structured Logs and OpenTelemetry persistence to a second target without changing other consumers' selected targets.
 - **FR-005**: Removing a binding MUST restore normal inheritance while retaining unrelated authored settings. Explicit null/empty/unknown binding values MUST refuse and MUST NOT mean removal.

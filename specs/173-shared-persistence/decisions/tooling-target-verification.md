@@ -1,4 +1,4 @@
-# Decision request: verify the live resource connection
+# Verify the supplied connection against the selected resource
 
 Status: owner-approved direction, 2026-09-23; concrete protocol design and review remain required before implementation. Tracking: #1967.
 
