@@ -30,6 +30,16 @@ dotnet test tests/essentials/Persistence/EntityFramework/Tests/Elsa.Persistence.
 
 Local results: two fixture tests passed against Docker with no skips; 280 existing persistence tests passed with no skips after the internal detached model was added. The fixture test proves that a table written in the primary database is absent from the diagnostics database and that the current Workbench can start and restart while both named connection references are available. It does **not** prove resource selection, migration placement, or new-mode behavior. The resolver, adapters, and resource-mode host journey remain to be implemented and tested.
 
+## T004 pure resolver checkpoint (2026-09-23)
+
+The EF-owned internal resolver selects a shell feature binding, then shell default, root default, or legacy mode. It resolves Provider and ConnectionName atomically, preserves case-insensitive resource lookup, refuses malformed or missing selected resources and authored legacy target conflicts, and reports unknown unenrolled bindings without carrying their values. Inputs are detached metadata; no connection string, feature construction, configuration provider, or database access enters this resolver. The adapter and runtime preparation seam remain open tasks.
+
+```bash
+dotnet test tests/essentials/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj --no-restore --verbosity quiet
+```
+
+Result: 296/296 tests passed, including 16 new resolver cases, with zero skips. A temporary mutation that ignored a feature binding made the binding-precedence test fail (1/1); restoring the source made all 16 focused resolver tests pass. T010 remains incomplete until raw authored presence, explicit false/zero, and adapter/source cases are covered.
+
 ## What success must prove
 
 The shared layout selects one named PostgreSQL resource for every enabled enrolled Runtime, Workflows Design, Activities Design and Publishing consumer. The diagnostics layout selects a second named resource for both Structured Logs and OpenTelemetry while leaving the primary consumers on their original target. The first slice does not redirect host-owned OpenIddict, private stores, or unknown persistence consumers ([spec](spec.md#normative-supported-participants-and-constraints)).
