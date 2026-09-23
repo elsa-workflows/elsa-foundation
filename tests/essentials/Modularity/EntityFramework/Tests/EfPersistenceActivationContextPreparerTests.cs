@@ -8,6 +8,7 @@ using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Testing;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Modularity.EntityFramework.Tests;
@@ -50,6 +51,48 @@ public sealed class EfPersistenceActivationContextPreparerTests
             Preparer(SelectedResource()).PrepareAsync(context));
 
         Assert.Equal(FeatureId, Assert.Single(error.Refusals).Feature);
+    }
+
+    [Fact]
+    public async Task Disabled_required_dependency_refuses_before_feature_construction_or_configuration()
+    {
+        var context = Context([], [
+            new FeatureApplyItem("AppFeature", true, Empty),
+            new FeatureApplyItem(FeatureId, false, Empty)
+        ]);
+        var preparer = new EfPersistenceActivationContextPreparer(
+            SelectedResource(),
+            new FakeRuntimeFeatureCatalog(
+                new ShellFeatureDescriptor("WorkflowsRuntimeResumption"),
+                new ShellFeatureDescriptor(FeatureId)
+                {
+                    StartupType = typeof(RuntimeEntityFrameworkCoreFeature),
+                    Dependencies = ["WorkflowsRuntimeResumption"]
+                },
+                new ShellFeatureDescriptor("AppFeature") { Dependencies = [FeatureId] },
+                new ShellFeatureDescriptor(nameof(EffectProbeFeature))
+                {
+                    StartupType = typeof(EffectProbeFeature)
+                }),
+            new DeferredEffectHostDefaults());
+
+        var error = await Assert.ThrowsAsync<FeatureActivationRefusedException>(() =>
+            preparer.PrepareAsync(context));
+
+        Assert.Equal(FeatureId, Assert.Single(error.Refusals).Feature);
+    }
+
+    [Fact]
+    public async Task Cancellation_refuses_before_host_composition()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var defaults = new CountingHostDefaults();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            Preparer(SelectedResource(), defaults).PrepareAsync(Context([], []), cancellation.Token));
+
+        Assert.Equal(0, defaults.ConfigureCount);
     }
 
     [Fact]
@@ -165,5 +208,28 @@ public sealed class EfPersistenceActivationContextPreparerTests
     {
         public void Configure(ShellBuilder builder, IConfiguration configuration) =>
             ((IConfigurationRoot)configuration).Reload();
+    }
+
+    private sealed class DeferredEffectHostDefaults : IEfToolingShellDefaults
+    {
+        public void Configure(ShellBuilder builder, IConfiguration configuration) =>
+            builder.WithFeature<EffectProbeFeature>(_ => throw new InvalidOperationException(
+                "Feature configurators must not run during preflight."));
+    }
+
+    private sealed class CountingHostDefaults : IEfToolingShellDefaults
+    {
+        public int ConfigureCount { get; private set; }
+
+        public void Configure(ShellBuilder builder, IConfiguration configuration) => ConfigureCount++;
+    }
+
+    private sealed class EffectProbeFeature : IShellFeature
+    {
+        public EffectProbeFeature() => throw new InvalidOperationException(
+            "Feature constructors must not run during preflight.");
+
+        public void ConfigureServices(IServiceCollection services) => throw new InvalidOperationException(
+            "Feature services must not be configured during preflight.");
     }
 }
