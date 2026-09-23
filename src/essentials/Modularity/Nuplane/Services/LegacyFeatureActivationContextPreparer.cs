@@ -4,6 +4,7 @@ using Elsa.Modularity.Core.Models;
 namespace Elsa.Modularity.Nuplane.Services;
 
 /// <summary>Preserves the existing feature-editor activation context in legacy compositions.</summary>
+[DefaultFeatureActivationContextPreparer]
 public sealed class LegacyFeatureActivationContextPreparer : IFeatureActivationContextPreparer
 {
     public Task<FeatureActivationContext> PrepareAsync(

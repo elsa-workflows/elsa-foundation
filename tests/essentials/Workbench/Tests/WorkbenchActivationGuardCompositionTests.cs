@@ -73,6 +73,35 @@ public sealed class WorkbenchActivationGuardCompositionTests
         Assert.NotEqual("Oracle", ReadProvider(stillTarget["configuration"]));
     }
 
+    [Fact]
+    public async Task Resource_managed_shell_refuses_legacy_editor_before_ordinary_EF_guard()
+    {
+        var shell = WorkbenchShell.Development with
+        {
+            Settings = new Dictionary<string, string>
+            {
+                ["Elsa:Persistence:Resources:primary:Provider"] = "Sqlite",
+                ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Elsa",
+                ["CShells:Shells:default:Configuration:Elsa:Persistence:Bindings:WorkflowsDesignEntityFrameworkCore"] = "primary"
+            }
+        };
+        await using var workbench = await WorkbenchProcess.StartAsync(shell);
+        using var client = new HttpClient { BaseAddress = workbench.Client.BaseAddress };
+        await SignInAsAdminAsync(client);
+
+        var before = await ReadCatalogAsync(client);
+        var revision = (string)before["revision"]!;
+        var applyBody = BuildApplyRequestRedirectingProvider(revision, before["features"]!.AsArray(), TargetFeature, "Oracle");
+        using var response = await client.PostAsync("/modularity/features/apply", JsonBody(applyBody));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var reason = (string)(await response.Content.ReadFromJsonAsync<JsonNode>())!["errors"]!["generalErrors"]![0]!;
+        Assert.StartsWith("[resource-managed-configuration]", reason, StringComparison.Ordinal);
+        Assert.Contains("WorkflowsDesignEntityFrameworkCore", reason, StringComparison.Ordinal);
+        Assert.DoesNotContain("'Oracle' provider engine could not be bound", reason, StringComparison.Ordinal);
+        Assert.Equal(revision, (string)(await ReadCatalogAsync(client))["revision"]!);
+    }
+
     private static async Task SignInAsAdminAsync(HttpClient client)
     {
         var login = new JsonObject { ["username"] = AdminUsername, ["password"] = AdminPassword };

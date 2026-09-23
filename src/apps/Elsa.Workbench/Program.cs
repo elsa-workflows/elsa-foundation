@@ -180,6 +180,9 @@ builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
     nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
 });
 builder.Services.AddSingleton<NuplaneAssemblyProvider>();
+// This host explicitly enrolls the shared EF resource preparers. Without a selected resource,
+// both preparers leave the legacy shell composition and feature editor behavior unchanged.
+builder.Services.AddEfPersistenceResources(configuration, typeof(WorkbenchEfToolingShellDefaults).Assembly);
 builder.Services.AddNuplaneFeatureCatalog();
 builder.Services.TryAddScoped<IModuleRegistryService, ModuleRegistryService>();
 builder.Services.TryAddScoped<IShellFeatureConfigurationStore, NullShellFeatureConfigurationStore>();

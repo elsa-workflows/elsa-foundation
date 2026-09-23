@@ -1,6 +1,6 @@
 # Shared persistence validation quickstart
 
-Status: Phase 0 research is complete. #1968 (shared Runtime, Workflows Design, Activities Design and Publishing persistence) and #1969 (separate Structured Logs and OpenTelemetry persistence) are not implementation-complete. This guide is the executable validation target for those slices; it does not claim that the resource-aware CLI or host wiring exists today.
+Status: Phase 0 research is complete. #1968 (shared Runtime, Workflows Design, Activities Design and Publishing persistence) and #1969 (separate Structured Logs and OpenTelemetry persistence) are not implementation-complete. Workbench host registration and a bounded PostgreSQL resource-selection proof now exist; the resource-aware CLI and complete host journeys remain open.
 
 The contract is defined by [the shared-persistence specification](spec.md), [the implementation plan](plan.md), [the authored configuration decision](decisions/authored-persistence.md), [the target-selection decision](decisions/tooling-target-selection.md), [the target-verification decision](decisions/tooling-target-verification.md), and [the configuration-context decision](decisions/tooling-configuration-context.md).
 
@@ -65,6 +65,18 @@ A full local architecture-suite attempt reported 243 passed and 15 EF dependency
 ## T011 enrollment architecture checkpoint (2026-09-23)
 
 The migration metadata tests lock the exact 13 stable enrolled IDs, their canonical modules and context types, explicit host-owned and Dashboard exclusions, and constructor-free discovery. An architecture guard now requires the EF policy project to have no project references or Elsa feature-package references and its resource-resolution sources to avoid direct workflow/activity/diagnostics feature types. The focused enrollment/facade suite passed 7/7 and the three relevant architecture guards passed 3/3 with zero skips. This is a boundary check, not a runtime activation or database-layout proof.
+
+## T009/T016/T028 host registration checkpoint (2026-09-24)
+
+Workbench declares one host-owned defaults composer, registers one CShells settings preparer and replaces the legacy management pass-through with the EF context preparer. Its `Resources` catalog is empty and no default or binding is selected in the stock appsettings/shell file, so the existing default shell remains legacy. A selected-resource test supplied four explicit bindings and found `__EFMigrationsHistory_ElsaRuntime`, `__EFMigrationsHistory_ElsaWorkflowsDesign`, `__EFMigrationsHistory_ElsaActivitiesDesign`, and `__EFMigrationsHistory_ElsaPublishingSnapshotReview` in the disposable shared PostgreSQL database. A separate live Workbench feature-editor request against a resource-bound shell returned HTTP 409 with `[resource-managed-configuration]` before the ordinary EF guard's distinct provider refusal and left the feature revision unchanged.
+
+```bash
+dotnet test tests/essentials/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj --no-restore --verbosity quiet -p:WarningLevel=0
+dotnet test tests/essentials/Workbench/Tests/Elsa.Workbench.Tests.csproj --no-restore --filter 'FullyQualifiedName~WorkbenchActivationGuardCompositionTests.Resource_managed_shell_refuses_legacy_editor_before_ordinary_EF_guard' --logger 'console;verbosity=normal' -p:WarningLevel=0
+dotnet test tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Tests/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj --no-restore --filter 'FullyQualifiedName~Selected_resource_places_the_four_enrolled_module_histories_on_the_shared_target' --logger 'console;verbosity=normal' -p:WarningLevel=0
+```
+
+Local results: the EF Modularity suite passed 29/29, the live editor test passed 1/1, and the selected-resource PostgreSQL test passed 1/1 with no skips. The focused architecture suite passed 40/40; generated maps and solution filters were checked. These results establish registration, four-module migration placement and management refusal ordering. They do not establish design/publish/execute/restart data behavior, changed-source reload, complete transaction-affinity validation, tooling agreement, or the separate diagnostics target.
 
 ## What success must prove
 
@@ -361,7 +373,7 @@ Do not attach raw configuration snapshots, connection strings, passwords, hashes
 
 This guide deliberately leaves the following as implementation gates rather than pretending they pass:
 
-- CShells `0.0.30-preview.158` is pinned. The pure resolver, metadata-only preparation facade, and unregistered CShells settings adapter exist, including EF provider/known-context preflight. The Workbench defaults composer contract is declared and shared with runtime, but resource mode is not registered in a host yet. Feature management now invokes one preparation service before ordinary guards; its EF resource-mode refusal implementation is still absent.
+- CShells `0.0.30-preview.158` is pinned. The resolver, preparation facade, CShells settings adapter, and Workbench host registration now run together. A bounded PostgreSQL test observed the Runtime, Workflows Design, Activities Design, and Publishing migration histories on the selected shared target. A live Workbench editor request returned HTTP 409 with the resource-managed prefix before the ordinary EF guard's distinct refusal, and its feature revision stayed unchanged. The EF management preparer evaluates current and candidate graphs; broader source-drift and transaction-affinity evidence remains open. This is not yet the full design/publish/execute/restart or tooling proof.
 - The shared PostgreSQL fixture exists and passes its bounded container suite. The rebuilt Workbench resource journey and its authored reload proof remain open.
 - The proposed `--configuration-context` and `--resource` protocol fields, resource-aware `--shell` transport, and old-host capability negotiation are not implemented by the current CLI.
 - No committed #1968 shared-layout or #1969 diagnostics PostgreSQL e2e script exists yet.
