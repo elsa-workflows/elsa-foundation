@@ -159,5 +159,6 @@ Stable feature IDs below define first-slice enrollment. Context/module ownership
 - Existing #1902 owns broader composition-guard cleanup. This slice must coordinate any guard guarantee it consumes instead of claiming unresolved checks passed.
 - Framework §2.12 and Elsa §E4 settings taxonomy remain deferred. This specification defines a bounded persistence capability and does not ratify a generic settings framework.
 - Profiles, groups, builder screens, data relocation and durable cross-system operation orchestration remain later program work. The first slice still must integrate safely with existing management and reload paths.
+- The first slice uses file-authored resources and explicit shell reload. The legacy feature editor refuses applicable resource-mode writes before guards/mutation; safe resource-aware editing remains required under #1964.
 - Resource editing through the future builder/API and broader recovery remain required program outcomes under #1963/#1964; conditional first-slice management acceptance does not declare those outcomes delivered.
 - The plan must settle the concrete reload seam, authored format, tooling protocol and management drift check before this draft can be approved for implementation. These are engineering evidence gates owned by #1967, not permission to implement from an unresolved draft.
