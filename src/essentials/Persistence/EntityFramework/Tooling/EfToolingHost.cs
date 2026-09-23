@@ -104,7 +104,7 @@ public static class EfToolingHost
     /// True for anything the internal-error handler should catch and report, false for CLR-fatal
     /// exceptions that must propagate instead of being laundered into a JSON response.
     /// </summary>
-    private static bool IsNonFatal(Exception failure) => failure is not (
+    internal static bool IsNonFatal(Exception failure) => failure is not (
         OutOfMemoryException or
         StackOverflowException or
         AccessViolationException or
