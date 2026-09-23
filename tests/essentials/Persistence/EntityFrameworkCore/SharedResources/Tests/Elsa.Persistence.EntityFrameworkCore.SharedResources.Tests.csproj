@@ -13,6 +13,6 @@
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../Workbench/Tests/Elsa.Workbench.Tests.csproj" />
+    <ProjectReference Include="../../../../Workbench/Tests/Elsa.Workbench.Tests.csproj" />
   </ItemGroup>
 </Project>

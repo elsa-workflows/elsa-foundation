@@ -59,7 +59,8 @@ internal enum PersistenceContextMode
 // Legacy ConnectionString is presence-only; no connection value enters the resolver or its evidence.
 internal sealed record PersistenceLegacyFieldPresence(
     PersistencePresence Presence,
-    PersistenceSourceProvenance Source);
+    PersistenceSourceProvenance Source,
+    bool IsFinalComposed = false);
 
 internal sealed record PersistenceLegacyTargetPresence(
     string FeatureId,

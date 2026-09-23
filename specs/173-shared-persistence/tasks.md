@@ -20,7 +20,7 @@ description: "Reviewed task list for shared persistence resources"
 **Purpose**: Establish the reviewed package and test-fixture prerequisites without changing default runtime behavior.
 
 - [x] T001 [P] Pin `CShells`, `CShells.Management.Api`, `CShells.Abstractions`, `CShells.AspNetCore`, `CShells.AspNetCore.Abstractions`, `CShells.FastEndpoints`, and `CShells.FastEndpoints.Abstractions` to `0.0.30-preview.158` in `Directory.Packages.props`; do not copy the upstream CShells hook into Elsa.
-- [x] T002 [P] Add the bounded shared-persistence host/test fixture in `tests/essentials/Persistence/EntityFrameworkCore/SharedResources/SharedPersistenceHostFixture.cs`, the PostgreSQL target-provisioning support in `tests/essentials/Persistence/EntityFrameworkCore/SharedResources/PostgreSqlTargetFixture.cs`, and their test project in `tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj` registered in `Elsa.Server.slnx`, while preserving the existing SQLite and legacy fixtures.
+- [x] T002 [P] Add the bounded shared-persistence host/test fixture in `tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Tests/SharedPersistenceHostFixture.cs`, the PostgreSQL target-provisioning support in `tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Tests/PostgreSqlTargetFixture.cs`, and their test project in `tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Tests/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj` registered in `Elsa.Server.slnx`, while preserving the existing SQLite and legacy fixtures.
 
 ---
 

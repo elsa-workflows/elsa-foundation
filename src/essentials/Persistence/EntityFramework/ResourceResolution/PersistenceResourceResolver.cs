@@ -73,12 +73,9 @@ internal sealed class PersistenceResourceResolver : IPersistenceResourceResolver
         {
             if (!legacy.IsEnabled)
                 Refuse(refusals, "resource-required-feature-disabled", participant.FeatureId, resourceName, null);
-            if (!legacy.IsReset)
-            {
-                RefuseIfAuthored(legacy.Provider, "Provider");
-                RefuseIfAuthored(legacy.ConnectionName, "ConnectionName");
-                RefuseIfAuthored(legacy.ConnectionString, "ConnectionString");
-            }
+            RefuseIfAuthored(legacy.Provider, "Provider");
+            RefuseIfAuthored(legacy.ConnectionName, "ConnectionName");
+            RefuseIfAuthored(legacy.ConnectionString, "ConnectionString");
         }
 
         return new PersistenceParticipantResolution(
@@ -92,7 +89,7 @@ internal sealed class PersistenceResourceResolver : IPersistenceResourceResolver
 
         void RefuseIfAuthored(PersistenceLegacyFieldPresence field, string name)
         {
-            if (field.Presence != PersistencePresence.Absent)
+            if (field.Presence != PersistencePresence.Absent && (!legacy.IsReset || field.IsFinalComposed))
                 Refuse(refusals, "resource-legacy-conflict", participant.FeatureId, resourceName, name);
         }
     }

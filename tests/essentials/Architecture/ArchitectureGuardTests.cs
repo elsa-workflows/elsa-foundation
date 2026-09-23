@@ -25,7 +25,11 @@ public sealed partial class ArchitectureGuardTests
     [
         // Elsa.Workbench keeps a narrow exception for the host-only module-management registry builder
         // (ModuleManagementRegistryBuilder), exercised by ModuleManagementRegistryBuilderTests.
-        ("Elsa.Workbench", "Elsa.Modularity.Tests")
+        ("Elsa.Workbench", "Elsa.Modularity.Tests"),
+        // The shared-persistence resolver stays internal to the EF policy assembly. Focused unit
+        // and migration metadata tests inspect detached plans without widening its production API.
+        ("Elsa.Persistence.EntityFramework", "Elsa.Persistence.EntityFramework.Tests"),
+        ("Elsa.Persistence.EntityFramework", "Elsa.Persistence.EntityFrameworkCore.Migrations.Tests")
     ];
 
     private static readonly Regex AssemblyInternalsVisibleToPattern = new(@"assembly\s*:\s*InternalsVisibleTo", RegexOptions.Compiled);

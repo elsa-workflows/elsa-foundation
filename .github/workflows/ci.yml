@@ -206,7 +206,7 @@ jobs:
             project: tests/essentials/Persistence/EntityFrameworkCore/TransactionTopology/Tests/Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests.csproj
             require: ''
           - suite: shared-persistence-fixture
-            project: tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj
+            project: tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Tests/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj
             require: ELSA_SHARED_PERSISTENCE_REQUIRE_POSTGRESQL
           - suite: mysql-feasibility
             project: tests/essentials/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj

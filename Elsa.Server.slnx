@@ -447,7 +447,7 @@
   </Folder>
   <Folder Name="/tests/essentials/Persistence/EntityFrameworkCore/" />
   <Folder Name="/tests/essentials/Persistence/EntityFrameworkCore/SharedResources/">
-    <Project Path="tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj" />
+    <Project Path="tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Tests/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/essentials/Persistence/EntityFrameworkCore/CliAcceptance/">
     <Project Path="tests/essentials/Persistence/EntityFrameworkCore/CliAcceptance/ProviderTests/Elsa.Persistence.EntityFrameworkCore.CliAcceptance.ProviderTests.csproj" />

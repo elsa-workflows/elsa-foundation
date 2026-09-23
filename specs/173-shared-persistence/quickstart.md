@@ -24,7 +24,7 @@ Results: 188 modularity, 26 activity API, and 17 EF modularity tests passed, wit
 The shared-resources test project is registered in `Elsa.Server.slnx` and the required PostgreSQL CI container matrix. Its fixture provisions two separate databases in one disposable `postgres:16-alpine` container, passes their connection references to a real Workbench child process, and supports a clean process restart. `ELSA_SHARED_PERSISTENCE_REQUIRE_POSTGRESQL=1` makes missing Docker a failure in the CI leg rather than a skipped pass.
 
 ```bash
-dotnet test tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj --verbosity quiet
+dotnet test tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Tests/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj --verbosity quiet
 dotnet test tests/essentials/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj --verbosity quiet
 ```
 
@@ -49,6 +49,14 @@ dotnet test tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/El
 ```
 
 Result: 220/220 migrations tests passed with zero skips, including two new enrollment cases. The test locks the exact 13 stable IDs and module/context pairs while excluding IAM, Secrets, distributed stores, Dashboard, and other unmarked features. A marked probe with a throwing constructor/configurator was discovered without either running. T011 architecture and integration coverage remains open; marker discovery alone does not prove resource-mode activation.
+
+## T006 configuration adapter checkpoint (in progress, 2026-09-23)
+
+The EF-owned adapter now reads root resource definitions, root/shell defaults and shell bindings from the composed preparation view and the selected shell's raw configuration. It recovers explicit null legacy target presence lost during CShells feature flattening, distinguishes reset raw fields from final code-configured fields, and leaves known inactive bindings inert. The public facade returns only Provider/ConnectionName scalar patches and redacted applicability, and returns an empty patch for a refusal. It does not construct feature classes, resolve connection values, or access a database. Architecture guards were updated to inventory the new files and documented test visibility; the shared PostgreSQL fixture was moved to its required `Tests/` project path. Local evidence: 29/29 targeted adapter/resolver tests, 7/7 enrollment/facade tests, 4/4 previously red architecture checks, and 2/2 relocated PostgreSQL fixture tests passed with zero skips. Generated maps and solution filters passed their freshness checks. The full changed-head CI gate has not yet run.
+
+T006 remains open while the configuration-source boundary is reviewed. `IConfiguration` exposes JSON scalar booleans/numbers as strings, so it cannot by itself prove that a selected scalar was originally authored as a string. Strict wrong-type selection reporting needs a source-aware rule or a reviewed conservative naming restriction. Runtime registration, generation reload, EF validation, and database proof are separate later tasks and are not claimed by this checkpoint.
+
+A full local architecture-suite attempt reported 243 passed and 15 EF dependency-guard failures. A targeted rerun showed those guards need evaluated Debug and Release assets from a full `Elsa.Server.slnx` restore, which this worktree does not have. The four architecture checks addressing the previous hosted failure passed locally. The fresh hosted CI run is the remaining full-gate evidence; the local full-suite attempt is not reported as green.
 
 ## What success must prove
 

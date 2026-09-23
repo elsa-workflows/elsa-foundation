@@ -1,11 +1,15 @@
 using System.Reflection;
 using CShells.Features;
+using CShells;
+using CShells.Lifecycle;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tooling;
+using Elsa.Persistence.EntityFramework.ResourceResolution;
 using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
@@ -65,6 +69,112 @@ public sealed class EfPersistenceResourceEnrollmentTests
         Assert.EndsWith(".RuntimeDbContext", probe.ContextIdentity, StringComparison.Ordinal);
         Assert.True(probe.HasOpaqueConfigurator);
     }
+
+    [Fact]
+    public void Public_preparation_materializes_only_provider_and_connection_name_before_feature_construction()
+    {
+        var context = PreparationContext();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:Resources:primary:Provider"] = "PostgreSql",
+            ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared",
+            ["Elsa:Persistence:DefaultResource"] = "primary"
+        }).Build();
+
+        var result = EfPersistencePreparation.Prepare(context, configuration);
+
+        Assert.True(result.HasApplicableResource);
+        Assert.Empty(result.RefusalCodes);
+        Assert.Equal("PostgreSql", result.Patch.ConfigurationData["WorkflowsRuntimeEntityFrameworkCore:Provider"]);
+        Assert.Equal("Shared", result.Patch.ConfigurationData["WorkflowsRuntimeEntityFrameworkCore:ConnectionName"]);
+        Assert.Equal(2, result.Patch.ConfigurationData.Count);
+    }
+
+    [Fact]
+    public void Public_preparation_refusal_returns_no_partial_patch_or_secret()
+    {
+        var context = PreparationContext(new Dictionary<string, string?>
+        {
+            ["WorkflowsRuntimeEntityFrameworkCore:Provider"] = "Sqlite"
+        });
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:Resources:primary:Provider"] = "PostgreSql",
+            ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared",
+            ["Elsa:Persistence:DefaultResource"] = "primary",
+            ["ConnectionStrings:Shared"] = "Host=secret-canary;Password=never-export"
+        }).Build();
+
+        var result = EfPersistencePreparation.Prepare(context, configuration);
+
+        Assert.Contains("resource-legacy-conflict", result.RefusalCodes);
+        Assert.Empty(result.Patch.ConfigurationData);
+        Assert.DoesNotContain("secret-canary", System.Text.Json.JsonSerializer.Serialize(result));
+    }
+
+    [Fact]
+    public void Public_preparation_refuses_opaque_configurator_without_constructing_feature()
+    {
+        var context = new ShellSettingsPreparationContext(new ShellId("default"),
+            new Dictionary<string, string?>(), ["ThrowingEnrollmentProbe"], [], [],
+            [new ShellFeaturePreparationDescriptor("ThrowingEnrollmentProbe", [],
+                typeof(ThrowingEnrollmentProbe), true)], ["ThrowingEnrollmentProbe"], [], []);
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:Resources:primary:Provider"] = "PostgreSql",
+            ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared",
+            ["Elsa:Persistence:DefaultResource"] = "primary"
+        }).Build();
+
+        var result = EfPersistencePreparation.Prepare(context, configuration);
+
+        Assert.Equal(["resource-configurator-unsupported"], result.RefusalCodes);
+        Assert.Empty(result.Patch.ConfigurationData);
+    }
+
+    [Fact]
+    public void Resource_selection_for_known_id_without_owning_startup_type_refuses()
+    {
+        var context = new ShellSettingsPreparationContext(new ShellId("default"),
+            new Dictionary<string, string?>(), ["WorkflowsRuntimeEntityFrameworkCore"], [], [],
+            [new ShellFeaturePreparationDescriptor("WorkflowsRuntimeEntityFrameworkCore", [], null, false)],
+            ["WorkflowsRuntimeEntityFrameworkCore"], [], []);
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:Resources:primary:Provider"] = "PostgreSql",
+            ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared",
+            ["Elsa:Persistence:DefaultResource"] = "primary"
+        }).Build();
+
+        var result = EfPersistencePreparation.Prepare(context, configuration);
+
+        Assert.Contains("resource-ownership-unresolved", result.RefusalCodes);
+        Assert.Empty(result.Patch.ConfigurationData);
+    }
+
+    [Fact]
+    public void Selected_resource_with_unsupported_field_refuses_without_patching()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:Resources:primary:Provider"] = "PostgreSql",
+            ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared",
+            ["Elsa:Persistence:Resources:primary:Schema"] = "other",
+            ["Elsa:Persistence:DefaultResource"] = "primary"
+        }).Build();
+
+        var result = EfPersistencePreparation.Prepare(PreparationContext(), configuration);
+
+        Assert.Equal(["resource-definition-invalid"], result.RefusalCodes);
+        Assert.Empty(result.Patch.ConfigurationData);
+    }
+
+    private static ShellSettingsPreparationContext PreparationContext(IReadOnlyDictionary<string, string?>? values = null) =>
+        new(new ShellId("default"), values ?? new Dictionary<string, string?>(),
+            ["WorkflowsRuntimeEntityFrameworkCore"], [], [],
+            [new ShellFeaturePreparationDescriptor("WorkflowsRuntimeEntityFrameworkCore", [],
+                typeof(RuntimeEntityFrameworkCoreFeature), false)],
+            ["WorkflowsRuntimeEntityFrameworkCore"], [], []);
 }
 
 [ShellFeature(name: "ThrowingEnrollmentProbe")]
