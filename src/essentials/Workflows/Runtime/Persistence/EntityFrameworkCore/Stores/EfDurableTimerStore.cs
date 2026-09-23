@@ -401,8 +401,8 @@ public sealed class EfDurableTimerStore(
         string? expectedWorkflowExecutionId = null,
         string? expectedTimerId = null)
     {
-        if (row.Revision <= 0 ||
-            EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) ||
+        if (EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) ||
+            row.Revision <= 0 ||
             row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) ||
             row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))
             throw new InvalidDataException("The durable-timer row scope, schema, or revision projection is corrupt.");

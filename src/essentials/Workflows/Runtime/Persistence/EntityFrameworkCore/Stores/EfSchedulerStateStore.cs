@@ -113,13 +113,13 @@ public sealed class EfSchedulerStateStore(
             row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope))
             throw new InvalidDataException("The scheduler-state row scope or revision projection is corrupt.");
         var state = EfSchedulerStateJson.Deserialize(row.ContentJson);
-        if ((expectedWorkflow is not null && !StringComparer.Ordinal.Equals(expectedWorkflow, state.WorkflowExecutionId)) ||
+        if (EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) ||
+            (expectedWorkflow is not null && !StringComparer.Ordinal.Equals(expectedWorkflow, state.WorkflowExecutionId)) ||
             row.WorkflowExecutionId != EfRuntimeOperationalStoreSupport.Encode(state.WorkflowExecutionId) ||
             row.WorkflowExecutionIdHash != EfRuntimeOperationalStoreSupport.Hash(state.WorkflowExecutionId) ||
             row.WorkflowExecutionIdOrderKey != EfRuntimeOperationalStoreSupport.Order(state.WorkflowExecutionId) ||
             row.Id != EfRuntimeOperationalStoreSupport.CompositeId(scope, state.WorkflowExecutionId) ||
-            row.Collection != Collection ||
-            EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion))
+            row.Collection != Collection)
             throw new InvalidDataException("The scheduler-state row identity or projection is corrupt.");
         return state;
     }

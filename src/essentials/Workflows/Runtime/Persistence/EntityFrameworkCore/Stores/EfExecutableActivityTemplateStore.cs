@@ -311,8 +311,9 @@ public sealed class EfExecutableActivityTemplateStore(
 
     private static ExecutableActivityTemplate Read(ExecutableActivityTemplateEntity row, TemplateIdentity identity)
     {
-        if (identity.TemplateId is null || row.Id != CreateId(identity.Scope, identity.TemplateId) || row.ScopeKey != Encode(identity.Scope) || row.ScopeKeyHash != Hash(identity.Scope) ||
-            row.TemplateId != Encode(identity.TemplateId) || row.TemplateIdHash != Hash(identity.TemplateId) || row.TemplateHashHash != Hash(row.TemplateHash) || row.TemplateIdOrderKey != OrderKey(identity.TemplateId) || EfSchemaVersion.NotReadable("RuntimeArtifact", row.SchemaVersion, RuntimeArtifactEfModule.SchemaVersion) || row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
+        if (EfSchemaVersion.NotReadable("RuntimeArtifact", row.SchemaVersion, RuntimeArtifactEfModule.SchemaVersion) ||
+            identity.TemplateId is null || row.Id != CreateId(identity.Scope, identity.TemplateId) || row.ScopeKey != Encode(identity.Scope) || row.ScopeKeyHash != Hash(identity.Scope) ||
+            row.TemplateId != Encode(identity.TemplateId) || row.TemplateIdHash != Hash(identity.TemplateId) || row.TemplateHashHash != Hash(row.TemplateHash) || row.TemplateIdOrderKey != OrderKey(identity.TemplateId) || row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
             throw new InvalidDataException("The persisted executable activity template row is corrupt.");
         try
         {
@@ -332,8 +333,9 @@ public sealed class EfExecutableActivityTemplateStore(
 
     private static HashClaim ReadClaim(ExecutableActivityTemplateHashClaimEntity row, TemplateIdentity identity)
     {
-        if (identity.TemplateHash is null || row.Id != HashClaimId(identity.Scope, identity.TemplateHash) || row.ScopeKey != Encode(identity.Scope) || row.ScopeKeyHash != Hash(identity.Scope) ||
-            row.TemplateHash != identity.TemplateHash || row.TemplateHashHash != Hash(identity.TemplateHash) || string.IsNullOrWhiteSpace(row.TemplateId) || row.TemplateId.Length > RuntimeArtifactEfModule.IdentityProjectionMaximumLength || EfSchemaVersion.NotReadable("RuntimeArtifact", row.SchemaVersion, RuntimeArtifactEfModule.SchemaVersion) || row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
+        if (EfSchemaVersion.NotReadable("RuntimeArtifact", row.SchemaVersion, RuntimeArtifactEfModule.SchemaVersion) ||
+            identity.TemplateHash is null || row.Id != HashClaimId(identity.Scope, identity.TemplateHash) || row.ScopeKey != Encode(identity.Scope) || row.ScopeKeyHash != Hash(identity.Scope) ||
+            row.TemplateHash != identity.TemplateHash || row.TemplateHashHash != Hash(identity.TemplateHash) || string.IsNullOrWhiteSpace(row.TemplateId) || row.TemplateId.Length > RuntimeArtifactEfModule.IdentityProjectionMaximumLength || row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
             throw new InvalidDataException("The persisted executable activity template hash claim is corrupt.");
         try
         {

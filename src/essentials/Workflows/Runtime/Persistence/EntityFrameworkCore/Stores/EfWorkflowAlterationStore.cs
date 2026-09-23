@@ -408,10 +408,10 @@ public sealed class EfWorkflowAlterationStore(
         var plan = RuntimeArtifactJson.Deserialize<WorkflowAlterationPlanState>(row.ContentJson);
         var idempotency = plan.AuthorityScope.TenantPartition + "\u001f" + plan.IdempotencyKeyHash;
         var valid =
+            EfSchemaVersion.Readable("RuntimeWorkflowAlteration", row.SchemaVersion, RuntimeWorkflowAlterationEfModule.SchemaVersion) &&
             (expectedPlanId is null || StringComparer.Ordinal.Equals(plan.PlanId, expectedPlanId)) &&
             StringComparer.Ordinal.Equals(plan.AuthorityScope.TenantPartition, scope) &&
             row.Id == Id(scope, plan.PlanId) &&
-            EfSchemaVersion.Readable("RuntimeWorkflowAlteration", row.SchemaVersion, RuntimeWorkflowAlterationEfModule.SchemaVersion) &&
             row.ScopeKey == EfRelationalIdentity.Encode(scope) &&
             row.ScopeKeyHash == EfRelationalIdentity.Hash(scope) &&
             row.PlanId == EfRelationalIdentity.Encode(plan.PlanId) &&
@@ -455,10 +455,10 @@ public sealed class EfWorkflowAlterationStore(
         var checkpoint = job.CheckpointCommitId;
         var claimableAt = job.Status == WorkflowAlterationJobStatus.Pending ? job.CreatedAt.UtcTicks : job.Claim?.ExpiresAt.UtcTicks;
         var valid =
+            EfSchemaVersion.Readable("RuntimeWorkflowAlteration", row.SchemaVersion, RuntimeWorkflowAlterationEfModule.SchemaVersion) &&
             (expectedJobId is null || StringComparer.Ordinal.Equals(job.JobId, expectedJobId)) &&
             StringComparer.Ordinal.Equals(job.TenantPartition, scope) &&
             row.Id == Id(scope, job.JobId) &&
-            EfSchemaVersion.Readable("RuntimeWorkflowAlteration", row.SchemaVersion, RuntimeWorkflowAlterationEfModule.SchemaVersion) &&
             row.ScopeKey == EfRelationalIdentity.Encode(scope) &&
             row.ScopeKeyHash == EfRelationalIdentity.Hash(scope) &&
             row.JobId == EfRelationalIdentity.Encode(job.JobId) &&

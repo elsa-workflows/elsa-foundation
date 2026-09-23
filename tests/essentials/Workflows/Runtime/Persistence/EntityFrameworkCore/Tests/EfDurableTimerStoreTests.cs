@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
@@ -78,6 +79,29 @@ public sealed class EfDurableTimerStoreTests
 
         await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Store.ListPageAsync(
             new DurableTimerPageQuery("wf-drift", 10)).AsTask());
+    }
+
+    [Fact]
+    public async Task A_skewed_timer_row_that_also_fails_an_integrity_invariant_reports_skew()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var now = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        await fixture.Store.SaveAsync(Timer("wf-skew", "timer-1", now));
+
+        // A module version whose schema moved almost certainly moved the row shape with it, so the
+        // revision this build recomputes is exactly what is most likely to disagree. Skew is the cause,
+        // so skew is what the operator is told - not corruption they would go looking for (ADR 0077, #1950).
+        await fixture.Context.DurableTimers.ExecuteUpdateAsync(row => row
+            .SetProperty(x => x.SchemaVersion, "2")
+            .SetProperty(x => x.Revision, 0L));
+        fixture.Context.ChangeTracker.Clear();
+
+        var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(
+            () => fixture.Store.FindAsync("wf-skew", "timer-1").AsTask());
+        Assert.Equal("RuntimeOperationalState", skew.Module);
+        Assert.Equal("2", skew.Found);
+        Assert.Equal(RuntimeOperationalStateEfModule.SchemaVersion, skew.Expected);
     }
 
     [Fact]

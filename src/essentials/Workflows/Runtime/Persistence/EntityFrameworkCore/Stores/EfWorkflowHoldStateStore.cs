@@ -164,9 +164,9 @@ public sealed class EfWorkflowHoldStateStore(
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
         { throw new InvalidDataException("The persisted workflow-hold state is not valid current data.", exception); }
         var workflow = state.WorkflowExecutionId;
-        var valid = (expectedControlPlaneStateId is null || state.ControlPlaneStateId == expectedControlPlaneStateId) &&
+        var valid = EfSchemaVersion.Readable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) &&
+                    (expectedControlPlaneStateId is null || state.ControlPlaneStateId == expectedControlPlaneStateId) &&
                     row.Id == EfRuntimeOperationalStoreSupport.Hash(EfRuntimeOperationalStoreSupport.Encode(scope) + "\u001f" + state.ControlPlaneStateId) &&
-                    EfSchemaVersion.Readable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) &&
                     row.ControlPlaneStateId == EfRuntimeOperationalStoreSupport.Encode(state.ControlPlaneStateId) && row.ControlPlaneStateIdHash == EfRuntimeOperationalStoreSupport.Hash(state.ControlPlaneStateId) && row.ControlPlaneStateIdOrderKey == EfRuntimeOperationalStoreSupport.Order(state.ControlPlaneStateId) &&
                     row.WorkflowExecutionId == (workflow is null ? null : EfRuntimeOperationalStoreSupport.Encode(workflow)) && row.WorkflowExecutionIdHash == (workflow is null ? null : EfRuntimeOperationalStoreSupport.Hash(workflow)) && row.WorkflowExecutionIdOrderKey == (workflow is null ? null : EfRuntimeOperationalStoreSupport.Order(workflow));
         if (!valid)

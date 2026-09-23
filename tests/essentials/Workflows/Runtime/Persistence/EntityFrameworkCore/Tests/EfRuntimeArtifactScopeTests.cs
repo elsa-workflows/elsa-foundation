@@ -946,6 +946,30 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task A_skewed_executable_row_that_also_fails_an_integrity_invariant_reports_skew()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Executable.SaveAsync(Executable("artifact-skew"));
+
+        // The artifact hash this build insists on is a property of the shape this build writes, and a
+        // module whose schema version moved need not still write it. The row is skewed, not damaged
+        // (ADR 0077, #1950).
+        await fixture.Context.WorkflowExecutables
+            .Where(x => x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("artifact-skew"))
+            .ExecuteUpdateAsync(row => row
+                .SetProperty(x => x.SchemaVersion, "2")
+                .SetProperty(x => x.ArtifactHash, " "));
+        fixture.Context.ChangeTracker.Clear();
+
+        var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(
+            () => fixture.Executable.FindAsync("artifact-skew").AsTask());
+        Assert.Equal("RuntimeArtifact", skew.Module);
+        Assert.Equal("2", skew.Found);
+        Assert.Equal(RuntimeArtifactEfModule.SchemaVersion, skew.Expected);
+    }
+
+    [Fact]
     public async Task Executable_overlong_persisted_artifact_hash_fails_closed_on_find_list_and_idempotent_save()
     {
         await using var database = await Database.CreateAsync();

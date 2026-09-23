@@ -540,8 +540,8 @@ public sealed class EfRuntimePostCommitOutboxStore(
         string scope,
         string? expectedOutboxItemId = null)
     {
-        if (row.Revision <= 0 ||
-            EfSchemaVersion.NotReadable("RuntimePostCommitOutbox", row.SchemaVersion, RuntimePostCommitOutboxEfModule.SchemaVersion) ||
+        if (EfSchemaVersion.NotReadable("RuntimePostCommitOutbox", row.SchemaVersion, RuntimePostCommitOutboxEfModule.SchemaVersion) ||
+            row.Revision <= 0 ||
             row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) ||
             row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))
         {
