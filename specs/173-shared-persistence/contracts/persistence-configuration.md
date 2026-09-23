@@ -77,6 +77,7 @@ Selection semantics are:
 - Root feature bindings and shell-local resource catalogs are unsupported in this slice.
 - Deleting the owning key reveals the next lower-priority value.
 - Null, empty, blank, wrong-type, unknown, or incomplete selected values refuse; null is never deletion.
+- New resource and connection-reference names use the conservative identifier-like rule in [the authored-configuration decision](../decisions/authored-persistence.md#configuration-surface); boolean/numeric-looking scalar tokens are reserved because `IConfiguration` erases their original JSON token type. Legacy feature values retain their existing syntax.
 
 ## Enrollment and existing metadata
 

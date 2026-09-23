@@ -38,8 +38,8 @@ internal static class PersistenceConfigurationAdapter
                 unsupportedDefinitions.Add(resource.Key);
             resources[resource.Key] = new PersistenceResourceDefinition(
                 resource.Key,
-                ReadValue(resource, "Provider", rootSource),
-                ReadValue(resource, "ConnectionName", rootSource),
+                ReadReference(resource, "Provider", rootSource),
+                ReadReference(resource, "ConnectionName", rootSource),
                 rootSource);
         }
 
@@ -58,10 +58,10 @@ internal static class PersistenceConfigurationAdapter
                 continue;
             var featureId = key[prefix.Length..];
             if (featureId.Length != 0)
-                bindings[featureId] = FromScalar(value, shellSource);
+                bindings[featureId] = FromReferenceScalar(value, shellSource);
         }
         foreach (var binding in rawPersistence.GetSection("Bindings").GetChildren())
-            bindings.TryAdd(binding.Key, ReadValue(rawPersistence.GetSection("Bindings"), binding.Key, rawSource));
+            bindings.TryAdd(binding.Key, ReadReference(rawPersistence.GetSection("Bindings"), binding.Key, rawSource));
 
         var resetIds = context.FeatureSettingResetIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var enabledIds = context.EnabledFeatureIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -127,7 +127,7 @@ internal static class PersistenceConfigurationAdapter
             false);
         return new ReadResult(
             new PersistenceResolutionInput(
-                new PersistenceResourceCatalog(resources, ReadValue(root, "DefaultResource", rootSource)),
+                new PersistenceResourceCatalog(resources, ReadReference(root, "DefaultResource", rootSource)),
                 new PersistenceShellSelection(context.ShellId.Name, shellDefault, bindings),
                 participants,
                 legacy,
@@ -155,8 +155,19 @@ internal static class PersistenceConfigurationAdapter
         PersistenceSourceProvenance composedSource,
         PersistenceSourceProvenance rawSource) =>
         TryGet(composed, composedKey, out var value)
-            ? FromScalar(value, composedSource)
-            : ReadValue(raw, rawKey, rawSource);
+            ? FromReferenceScalar(value, composedSource)
+            : ReadReference(raw, rawKey, rawSource);
+
+    private static PersistenceAuthoredValue ReadReference(
+        IConfigurationSection parent,
+        string key,
+        PersistenceSourceProvenance source)
+    {
+        var value = ReadValue(parent, key, source);
+        return value.Presence == PersistencePresence.Value
+            ? FromReferenceScalar(value.Value, source)
+            : value;
+    }
 
     private static PersistenceAuthoredValue ReadValue(
         IConfigurationSection parent,
@@ -174,6 +185,25 @@ internal static class PersistenceConfigurationAdapter
     private static PersistenceAuthoredValue FromScalar(string? value, PersistenceSourceProvenance source) =>
         new(value is null ? PersistencePresence.Null : string.IsNullOrWhiteSpace(value) ? PersistencePresence.Blank : PersistencePresence.Value,
             value, source);
+
+    // IConfiguration has only string? leaves. It cannot distinguish JSON false/0 from
+    // the strings "false"/"0" after provider composition. The first-slice contract reserves
+    // those ambiguous spellings and uses identifier-like reference names instead.
+    private static PersistenceAuthoredValue FromReferenceScalar(string? value, PersistenceSourceProvenance source)
+    {
+        var scalar = FromScalar(value, source);
+        return scalar.Presence == PersistencePresence.Value && !IsReferenceName(value!)
+            ? new PersistenceAuthoredValue(PersistencePresence.WrongType, null, source)
+            : scalar;
+    }
+
+    private static bool IsReferenceName(string value) =>
+        value.Length > 0 &&
+        (char.IsLetter(value[0]) || value[0] == '_') &&
+        !value.Equals("true", StringComparison.OrdinalIgnoreCase) &&
+        !value.Equals("false", StringComparison.OrdinalIgnoreCase) &&
+        !value.Equals("null", StringComparison.OrdinalIgnoreCase) &&
+        value.All(character => char.IsLetterOrDigit(character) || character is '_' or '-' or '.');
 
     private static bool TryGet(IReadOnlyDictionary<string, string?> values, string key, out string? value)
     {

@@ -167,6 +167,64 @@ public sealed class PersistenceConfigurationAdapterTests
         Assert.Equal("resource-selection-invalid", Assert.Single(result.Resolution.Refusals).Code);
     }
 
+    [Theory]
+    [InlineData("false")]
+    [InlineData("0")]
+    [InlineData("\"false\"")]
+    [InlineData("\"0\"")]
+    public void Scalar_like_selection_is_reserved_and_refuses_before_resource_lookup(string authoredJson)
+    {
+        var configuration = Json($$"""
+            { "Elsa": { "Persistence": { "Resources": { "primary": { "Provider": "PostgreSql", "ConnectionName": "Shared" } }, "DefaultResource": {{authoredJson}} } } }
+            """);
+
+        var result = Resolve(Context(), configuration);
+
+        Assert.Equal(PersistencePresence.WrongType, result.Input.RootCatalog.RootDefault.Presence);
+        Assert.Equal("resource-selection-invalid", Assert.Single(result.Resolution.Refusals).Code);
+    }
+
+    [Theory]
+    [InlineData("false")]
+    [InlineData("0")]
+    public void Scalar_like_connection_name_makes_selected_definition_invalid(string authoredJson)
+    {
+        var configuration = Json($$"""
+            { "Elsa": { "Persistence": { "Resources": { "primary": { "Provider": "PostgreSql", "ConnectionName": {{authoredJson}} } }, "DefaultResource": "primary" } } }
+            """);
+
+        var result = Resolve(Context(), configuration);
+
+        Assert.Equal(PersistencePresence.WrongType, result.Input.RootCatalog.Resources["primary"].ConnectionName.Presence);
+        Assert.Equal("resource-definition-invalid", Assert.Single(result.Resolution.Refusals).Code);
+    }
+
+    [Fact]
+    public void Identifier_like_resource_and_connection_names_allow_dots_dashes_and_underscores()
+    {
+        var configuration = Json("""
+            { "Elsa": { "Persistence": { "Resources": { "primary-v1": { "Provider": "PostgreSql", "ConnectionName": "Elsa.Diagnostics_1" } }, "DefaultResource": "PRIMARY-v1" } } }
+            """);
+
+        var result = Resolve(Context(), configuration);
+
+        Assert.False(result.Resolution.IsRefused);
+        Assert.Equal("Elsa.Diagnostics_1", Assert.Single(result.Resolution.Participants).ConnectionName);
+    }
+
+    [Fact]
+    public void Runtime_source_context_records_checked_scopes_without_claiming_a_frozen_external_snapshot()
+    {
+        var input = PersistenceConfigurationAdapter.Read(Context(), RootDefault(), [Participant]).Input;
+
+        Assert.Equal(PersistenceContextMode.Runtime, input.SourceContext.Mode);
+        Assert.Equal("default", input.SourceContext.ShellName);
+        Assert.Equal(["root", "shell-composed", "shell-authored"],
+            input.SourceContext.CheckedSources.Select(source => source.Scope));
+        Assert.False(input.SourceContext.IncludesExternalEnvironment);
+        Assert.False(input.SourceContext.IsFrozenSnapshot);
+    }
+
     private static (PersistenceResolutionInput Input, PersistenceResolutionResult Resolution) Resolve(
         ShellSettingsPreparationContext context,
         IConfiguration configuration)

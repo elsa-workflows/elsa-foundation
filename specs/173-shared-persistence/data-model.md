@@ -69,7 +69,7 @@ There are no root feature bindings or shell-local resource catalogs in this slic
 
 Selection precedence is shell feature binding, shell default, root default, then legacy feature configuration. A present shell key wins over root fallback, including a final code-configured shell default. Removing the owning override reveals the next lower-priority value.
 
-Resource identity is case-insensitive for lookup. A selected resource is atomic: Provider and ConnectionName must both be present and nonblank on the same object. Resources have no inline ConnectionString, Schema, Pooling, or migration-policy fields.
+Resource identity is case-insensitive for lookup. Resource and connection-reference names follow the identifier-like syntax and reserved-token rule in [Authored persistence configuration](decisions/authored-persistence.md#configuration-surface). A selected resource is atomic: Provider and ConnectionName must both be present and nonblank on the same object. Resources have no inline ConnectionString, Schema, Pooling, or migration-policy fields.
 
 Presence semantics are explicit:
 
