@@ -88,6 +88,16 @@ dotnet test tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/El
 
 The EF migrations test project passed 237/237 with zero skips, including four new transaction-layout cases.
 
+## T014 shared-layout contract checkpoint (2026-09-24)
+
+The focused contract test names all 11 enrolled Runtime, Workflows Design, Activities Design and Publishing consumers. It verifies one root resource produces exactly one Provider/ConnectionName pair for each consumer and that omitting Provider refuses the entire layout without a partial patch or initialized SQLite fallback. The contract uses SQLite so its test project does not alter the provider-availability assumptions of existing tests; the separate Workbench fixture above remains the real PostgreSQL placement proof.
+
+```bash
+dotnet test tests/essentials/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj --logger 'console;verbosity=quiet' -p:WarningLevel=0
+```
+
+The full EF test project passed 325/325 with zero skips. The focused architecture suite passed 40/40 with zero skips after the reviewed source inventory was updated; maps and solution filters were refreshed for the added test-project references. T014 is complete; runtime data and tooling parity remain open.
+
 ## What success must prove
 
 The shared layout selects one named PostgreSQL resource for every enabled enrolled Runtime, Workflows Design, Activities Design and Publishing consumer. The diagnostics layout selects a second named resource for both Structured Logs and OpenTelemetry while leaving the primary consumers on their original target. The first slice does not redirect host-owned OpenIddict, private stores, or unknown persistence consumers ([spec](spec.md#normative-supported-participants-and-constraints)).

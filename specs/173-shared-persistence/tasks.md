@@ -9,7 +9,7 @@ description: "Reviewed task list for shared persistence resources"
 
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `contracts/`, and `quickstart.md`.
 
-**Status**: Integrated design review approved on 2026-09-23. #1967 publication completed through PR #1973; implementation is active. One active delivery issue at a time: #1968 owns US1, US2 and US4; #1969 owns US3 after #1968. T001-T007, T009-T011, T016-T017 and T027-T028 are complete; T008 is in progress. Remaining tasks are open.
+**Status**: Integrated design review approved on 2026-09-23. #1967 publication completed through PR #1973; implementation is active. One active delivery issue at a time: #1968 owns US1, US2 and US4; #1969 owns US3 after #1968. T001-T007, T009-T011, T014, T016-T017 and T027-T028 are complete; T008 is in progress. Remaining tasks are open.
 
 **Tests**: Tests are required by the specification. Add focused tests before implementation within each user-story phase and retain the existing regression suites.
 
@@ -54,7 +54,7 @@ description: "Reviewed task list for shared persistence resources"
 
 ### Tests for User Story 1
 
-- [ ] T014 [P] [US1] Add shared-layout resolver/materialization contract tests in `tests/essentials/Persistence/EntityFramework/Tests/SharedPersistenceLayoutTests.cs` covering all enrolled Runtime, Workflows Design, Activities Design, and Publishing consumers and rejecting omitted-provider SQLite drift.
+- [x] T014 [P] [US1] Add shared-layout resolver/materialization contract tests in `tests/essentials/Persistence/EntityFramework/Tests/SharedPersistenceLayoutTests.cs` covering all enrolled Runtime, Workflows Design, Activities Design, and Publishing consumers and rejecting omitted-provider SQLite drift.
 - [ ] T015 [P] [US1] Add host composition tests in `tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/SharedPersistenceCompositionTests.cs`, `tests/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Tests/SharedPersistenceCompositionTests.cs`, and `tests/essentials/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/SharedPersistenceCompositionTests.cs` for restart-safe persisted design, publication, and execution state. The shared host fixture/E2E must also explicitly exercise Activities Design creation/publication and inspect its persisted rows/history; a Runtime-only smoke does not cover it.
 
 ### Implementation for User Story 1

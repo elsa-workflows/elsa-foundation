@@ -172,6 +172,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "tests/essentials/Persistence/EntityFramework/Tests/PersistenceConfigurationAdapterTests.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/PersistenceResourceResolverTests.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/ProviderFailures.cs",
+        "tests/essentials/Persistence/EntityFramework/Tests/SharedPersistenceLayoutTests.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/TemporarySqliteDatabase.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/TemporarySqliteDatabaseTests.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/UnorderedRowLimitGuard.cs",
