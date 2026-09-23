@@ -7,6 +7,10 @@
 # Elsa is pre-release and ships no production data, so each module keeps one Initial migration
 # per provider that is regenerated whenever its model changes. Secrets keeps its historical
 # migration chain; only a provider with no Secrets migrations yet gets an Initial here.
+#
+# Regeneration ends when 4.0 ships as a stable release (ADR 0078, issue #1976): each Initial is
+# then frozen as its module's baseline and later model changes add incremental migrations. A
+# regenerated Initial gets a new migration id, which breaks every database that applied the old one.
 # Migrations compile into the module assembly, which stays provider-free: the post-processing
 # step below rewrites the few provider-package calls EF emits.
 set -euo pipefail

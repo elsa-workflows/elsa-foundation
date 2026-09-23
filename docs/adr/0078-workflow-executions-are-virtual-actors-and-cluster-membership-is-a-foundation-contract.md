@@ -1,7 +1,7 @@
 ---
 status: proposed
 date: 2026-09-24
-decision_context: Discussion on 2026-09-23 and 2026-09-24 of the cluster gap ADR 0077 leaves open; decided by Sipke Schoorstra — membership first, a foundation contract with swappable providers, actor frameworks admitted only as providers bound by the four invariants below, and on 2026-09-24 that features needing new data wait for finalization.
+decision_context: Discussion on 2026-09-23 and 2026-09-24 of the cluster gap ADR 0077 leaves open; decided by Sipke Schoorstra — membership first, a foundation contract with swappable providers, actor frameworks admitted only as providers bound by the four invariants below, and on 2026-09-24 that features needing new data wait for finalization and that migrations keep being regenerated until 4.0 ships as a stable release.
 ---
 
 # Workflow executions are virtual actors, and cluster membership is a foundation contract
@@ -190,10 +190,14 @@ approximates virtual actors with the most ceremony.
 - The conformance suite is part of the contract, built alongside the first provider rather than after it.
 - Every schema-changing release ships an upcaster from its predecessor. For an additive change the upcaster
   is trivial; the cost grows only with the size of the change.
-- None of the gate applies to a real upgrade until the practice of regenerating each module's `Initial`
-  migration ends. Each regeneration gives the migration a new identifier, so a database that applied the
-  previous one sees the new one as pending and tries to create tables that already exist. That is correct
-  while Elsa ships no production data, and it must end before the first release that does.
+- **Migrations keep being regenerated until 4.0 ships as a stable release.** Until then every model change
+  rewrites the affected module's `Initial` migration under a new identifier, so a database that applied the
+  previous one sees the new one as pending and tries to create tables that already exist. None of the gate —
+  nor any upgrade path — applies to a real database before then, and a persistent development database,
+  Workbench's own SQLite files included, must be recreated after a model change. At the 4.0 stable release
+  each module's `Initial` is frozen as its baseline, later model changes add incremental migrations as
+  Secrets already does, and a guard fails the build if a shipped migration is edited, renamed or deleted.
+  The freeze is part of shipping 4.0, not a follow-up to it; it is tracked as #1976.
 
 ## Linked decisions
 
