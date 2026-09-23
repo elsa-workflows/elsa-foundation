@@ -1,7 +1,7 @@
 ---
 status: proposed
 date: 2026-09-24
-decision_context: Discussion on 2026-09-23 and 2026-09-24 of the cluster gap ADR 0077 leaves open; decided by Sipke Schoorstra — membership first, a foundation contract with swappable providers, and actor frameworks admitted only as providers bound by the four invariants below.
+decision_context: Discussion on 2026-09-23 and 2026-09-24 of the cluster gap ADR 0077 leaves open; decided by Sipke Schoorstra — membership first, a foundation contract with swappable providers, actor frameworks admitted only as providers bound by the four invariants below, and on 2026-09-24 that features needing new data wait for finalization.
 ---
 
 # Workflow executions are virtual actors, and cluster membership is a foundation contract
@@ -120,6 +120,22 @@ written, and a version may leave the readable range only once a scan proves no r
 While a version awaits finalization, migrations are **expand-only**: nothing is dropped, renamed or retyped
 until no finalized version still reads it.
 
+**Features that need the new data wait for finalization.** Until then writers use the old format, so new
+fields have nowhere to go. Finalization is also the **rollback boundary**: before it, no rows in the new format
+exist and rolling back to the previous binary is safe; after it, it is not. Gating new-data features on
+finalization is what keeps that rollback real. The cost is small: with automatic finalization the window lasts
+only as long as the rollout, and on a single host it closes immediately. It stretches only under an operator's
+hold — during a canary, which is exactly when rollback must stay clean. Two rules go with it:
+
+- **A dormant feature says why.** It reports that it becomes available once every host can read the new
+  version, rather than simply being absent.
+- **A write that needs dormant data is refused, never dropped.** A request setting a field the old format
+  cannot hold fails with a diagnostic. Quietly discarding the field would be exactly the silent data loss
+  this design exists to prevent.
+
+Modules check dormancy through one shared helper over the finalized version, so the rule is applied the same
+way everywhere rather than reinvented per module.
+
 **Version-aware placement.** Mid-rollout, or when a module has been installed on only part of the fleet, an
 execution needing that module is placed only on members that advertise it. Finalization stops a new version
 writing too early; placement stops an execution landing on a host that cannot run it. Neither is sufficient
@@ -158,6 +174,12 @@ approximates virtual actors with the most ceremony.
 - **Durable membership on every host, even alone.** Rejected. One implementation is simpler, but every
   deployment would carry tables and heartbeat writes it does not need, and the in-process-default shape
   already exists in the runtime.
+- **Early use of new-data features where the data lives only in new columns.** An EF update from an older
+  model never touches a column it does not know, so such data survives old writers. Rejected: rolling back
+  before finalization would hide data users had already entered, each change would need its own proof, and it
+  fails outright for stores that rewrite a JSON document or delete and reinsert a row.
+- **Leave dormancy to each module.** Rejected: nothing would stop a module from silently dropping new data,
+  the one failure this design most needs to rule out.
 
 ## Consequences
 
@@ -173,14 +195,6 @@ approximates virtual actors with the most ceremony.
   previous one sees the new one as pending and tries to create tables that already exist. That is correct
   while Elsa ships no production data, and it must end before the first release that does.
 
-## Open
-
-- **What a feature that needs new data does before finalization.** While writers still write the old format,
-  the new fields have nowhere to go. The candidates are to gate such features until finalization, to permit
-  early use only where new data lives in new columns, or to leave it to each module. Undecided.
-- **ADR 0077 still names additive-only as its destination.** It is to be amended to name this gate once the
-  question above is settled.
-
 ## Linked decisions
 
 - [ADR 0031](0031-runtime-burst-execution-sticky-single-writer-drain-with-in-process-fast-path.md) — the
@@ -190,6 +204,6 @@ approximates virtual actors with the most ceremony.
 - [ADR 0076](0076-persistence-tooling-runs-inside-the-host-closure.md) — the activation guards the gate builds
   on
 - [ADR 0077](0077-a-module-upgrades-in-place-only-when-its-persisted-schema-is-unchanged.md) — the gap this
-  closes, and the ADR to amend once it is settled
+  closes; amended on 2026-09-24 to name this gate as its destination
 - [Framework constitution §2.6.2](../../.specify/memory/constitution-framework.md) — replacement contracts
 - Issue #1144 (FR-1, independent release)
