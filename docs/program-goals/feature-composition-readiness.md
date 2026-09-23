@@ -16,7 +16,7 @@ Help developers and operators compose an Elsa runtime from understandable starti
 
 This evolves the existing Feature Composition Readiness bucket in place. Its classification and generator-readiness work remains part of the program. GitHub issues hold scope, dependencies, acceptance criteria, and progress; the project is the single scheduling view. This document routes work rather than duplicating the issue backlog.
 
-The [program issue](https://github.com/elsa-workflows/elsa-foundation/issues/1959) captures the initial design investigation. Its expression-count improvements are synthetic evidence, not proof of deployed layouts or usability. The [persistence-boundary report](../reports/runtime-composition/persistence-boundaries.md) grounds the next delivery slice in current module ownership and transaction constraints.
+The [program issue](https://github.com/elsa-workflows/elsa-foundation/issues/1959) captures the initial design investigation. Its expression-count improvements are synthetic evidence, not proof of deployed layouts or usability. The [persistence-boundary report](../reports/runtime-composition/persistence-boundaries.md) grounds the next delivery slice in current module ownership and transaction constraints. The [effective-configuration report](../reports/runtime-composition/effective-configuration.md) defines the proposed runtime/tooling seam and the remaining specification decisions.
 
 ## In Scope
 
@@ -41,7 +41,7 @@ The [program issue](https://github.com/elsa-workflows/elsa-foundation/issues/195
 The initial backlog was published on 2026-09-23. Program execution began with discovery #1965; no production implementation has started. Consult the linked issues/project for current execution state.
 
 1. Discover supported persistence boundaries in [#1965](https://github.com/elsa-workflows/elsa-foundation/issues/1965), then the shared runtime/tooling resolution path in [#1966](https://github.com/elsa-workflows/elsa-foundation/issues/1966). These are the only initially ready leaves.
-2. Reconcile the evidence and specify the bounded delivery slice in [#1967](https://github.com/elsa-workflows/elsa-foundation/issues/1967), blocked on both spikes. Closing a spike with unknowns does not automatically make implementation ready.
+2. Reconcile the evidence and specify the bounded delivery slice in [#1967](https://github.com/elsa-workflows/elsa-foundation/issues/1967), using both reviewed spike results. Closing a spike with unknowns does not automatically make implementation ready.
 3. Deliver the shared persistence path in [#1968](https://github.com/elsa-workflows/elsa-foundation/issues/1968), then a proven diagnostics override in [#1969](https://github.com/elsa-workflows/elsa-foundation/issues/1969). Both stories are initially blocked and require specification refinement.
 4. Refine later epic outlines only when their contracts and evidence are concrete. Keep one active integration lane and synchronize issue comments, labels, and project readiness when work changes state.
 
