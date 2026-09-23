@@ -1,39 +1,61 @@
-# Feature Composition Readiness
+# Runtime Composition & Configuration
 
 Status: active.
 
-Area: feature composition / CShells and Nuplane shell readiness.
+Area: feature composition / shared persistence / developer and operator configuration.
 
 Steward(s): Joey plus active architects/agents.
 
+Program: [#1959](https://github.com/elsa-workflows/elsa-foundation/issues/1959).
+
+Scheduling view: [Runtime Composition & Configuration, project 51](https://github.com/orgs/elsa-workflows/projects/51).
+
 ## Purpose
 
-Advance feature composition without letting the CShells Appsettings Generator guess feature IDs, required activations, settings, secrets, host-loading shape, or dependency policy.
+Help developers and operators compose an Elsa runtime from understandable starting points, configure shared infrastructure once, and inspect the exact result while retaining granular feature control.
 
-This bucket keeps Feature Composition Explorer work separate from generator implementation until a bounded feature slice has enough classified evidence.
+This evolves the existing Feature Composition Readiness bucket in place. Its classification and generator-readiness work remains part of the program. GitHub issues hold scope, dependencies, acceptance criteria, and progress; the project is the single scheduling view. This document routes work rather than duplicating the issue backlog.
+
+The [program issue](https://github.com/elsa-workflows/elsa-foundation/issues/1959) captures the initial design investigation. Its expression-count improvements are synthetic evidence, not proof of deployed layouts or usability. The [persistence-boundary report](../reports/runtime-composition/persistence-boundaries.md) grounds the next delivery slice in current module ownership and transaction constraints.
 
 ## In Scope
 
-- Feature Composition Explorer readiness.
-- Bounded feature dependency classification passes.
-- Bounded settings classification passes.
-- Generator readiness checks for selected slices.
-- Host-loading and assembly-scanning output-shape decisions where they affect composition.
-- External package/version compatibility evidence for selected feature sets.
+- Shared persistence defaults and explicit feature bindings for reviewed consumer/layout sets.
+- Versioned starting profiles, flat feature groups, and exact feature editing.
+- Shared effective configuration for runtime activation, EF tooling, and developer plan/explain/export workflows.
+- Runtime builder UX grounded in representative developer and operator tasks.
+- Review/apply, revision, migration prerequisites, and failure recovery for supported compositions.
+- Bounded dependency/settings classification, generator readiness, and host-loading/package compatibility evidence needed by those outcomes.
 
 ## Out Of Scope
 
 - Implementing the CShells Appsettings Generator before required activations, settings, secrets, and host-loading are classified.
-- Treating `src/apps/Elsa.Server` as canonical shell composition policy.
+- Treating `src/Apps/Elsa.Server` as canonical shell composition policy.
+- Consolidating modules to reduce configuration choices, a generic settings/constraint framework, or arbitrary database splits without evidence.
+- Replacing separately owned package-loading, module-layout, OpenIddict, or connection-guard work.
 - Broad runtime execution design.
 - Broad constitution ratification unrelated to composition/configuration.
 
 ## Active Objectives
 
-1. Use the Feature Composition Explorer before the CShells Appsettings Generator.
-2. Apply reviewed dependency/settings labels only to bounded feature slices backed by evidence or architecture review.
-3. Leave unknown, disputed, or merely inferred activations/settings pending review.
-4. Run a generator readiness pass before any generator implementation.
+The initial backlog was published on 2026-09-23. Program execution began with discovery #1965; no production implementation has started. Consult the linked issues/project for current execution state.
+
+1. Discover supported persistence boundaries in [#1965](https://github.com/elsa-workflows/elsa-foundation/issues/1965), then the shared runtime/tooling resolution path in [#1966](https://github.com/elsa-workflows/elsa-foundation/issues/1966). These are the only initially ready leaves.
+2. Reconcile the evidence and specify the bounded delivery slice in [#1967](https://github.com/elsa-workflows/elsa-foundation/issues/1967), blocked on both spikes. Closing a spike with unknowns does not automatically make implementation ready.
+3. Deliver the shared persistence path in [#1968](https://github.com/elsa-workflows/elsa-foundation/issues/1968), then a proven diagnostics override in [#1969](https://github.com/elsa-workflows/elsa-foundation/issues/1969). Both stories are initially blocked and require specification refinement.
+4. Refine later epic outlines only when their contracts and evidence are concrete. Keep one active integration lane and synchronize issue comments, labels, and project readiness when work changes state.
+
+## Epic Outcomes
+
+| Epic | Initial planning depth |
+|---|---|
+| [Shared persistence and explicit overrides #1960](https://github.com/elsa-workflows/elsa-foundation/issues/1960) | Two discovery spikes, a specification checkpoint, and two blocked outcome stories |
+| [Profiles and feature groups #1961](https://github.com/elsa-workflows/elsa-foundation/issues/1961) | Outcome and unresolved decisions only |
+| [Developer plan, explain, and export #1962](https://github.com/elsa-workflows/elsa-foundation/issues/1962) | Outcome and unresolved decisions only |
+| [Runtime builder UX #1963](https://github.com/elsa-workflows/elsa-foundation/issues/1963) | Outcome and unresolved decisions only |
+| [Apply, evolution, and recovery #1964](https://github.com/elsa-workflows/elsa-foundation/issues/1964) | Outcome and unresolved decisions only |
+
+Existing [connection-guard #1902](https://github.com/elsa-workflows/elsa-foundation/issues/1902), [OpenIddict #1895](https://github.com/elsa-workflows/elsa-foundation/issues/1895), [Secrets migration-policy #1900](https://github.com/elsa-workflows/elsa-foundation/issues/1900), [unknown-feature #1159](https://github.com/elsa-workflows/elsa-foundation/issues/1159), and [package-loading #1145](https://github.com/elsa-workflows/elsa-foundation/issues/1145) issues remain separately owned. Reconcile their current evidence before consuming their guarantees; do not duplicate or reparent them into this program by assumption.
 
 ## Linked Surfaces
 
@@ -46,8 +68,8 @@ This bucket keeps Feature Composition Explorer work separate from generator impl
 
 ## Current Roadmap Notes
 
-- The Feature Composition Explorer is closer than generator implementation.
-- Start with one bounded shell goal or domain cluster.
+- Start with one bounded Runtime/Design/Publishing persistence composition and establish the physical constraints before promising overrides.
+- Use the Feature Composition Explorer before generator implementation; leave unknown, disputed, or inferred activations/settings pending review.
 - Before using generated maps as strong evidence, establish freshness with `dotnet run --project tools/maps/Elsa.Maps.Generator -- check`. If it is red or you cannot run it, refresh the relevant map first and review generated findings before continuing. See the [maps index](../maps/README.md#freshness).
 
 ## Drift / Review Notes
@@ -57,4 +79,4 @@ This bucket keeps Feature Composition Explorer work separate from generator impl
 
 ## Removal or Completion Conditions
 
-Complete or pause this bucket when a bounded feature slice is classified enough for reliable exploration or generator readiness, or when the generator work moves into its own implementation spec.
+Complete this program when the linked epic outcomes have verified delivery evidence: shared persistence and overrides, reviewed profiles/groups, consistent developer tooling, evaluated builder UX, and supported composition evolution. Reassess or pause it explicitly if product scope changes; classification or research completion alone does not complete the program.
