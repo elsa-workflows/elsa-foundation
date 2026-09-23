@@ -329,12 +329,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             options.EnablePathRouting = true;
             options.ExcludePaths = ["/health/live", "/health/ready"];
         })
-        .ConfigureAllShells(shell => shell
-            .WithFeature<ModularityApiFeature>()
-            // Binding an absent section is a no-op, so the feature's opt-in default stands unless an
-            // operator sets Elsa:Workflows:Runtime:FaultCapture:CaptureStackTrace.
-            .WithFeature<RuntimeFaultStackTraceFeature>(feature =>
-                configuration.GetSection(RuntimeFaultCaptureOptions.SectionName).Bind(feature)));
+        .ConfigureAllShells(shell => new WorkbenchEfToolingShellDefaults().Configure(shell, configuration));
 });
 
 // Opt-in eager shell activation (spec 132, First-Request/Cold-Start Readiness unit 4). Default OFF. When

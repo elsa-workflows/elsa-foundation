@@ -22,6 +22,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
 {
     private static readonly string[] PolicyPackages =
     [
+        "CShells",
         "CShells.Abstractions",
         "Microsoft.EntityFrameworkCore",
         "Microsoft.EntityFrameworkCore.Relational",
@@ -99,6 +100,8 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/essentials/Persistence/EntityFramework/Tooling/EfToolingContract.cs",
         "src/essentials/Persistence/EntityFramework/Tooling/EfToolingExitCode.cs",
         "src/essentials/Persistence/EntityFramework/Tooling/EfToolingHost.cs",
+        "src/essentials/Persistence/EntityFramework/Tooling/EfToolingShellDefaultsAttribute.cs",
+        "src/essentials/Persistence/EntityFramework/Tooling/IEfToolingShellDefaults.cs",
         "src/essentials/Persistence/EntityFramework/UnicodeOrdinalCasingTable.Generated.cs",
         "src/essentials/Persistence/EntityFramework/UnicodeOrdinalCasingTable.cs",
         "src/essentials/Persistence/EntityFramework/UsesEfModuleAttribute.cs",
