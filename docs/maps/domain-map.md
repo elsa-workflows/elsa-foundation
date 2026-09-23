@@ -7,9 +7,9 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 ## Summary
 
 - Source projects: 131
-- Test projects: 108
+- Test projects: 109
 - Domains: 29
-- Direct cross-domain references: 674
+- Direct cross-domain references: 675
 
 ## Domains
 
@@ -31,7 +31,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Locking | 2 | 0 | contract<br>provider/implementation |
 | Elsa.Mediator | 2 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Modularity | 4 | 2 | contract<br>feature/implementation<br>test |
-| Elsa.Persistence | 1 | 7 | feature/implementation<br>test |
+| Elsa.Persistence | 1 | 8 | feature/implementation<br>test |
 | Elsa.Pipelines | 1 | 0 | contract |
 | Elsa.Primitives | 2 | 2 | feature/implementation<br>test |
 | Elsa.Samples | 0 | 1 | test |
@@ -246,6 +246,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests](../../tests/essentials/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj) | test | Elsa.Persistence | EntityFrameworkCore.Migrations.ProviderTests | test | Elsa.Activities.Design.Persistence.EntityFrameworkCore<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore<br>Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore<br>Elsa.Foundation.Identity.Persistence.EntityFrameworkCore<br>Elsa.Secrets.Persistence.EntityFrameworkCore<br>Elsa.Studio.Preferences.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore<br>Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore |
 | [Elsa.Persistence.EntityFrameworkCore.Migrations.Tests](../../tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj) | test | Elsa.Persistence | EntityFrameworkCore.Migrations.Tests | test | Elsa.Activities.Design.Persistence.EntityFrameworkCore<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore<br>Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore<br>Elsa.EntityFrameworkCore.Tooling<br>Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore<br>Elsa.Foundation.Identity.Persistence.EntityFrameworkCore<br>Elsa.Secrets.Persistence.EntityFrameworkCore<br>Elsa.Studio.Preferences.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore<br>Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore |
 | [Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests](../../tests/essentials/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj) | test | Elsa.Persistence | EntityFrameworkCore.MySql.FeasibilityTests | test | Elsa.Secrets<br>Elsa.Secrets.Persistence.EntityFrameworkCore |
+| [Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests](../../tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj) | test | Elsa.Persistence | EntityFrameworkCore.SharedResources.Tests | test | Elsa.Workbench.Tests |
 | [Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests](../../tests/essentials/Persistence/EntityFrameworkCore/TransactionTopology/Tests/Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests.csproj) | test | Elsa.Persistence | EntityFrameworkCore.TransactionTopology.Tests | test | - |
 | [Elsa.Primitives.Hosting.Tests](../../tests/essentials/Primitives/Hosting/Tests/Elsa.Primitives.Hosting.Tests.csproj) | test | Elsa.Primitives | Hosting.Tests | test | Elsa.Primitives.Hosting |
 | [Elsa.Primitives.Tests](../../tests/essentials/Primitives/Tests/Elsa.Primitives.Tests.csproj) | test | Elsa.Primitives | Tests | test | Elsa.Primitives |
@@ -643,6 +644,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Persistence.EntityFrameworkCore.Migrations.Tests](../../tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj) | Elsa.Persistence | [Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore](../../src/extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj) | Elsa3 |
 | [Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests](../../tests/essentials/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj) | Elsa.Persistence | [Elsa.Secrets](../../src/essentials/Secrets/Elsa.Secrets.csproj) | Elsa.Secrets |
 | [Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests](../../tests/essentials/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj) | Elsa.Persistence | [Elsa.Secrets.Persistence.EntityFrameworkCore](../../src/essentials/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj) | Elsa.Secrets |
+| [Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests](../../tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj) | Elsa.Persistence | [Elsa.Workbench.Tests](../../tests/essentials/Workbench/Tests/Elsa.Workbench.Tests.csproj) | Elsa.Workbench |
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/essentials/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | Elsa.Samples | [Elsa.Activities.Design.Core](../../src/essentials/Activities/Design/Core/Elsa.Activities.Design.Core.csproj) | Elsa.Activities |
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/essentials/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | Elsa.Samples | [Elsa.Activities.Runtime.Core](../../src/essentials/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj) | Elsa.Activities |
 | [Elsa.Secrets](../../src/essentials/Secrets/Elsa.Secrets.csproj) | Elsa.Secrets | [Elsa.Attention.Core](../../src/essentials/Attention/Core/Elsa.Attention.Core.csproj) | Elsa.Attention |

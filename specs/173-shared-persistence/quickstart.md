@@ -19,6 +19,17 @@ dotnet test tests/essentials/Modularity/EntityFramework/Tests/Elsa.Modularity.En
 
 Results: 188 modularity, 26 activity API, and 17 EF modularity tests passed, with zero failures or skips. The modularity test build also compiled its actual Workbench and Foundation Host project references against the published packages. The duplicated catalog fake is shared and implements the supported typed refresh contract while retaining detailed descriptors for settings and activity attribution. Existing compiler/analyzer warnings remain; no resource-mode, PostgreSQL, restart, migration-tooling, or new-mode acceptance evidence is claimed by this checkpoint.
 
+## T002-T003 fixture and detached-model checkpoint (2026-09-23)
+
+The shared-resources test project is registered in `Elsa.Server.slnx` and the required PostgreSQL CI container matrix. Its fixture provisions two separate databases in one disposable `postgres:16-alpine` container, passes their connection references to a real Workbench child process, and supports a clean process restart. `ELSA_SHARED_PERSISTENCE_REQUIRE_POSTGRESQL=1` makes missing Docker a failure in the CI leg rather than a skipped pass.
+
+```bash
+dotnet test tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj --verbosity quiet
+dotnet test tests/essentials/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj --verbosity quiet
+```
+
+Local results: two fixture tests passed against Docker with no skips; 280 existing persistence tests passed with no skips after the internal detached model was added. The fixture test proves that a table written in the primary database is absent from the diagnostics database and that the current Workbench can start and restart while both named connection references are available. It does **not** prove resource selection, migration placement, or new-mode behavior. The resolver, adapters, and resource-mode host journey remain to be implemented and tested.
+
 ## What success must prove
 
 The shared layout selects one named PostgreSQL resource for every enabled enrolled Runtime, Workflows Design, Activities Design and Publishing consumer. The diagnostics layout selects a second named resource for both Structured Logs and OpenTelemetry while leaving the primary consumers on their original target. The first slice does not redirect host-owned OpenIddict, private stores, or unknown persistence consumers ([spec](spec.md#normative-supported-participants-and-constraints)).
