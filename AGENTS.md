@@ -255,5 +255,5 @@ New work should move toward this rule:
 <!-- SPECKIT START -->
 For additional context about technologies, project structure, shell commands, contracts, and
 validation scenarios for the active work unit, read
-`specs/167-publishing-api-migration/plan.md`.
+`specs/173-shared-persistence/plan.md`.
 <!-- SPECKIT END -->
