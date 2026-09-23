@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-23
 
-**Status**: Design reviewed; #1967 publication pending
+**Status**: Draft — design reviewed; #1967 publication pending
 
 **Input**: Program [#1959](https://github.com/elsa-workflows/elsa-foundation/issues/1959), specification [#1967](https://github.com/elsa-workflows/elsa-foundation/issues/1967): configure persistence once, retain explicit feature overrides, and make runtime and migration tooling agree. Incorporates reviewed spikes [#1965](https://github.com/elsa-workflows/elsa-foundation/issues/1965#issuecomment-5798240404) and [#1966](https://github.com/elsa-workflows/elsa-foundation/issues/1966#issuecomment-5798450673).
 

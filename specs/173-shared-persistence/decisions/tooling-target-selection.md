@@ -13,7 +13,7 @@ A module whose owners all use another connection reference is outside this decla
 | Existing module selector | With an explicit resource |
 |---|---|
 | `--from-host` | Select every candidate module in the declared target group, including aliases with the same provider/reference pair. Include dependency-enabled features before deriving modules. |
-| `--modules A B` | Preserve the exact requested module set; every module must be a candidate in the declared target group. Refuse an unrelated, disabled-only, unenrolled or outside-group module rather than silently dropping it. |
+| `--modules A,B` | Preserve the exact requested module set; every module must be a candidate in the declared target group. Refuse an unrelated, disabled-only, unenrolled or outside-group module rather than silently dropping it. |
 | `--all` | Retain the existing meaning of all discovered modules. Refuse unless every discovered module is a candidate in the declared target group. Never reinterpret all as a filter. |
 | No module selector on `list` | Return the same resource-scoped set as from-host. Other commands retain the existing requirement for a module selector. |
 
