@@ -20,5 +20,6 @@ public sealed class PublicationProjectionIntentEntity
     public string? LastFailureMessage { get; set; }
     public string? TenantId { get; set; }
     public string TenantIdHash { get; set; } = null!;
+    public string SchemaVersion { get; set; } = null!;
     public long Revision { get; set; }
 }

@@ -12,6 +12,7 @@ public sealed class PublicationPolicyEntity
     public string TenantIdHash { get; set; } = null!;
     public string DefaultAction { get; set; } = null!;
     public string DefaultSlotName { get; set; } = null!;
+    public string SchemaVersion { get; set; } = null!;
     public long Revision { get; set; }
     public long UpdatedAtUtcTicks { get; set; }
     public int UpdatedAtOffsetMinutes { get; set; }

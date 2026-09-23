@@ -156,6 +156,7 @@ public sealed class EfPublicationPolicyStore(
             TenantIdHash = EfPublishingStoreSupport.TenantHash(tenantId),
             DefaultAction = policy.DefaultAction.ToString(),
             DefaultSlotName = EfPublishingStoreSupport.Encode(policy.DefaultSlotName),
+            SchemaVersion = PublishingPolicyProjectionEfModule.SchemaVersion,
             Revision = policy.Revision,
             UpdatedAtUtcTicks = updated.UtcTicks,
             UpdatedAtOffsetMinutes = updated.OffsetMinutes
@@ -168,6 +169,7 @@ public sealed class EfPublicationPolicyStore(
         var updated = EfPublishingStoreSupport.DateTimeOffsetParts(policy.UpdatedAt);
         row.DefaultAction = policy.DefaultAction.ToString();
         row.DefaultSlotName = EfPublishingStoreSupport.Encode(policy.DefaultSlotName);
+        row.SchemaVersion = PublishingPolicyProjectionEfModule.SchemaVersion;
         row.Revision = policy.Revision;
         row.UpdatedAtUtcTicks = updated.UtcTicks;
         row.UpdatedAtOffsetMinutes = updated.OffsetMinutes;
@@ -175,6 +177,9 @@ public sealed class EfPublicationPolicyStore(
 
     private static PublicationPolicy ToModel(PublicationPolicyEntity row)
     {
+        // Whether this build can read the row at all is settled before whether the row is consistent:
+        // a row written by another module version may legitimately fail checks that describe this shape.
+        EfSchemaVersion.EnsureReadable("PublishingPolicyProjection", row.SchemaVersion, PublishingPolicyProjectionEfModule.SchemaVersion);
         var policyKey = EfPublishingStoreSupport.DecodeValue(row.PolicyKey, PublishingPolicyProjectionEfModule.PolicyKeyMaximumLength, nameof(row.PolicyKey));
         var tenantId = EfPublishingStoreSupport.DecodeNullableIdentity(row.TenantId, nameof(row.TenantId));
         if (!StringComparer.Ordinal.Equals(row.TenantIdHash, EfPublishingStoreSupport.TenantHash(tenantId)) ||

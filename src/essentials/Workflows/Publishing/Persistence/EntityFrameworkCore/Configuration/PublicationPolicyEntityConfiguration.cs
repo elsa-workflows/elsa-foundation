@@ -19,6 +19,7 @@ public sealed class PublicationPolicyEntityConfiguration : IEntityTypeConfigurat
         builder.Property(row => row.TenantIdHash).HasMaxLength(PublishingPolicyProjectionEfModule.HashMaximumLength).IsRequired();
         builder.Property(row => row.DefaultAction).HasMaxLength(PublishingPolicyProjectionEfModule.EnumMaximumLength).IsRequired();
         builder.Property(row => row.DefaultSlotName).HasMaxLength(PublishingPolicyProjectionEfModule.EncodedIdentityMaximumLength).IsRequired();
+        builder.Property(row => row.SchemaVersion).HasMaxLength(PublishingPolicyProjectionEfModule.SchemaVersionMaximumLength).IsRequired();
         builder.Property(row => row.Revision).IsConcurrencyToken().IsRequired();
         builder.Property(row => row.UpdatedAtUtcTicks).IsRequired();
         builder.Property(row => row.UpdatedAtOffsetMinutes).IsRequired();

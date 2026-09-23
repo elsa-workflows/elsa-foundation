@@ -64,6 +64,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     TenantIdHash = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false, collation: "Latin1_General_100_BIN2"),
                     DefaultAction = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false, collation: "Latin1_General_100_BIN2"),
                     DefaultSlotName = table.Column<string>(type: "nvarchar(1200)", maxLength: 1200, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    SchemaVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false, collation: "Latin1_General_100_BIN2"),
                     Revision = table.Column<long>(type: "bigint", nullable: false),
                     UpdatedAtUtcTicks = table.Column<long>(type: "bigint", nullable: false),
                     UpdatedAtOffsetMinutes = table.Column<int>(type: "int", nullable: false)
@@ -94,6 +95,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     LastFailureMessage = table.Column<string>(type: "nvarchar(1368)", maxLength: 1368, nullable: true),
                     TenantId = table.Column<string>(type: "nvarchar(1200)", maxLength: 1200, nullable: true, collation: "Latin1_General_100_BIN2"),
                     TenantIdHash = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    SchemaVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false, collation: "Latin1_General_100_BIN2"),
                     Revision = table.Column<long>(type: "bigint", nullable: false)
                 },
                 constraints: table =>
