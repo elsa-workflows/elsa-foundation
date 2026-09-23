@@ -138,6 +138,7 @@ ragged activation is harmless and runtime installation works on a cluster.
 
 ## Linked decisions
 
+- [ADR 0078](0078-workflow-executions-are-virtual-actors-and-cluster-membership-is-a-foundation-contract.md) — cluster membership, and the gate proposed for closing the ragged-activation gap above
 - [ADR 0067](0067-package-versioning-uses-two-lines-with-computed-patch.md) — the versioning this rule constrains
 - [ADR 0076](0076-persistence-tooling-runs-inside-the-host-closure.md) — D9's activation guards, which this relies on
 - [ADR 0073](0073-ef-core-is-the-only-first-party-persistence-family.md) — the persistence family this applies to

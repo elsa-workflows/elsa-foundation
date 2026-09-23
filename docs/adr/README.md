@@ -88,3 +88,4 @@ Numbers are not unique: the folder holds two independent sequences (an early Ext
 | 0075 | [Oracle is not a supported first-party EF Core engine](0075-oracle-is-not-a-supported-ef-core-engine.md) | Accepted |
 | 0076 | [Persistence tooling runs inside the host's closure](0076-persistence-tooling-runs-inside-the-host-closure.md) | Accepted |
 | 0077 | [A module upgrades in place only when its persisted schema is unchanged](0077-a-module-upgrades-in-place-only-when-its-persisted-schema-is-unchanged.md) | Proposed |
+| 0078 | [Workflow executions are virtual actors, and cluster membership is a foundation contract](0078-workflow-executions-are-virtual-actors-and-cluster-membership-is-a-foundation-contract.md) | Proposed |
