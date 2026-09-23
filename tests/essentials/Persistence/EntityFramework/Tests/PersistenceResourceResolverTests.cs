@@ -136,6 +136,26 @@ public sealed class PersistenceResourceResolverTests
     [Theory]
     [InlineData("Provider")]
     [InlineData("ConnectionName")]
+    public void Wrong_type_resource_field_refuses_without_partial_materialization(string field)
+    {
+        var resource = new PersistenceResourceDefinition("primary",
+            field == "Provider" ? new(PersistencePresence.WrongType, null, Root) : Value("PostgreSql", Root),
+            field == "ConnectionName" ? new(PersistencePresence.WrongType, null, Root) : Value("Shared", Root),
+            Root);
+
+        var result = _resolver.Resolve(Input(
+            resources: new Dictionary<string, PersistenceResourceDefinition> { ["primary"] = resource },
+            rootDefault: Value("primary", Root)));
+
+        Assert.Equal("resource-definition-invalid", Assert.Single(result.Refusals).Code);
+        Assert.Equal(field, Assert.Single(result.Refusals).FieldName);
+        Assert.Null(Assert.Single(result.Participants).Provider);
+        Assert.Null(Assert.Single(result.Participants).ConnectionName);
+    }
+
+    [Theory]
+    [InlineData("Provider")]
+    [InlineData("ConnectionName")]
     [InlineData("ConnectionString")]
     public void Any_effective_authored_legacy_target_conflicts_even_when_null(string field)
     {
@@ -148,6 +168,51 @@ public sealed class PersistenceResourceResolverTests
         var reset = _resolver.Resolve(Input(rootDefault: Value("primary", Root), legacy: legacy with { IsReset = true }));
         Assert.False(reset.IsRefused);
         Assert.Equal("PostgreSql", Assert.Single(reset.Participants).Provider);
+    }
+
+    [Theory]
+    [InlineData("Provider")]
+    [InlineData("ConnectionName")]
+    [InlineData("ConnectionString")]
+    public void Reset_does_not_hide_final_code_configured_target(string field)
+    {
+        var legacy = LegacyTarget(field, PersistencePresence.Value) with { IsReset = true };
+        legacy = field switch
+        {
+            "Provider" => legacy with { Provider = legacy.Provider with { IsFinalComposed = true } },
+            "ConnectionName" => legacy with { ConnectionName = legacy.ConnectionName with { IsFinalComposed = true } },
+            _ => legacy with { ConnectionString = legacy.ConnectionString with { IsFinalComposed = true } }
+        };
+
+        var result = _resolver.Resolve(Input(rootDefault: Value("primary", Root), legacy: legacy));
+
+        Assert.Equal("resource-legacy-conflict", Assert.Single(result.Refusals).Code);
+        Assert.Equal(field, Assert.Single(result.Refusals).FieldName);
+    }
+
+    [Fact]
+    public void Resolution_is_repeatable_and_does_not_mutate_authored_input()
+    {
+        var resources = new Dictionary<string, PersistenceResourceDefinition>
+        {
+            ["primary"] = Resource("primary", "PostgreSql", "Shared")
+        };
+        var bindings = new Dictionary<string, PersistenceAuthoredValue>
+        {
+            [FeatureId] = Value("primary", Shell)
+        };
+        var input = Input(resources: resources, bindings: bindings);
+
+        var first = _resolver.Resolve(input);
+        var second = _resolver.Resolve(input);
+
+        Assert.False(first.IsRefused);
+        Assert.Equal(first.Participants, second.Participants);
+        Assert.Same(input.RootCatalog.Resources, resources);
+        Assert.Same(input.ShellSelection.FeatureBindings, bindings);
+        Assert.Single(resources);
+        Assert.Single(bindings);
+        Assert.Equal("primary", bindings[FeatureId].Value);
     }
 
     [Fact]
