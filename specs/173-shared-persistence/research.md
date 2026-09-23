@@ -26,7 +26,7 @@ The pinned [ConfigurationShellBlueprint](https://github.com/sfmskywalker/cshells
 
 **Alternatives rejected:** A frozen overlay becomes stale; an early provider wrapper misses final participants; internal descriptor replacement copies framework internals; declaring every custom composition ready from today's Workbench files would overclaim support. The upstream hook is generic; persistence semantics stay in Elsa.
 
-**Reload:** Host source providers may refresh configuration, but rebuilding an active shell requires explicit registry reload. Each generation must prepare a fresh snapshot. Required upstream tests prove global/implicit participation, binding consumption, zero feature-side effects on refusal, invariant enforcement and recomputation. These tests have not yet run; #134 owns delivery and publication.
+**Reload:** Host source providers may refresh configuration, but rebuilding an active shell requires explicit registry reload. Each generation must prepare a fresh snapshot. Required upstream tests prove global/implicit participation, binding consumption, zero feature-side effects on refusal, invariant enforcement and recomputation. The upstream implementation is independently reviewed in [CShells PR #135](https://github.com/valence-works/cshells/pull/135), commit `d4b11b856159236d9493b19481200002b70d932b`. Its local verification passed 679 Release tests, including 11 focused preparation cases, with a cancellation mutation check. GitHub CI/review and package publication remain pending; #134 owns delivery and publication. The final API exposes a detached scalar shell-configuration view plus set/remove changes; untouched typed configuration is preserved. Root configuration fallback is deliberately separate and must be supplied explicitly by the Elsa adapter when required.
 
 ## R3. Existing feature management with file-authored resources
 
@@ -44,9 +44,9 @@ The pinned [ConfigurationShellBlueprint](https://github.com/sfmskywalker/cshells
 
 **Required boundary:** Preserve ADR 0076's EF-free front end, host dependency closure, authoritative provider, explicit file context and environment/stdin secrets. Extend the protocol with deliberate version/capability negotiation before the provider-only projection discards resource intent. A live invocation currently receives one connection, so a multi-target layout must select and validate each target's module set independently.
 
-**Owner decision pending:** [Strict target verification proposal](decisions/tooling-target-verification.md) asks whether resource-aware tooling may read the expected configured connection solely to compare the explicit env/stdin live value. Do not adopt that amendment or claim connection-value parity before the decision.
+**Owner-approved direction (2026-09-23):** Adopt [strict target verification](decisions/tooling-target-verification.md), provided it remains bounded. Read the expected named connection inside the explicitly selected host context only to compare it with the supplied env/stdin value. Keep the actual database input env/stdin-only, refuse before database access on unresolved/mismatched values, and never emit either value. This adds a lookup and the existing equality check, not a generic secret provider or database probe. Runtime proof, protocol design and ADR review are still required.
 
-**Remaining design after decision:** Choose the narrow explicit input that reaches the host-owned resolver without shipping secret values in public plans or assuming the tool's environment is the host environment. Define configuration checks versus live target checks, and how unsupported old hosts refuse. Review any ADR extension before implementation.
+**Remaining design:** Choose the narrow explicit input that reaches the host-owned resolver without shipping secret values in public plans or assuming the tool's environment is the host environment. Define configuration checks versus live target checks, and how unsupported old hosts refuse. Review any ADR extension before implementation.
 
 ## R5. Scope and evidence
 
@@ -54,4 +54,4 @@ The pinned [ConfigurationShellBlueprint](https://github.com/sfmskywalker/cshells
 
 **Required evidence:** Real design/publish/execute/restart data, migration histories and tooling target agreement; source/presence conflict matrix; successful recomputation on reload; secret redaction and no-side-effect refusals. Existing passing component tests are regression evidence only.
 
-**Status:** #1968 and #1969 remain blocked. R2 has a reviewed upstream implementation prerequisite; R3 has a bounded safe first-slice decision. R4 awaits the owner decision. Complete plan/contracts/tasks and review before implementation readiness. CShells #134 can proceed independently of R4.
+**Status:** #1968 and #1969 remain blocked. R2 has a reviewed upstream implementation prerequisite; R3 has a bounded safe first-slice decision. R4 has owner approval for the bounded strict check; concrete context/protocol contracts remain to be reviewed. Complete plan/contracts/tasks and review before implementation readiness. CShells #134 can proceed independently of R4.

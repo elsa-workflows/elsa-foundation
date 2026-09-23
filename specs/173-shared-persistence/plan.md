@@ -4,7 +4,7 @@
 
 **Input**: specification #1967 / `specs/173-shared-persistence/spec.md`.
 
-**Status**: Phase 0 research in progress. Not approved for Elsa implementation. The owner decision on tooling target verification remains open; Phase 1 contracts and the task breakdown cannot be finalized yet.
+**Status**: Phase 0 research in progress. Not approved for Elsa implementation. The owner approved bounded strict target verification on 2026-09-23. Phase 1 contracts and the task breakdown remain to be designed and reviewed; upstream publication is pending.
 
 ## Summary
 
@@ -32,7 +32,7 @@ Use a generic final-settings preparation hook in CShells so Elsa sees global and
 
 **Scale/Scope**: The 13 stable feature IDs across six participant sets in the spec, with only the first four sets in the initial shared layout and both diagnostics sets in the second layout. Dynamic/unknown participants do not become ready by resemblance of options.
 
-**Open architecture decision**: Strict live target verification versus the existing ADR 0076 D7 credential boundary; see [decision request](decisions/tooling-target-verification.md). No implementation branch may silently choose one.
+**Approved direction**: Use bounded strict live target verification; see [decision record](decisions/tooling-target-verification.md). The owner approved one expected-value lookup and strict comparison, while retaining env/stdin as the only actual database connection input. Concrete host-context transport and negotiated protocol remain design gates.
 
 ## Constitution Check
 
@@ -46,9 +46,9 @@ Pre-design research check:
 - Framework §2.22: document supported configuration, refusal, lifecycle and extension behavior with evidence.
 - Elsa §E2.2: Runtime/Design dependency boundaries and deployment shapes remain unchanged.
 - Framework §2.12 / Elsa §E4: the bounded persistence contract does not ratify deferred generic settings classification.
-- ADR 0066/0073/0076: retain ordered publication, first-party EF ownership and host-closure tooling. D7 extension remains proposed, not accepted.
+- ADR 0066/0073/0076: retain ordered publication, first-party EF ownership and host-closure tooling. The bounded D7 verification extension has owner approval; its concrete contract and ADR amendment still require the normal design review.
 
-No justified constitutional violation is proposed. Post-design check remains open until the target-verification decision and concrete contracts are complete. The CShells prerequisite has its own package/dependency and regression gates.
+No justified constitutional violation is proposed. Post-design check remains open until the concrete target-verification contracts are complete. The CShells prerequisite has its own package/dependency and regression gates.
 
 ## Project Structure
 
@@ -81,7 +81,7 @@ specs/173-shared-persistence/
 
 [R1-R5](research.md) record ownership, lifecycle, management, tooling and evidence. R2 is resolved into an upstream prerequisite. R3 selects explicit pre-mutation refusal in the legacy feature editor for resource-mode compositions while retaining file/shell reload; resource-aware operations remain required under #1964.
 
-R4 is waiting for the owner decision. Until it is settled, do not generate a supposedly ready tooling protocol or publish #1968 as implementable. The upstream lifecycle task is independent and may proceed while that decision is pending.
+R4 now has the owner decision. Finish and review the explicit host-context input and negotiated tooling protocol before publishing #1968 as implementable. CShells #134 remains the single active delivery leaf through review and publication; resume this specification as the next delivery item afterward.
 
 ## Delivery and validation gates
 
@@ -93,4 +93,4 @@ R4 is waiting for the owner decision. Until it is settled, do not generate a sup
 
 ## Complexity Tracking
 
-No constitutional exception is requested. The upstream hook is required to avoid duplicating dependency/default composition in Elsa. The proposed CLI trust-boundary extension requires an explicit decision before acceptance; it is not hidden as implementation complexity.
+No constitutional exception is requested. The upstream hook is required to avoid duplicating dependency/default composition in Elsa. The owner-approved CLI verification extension is limited to one expected-value lookup and an existing strict comparison. Do not expand it into database identity discovery, generic secret management, or automatic connection selection.

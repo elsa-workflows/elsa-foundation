@@ -1,14 +1,14 @@
 # Decision request: verify the live resource connection
 
-Status: proposed; owner decision requested before adoption. Tracking: #1967.
+Status: owner-approved direction, 2026-09-23; concrete protocol design and review remain required before implementation. Tracking: #1967.
 
 ## Why this decision matters
 
 The shared-resource contract should prevent migration tooling from selecting the right provider and module names while applying them to the wrong database. A connection name alone cannot prove the supplied live connection value matches the selected resource.
 
-[ADR 0076 D7](../../../docs/adr/0076-persistence-tooling-runs-inside-the-host-closure.md#d7--connection-by-environment-variable-or-stdin-only) limits live connection input to environment/stdin. Its exact source section remains authoritative; this proposal does not change accepted behavior until approved.
+[ADR 0076 D7](../../../docs/adr/0076-persistence-tooling-runs-inside-the-host-closure.md#d7--connection-by-environment-variable-or-stdin-only) limits live connection input to environment/stdin. The owner approved the recommended verification on condition that it stays simple. The accepted scope adds one expected-value lookup and the existing strict comparison inside the selected host context; it adds no secret store, target-discovery framework, database probe, or alternative connection input.
 
-## Recommended amendment for resource mode
+## Accepted direction for resource mode
 
 - Actual database operations still receive their connection only through the existing explicit environment/stdin input. No raw connection argument is introduced.
 - Inside the target host closure, allow the resource-aware tooling adapter to resolve the selected resource's named connection from the explicitly selected target-host configuration context solely as the expected value for comparison.
@@ -24,7 +24,7 @@ This extends the trust boundary to reading an expected configured value for veri
 
 Keep D7 unchanged and prove only provider/resource/connection-reference agreement from the tool's explicit context. Mark connection-value parity unverified when an independent expected value is unavailable. A separate explicit verification mechanism would then be needed before the program could claim full target agreement or report a layout ready.
 
-## Required verification if approved
+## Required verification
 
 1. Right provider and resource name with the wrong supplied connection refuses before database access.
 2. Unset expected connection refuses; it does not substitute a default or adopt the supplied value as its own expectation.
@@ -32,4 +32,4 @@ Keep D7 unchanged and prove only provider/resource/connection-reference agreemen
 4. Canary secrets never appear in request/response output, manifest, stdout/stderr, diagnostic, exception, or argv.
 5. Legacy requests remain unchanged, and an old host refuses the negotiated resource contract clearly.
 
-The downstream plan remains open on this choice; no production implementation is authorized by this draft alone.
+The owner choice is settled. The downstream plan must still define explicit context transport and protocol negotiation and pass design review before implementation readiness. Strict value equality is intentionally conservative: differently formatted connection strings or separate migration credentials are not assumed equivalent. Supporting those cases would require a separately reviewed target-identity design, not a silent relaxation of this check.
