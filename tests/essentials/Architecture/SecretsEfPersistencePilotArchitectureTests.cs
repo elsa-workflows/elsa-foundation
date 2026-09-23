@@ -94,6 +94,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/essentials/Persistence/EntityFramework/Tooling/EfModuleOrder.cs",
         "src/essentials/Persistence/EntityFramework/Tooling/EfMySqlIdempotentScript.cs",
         "src/essentials/Persistence/EntityFramework/Tooling/EfPersistenceParticipantCatalog.cs",
+        "src/essentials/Persistence/EntityFramework/Tooling/EfPersistenceResourceValidator.cs",
         "src/essentials/Persistence/EntityFramework/Tooling/EfProviderAgreement.cs",
         "src/essentials/Persistence/EntityFramework/Tooling/EfToolingContract.cs",
         "src/essentials/Persistence/EntityFramework/Tooling/EfToolingExitCode.cs",
