@@ -4,6 +4,21 @@ Status: Phase 0 research is complete. #1968 (shared Runtime, Workflows Design, A
 
 The contract is defined by [the shared-persistence specification](spec.md), [the implementation plan](plan.md), [the authored configuration decision](decisions/authored-persistence.md), [the target-selection decision](decisions/tooling-target-selection.md), [the target-verification decision](decisions/tooling-target-verification.md), and [the configuration-context decision](decisions/tooling-configuration-context.md).
 
+## T001 package compatibility checkpoint (2026-09-23)
+
+All seven centrally managed CShells packages now resolve to published `0.0.30-preview.158`. Every downloaded nuspec identifies CShells merge commit `58e4296196637ff3ea6cd3d97e9df875f547b818`; [publication run](https://github.com/valence-works/cshells/actions/runs/35912858168) and [closed compatibility prerequisite #136](https://github.com/valence-works/cshells/issues/136) contain upstream evidence. A normal feed restore with `--no-http-cache` cleared stale preview.157 index data; no local package override remains.
+
+Verified on the implementation branch:
+
+```bash
+dotnet restore tests/essentials/Modularity/Tests/Elsa.Modularity.Tests.csproj --no-http-cache --verbosity quiet
+dotnet test tests/essentials/Modularity/Tests/Elsa.Modularity.Tests.csproj --no-restore --verbosity quiet
+dotnet test tests/essentials/Activities/Design/Api/Tests/Elsa.Activities.Design.Api.Tests.csproj --verbosity quiet
+dotnet test tests/essentials/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj --verbosity quiet
+```
+
+Results: 188 modularity, 26 activity API, and 17 EF modularity tests passed, with zero failures or skips. The modularity test build also compiled its actual Workbench and Foundation Host project references against the published packages. The duplicated catalog fake is shared and implements the supported typed refresh contract while retaining detailed descriptors for settings and activity attribution. Existing compiler/analyzer warnings remain; no resource-mode, PostgreSQL, restart, migration-tooling, or new-mode acceptance evidence is claimed by this checkpoint.
+
 ## What success must prove
 
 The shared layout selects one named PostgreSQL resource for every enabled enrolled Runtime, Workflows Design, Activities Design and Publishing consumer. The diagnostics layout selects a second named resource for both Structured Logs and OpenTelemetry while leaving the primary consumers on their original target. The first slice does not redirect host-owned OpenIddict, private stores, or unknown persistence consumers ([spec](spec.md#normative-supported-participants-and-constraints)).
@@ -39,7 +54,7 @@ diagnostics target: <diagnostics-database>
 
 The repository currently documents the Workbench project and HTTP profile, but does not yet contain a committed PostgreSQL resource fixture or a resource-aware e2e script. Add the exact fixture/profile path when #1968 implementation lands; do not substitute a guessed launch profile.
 
-Before integrating #1968, Elsa must pin the delivered CShells package `0.0.30-preview.157`. The current repository pin remains `0.0.29-preview.147` in `Directory.Packages.props:14-20`; the published prerequisite and its evidence are recorded in [research R2](research.md#r2-cshells-lifecycle-integration). Verify the implementation branch with:
+T001 pins all seven CShells packages to `0.0.30-preview.158`, which includes the preparation hook and the detailed catalog compatibility fix required by Elsa. The published prerequisite and its evidence are recorded in [research R2](research.md#r2-cshells-lifecycle-integration). Verify the implementation branch with:
 
 ```bash
 rg -n 'PackageVersion Include="CShells(|\.Abstractions|\.AspNetCore|\.AspNetCore\.Abstractions|\.FastEndpoints|\.FastEndpoints\.Abstractions|\.Management\.Api)"' Directory.Packages.props
@@ -299,7 +314,7 @@ Do not attach raw configuration snapshots, connection strings, passwords, hashes
 
 This guide deliberately leaves the following as implementation gates rather than pretending they pass:
 
-- Elsa has not yet pinned CShells `0.0.30-preview.157`.
+- CShells `0.0.30-preview.158` is pinned; the resource preparation adapter is not implemented yet.
 - The resource resolver, runtime pre-binding adapter, Workbench resource fixture, and management pre-guard are not present in this specification tree.
 - The proposed `--configuration-context` and `--resource` protocol fields, resource-aware `--shell` transport, and old-host capability negotiation are not implemented by the current CLI.
 - No committed #1968 shared-layout or #1969 diagnostics PostgreSQL e2e script exists yet.

@@ -1,10 +1,10 @@
 # Implementation Plan: Shared persistence resources
 
-**Branch**: `1305-shared-persistence` | **Date**: 2026-09-23 | **Spec**: [spec.md](spec.md)
+**Branch**: `codex/1968-shared-persistence` | **Date**: 2026-09-23 | **Spec**: [spec.md](spec.md)
 
 **Input**: specification #1967 / `specs/173-shared-persistence/spec.md`.
 
-**Status**: Phase 0 and Phase 1 complete; the integrated model/contracts/quickstart and 45-task breakdown passed independent design review on 2026-09-23. Publish and complete #1967's PR gate before activating #1968 in the single delivery queue. This is design readiness, not implementation or runtime/database evidence. The owner approved bounded strict target verification; the upstream prerequisite is published and verified as `0.0.30-preview.157`.
+**Status**: Phase 0 and Phase 1 complete; the integrated model/contracts/quickstart and 45-task breakdown passed independent design review on 2026-09-23. #1967 was published through PR #1973; #1968 is active in the single delivery queue. This is design readiness, not implementation or runtime/database evidence. The owner approved bounded strict target verification; the upstream prerequisite is published and verified as `0.0.30-preview.158`.
 
 ## Summary
 
@@ -32,7 +32,7 @@ Use a generic final-settings preparation hook in CShells so Elsa sees global and
 
 **Scale/Scope**: The 13 stable feature IDs across six participant sets in the spec, with only the first four sets in the initial shared layout and both diagnostics sets in the second layout. Dynamic/unknown participants do not become ready by resemblance of options.
 
-**Approved direction**: Use bounded strict live target verification; see [decision record](decisions/tooling-target-verification.md). The owner approved one expected-value lookup and strict comparison, while retaining env/stdin as the only actual database connection input. Concrete source, snapshot, version and selection rules are in [the tooling contract](contracts/tooling.md); integrated design review passed; #1967 publication remains the scheduling gate.
+**Approved direction**: Use bounded strict live target verification; see [decision record](decisions/tooling-target-verification.md). The owner approved one expected-value lookup and strict comparison, while retaining env/stdin as the only actual database connection input. Concrete source, snapshot, version and selection rules are in [the tooling contract](contracts/tooling.md); integrated design review passed; #1967 publication is complete through PR #1973.
 
 ## Constitution Check
 
@@ -105,12 +105,12 @@ specs/173-shared-persistence/
 
 R4 has the owner decision. The decisions now define the authored root/shell hierarchy, effective legacy-field presence, explicit source modes, declared target groups and no-selector semantic preflight. Independent review approved one opaque host-owned source snapshot reused by internal list and script, atomic capability negotiation, canonical worker selectors and typed error redaction. A published-package probe confirmed the null-presence distinction and public hostless discovery/dependency APIs.
 
-The host-default composer direction and factory/context-aware invocation signatures have passed Phase 0 review. The Phase 1 model/contracts/quickstart and task breakdown passed integrated review. Publish the specification and complete its PR gates before activating #1968. Source-file parsing alone must not silently omit Workbench's ConfigureAllShells choices. CShells #134 is complete with published-package verification. This specification remains the single active delivery item.
+The host-default composer direction and factory/context-aware invocation signatures have passed Phase 0 review. The Phase 1 model/contracts/quickstart and task breakdown passed integrated review. The specification was published through PR #1973; #1968 is active. Source-file parsing alone must not silently omit Workbench's ConfigureAllShells choices. CShells #134 is complete with published-package verification. #1968 is the single active delivery item.
 
 ## Delivery and validation gates
 
-1. **Done:** CShells #134 merged and `0.0.30-preview.157` was published and verified through an isolated package consumer. Pin it in Elsa when integrating #1968.
-2. **Design done:** authored configuration, runtime/management and tooling contracts reviewed against all 21 FRs, six SCs and four spec journeys; 45 tasks produced using Spec Kit. Complete the #1967 publication/PR gate.
+1. **Done:** CShells #134 delivered the preparation hook; compatibility follow-up #136 / PR #137 restored detailed catalog reads. T001 pins `0.0.30-preview.158`; actual host compilation and 231 affected tests passed. See the [compatibility checkpoint](quickstart.md#t001-package-compatibility-checkpoint-2026-09-23).
+2. **Design done:** authored configuration, runtime/management and tooling contracts reviewed against all 21 FRs, six SCs and four spec journeys; 45 tasks produced using Spec Kit. #1967 publication completed through PR #1973.
 3. Deliver #1968 as the shared runtime/database/tooling path, including legacy checks and preflight refusals. Follow with #1969's actual two-target proof and negative layouts.
 4. Run focused component/architecture tests and applicable backend end-to-end journeys. Refresh/check generated maps only when authoritative inputs change; required CI and review must pass before merge. Do not infer a full host result from a pure resolver test.
 5. Publish evidence and keep issue dependencies, readiness, status and labels aligned. The program's other four epics remain required outcomes.

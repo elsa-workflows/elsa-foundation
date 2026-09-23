@@ -1,6 +1,6 @@
 # Runtime preparation and legacy management contract
 
-Status: Integrated design review approved on 2026-09-23 for #1967. Publication is pending; implementation and runtime/database verification remain #1968/#1969 work.
+Status: Integrated design review approved on 2026-09-23 for #1967. Published in PR #1973; implementation and runtime/database verification remain #1968/#1969 work.
 
 The [persistence configuration contract](persistence-configuration.md) owns resource shape, presence, enrollment and resolution. The [tooling contract](tooling.md) owns the shared host-default declaration. This document specifies when runtime and management invoke that resolution and which side effects are permitted.
 
@@ -8,7 +8,7 @@ The [persistence configuration contract](persistence-configuration.md) owns reso
 
 Add one root registration extension, `AddEfPersistenceResources(IServiceCollection services, IConfiguration configuration, Assembly hostAssembly)`, owned by Elsa.Modularity.EntityFramework. It validates that the explicit host assembly carries the tooling contract's single defaults-composer declaration. The declaration is mandatory for resource activation, including code-selected defaults. Do not scan unrelated loaded assemblies for a substitute. Legacy-only hosts need not register the adapter or declare a composer.
 
-Registration installs exactly one CShells `IShellSettingsPreparer` and the EF management context-preparation implementation. Use the delivered CShells 0.0.30-preview.157 public contract. Duplicate preparers retain CShells' fail-fast refusal; do not create an implicit preparer chain. Root configuration is an explicit dependency because the CShells callback contains only composed shell configuration.
+Registration installs exactly one CShells `IShellSettingsPreparer` and the EF management context-preparation implementation. Use the delivered CShells public preparation contract from preview.157, with the detailed catalog compatibility fix in preview.158. Duplicate preparers retain CShells' fail-fast refusal; do not create an implicit preparer chain. Root configuration is an explicit dependency because the CShells callback contains only composed shell configuration.
 
 For each fresh shell generation:
 

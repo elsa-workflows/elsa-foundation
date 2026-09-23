@@ -9,24 +9,24 @@ description: "Reviewed task list for shared persistence resources"
 
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `contracts/`, and `quickstart.md`.
 
-**Status**: Integrated design review approved on 2026-09-23. Complete #1967 publication/PR gates before activating implementation. One active delivery issue at a time: #1968 owns US1, US2 and US4; #1969 owns US3 after #1968. All tasks below are unimplemented.
+**Status**: Integrated design review approved on 2026-09-23. #1967 publication completed through PR #1973; implementation is active. One active delivery issue at a time: #1968 owns US1, US2 and US4; #1969 owns US3 after #1968. T001 is complete; remaining tasks are unimplemented.
 
 **Tests**: Tests are required by the specification. Add focused tests before implementation within each user-story phase and retain the existing regression suites.
 
-**Upstream prerequisite**: Pin the already-published CShells `0.0.30-preview.157`; do not duplicate the upstream preparation-hook implementation in Elsa.
+**Upstream prerequisite**: Pin the already-published CShells `0.0.30-preview.158`; do not duplicate the upstream preparation-hook implementation in Elsa.
 
 ## Phase 1: Setup (Shared Infrastructure)
 
 **Purpose**: Establish the reviewed package and test-fixture prerequisites without changing default runtime behavior.
 
-- [ ] T001 [P] Pin `CShells`, `CShells.Management.Api`, `CShells.Abstractions`, `CShells.AspNetCore`, `CShells.AspNetCore.Abstractions`, `CShells.FastEndpoints`, and `CShells.FastEndpoints.Abstractions` to `0.0.30-preview.157` in `Directory.Packages.props`; do not copy the upstream CShells hook into Elsa.
+- [x] T001 [P] Pin `CShells`, `CShells.Management.Api`, `CShells.Abstractions`, `CShells.AspNetCore`, `CShells.AspNetCore.Abstractions`, `CShells.FastEndpoints`, and `CShells.FastEndpoints.Abstractions` to `0.0.30-preview.158` in `Directory.Packages.props`; do not copy the upstream CShells hook into Elsa.
 - [ ] T002 [P] Add the bounded shared-persistence host/test fixture in `tests/essentials/Persistence/EntityFrameworkCore/SharedResources/SharedPersistenceHostFixture.cs`, the PostgreSQL target-provisioning support in `tests/essentials/Persistence/EntityFrameworkCore/SharedResources/PostgreSqlTargetFixture.cs`, and their test project in `tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj` registered in `Elsa.Server.slnx`, while preserving the existing SQLite and legacy fixtures.
 
 ---
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-**Purpose**: Implement the provider-neutral input, resolution, enrollment, and preparation seams required by every user story. These tasks become eligible after #1967 publication.
+**Purpose**: Implement the provider-neutral input, resolution, enrollment, and preparation seams required by every user story. #1967 publication is complete; execute these tasks after the setup phase.
 
 - [ ] T003 [P] Add the presence-aware detached resource, shell-selection, source-provenance, participant, resolution, refusal, and evidence records in `src/essentials/Persistence/EntityFramework/ResourceResolution/PersistenceResourceModels.cs`, keeping connection-string values out of the detached model.
 - [ ] T004 Implement the side-effect-free precedence and atomic Provider/ConnectionName resolver in `src/essentials/Persistence/EntityFramework/ResourceResolution/PersistenceResourceResolver.cs` using shell binding → shell default → root default → legacy configuration, including blank/null/wrong-type/refusal and reset semantics.
@@ -40,7 +40,7 @@ description: "Reviewed task list for shared persistence resources"
 - [ ] T012 [P] Add CShells preparation lifecycle tests in `tests/essentials/Modularity/EntityFramework/Tests/FeatureActivationContextPreparerTests.cs` proving globals and dependency-enabled participants are visible before feature construction/configurators, duplicate preparers fail, cancellation refuses activation, and no feature effect occurs on refusal.
 - [ ] T013 Add the shared foundational project/reference and package checks in `tests/essentials/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj`, `tests/essentials/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj`, and `tests/essentials/Architecture/Elsa.Architecture.Tests.csproj` without adding EF to Modularity.Core/Nuplane or the CLI worker.
 
-**Checkpoint**: Contracts reviewed, CShells `0.0.30-preview.157` pinned, and the pure resolver plus preparation seam can be tested without a database or feature construction.
+**Checkpoint**: Contracts reviewed, CShells `0.0.30-preview.158` pinned, and the pure resolver plus preparation seam can be tested without a database or feature construction.
 
 ---
 
