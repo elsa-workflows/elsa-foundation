@@ -300,6 +300,8 @@ public sealed class NuplaneRestoreCliTests : IDisposable
         Assert.Equal(ToolExitCode.ResolutionFailure, run.ExitCode);
         Assert.Contains("restore-incomplete", run.Error, StringComparison.Ordinal);
         Assert.Contains(Module, run.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("restore-host-version-unsatisfied", run.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("restore-capability-unresolved", run.Error, StringComparison.Ordinal);
         Assert.Empty(Directory.EnumerateFileSystemEntries(output.Path));
     }
 
@@ -353,20 +355,24 @@ internal sealed class RestoreHost : IDisposable
 
     public void Dispose() => root.Dispose();
 
-    /// <summary>Writes the host's own <c>appsettings.json</c>, carrying one or more feed declarations.</summary>
-    public void Configure(string feeds) => File.WriteAllText(System.IO.Path.Join(Path, "appsettings.json"), Settings(feeds));
+    /// <summary>
+    /// Writes the host's own <c>appsettings.json</c>, carrying one or more feed declarations and, when given,
+    /// a <c>Nuplane:Capabilities</c> section (the shape spec 172 D3 defines) and a
+    /// <c>Nuplane:HostProvidedPackages</c> list — each written verbatim rather than through a helper, so a
+    /// test reads as the operator's file.
+    /// </summary>
+    public void Configure(string feeds, string? capabilities = null, string? hostProvidedPackages = null) =>
+        File.WriteAllText(System.IO.Path.Join(Path, "appsettings.json"), Settings(feeds, capabilities, hostProvidedPackages));
 
     /// <summary>Writes the <c>appsettings.&lt;environment&gt;.json</c> overlay the host would layer on top.</summary>
     public void ConfigureOverlay(string environment, string feeds) =>
         File.WriteAllText(System.IO.Path.Join(Path, $"appsettings.{environment}.json"), Settings(feeds));
 
     /// <summary>
-    /// Writes the host's own <c>appsettings.json</c> with a <c>Nuplane:Capabilities</c> section beside the
-    /// feeds — the shape spec 172 D3 defines, written verbatim rather than through a helper so a test reads
-    /// as the operator's file.
+    /// The host's own dependency file — the one the worker is launched with (<c>--depsfile</c>), and so the
+    /// one Nuplane reads the host's package versions from during a restore.
     /// </summary>
-    public void Configure(string feeds, string capabilities) =>
-        File.WriteAllText(System.IO.Path.Join(Path, "appsettings.json"), Settings(feeds, capabilities));
+    public HostDepsFile Deps => HostDepsFile.Read(Directory.EnumerateFiles(Path, "*.deps.json").Single());
 
     /// <summary>
     /// Packs the fixture module into the host's own drop folder as a real <c>.nupkg</c> — a zip carrying a
@@ -375,6 +381,14 @@ internal sealed class RestoreHost : IDisposable
     /// </summary>
     public void Feed(string packageId, string version) =>
         Pack(packageId, version, [typeof(WidgetsDbContext).Assembly.Location], capabilities: null);
+
+    /// <summary>
+    /// The fixture module packed with one nuspec dependency — the edge a module built against a newer host
+    /// declares, as <c>&lt;dependency id="…" version="…" /&gt;</c>, and the only thing Nuplane reads to decide
+    /// whether the host it lands on can satisfy it.
+    /// </summary>
+    public void FeedDependingOn(string packageId, string version, string dependencyId, string versionRange) =>
+        Pack(packageId, version, [typeof(WidgetsDbContext).Assembly.Location], capabilities: null, (dependencyId, versionRange));
 
     /// <summary>
     /// The same module packed the way a real EF module package ships since spec 172 FR-001: with a
@@ -480,7 +494,12 @@ internal sealed class RestoreHost : IDisposable
     /// declares one — a package-root <c>nuplane.json</c>, which is exactly where a real module package
     /// carries it (<c>&lt;None Update="nuplane.json" Pack="true" PackagePath="/" /&gt;</c>).
     /// </summary>
-    private void Pack(string packageId, string version, IReadOnlyList<string> assemblies, string? capabilities)
+    private void Pack(
+        string packageId,
+        string version,
+        IReadOnlyList<string> assemblies,
+        string? capabilities,
+        (string Id, string VersionRange)? dependency = null)
     {
         Directory.CreateDirectory(FeedDirectory);
         using var archive = ZipFile.Open(
@@ -497,7 +516,9 @@ internal sealed class RestoreHost : IDisposable
                      <version>{version}</version>
                      <authors>Acme</authors>
                      <description>Packed by the test that needs a feed to restore from.</description>
-                     <dependencies />
+                     {(dependency is { } edge
+                         ? $"<dependencies><dependency id=\"{edge.Id}\" version=\"{edge.VersionRange}\" /></dependencies>"
+                         : "<dependencies />")}
                    </metadata>
                  </package>
                  """);
@@ -513,11 +534,12 @@ internal sealed class RestoreHost : IDisposable
             archive.CreateEntryFromFile(assembly, $"lib/net10.0/{System.IO.Path.GetFileName(assembly)}");
     }
 
-    private static string Settings(string feeds, string? capabilities = null) =>
+    private static string Settings(string feeds, string? capabilities = null, string? hostProvidedPackages = null) =>
         $$"""
           {
             "Nuplane": {
               {{(capabilities is null ? "" : $"\"Capabilities\": {capabilities},")}}
+              {{(hostProvidedPackages is null ? "" : $"\"HostProvidedPackages\": {hostProvidedPackages},")}}
               "Setup": {
                 "Feeds": {
           {{feeds}}

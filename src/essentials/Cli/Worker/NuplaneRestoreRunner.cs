@@ -40,6 +40,14 @@ internal static class NuplaneRestoreRunner
     private const string CapabilityStagePrefix = "capability-";
 
     /// <summary>
+    /// The stage Nuplane records for a package that depends on a package the host declares it provides
+    /// (<c>Nuplane:HostProvidedPackages</c>) at a version the host's own deps file cannot satisfy. Matched
+    /// exactly rather than by prefix: it is one stage, not a family, and nothing Nuplane documents beside it
+    /// shares its leading word.
+    /// </summary>
+    private const string HostVersionUnsatisfiedStage = "host-version-unsatisfied";
+
+    /// <summary>
     /// Restores the host's package set, or reports why it did not. Failures Nuplane reports rather than
     /// throws — a degraded cycle, a failed package, a feed refused for its credentials, a store another
     /// process holds — all come back as a <see cref="RestoreOutcome"/> for the caller to refuse on.
@@ -114,17 +122,30 @@ internal static class NuplaneRestoreRunner
 
         // A capability refusal is a failed package like any other in FailedPackages, so it would be reported
         // as "this package could not be installed" — true, and useless: the package is on the feed, and what
-        // is actually missing is a decision the host has not made. The stage that says so is on the result's
-        // own Refusals, which is where it is read from.
-        var capability = CapabilityRefusals(result);
+        // is actually missing is a decision the host has not made. A host-version refusal is the same shape
+        // with a different missing thing: the package is on the feed, and what is missing is a host new
+        // enough for it. The stages that say so are on the result's own Refusals, which is where both are
+        // read from.
+        var hostVersion = Refusals(result, stage => stage == HostVersionUnsatisfiedStage);
+        var capability = Refusals(result, stage => stage.StartsWith(CapabilityStagePrefix, StringComparison.Ordinal));
+
+        // Both in one cycle is two independent faults on different packages, and fixing either one alone
+        // leaves the run refused for the other. So neither hides the other: the host-version verdict carries
+        // the capability refusals beside its own. It is the one that leads because it is the one no
+        // configuration key can fix — it takes another host or another pin.
+        if (hostVersion.Count > 0)
+            return RestoreOutcome.HostVersionUnsatisfied(hostVersion, capability, result.StateFilePath, result.InstallRoot);
+
         return capability.Count > 0
             ? RestoreOutcome.CapabilityRefused(capability, result.StateFilePath, result.InstallRoot)
             : RestoreOutcome.Degraded([.. result.FailedPackages], result.StateFilePath, result.InstallRoot);
     }
 
     /// <summary>
-    /// Every <c>capability-*</c> refusal this cycle recorded, as Nuplane worded it. Nuplane's own messages
-    /// name the capability, every declared option and the configuration key, so they are carried verbatim
+    /// Every refusal this cycle recorded under a stage <paramref name="stage"/> accepts, as Nuplane worded
+    /// it. Nuplane's own messages already name what the operator acts on — for a capability, the capability,
+    /// every declared option and the configuration key; for a host version, the dependent package, the
+    /// dependency, the range it requires and the version the host provides — so they are carried verbatim
     /// rather than restated in worse words by a tool that knows less about the closure than the cycle did.
     /// </summary>
     /// <remarks>
@@ -142,10 +163,10 @@ internal static class NuplaneRestoreRunner
     /// one read either way.
     /// </para>
     /// </remarks>
-    private static IReadOnlyList<string> CapabilityRefusals(NuplaneRestoreResult result) =>
+    private static IReadOnlyList<string> Refusals(NuplaneRestoreResult result, Func<string, bool> stage) =>
     [
         .. result.Refusals
-            .Where(refusal => refusal.Stage.StartsWith(CapabilityStagePrefix, StringComparison.Ordinal))
+            .Where(refusal => stage(refusal.Stage))
             .OrderBy(refusal => refusal.PackageId, StringComparer.OrdinalIgnoreCase)
             .Select(refusal => $"{refusal.PackageId} ({refusal.Stage}): {refusal.Message}")
     ];

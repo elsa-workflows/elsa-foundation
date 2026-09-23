@@ -124,7 +124,10 @@ The dependency walk skips anything `IsHostProvidedDependency` believes the host 
    `Elsa.Resilience`, `Elsa.Resilience.Core`, `Elsa.Tenants`, `Elsa.Workflows.Core`,
    `Elsa.Workflows.Management`, `Elsa.Workflows.Runtime`), and the whole `Microsoft.Extensions.` prefix.
    That fixed list is gone; a host that needs any of those ids treated as already-supplied now has to
-   name them under `Nuplane:HostProvidedPackages`.
+   name them under `Nuplane:HostProvidedPackages`. A declared package is never acquired, but since
+   `0.0.11-preview.93` it is no longer skipped blindly either: when the host's own `*.deps.json` carries
+   it at a version outside the dependency's range, the dependent package is refused — see
+   [What fails loudly](#what-fails-loudly).
 2. Anything present in the host's own `*.deps.json` at a version satisfying the range — unchanged by
    `#90`, and still independent of rule 1.
 
@@ -142,9 +145,19 @@ Shell 'default' requested 1 feature(s) that are not available: WorkflowsRuntimeE
 
 Rule 2 has a subtler edge: a package genuinely in the host's `deps.json` is correctly not downloaded,
 but it is loaded in the host's default context. A feed package only sees it if it is also listed in
-`Nuplane:Loading:SharedAssemblies` — acquisition-skipping and assembly-sharing are two separate lists
-that are not kept in step. `NativeEndpoints` behaves this way, and a feature depending on it fails
-with `FeatureNotFoundException` rather than a missing-file error.
+`Nuplane:Loading:SharedAssemblies` — acquisition-skipping and assembly-sharing are two separate lists,
+and Nuplane does not keep them in step. `NativeEndpoints` behaves this way, and a feature depending on it
+fails with `FeatureNotFoundException` rather than a missing-file error.
+
+The reverse direction is kept in step by this repository instead. A shared assembly always resolves to
+the host's copy, whatever version the feed package was built against, so each host's
+`appsettings.json` also declares, under `Nuplane:HostProvidedPackages`, the package of every assembly it
+lists in `Nuplane:Loading:SharedAssemblies` — restating Nuplane's two defaults, because a configured list
+replaces them. `HostProvidedPackagesGuardTests` (`tests/essentials/Architecture`) fails the build when a
+shared assembly's package is not declared. The declaration is what makes the version check apply: a feed
+package that needs a newer version of a declared package than the host's `deps.json` carries is refused
+at reconciliation (see [What fails loudly](#what-fails-loudly)) instead of being bound to the older copy
+and failing later at a missing member.
 
 Neither case is caught by the version range or the lock file, because nothing was resolved to check.
 
@@ -404,8 +417,65 @@ reports `IsDegraded=True` with the package in `FailedPackages`, and the state fi
 reason under `lastFailureById`. That is the loud failure to look for; a degraded cycle means the
 feed was reached and the package was not there.
 
+A package that needs a **newer host than the one running** is refused at reconciliation rather than
+loaded (since Nuplane `0.0.11-preview.93`, [valence-works/nuplane#100](https://github.com/valence-works/nuplane/pull/100)).
+It happens when the package, or a package in its closure, depends on a package the host declares under
+`Nuplane:HostProvidedPackages`, and the host's own `*.deps.json` carries that package at a version
+outside the range the dependency requires — a module built against `Elsa.Workflows.Core [4.1.0, 5.0.0)`
+on a host whose deps file carries `4.0.0`, with `Elsa.` declared. A declared package is never acquired,
+so there is no newer copy for Nuplane to fetch; loading the module anyway would bind it to the older
+assembly, and the failure would surface much later as a missing member at the point of use. Instead the
+module, and every root whose closure reaches it, is refused under stage `host-version-unsatisfied`, and
+every other root still applies. The host's log carries one Warning per refused package (event 1034,
+category `Nuplane.Observability.ReconciliationLogger`):
+
+```
+Host-provided dependency version refused [CorrelationId=…, PackageId=Acme.Widgets]:
+  Package 'Acme.Widgets@1.4.2' requires 'Elsa.Workflows.Core [4.1.0, 5.0.0)', but the host provides
+  'Elsa.Workflows.Core 4.0.0'. …
+```
+
+The cycle is degraded like any other failed package, the state file records the stage and message under
+`lastFailureById`, and `Reconciliation:StartupFailurePolicy` decides what that means for startup.
+`dotnet elsa persistence --restore` refuses the same case by name (exit 3,
+`restore-host-version-unsatisfied`), carrying Nuplane's message verbatim; when the same cycle also refused
+a module for an unselected provider engine, that refusal is listed beside it under its own `capability-*`
+stage rather than left for the next run to find. The fix is one of two, and never a configuration key: run
+a host at or above the version the module requires, or pin the module to a version whose requirement this
+host satisfies.
+
+The check needs a version to compare against. A declared package the host's deps file does not carry at
+all — a prefix entry such as `Elsa.` on a host that compiles in no Elsa feature — is still trusted as
+supplied, and each such dependency is logged as a Warning (event 1035) naming the dependent package, the
+dependency and the range, so it is visible rather than silent. An *undeclared* package the host carries at
+an unsatisfying version is not refused either: it is acquired from the feed like any other dependency.
+
 What is not loud is the wildcard case above, because a pattern that matches nothing is
 indistinguishable from a feed that was asked for nothing.
+
+## Hot reload is a Foundation.Host behavior, not a product one
+
+`Elsa.Foundation.Host` picks up a newly reconciled package without a restart.
+`ShellReloadOnPackagesChanged` (`src/apps/Elsa.Foundation.Host/Shells/ShellReloadOnPackagesChanged.cs`)
+is registered as a Nuplane observer in `src/apps/Elsa.Foundation.Host/Program.cs`, and when a
+reconciliation cycle completes — not when packages land on disk, which is before their assemblies are
+loaded — it refreshes the CShells runtime feature catalog and reloads every active shell. It is on unless
+`Elsa:Shells:ReloadOnPackageChange` is set to `false`, and it does nothing until a shell is active, so the
+startup cycle is left to ordinary shell activation. A reload failure is logged and the new assemblies
+apply at the next restart. The bridge performs no compatibility check of its own: it reloads whatever the
+cycle applied, which is why the refusal above has to happen at reconciliation — a refused package is
+never applied, so there is nothing for the reload to pick up.
+
+`Elsa.Workbench` does not do this. Its `Program.cs` composes Nuplane with no reconciliation observer, and
+registers `NullShellReloader` (`src/apps/Elsa.Workbench/Modularity/NullShellReloader.cs`) as its
+host-level `IShellReloader` — a no-op that reports zero shells reloaded. A package the directory watcher
+or the `/_elsa/module-management` upload and reconcile endpoints bring in is reconciled and loaded, but
+the running shells keep the feature set they were built with; those endpoints answer
+`"RequiresReload": true` to say so. The new package takes effect at the next restart. The one exception
+is a shell that enables the `ModularityApi` feature: it replaces `NullShellReloader` inside that shell
+with a reloader that does reload it, so a feature change applied through that shell's module API also
+refreshes the feature catalog and rebuilds that one shell. That is a side effect of applying feature
+configuration, not a response to reconciliation.
 
 ## Related
 
