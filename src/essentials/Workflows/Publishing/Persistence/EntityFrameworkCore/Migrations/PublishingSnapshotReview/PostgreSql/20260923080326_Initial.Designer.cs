@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.PublishingSnapshotReview.PostgreSql
 {
     [DbContext(typeof(PublishingSnapshotReviewPostgreSqlDbContext))]
-    [Migration("20260918220427_Initial")]
+    [Migration("20260923080326_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -189,6 +189,12 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
+
                     b.Property<string>("TenantId")
                         .HasMaxLength(1200)
                         .HasColumnType("character varying(1200)")
@@ -299,6 +305,12 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<string>("Status")
                         .IsRequired()

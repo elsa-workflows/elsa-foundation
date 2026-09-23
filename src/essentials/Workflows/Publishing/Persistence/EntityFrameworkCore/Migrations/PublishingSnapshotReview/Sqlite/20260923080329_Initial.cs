@@ -64,6 +64,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     TenantIdHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     DefaultAction = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
                     DefaultSlotName = table.Column<string>(type: "TEXT", maxLength: 1200, nullable: false),
+                    SchemaVersion = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
                     Revision = table.Column<long>(type: "INTEGER", nullable: false),
                     UpdatedAtUtcTicks = table.Column<long>(type: "INTEGER", nullable: false),
                     UpdatedAtOffsetMinutes = table.Column<int>(type: "INTEGER", nullable: false)
@@ -94,6 +95,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     LastFailureMessage = table.Column<string>(type: "TEXT", maxLength: 1368, nullable: true),
                     TenantId = table.Column<string>(type: "TEXT", maxLength: 1200, nullable: true),
                     TenantIdHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
+                    SchemaVersion = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
                     Revision = table.Column<long>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>

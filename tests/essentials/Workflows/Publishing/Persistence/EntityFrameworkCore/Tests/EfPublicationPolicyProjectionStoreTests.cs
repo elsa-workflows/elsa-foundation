@@ -257,6 +257,7 @@ public sealed class EfPublicationPolicyProjectionStoreTests
             Status = nameof(PublicationProjectionIntentStatus.Pending),
             TenantId = "tenant-a",
             TenantIdHash = EfRelationalIdentity.Hash("tenant-a"),
+            SchemaVersion = PublishingPolicyProjectionEfModule.SchemaVersion,
             Revision = 1
         });
         await context.SaveChangesAsync();
@@ -283,6 +284,74 @@ public sealed class EfPublicationPolicyProjectionStoreTests
 
         await using var verify = database.Context();
         Assert.Equal("original", (await database.Policies(verify, "tenant-a").FindAsync("zombie"))!.DefaultSlotName);
+    }
+
+    [Fact]
+    public async Task Policy_rows_written_by_another_module_version_report_skew_not_corruption()
+    {
+        await using var database = await Database.CreateAsync();
+        await using (var setup = database.Context())
+        {
+            var store = database.Policies(setup, "tenant-a");
+            Assert.True((await store.TrySaveAsync(Policy("readable", "slot"), 0)).Succeeded);
+            Assert.True((await store.TrySaveAsync(Policy("drift-schema", "slot"), 0)).Succeeded);
+            // A second write takes the update path, which has to stamp the column too.
+            Assert.True((await store.TrySaveAsync(Policy("readable", "updated-slot"), 1)).Succeeded);
+        }
+
+        await using var context = database.Context();
+        Assert.Equal([PublishingPolicyProjectionEfModule.SchemaVersion],
+            await context.Policies.AsNoTracking().Select(row => row.SchemaVersion).Distinct().ToArrayAsync());
+        await context.Policies
+            .Where(row => row.WorkflowDefinitionId == EfRelationalIdentity.Encode("drift-schema"))
+            .ExecuteUpdateAsync(row => row.SetProperty(x => x.SchemaVersion, "2.0.0"));
+
+        await using var verify = database.Context();
+        var store2 = database.Policies(verify, "tenant-a");
+        // Stamping is what makes the refusal meaningful: an unmolested row still round-trips.
+        Assert.Equal("updated-slot", (await store2.FindAsync("readable"))!.DefaultSlotName);
+        await AssertSkewAsync(() => store2.FindAsync("drift-schema").AsTask(), "2.0.0");
+    }
+
+    [Fact]
+    public async Task Projection_intent_rows_written_by_another_module_version_report_skew_not_corruption()
+    {
+        await using var database = await Database.CreateAsync();
+        var readable = Intent("readable", "publication-1");
+        await using (var setup = database.Context())
+        {
+            var store = database.Intents(setup, "tenant-a");
+            await store.SaveAsync(readable);
+            await store.SaveAsync(Intent("drift-schema", "publication-1"));
+            // A transition takes the update path, which has to stamp the column too.
+            Assert.True((await store.TryTransitionAsync(
+                readable with { Status = PublicationProjectionIntentStatus.Delivering, AttemptCount = 1 },
+                PublicationProjectionIntentStatus.Pending)).Succeeded);
+        }
+
+        await using var context = database.Context();
+        Assert.Equal([PublishingPolicyProjectionEfModule.SchemaVersion],
+            await context.ProjectionIntents.AsNoTracking().Select(row => row.SchemaVersion).Distinct().ToArrayAsync());
+        await context.ProjectionIntents
+            .Where(row => row.IntentId == EfRelationalIdentity.Encode("drift-schema"))
+            .ExecuteUpdateAsync(row => row.SetProperty(x => x.SchemaVersion, "2.0.0"));
+
+        await using var verify = database.Context();
+        var store2 = database.Intents(verify, "tenant-a");
+        // Stamping is what makes the refusal meaningful: an unmolested row still round-trips.
+        Assert.Equal(PublicationProjectionIntentStatus.Delivering, (await store2.FindAsync("readable"))!.Status);
+        await AssertSkewAsync(() => store2.FindAsync("drift-schema").AsTask(), "2.0.0");
+        await AssertSkewAsync(() => store2.ListByPublicationAsync("publication-1").AsTask(), "2.0.0");
+    }
+
+    private static async Task AssertSkewAsync(Func<Task> read, string found)
+    {
+        // A version this build does not run wrote the row. Nothing is damaged, so reporting it as
+        // corruption would send an operator looking for data damage that does not exist (ADR 0077).
+        var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(read);
+        Assert.Equal("PublishingPolicyProjection", skew.Module);
+        Assert.Equal(found, skew.Found);
+        Assert.Equal(PublishingPolicyProjectionEfModule.SchemaVersion, skew.Expected);
     }
 
     private static PublicationPolicy Policy(string? definitionId, string slot) =>

@@ -195,6 +195,7 @@ public sealed class EfPublicationProjectionIntentStore(
             LastFailureMessage = intent.LastFailure is null ? null : EfPublishingStoreSupport.Encode(intent.LastFailure.Message),
             TenantId = EfPublishingStoreSupport.EncodeNullable(tenantId),
             TenantIdHash = EfPublishingStoreSupport.TenantHash(tenantId),
+            SchemaVersion = PublishingPolicyProjectionEfModule.SchemaVersion,
             Revision = 1
         };
     }
@@ -208,11 +209,15 @@ public sealed class EfPublicationProjectionIntentStore(
         row.NextAttemptAtOffsetMinutes = next.NextAttemptAtOffsetMinutes;
         row.LastFailureCode = next.LastFailureCode;
         row.LastFailureMessage = next.LastFailureMessage;
+        row.SchemaVersion = next.SchemaVersion;
         row.Revision = checked(row.Revision + 1);
     }
 
     private static PublicationProjectionIntent ToModel(PublicationProjectionIntentEntity row)
     {
+        // Whether this build can read the row at all is settled before whether the row is consistent:
+        // a row written by another module version may legitimately fail checks that describe this shape.
+        EfSchemaVersion.EnsureReadable("PublishingPolicyProjection", row.SchemaVersion, PublishingPolicyProjectionEfModule.SchemaVersion);
         var intentId = EfPublishingStoreSupport.DecodeIdentity(row.IntentId, nameof(row.IntentId));
         var publicationId = EfPublishingStoreSupport.DecodeIdentity(row.PublicationId, nameof(row.PublicationId));
         var projectionKind = EfPublishingStoreSupport.DecodeIdentity(row.ProjectionKind, nameof(row.ProjectionKind));

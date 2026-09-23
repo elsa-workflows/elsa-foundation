@@ -1,7 +1,9 @@
 ---
 status: proposed
 date: 2026-09-22
+amended: 2026-09-23
 decision_context: Questions raised at the 2026-09-21 demo and relayed in the Teams thread on this programme; decided by Sipke Schoorstra on issues #1945, #1946 and #1947, which record the options and the evidence behind each.
+amendment_context: the fifteenth module's declared schema version was wired up — stamped on write and checked first on read in the publication-policy and projection-intent stores — so every count of checking read paths in this ADR now reads fifteen rather than fourteen.
 ---
 
 # A module upgrades in place only when its persisted schema is unchanged
@@ -19,15 +21,20 @@ over time.
 and two mechanisms that enforce it by accident rather than by design.
 
 **A version a reader does not recognise is reported as corruption.** Fifteen EF modules declare a
-schema-version constant. Fourteen check it on a read path: twelve runtime modules
+schema-version constant, and all fifteen now check it on a read path: twelve runtime modules
 (`BookmarkStateEfModule`, `RuntimeActivationSlotEfModule`, `RuntimeActivityExecutionEfModule`,
 `RuntimeArtifactEfModule`, `RuntimeOperationalStateEfModule`, `RuntimePostCommitOutboxEfModule`,
 `RuntimeSchedulerPoisonEfModule`, `RuntimeTriggerBindingEfModule`, `RuntimeWorkflowAlterationEfModule`,
 `RuntimeWorkflowDispatchEfModule`, `RuntimeWorkflowExecutionEfModule`, `RuntimeWorkflowTestScopeEfModule`),
-plus `PublishingLedgerEfModule.ContentSchemaVersion` and `Elsa3ImportEfModule`. All are `1.0.0` except
-`ContentSchemaVersion`, which is `1`. The fifteenth, `PublishingPolicyProjectionEfModule.SchemaVersion`,
-is declared but neither written nor read, so those tables carry no version at all. The field is checked
-for equality **alongside hash and order-key integrity checks**:
+plus `PublishingLedgerEfModule.ContentSchemaVersion`, `Elsa3ImportEfModule` and
+`PublishingPolicyProjectionEfModule.SchemaVersion`. All are `1.0.0` except `ContentSchemaVersion`,
+which is `1`. Only fourteen checked it when this ADR was written: the fifteenth,
+`PublishingPolicyProjectionEfModule.SchemaVersion`, was declared but neither written nor read, so
+`elsa_publication_policies` and `elsa_publication_projection_intents` carried no version column at all
+and a newer version's rows were read as if this build had written them. That gap was closed by wiring
+the constant up — the column is now stamped on every write and checked first on every read — rather
+than by deleting the constant, which would have left the two tables permanently unversioned. The field
+is checked for equality **alongside hash and order-key integrity checks**:
 
 ```csharp
 if (row.Revision <= 0 || row.SchemaVersion != RuntimeOperationalStateEfModule.SchemaVersion)
@@ -73,7 +80,7 @@ normally, and resumption across pods works, because persisted runtime state is g
 independent release.
 
 **Additive-only within a major is the stated destination, not this decision.** Reaching it means
-changing fourteen modules' read paths and splitting `SchemaVersion` into envelope integrity and a
+changing fifteen modules' read paths and splitting `SchemaVersion` into envelope integrity and a
 readable range, so that a reader tolerates unknown columns and refuses only an unrecognised major.
 
 ## How this composes with runtime module installation
@@ -106,7 +113,7 @@ ragged activation is harmless and runtime installation works on a cluster.
 ## Considered options
 
 - **Additive-only within a major, now.** The end state, and what independent release means to an
-  operator. Rejected as immediate work, not as a destination: it changes fourteen modules' read paths
+  operator. Rejected as immediate work, not as a destination: it changes fifteen modules' read paths
   and the meaning of a field, which is a larger change than the rule it would support.
 - **Detect and refuse, permanently.** Every schema change coordinated, forever. Rejected because it
   permanently caps what independent release can promise, and the ragged-activation gap above shows the

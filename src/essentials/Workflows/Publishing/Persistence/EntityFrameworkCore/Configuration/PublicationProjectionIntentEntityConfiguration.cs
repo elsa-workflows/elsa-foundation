@@ -25,6 +25,7 @@ public sealed class PublicationProjectionIntentEntityConfiguration : IEntityType
         builder.Property(row => row.LastFailureMessage).HasMaxLength(PublishingPolicyProjectionEfModule.EncodedFailureMessageMaximumLength);
         builder.Property(row => row.TenantId).HasMaxLength(PublishingPolicyProjectionEfModule.EncodedIdentityMaximumLength);
         builder.Property(row => row.TenantIdHash).HasMaxLength(PublishingPolicyProjectionEfModule.HashMaximumLength).IsRequired();
+        builder.Property(row => row.SchemaVersion).HasMaxLength(PublishingPolicyProjectionEfModule.SchemaVersionMaximumLength).IsRequired();
         builder.Property(row => row.Revision).IsConcurrencyToken().IsRequired();
 
         // Raw residuals are intentionally excluded: MySQL's composite index budget is provider
