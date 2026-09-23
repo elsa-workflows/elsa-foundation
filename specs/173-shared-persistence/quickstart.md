@@ -58,6 +58,10 @@ T006 remains open while the configuration-source boundary is reviewed. `IConfigu
 
 A full local architecture-suite attempt reported 243 passed and 15 EF dependency-guard failures. A targeted rerun showed those guards need evaluated Debug and Release assets from a full `Elsa.Server.slnx` restore, which this worktree does not have. The four architecture checks addressing the previous hosted failure passed locally. The fresh hosted CI run is the remaining full-gate evidence; the local full-suite attempt is not reported as green.
 
+## T007 provider-neutral seam checkpoint (2026-09-23)
+
+`IFeatureActivationContextPreparer` now expresses a single replacement preparation call using the existing `FeatureActivationContext` and `FeatureActivationRefusedException` contract. `LegacyFeatureActivationContextPreparer` returns the same context for legacy compositions and honors cancellation; it carries no EF types. `dotnet build src/essentials/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj --no-restore --verbosity quiet` succeeded with zero warnings/errors. Registration and mandatory invocation before ordinary guards are T027-T028 and are not claimed here.
+
 ## What success must prove
 
 The shared layout selects one named PostgreSQL resource for every enabled enrolled Runtime, Workflows Design, Activities Design and Publishing consumer. The diagnostics layout selects a second named resource for both Structured Logs and OpenTelemetry while leaving the primary consumers on their original target. The first slice does not redirect host-owned OpenIddict, private stores, or unknown persistence consumers ([spec](spec.md#normative-supported-participants-and-constraints)).
