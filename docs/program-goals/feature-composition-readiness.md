@@ -38,9 +38,9 @@ The [program issue](https://github.com/elsa-workflows/elsa-foundation/issues/195
 
 ## Active Objectives
 
-The initial backlog was published on 2026-09-23. Program execution began with discovery #1965; no production implementation has started. Consult the linked issues/project for current execution state.
+The initial backlog was published on 2026-09-23. Discovery #1965/#1966 is complete. The generic lifecycle prerequisite [CShells #134](https://github.com/valence-works/cshells/issues/134) is delivered and its published package is verified; #1967 is completing the first persistence specification. Elsa resource-mode implementation has not started. Consult the linked issues/project for current execution state.
 
-1. Discover supported persistence boundaries in [#1965](https://github.com/elsa-workflows/elsa-foundation/issues/1965), then the shared runtime/tooling resolution path in [#1966](https://github.com/elsa-workflows/elsa-foundation/issues/1966). These are the only initially ready leaves.
+1. Discover supported persistence boundaries in [#1965](https://github.com/elsa-workflows/elsa-foundation/issues/1965), then the shared runtime/tooling resolution path in [#1966](https://github.com/elsa-workflows/elsa-foundation/issues/1966). Both discovery leaves are complete; their reports ground the specification.
 2. Reconcile the evidence and specify the bounded delivery slice in [#1967](https://github.com/elsa-workflows/elsa-foundation/issues/1967), using both reviewed spike results. Closing a spike with unknowns does not automatically make implementation ready.
 3. Deliver the shared persistence path in [#1968](https://github.com/elsa-workflows/elsa-foundation/issues/1968), then a proven diagnostics override in [#1969](https://github.com/elsa-workflows/elsa-foundation/issues/1969). Both stories are initially blocked and require specification refinement.
 4. Refine later epic outlines only when their contracts and evidence are concrete. Keep one active integration lane and synchronize issue comments, labels, and project readiness when work changes state.

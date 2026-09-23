@@ -4,7 +4,7 @@
 
 **Input**: specification #1967 / `specs/173-shared-persistence/spec.md`.
 
-**Status**: Phase 0 research in progress. Not approved for Elsa implementation. The owner approved bounded strict target verification on 2026-09-23. Phase 1 contracts and the task breakdown remain to be designed and reviewed; upstream publication is pending.
+**Status**: Phase 0 research in progress. Not approved for Elsa implementation. The owner approved bounded strict target verification on 2026-09-23. Phase 1 contracts and the task breakdown remain to be designed and reviewed; the upstream prerequisite is published and verified as `0.0.30-preview.157`.
 
 ## Summary
 
@@ -81,11 +81,11 @@ specs/173-shared-persistence/
 
 [R1-R5](research.md) record ownership, lifecycle, management, tooling and evidence. R2 is resolved into an upstream prerequisite. R3 selects explicit pre-mutation refusal in the legacy feature editor for resource-mode compositions while retaining file/shell reload; resource-aware operations remain required under #1964.
 
-R4 now has the owner decision. Finish and review the explicit host-context input and negotiated tooling protocol before publishing #1968 as implementable. CShells #134 remains the single active delivery leaf through review and publication; resume this specification as the next delivery item afterward.
+R4 now has the owner decision. Finish and review the explicit host-context input and negotiated tooling protocol before publishing #1968 as implementable. CShells #134 is complete with published-package verification. This specification is now the single active delivery item.
 
 ## Delivery and validation gates
 
-1. Deliver and publish CShells #134 with focused ordering, refusal, invariant and reload evidence. Pin it in Elsa when integrating #1968.
+1. **Done:** CShells #134 merged and `0.0.30-preview.157` was published and verified through an isolated package consumer. Pin it in Elsa when integrating #1968.
 2. Finish the authored configuration, input-context, redacted plan and tooling contracts after R4. Review against every FR/SC and both existing stories; produce bounded tasks using the normal Spec Kit flow.
 3. Deliver #1968 as the shared runtime/database/tooling path, including legacy checks and preflight refusals. Follow with #1969's actual two-target proof and negative layouts.
 4. Run focused component/architecture tests and applicable backend end-to-end journeys. Refresh/check generated maps only when authoritative inputs change; required CI and review must pass before merge. Do not infer a full host result from a pure resolver test.
