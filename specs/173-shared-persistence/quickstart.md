@@ -98,6 +98,16 @@ dotnet test tests/essentials/Persistence/EntityFramework/Tests/Elsa.Persistence.
 
 The full EF test project passed 325/325 with zero skips. The focused architecture suite passed 40/40 with zero skips after the reviewed source inventory was updated; maps and solution filters were refreshed for the added test-project references. T014 is complete; runtime data and tooling parity remain open.
 
+## T015 live shared-layout checkpoint (2026-09-24)
+
+The disposable PostgreSQL Workbench fixture now runs a real authenticated HTTP journey against one selected resource: create and publish a reusable activity in Activities Design, submit and publish a workflow that uses it, execute it to completion, then restart Workbench in a fresh process directory and read the completed execution, workflow version, and activity definition again. Direct PostgreSQL checks find persisted rows in the primary target's Activities Design, Workflows Design, Publishing, and Runtime tables. The diagnostics target has none of those four module migration histories. This proves data placement and restart for this representative path; it does not prove all feature families, resource-aware migration tooling, or a separate diagnostics binding.
+
+```bash
+dotnet test tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Tests/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj --no-restore --logger 'console;verbosity=quiet' -p:WarningLevel=0
+```
+
+The full shared-resource fixture project passed 4/4 with zero skips against disposable PostgreSQL. T015 remains open for its requested module-level tests and broader behavior coverage; T024's documented standalone e2e and tooling-agreement receipt remain open.
+
 ## What success must prove
 
 The shared layout selects one named PostgreSQL resource for every enabled enrolled Runtime, Workflows Design, Activities Design and Publishing consumer. The diagnostics layout selects a second named resource for both Structured Logs and OpenTelemetry while leaving the primary consumers on their original target. The first slice does not redirect host-owned OpenIddict, private stores, or unknown persistence consumers ([spec](spec.md#normative-supported-participants-and-constraints)).

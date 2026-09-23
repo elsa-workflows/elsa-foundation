@@ -1,0 +1,210 @@
+using System.Net.Http.Json;
+using System.Text.Json.Nodes;
+using Elsa.Workbench.Tests;
+using Npgsql;
+using Xunit;
+
+namespace Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests;
+
+[Collection(PostgreSqlTargetFixture.CollectionName)]
+public sealed class SharedPersistenceJourneyTests(PostgreSqlTargetFixture targets)
+{
+    [SkippableFact]
+    public async Task Shared_resource_preserves_reusable_activity_published_workflow_and_execution_after_restart()
+    {
+        Skip.IfNot(targets.IsAvailable, targets.SkipReason ?? "Docker/PostgreSQL unavailable.");
+
+        await using var host = new SharedPersistenceHostFixture(targets, SharedPersistenceHostFixture.PrimaryResourceSettings());
+        await host.StartAsync();
+        var client = host.Process.Client;
+        await SignInAsync(client);
+
+        var writeLineId = await ActivityVersionIdAsync(client, "Elsa.Activities.Primitives.Activities.WriteLine");
+        var sequenceId = await ActivityVersionIdAsync(client, "Elsa.Activities.Sequence.Activities.Sequence");
+        var marker = $"shared-resource-{Guid.NewGuid():N}";
+        var reusable = await PublishReusableActivityAsync(client, marker, sequenceId, writeLineId);
+        var submitted = await PostAsync(client, "design/workflows/definitions/submit", new
+        {
+            name = marker,
+            description = "Shared persistence resource restart proof",
+            state = new
+            {
+                variables = Array.Empty<object>(),
+                inputs = Array.Empty<object>(),
+                outputs = Array.Empty<object>(),
+                workflowActivityOptions = (object?)null,
+                strategyOptions = (object?)null,
+                rootActivity = ActivityNode(reusable.VersionId)
+            }
+        });
+        var versionId = Required(submitted, "version", "id");
+        var published = await PostAsync(client, $"publishing/workflows/{versionId}/publish", new { });
+        var artifactId = Required(published, "artifactId");
+        var sourceReferenceId = Required(published, "sourceReferenceId");
+        var started = await PostAsync(client, $"runtime/workflows/executables/{artifactId}/execute",
+            new { sourceReferenceId });
+        var executionId = Required(started, "workflowExecutionId");
+        var completed = await WaitForCompletionAsync(client, executionId);
+        Assert.Contains((string?)completed["instance"]?["status"], new[] { "Completed", "Finished" });
+        Assert.Contains(completed["activities"]!.AsArray(), activity =>
+            StringComparer.OrdinalIgnoreCase.Equals((string?)activity?["activityType"], reusable.TypeKey) &&
+            (string?)activity?["status"] is "Completed" or "Finished");
+
+        await host.RestartAsync();
+        client = host.Process.Client;
+        await SignInAsync(client);
+        var persisted = await GetAsync(client, $"runtime/workflows/instances/{executionId}");
+        Assert.Contains((string?)persisted["instance"]?["status"], new[] { "Completed", "Finished" });
+        var persistedVersion = await GetAsync(client, $"design/workflows/versions/{versionId}");
+        Assert.NotNull(persistedVersion);
+        var activityCatalog = await GetAsync(client, $"design/activities/definitions?search={Uri.EscapeDataString(marker)}");
+        Assert.Contains(activityCatalog["items"]!.AsArray(), item =>
+            StringComparer.Ordinal.Equals((string?)item?["definition"]?["definitionId"], reusable.DefinitionId) &&
+            StringComparer.Ordinal.Equals((string?)item?["definition"]?["headVersionId"], reusable.VersionId));
+
+        await using var primary = new NpgsqlConnection(targets.PrimaryConnectionString);
+        await primary.OpenAsync();
+        foreach (var table in new[]
+                 {
+                     "elsa_activity_definitions",
+                     "elsa_workflow_definitions_v2",
+                     "elsa_publication_records",
+                     "elsa_runtime_workflow_execution_state"
+                 })
+        {
+            await using var count = primary.CreateCommand();
+            count.CommandText = $"SELECT COUNT(*) FROM \"{table}\"";
+            Assert.True((long)(await count.ExecuteScalarAsync())! > 0, $"{table} has no persisted rows on the shared target.");
+        }
+
+        await using var diagnostics = new NpgsqlConnection(targets.DiagnosticsConnectionString);
+        await diagnostics.OpenAsync();
+        await using var check = diagnostics.CreateCommand();
+        check.CommandText = "SELECT COUNT(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public' AND tablename IN ('__EFMigrationsHistory_ElsaRuntime', '__EFMigrationsHistory_ElsaWorkflowsDesign', '__EFMigrationsHistory_ElsaActivitiesDesign', '__EFMigrationsHistory_ElsaPublishingSnapshotReview')";
+        Assert.Equal(0L, await check.ExecuteScalarAsync());
+    }
+
+    private static object ActivityNode(string versionId, string? text = null) => new
+    {
+        nodeId = "root",
+        activityVersionId = versionId,
+        inputs = text is null ? Array.Empty<object>() : new object[]
+        {
+            new
+            {
+                referenceKey = "text",
+                value = new { value = text, expressionType = "Literal" },
+                autoEvaluate = (object?)null,
+                evaluatorType = (object?)null,
+                storageDriverType = (object?)null,
+                isSensitive = (object?)null
+            }
+        },
+        outputs = Array.Empty<object>()
+    };
+
+    private static async Task<ReusablePublication> PublishReusableActivityAsync(
+        HttpClient client, string marker, string sequenceId, string writeLineId)
+    {
+        var manifest = new
+        {
+            variables = Array.Empty<object>(),
+            rootActivity = new
+            {
+                nodeId = "graph-root",
+                activityVersionId = sequenceId,
+                inputs = Array.Empty<object>(),
+                outputs = Array.Empty<object>(),
+                structure = new
+                {
+                    kind = "elsa.sequence.structure",
+                    schemaVersion = "1.0.0",
+                    payload = new { activities = new[] { ActivityNode(writeLineId, marker) } }
+                }
+            },
+            outputMappings = Array.Empty<object>()
+        };
+        var created = await PostAsync(client, "design/activities/definitions", new
+        {
+            category = "QaReusable",
+            displayName = marker,
+            description = "Shared persistence resource restart proof",
+            provider = new { providerKey = "elsa.activity-graph", schemaVersion = "1", payload = manifest },
+            contract = new
+            {
+                contractSchemaVersion = "1",
+                inputs = Array.Empty<object>(),
+                outputs = Array.Empty<object>(),
+                outcomes = new[] { new { referenceKey = "done", name = "Done", isEmitted = true } }
+            },
+            layout = Array.Empty<object>()
+        });
+        var draftId = Required(created, "draft", "draftId");
+        var revision = (long)created["draft"]!["revision"]!;
+        var preflight = await PostAsync(client, $"design/activities/drafts/{draftId}/publication-preflight",
+            new { expectedDraftRevision = revision, expectedDefinitionHeadVersionId = (string?)null });
+        Assert.True((bool)preflight["isPublishable"]!);
+        var published = await PostAsync(client, $"design/activities/drafts/{draftId}/publish", new
+        {
+            expectedDraftRevision = (long)preflight["draftRevision"]!,
+            expectedDefinitionHeadVersionId = (string?)preflight["definitionHeadVersionId"],
+            version = Required(preflight, "reviewedVersion"),
+            reviewToken = Required(preflight, "reviewToken"),
+            idempotencyKey = Guid.NewGuid().ToString()
+        });
+        Assert.Equal("Applied", (string?)published["status"]);
+        return new ReusablePublication(
+            Required(created, "definition", "definitionId"),
+            Required(created, "definition", "activityTypeKey"),
+            Required(published, "outcome", "definitionVersionId"));
+    }
+
+    private static async Task SignInAsync(HttpClient client)
+    {
+        await PostAsync(client, "_elsa/identity/login", new { username = "admin", password = "Password123!" });
+    }
+
+    private static async Task<string> ActivityVersionIdAsync(HttpClient client, string typeKey)
+    {
+        var catalog = await GetAsync(client, $"design/activities/definitions?search={Uri.EscapeDataString(typeKey)}");
+        var item = catalog["items"]?.AsArray().FirstOrDefault(x =>
+            StringComparer.Ordinal.Equals((string?)x?["definition"]?["activityTypeKey"], typeKey));
+        return Required(item, "definition", "headVersionId");
+    }
+
+    private static async Task<JsonNode> WaitForCompletionAsync(HttpClient client, string executionId)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
+        do
+        {
+            var result = await GetAsync(client, $"runtime/workflows/instances/{executionId}");
+            if ((string?)result["instance"]?["status"] is "Completed" or "Finished" or "Faulted" or "Cancelled")
+                return result;
+            await Task.Delay(500);
+        } while (DateTimeOffset.UtcNow < deadline);
+        throw new TimeoutException("The shared-resource workflow did not reach a terminal state.");
+    }
+
+    private static async Task<JsonNode> GetAsync(HttpClient client, string path)
+    {
+        using var response = await client.GetAsync(path);
+        Assert.True(response.IsSuccessStatusCode, $"GET {path} returned {(int)response.StatusCode}.");
+        return (await response.Content.ReadFromJsonAsync<JsonNode>())!;
+    }
+
+    private static async Task<JsonNode> PostAsync(HttpClient client, string path, object body)
+    {
+        using var response = await client.PostAsJsonAsync(path, body);
+        Assert.True(response.IsSuccessStatusCode, $"POST {path} returned {(int)response.StatusCode}.");
+        return (await response.Content.ReadFromJsonAsync<JsonNode>())!;
+    }
+
+    private static string Required(JsonNode? node, params string[] path)
+    {
+        foreach (var segment in path)
+            node = node?[segment];
+        return (string?)node ?? throw new InvalidOperationException($"Response lacks {string.Join('.', path)}.");
+    }
+
+    private sealed record ReusablePublication(string DefinitionId, string TypeKey, string VersionId);
+}

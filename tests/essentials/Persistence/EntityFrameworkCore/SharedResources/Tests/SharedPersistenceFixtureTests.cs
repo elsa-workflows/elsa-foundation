@@ -49,21 +49,7 @@ public sealed class SharedPersistenceFixtureTests(PostgreSqlTargetFixture target
     {
         Skip.IfNot(targets.IsAvailable, targets.SkipReason ?? "Docker/PostgreSQL unavailable.");
 
-        var settings = new Dictionary<string, string>
-        {
-            ["Elsa:Persistence:Resources:primary:Provider"] = "PostgreSql",
-            ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared"
-        };
-        foreach (var feature in new[]
-                 {
-                     "WorkflowsRuntimeEntityFrameworkCore",
-                     "WorkflowsDesignEntityFrameworkCore",
-                     "ActivitiesDesignEntityFrameworkCore",
-                     "WorkflowsPublishingEntityFrameworkCore"
-                 })
-            settings[$"CShells:Shells:default:Configuration:Elsa:Persistence:Bindings:{feature}"] = "primary";
-
-        await using var host = new SharedPersistenceHostFixture(targets, settings);
+        await using var host = new SharedPersistenceHostFixture(targets, SharedPersistenceHostFixture.PrimaryResourceSettings());
         await host.StartAsync();
         using (var response = await host.Process.Client.GetAsync("/"))
             Assert.True(response.IsSuccessStatusCode);

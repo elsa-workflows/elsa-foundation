@@ -5,6 +5,24 @@ namespace Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests;
 /// <summary>Runs the built Workbench with named target connections and supports a clean process restart.</summary>
 public sealed class SharedPersistenceHostFixture : IAsyncDisposable
 {
+    public static IReadOnlyDictionary<string, string> PrimaryResourceSettings()
+    {
+        var settings = new Dictionary<string, string>
+        {
+            ["Elsa:Persistence:Resources:primary:Provider"] = "PostgreSql",
+            ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared"
+        };
+        foreach (var feature in new[]
+                 {
+                     "WorkflowsRuntimeEntityFrameworkCore",
+                     "WorkflowsDesignEntityFrameworkCore",
+                     "ActivitiesDesignEntityFrameworkCore",
+                     "WorkflowsPublishingEntityFrameworkCore"
+                 })
+            settings[$"CShells:Shells:default:Configuration:Elsa:Persistence:Bindings:{feature}"] = "primary";
+        return settings;
+    }
+
     private readonly WorkbenchShell _shell;
     private WorkbenchProcess? _process;
 
