@@ -92,6 +92,65 @@ public sealed class EfToolingConfigurationContextTests
             EfToolingConfigurationContext.WorkbenchJson, cancellationToken: cancellation.Token));
     }
 
+    [Fact]
+    public void Expected_connection_requires_an_independent_exact_live_match()
+    {
+        using var host = new HostFiles();
+        host.WriteRaw("appsettings.json", """{"ConnectionStrings":{"Shared":"connection-value-canary","Empty":" "}}""");
+        using var context = host.Create(EfToolingConfigurationContext.WorkbenchJson);
+
+        context.VerifyExpectedConnection("Shared", "connection-value-canary");
+
+        var missingExpected = Assert.Throws<EfToolingRefusal>(() =>
+            context.VerifyExpectedConnection("Other", "connection-value-canary"));
+        var emptyExpected = Assert.Throws<EfToolingRefusal>(() =>
+            context.VerifyExpectedConnection("Empty", "connection-value-canary"));
+        var missingActual = Assert.Throws<EfToolingRefusal>(() =>
+            context.VerifyExpectedConnection("Shared", null));
+        var emptyActual = Assert.Throws<EfToolingRefusal>(() =>
+            context.VerifyExpectedConnection("Shared", " "));
+        var mismatch = Assert.Throws<EfToolingRefusal>(() =>
+            context.VerifyExpectedConnection("Shared", "Connection-value-canary"));
+
+        Assert.Equal("expected-connection-unresolved", missingExpected.Code);
+        Assert.Equal("expected-connection-unresolved", emptyExpected.Code);
+        Assert.Equal("invalid-request", missingActual.Code);
+        Assert.Equal("invalid-request", emptyActual.Code);
+        Assert.Equal("connection-target-mismatch", mismatch.Code);
+        foreach (var refusal in new[] { missingExpected, emptyExpected, missingActual, emptyActual, mismatch })
+            Assert.DoesNotContain("connection-value-canary", refusal.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Expected_connection_uses_only_the_selected_frozen_source_mode()
+    {
+        using var host = new HostFiles();
+        var reference = $"Shared{Guid.NewGuid():N}";
+        var environmentKey = $"ConnectionStrings__{reference}";
+        host.WriteRaw("appsettings.json", JsonSerializer.Serialize(new
+        {
+            ConnectionStrings = new Dictionary<string, string> { [reference] = "file-target-canary" }
+        }));
+        Environment.SetEnvironmentVariable(environmentKey, "environment-target-canary");
+        try
+        {
+            using var files = host.Create(EfToolingConfigurationContext.WorkbenchJson);
+            using var inherited = host.Create(EfToolingConfigurationContext.WorkbenchJsonEnvironment);
+            Environment.SetEnvironmentVariable(environmentKey, "changed-after-snapshot");
+
+            files.VerifyExpectedConnection(reference, "file-target-canary");
+            inherited.VerifyExpectedConnection(reference, "environment-target-canary");
+            var mismatch = Assert.Throws<EfToolingRefusal>(() =>
+                files.VerifyExpectedConnection(reference, "environment-target-canary"));
+            Assert.Equal("connection-target-mismatch", mismatch.Code);
+            Assert.DoesNotContain("target-canary", mismatch.ToString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(environmentKey, null);
+        }
+    }
+
     private sealed class HostFiles : IDisposable
     {
         public string Directory { get; } = Path.Join(Path.GetTempPath(), $"elsa-tooling-context-{Guid.NewGuid():N}");

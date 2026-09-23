@@ -41,6 +41,34 @@ public sealed class EfToolingConfigurationContext : IDisposable
         ? throw EfToolingRefusal.Resolution("configuration-context-disposed", "The selected configuration context is no longer available.")
         : configuration;
 
+    /// <summary>
+    /// Checks one selected resource's named target against the separately supplied live connection.
+    /// Offline operations must not call this method. Neither value is returned or included in a refusal.
+    /// </summary>
+    internal void VerifyExpectedConnection(string connectionName, string? actualConnection)
+    {
+        var snapshot = Configuration;
+        if (string.IsNullOrWhiteSpace(connectionName))
+            throw EfToolingRefusal.Resolution("expected-connection-unresolved", "The selected connection reference is not valid.");
+        if (string.IsNullOrWhiteSpace(actualConnection))
+            throw EfToolingRefusal.Usage("invalid-request", "A live operation needs a separately supplied connection.");
+
+        string? expected;
+        try
+        {
+            expected = snapshot.GetConnectionString(connectionName);
+        }
+        catch (Exception failure) when (EfToolingHost.IsNonFatal(failure))
+        {
+            throw EfToolingRefusal.Resolution("configuration-context-invalid", "The selected connection reference could not be read.");
+        }
+
+        if (string.IsNullOrWhiteSpace(expected))
+            throw EfToolingRefusal.Resolution("expected-connection-unresolved", "The selected named connection is absent or empty in this configuration context.");
+        if (!string.Equals(expected, actualConnection, StringComparison.Ordinal))
+            throw EfToolingRefusal.Resolution("connection-target-mismatch", "The supplied connection does not match the selected named connection in this configuration context.");
+    }
+
     /// <summary>Reads the selected files once, without reload or a public configuration projection.</summary>
     internal static EfToolingConfigurationContext Create(
         string source,
