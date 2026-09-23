@@ -3,11 +3,14 @@ using System.Reflection.Emit;
 using CShells.Features;
 using CShells;
 using CShells.Lifecycle;
+using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Persistence.EntityFramework.ResourceResolution;
 using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
@@ -291,6 +294,107 @@ public sealed class EfPersistenceResourceEnrollmentTests
 
         Assert.Contains("resource-context-conflict", result.RefusalCodes);
         Assert.Empty(result.Patch.ConfigurationData);
+    }
+
+    [Theory]
+    [InlineData("Data Source=design.db", false)]
+    [InlineData("Data Source=activities.db", true)]
+    public void Activity_upgrade_design_contexts_must_share_a_target_without_constraining_publishing(
+        string workflowsConnection, bool expectedValid)
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:Bindings:ActivitiesDesignEntityFrameworkCore"] = "activities",
+            ["Elsa:Persistence:Bindings:WorkflowsDesignEntityFrameworkCore"] = "workflows",
+            ["Elsa:Persistence:Bindings:WorkflowsPublishingEntityFrameworkCore"] = "publishing"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:Resources:activities:Provider"] = "Sqlite",
+            ["Elsa:Persistence:Resources:activities:ConnectionName"] = "Activities",
+            ["Elsa:Persistence:Resources:workflows:Provider"] = "Sqlite",
+            ["Elsa:Persistence:Resources:workflows:ConnectionName"] = "Workflows",
+            ["Elsa:Persistence:Resources:publishing:Provider"] = "Sqlite",
+            ["Elsa:Persistence:Resources:publishing:ConnectionName"] = "Publishing",
+            ["ConnectionStrings:Activities"] = "Data Source=activities.db",
+            ["ConnectionStrings:Workflows"] = workflowsConnection,
+            ["ConnectionStrings:Publishing"] = "Data Source=publishing.db"
+        }).Build();
+
+        var result = EfPersistencePreparation.Prepare(ActivityUpgradeContext(values), configuration);
+
+        Assert.Equal(expectedValid, result.RefusalCodes.Count == 0);
+        if (expectedValid)
+            Assert.Equal(6, result.Patch.ConfigurationData.Count);
+        else
+        {
+            Assert.Contains("resource-context-conflict", result.RefusalCodes);
+            Assert.Empty(result.Patch.ConfigurationData);
+        }
+        Assert.DoesNotContain("Data Source=", System.Text.Json.JsonSerializer.Serialize(result));
+    }
+
+    [Fact]
+    public void Separate_design_targets_without_the_publishing_upgrade_store_are_not_rejected()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:Bindings:ActivitiesDesignEntityFrameworkCore"] = "activities",
+            ["Elsa:Persistence:Bindings:WorkflowsDesignEntityFrameworkCore"] = "workflows"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:Resources:activities:Provider"] = "Sqlite",
+            ["Elsa:Persistence:Resources:activities:ConnectionName"] = "Activities",
+            ["Elsa:Persistence:Resources:workflows:Provider"] = "Sqlite",
+            ["Elsa:Persistence:Resources:workflows:ConnectionName"] = "Workflows",
+            ["ConnectionStrings:Activities"] = "Data Source=activities.db",
+            ["ConnectionStrings:Workflows"] = "Data Source=workflows.db"
+        }).Build();
+
+        var result = EfPersistencePreparation.Prepare(ActivityUpgradeContext(values, includePublishing: false), configuration);
+
+        Assert.Empty(result.RefusalCodes);
+        Assert.Equal(4, result.Patch.ConfigurationData.Count);
+    }
+
+    [Fact]
+    public void Resource_selected_activity_design_checks_the_legacy_workflow_design_transaction_target()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:Bindings:ActivitiesDesignEntityFrameworkCore"] = "activities",
+            ["Elsa:Persistence:Bindings:WorkflowsPublishingEntityFrameworkCore"] = "publishing"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:Resources:activities:Provider"] = "Sqlite",
+            ["Elsa:Persistence:Resources:activities:ConnectionName"] = "Activities",
+            ["Elsa:Persistence:Resources:publishing:Provider"] = "Sqlite",
+            ["Elsa:Persistence:Resources:publishing:ConnectionName"] = "Publishing",
+            ["ConnectionStrings:Activities"] = "Data Source=activities.db",
+            ["ConnectionStrings:Publishing"] = "Data Source=publishing.db",
+            ["ConnectionStrings:Elsa"] = "Data Source=legacy-design.db"
+        }).Build();
+
+        var result = EfPersistencePreparation.Prepare(ActivityUpgradeContext(values), configuration);
+
+        Assert.Contains("resource-context-conflict", result.RefusalCodes);
+        Assert.Empty(result.Patch.ConfigurationData);
+    }
+
+    private static ShellSettingsPreparationContext ActivityUpgradeContext(
+        IReadOnlyDictionary<string, string?> values, bool includePublishing = true)
+    {
+        var features = new List<ShellFeaturePreparationDescriptor>
+        {
+            new("ActivitiesDesignEntityFrameworkCore", [], typeof(ActivitiesDesignEntityFrameworkCoreFeature), false),
+            new("WorkflowsDesignEntityFrameworkCore", [], typeof(WorkflowsDesignEntityFrameworkCoreFeature), false)
+        };
+        if (includePublishing)
+            features.Add(new("WorkflowsPublishingEntityFrameworkCore", [], typeof(PublishingEntityFrameworkCoreFeature), false));
+        var ids = features.Select(x => x.Id).ToArray();
+        return new ShellSettingsPreparationContext(new ShellId("default"), values, ids, [], [], features, ids, [], []);
     }
 
     private static ShellSettingsPreparationContext PreparationContext(IReadOnlyDictionary<string, string?>? values = null) =>

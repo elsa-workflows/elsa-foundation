@@ -20,6 +20,10 @@ internal static class EfPersistenceResourceValidator
 
         var refusals = new HashSet<string>(StringComparer.Ordinal);
         var targets = new List<Target>();
+        // Publishing EF registers the activity-upgrade mutation store, which enlists both
+        // Design contexts in one local transaction. Its own ledger target may be separate.
+        var hasActivityUpgradeStore = resolution.Participants.Any(x =>
+            StringComparer.Ordinal.Equals(x.Participant.FeatureId, "WorkflowsPublishingEntityFrameworkCore"));
         foreach (var selected in resolution.Participants.Where(x => x.Selection != PersistenceSelectionKind.Legacy))
         {
             if (selected.Provider is null || selected.ConnectionName is null)
@@ -53,7 +57,8 @@ internal static class EfPersistenceResourceValidator
             var participant = legacy.Participant;
             if (participant.ModuleNames.Count != 1 ||
                 EfModuleCatalog.Find(modules, participant.ModuleNames[0]) is not { } module ||
-                !selectedContexts.Contains(module.ContextType))
+                !selectedContexts.Contains(module.ContextType) &&
+                !(hasActivityUpgradeStore && IsActivityUpgradeDesignModule(module.Name)))
                 continue;
 
             var provider = Get(composedSettings, $"{participant.FeatureId}:Provider") ??
@@ -93,6 +98,17 @@ internal static class EfPersistenceResourceValidator
                     !StringComparer.Ordinal.Equals(x.Connection, first.Connection) ||
                     !StringComparer.Ordinal.Equals(x.Schema, first.Schema) ||
                     x.Pooling != first.Pooling))
+                refusals.Add("resource-context-conflict");
+        }
+
+        if (hasActivityUpgradeStore)
+        {
+            var activities = targets.FirstOrDefault(x => x.ModuleName == "Activities.Design");
+            var workflows = targets.FirstOrDefault(x => x.ModuleName == "Workflows.Design");
+            if (activities is null || workflows is null)
+                refusals.Add("resource-ownership-unresolved");
+            else if (!StringComparer.Ordinal.Equals(activities.Provider, workflows.Provider) ||
+                     !StringComparer.Ordinal.Equals(activities.Connection, workflows.Connection))
                 refusals.Add("resource-context-conflict");
         }
 
@@ -152,9 +168,12 @@ internal static class EfPersistenceResourceValidator
             return null;
         }
 
-        return new Target(module.ContextType, provider, connection, schema,
+        return new Target(module.Name, module.ContextType, provider, connection, schema,
             bool.TryParse(poolingValue, out var pooling) && pooling);
     }
+
+    private static bool IsActivityUpgradeDesignModule(string moduleName) =>
+        moduleName is "Activities.Design" or "Workflows.Design";
 
     private static string? Get(IReadOnlyDictionary<string, string?> settings, string key)
     {
@@ -169,5 +188,5 @@ internal static class EfPersistenceResourceValidator
         IConfiguration rootConfiguration) =>
         Get(composedSettings, $"ConnectionStrings:{name}") ?? rootConfiguration.GetConnectionString(name);
 
-    private sealed record Target(Type ContextType, string Provider, string Connection, string? Schema, bool Pooling);
+    private sealed record Target(string ModuleName, Type ContextType, string Provider, string Connection, string? Schema, bool Pooling);
 }

@@ -78,6 +78,16 @@ dotnet test tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Tes
 
 Local results: the EF Modularity suite passed 29/29, the live editor test passed 1/1, and the selected-resource PostgreSQL test passed 1/1 with no skips. The focused architecture suite passed 40/40; generated maps and solution filters were checked. These results establish registration, four-module migration placement and management refusal ordering. They do not establish design/publish/execute/restart data behavior, changed-source reload, complete transaction-affinity validation, tooling agreement, or the separate diagnostics target.
 
+## T008 transaction-affinity checkpoint (2026-09-24)
+
+The EF preflight now checks the two Design contexts used by the Publishing EF activity-upgrade store against the same effective provider and connection value before activation. A selected Design resource is compared with a legacy Design counterpart as well. Publishing's own ledger target is not forced onto that transaction, and separate Design targets remain allowed when the upgrade store is absent. The existing `EfSharedTransaction` still performs its strict check before opening a connection during a live upgrade apply. This checkpoint covers the known upgrade-store relationship; T008 remains open for the remaining integrated source, ownership, and unsupported-layout checks.
+
+```bash
+dotnet test tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj --no-restore --logger 'console;verbosity=quiet' -p:WarningLevel=0
+```
+
+The EF migrations test project passed 237/237 with zero skips, including four new transaction-layout cases.
+
 ## What success must prove
 
 The shared layout selects one named PostgreSQL resource for every enabled enrolled Runtime, Workflows Design, Activities Design and Publishing consumer. The diagnostics layout selects a second named resource for both Structured Logs and OpenTelemetry while leaving the primary consumers on their original target. The first slice does not redirect host-owned OpenIddict, private stores, or unknown persistence consumers ([spec](spec.md#normative-supported-participants-and-constraints)).
