@@ -447,12 +447,13 @@ discovery mechanism. Offline commands do not perform the expected-value lookup.
 The source context must state what was checked. The proposed Workbench file and explicitly selected
 environment modes describe supplied configuration, not observation of a separately running host's
 environment; the original file-only provider-agreement note in D4 is not a claim of parity across
-those contexts. Neither connection value, a connection hash, a configuration snapshot nor raw
-source/exception details may appear in exported evidence. Strict equality intentionally does not
+those contexts. Neither connection value, a connection hash, raw paths, configuration values/snapshots
+nor underlying exception details may appear in exported evidence. Strict equality intentionally does not
 infer equivalence for differently formatted strings or separate migration credentials. Concrete
 context transport, redacted failures and compatibility gates are specified and reviewed under
 [specification 173](../../specs/173-shared-persistence/decisions/tooling-target-verification.md)
-before resource-mode implementation is approved. The legacy connection-input contract remains as
+and its [configuration-context contract](../../specs/173-shared-persistence/decisions/tooling-configuration-context.md).
+Final contract and implementation-readiness review remain pending. The legacy connection-input contract remains as
 stated above.
 
 ### D8 — Post-migration actions are declared, audited at startup, and never auto-run

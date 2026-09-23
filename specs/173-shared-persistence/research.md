@@ -1,6 +1,6 @@
 # Shared persistence research and decisions
 
-Status: planning input in progress. This does not approve implementation. The reviewed discovery records are [persistence boundaries](../../docs/reports/runtime-composition/persistence-boundaries.md) and [effective configuration](../../docs/reports/runtime-composition/effective-configuration.md).
+Status: Phase 0 research complete; Phase 1 contracts drafted; integrated review and tasks in progress. This does not approve implementation. The reviewed discovery records are [persistence boundaries](../../docs/reports/runtime-composition/persistence-boundaries.md) and [effective configuration](../../docs/reports/runtime-composition/effective-configuration.md).
 
 ## R1. Resolve before feature binding
 
@@ -10,7 +10,7 @@ Status: planning input in progress. This does not approve implementation. The re
 
 **Alternatives:** Activation guards alone cannot cover startup. Repeating resolution inside each feature loses shared context and makes tooling disagree. A generic settings framework would exceed the approved bounded slice.
 
-**Status:** Ownership reviewed in #1966. Exact input/output contracts and packaging still to be designed.
+**Status:** Ownership reviewed in #1966. Detached input/output shapes and adapter contracts are drafted in data-model.md and contracts/; integrated review is in progress.
 
 ## R2. CShells lifecycle integration
 
@@ -46,7 +46,7 @@ The pinned [ConfigurationShellBlueprint](https://github.com/sfmskywalker/cshells
 
 **Owner-approved direction (2026-09-23):** Adopt [strict target verification](decisions/tooling-target-verification.md), provided it remains bounded. Read the expected named connection inside the explicitly selected host context only to compare it with the supplied env/stdin value. Keep the actual database input env/stdin-only, refuse before database access on unresolved/mismatched values, and never emit either value. This adds a lookup and the existing equality check, not a generic secret provider or database probe. Runtime proof, protocol design and ADR review are still required.
 
-**Remaining design:** Choose the narrow explicit input that reaches the host-owned resolver without shipping secret values in public plans or assuming the tool's environment is the host environment. Define configuration checks versus live target checks, and how unsupported old hosts refuse. Review any ADR extension before implementation.
+**Historical design question, resolved by R7 and the Phase 1 contracts:** Choose the narrow explicit input that reaches the host-owned resolver without shipping secret values in public plans or assuming the tool's environment is the host environment. Define configuration checks versus live target checks, and how unsupported old hosts refuse. Review any ADR extension before implementation.
 
 ## R5. Scope and evidence
 
@@ -64,9 +64,9 @@ For Workbench, the reproducible file order is appsettings.json, its environment 
 
 The minimal candidate is a versioned explicit file context plus one host-owned lookup and strict comparison. It must not infer live environment parity from the tool process. A missing expected value refuses before database access. Supporting external secret providers or different host source orders is outside this candidate and must be marked unsupported/unverified rather than silently approximated. These are engineering findings, not final wire fields or approval to narrow the whole program to file-only configuration.
 
-The follow-up [configuration-context proposal](decisions/tooling-configuration-context.md) covers the standard environment case with a second explicit source mode: the same four files followed by the worker's inherited environment, identified as operator-supplied configuration rather than observed runtime state. Source review supports that bounded option. It adds no secret-provider framework. Independent design review remains required, particularly for no-selector behavior and complete command-path transport.
+The follow-up [configuration-context proposal](decisions/tooling-configuration-context.md) covers the standard environment case with a second explicit source mode: the same four files followed by the worker's inherited environment, identified as operator-supplied configuration rather than observed runtime state. Source review supports that bounded option. It adds no secret-provider framework. Independent Phase 0 review subsequently resolved no-selector behavior and complete command-path transport as recorded in R7.
 
-Before closing research, review exactly how the selected directory reaches the host-side adapter (the worker field alone is not proof that the reflected host request receives it), preserve one selected module set per supplied connection, and distinguish reference/configuration checks from observed runtime evidence. An older host must refuse a resource-context request before silently dropping the new field. Keep raw paths and connection values out of public host facts and exported plans.
+The Phase 0 closure reviewed exactly how the selected directory reaches the host-side adapter (the worker field alone is not proof that the reflected host request receives it), how to preserve one selected module set per supplied connection, and how reference/configuration checks differ from observed runtime evidence. An older host must refuse a resource-context request before silently dropping the new field. Keep raw paths and connection values out of public host facts and exported plans.
 
 Source pointers: `src/apps/Elsa.Workbench/Program.cs`; `src/essentials/Cli/ShellConfiguration.cs`; `src/essentials/Cli/Worker/HostAppSettings.cs`; `WorkerContract.cs`; `WorkerRunner.cs`; `ToolingEntryPoint.cs`; `src/essentials/Persistence/EntityFramework/Tooling/EfToolingContract.cs`; `EfToolingHost.cs`; `EfProviderAgreement.cs`. The existing Workbench configuration, worker launch, capability-refusal, and CLI redaction tests are evidence starting points, not new-mode proof.
 
@@ -78,6 +78,6 @@ The [target selection decision](decisions/tooling-target-selection.md) defines d
 
 Independent review approved the opaque per-invocation snapshot direction, canonical worker selectors and configuration-package ownership. The context is created once and passed to internal list and final script so a file change cannot alter their module selection. Factory and context-aware invocation support are negotiated together; disposal and every error path must be redacted. The original legacy entry point remains unchanged.
 
-The no-selector predicate is now host-owned semantic preflight after a CLI raw hint. Definitions and inactive bindings do not activate resources; dependency-expanded membership is authoritative. Source inspection corrected an overly broad disabled-feature exclusion: CShells may reintroduce a disabled dependency, so resource applicability must see it and refuse the conflict rather than omit it.
+The no-selector predicate is host-owned semantic preflight on every capable host invocation; a raw hint only governs compatibility when no composer or capability exists. Definitions and inactive bindings do not activate resources; dependency-expanded membership is authoritative. Source inspection corrected an overly broad disabled-feature exclusion: CShells may reintroduce a disabled dependency, so resource applicability must see it and refuse the conflict rather than omit it.
 
-Remaining review before Phase 1 closure: the new host-default composer declaration must faithfully share Workbench's global code selections with tooling; freeze factory/invocation signatures, then reconcile all selected directions in the plan, data model and contracts. #1967 remains active; #1968/#1969 remain blocked. No resource runtime implementation has been started.
+Final Phase 0 review resolved the composer/factory direction and caught the no-selector code-only bypass. A declared composer is now always probed; composer-free hosts retain a separately labeled legacy-only branch only when no new resource-contract key exists. Runtime resource enrollment requires the same host declaration, making that branch meaningful. The public composer-plus-FromConfiguration path matched the actual configured blueprint for object/reset/disabled fixtures in the published-package probe. Phase 1 now has a plan, data model, concrete contracts and validation guide, followed by tasks and readiness review. #1967 remains active; #1968/#1969 remain blocked. No resource runtime implementation has been started.

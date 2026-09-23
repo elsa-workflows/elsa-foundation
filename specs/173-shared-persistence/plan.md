@@ -4,7 +4,7 @@
 
 **Input**: specification #1967 / `specs/173-shared-persistence/spec.md`.
 
-**Status**: Phase 0 research in progress. Not approved for Elsa implementation. The owner approved bounded strict target verification on 2026-09-23. Phase 1 contracts and the task breakdown remain to be designed and reviewed; the upstream prerequisite is published and verified as `0.0.30-preview.157`.
+**Status**: Phase 0 complete. Phase 1 artifacts drafted and under integrated review; tasks are being generated. Not yet approved for Elsa implementation. The owner approved bounded strict target verification on 2026-09-23; the upstream prerequisite is published and verified as `0.0.30-preview.157`.
 
 ## Summary
 
@@ -32,7 +32,7 @@ Use a generic final-settings preparation hook in CShells so Elsa sees global and
 
 **Scale/Scope**: The 13 stable feature IDs across six participant sets in the spec, with only the first four sets in the initial shared layout and both diagnostics sets in the second layout. Dynamic/unknown participants do not become ready by resemblance of options.
 
-**Approved direction**: Use bounded strict live target verification; see [decision record](decisions/tooling-target-verification.md). The owner approved one expected-value lookup and strict comparison, while retaining env/stdin as the only actual database connection input. Concrete host-context transport and negotiated protocol remain design gates.
+**Approved direction**: Use bounded strict live target verification; see [decision record](decisions/tooling-target-verification.md). The owner approved one expected-value lookup and strict comparison, while retaining env/stdin as the only actual database connection input. Concrete source, snapshot, version and selection rules are in [the tooling contract](contracts/tooling.md); integrated review remains the readiness gate.
 
 ## Constitution Check
 
@@ -48,7 +48,21 @@ Pre-design research check:
 - Framework §2.12 / Elsa §E4: the bounded persistence contract does not ratify deferred generic settings classification.
 - ADR 0066/0073/0076: retain ordered publication, first-party EF ownership and host-closure tooling. The bounded D7 verification extension has owner approval; its concrete contract and ADR amendment still require the normal design review.
 
-No justified constitutional violation is proposed. Post-design check remains open until the concrete target-verification contracts are complete. The CShells prerequisite has its own package/dependency and regression gates.
+Post-design check against the current constitutions:
+
+| Gate | Design result and implementation evidence still required |
+|---|---|
+| Framework §2.1 / §2.7 | Core/Nuplane contain only provider-neutral management contracts. EF-family adapters and tooling stay with the EF owner; CLI/worker remain EF-free. The concrete preparation facade uses existing public CShells types and a small redacted result; internal resolver DTOs stay private. Verify actual project references during implementation. |
+| Framework §2.6.2 | One replacement preparation service and one CShells preparer. Declare replacement kind and detect conflicts; no IEnumerable/preprocessor chain. |
+| Framework §2.9 / Elsa §E2.5 | Module contexts and their existing optional base stay intact. Shared resources select target pairs rather than introducing a universal context. |
+| Framework §2.19 | The existing 13 stable feature identities remain binding keys; the marker adds enrollment without renaming them. |
+| Framework §2.21–2.23 | Preserve legacy test objectives, add discriminating negative cases and mutation/revert proof, then real host/database/tooling journeys. No existing green suite is reclassified as new-mode proof. |
+| Framework §2.22 | Contracts/quickstart define selection, sources, exclusions, errors and lifecycle; implementation must update package docs and the Modularity extension-point catalog. |
+| Elsa §E2.2 / ADR 0066 | Separate Design/Runtime stores and ordered publication remain valid; no blanket cross-context transaction is added. |
+| ADR 0073/0076 | EF owns tooling inside the selected host closure. Versioned protocol retains legacy behavior; the owner-approved D7 extension only reads expected values for strict live comparison. |
+| Deferred sections | Framework §2.12 and Elsa §E4 remain deferred. No claim rests on provisional framework §2.24 or Elsa §E2.9. |
+
+No constitutional exception is proposed. Final integrated review must confirm the public adapter boundary and task coverage before this check is considered complete. The CShells prerequisite has its own completed package/dependency and regression gates.
 
 ## Project Structure
 
@@ -64,7 +78,12 @@ specs/173-shared-persistence/
   decisions/tooling-target-selection.md
   decisions/authored-persistence.md
   checklists/requirements.md
-  # data-model.md, contracts/, quickstart.md and tasks.md follow research closure
+  data-model.md
+  contracts/persistence-configuration.md
+  contracts/runtime-management.md
+  contracts/tooling.md
+  quickstart.md
+  tasks.md
 ```
 
 ### Source ownership
@@ -80,18 +99,18 @@ specs/173-shared-persistence/
 
 **Structure decision**: Extend existing packages at their owning boundaries. Do not add a speculative umbrella project. Final type names and wire fields are assigned only in the reviewed contracts.
 
-## Research decisions and remaining gate
+## Research decisions and integration gate
 
 [R1-R5](research.md) record ownership, lifecycle, management, tooling and evidence. R2 is resolved into an upstream prerequisite. R3 selects explicit pre-mutation refusal in the legacy feature editor for resource-mode compositions while retaining file/shell reload; resource-aware operations remain required under #1964.
 
 R4 has the owner decision. The decisions now define the authored root/shell hierarchy, effective legacy-field presence, explicit source modes, declared target groups and no-selector semantic preflight. Independent review approved one opaque host-owned source snapshot reused by internal list and script, atomic capability negotiation, canonical worker selectors and typed error redaction. A published-package probe confirmed the null-presence distinction and public hostless discovery/dependency APIs.
 
-Finish review of the host-default composer declaration and freeze factory/context-aware invocation signatures, then produce the Phase 1 model/contracts/quickstart and task breakdown before publishing #1968 as implementable. Source-file parsing alone must not silently omit Workbench's ConfigureAllShells choices. CShells #134 is complete with published-package verification. This specification remains the single active delivery item.
+The host-default composer direction and factory/context-aware invocation signatures have passed Phase 0 review. Review the Phase 1 model/contracts/quickstart and task breakdown before publishing #1968 as implementable. Source-file parsing alone must not silently omit Workbench's ConfigureAllShells choices. CShells #134 is complete with published-package verification. This specification remains the single active delivery item.
 
 ## Delivery and validation gates
 
 1. **Done:** CShells #134 merged and `0.0.30-preview.157` was published and verified through an isolated package consumer. Pin it in Elsa when integrating #1968.
-2. Finish the authored configuration, input-context, redacted plan and tooling contracts after R4. Review against every FR/SC and both existing stories; produce bounded tasks using the normal Spec Kit flow.
+2. Review the authored configuration, runtime/management and tooling contracts against every FR/SC, all four spec journeys and both delivery issues; complete bounded tasks using the normal Spec Kit flow.
 3. Deliver #1968 as the shared runtime/database/tooling path, including legacy checks and preflight refusals. Follow with #1969's actual two-target proof and negative layouts.
 4. Run focused component/architecture tests and applicable backend end-to-end journeys. Refresh/check generated maps only when authoritative inputs change; required CI and review must pass before merge. Do not infer a full host result from a pure resolver test.
 5. Publish evidence and keep issue dependencies, readiness, status and labels aligned. The program's other four epics remain required outcomes.

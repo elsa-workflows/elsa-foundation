@@ -1,6 +1,6 @@
 # Authored persistence configuration and presence
 
-Status: selected engineering direction for #1967; Phase 1 types and integration review remain required.
+Status: selected engineering direction for #1967; Phase 0 review complete; Phase 1 types and integration review remain required.
 
 ## Configuration surface
 
@@ -69,3 +69,5 @@ On 2026-09-23, an isolated package-only net10.0 probe against CShells and CShell
 - Public FeatureDiscovery.DiscoverFeatures and FeatureDependencyResolver.GetOrderedFeatures discover and expand a two-feature dependency without constructing either feature or a shell service provider. Both feature constructors and ConfigureServices throw if called; neither was called.
 
 Command: `dotnet run --project /tmp/runtime-composition-1967-presence-probe/PackageProbe.csproj --no-restore`. All assertions passed. This characterizes the published package with an in-memory configuration fixture; it is not Elsa adapter, provider-chain concurrency, real-host or database proof. The implementation acceptance suite must preserve these cases and add JSON overlays, environment inputs, arrays/wrappers, resets and reload.
+
+An additional published-package probe compared the shared composer followed by public ShellBuilder.FromConfiguration with the actual configured runtime blueprint. Object overrides, boolean reset and disabled declarations matched across enabled/disabled/reset identities, configuration data and configurator identities. No feature constructor or configurator ran. This validates the public composition seam for those fixtures, not a complete Workbench integration.
