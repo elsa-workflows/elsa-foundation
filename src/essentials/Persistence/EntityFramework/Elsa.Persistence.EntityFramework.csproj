@@ -19,6 +19,7 @@
   <ItemGroup>
     <!-- Test-only visibility for the pure resolver. Production adapters use the public preparation facade. -->
     <InternalsVisibleTo Include="Elsa.Persistence.EntityFramework.Tests" />
+    <InternalsVisibleTo Include="Elsa.Persistence.EntityFrameworkCore.Migrations.Tests" />
   </ItemGroup>
 
 </Project>

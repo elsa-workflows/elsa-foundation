@@ -16,6 +16,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
     Description = "Opt-in EF Core persistence for the Publishing ledger (publication records, snapshot reviews, policies, projection intents, activity-publication and draft test-run receipts), the ordered reusable-activity publication commands, and the cross-catalog activity-upgrade bridge (discovery, atomic apply and dependency-projection rebuild). These require the Activities Design, Workflows Design and Runtime EF modules.",
     DependsOn = new object[] { "WorkflowsPublishing" })]
 [UsesEfModule("Workflows.Publishing")]
+[EfPersistenceResourceParticipant]
 public class PublishingEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(DisplayName = "Provider", Description = "Relational provider: Sqlite, SqlServer, PostgreSql, or MySql.", Category = "Persistence")]

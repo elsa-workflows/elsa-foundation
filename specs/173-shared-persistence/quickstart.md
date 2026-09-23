@@ -40,6 +40,16 @@ dotnet test tests/essentials/Persistence/EntityFramework/Tests/Elsa.Persistence.
 
 Result: 296/296 tests passed, including 16 new resolver cases, with zero skips. A temporary mutation that ignored a feature binding made the binding-precedence test fail (1/1); restoring the source made all 16 focused resolver tests pass. T010 remains incomplete until raw authored presence, explicit false/zero, and adapter/source cases are covered.
 
+## T005 explicit enrollment checkpoint (2026-09-23)
+
+The 13 reviewed feature classes now carry `EfPersistenceResourceParticipantAttribute`. The EF-owned participant catalog combines that marker with existing `ShellFeature` identity, `UsesEfModule` declarations, `EfProviderAgreement` provider-setting metadata, and `EfModuleCatalog` context ownership. Discovery does not construct feature classes or configure their services. Missing or conflicting module ownership stays unresolved for the later EF validator instead of changing legacy startup.
+
+```bash
+dotnet test tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj --no-restore --verbosity quiet
+```
+
+Result: 220/220 migrations tests passed with zero skips, including two new enrollment cases. The test locks the exact 13 stable IDs and module/context pairs while excluding IAM, Secrets, distributed stores, Dashboard, and other unmarked features. A marked probe with a throwing constructor/configurator was discovered without either running. T011 architecture and integration coverage remains open; marker discovery alone does not prove resource-mode activation.
+
 ## What success must prove
 
 The shared layout selects one named PostgreSQL resource for every enabled enrolled Runtime, Workflows Design, Activities Design and Publishing consumer. The diagnostics layout selects a second named resource for both Structured Logs and OpenTelemetry while leaving the primary consumers on their original target. The first slice does not redirect host-owned OpenIddict, private stores, or unknown persistence consumers ([spec](spec.md#normative-supported-participants-and-constraints)).
