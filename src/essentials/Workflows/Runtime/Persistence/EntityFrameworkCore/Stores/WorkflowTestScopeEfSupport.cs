@@ -45,10 +45,10 @@ internal static class WorkflowTestScopeEfSupport
         var tenant = record.Scope.TenantId;
         var partition = record.Scope.Partition.Value;
         var valid =
+            EfSchemaVersion.Readable("RuntimeWorkflowTestScope", row.SchemaVersion, RuntimeWorkflowTestScopeEfModule.SchemaVersion) &&
             (expectedScopeId is null || StringComparer.Ordinal.Equals(record.Scope.ScopeId, expectedScopeId)) &&
             (tenant is null || StringComparer.Ordinal.Equals(tenant, accessScope)) &&
             row.Id == Id(accessScope, record.Scope.ScopeId) &&
-            EfSchemaVersion.Readable("RuntimeWorkflowTestScope", row.SchemaVersion, RuntimeWorkflowTestScopeEfModule.SchemaVersion) &&
             row.AccessScopeKey == EfRelationalIdentity.Encode(accessScope) &&
             row.AccessScopeKeyHash == EfRelationalIdentity.Hash(accessScope) &&
             row.ScopeId == EfRelationalIdentity.Encode(record.Scope.ScopeId) &&

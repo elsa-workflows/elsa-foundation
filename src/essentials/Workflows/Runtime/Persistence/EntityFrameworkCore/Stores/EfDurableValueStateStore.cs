@@ -149,7 +149,8 @@ public sealed class EfDurableValueStateStore(
             row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope))
             throw new InvalidDataException("The durable-value row scope or revision projection is corrupt.");
         var state = RuntimeArtifactJson.Deserialize<DurableValueState>(row.ContentJson);
-        if ((expectedWorkflow is not null && !StringComparer.Ordinal.Equals(expectedWorkflow, state.WorkflowExecutionId)) ||
+        if (EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) ||
+            (expectedWorkflow is not null && !StringComparer.Ordinal.Equals(expectedWorkflow, state.WorkflowExecutionId)) ||
             (expectedValue is not null && !StringComparer.Ordinal.Equals(expectedValue, state.DurableValueId)) ||
             row.WorkflowExecutionId != EfRuntimeOperationalStoreSupport.Encode(state.WorkflowExecutionId) ||
             row.WorkflowExecutionIdHash != EfRuntimeOperationalStoreSupport.Hash(state.WorkflowExecutionId) ||
@@ -157,8 +158,7 @@ public sealed class EfDurableValueStateStore(
             row.DurableValueId != EfRuntimeOperationalStoreSupport.Encode(state.DurableValueId) ||
             row.DurableValueIdHash != EfRuntimeOperationalStoreSupport.Hash(state.DurableValueId) ||
             row.DurableValueIdOrderKey != EfRuntimeOperationalStoreSupport.Order(state.DurableValueId) ||
-            row.Id != EfRuntimeOperationalStoreSupport.CompositeId(scope, state.WorkflowExecutionId, state.DurableValueId) ||
-            EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion))
+            row.Id != EfRuntimeOperationalStoreSupport.CompositeId(scope, state.WorkflowExecutionId, state.DurableValueId))
             throw new InvalidDataException("The durable-value row identity or projection is corrupt.");
         return state;
     }

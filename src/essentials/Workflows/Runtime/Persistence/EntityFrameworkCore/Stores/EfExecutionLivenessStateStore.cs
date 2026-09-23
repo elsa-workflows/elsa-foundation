@@ -477,10 +477,10 @@ public sealed class EfExecutionLivenessStateStore(
         { throw new InvalidDataException("The persisted execution-liveness state is not valid current data.", exception); }
         var lease = state.ExecutionLease;
         var heartbeat = state.Heartbeat;
-        var valid = (expectedWorkflow is null || state.WorkflowExecutionId == expectedWorkflow) &&
+        var valid = EfSchemaVersion.Readable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) &&
+                    (expectedWorkflow is null || state.WorkflowExecutionId == expectedWorkflow) &&
                     (expectedOperational is null || state.ExecutionLivenessStateId == expectedOperational) &&
                     row.Id == EfRuntimeOperationalStoreSupport.CompositeId(scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId) &&
-                    EfSchemaVersion.Readable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) &&
                     row.WorkflowExecutionId == EfRuntimeOperationalStoreSupport.Encode(state.WorkflowExecutionId) && row.WorkflowExecutionIdHash == EfRuntimeOperationalStoreSupport.Hash(state.WorkflowExecutionId) && row.WorkflowExecutionIdOrderKey == EfRuntimeOperationalStoreSupport.Order(state.WorkflowExecutionId) &&
                     row.OperationalStateId == EfRuntimeOperationalStoreSupport.Encode(state.ExecutionLivenessStateId) && row.OperationalStateIdHash == EfRuntimeOperationalStoreSupport.Hash(state.ExecutionLivenessStateId) && row.OperationalStateIdOrderKey == EfRuntimeOperationalStoreSupport.Order(state.ExecutionLivenessStateId) &&
                     row.InterruptedStatus == (state.InterruptedExecution is { } interrupted ? (int)interrupted.Status : null) && row.InterruptedAtUtcTicks == state.InterruptedExecution?.InterruptedAt.UtcTicks &&

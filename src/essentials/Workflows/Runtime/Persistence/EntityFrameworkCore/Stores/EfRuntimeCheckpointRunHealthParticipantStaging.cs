@@ -109,8 +109,8 @@ internal static class EfRuntimeCheckpointRunHealthParticipantStaging
     {
         try
         {
-            if (row.Revision <= 0 ||
-                EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) ||
+            if (EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) ||
+                row.Revision <= 0 ||
                 row.Id != EfRuntimeOperationalStoreSupport.CompositeId(scope, expectedWorkflowExecutionId) ||
                 row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) ||
                 row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))

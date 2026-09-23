@@ -99,8 +99,8 @@ internal static class WorkflowDispatchEfSupport
         string scope,
         string? expectedDispatchId = null)
     {
-        if (row.Revision <= 0 ||
-            EfSchemaVersion.NotReadable("RuntimeWorkflowDispatch", row.SchemaVersion, RuntimeWorkflowDispatchEfModule.SchemaVersion) ||
+        if (EfSchemaVersion.NotReadable("RuntimeWorkflowDispatch", row.SchemaVersion, RuntimeWorkflowDispatchEfModule.SchemaVersion) ||
+            row.Revision <= 0 ||
             row.ScopeKey != EfRelationalIdentity.Encode(scope) ||
             row.ScopeKeyHash != EfRelationalIdentity.Hash(scope))
             throw new InvalidDataException("The workflow dispatch row scope, schema, or revision projection is corrupt.");

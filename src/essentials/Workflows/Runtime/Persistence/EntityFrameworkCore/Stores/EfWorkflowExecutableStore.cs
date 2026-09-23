@@ -598,11 +598,12 @@ public sealed class EfWorkflowExecutableStore(
         string expected,
         string id)
     {
-        if (row.Id != id || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
+        if (EfSchemaVersion.NotReadable("RuntimeArtifact", row.SchemaVersion, RuntimeArtifactEfModule.SchemaVersion) ||
+            row.Id != id || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
             row.ArtifactId != Encode(expected) || row.ArtifactIdHash != Hash(expected) ||
             string.IsNullOrWhiteSpace(row.ArtifactHash) ||
             row.ArtifactHash.Length > RuntimeArtifactEfModule.HashMaximumLength ||
-            EfSchemaVersion.NotReadable("RuntimeArtifact", row.SchemaVersion, RuntimeArtifactEfModule.SchemaVersion) || row.ArtifactIdOrderKey != OrderKey(expected) ||
+            row.ArtifactIdOrderKey != OrderKey(expected) ||
             string.IsNullOrWhiteSpace(row.IncarnationId))
             throw new InvalidDataException("The persisted workflow executable row is corrupt.");
         try
@@ -622,9 +623,10 @@ public sealed class EfWorkflowExecutableStore(
 
     private static CoordinationState ReadCoordination(WorkflowExecutableCoordinationEntity row, string scope, string expected, string id)
     {
-        if (row.Id != id || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
+        if (EfSchemaVersion.NotReadable("RuntimeArtifact", row.SchemaVersion, RuntimeArtifactEfModule.SchemaVersion) ||
+            row.Id != id || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
             row.ArtifactId != Encode(expected) || row.ArtifactIdHash != Hash(expected) ||
-            EfSchemaVersion.NotReadable("RuntimeArtifact", row.SchemaVersion, RuntimeArtifactEfModule.SchemaVersion) || row.Revision <= 0 ||
+            row.Revision <= 0 ||
             string.IsNullOrWhiteSpace(row.IncarnationId))
             throw new InvalidDataException("The persisted workflow executable coordination row is corrupt.");
 

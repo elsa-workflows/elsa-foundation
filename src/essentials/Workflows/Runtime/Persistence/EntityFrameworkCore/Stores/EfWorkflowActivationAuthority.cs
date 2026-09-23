@@ -262,7 +262,8 @@ public sealed class EfWorkflowActivationAuthority(
         }
         ValidateIdentity(slot.WorkflowDefinitionId, nameof(slot.WorkflowDefinitionId));
         ValidateIdentity(slot.SlotName, nameof(slot.SlotName));
-        if (row.Id != RowId(scope, slot.WorkflowDefinitionId, slot.SlotName) ||
+        if (EfSchemaVersion.NotReadable("RuntimeActivationSlot", row.SchemaVersion, RuntimeActivationSlotEfModule.SchemaVersion) ||
+            row.Id != RowId(scope, slot.WorkflowDefinitionId, slot.SlotName) ||
             row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
             expectedDefinitionId is not null && slot.WorkflowDefinitionId != expectedDefinitionId ||
             expectedSlotName is not null && slot.SlotName != expectedSlotName ||
@@ -283,7 +284,7 @@ public sealed class EfWorkflowActivationAuthority(
             row.SourceId != (slot.Source?.SourceId is null ? null : Encode(slot.Source.SourceId)) ||
             row.UpdatedAtUtcTicks != slot.UpdatedAt.UtcTicks ||
             row.UpdatedAtOffsetMinutes != (int)slot.UpdatedAt.Offset.TotalMinutes ||
-            EfSchemaVersion.NotReadable("RuntimeActivationSlot", row.SchemaVersion, RuntimeActivationSlotEfModule.SchemaVersion) || row.Revision <= 0 || slot.Revision != row.Revision)
+            row.Revision <= 0 || slot.Revision != row.Revision)
             throw new InvalidDataException("The persisted EF activation-slot row does not match its identity envelope or authoritative content.");
         ValidateSource(slot.Source);
         if (slot.ActiveActivationId is null && slot.Source is not null)

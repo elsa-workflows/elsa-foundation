@@ -281,8 +281,8 @@ public sealed class EfWorkflowPortfolioDataSource(
             var artifactId = Decode(row.ArtifactId);
             var definitionVersionId = Decode(row.DefinitionVersionId);
             var definitionId = Decode(row.DefinitionId);
-            if (row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId) ||
-                EfSchemaVersion.NotReadable("RuntimeArtifact", row.SchemaVersion, RuntimeArtifactEfModule.SchemaVersion) ||
+            if (EfSchemaVersion.NotReadable("RuntimeArtifact", row.SchemaVersion, RuntimeArtifactEfModule.SchemaVersion) ||
+                row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId) ||
                 !StringComparer.Ordinal.Equals(row.Id, EfRelationalIdentity.HashLengthFramed(scope, sourceReferenceId)) ||
                 !StringComparer.Ordinal.Equals(row.ScopeKey, Encode(scope)) ||
                 !StringComparer.Ordinal.Equals(row.ScopeKeyHash, EfRelationalIdentity.Hash(scope)) ||
