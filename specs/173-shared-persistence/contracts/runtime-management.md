@@ -1,6 +1,6 @@
 # Runtime preparation and legacy management contract
 
-Status: Phase 1 design for #1967, pending integrated review. These adapters require #1968 implementation. This contract does not complete the program's resource-aware editing and recovery epic #1964.
+Status: Integrated design review approved on 2026-09-23 for #1967. Publication is pending; implementation and runtime/database verification remain #1968/#1969 work.
 
 The [persistence configuration contract](persistence-configuration.md) owns resource shape, presence, enrollment and resolution. The [tooling contract](tooling.md) owns the shared host-default declaration. This document specifies when runtime and management invoke that resolution and which side effects are permitted.
 
@@ -28,6 +28,10 @@ Runtime connection lookup remains the existing module/provider path after materi
 Explicit file/shell reload recomposes a fresh generation and reruns preparation. Generated Provider/ConnectionName values must never become authored defaults on the next generation. A failed candidate leaves the previously active generation available under the existing shell lifecycle. Verify this against a running rebuilt Workbench; a resolver test alone does not prove reload behavior.
 
 Save only authored intent to the existing store. Do not save a generated plan, effective patches or secret-restored materialization as a new resource document. No new automatic data movement or migration-policy override occurs on a selection change. Successful activation does not itself prove data relocation.
+
+The supported operator trigger is the existing Workbench root endpoint `POST /_admin/shells/reload/{name}` (URL-encode the selected shell name), mapped by Program.cs through CShells.Management.Api. It calls IShellRegistry.ReloadAsync directly. Authentication uses the existing `X-Elsa-Module-Management-Key` header and `Elsa:ModuleManagement:ApiKey` configuration; keep the credential server-side and out of shell commands/evidence. No configured key returns 404; an invalid/missing supplied key returns 401. This is host-control access under ADR 0037, not a new browser/user permission or resource editing API.
+
+A completed handler returns the existing reload response with name, success, newShell, drain and error. HTTP 200 alone does not prove activation: assert success=true, the expected new generation and readiness. On candidate failure, assert success=false plus a safe error and verify the previous active generation remains usable. Wait for the host's configuration change notification in the fixture before invoking reload; changing a process's external environment requires restart rather than claiming JSON reload rereads process startup inputs. The existing shell-scoped ModularityApi registration already replaces its NullShellReloader with ShellReloader; do not rewire that unrelated fallback merely to expose the root reload operation.
 
 Configuration-provider change detection is scoped to candidate construction. The existing Features-only management revision and non-atomic store writes do not establish concurrency protection for resources or root sources. Full preview/apply consistency, resource editing and saved-versus-activated recovery remain #1964 outcomes.
 
@@ -59,7 +63,9 @@ Invocation order is normative:
 
 An ordinary guard is not sufficient: current guard execution continues after a refusal and a later persistence guard may perform database work. Preparation refusal returns immediately before all ordinary guards. It must also precede save, refresh and reload. It may read the current configuration and compose metadata without feature effects; it cannot invoke migration guards to discover whether a request is safe.
 
-For a legacy editor write, refuse with stable code `resource-managed-configuration` if either the current or candidate final graph has an enabled enrolled consumer with effective resource selection, including invalid selected intent. Evaluate both states: disabling/removing a resource consumer must not bypass the current-state check, and newly enabling one must not bypass the candidate check. A valid definitions-only catalog or an inactive binding with no applicable consumer does not trigger refusal. Failed/ambiguous composition cannot be treated as proof of no applicability.
+For a legacy editor write, refuse with the exact stable Reason prefix `[resource-managed-configuration]` if either the current or candidate final graph has an enabled enrolled consumer with effective resource selection, including invalid selected intent. Evaluate both states: disabling/removing a resource consumer must not bypass the current-state check, and newly enabling one must not bypass the candidate check. A valid definitions-only catalog or an inactive binding with no applicable consumer does not trigger refusal. Failed/ambiguous composition cannot be treated as proof of no applicability.
+
+This token is text in the existing FeatureActivationRefusal.Reason and consequently the existing HTTP 409 errors.generalErrors message; no structured code field is added to that legacy envelope. Each reason begins `[resource-managed-configuration] Feature '<featureId>' uses resource-managed persistence. Edit authored configuration and reload the shell.` Render/escape the feature identity as data and keep it non-secret. Multiple-refusal exception formatting remains unchanged; tests assert the prefix in each emitted reason.
 
 The refusal gives a safe instruction to edit authored configuration and use explicit reload for this first slice. It identifies affected feature/resource identities without displaying connection values or flattened effective settings. All current guards, legacy provider behavior and save semantics remain for requests with no applicable resource intent. Do not claim that this refusal supplies a full resource-management API.
 

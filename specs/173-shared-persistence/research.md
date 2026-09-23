@@ -1,6 +1,6 @@
 # Shared persistence research and decisions
 
-Status: Phase 0 research complete; Phase 1 contracts drafted; integrated review and tasks in progress. This does not approve implementation. The reviewed discovery records are [persistence boundaries](../../docs/reports/runtime-composition/persistence-boundaries.md) and [effective configuration](../../docs/reports/runtime-composition/effective-configuration.md).
+Status: Phase 0 research complete; Phase 1 contracts and 45-task breakdown passed integrated design review; #1967 publication remains pending. This does not approve implementation. The reviewed discovery records are [persistence boundaries](../../docs/reports/runtime-composition/persistence-boundaries.md) and [effective configuration](../../docs/reports/runtime-composition/effective-configuration.md).
 
 ## R1. Resolve before feature binding
 
@@ -10,7 +10,7 @@ Status: Phase 0 research complete; Phase 1 contracts drafted; integrated review 
 
 **Alternatives:** Activation guards alone cannot cover startup. Repeating resolution inside each feature loses shared context and makes tooling disagree. A generic settings framework would exceed the approved bounded slice.
 
-**Status:** Ownership reviewed in #1966. Detached input/output shapes and adapter contracts are drafted in data-model.md and contracts/; integrated review is in progress.
+**Status:** Ownership reviewed in #1966. Detached input/output shapes and adapter contracts are drafted in data-model.md and contracts/; integrated review has passed.
 
 ## R2. CShells lifecycle integration
 
@@ -44,7 +44,7 @@ The pinned [ConfigurationShellBlueprint](https://github.com/sfmskywalker/cshells
 
 **Required boundary:** Preserve ADR 0076's EF-free front end, host dependency closure, authoritative provider, explicit file context and environment/stdin secrets. Extend the protocol with deliberate version/capability negotiation before the provider-only projection discards resource intent. A live invocation currently receives one connection, so a multi-target layout must select and validate each target's module set independently.
 
-**Owner-approved direction (2026-09-23):** Adopt [strict target verification](decisions/tooling-target-verification.md), provided it remains bounded. Read the expected named connection inside the explicitly selected host context only to compare it with the supplied env/stdin value. Keep the actual database input env/stdin-only, refuse before database access on unresolved/mismatched values, and never emit either value. This adds a lookup and the existing equality check, not a generic secret provider or database probe. Runtime proof, protocol design and ADR review are still required.
+**Owner-approved direction (2026-09-23):** Adopt [strict target verification](decisions/tooling-target-verification.md), provided it remains bounded. Read the expected named connection inside the explicitly selected host context only to compare it with the supplied env/stdin value. Keep the actual database input env/stdin-only, refuse before database access on unresolved/mismatched values, and never emit either value. This adds a lookup and the existing equality check, not a generic secret provider or database probe. Protocol design and ADR review subsequently passed in Phase 1; runtime proof remains required.
 
 **Historical design question, resolved by R7 and the Phase 1 contracts:** Choose the narrow explicit input that reaches the host-owned resolver without shipping secret values in public plans or assuming the tool's environment is the host environment. Define configuration checks versus live target checks, and how unsupported old hosts refuse. Review any ADR extension before implementation.
 
@@ -54,7 +54,7 @@ The pinned [ConfigurationShellBlueprint](https://github.com/sfmskywalker/cshells
 
 **Required evidence:** Real design/publish/execute/restart data, migration histories and tooling target agreement; source/presence conflict matrix; successful recomputation on reload; secret redaction and no-side-effect refusals. Existing passing component tests are regression evidence only.
 
-**Status:** #1968 and #1969 remain blocked. R2 has a reviewed upstream implementation prerequisite; R3 has a bounded safe first-slice decision. R4 has owner approval for the bounded strict check; concrete context/protocol contracts remain to be reviewed. CShells #134 is delivered and #1967 is the single active delivery item. Complete plan/contracts/tasks and review before implementation readiness.
+**Status:** #1968 and #1969 remain blocked. R2 has a reviewed upstream implementation prerequisite; R3 has a bounded safe first-slice decision. R4 has owner approval for the bounded strict check; concrete context/protocol contracts have passed integrated review. CShells #134 is delivered and #1967 is the single active delivery item. Complete #1967 publication before activating the reviewed implementation tasks.
 
 ## R6. Explicit tooling source context: engineering findings to resolve in the contract
 

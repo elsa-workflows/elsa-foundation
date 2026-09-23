@@ -1,6 +1,6 @@
 ---
 
-description: "Draft task list for shared persistence resources"
+description: "Reviewed task list for shared persistence resources"
 ---
 
 # Tasks: Shared persistence resources
@@ -9,7 +9,7 @@ description: "Draft task list for shared persistence resources"
 
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `contracts/`, and `quickstart.md`.
 
-**Status**: Draft pending integrated review of `contracts/persistence-configuration.md`, `contracts/runtime-management.md`, and `contracts/tooling.md`. Do not begin implementation tasks until the contract review closes. The task breakdown is organized for one active delivery issue at a time: #1968 owns US1, US2, and US4; #1969 owns US3 after #1968.
+**Status**: Integrated design review approved on 2026-09-23. Complete #1967 publication/PR gates before activating implementation. One active delivery issue at a time: #1968 owns US1, US2 and US4; #1969 owns US3 after #1968. All tasks below are unimplemented.
 
 **Tests**: Tests are required by the specification. Add focused tests before implementation within each user-story phase and retain the existing regression suites.
 
@@ -19,14 +19,14 @@ description: "Draft task list for shared persistence resources"
 
 **Purpose**: Establish the reviewed package and test-fixture prerequisites without changing default runtime behavior.
 
-- [ ] T001 [P] Pin `CShells.Abstractions`, `CShells.AspNetCore`, `CShells.AspNetCore.Abstractions`, `CShells.FastEndpoints`, and `CShells.FastEndpoints.Abstractions` to `0.0.30-preview.157` in `Directory.Packages.props`; do not copy the upstream CShells hook into Elsa.
+- [ ] T001 [P] Pin `CShells`, `CShells.Management.Api`, `CShells.Abstractions`, `CShells.AspNetCore`, `CShells.AspNetCore.Abstractions`, `CShells.FastEndpoints`, and `CShells.FastEndpoints.Abstractions` to `0.0.30-preview.157` in `Directory.Packages.props`; do not copy the upstream CShells hook into Elsa.
 - [ ] T002 [P] Add the bounded shared-persistence host/test fixture in `tests/essentials/Persistence/EntityFrameworkCore/SharedResources/SharedPersistenceHostFixture.cs`, the PostgreSQL target-provisioning support in `tests/essentials/Persistence/EntityFrameworkCore/SharedResources/PostgreSqlTargetFixture.cs`, and their test project in `tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj` registered in `Elsa.Server.slnx`, while preserving the existing SQLite and legacy fixtures.
 
 ---
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-**Purpose**: Implement the provider-neutral input, resolution, enrollment, and preparation seams required by every user story. These tasks remain blocked until the integrated contract review is complete.
+**Purpose**: Implement the provider-neutral input, resolution, enrollment, and preparation seams required by every user story. These tasks become eligible after #1967 publication.
 
 - [ ] T003 [P] Add the presence-aware detached resource, shell-selection, source-provenance, participant, resolution, refusal, and evidence records in `src/essentials/Persistence/EntityFramework/ResourceResolution/PersistenceResourceModels.cs`, keeping connection-string values out of the detached model.
 - [ ] T004 Implement the side-effect-free precedence and atomic Provider/ConnectionName resolver in `src/essentials/Persistence/EntityFramework/ResourceResolution/PersistenceResourceResolver.cs` using shell binding → shell default → root default → legacy configuration, including blank/null/wrong-type/refusal and reset semantics.
@@ -55,7 +55,7 @@ description: "Draft task list for shared persistence resources"
 ### Tests for User Story 1
 
 - [ ] T014 [P] [US1] Add shared-layout resolver/materialization contract tests in `tests/essentials/Persistence/EntityFramework/Tests/SharedPersistenceLayoutTests.cs` covering all enrolled Runtime, Workflows Design, Activities Design, and Publishing consumers and rejecting omitted-provider SQLite drift.
-- [ ] T015 [P] [US1] Add host composition tests in `tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/SharedPersistenceCompositionTests.cs`, `tests/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Tests/SharedPersistenceCompositionTests.cs`, and `tests/essentials/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/SharedPersistenceCompositionTests.cs` for restart-safe persisted design, publication, and execution state.
+- [ ] T015 [P] [US1] Add host composition tests in `tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/SharedPersistenceCompositionTests.cs`, `tests/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Tests/SharedPersistenceCompositionTests.cs`, and `tests/essentials/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/SharedPersistenceCompositionTests.cs` for restart-safe persisted design, publication, and execution state. The shared host fixture/E2E must also explicitly exercise Activities Design creation/publication and inspect its persisted rows/history; a Runtime-only smoke does not cover it.
 
 ### Implementation for User Story 1
 
@@ -89,7 +89,7 @@ description: "Draft task list for shared persistence resources"
 ### Implementation for User Story 2
 
 - [ ] T027 [US2] Implement the mandatory management preparation order in `src/essentials/Modularity/Nuplane/Services/FeatureManagementService.cs` and `src/essentials/Modularity/Core/Contracts/IFeatureActivationContextPreparer.cs`: restore secrets and validate, prepare once, pass the returned context to `EnsureActivationAllowedAsync`, then run ordinary guards and only then save/refresh/reload.
-- [ ] T028 [US2] Register the legacy pass-through and EF preparation implementations in `src/essentials/Modularity/Nuplane/Extensions/ModularityNuplaneServiceCollectionExtensions.cs` and `src/essentials/Modularity/EntityFramework/Extensions/ModularityEntityFrameworkServiceCollectionExtensions.cs`, returning the existing redacted `FeatureActivationRefusedException` with `resource-managed-configuration` before any ordinary guard or mutation.
+- [ ] T028 [US2] Register the legacy pass-through and EF preparation implementations in `src/essentials/Modularity/Nuplane/Extensions/ModularityNuplaneServiceCollectionExtensions.cs` and `src/essentials/Modularity/EntityFramework/Extensions/ModularityEntityFrameworkServiceCollectionExtensions.cs`, throwing the existing redacted `FeatureActivationRefusedException` with the exact `[resource-managed-configuration]` Reason prefix in the unchanged HTTP 409 envelope before any ordinary guard or mutation.
 - [ ] T029 [US2] Add management refusal and downstream-side-effect tests in `tests/essentials/Modularity/Tests/FeatureManagementServiceTests.cs` and `tests/essentials/Modularity/EntityFramework/Tests/EfPendingMigrationActivationGuardTests.cs` for current-only, candidate-only, invalid applicable intent, definitions-only, and wholly legacy requests.
 - [ ] T030 [US2] Add code-default, disabled/reintroduced dependency, opaque configurator, unknown-consumer, and host-owned/private-store preservation tests in `tests/essentials/Modularity/EntityFramework/Tests/FeatureActivationContextPreparerTests.cs` and `tests/essentials/Persistence/EntityFramework/Tests/PersistenceResourceResolverTests.cs`.
 - [ ] T031 [US2] Add legacy host regression journeys in `tests/essentials/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEntityFrameworkCoreShellReloadTests.cs`, `tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/ModuleMigrationTests.cs`, and `e2e-tests/durability/Test-RestartRecovery.ps1` proving resource mode is absent and existing behavior remains intact.
@@ -113,7 +113,7 @@ description: "Draft task list for shared persistence resources"
 
 ### Implementation for User Story 4
 
-- [ ] T034 [US4] Implement fresh source-snapshot preparation and reload failure behavior in `src/essentials/Modularity/EntityFramework/EfPersistenceActivationContextPreparer.cs` and `src/essentials/Modularity/Api/Services/ShellReloader.cs`, then prove it through the supported Workbench reload wiring in `src/apps/Elsa.Workbench/Program.cs` without changing the Foundation Host endpoint contract or writing generated patches back to authored configuration.
+- [ ] T034 [US4] Implement fresh source-snapshot preparation in `src/essentials/Modularity/EntityFramework/EfPersistenceShellSettingsPreparer.cs` and prove explicit reload through the existing Workbench `POST /_admin/shells/reload/{name}` mapping in `src/apps/Elsa.Workbench/Program.cs` using `e2e-tests/composition/Test-SharedPersistence.ps1`; assert success/new generation/readiness rather than HTTP 200 alone, and assert previous-generation availability on failure. Do not add an endpoint or rewire the existing shell-scoped reloader fallback.
 - [ ] T035 [US4] Implement host-owned file and inherited-environment context creation in `src/essentials/Persistence/EntityFramework/Tooling/EfToolingConfigurationContext.cs`; keep `src/essentials/Cli/Worker/HostAppSettings.cs`, `src/essentials/Cli/ShellConfiguration.cs`, and `src/essentials/Cli/Worker/WorkerRunner.cs` limited to canonical host/shell/environment metadata and resource-intent transport, with no claim of observing a separate running host.
 - [ ] T036 [US4] Implement closed manifest v2/redacted context evidence and schema v1 compatibility in `src/essentials/Persistence/EntityFramework/Tooling/EfToolingContract.cs`, `src/essentials/Persistence/EntityFramework/Tooling/EfMigrationPlan.cs`, `src/essentials/Cli/MigrationPlan.cs`, `src/essentials/Cli/Report.cs`, and `src/essentials/Cli/ScriptCheck.cs`; script-check must reconstruct selectors from the committed manifest only.
 - [ ] T037 [US4] Add current/candidate resource-mode refusal and source-change detection tests in `tests/essentials/Modularity/Tests/FeatureManagementServiceTests.cs` and `tests/essentials/Modularity/EntityFramework/Tests/PersistenceResourceReloadTests.cs`, proving refusal before save/refresh/reload with zero downstream guard activity while definitions-only and wholly legacy edits retain existing behavior; do not implement deferred #1964 acceptance or recovery here.
@@ -150,7 +150,7 @@ description: "Draft task list for shared persistence resources"
 
 **Purpose**: Complete source-grounded documentation, traceability, and focused verification without expanding the feature into profiles, groups, builder UX, generic settings, or durable apply/recovery.
 
-- [ ] T044 [P] Update `specs/173-shared-persistence/quickstart.md`, `specs/173-shared-persistence/plan.md`, `specs/173-shared-persistence/contracts/persistence-configuration.md`, `specs/173-shared-persistence/contracts/runtime-management.md`, `specs/173-shared-persistence/contracts/tooling.md`, `src/essentials/Persistence/EntityFramework/README.md`, `src/essentials/Cli/README.md`, `src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md`, and `src/essentials/Modularity/Api/EXTENSION_POINTS.md` with final supported layouts, legacy migration, host-owned exclusions, refusal/evidence rules, and a checked FR/SC traceability record; keep the documents marked draft until integrated review is complete.
+- [ ] T044 [P] Update `specs/173-shared-persistence/quickstart.md`, `specs/173-shared-persistence/plan.md`, `specs/173-shared-persistence/contracts/persistence-configuration.md`, `specs/173-shared-persistence/contracts/runtime-management.md`, `specs/173-shared-persistence/contracts/tooling.md`, `src/essentials/Persistence/EntityFramework/README.md`, `src/essentials/Cli/README.md`, `src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md`, and `src/essentials/Modularity/Api/EXTENSION_POINTS.md` with final supported layouts, legacy migration, host-owned exclusions, refusal/evidence rules, and a checked FR/SC traceability record; keep implementation evidence distinct from reviewed design.
 - [ ] T045 Run the focused component/architecture suites, rebuilt-host/database/tooling quickstart, mutation checks, `git diff --check`, root diff review, required current-head CI/review gates, and the generated-map freshness check before every merge; refresh generated maps only when authoritative inputs changed and that refresh is explicitly authorized. Record exact commands, current-head evidence, and unavailable gates in `specs/173-shared-persistence/quickstart.md` and the delivery issue without claiming unrun evidence.
 
 ---
@@ -184,7 +184,7 @@ description: "Draft task list for shared persistence resources"
 - **User Story 2 (Phase 4)**: Baseline tests T025-T026 may run alongside US1 after Foundation; management implementation T027-T031 depends on the preparation seam and resolver from Foundation and the shared materialization behavior from US1.
 - **User Story 4 (Phase 5)**: Depends on Foundation and the shared target path from US1; its tooling and management source-context work must complete before US3.
 - **User Story 3 (Phase 6)**: Depends on US1 and the applicable validation/evidence from US4; #1969 is blocked until #1968's shared layout is accepted.
-- **Polish (Phase 7)**: Depends on the desired stories and their evidence; keep the specification/contract status draft until integrated review closes.
+- **Polish (Phase 7)**: Depends on the desired stories and their evidence; update evidence only after the corresponding implementation checks pass.
 
 ### User Story Dependencies
 
@@ -271,5 +271,5 @@ Do not add tasks for a general configuration framework, profiles/groups, a runti
 
 - `[P]` tasks touch separate files and have no dependency on incomplete work.
 - `[US1]`, `[US2]`, `[US3]`, and `[US4]` map directly to the specification's user stories.
-- The current contracts are integrated-review drafts. Final type names, wire details, and exact file placement remain subject to that review; implementation tasks are intentionally gated.
+- The contracts passed integrated design review. Any implementation-driven change to their public behavior requires an explicit reviewed amendment; file-local implementation choices remain routine engineering decisions.
 - #1902, #1895, #1900, #1159, and #1145 remain existing related work/dependencies; this task list does not duplicate their scope.

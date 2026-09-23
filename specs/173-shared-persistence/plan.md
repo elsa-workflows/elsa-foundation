@@ -4,7 +4,7 @@
 
 **Input**: specification #1967 / `specs/173-shared-persistence/spec.md`.
 
-**Status**: Phase 0 complete. Phase 1 artifacts drafted and under integrated review; tasks are being generated. Not yet approved for Elsa implementation. The owner approved bounded strict target verification on 2026-09-23; the upstream prerequisite is published and verified as `0.0.30-preview.157`.
+**Status**: Phase 0 and Phase 1 complete; the integrated model/contracts/quickstart and 45-task breakdown passed independent design review on 2026-09-23. Publish and complete #1967's PR gate before activating #1968 in the single delivery queue. This is design readiness, not implementation or runtime/database evidence. The owner approved bounded strict target verification; the upstream prerequisite is published and verified as `0.0.30-preview.157`.
 
 ## Summary
 
@@ -32,7 +32,7 @@ Use a generic final-settings preparation hook in CShells so Elsa sees global and
 
 **Scale/Scope**: The 13 stable feature IDs across six participant sets in the spec, with only the first four sets in the initial shared layout and both diagnostics sets in the second layout. Dynamic/unknown participants do not become ready by resemblance of options.
 
-**Approved direction**: Use bounded strict live target verification; see [decision record](decisions/tooling-target-verification.md). The owner approved one expected-value lookup and strict comparison, while retaining env/stdin as the only actual database connection input. Concrete source, snapshot, version and selection rules are in [the tooling contract](contracts/tooling.md); integrated review remains the readiness gate.
+**Approved direction**: Use bounded strict live target verification; see [decision record](decisions/tooling-target-verification.md). The owner approved one expected-value lookup and strict comparison, while retaining env/stdin as the only actual database connection input. Concrete source, snapshot, version and selection rules are in [the tooling contract](contracts/tooling.md); integrated design review passed; #1967 publication remains the scheduling gate.
 
 ## Constitution Check
 
@@ -46,7 +46,7 @@ Pre-design research check:
 - Framework §2.22: document supported configuration, refusal, lifecycle and extension behavior with evidence.
 - Elsa §E2.2: Runtime/Design dependency boundaries and deployment shapes remain unchanged.
 - Framework §2.12 / Elsa §E4: the bounded persistence contract does not ratify deferred generic settings classification.
-- ADR 0066/0073/0076: retain ordered publication, first-party EF ownership and host-closure tooling. The bounded D7 verification extension has owner approval; its concrete contract and ADR amendment still require the normal design review.
+- ADR 0066/0073/0076: retain ordered publication, first-party EF ownership and host-closure tooling. The bounded D7 verification extension has owner approval; its concrete contract and ADR amendment have now passed integrated design review.
 
 Post-design check against the current constitutions:
 
@@ -62,7 +62,7 @@ Post-design check against the current constitutions:
 | ADR 0073/0076 | EF owns tooling inside the selected host closure. Versioned protocol retains legacy behavior; the owner-approved D7 extension only reads expected values for strict live comparison. |
 | Deferred sections | Framework §2.12 and Elsa §E4 remain deferred. No claim rests on provisional framework §2.24 or Elsa §E2.9. |
 
-No constitutional exception is proposed. Final integrated review must confirm the public adapter boundary and task coverage before this check is considered complete. The CShells prerequisite has its own completed package/dependency and regression gates.
+No constitutional exception is proposed. The final integrated review confirmed the public adapter boundary, concrete reload trigger, unchanged legacy error envelope and task coverage. The post-design constitution check is complete; implementation still must supply its prescribed evidence. The CShells prerequisite has its own completed package/dependency and regression gates.
 
 ## Project Structure
 
@@ -105,12 +105,12 @@ specs/173-shared-persistence/
 
 R4 has the owner decision. The decisions now define the authored root/shell hierarchy, effective legacy-field presence, explicit source modes, declared target groups and no-selector semantic preflight. Independent review approved one opaque host-owned source snapshot reused by internal list and script, atomic capability negotiation, canonical worker selectors and typed error redaction. A published-package probe confirmed the null-presence distinction and public hostless discovery/dependency APIs.
 
-The host-default composer direction and factory/context-aware invocation signatures have passed Phase 0 review. Review the Phase 1 model/contracts/quickstart and task breakdown before publishing #1968 as implementable. Source-file parsing alone must not silently omit Workbench's ConfigureAllShells choices. CShells #134 is complete with published-package verification. This specification remains the single active delivery item.
+The host-default composer direction and factory/context-aware invocation signatures have passed Phase 0 review. The Phase 1 model/contracts/quickstart and task breakdown passed integrated review. Publish the specification and complete its PR gates before activating #1968. Source-file parsing alone must not silently omit Workbench's ConfigureAllShells choices. CShells #134 is complete with published-package verification. This specification remains the single active delivery item.
 
 ## Delivery and validation gates
 
 1. **Done:** CShells #134 merged and `0.0.30-preview.157` was published and verified through an isolated package consumer. Pin it in Elsa when integrating #1968.
-2. Review the authored configuration, runtime/management and tooling contracts against every FR/SC, all four spec journeys and both delivery issues; complete bounded tasks using the normal Spec Kit flow.
+2. **Design done:** authored configuration, runtime/management and tooling contracts reviewed against all 21 FRs, six SCs and four spec journeys; 45 tasks produced using Spec Kit. Complete the #1967 publication/PR gate.
 3. Deliver #1968 as the shared runtime/database/tooling path, including legacy checks and preflight refusals. Follow with #1969's actual two-target proof and negative layouts.
 4. Run focused component/architecture tests and applicable backend end-to-end journeys. Refresh/check generated maps only when authoritative inputs change; required CI and review must pass before merge. Do not infer a full host result from a pure resolver test.
 5. Publish evidence and keep issue dependencies, readiness, status and labels aligned. The program's other four epics remain required outcomes.

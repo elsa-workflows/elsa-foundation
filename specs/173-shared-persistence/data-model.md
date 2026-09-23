@@ -1,6 +1,6 @@
 # Shared persistence configuration data model
 
-Status: Design pending integrated review for #1967. This records Phase 1 contract input; it is not implementation proof, a ratified generic settings model, or a readiness claim.
+Status: Integrated design review approved on 2026-09-23 for #1967. Publication is pending; implementation and runtime/database verification remain #1968/#1969 work.
 
 Canonical decisions:
 

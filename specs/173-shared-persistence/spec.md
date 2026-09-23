@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-23
 
-**Status**: Draft
+**Status**: Design reviewed; #1967 publication pending
 
 **Input**: Program [#1959](https://github.com/elsa-workflows/elsa-foundation/issues/1959), specification [#1967](https://github.com/elsa-workflows/elsa-foundation/issues/1967): configure persistence once, retain explicit feature overrides, and make runtime and migration tooling agree. Incorporates reviewed spikes [#1965](https://github.com/elsa-workflows/elsa-foundation/issues/1965#issuecomment-5798240404) and [#1966](https://github.com/elsa-workflows/elsa-foundation/issues/1966#issuecomment-5798450673).
 
@@ -161,4 +161,4 @@ Stable feature IDs below define first-slice enrollment. Context/module ownership
 - Profiles, groups, builder screens, data relocation and durable cross-system operation orchestration remain later program work. The first slice still must integrate safely with existing management and reload paths.
 - The first slice uses file-authored resources and explicit shell reload. The legacy feature editor refuses applicable resource-mode writes before guards/mutation; safe resource-aware editing remains required under #1964.
 - Resource editing through the future builder/API and broader recovery remain required program outcomes under #1963/#1964; conditional first-slice management acceptance does not declare those outcomes delivered.
-- The plan must settle the concrete reload seam, authored format, tooling protocol and management drift check before this draft can be approved for implementation. These are engineering evidence gates owned by #1967, not permission to implement from an unresolved draft.
+- The reviewed plan/contracts/tasks settle the concrete reload seam, authored format, tooling protocol and bounded management drift check. Complete #1967 publication before activating implementation; runtime/database acceptance remains owned by #1968/#1969.

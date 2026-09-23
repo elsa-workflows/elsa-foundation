@@ -453,7 +453,7 @@ infer equivalence for differently formatted strings or separate migration creden
 context transport, redacted failures and compatibility gates are specified and reviewed under
 [specification 173](../../specs/173-shared-persistence/decisions/tooling-target-verification.md)
 and its [configuration-context contract](../../specs/173-shared-persistence/decisions/tooling-configuration-context.md).
-Final contract and implementation-readiness review remain pending. The legacy connection-input contract remains as
+The specification contracts passed integrated design review on 2026-09-23; publication and implementation evidence remain pending. The legacy connection-input contract remains as
 stated above.
 
 ### D8 — Post-migration actions are declared, audited at startup, and never auto-run

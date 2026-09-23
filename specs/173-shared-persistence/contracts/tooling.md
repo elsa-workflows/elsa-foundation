@@ -1,6 +1,6 @@
 # Resource-aware persistence tooling contract
 
-Status: Phase 1 design for #1967; pending integrated review. The new API and flags below require #1968 implementation. Legacy protocol and manifest version 1 remain unchanged.
+Status: Integrated design review approved on 2026-09-23 for #1967. Publication is pending; implementation and runtime/database verification remain #1968/#1969 work.
 
 This contract specializes the reviewed [configuration-context decision](../decisions/tooling-configuration-context.md), [target-selection decision](../decisions/tooling-target-selection.md), and [strict verification decision](../decisions/tooling-target-verification.md). Configuration shape and enrollment belong to [persistence-configuration.md](persistence-configuration.md). No generic secret-provider or database-identity service is introduced.
 

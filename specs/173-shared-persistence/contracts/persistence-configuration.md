@@ -1,6 +1,6 @@
 # Persistence configuration contracts
 
-Status: Design pending integrated review for #1967. This document records the Phase 1 boundaries; it is not implementation proof, host proof, database proof, or a public settings API.
+Status: Integrated design review approved on 2026-09-23 for #1967. Publication is pending; implementation and runtime/database verification remain #1968/#1969 work.
 
 Canonical decisions:
 
@@ -122,7 +122,7 @@ on the host assembly, carrying its composer Type, with the composer implementing
 
     IEfToolingShellDefaults.Configure(ShellBuilder, IConfiguration)
 
-The host must enforce the same declaration at runtime. The [tooling contract](tooling.md) defines the distinct private-worker, context, operation and manifest versions under review; the legacy host entry point remains v1. The context is an opaque host-owned snapshot and never includes the actual env/stdin connection. The worker must refuse old hosts or partial capability negotiation rather than fall back to provider-only projection.
+The host must enforce the same declaration at runtime. The [tooling contract](tooling.md) defines the distinct private-worker, context, operation and manifest versions; the legacy host entry point remains v1. The context is an opaque host-owned snapshot and never includes the actual env/stdin connection. The worker must refuse old hosts or partial capability negotiation rather than fall back to provider-only projection.
 
 Offline list/plan/script uses resource membership and selected module scope without expected-connection lookup. Live apply/validate/post-migrate obtains the actual connection only through existing env/stdin input, looks up the expected named connection inside the explicit host context, and strictly compares them before creating a DbContext or opening a database. No connection value, hash, raw path, snapshot, or driver/reflection exception reaches output or process arguments.
 
@@ -180,4 +180,4 @@ The contract maps to every requirement in [specification § Functional Requireme
 | FR-020 | Unknown authored data survives and unknown ownership remains unresolved. |
 | FR-021 | The linked specification, decisions, and verification inventory define required evidence. |
 
-Implementation, package pinning, runtime host proof, diagnostics split proof, and integrated verification remain pending review.
+Implementation, package pinning, runtime host proof, diagnostics split proof, and integrated verification remain implementation gates.
