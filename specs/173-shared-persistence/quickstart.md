@@ -62,6 +62,10 @@ A full local architecture-suite attempt reported 243 passed and 15 EF dependency
 
 `IFeatureActivationContextPreparer` now expresses a single replacement preparation call using the existing `FeatureActivationContext` and `FeatureActivationRefusedException` contract. `LegacyFeatureActivationContextPreparer` returns the same context for legacy compositions and honors cancellation; it carries no EF types. `dotnet build src/essentials/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj --no-restore --verbosity quiet` succeeded with zero warnings/errors. Registration and mandatory invocation before ordinary guards are T027-T028 and are not claimed here.
 
+## T011 enrollment architecture checkpoint (2026-09-23)
+
+The migration metadata tests lock the exact 13 stable enrolled IDs, their canonical modules and context types, explicit host-owned and Dashboard exclusions, and constructor-free discovery. An architecture guard now requires the EF policy project to have no project references or Elsa feature-package references and its resource-resolution sources to avoid direct workflow/activity/diagnostics feature types. The focused enrollment/facade suite passed 7/7 and the three relevant architecture guards passed 3/3 with zero skips. This is a boundary check, not a runtime activation or database-layout proof.
+
 ## What success must prove
 
 The shared layout selects one named PostgreSQL resource for every enabled enrolled Runtime, Workflows Design, Activities Design and Publishing consumer. The diagnostics layout selects a second named resource for both Structured Logs and OpenTelemetry while leaving the primary consumers on their original target. The first slice does not redirect host-owned OpenIddict, private stores, or unknown persistence consumers ([spec](spec.md#normative-supported-participants-and-constraints)).

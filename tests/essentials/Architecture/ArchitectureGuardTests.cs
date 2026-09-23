@@ -121,6 +121,26 @@ public sealed partial class ArchitectureGuardTests
     }
 
     [Fact]
+    public void Shared_persistence_resolution_does_not_depend_on_feature_assemblies()
+    {
+        var policy = Path.Combine(RepoRoot, "src", "essentials", "Persistence", "EntityFramework");
+        var project = XDocument.Load(Path.Join(policy, "Elsa.Persistence.EntityFramework.csproj"));
+        Assert.Empty(project.Descendants("ProjectReference"));
+        Assert.DoesNotContain(project.Descendants("PackageReference"), reference =>
+            (reference.Attribute("Include")?.Value ?? string.Empty).StartsWith("Elsa.", StringComparison.Ordinal));
+
+        var boundarySources = Directory.EnumerateFiles(Path.Join(policy, "ResourceResolution"), "*.cs")
+            .Append(Path.Join(policy, "Tooling", "EfPersistenceParticipantCatalog.cs"));
+        foreach (var path in boundarySources)
+        {
+            var source = File.ReadAllText(path);
+            Assert.DoesNotContain("Elsa.Workflows.", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("Elsa.Activities.", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("Elsa.Diagnostics.", source, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void Active_project_and_solution_references_resolve_to_existing_projects()
     {
         var missing = new List<string>();
