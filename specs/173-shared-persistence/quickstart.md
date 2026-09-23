@@ -361,8 +361,8 @@ Do not attach raw configuration snapshots, connection strings, passwords, hashes
 
 This guide deliberately leaves the following as implementation gates rather than pretending they pass:
 
-- CShells `0.0.30-preview.158` is pinned; the resource preparation adapter is not implemented yet.
-- The resource resolver, runtime pre-binding adapter, Workbench resource fixture, and management pre-guard are not present in this specification tree.
+- CShells `0.0.30-preview.158` is pinned. The pure resolver and metadata-only preparation facade exist, including EF provider/known-context preflight, but no CShells registration invokes the facade yet. The management pre-guard is still absent.
+- The shared PostgreSQL fixture exists and passes its bounded container suite. The rebuilt Workbench resource journey and its authored reload proof remain open.
 - The proposed `--configuration-context` and `--resource` protocol fields, resource-aware `--shell` transport, and old-host capability negotiation are not implemented by the current CLI.
 - No committed #1968 shared-layout or #1969 diagnostics PostgreSQL e2e script exists yet.
 - Current e2e scripts prove SQLite/default-shell HTTP behavior and diagnostics routes, not named-resource target placement.

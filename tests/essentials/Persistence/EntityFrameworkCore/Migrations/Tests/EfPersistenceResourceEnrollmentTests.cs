@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Reflection.Emit;
 using CShells.Features;
 using CShells;
 using CShells.Lifecycle;
@@ -78,7 +79,8 @@ public sealed class EfPersistenceResourceEnrollmentTests
         {
             ["Elsa:Persistence:Resources:primary:Provider"] = "PostgreSql",
             ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared",
-            ["Elsa:Persistence:DefaultResource"] = "primary"
+            ["Elsa:Persistence:DefaultResource"] = "primary",
+            ["ConnectionStrings:Shared"] = "Host=localhost;Database=elsa;Username=test;Password=secret-canary"
         }).Build();
 
         var result = EfPersistencePreparation.Prepare(context, configuration);
@@ -88,6 +90,28 @@ public sealed class EfPersistenceResourceEnrollmentTests
         Assert.Equal("PostgreSql", result.Patch.ConfigurationData["WorkflowsRuntimeEntityFrameworkCore:Provider"]);
         Assert.Equal("Shared", result.Patch.ConfigurationData["WorkflowsRuntimeEntityFrameworkCore:ConnectionName"]);
         Assert.Equal(2, result.Patch.ConfigurationData.Count);
+    }
+
+    [Fact]
+    public void Preparation_ignores_unrelated_dynamic_module_metadata()
+    {
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(
+            new AssemblyName($"Unrelated.InvalidEfModule.{Guid.NewGuid():N}"), AssemblyBuilderAccess.Run);
+        var constructor = typeof(EfModuleAttribute).GetConstructor([typeof(string), typeof(Type)])!;
+        var history = typeof(EfModuleAttribute).GetProperty(nameof(EfModuleAttribute.HistoryModule))!;
+        assembly.SetCustomAttribute(new CustomAttributeBuilder(constructor,
+            ["Unrelated.Invalid", typeof(object)], [history], ["Bad.Name"]));
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:Resources:primary:Provider"] = "Sqlite",
+            ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared",
+            ["Elsa:Persistence:DefaultResource"] = "primary",
+            ["ConnectionStrings:Shared"] = "Data Source=shared.db"
+        }).Build();
+
+        var result = EfPersistencePreparation.Prepare(PreparationContext(), configuration);
+
+        Assert.Empty(result.RefusalCodes);
     }
 
     [Fact]
@@ -169,12 +193,123 @@ public sealed class EfPersistenceResourceEnrollmentTests
         Assert.Empty(result.Patch.ConfigurationData);
     }
 
+    [Theory]
+    [InlineData("Sqlite", "resource-definition-invalid")]
+    [InlineData("UnknownProvider", "resource-context-conflict")]
+    public void Resource_preflight_refuses_missing_connection_or_unknown_provider_before_patching(
+        string provider, string code)
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:Resources:primary:Provider"] = provider,
+            ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Missing",
+            ["Elsa:Persistence:DefaultResource"] = "primary"
+        };
+        if (provider == "UnknownProvider")
+            values["ConnectionStrings:Missing"] = "Data Source=unused.db";
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+
+        var result = EfPersistencePreparation.Prepare(PreparationContext(), configuration);
+
+        Assert.Contains(code, result.RefusalCodes);
+        Assert.Empty(result.Patch.ConfigurationData);
+    }
+
+    [Theory]
+    [InlineData("Host=localhost;Database=one", "Host=localhost;Database=two", false, false)]
+    [InlineData("Host=localhost;Database=one", "Host=localhost;Database=one", false, true)]
+    [InlineData("Host=localhost;Database=one", "Host=localhost;Database=one", true, false)]
+    public void Features_sharing_runtime_context_must_agree_on_physical_target_and_pooling(
+        string firstConnection, string secondConnection, bool firstPooling, bool secondPooling)
+    {
+        var context = RuntimePairContext(new Dictionary<string, string?>
+            {
+                ["WorkflowsRuntimeEntityFrameworkCore:Pooling"] = firstPooling.ToString(),
+                ["WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence:Pooling"] = secondPooling.ToString(),
+                ["Elsa:Persistence:Bindings:WorkflowsRuntimeEntityFrameworkCore"] = "first",
+                ["Elsa:Persistence:Bindings:WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence"] = "second"
+            });
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:Resources:first:Provider"] = "Sqlite",
+            ["Elsa:Persistence:Resources:first:ConnectionName"] = "One",
+            ["Elsa:Persistence:Resources:second:Provider"] = "Sqlite",
+            ["Elsa:Persistence:Resources:second:ConnectionName"] = "Two",
+            ["ConnectionStrings:One"] = firstConnection,
+            ["ConnectionStrings:Two"] = secondConnection
+        }).Build();
+
+        var result = EfPersistencePreparation.Prepare(context, configuration);
+
+        Assert.Contains("resource-context-conflict", result.RefusalCodes);
+        Assert.Empty(result.Patch.ConfigurationData);
+        Assert.DoesNotContain(firstConnection, System.Text.Json.JsonSerializer.Serialize(result));
+        Assert.DoesNotContain(secondConnection, System.Text.Json.JsonSerializer.Serialize(result));
+    }
+
+    [Fact]
+    public void Different_connection_names_can_share_the_shells_effective_runtime_target()
+    {
+        var context = RuntimePairContext(new Dictionary<string, string?>
+            {
+                ["Elsa:Persistence:Bindings:WorkflowsRuntimeEntityFrameworkCore"] = "first",
+                ["Elsa:Persistence:Bindings:WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence"] = "second",
+                ["ConnectionStrings:One"] = "Data Source=same.db"
+            });
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:Resources:first:Provider"] = "Sqlite",
+            ["Elsa:Persistence:Resources:first:ConnectionName"] = "One",
+            ["Elsa:Persistence:Resources:second:Provider"] = "Sqlite",
+            ["Elsa:Persistence:Resources:second:ConnectionName"] = "Two",
+            ["ConnectionStrings:One"] = "Data Source=root-would-differ.db",
+            ["ConnectionStrings:Two"] = "Data Source=same.db"
+        }).Build();
+
+        var result = EfPersistencePreparation.Prepare(context, configuration);
+
+        Assert.Empty(result.RefusalCodes);
+        Assert.Equal(4, result.Patch.ConfigurationData.Count);
+    }
+
+    [Fact]
+    public void Resource_selected_runtime_feature_cannot_split_a_legacy_runtime_feature()
+    {
+        var context = RuntimePairContext(new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:Bindings:WorkflowsRuntimeEntityFrameworkCore"] = "first"
+        });
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:Resources:first:Provider"] = "Sqlite",
+            ["Elsa:Persistence:Resources:first:ConnectionName"] = "Selected",
+            ["ConnectionStrings:Selected"] = "Data Source=selected.db",
+            ["ConnectionStrings:Elsa"] = "Data Source=legacy.db"
+        }).Build();
+
+        var result = EfPersistencePreparation.Prepare(context, configuration);
+
+        Assert.Contains("resource-context-conflict", result.RefusalCodes);
+        Assert.Empty(result.Patch.ConfigurationData);
+    }
+
     private static ShellSettingsPreparationContext PreparationContext(IReadOnlyDictionary<string, string?>? values = null) =>
         new(new ShellId("default"), values ?? new Dictionary<string, string?>(),
             ["WorkflowsRuntimeEntityFrameworkCore"], [], [],
             [new ShellFeaturePreparationDescriptor("WorkflowsRuntimeEntityFrameworkCore", [],
                 typeof(RuntimeEntityFrameworkCoreFeature), false)],
             ["WorkflowsRuntimeEntityFrameworkCore"], [], []);
+
+    private static ShellSettingsPreparationContext RuntimePairContext(IReadOnlyDictionary<string, string?> values) =>
+        new(new ShellId("default"), values,
+            ["WorkflowsRuntimeEntityFrameworkCore", "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence"], [], [],
+            [
+                new ShellFeaturePreparationDescriptor("WorkflowsRuntimeEntityFrameworkCore", [],
+                    typeof(RuntimeEntityFrameworkCoreFeature), false),
+                new ShellFeaturePreparationDescriptor("WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence", [],
+                    typeof(RuntimeBookmarksEntityFrameworkCoreFeature), false)
+            ],
+            ["WorkflowsRuntimeEntityFrameworkCore", "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence"], [], []);
 }
 
 [ShellFeature(name: "ThrowingEnrollmentProbe")]

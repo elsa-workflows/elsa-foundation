@@ -130,7 +130,8 @@ public sealed partial class ArchitectureGuardTests
             (reference.Attribute("Include")?.Value ?? string.Empty).StartsWith("Elsa.", StringComparison.Ordinal));
 
         var boundarySources = Directory.EnumerateFiles(Path.Join(policy, "ResourceResolution"), "*.cs")
-            .Append(Path.Join(policy, "Tooling", "EfPersistenceParticipantCatalog.cs"));
+            .Append(Path.Join(policy, "Tooling", "EfPersistenceParticipantCatalog.cs"))
+            .Append(Path.Join(policy, "Tooling", "EfPersistenceResourceValidator.cs"));
         foreach (var path in boundarySources)
         {
             var source = File.ReadAllText(path);

@@ -14,7 +14,18 @@ public static class EfPersistencePreparation
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(rootConfiguration);
 
-        var discovered = EfPersistenceParticipantCatalog.Discover(AppDomain.CurrentDomain.GetAssemblies())
+        // Known enrollment includes inactive and metadata-only IDs, so startup types from
+        // this graph alone are insufficient. Dynamic assemblies are not part of a host's
+        // stable package closure and may include deliberately malformed test declarations.
+        var loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(x => !x.IsDynamic)
+            .ToArray();
+        var featureAssemblies = context.OrderedFeatures
+            .Select(x => x.StartupType?.Assembly)
+            .OfType<System.Reflection.Assembly>()
+            .Distinct()
+            .ToArray();
+        var discovered = EfPersistenceParticipantCatalog.Discover(loadedAssemblies)
             .GroupBy(x => x.FeatureId, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key,
                 group => group.Count() == 1 ? group.First() : group.First() with { ContextIdentity = string.Empty },
@@ -43,10 +54,18 @@ public static class EfPersistencePreparation
             if (selected.ResourceName is not null &&
                 read.UnsupportedResourceDefinitions.Contains(selected.ResourceName))
                 refusals.Add("resource-definition-invalid");
-            if (string.IsNullOrEmpty(selected.Participant.ContextIdentity) ||
-                selected.Participant.ModuleNames.Count == 0)
+            if (!selected.Participant.HasOpaqueConfigurator &&
+                (string.IsNullOrEmpty(selected.Participant.ContextIdentity) ||
+                selected.Participant.ModuleNames.Count == 0))
                 refusals.Add("resource-ownership-unresolved");
         }
+
+        if (applicable && refusals.Count == 0)
+            refusals.AddRange(EfPersistenceResourceValidator.Validate(
+                resolution,
+                EfModuleCatalog.Discover(featureAssemblies),
+                context.ConfigurationData,
+                rootConfiguration));
 
         var patch = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         if (refusals.Count == 0)
