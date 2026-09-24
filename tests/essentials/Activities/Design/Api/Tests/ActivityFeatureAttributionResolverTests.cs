@@ -1,6 +1,7 @@
 using CShells.Features;
 using Elsa.Activities.Design.Api.Services;
 using Elsa.Serialization.Core;
+using Elsa.Testing;
 using Xunit;
 
 namespace Elsa.Activities.Design.Api.Tests;
@@ -109,24 +110,5 @@ public sealed class ActivityFeatureAttributionResolverTests
         public Type GetTypeOrDefault(string alias) => TryGetType(alias, out var type) ? type : typeof(object);
 
         public bool TryGetTypeOrDefault(string alias, out Type type) => TryGetType(alias, out type);
-    }
-
-    private sealed class FakeRuntimeFeatureCatalog(ShellFeatureDescriptor[] descriptors) : IRuntimeFeatureCatalog
-    {
-        public Task<RuntimeFeatureCatalogSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(Build());
-
-        public Task<RuntimeFeatureCatalogSnapshot> RefreshAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(Build());
-
-        private RuntimeFeatureCatalogSnapshot Build()
-        {
-            var map = new Dictionary<string, ShellFeatureDescriptor>(StringComparer.OrdinalIgnoreCase);
-            foreach (var descriptor in descriptors)
-                if (!string.IsNullOrWhiteSpace(descriptor.Id))
-                    map[descriptor.Id] = descriptor;
-
-            return new RuntimeFeatureCatalogSnapshot(1, [], descriptors, map, DateTimeOffset.UnixEpoch);
-        }
     }
 }

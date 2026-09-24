@@ -25,6 +25,10 @@ public sealed class ServerReadinessTests
         Assert.Equal("shell_activation_pending", ready.Body.Code);
         Assert.Null(fixture.Registry.GetActive(ServerReadinessFixture.DefaultShellName));
         Assert.Equal(1, defaultGate.Attempts);
+
+        // Finish the deliberately blocked activation before fixture shutdown drains the shell.
+        defaultGate.Release();
+        await fixture.WaitUntilReadyAsync();
     }
 
     [Fact]
@@ -181,5 +185,31 @@ public sealed class ServerReadinessTests
         Assert.Equal(HttpStatusCode.OK, afterReload.StatusCode);
         Assert.True(afterReload.Body.Generation > initialGeneration);
         Assert.Null(afterReload.Body.DurationMs);
+    }
+
+    [Fact]
+    public async Task FailedReloadKeepsThePreviousGenerationReady()
+    {
+        await using var fixture = await ServerReadinessFixture.StartAsync();
+        var initialGate = fixture.RouteInitialization.For(ServerReadinessFixture.DefaultShellName);
+        await fixture.WaitForDefaultRouteInitializationAsync();
+        initialGate.Release();
+        await fixture.WaitUntilReadyAsync();
+        var initial = fixture.Registry.GetActive(ServerReadinessFixture.DefaultShellName)!;
+
+        var reloadGate = fixture.RouteInitialization.PrepareNext(ServerReadinessFixture.DefaultShellName);
+        reloadGate.Failure = new InvalidOperationException("sensitive candidate detail");
+        var reload = fixture.Registry.ReloadAsync(ServerReadinessFixture.DefaultShellName);
+        await reloadGate.WaitUntilEnteredAsync();
+        reloadGate.Release();
+        await reload;
+
+        var active = fixture.Registry.GetActive(ServerReadinessFixture.DefaultShellName);
+        var ready = await fixture.ReadReadyAsync();
+        Assert.Same(initial, active);
+        Assert.Equal(ShellLifecycleState.Active, active!.State);
+        Assert.Equal(HttpStatusCode.OK, ready.StatusCode);
+        Assert.Equal(initial.Descriptor.Generation, ready.Body.Generation);
+        Assert.Equal(ShellReadinessStatus.Ready, fixture.ReadinessState.Snapshot.Status);
     }
 }

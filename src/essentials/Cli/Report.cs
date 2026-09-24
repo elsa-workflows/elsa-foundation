@@ -68,7 +68,8 @@ internal static class Report
                 WritePlan(output, tooling.GetProperty("plan"));
                 break;
             case WorkerCommands.Script:
-                WriteScript(output, tooling.GetProperty("script"));
+                WriteScript(output, tooling.GetProperty("script"),
+                    tooling.TryGetProperty("configurationContext", out var scriptContext) ? scriptContext : null);
                 break;
             case WorkerCommands.Apply:
                 WriteApply(output, tooling.GetProperty("apply"));
@@ -80,6 +81,9 @@ internal static class Report
                 WritePostMigrate(output, tooling.GetProperty("postMigrate"));
                 break;
         }
+
+        if (tooling.TryGetProperty("configurationContext", out var context))
+            WriteConfigurationContext(output, context);
 
         return response.ExitCode;
     }
@@ -109,6 +113,27 @@ internal static class Report
         WriteTable(output, ["MODULE", "ASSEMBLY", "CONTEXT", "HISTORY TABLE", "PROVIDERS"], rows);
         output.WriteLine();
         output.WriteLine($"{rows.Length} module(s).");
+    }
+
+    private static void WriteConfigurationContext(TextWriter output, JsonElement context)
+    {
+        output.WriteLine();
+        output.WriteLine($"Configuration context: {Safe(Text(context, "source"))}; " +
+                         $"shell {Safe(Text(context, "shell"))}; " +
+                         $"resource {Safe(Text(context, "resource"))}; " +
+                         $"resolution {Safe(Text(context, "resolution"))}.");
+        output.WriteLine($"Target verification: {Safe(Text(context, "targetVerification"))}; " +
+                         $"runtime parity: {Safe(Text(context, "runtimeParity"))}.");
+        foreach (var participant in context.GetProperty("participants").EnumerateArray())
+            output.WriteLine($"  {Safe(Text(participant, "feature"))} → {Safe(Text(participant, "module"))}: " +
+                             $"{Safe(Text(participant, "resource"))}, {Safe(Text(participant, "provider"))}, " +
+                             $"connection reference {Safe(Text(participant, "connectionReference"))} " +
+                             $"({Safe(Text(participant, "selection"))}).");
+        foreach (var unresolved in context.GetProperty("unresolved").EnumerateArray())
+            output.WriteLine($"  unresolved: {Safe(unresolved.GetString() ?? "")}");
+
+        static string Safe(string value) => string.Concat(value.Select(character =>
+            char.IsControl(character) ? $"\\u{(int)character:X4}" : character.ToString()));
     }
 
     private static void WritePlan(TextWriter output, JsonElement plan)
@@ -141,12 +166,14 @@ internal static class Report
         "running host's own environment-variable configuration overrides are invisible to this check, so " +
         "its effective provider can differ from the one verified here.";
 
-    private static void WriteScript(TextWriter output, JsonElement script)
+    private static void WriteScript(TextWriter output, JsonElement script, JsonElement? context)
     {
         foreach (var file in script.GetProperty("files").EnumerateArray())
             output.WriteLine($"{Text(file, "file")}  {Text(file, "sha256")}  {Text(file, "module")}");
         output.WriteLine($"{Text(script, "manifest")}  {Text(script, "manifestSha256")}");
-        output.WriteLine(ProviderAgreementNote);
+        output.WriteLine(context is { } selected
+            ? $"note: providerAgreement was checked against {Text(selected, "source")}; runtime parity remains unobserved."
+            : ProviderAgreementNote);
     }
 
     private static void WriteApply(TextWriter output, JsonElement apply)

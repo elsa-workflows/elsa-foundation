@@ -27,4 +27,9 @@
     <ProjectReference Include="..\..\..\..\src\essentials\Workflows\Design\Reconciliation\Git\Elsa.Workflows.Design.Reconciliation.Git.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../../../Shared/FakeRuntimeFeatureCatalog.cs" Link="FakeRuntimeFeatureCatalog.cs" />
+    <Using Include="Elsa.Testing" />
+  </ItemGroup>
+
 </Project>

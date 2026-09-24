@@ -42,7 +42,12 @@ public sealed class WorkbenchProcess : IAsyncDisposable
     /// <summary>A client carrying the host management key.</summary>
     public HttpClient ManagementClient { get; }
 
-    public static async Task<WorkbenchProcess> StartAsync(WorkbenchShell shell)
+    /// <summary>The isolated authored configuration directory used by this process.</summary>
+    public string ContentRoot => _directory;
+
+    public static async Task<WorkbenchProcess> StartAsync(
+        WorkbenchShell shell,
+        Action<string>? prepareContentRoot = null)
     {
         var directory = Directory.CreateTempSubdirectory("elsa-workbench-smoke-").FullName;
         CopySourceFile(shell.ShellFile, directory, "shells.json");
@@ -52,6 +57,15 @@ public sealed class WorkbenchProcess : IAsyncDisposable
         if (File.Exists(WorkbenchBuild.SourceFile($"appsettings.{shell.Environment}.json")))
             CopySourceFile($"appsettings.{shell.Environment}.json", directory);
         Directory.CreateDirectory(Path.Combine(directory, "packages"));
+        try
+        {
+            prepareContentRoot?.Invoke(directory);
+        }
+        catch
+        {
+            Directory.Delete(directory, recursive: true);
+            throw;
+        }
 
         // Let Kestrel reserve its own ephemeral port. Selecting a "free" port with a temporary listener and
         // releasing it before the child binds leaves a race with other parallel test processes.

@@ -37,6 +37,8 @@
       "src/essentials/Http/Elsa.Http.csproj",
       "src/essentials/Locking/Core/Elsa.Locking.Core.csproj",
       "src/essentials/Mediator/Core/Elsa.Mediator.Core.csproj",
+      "src/essentials/Modularity/Core/Elsa.Modularity.Core.csproj",
+      "src/essentials/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj",
       "src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
       "src/essentials/Pipelines/Core/Elsa.Pipelines.Core.csproj",
       "src/essentials/Primitives/Primitives/Elsa.Primitives.csproj",

@@ -25,7 +25,14 @@ public sealed partial class ArchitectureGuardTests
     [
         // Elsa.Workbench keeps a narrow exception for the host-only module-management registry builder
         // (ModuleManagementRegistryBuilder), exercised by ModuleManagementRegistryBuilderTests.
-        ("Elsa.Workbench", "Elsa.Modularity.Tests")
+        ("Elsa.Workbench", "Elsa.Modularity.Tests"),
+        // The shared-persistence resolver stays internal to the EF policy assembly. Focused unit
+        // and migration metadata tests inspect detached plans without widening its production API.
+        ("Elsa.Persistence.EntityFramework", "Elsa.Persistence.EntityFramework.Tests"),
+        ("Elsa.Persistence.EntityFramework", "Elsa.Persistence.EntityFrameworkCore.Migrations.Tests"),
+        // The worker's reflected host-context API stays internal; CLI tests verify exact and
+        // partial shape negotiation without making those details part of its public surface.
+        ("Elsa.Cli.Worker", "Elsa.Cli.Tests")
     ];
 
     private static readonly Regex AssemblyInternalsVisibleToPattern = new(@"assembly\s*:\s*InternalsVisibleTo", RegexOptions.Compiled);
@@ -114,6 +121,45 @@ public sealed partial class ArchitectureGuardTests
             .ToList();
 
         Assert.True(mismatches.Count == 0, string.Join(Environment.NewLine, mismatches));
+    }
+
+    [Fact]
+    public void Shared_persistence_resolution_does_not_depend_on_feature_assemblies()
+    {
+        var policy = Path.Combine(RepoRoot, "src", "essentials", "Persistence", "EntityFramework");
+        var project = XDocument.Load(Path.Join(policy, "Elsa.Persistence.EntityFramework.csproj"));
+        Assert.Empty(project.Descendants("ProjectReference"));
+        Assert.DoesNotContain(project.Descendants("PackageReference"), reference =>
+            (reference.Attribute("Include")?.Value ?? string.Empty).StartsWith("Elsa.", StringComparison.Ordinal));
+
+        var boundarySources = Directory.EnumerateFiles(Path.Join(policy, "ResourceResolution"), "*.cs")
+            .Append(Path.Join(policy, "Tooling", "EfPersistenceParticipantCatalog.cs"))
+            .Append(Path.Join(policy, "Tooling", "EfPersistenceResourceValidator.cs"));
+        foreach (var path in boundarySources)
+        {
+            var source = File.ReadAllText(path);
+            Assert.DoesNotContain("Elsa.Workflows.", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("Elsa.Activities.", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("Elsa.Diagnostics.", source, StringComparison.Ordinal);
+        }
+    }
+
+    [Theory]
+    [InlineData("src/essentials/Modularity/Core/Elsa.Modularity.Core.csproj")]
+    [InlineData("src/essentials/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj")]
+    [InlineData("src/essentials/Cli/Worker/Elsa.Cli.Worker.csproj")]
+    public void Neutral_activation_and_tooling_projects_have_no_entity_framework_dependency(string projectPath)
+    {
+        var project = XDocument.Load(Path.Join(RepoRoot, projectPath));
+        var efReferences = project.Descendants()
+            .Where(element => element.Name.LocalName is "ProjectReference" or "PackageReference")
+            .Select(element => element.Attribute("Include")?.Value)
+            .OfType<string>()
+            .Where(reference => reference.Contains("EntityFramework", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        Assert.True(efReferences.Length == 0,
+            $"{projectPath} must remain EF-free: {string.Join(", ", efReferences)}");
     }
 
     [Fact]

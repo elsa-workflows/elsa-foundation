@@ -1,9 +1,9 @@
 ---
 status: proposed
 date: 2026-08-07
-amended: 2026-09-22
+amended: 2026-09-24
 decision_context: FR-1 discussion on issue #1144, agreed by Joey Barten, Sipke Schoorstra and Frans van Ek
-amendment_context: patch derivation changed from commit height to last-published state after the rename hazard was measured; agreed on PR #1948 by Frans van Ek, Joey Barten and Sipke Schoorstra, the same three who agreed the original
+amendment_context: 2026-09-22, patch derivation changed from commit height to last-published state after the rename hazard was measured; agreed on PR #1948 by Frans van Ek, Joey Barten and Sipke Schoorstra, the same three who agreed the original. 2026-09-24, Line A membership is defined by a rule rather than a heuristic, which settles the six undecided packages; proposed by Sipke Schoorstra and awaiting the agreement of Frans van Ek and Joey Barten. 2026-09-24, the last-published record moves out of the generated dependency map into its own committed file that only publishing writes; proposed by Sipke Schoorstra and awaiting the agreement of Frans van Ek and Joey Barten.
 ---
 
 # Package versioning uses two version lines with a computed patch digit
@@ -35,10 +35,38 @@ Two measurements taken over the repository's full history (2026-05-08 onward, 10
 **Two version lines.**
 
 **Line A, the host baseline.** The cross-cutting contract packages a host pins share one version that
-moves only when the contract surface changes, under framework §4.2 SemVer. Membership begins with
-`Elsa.Primitives`, `Elsa.Events.Core`, `Elsa.Tasks.Core`, `Elsa.Serialization.Core`,
-`Elsa.Mediator.Core`, `Elsa.Attention.Core` and `Elsa.Expressions.Core`,
-selected on cross-domain reach and low churn.
+moves only when the contract surface changes, under framework §4.2 SemVer.
+
+**Line A is the set of contracts every host shares with every feature, closed under dependencies.** A
+package belongs on Line A when its types cross the boundary between separately loaded units — host and
+feature, or one feature and another — for every domain, so that a feature carrying its own copy would see
+types that do not match the host's. And the set is closed: a Line A package depends only on Line A
+packages, because a Line B dependency's floor moves with every release and would drag the baseline with
+it. A domain's `.Core` is shared only within its own domain, and stays on Line B.
+
+Membership is `Elsa.Primitives`, `Elsa.Events.Core`, `Elsa.Tasks.Core`, `Elsa.Serialization.Core`,
+`Elsa.Mediator.Core`, `Elsa.Attention.Core`, `Elsa.Expressions.Core`, `Elsa.Pipelines.Core`,
+`Elsa.Locking.Core` and `Elsa.Caching.Core`.
+
+*Amended 2026-09-24.* Membership was first chosen on cross-domain reach and low churn. That heuristic left
+six packages undecided and could not say which way the next borderline package should go, so it is
+replaced by the rule above. Applied to the six, measured against the tree on 2026-09-24:
+
+- `Elsa.Pipelines.Core` is **required by the closure**: `Elsa.Events.Core` and `Elsa.Mediator.Core`
+  reference it directly, and `Elsa.Serialization.Core` transitively. It is also small and stable — six
+  public types, seven commits over the repository's history.
+- `Elsa.Locking.Core` and `Elsa.Caching.Core` are **cross-cutting contracts** — not any one domain's —
+  that `Elsa.Workbench` already shares, each with three public types and seven and eight commits
+  respectively.
+- `Elsa.Http.Core` is the Http domain's own contract — 41 public types and the most change of the six,
+  19 commits — and stays on Line B with its domain.
+- `Elsa.Expressions.JavaScript.Core` belongs to an optional engine; a host without JavaScript should not
+  pin it. It stays on Line B with the Expressions domain.
+- `Elsa.Modularity.Core` is host composition machinery that no feature binds to — one other domain
+  references it, and no shared assembly depends on it. It stays on Line B.
+
+`Elsa.Persistence.Core` was a member in the original text and was removed on 2026-09-01, when the project
+itself was deleted.
 
 **Line B, everything else.** All features and all domain `.Core` packages share `major.minor` across
 the repository, with the patch digit per package. A domain's `.Core` ships with its domain, because a
@@ -55,6 +83,14 @@ in the computation.
 The change is confined to how the digit is derived. Everything else this decision records — the two
 lines, selective publishing, derived floors with an upper bound, release-shaped previews, and the
 absence of authored version elements — is unaffected, and the reasons for them are untouched.
+
+*Amended 2026-09-24.* The last-published record is kept in its own committed file beside the
+dependency map rather than inside it. The map is generated from the tree and changes through pull
+requests; the record is written only by publishing from `main`. Holding both in one file would give
+it two writers, so every publish write-back would contend with pull requests that regenerate the
+map, and the map would stop being a function of the tree alone. The record is keyed by package id
+and joined to the map's nodes when the patch is computed. No record is ever removed, so a package id
+that returns after being deleted or renamed continues from its last published version.
 
 **Publishing is selective.** Only packages whose own files changed are published. Unchanged packages
 keep their last published version, so dependency floors are never restamped for a change the package
@@ -81,6 +117,12 @@ propagates through the reverse closure.
 
 ## Considered options
 
+- **Line A chosen on cross-domain reach and low churn**, this decision's original selection rule, was
+  replaced on 2026-09-24 because it is a heuristic: it left six packages undecided and gives no answer for
+  the next one. It also missed that `Elsa.Pipelines.Core` was already required by two members.
+- **Line A as whatever hosts share today** was rejected: `Elsa.Workbench` shares domain `.Core` packages,
+  including `Elsa.Workflows.Runtime.Core`, the most-changed project in the repository, so Line A would move
+  on almost every commit.
 - **Whole-version lockstep across the repository**, the current behaviour, was rejected because
   derived floors inflate and runtime feature installation stops being independent of the host. It is
   sanctioned by framework §2.13, so this is a release-engineering choice rather than a compliance
@@ -143,16 +185,22 @@ propagates through the reverse closure.
 - Version numbers remain stable only against a stable history. Rewriting `main` renumbers, because the
   last-published record and the change detection both read history. No scheme considered here survives
   a rewrite.
-- Publishing now depends on the dependency map being **correct**, not merely present: a stale or wrong
-  last-published record yields a wrong version. This deepens an existing dependency rather than adding
-  one, since the map already resolves floors and change detection and already carries a freshness
-  gate.
+- Publishing now depends on the dependency map and the last-published record being **correct**, not
+  merely present: a stale or wrong record yields a wrong version. For the map this deepens an
+  existing dependency rather than adding one, since the map already resolves floors and change
+  detection and already carries a freshness gate. The record is not derived from the tree, so no
+  freshness gate can check it; it is protected instead by letting only publishing write it.
 - Consumers hold a release number rather than a package version. A generated release manifest records
   which package versions constitute a given release.
-- Line A membership is not fully settled. Six packages sit in a band the selection rule does not
-  decide (`Elsa.Expressions.JavaScript.Core`, `Elsa.Locking.Core`, `Elsa.Http.Core`,
-  `Elsa.Pipelines.Core`, `Elsa.Caching.Core`, `Elsa.Modularity.Core`). Which of these a host must pin
-  is determined by the clean host specification, not by this decision.
+- Line A membership follows from the rule rather than from judgment, and a new package is placed the
+  same way. The closure property is mechanically checkable — a Line A package referencing a Line B package
+  is a defect — and should be enforced by an architecture test once the dependency map records each
+  project's version line.
+- Every host must share all of Line A. Today none does: `Elsa.Workbench` shares seven of the ten but
+  omits `Elsa.Events.Core`, `Elsa.Attention.Core` and `Elsa.Pipelines.Core`, although six of the
+  assemblies it does share depend on `Elsa.Events.Core` and seven on `Elsa.Pipelines.Core`; and
+  `Elsa.Foundation.Host` shares no Elsa assembly at all. Which assemblies each host shares is the clean
+  host specification's concern (#1145), which now has a rule to derive them from.
 - Nuplane must promote a domain's `.Core` to a shared assembly within that domain's subtree, for
   first-party and third-party domains alike; otherwise two features in one domain load separate copies
   and their types do not match. That work belongs to the clean host effort.
