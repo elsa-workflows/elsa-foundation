@@ -1,6 +1,11 @@
+using CShells;
+using CShells.Features;
+using CShells.Lifecycle;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework.ResourceResolution;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
@@ -47,6 +52,48 @@ public sealed class EfProviderAgreementTests
         var run = await PlanAsync("PostgreSql", ["Workflows.Runtime"], Enabled((Runtime, "PostgreSql"), (Bookmarks, "PostgreSql")));
 
         Assert.Equal(EfToolingExitCode.Success, run.ExitCode);
+    }
+
+    [Fact]
+    public void Shared_resource_materialization_agrees_with_tooling_for_every_selected_runtime_feature()
+    {
+        var participants = EfPersistenceParticipantCatalog.Discover(Closure)
+            .Where(participant => participant.ModuleNames.Contains("Workflows.Runtime", StringComparer.OrdinalIgnoreCase))
+            .ToArray();
+        var featureIds = participants.Select(participant => participant.FeatureId).ToArray();
+        Assert.Equal(8, featureIds.Length);
+        var featureTypes = EfProviderAgreement.Discover(Closure)
+            .ToDictionary(usage => usage.Feature, usage => usage.FeatureType, StringComparer.OrdinalIgnoreCase);
+        var context = new ShellSettingsPreparationContext(new ShellId("default"),
+            new Dictionary<string, string?>(), featureIds, [], [],
+            participants.Select(participant => new ShellFeaturePreparationDescriptor(
+                participant.FeatureId, [], featureTypes[participant.FeatureId], false)).ToArray(),
+            featureIds, [], []);
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:DefaultResource"] = "primary",
+            ["Elsa:Persistence:Resources:primary:Provider"] = "PostgreSql",
+            ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared",
+            ["ConnectionStrings:Shared"] = "Host=localhost;Database=elsa;Username=test;Password=secret-canary"
+        }).Build();
+
+        var prepared = EfPersistencePreparation.Prepare(context, configuration);
+
+        Assert.Empty(prepared.RefusalCodes);
+        Assert.Equal(featureIds.Length * 2, prepared.Patch.ConfigurationData.Count);
+        Assert.All(featureIds, feature =>
+        {
+            Assert.Equal("PostgreSql", prepared.Patch.ConfigurationData[$"{feature}:Provider"]);
+            Assert.Equal("Shared", prepared.Patch.ConfigurationData[$"{feature}:ConnectionName"]);
+        });
+
+        var enabled = featureIds.Select(feature =>
+            (Shell: "default", Feature: feature, Provider: prepared.Patch.ConfigurationData[$"{feature}:Provider"]));
+        var disagreements = EfProviderAgreement.Check(enabled,
+            EfProviderAgreement.Discover(Closure), ["Workflows.Runtime"], "PostgreSql");
+
+        Assert.Empty(disagreements);
+        Assert.DoesNotContain("secret-canary", System.Text.Json.JsonSerializer.Serialize(prepared));
     }
 
     /// <summary>User Story 1 scenario 5, and the first of the two disagreement edge cases.</summary>
