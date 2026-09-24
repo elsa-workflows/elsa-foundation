@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net10.0</TargetFramework><IsTestProject>true</IsTestProject><IsPackable>false</IsPackable></PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="CShells.AspNetCore" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <PackageReference Include="MySql.EntityFrameworkCore" />
@@ -31,6 +33,14 @@
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Design\Validations\Elsa.Workflows.Design.Validations.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Expressions\Elsa.Expressions.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Mediator\Elsa.Mediator.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->

@@ -5,16 +5,16 @@
 **Status**: Draft
 **Input**: Make one generated machine-readable dataset the source of truth for the repository's project graph, with the existing markdown maps becoming projections of it, so that publishing can resolve which project owns a file without depending on a documentation tool.
 
-Decision of record: [ADR 0067](../../docs/adr/0067-package-versioning-uses-two-lines-with-computed-patch.md), which records that the dependency map "resolves file ownership for the patch computation and generates the `SharedAssemblies` list and the host compatibility manifest".
+Decision of record: [ADR 0067](../../docs/adr/0067-package-versioning-uses-two-lines-with-computed-patch.md), which records that the dependency map "resolves file ownership for the patch computation and generates the `SharedAssemblies` list and the host compatibility manifest". Its Decision keeps each package's last published version in its own committed file, which only publishing writes, and not in this dataset; spec 150 specifies that record and consumes this dataset.
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Resolve which project owns a changed file (Priority: P1)
 
 The publishing pipeline needs to know, for any repository-relative path in a commit, which project
-owns it, so a later work unit can compute a per-package version from commit history. Project
-directories nest, so `src/Elsa/Workflows/Runtime/Core/Foo.cs` belongs to
-`Elsa.Workflows.Runtime.Core` and not to `Elsa.Workflows.Runtime`.
+owns it, so spec 150 can decide whether a package changed since it was last published, by comparing
+ownership at two commits. Project directories nest, so `src/Elsa/Workflows/Runtime/Core/Foo.cs`
+belongs to `Elsa.Workflows.Runtime.Core` and not to `Elsa.Workflows.Runtime`.
 
 **Why this priority**: This is the capability that unblocks spec 150. Without it, either the
 publishing pipeline takes a dependency on the documentation generator, or the ownership rule is
@@ -40,7 +40,8 @@ compiles into.
 ### User Story 2 - Read a map that cannot drift from the tree (Priority: P1)
 
 A maintainer opens `docs/maps/project-reference-map.md` and trusts it, because it is generated from
-the same dataset as every other map rather than from its own independent scan.
+the same dataset as every other map rather than from its own independent scan. The dataset holds no
+publish state, which is what keeps it a function of the tree alone.
 
 **Why this priority**: The maps are already the repository's shared mental model, and today each is
 produced by its own generator pass. One dataset with projections removes the class of bug where two
@@ -102,9 +103,10 @@ check fails naming the dataset.
 - **FR-002**: Every markdown map that today derives from the project graph MUST be generated as a
   projection of that dataset, and MUST NOT independently scan `.csproj` files.
 - **FR-003**: Each node MUST record the project name, repository-relative project path, kind
-  (source or test), packable state, domain and sub-domain, and role.
+  (source or test), packable state, domain and sub-domain, and role. Each packable node MUST
+  additionally record its package id, the key spec 150 joins its last-published record on.
 - **FR-004**: Each node MUST record which version line it belongs to, per ADR 0067. Line A membership
-  is the eight packages named there; every other packable project is Line B.
+  is the set of packages named there (ADR 0067, Decision); every other packable project is Line B.
 - **FR-005**: Each edge MUST be typed `internal` or `external`, and MUST record the target package
   identity. Internal edges MUST record the target project path; external edges MUST record the
   declared version.
@@ -118,10 +120,14 @@ check fails naming the dataset.
   project paths, so that the dataset changes only when the project graph changes.
 - **FR-010**: `feature-dependency-map.md` MUST remain separate, because CShells `DependsOn`
   attributes carry literal feature-id strings that no reference graph can capture.
+- **FR-011**: The dataset MUST NOT carry publish state. The last-published record lives in its own
+  file (spec 150); generation MUST NOT read or write that file, and the freshness check MUST NOT
+  cover it.
 
 ### Key Entities
 
 - **Project node**: one per project in `src/` and `tests/`; identity is its repository-relative path.
+  A packable node also records its package id.
 - **Dependency edge**: a directed relation from a node to a package identity, typed by whether the
   target resolves inside this repository.
 - **Dataset**: the set of nodes and edges plus the freshness fingerprint, versioned by a schema
@@ -139,6 +145,7 @@ check fails naming the dataset.
 - **SC-004**: The freshness check fails on a project-graph change made without regeneration, and
   passes on a documentation-only change.
 - **SC-005**: No consumer of the dataset needs to reference or execute the documentation generator.
+- **SC-006**: Changing the record file changes no byte of the dataset or of any projection.
 
 ## Assumptions
 
@@ -154,9 +161,11 @@ check fails naming the dataset.
 - Version computation and selective publishing. That is spec 150, which consumes this dataset.
 - Generating the `SharedAssemblies` list and the host compatibility manifest. Both are named in
   ADR 0067 as future consumers and neither is built here.
-- Ratifying Line A membership beyond the eight packages in ADR 0067. The remaining candidates are
-  deferred to the clean host specification (#1145).
+- Deciding Line A membership. ADR 0067's Decision names the members; this spec only records the line
+  each project is on. Which assemblies each host shares is the clean host specification's concern
+  (#1145).
 - Merging `feature-dependency-map.md` into the dataset, per FR-010.
+- The last-published record: its file, what writes it, and its pull-request guard are spec 150.
 
 ## Open Questions
 
