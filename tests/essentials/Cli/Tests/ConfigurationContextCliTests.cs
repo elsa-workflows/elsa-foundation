@@ -137,4 +137,40 @@ public sealed class ConfigurationContextCliTests
         Assert.False(Directory.Exists(output));
     }
 
+    [Theory]
+    [InlineData("PartialContextHost")]
+    [InlineData("UnsupportedContextHost")]
+    public void Partial_or_unsupported_context_api_refuses_before_factory_or_legacy_tooling(string fixture)
+    {
+        using var host = new TempDirectory("elsa-incompatible-context-host-");
+        foreach (var file in Directory.EnumerateFiles(DotnetElsa.Host(fixture)))
+            File.Copy(file, host.File(Path.GetFileName(file)));
+
+        var factoryMarker = host.File("factory-invoked.txt");
+        var operationMarker = host.File("context-operation-invoked.txt");
+        var legacyMarker = host.File("legacy-invoked.txt");
+        var output = host.File("sql");
+        var environment = new Dictionary<string, string>
+        {
+            ["ELSA_CONTEXT_FACTORY_MARKER"] = factoryMarker,
+            ["ELSA_CONTEXT_OPERATION_MARKER"] = operationMarker,
+            ["ELSA_CONTEXT_LEGACY_MARKER"] = legacyMarker,
+            ["ELSA_EF_CONNECTION"] = "Host=invalid;Password=context-api-canary"
+        };
+
+        var run = DotnetElsa.Run(environment,
+            "persistence", "script", "--host", host.Path,
+            "--provider", "PostgreSql", "--modules", "Acme.Widgets", "--output", output,
+            "--configuration-context", WorkerContextSources.WorkbenchJson,
+            "--shell", "default", "--resource", "primary");
+
+        Assert.Equal(ToolExitCode.ResolutionFailure, run.ExitCode);
+        Assert.Contains("context-capability-unavailable", run.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("context-api-canary", run.Text, StringComparison.Ordinal);
+        Assert.False(File.Exists(factoryMarker), "An unsupported context API must be rejected before its factory runs.");
+        Assert.False(File.Exists(operationMarker), "An unsupported context API must be rejected before its operation runs.");
+        Assert.False(File.Exists(legacyMarker), "An unsupported context API must never downgrade to v1 tooling.");
+        Assert.False(Directory.Exists(output), "A refused script must not create its artifact directory.");
+    }
+
 }

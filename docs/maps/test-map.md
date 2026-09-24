@@ -6,8 +6,8 @@ Records direct test-project references and test source-file inventory; it does n
 
 ## Summary
 
-- Test projects: 112
-- Source projects directly referenced by at least one test project: 146
+- Test projects: 116
+- Source projects directly referenced by at least one test project: 150
 - Source projects not directly referenced by test projects: 6
 
 ## Test Projects
@@ -53,10 +53,14 @@ Records direct test-project references and test source-file inventory; it does n
 | [Elsa.Cli.Fixtures.MinimalHost](../../tests/essentials/Cli/Fixtures/MinimalHost/Elsa.Cli.Fixtures.MinimalHost.csproj) | Acme.Widgets |
 | [Elsa.Cli.Fixtures.NuplaneCapabilityHost](../../tests/essentials/Cli/Fixtures/NuplaneCapabilityHost/Elsa.Cli.Fixtures.NuplaneCapabilityHost.csproj) | Elsa.Persistence.EntityFramework |
 | [Elsa.Cli.Fixtures.NuplaneHost](../../tests/essentials/Cli/Fixtures/NuplaneHost/Elsa.Cli.Fixtures.NuplaneHost.csproj) | Elsa.Persistence.EntityFramework |
+| [Elsa.Cli.Fixtures.PartialContextHost](../../tests/essentials/Cli/Fixtures/PartialContextHost/Elsa.Cli.Fixtures.PartialContextHost.csproj) | Elsa.Cli.Fixtures.PartialContextPersistence |
+| [Elsa.Cli.Fixtures.PartialContextPersistence](../../tests/essentials/Cli/Fixtures/PartialContextPersistence/Elsa.Cli.Fixtures.PartialContextPersistence.csproj) | - |
 | [Elsa.Cli.Fixtures.ShellsHost](../../tests/essentials/Cli/Fixtures/ShellsHost/Elsa.Cli.Fixtures.ShellsHost.csproj) | Elsa.Secrets.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
+| [Elsa.Cli.Fixtures.UnsupportedContextHost](../../tests/essentials/Cli/Fixtures/UnsupportedContextHost/Elsa.Cli.Fixtures.UnsupportedContextHost.csproj) | Elsa.Cli.Fixtures.UnsupportedContextPersistence |
+| [Elsa.Cli.Fixtures.UnsupportedContextPersistence](../../tests/essentials/Cli/Fixtures/UnsupportedContextPersistence/Elsa.Cli.Fixtures.UnsupportedContextPersistence.csproj) | - |
 | [Acme.Widgets](../../tests/essentials/Cli/Fixtures/Widgets/Acme.Widgets.csproj) | Elsa.Persistence.EntityFramework |
 | [Elsa.Cli.Fixtures.WorkerContextHost](../../tests/essentials/Cli/Fixtures/WorkerContextHost/Elsa.Cli.Fixtures.WorkerContextHost.csproj) | - |
-| [Elsa.Cli.Tests](../../tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj) | Acme.Widgets<br>Elsa.Cli<br>Elsa.Cli.Fixtures.CollisionHost<br>Elsa.Cli.Fixtures.Host<br>Elsa.Cli.Fixtures.LegacyHost<br>Elsa.Cli.Fixtures.MinimalHost<br>Elsa.Cli.Fixtures.NuplaneCapabilityHost<br>Elsa.Cli.Fixtures.NuplaneHost<br>Elsa.Cli.Fixtures.ShellsHost<br>Elsa.Cli.Fixtures.WorkerContextHost |
+| [Elsa.Cli.Tests](../../tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj) | Acme.Widgets<br>Elsa.Cli<br>Elsa.Cli.Fixtures.CollisionHost<br>Elsa.Cli.Fixtures.Host<br>Elsa.Cli.Fixtures.LegacyHost<br>Elsa.Cli.Fixtures.MinimalHost<br>Elsa.Cli.Fixtures.NuplaneCapabilityHost<br>Elsa.Cli.Fixtures.NuplaneHost<br>Elsa.Cli.Fixtures.PartialContextHost<br>Elsa.Cli.Fixtures.ShellsHost<br>Elsa.Cli.Fixtures.UnsupportedContextHost<br>Elsa.Cli.Fixtures.WorkerContextHost |
 | [Elsa.Diagnostics.ConsoleLogStreaming.Tests](../../tests/essentials/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj) | Elsa.Diagnostics.ConsoleLogStreaming |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests](../../tests/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests.csproj) | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests](../../tests/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests.csproj) | Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore |
@@ -170,7 +174,11 @@ Records direct test-project references and test source-file inventory; it does n
 | Elsa.Cli.Fixtures.MinimalHost | [Program.cs](../../tests/essentials/Cli/Fixtures/MinimalHost/Program.cs) |
 | Elsa.Cli.Fixtures.NuplaneCapabilityHost | [Program.cs](../../tests/essentials/Cli/Fixtures/NuplaneCapabilityHost/Program.cs) |
 | Elsa.Cli.Fixtures.NuplaneHost | [Program.cs](../../tests/essentials/Cli/Fixtures/NuplaneHost/Program.cs) |
+| Elsa.Cli.Fixtures.PartialContextHost | [Program.cs](../../tests/essentials/Cli/Fixtures/PartialContextHost/Program.cs) |
+| Elsa.Cli.Fixtures.PartialContextPersistence | - |
 | Elsa.Cli.Fixtures.ShellsHost | [Program.cs](../../tests/essentials/Cli/Fixtures/ShellsHost/Program.cs) |
+| Elsa.Cli.Fixtures.UnsupportedContextHost | [Program.cs](../../tests/essentials/Cli/Fixtures/UnsupportedContextHost/Program.cs) |
+| Elsa.Cli.Fixtures.UnsupportedContextPersistence | [VersionedOperation.cs](../../tests/essentials/Cli/Fixtures/UnsupportedContextPersistence/VersionedOperation.cs) |
 | Acme.Widgets | [AssemblyInfo.cs](../../tests/essentials/Cli/Fixtures/Widgets/AssemblyInfo.cs)<br>[20260101000000_Initial.cs](../../tests/essentials/Cli/Fixtures/Widgets/Migrations/PostgreSql/20260101000000_Initial.cs)<br>[20260102000000_AddLabel.cs](../../tests/essentials/Cli/Fixtures/Widgets/Migrations/PostgreSql/20260102000000_AddLabel.cs)<br>[20260101000000_Initial.cs](../../tests/essentials/Cli/Fixtures/Widgets/Migrations/SqlServer/20260101000000_Initial.cs)<br>[WidgetsDbContext.cs](../../tests/essentials/Cli/Fixtures/Widgets/WidgetsDbContext.cs) |
 | Elsa.Cli.Fixtures.WorkerContextHost | [EfToolingConfigurationContext.cs](../../tests/essentials/Cli/Fixtures/WorkerContextHost/EfToolingConfigurationContext.cs)<br>[FakeContextHost.cs](../../tests/essentials/Cli/Fixtures/WorkerContextHost/FakeContextHost.cs) |
 | Elsa.Cli.Tests | [ConfigurationContextCliTests.cs](../../tests/essentials/Cli/Tests/ConfigurationContextCliTests.cs)<br>[DotnetElsa.cs](../../tests/essentials/Cli/Tests/DotnetElsa.cs)<br>[EngineCapabilityCliTests.cs](../../tests/essentials/Cli/Tests/EngineCapabilityCliTests.cs)<br>[HostDepsFileTests.cs](../../tests/essentials/Cli/Tests/HostDepsFileTests.cs)<br>[HostResolutionTests.cs](../../tests/essentials/Cli/Tests/HostResolutionTests.cs)<br>[HostResourceHintsTests.cs](../../tests/essentials/Cli/Tests/HostResourceHintsTests.cs)<br>[NuplanePackageRootTests.cs](../../tests/essentials/Cli/Tests/NuplanePackageRootTests.cs)<br>[NuplaneRestoreCliTests.cs](../../tests/essentials/Cli/Tests/NuplaneRestoreCliTests.cs)<br>[PackageRootProbeTests.cs](../../tests/essentials/Cli/Tests/PackageRootProbeTests.cs)<br>[PersistenceCliTests.cs](../../tests/essentials/Cli/Tests/PersistenceCliTests.cs)<br>[ProviderAgreementCliTests.cs](../../tests/essentials/Cli/Tests/ProviderAgreementCliTests.cs)<br>[ScriptCheckClassificationTests.cs](../../tests/essentials/Cli/Tests/ScriptCheckClassificationTests.cs)<br>[ScriptCheckCliTests.cs](../../tests/essentials/Cli/Tests/ScriptCheckCliTests.cs)<br>[ShellConfigurationTests.cs](../../tests/essentials/Cli/Tests/ShellConfigurationTests.cs)<br>[ToolingEntryPointTests.cs](../../tests/essentials/Cli/Tests/ToolingEntryPointTests.cs)<br>[WorkerLaunchTests.cs](../../tests/essentials/Cli/Tests/WorkerLaunchTests.cs)<br>[WorkerProtocolTests.cs](../../tests/essentials/Cli/Tests/WorkerProtocolTests.cs)<br>[WorkerRunnerConfigurationContextTests.cs](../../tests/essentials/Cli/Tests/WorkerRunnerConfigurationContextTests.cs) |
