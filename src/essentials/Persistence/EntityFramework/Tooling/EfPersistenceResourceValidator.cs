@@ -66,6 +66,15 @@ internal static class EfPersistenceResourceValidator
                 !(hasActivityUpgradeStore && IsActivityUpgradeDesignModule(module.Name)))
                 continue;
 
+            // A legacy configurator can replace the provider, connection or shared context
+            // options at feature binding time. The detached plan cannot establish agreement
+            // with a resource-selected owner without executing that code.
+            if (participant.HasOpaqueConfigurator)
+            {
+                refusals.Add("resource-ownership-unresolved");
+                continue;
+            }
+
             var provider = Get(composedSettings, $"{participant.FeatureId}:Provider") ??
                            EfProviderAgreement.UnsetProvider;
             string? connection;

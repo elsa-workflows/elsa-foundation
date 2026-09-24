@@ -172,14 +172,20 @@ public sealed class EfToolingHostTests : IDisposable
         var manifest = File.ReadAllBytes(Path.Join(output, EfMigrationPlan.FileName));
         using var document = JsonDocument.Parse(manifest);
         var plan = document.RootElement;
+        var configurationContext = plan.GetProperty("configurationContext");
+        var serializedManifest = Encoding.UTF8.GetString(manifest);
         Assert.NotNull(response.Script);
         Assert.Equal(2, plan.GetProperty("schemaVersion").GetInt32());
         Assert.Equal("checked", plan.GetProperty("host").GetProperty("providerAgreement").GetString());
-        Assert.Equal("primary", plan.GetProperty("configurationContext").GetProperty("resource").GetString());
-        Assert.Equal("Shared", Assert.Single(plan.GetProperty("configurationContext").GetProperty("participants").EnumerateArray())
+        Assert.Equal("workbench-json-v1", configurationContext.GetProperty("source").GetString());
+        Assert.Equal("not-performed", configurationContext.GetProperty("targetVerification").GetString());
+        Assert.Equal("unobserved", configurationContext.GetProperty("runtimeParity").GetString());
+        Assert.Equal(["expected-connection-unchecked"],
+            configurationContext.GetProperty("unresolved").EnumerateArray().Select(value => value.GetString()));
+        Assert.Equal("primary", configurationContext.GetProperty("resource").GetString());
+        Assert.Equal("Shared", Assert.Single(configurationContext.GetProperty("participants").EnumerateArray())
             .GetProperty("connectionReference").GetString());
-        Assert.DoesNotContain("connection-value-canary", Encoding.UTF8.GetString(manifest), StringComparison.Ordinal);
-        Assert.DoesNotContain(root, Encoding.UTF8.GetString(manifest), StringComparison.Ordinal);
+        Assert.DoesNotContain(root, serializedManifest, StringComparison.Ordinal);
 
         var repeated = Path.Join(root, "context-script-repeated");
         EfToolingHost.ScriptModules([module], "PostgreSql", null, repeated,
