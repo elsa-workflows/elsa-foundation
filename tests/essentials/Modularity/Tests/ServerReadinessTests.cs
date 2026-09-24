@@ -25,6 +25,10 @@ public sealed class ServerReadinessTests
         Assert.Equal("shell_activation_pending", ready.Body.Code);
         Assert.Null(fixture.Registry.GetActive(ServerReadinessFixture.DefaultShellName));
         Assert.Equal(1, defaultGate.Attempts);
+
+        // Finish the deliberately blocked activation before fixture shutdown drains the shell.
+        defaultGate.Release();
+        await fixture.WaitUntilReadyAsync();
     }
 
     [Fact]
