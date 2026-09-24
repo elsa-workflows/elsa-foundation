@@ -144,6 +144,24 @@ public sealed partial class ArchitectureGuardTests
         }
     }
 
+    [Theory]
+    [InlineData("src/essentials/Modularity/Core/Elsa.Modularity.Core.csproj")]
+    [InlineData("src/essentials/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj")]
+    [InlineData("src/essentials/Cli/Worker/Elsa.Cli.Worker.csproj")]
+    public void Neutral_activation_and_tooling_projects_have_no_entity_framework_dependency(string projectPath)
+    {
+        var project = XDocument.Load(Path.Join(RepoRoot, projectPath));
+        var efReferences = project.Descendants()
+            .Where(element => element.Name.LocalName is "ProjectReference" or "PackageReference")
+            .Select(element => element.Attribute("Include")?.Value)
+            .OfType<string>()
+            .Where(reference => reference.Contains("EntityFramework", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        Assert.True(efReferences.Length == 0,
+            $"{projectPath} must remain EF-free: {string.Join(", ", efReferences)}");
+    }
+
     [Fact]
     public void Active_project_and_solution_references_resolve_to_existing_projects()
     {

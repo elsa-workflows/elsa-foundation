@@ -9,7 +9,7 @@ description: "Reviewed task list for shared persistence resources"
 
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `contracts/`, and `quickstart.md`.
 
-**Status**: Integrated design review approved on 2026-09-23. #1967 publication completed through PR #1973; implementation is active. One active delivery issue at a time: #1968 owns US1, US2 and US4; #1969 owns US3 after #1968. T001-T007, T009-T011, T014, T016-T017, T020-T022, T024, T027-T028, T033-T037 are complete; T008 and T015 are in progress. Remaining tasks are open.
+**Status**: Integrated design review approved on 2026-09-23. #1967 publication completed through PR #1973; implementation is active. One active delivery issue at a time: #1968 owns US1, US2 and US4; #1969 owns US3 after #1968. T001-T007, T009-T011, T013-T014, T016-T017, T020-T022, T024, T027-T028, T033-T037 are complete; T008 and T015 are in progress. Remaining tasks are open.
 
 **Tests**: Tests are required by the specification. Add focused tests before implementation within each user-story phase and retain the existing regression suites.
 
@@ -38,7 +38,7 @@ description: "Reviewed task list for shared persistence resources"
 - [x] T010 [P] Add resolver contract tests in `tests/essentials/Persistence/EntityFramework/Tests/PersistenceResourceResolverTests.cs` for precedence, atomic provider/connection selection, legacy ambiguity, missing targets, explicit false/zero/null/blank presence, reset, unknowns, redaction, and no side effects.
 - [x] T011 [P] Add enrollment and architecture tests in `tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/EfPersistenceResourceEnrollmentTests.cs` and `tests/essentials/Architecture/ArchitectureGuardTests.cs` proving the 13 reviewed participants, module/context ownership, host-owned exclusions, stable identities, and no resolver dependency on workflow feature classes.
 - [x] T012 [P] Add CShells preparation lifecycle tests in `tests/essentials/Modularity/EntityFramework/Tests/EfPersistenceActivationContextPreparerTests.cs` and `EfPersistenceResourceRegistrationTests.cs` proving globals and dependency-enabled participants are visible before feature construction/configurators, duplicate preparers fail, cancellation refuses activation, and no feature effect occurs on refusal.
-- [ ] T013 Add the shared foundational project/reference and package checks in `tests/essentials/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj`, `tests/essentials/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj`, and `tests/essentials/Architecture/Elsa.Architecture.Tests.csproj` without adding EF to Modularity.Core/Nuplane or the CLI worker.
+- [x] T013 Add the shared foundational project/reference and package checks in `tests/essentials/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj`, `tests/essentials/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj`, and `tests/essentials/Architecture/Elsa.Architecture.Tests.csproj` without adding EF to Modularity.Core/Nuplane or the CLI worker.
 
 **Checkpoint**: Contracts reviewed, CShells `0.0.30-preview.158` pinned, and the pure resolver plus preparation seam can be tested without a database or feature construction.
 
