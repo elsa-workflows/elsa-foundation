@@ -301,6 +301,7 @@ public sealed class FeatureManagementServiceTests
         Assert.Equal("module 'Sample' has a pending migration", exception.Message);
         Assert.Equal("NewFeature", Assert.Single(exception.Refusals).Feature);
         Assert.False(_store.Features.ContainsKey("NewFeature"));
+        Assert.Equal(0, _store.SaveCount);
         Assert.Equal(0, _refresher.RefreshCount);
         Assert.Equal(0, _reloader.ReloadCount);
     }
@@ -341,6 +342,7 @@ public sealed class FeatureManagementServiceTests
             service.ApplyAsync(new FeatureApplyRequest(catalog.Revision, [new("NewFeature", true, Json("{}"))])));
 
         Assert.False(_store.Features.ContainsKey("NewFeature"));
+        Assert.Equal(0, _store.SaveCount);
         Assert.Equal(0, _refresher.RefreshCount);
         Assert.Equal(0, _reloader.ReloadCount);
     }
@@ -412,6 +414,7 @@ public sealed class FeatureManagementServiceTests
         Assert.Null(guard.Context);
         Assert.Equal("NewFeature", Assert.Single(exception.Refusals).Feature);
         Assert.False(_store.Features.ContainsKey("NewFeature"));
+        Assert.Equal(0, _store.SaveCount);
         Assert.Equal(0, _refresher.RefreshCount);
         Assert.Equal(0, _reloader.ReloadCount);
     }

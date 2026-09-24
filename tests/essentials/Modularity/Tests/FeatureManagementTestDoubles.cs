@@ -16,6 +16,7 @@ namespace Elsa.Modularity.Tests;
 internal sealed class FakeShellStore(IEqualityComparer<string>? featureIdComparer = null) : IShellFeatureConfigurationStore
 {
     public Dictionary<string, JsonElement> Features { get; } = new(featureIdComparer ?? StringComparer.OrdinalIgnoreCase);
+    public int SaveCount { get; private set; }
 
     public Task<ShellFeatureConfigurationSnapshot> LoadAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult(Snapshot());
@@ -25,6 +26,7 @@ internal sealed class FakeShellStore(IEqualityComparer<string>? featureIdCompare
         IReadOnlyList<FeatureConfigurationChange> features,
         CancellationToken cancellationToken = default)
     {
+        SaveCount++;
         var current = Snapshot();
         if (expectedRevision != current.Revision)
             throw new FeatureCatalogRevisionConflictException(expectedRevision, current.Revision);
