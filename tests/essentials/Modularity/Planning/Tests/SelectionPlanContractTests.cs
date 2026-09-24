@@ -55,6 +55,27 @@ public sealed class SelectionPlanContractTests
     }
 
     [Fact]
+    public void Typed_callers_cannot_supply_malformed_pins_or_echo_connection_like_package_locks()
+    {
+        var catalog = PlannerFixture.Catalog();
+        var authored = PlannerFixture.Authored(catalog, add: ["A"], accepted: ["A"]);
+        var badCatalogPin = authored with { Catalog = authored.Catalog with { Digest = "not-a-digest" } };
+        var badAcceptedPin = authored with { Accepted = authored.Accepted with { CatalogDigest = "not-a-digest" } };
+        var badProfileRef = authored with { Profile = new DefinitionReference("foundation", "profile", "p", "1", "not-a-digest") };
+        var leakedLock = authored with { Accepted = authored.Accepted with
+        {
+            Locks = [new FeatureLock("A", "package", "Server=private;Password=secret", "1.0.0", new string('a', 64), "accepted")]
+        } };
+        var malformedLockDigest = authored with { Accepted = authored.Accepted with
+        {
+            Locks = [new FeatureLock("A", "package", "Elsa.Test.A", "1.0.0", "not-a-digest", "accepted")]
+        } };
+
+        foreach (var malformed in new[] { badCatalogPin, badAcceptedPin, badProfileRef, leakedLock, malformedLockDigest })
+            Assert.Equal("invalid-field", Assert.Throws<SelectionDocumentException>(() => SelectionPlanner.Plan(catalog, malformed)).Code);
+    }
+
+    [Fact]
     public void Public_result_serialization_is_stable_across_definition_and_choice_order()
     {
         var first = PlannerFixture.Definition("group", "first", ["B", "A"]);

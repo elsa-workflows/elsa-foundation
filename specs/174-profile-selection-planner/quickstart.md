@@ -36,7 +36,7 @@ These tests prove deterministic selection planning against supplied snapshots. T
 
 ## #1986 local evidence (2026-09-24)
 
-- `Elsa.Modularity.Planning.Tests` Release: 39 passed, including exact fixture sets, JCS vectors, negative imports, host evidence, re-resolution and opaque-settings privacy.
+- `Elsa.Modularity.Planning.Tests` Release: 41 passed, including exact fixture sets, JCS vectors, negative imports, host evidence, re-resolution and opaque-settings privacy.
 - Existing `Elsa.Modularity.Tests` Release: 195 passed.
 - `Elsa.Architecture.Tests` Release: 262 passed after `tools/architecture/restore-ci-project-graph.sh` generated the required separate Debug and Release restore graphs. The first architecture run failed because the new projects were absent from `Elsa.Server.slnx` and the Debug graph was missing; both causes were corrected before the green run.
 - `solution-filters-check`: green. Map freshness, diff review and exact-head CI are pending until the final implementation changes and map refresh are complete.

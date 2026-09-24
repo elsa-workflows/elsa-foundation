@@ -248,9 +248,15 @@ public static class SelectionJsonReader
             var manifestDigest = OptionalString(row, "manifestDigest");
             if (kind == "package" && (packageId is null || packageVersion is null || manifestDigest is null))
                 throw new SelectionDocumentException("invalid-field", "A package lock needs package ID, version and manifest digest.");
+            if (kind == "package" && (!SelectionValueRules.IsSafeReference(packageId) ||
+                !SelectionValueRules.IsSafeReference(packageVersion) || !SelectionValueRules.IsDigest(manifestDigest)))
+                throw new SelectionDocumentException("invalid-field", "A package lock needs safe identity labels and a SHA-256 manifest digest.");
             if (kind == "hostBundled" && (packageId is not null || packageVersion is not null || manifestDigest is not null))
                 throw new SelectionDocumentException("invalid-field", "A host-bundled lock cannot carry package fields.");
-            return new FeatureLock(RequiredString(row, "featureId"), kind, packageId, packageVersion, manifestDigest, OptionalString(row, "evidenceSource") ?? "accepted");
+            var evidenceSource = OptionalString(row, "evidenceSource") ?? "accepted";
+            if (!SelectionValueRules.IsSafeReference(evidenceSource))
+                throw new SelectionDocumentException("invalid-field", "A lock evidence source must be a safe reference label.");
+            return new FeatureLock(RequiredString(row, "featureId"), kind, packageId, packageVersion, manifestDigest, evidenceSource);
         }).ToImmutableArray();
         if (locks.GroupBy(x => x.FeatureId, s_comparer).Any(group => group.Count() > 1) || locks.Any(x => !ids.Contains(x.FeatureId, s_comparer)))
             throw new SelectionDocumentException("invalid-field", "Accepted locks must uniquely refer to accepted feature IDs.");
@@ -275,7 +281,7 @@ public static class SelectionJsonReader
     private static string RequiredDigest(JsonElement element, string name)
     {
         var digest = RequiredString(element, name);
-        if (digest.Length != 64 || digest.Any(ch => !char.IsAsciiHexDigitLower(ch)))
+        if (!SelectionValueRules.IsDigest(digest))
             throw new SelectionDocumentException("invalid-field", $"{name} must be 64 lowercase hexadecimal characters.");
         return digest;
     }

@@ -184,30 +184,50 @@ public static class SelectionPlanner
 
     private static void ValidateAuthored(AuthoredComposition authored)
     {
-        if (authored.Catalog is null || authored.Accepted is null || authored.Groups.IsDefault || authored.Add.IsDefault ||
-            authored.Remove.IsDefault || authored.Accepted.FeatureIds.IsDefault || authored.Accepted.Locks.IsDefault ||
-            authored.Groups.Any(x => string.IsNullOrWhiteSpace(x.Id) || string.IsNullOrWhiteSpace(x.Version)) ||
+        if (authored.Catalog is null || authored.Accepted is null)
+            throw new SelectionDocumentException("invalid-field", "The authored selection requires catalog and accepted pins.");
+        if (string.IsNullOrWhiteSpace(authored.Catalog.Id) || string.IsNullOrWhiteSpace(authored.Catalog.Version) ||
+            !SelectionValueRules.IsDigest(authored.Catalog.Digest) || !SelectionValueRules.IsDigest(authored.Accepted.CatalogDigest) ||
+            authored.Groups.IsDefault || authored.Add.IsDefault || authored.Remove.IsDefault ||
+            authored.Accepted.FeatureIds.IsDefault || authored.Accepted.Locks.IsDefault ||
+            authored.Profile is { } profile && (profile.Kind != "profile" || !ValidReference(profile)) ||
+            authored.Groups.Any(x => x.Kind != "group" || x.Origin != "foundation" || !ValidReference(x)) ||
             authored.Groups.Distinct().Count() != authored.Groups.Length ||
             authored.Add.Any(string.IsNullOrWhiteSpace) || authored.Remove.Any(string.IsNullOrWhiteSpace) ||
             authored.Add.Distinct(StringComparer.Ordinal).Count() != authored.Add.Length ||
             authored.Remove.Distinct(StringComparer.Ordinal).Count() != authored.Remove.Length ||
             authored.Accepted.FeatureIds.Any(string.IsNullOrWhiteSpace) ||
             authored.Accepted.FeatureIds.Distinct(StringComparer.Ordinal).Count() != authored.Accepted.FeatureIds.Length ||
-            authored.Accepted.Locks.GroupBy(x => x.FeatureId, StringComparer.Ordinal).Any(group => group.Count() > 1))
+            authored.Accepted.Locks.GroupBy(x => x.FeatureId, StringComparer.Ordinal).Any(group => group.Count() > 1) ||
+            authored.Accepted.Locks.Any(x => !ValidLock(x, authored.Accepted.FeatureIds)))
             throw new SelectionDocumentException("invalid-field", "The authored selection contains invalid or duplicate IDs.");
     }
+
+    private static bool ValidReference(DefinitionReference reference) =>
+        reference.Origin is "foundation" or "workspace" && reference.Kind is "profile" or "group" &&
+        !string.IsNullOrWhiteSpace(reference.Id) && !string.IsNullOrWhiteSpace(reference.Version) &&
+        SelectionValueRules.IsDigest(reference.Digest);
+
+    private static bool ValidLock(FeatureLock featureLock, ImmutableArray<string> acceptedIds) =>
+        !string.IsNullOrWhiteSpace(featureLock.FeatureId) && acceptedIds.Contains(featureLock.FeatureId, StringComparer.Ordinal) &&
+        SelectionValueRules.IsSafeReference(featureLock.EvidenceSource) &&
+        (featureLock.Kind switch
+        {
+            "hostBundled" => featureLock.PackageId is null && featureLock.PackageVersion is null && featureLock.ManifestDigest is null,
+            "package" => SelectionValueRules.IsSafeReference(featureLock.PackageId) &&
+                SelectionValueRules.IsSafeReference(featureLock.PackageVersion) && SelectionValueRules.IsDigest(featureLock.ManifestDigest),
+            _ => false
+        });
 
     private static PersistenceEvidence ValidatePersistence(PersistenceEvidence? evidence)
     {
         if (evidence is null)
             return new PersistenceEvidence("unchecked", "none", [], []);
-        if (evidence.Status is not ("checked" or "unchecked" or "unresolved") || !SafeLabel(evidence.Provenance) ||
+        if (evidence.Status is not ("checked" or "unchecked" or "unresolved") || !SelectionValueRules.IsSafeReference(evidence.Provenance) ||
             evidence.ResourceReferences.IsDefault || evidence.UnresolvedReasons.IsDefault ||
-            evidence.ResourceReferences.Any(x => !SafeLabel(x)) || evidence.UnresolvedReasons.Any(x => !SafeLabel(x)))
+            evidence.ResourceReferences.Any(x => !SelectionValueRules.IsSafeReference(x)) ||
+            evidence.UnresolvedReasons.Any(x => !SelectionValueRules.IsSafeReference(x)))
             throw new SelectionDocumentException("invalid-field", "The supplied persistence summary is invalid.");
         return evidence;
     }
-
-    private static bool SafeLabel(string? value) => !string.IsNullOrEmpty(value) &&
-        value.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '.' or '_' or '-' or '/');
 }

@@ -101,4 +101,21 @@ public sealed class SelectionDocumentTests
         var duplicate = authored with { Add = ["A", "A"] };
         Assert.Equal("duplicate-authored-selection", Assert.Throws<SelectionDocumentException>(() => SelectionJsonReader.ParseComposition(PlannerFixture.Json(duplicate))).Code);
     }
+
+    [Fact]
+    public void Imported_package_locks_reject_bad_digests_and_connection_like_identifiers()
+    {
+        var catalog = PlannerFixture.Catalog();
+        var authored = PlannerFixture.Authored(catalog, accepted: ["A"]);
+        var lockWithBadDigest = authored with { Accepted = authored.Accepted with
+        {
+            Locks = [new("A", "package", "Elsa.Test.A", "1.0.0", "not-a-digest", "accepted")]
+        } };
+        var lockWithConnection = authored with { Accepted = authored.Accepted with
+        {
+            Locks = [new("A", "package", "Server=private;Password=secret", "1.0.0", new string('a', 64), "accepted")]
+        } };
+        Assert.Equal("invalid-field", Assert.Throws<SelectionDocumentException>(() => SelectionJsonReader.ParseComposition(PlannerFixture.Json(lockWithBadDigest))).Code);
+        Assert.Equal("invalid-field", Assert.Throws<SelectionDocumentException>(() => SelectionJsonReader.ParseComposition(PlannerFixture.Json(lockWithConnection))).Code);
+    }
 }

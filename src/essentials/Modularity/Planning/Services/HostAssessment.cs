@@ -106,13 +106,15 @@ internal static class HostAssessment
 
     private static void Validate(HostInventory inventory)
     {
-        if (string.IsNullOrWhiteSpace(inventory.InventoryId) || string.IsNullOrWhiteSpace(inventory.TargetId) || string.IsNullOrWhiteSpace(inventory.Source) || inventory.ObservedAt == default)
+        if (!SelectionValueRules.IsSafeReference(inventory.InventoryId) ||
+            !SelectionValueRules.IsSafeReference(inventory.TargetId) ||
+            !SelectionValueRules.IsSafeReference(inventory.Source) || inventory.ObservedAt == default)
             throw new SelectionDocumentException("invalid-field", "Inventory identity, target, observation time and source are required.");
         if (inventory.Features.IsDefault || inventory.Features.GroupBy(x => x.FeatureId, StringComparer.Ordinal).Any(group => group.Count() > 1))
             throw new SelectionDocumentException("invalid-field", "Inventory feature rows must be present and unique.");
         foreach (var row in inventory.Features)
         {
-            if (string.IsNullOrWhiteSpace(row.FeatureId) || string.IsNullOrWhiteSpace(row.EvidenceSource) ||
+            if (string.IsNullOrWhiteSpace(row.FeatureId) || !SelectionValueRules.IsSafeReference(row.EvidenceSource) ||
                 row.Availability is not ("loaded" or "installed" or "absent" or "unknown") ||
                 row.ManifestReadStatus is not ("read" or "unreadable" or "absent" or "unknown") ||
                 row.Compatibility is not ("compatible" or "incompatible" or "unknown"))
@@ -121,7 +123,8 @@ internal static class HostAssessment
                 throw new SelectionDocumentException("invalid-field", "A host-bundled feature cannot also have a package identity.");
             if (row.RuntimeDependencies is not null && row.Availability != "loaded")
                 throw new SelectionDocumentException("invalid-field", "Runtime descriptor edges require a loaded feature observation.");
-            if (row.Package is { } package && (string.IsNullOrWhiteSpace(package.PackageId) || string.IsNullOrWhiteSpace(package.PackageVersion) || string.IsNullOrWhiteSpace(package.ManifestDigest)))
+            if (row.Package is { } package && (!SelectionValueRules.IsSafeReference(package.PackageId) ||
+                !SelectionValueRules.IsSafeReference(package.PackageVersion) || !SelectionValueRules.IsDigest(package.ManifestDigest)))
                 throw new SelectionDocumentException("invalid-field", "An observed package needs its ID, version and manifest digest.");
             if (row.RuntimeDependencies is { } runtime && (runtime.IsDefault || runtime.Any(string.IsNullOrWhiteSpace) || runtime.Distinct(StringComparer.Ordinal).Count() != runtime.Length))
                 throw new SelectionDocumentException("invalid-field", "Runtime dependency IDs must be unique and nonempty.");
