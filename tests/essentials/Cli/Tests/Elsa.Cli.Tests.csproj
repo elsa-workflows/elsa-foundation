@@ -35,6 +35,7 @@
     <ProjectReference Include="..\Fixtures\NuplaneHost\Elsa.Cli.Fixtures.NuplaneHost.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Fixtures\NuplaneCapabilityHost\Elsa.Cli.Fixtures.NuplaneCapabilityHost.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Fixtures\ShellsHost\Elsa.Cli.Fixtures.ShellsHost.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Fixtures\ResourceAwareLiveHost\Elsa.Cli.Fixtures.ResourceAwareLiveHost.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Fixtures\WorkerContextHost\Elsa.Cli.Fixtures.WorkerContextHost.csproj" Aliases="FakeWorkerHost" />
   </ItemGroup>
 
