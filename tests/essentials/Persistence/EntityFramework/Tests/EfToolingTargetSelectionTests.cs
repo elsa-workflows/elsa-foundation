@@ -21,6 +21,32 @@ public sealed class EfToolingTargetSelectionTests
     }
 
     [Fact]
+    public void Diagnostics_resource_selects_only_its_two_modules_and_refuses_primary_module_requests()
+    {
+        var prepared = Prepared(
+            [Owner("Runtime", "Workflows.Runtime", "primary", "PostgreSql", "Primary"),
+             Owner("Logs", "Diagnostics.StructuredLogs", "diagnostics", "PostgreSql", "Diagnostics"),
+             Owner("Telemetry", "Diagnostics.OpenTelemetry", "diagnostics", "PostgreSql", "Diagnostics")]);
+        string[] discovered = ["Workflows.Runtime", "Diagnostics.StructuredLogs", "Diagnostics.OpenTelemetry"];
+
+        var diagnostics = EfToolingTargetSelection.Select(prepared, discovered,
+            new EfToolingSelection { Kind = EfToolingSelection.FromHostKind }, "diagnostics");
+        var primary = EfToolingTargetSelection.Select(prepared, discovered,
+            new EfToolingSelection { Kind = EfToolingSelection.FromHostKind }, "primary");
+
+        Assert.Equal(["Diagnostics.OpenTelemetry", "Diagnostics.StructuredLogs"], diagnostics);
+        Assert.Equal(["Workflows.Runtime"], primary);
+        foreach (var selection in new[]
+                 {
+                     new EfToolingSelection { Kind = EfToolingSelection.ModulesKind,
+                         Modules = ["Diagnostics.StructuredLogs", "Workflows.Runtime"] },
+                     new EfToolingSelection { Kind = EfToolingSelection.AllKind }
+                 })
+            Assert.Equal("resource-target-scope", Assert.Throws<EfToolingRefusal>(() =>
+                EfToolingTargetSelection.Select(prepared, discovered, selection, "diagnostics")).Code);
+    }
+
+    [Fact]
     public void Explicit_and_all_selection_refuse_a_module_with_any_owner_outside_the_group()
     {
         var prepared = Prepared(

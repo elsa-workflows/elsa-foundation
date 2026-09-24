@@ -42,6 +42,9 @@ public sealed class WorkbenchProcess : IAsyncDisposable
     /// <summary>A client carrying the host management key.</summary>
     public HttpClient ManagementClient { get; }
 
+    /// <summary>The isolated authored configuration directory used by this process.</summary>
+    public string ContentRoot => _directory;
+
     public static async Task<WorkbenchProcess> StartAsync(
         WorkbenchShell shell,
         Action<string>? prepareContentRoot = null)

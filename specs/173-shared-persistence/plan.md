@@ -4,7 +4,7 @@
 
 **Input**: specification #1967 / `specs/173-shared-persistence/spec.md`.
 
-**Status**: Phase 0 and Phase 1 design passed independent review on 2026-09-23 and #1967 was published through PR #1973. #1968 is active in draft PR #1974; [the quickstart evidence record](quickstart.md#fr-and-sc-evidence-check-2026-09-24) separates implemented shared-layout checks from T045 final acceptance and #1969 diagnostics work. The owner approved bounded strict target verification. The current CShells pin is `0.0.30-preview.159`; preview.158 was the initial compatibility checkpoint.
+**Status**: Phase 0 and Phase 1 design passed independent review on 2026-09-23 and #1967 was published through PR #1973. #1968 merged in PR #1974 with green post-merge CI and Maps; #1969 is the active diagnostics-layout work unit. [The quickstart evidence record](quickstart.md#fr-and-sc-evidence-check-2026-09-24) distinguishes merged shared-layout proof from diagnostics branch proof. The owner approved bounded strict target verification. The current CShells pin is `0.0.30-preview.159`; preview.158 was the initial compatibility checkpoint.
 
 ## Summary
 
@@ -62,7 +62,7 @@ Post-design check against the current constitutions:
 | ADR 0073/0076 | EF owns tooling inside the selected host closure. Versioned protocol retains legacy behavior; the owner-approved D7 extension only reads expected values for strict live comparison. |
 | Deferred sections | Framework §2.12 and Elsa §E4 remain deferred. No claim rests on provisional framework §2.24 or Elsa §E2.9. |
 
-No constitutional exception is proposed. The final integrated review confirmed the public adapter boundary, concrete reload trigger, unchanged legacy error envelope and task coverage. The post-design constitution check is complete. Recorded implementation evidence is linked in the quickstart; T045 remains the final current-head gate. The CShells prerequisite has its own completed package/dependency and regression gates.
+No constitutional exception is proposed. The final integrated review confirmed the public adapter boundary, concrete reload trigger, unchanged legacy error envelope and task coverage. The post-design constitution check is complete. Recorded implementation evidence is linked in the quickstart; T045 passed on #1968 before PR #1974 merged. The CShells prerequisite has its own completed package/dependency and regression gates.
 
 ## Project Structure
 

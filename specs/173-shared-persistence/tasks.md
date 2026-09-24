@@ -134,13 +134,13 @@ description: "Reviewed task list for shared persistence resources"
 
 ### Tests for User Story 3
 
-- [ ] T040 [P] [US3] Add diagnostics-binding and inheritance tests in `tests/essentials/Persistence/EntityFramework/Tests/DiagnosticsPersistenceBindingTests.cs` and `tests/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/EfOpenTelemetryResourceBindingTests.cs` for both diagnostic consumers, binding removal, unrelated-target preservation, private defaults, and redacted refusal.
+- [x] T040 [P] [US3] Add diagnostics-binding and inheritance tests in `tests/essentials/Persistence/EntityFramework/Tests/DiagnosticsPersistenceBindingTests.cs` and `tests/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/EfOpenTelemetryResourceBindingTests.cs` for both diagnostic consumers, binding removal, unrelated-target preservation, private defaults, and redacted refusal.
 
 ### Implementation for User Story 3
 
-- [ ] T041 [US3] Implement EF-owned diagnostics/shared-context and unsupported-layout validation in `src/essentials/Persistence/EntityFramework/Tooling/EfPersistenceResourceValidator.cs` and `src/essentials/Modularity/EntityFramework/EfPersistenceActivationContextPreparer.cs`; reuse the existing strict provider/connection checks in `src/essentials/Persistence/EntityFramework/EfSharedTransaction.cs` and change that file only if integrated contract review identifies a concrete gap. Resource names or aliases must not establish physical identity.
-- [ ] T042 [US3] Add per-target tooling module selection and diagnostics migration coverage in `src/essentials/Persistence/EntityFramework/Tooling/EfToolingHost.cs`, `tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/EfToolingHostTests.cs`, and `tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/ModuleMigrationTests.cs`.
-- [ ] T043 [US3] Add the separate-diagnostics PostgreSQL journey and invalid-layout refusal in `e2e-tests/diagnostics/Test-SharedDiagnosticsPersistence.ps1`, `e2e-tests/diagnostics/Test-OpenTelemetryApiMigration.ps1`, and `e2e-tests/README.md`, recording module sets, migration histories, data placement, restart, target mismatch, shared-context, and transaction-affinity evidence.
+- [x] T041 [US3] Implement EF-owned diagnostics/shared-context and unsupported-layout validation in `src/essentials/Persistence/EntityFramework/Tooling/EfPersistenceResourceValidator.cs`; verify that the existing `EfPersistenceActivationContextPreparer` calls the validator before activation and that `EfSharedTransaction` retains its strict live provider/connection checks. Resource names or aliases must not establish physical identity.
+- [x] T042 [US3] Verify the existing per-target `EfToolingHost` selection with `EfToolingTargetSelectionTests.cs` and add diagnostics migration coverage in `tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/ModuleMigrationTests.cs`; retain the existing production selection path when the live CLI proof finds no gap.
+- [x] T043 [US3] Add the separate-diagnostics PostgreSQL journey and invalid-layout refusal in `e2e-tests/diagnostics/Test-SharedDiagnosticsPersistence.ps1`, `e2e-tests/diagnostics/Test-OpenTelemetryApiMigration.ps1`, and `e2e-tests/README.md`, recording module sets, migration histories, data placement, restart, target mismatch, shared-context, and transaction-affinity evidence.
 
 **Checkpoint**: SC-003 and the diagnostics portions of SC-004/SC-005 pass; no unsupported custom split is reported ready from configuration names alone.
 

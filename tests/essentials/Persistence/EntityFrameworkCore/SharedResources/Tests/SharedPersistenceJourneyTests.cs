@@ -16,39 +16,9 @@ public sealed class SharedPersistenceJourneyTests(PostgreSqlTargetFixture target
 
         await using var host = new SharedPersistenceHostFixture(targets, SharedPersistenceHostFixture.PrimaryResourceSettings());
         await host.StartAsync();
+        var journey = await PublishAndExecuteAsync(host.Process.Client);
         var client = host.Process.Client;
-        await SignInAsync(client);
-
-        var writeLineId = await ActivityVersionIdAsync(client, "Elsa.Activities.Primitives.Activities.WriteLine");
-        var sequenceId = await ActivityVersionIdAsync(client, "Elsa.Activities.Sequence.Activities.Sequence");
-        var marker = $"shared-resource-{Guid.NewGuid():N}";
-        var reusable = await PublishReusableActivityAsync(client, marker, sequenceId, writeLineId);
-        var submitted = await PostAsync(client, "design/workflows/definitions/submit", new
-        {
-            name = marker,
-            description = "Shared persistence resource restart proof",
-            state = new
-            {
-                variables = Array.Empty<object>(),
-                inputs = Array.Empty<object>(),
-                outputs = Array.Empty<object>(),
-                workflowActivityOptions = (object?)null,
-                strategyOptions = (object?)null,
-                rootActivity = ActivityNode(reusable.VersionId)
-            }
-        });
-        var versionId = Required(submitted, "version", "id");
-        var published = await PostAsync(client, $"publishing/workflows/{versionId}/publish", new { });
-        var artifactId = Required(published, "artifactId");
-        var sourceReferenceId = Required(published, "sourceReferenceId");
-        var started = await PostAsync(client, $"runtime/workflows/executables/{artifactId}/execute",
-            new { sourceReferenceId });
-        var executionId = Required(started, "workflowExecutionId");
-        var completed = await WaitForCompletionAsync(client, executionId);
-        Assert.Contains((string?)completed["instance"]?["status"], new[] { "Completed", "Finished" });
-        Assert.Contains(completed["activities"]!.AsArray(), activity =>
-            StringComparer.OrdinalIgnoreCase.Equals((string?)activity?["activityType"], reusable.TypeKey) &&
-            (string?)activity?["status"] is "Completed" or "Finished");
+        var (marker, reusable, versionId, executionId) = journey;
 
         await host.RestartAsync();
         client = host.Process.Client;
@@ -114,6 +84,64 @@ public sealed class SharedPersistenceJourneyTests(PostgreSqlTargetFixture target
         await using var check = diagnostics.CreateCommand();
         check.CommandText = "SELECT COUNT(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public' AND tablename IN ('__EFMigrationsHistory_ElsaRuntime', '__EFMigrationsHistory_ElsaWorkflowsDesign', '__EFMigrationsHistory_ElsaActivitiesDesign', '__EFMigrationsHistory_ElsaPublishingSnapshotReview', 'elsa_activity_definitions', 'elsa_workflow_definitions_v2', 'elsa_publication_records', 'elsa_runtime_workflow_execution_state')";
         Assert.Equal(0L, await check.ExecuteScalarAsync());
+    }
+
+    private static async Task<WorkflowJourney> PublishAndExecuteAsync(HttpClient client)
+    {
+        await SignInAsync(client);
+        var writeLineId = await ActivityVersionIdAsync(client, "Elsa.Activities.Primitives.Activities.WriteLine");
+        var sequenceId = await ActivityVersionIdAsync(client, "Elsa.Activities.Sequence.Activities.Sequence");
+        var marker = $"shared-resource-{Guid.NewGuid():N}";
+        var reusable = await PublishReusableActivityAsync(client, marker, sequenceId, writeLineId);
+        var submitted = await PostAsync(client, "design/workflows/definitions/submit", new
+        {
+            name = marker,
+            description = "Shared persistence resource restart proof",
+            state = new
+            {
+                variables = Array.Empty<object>(),
+                inputs = Array.Empty<object>(),
+                outputs = Array.Empty<object>(),
+                workflowActivityOptions = (object?)null,
+                strategyOptions = (object?)null,
+                rootActivity = ActivityNode(reusable.VersionId)
+            }
+        });
+        var versionId = Required(submitted, "version", "id");
+        var published = await PostAsync(client, $"publishing/workflows/{versionId}/publish", new { });
+        var artifactId = Required(published, "artifactId");
+        var sourceReferenceId = Required(published, "sourceReferenceId");
+        var started = await PostAsync(client, $"runtime/workflows/executables/{artifactId}/execute",
+            new { sourceReferenceId });
+        var executionId = Required(started, "workflowExecutionId");
+        var completed = await WaitForCompletionAsync(client, executionId);
+        Assert.Contains((string?)completed["instance"]?["status"], new[] { "Completed", "Finished" });
+        Assert.Contains(completed["activities"]!.AsArray(), activity =>
+            StringComparer.OrdinalIgnoreCase.Equals((string?)activity?["activityType"], reusable.TypeKey) &&
+            (string?)activity?["status"] is "Completed" or "Finished");
+        return new WorkflowJourney(marker, reusable, versionId, executionId);
+    }
+
+    [SkippableFact]
+    public async Task Separate_diagnostics_resource_keeps_representative_workflow_on_primary_after_restart()
+    {
+        Skip.IfNot(targets.IsAvailable, targets.SkipReason ?? "Docker/PostgreSQL unavailable.");
+        await using var host = new SharedPersistenceHostFixture(targets,
+            SharedPersistenceHostFixture.DiagnosticsResourceSettings(),
+            SharedPersistenceHostFixture.RemoveLegacyDiagnosticsTargets);
+        await host.StartAsync();
+        var journey = await PublishAndExecuteAsync(host.Process.Client);
+        Assert.True(await HasActivityAsync(targets.PrimaryConnectionString, journey.Marker));
+        Assert.False(await HasTableAsync(targets.DiagnosticsConnectionString, "elsa_activity_definitions"));
+
+        await host.RestartAsync();
+        var client = host.Process.Client;
+        await SignInAsync(client);
+        var execution = await GetAsync(client, $"runtime/workflows/instances/{journey.ExecutionId}");
+        Assert.Contains((string?)execution["instance"]?["status"], new[] { "Completed", "Finished" });
+        Assert.NotNull(await GetAsync(client, $"design/workflows/versions/{journey.VersionId}"));
+        Assert.True(await HasActivityAsync(targets.PrimaryConnectionString, journey.Marker));
+        Assert.False(await HasTableAsync(targets.DiagnosticsConnectionString, "elsa_runtime_workflow_execution_state"));
     }
 
     [SkippableFact]
@@ -348,4 +376,5 @@ public sealed class SharedPersistenceJourneyTests(PostgreSqlTargetFixture target
     }
 
     private sealed record ReusablePublication(string DefinitionId, string TypeKey, string VersionId);
+    private sealed record WorkflowJourney(string Marker, ReusablePublication Reusable, string VersionId, string ExecutionId);
 }

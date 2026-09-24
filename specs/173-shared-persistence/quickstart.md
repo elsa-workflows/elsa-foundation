@@ -1,6 +1,6 @@
 # Shared persistence validation quickstart
 
-Status: Phase 0 research is complete. #1968 (shared Runtime, Workflows Design, Activities Design and Publishing persistence) and #1969 (separate Structured Logs and OpenTelemetry persistence) are not implementation-complete. Workbench and the resource-aware CLI now pass standalone same-target and authored-resource-reload PostgreSQL journeys for the four enabled default-shell modules. The seven opt-in Runtime EF identities also have live activation and migration-placement evidence; their individual data behavior, broader reload contracts, and the separate diagnostics layout remain open.
+Status: Phase 0 research is complete. #1968 (shared Runtime, Workflows Design, Activities Design and Publishing persistence) merged in PR #1974 with green post-merge CI and Maps. #1969 is the active separate-diagnostics work unit; its branch has live two-target PostgreSQL evidence, pending final review and merge. The seven opt-in Runtime EF identities have live activation and migration-placement evidence; their individual data behavior and broader reload contracts remain outside these two supported layouts.
 
 The contract is defined by [the shared-persistence specification](spec.md), [the implementation plan](plan.md), [the authored configuration decision](decisions/authored-persistence.md), [the target-selection decision](decisions/tooling-target-selection.md), [the target-verification decision](decisions/tooling-target-verification.md), and [the configuration-context decision](decisions/tooling-configuration-context.md).
 
@@ -48,7 +48,7 @@ The 13 reviewed feature classes now carry `EfPersistenceResourceParticipantAttri
 dotnet test tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj --no-restore --verbosity quiet
 ```
 
-Result: 220/220 migrations tests passed with zero skips, including two new enrollment cases. The test locks the exact 13 stable IDs and module/context pairs while excluding IAM, Secrets, distributed stores, Dashboard, and other unmarked features. A marked probe with a throwing constructor/configurator was discovered without either running. T011 architecture and integration coverage remains open; marker discovery alone does not prove resource-mode activation.
+Result at this checkpoint: 220/220 migrations tests passed with zero skips, including two new enrollment cases. The test locks the exact 13 stable IDs and module/context pairs while excluding IAM, Secrets, distributed stores, Dashboard, and other unmarked features. A marked probe with a throwing constructor/configurator was discovered without either running. T011 architecture and integration coverage was added later; marker discovery alone did not prove resource-mode activation.
 
 ## T006 configuration adapter checkpoint (2026-09-23)
 
@@ -56,7 +56,7 @@ The EF-owned adapter now reads root resource definitions, root/shell defaults an
 
 The first-slice implementation reserves scalar-like resource and connection-reference names because `IConfiguration` exposes JSON booleans/numbers as strings. This makes those values fail closed regardless of quoting while keeping legacy feature syntax unchanged. T006's targeted adapter/resolver suite passed 37/37 after adding identifier, raw-token and source-evidence cases; enrollment/facade tests passed 7/7, zero skips. The new naming rule remains subject to PR review. Runtime registration, generation reload, EF validation, and database proof are separate later tasks and are not claimed by this checkpoint.
 
-A full local architecture-suite attempt reported 243 passed and 15 EF dependency-guard failures. A targeted rerun showed those guards need evaluated Debug and Release assets from a full `Elsa.Server.slnx` restore, which this worktree does not have. The four architecture checks addressing the previous hosted failure passed locally. The fresh hosted CI run is the remaining full-gate evidence; the local full-suite attempt is not reported as green.
+A full local architecture-suite attempt at this checkpoint reported 243 passed and 15 EF dependency-guard failures. A targeted rerun showed those guards need evaluated Debug and Release assets from a full `Elsa.Server.slnx` restore, which this worktree did not have then. The four architecture checks addressing the previous hosted failure passed locally. The later T045 local suite and hosted CI passed; the earlier local attempt is not reported as green.
 
 ## T007 provider-neutral seam checkpoint (2026-09-23)
 
@@ -80,7 +80,7 @@ Local results: the EF Modularity suite passed 29/29, the live editor test passed
 
 ## T008 transaction-affinity checkpoint (2026-09-24)
 
-The EF preflight now checks the two Design contexts used by the Publishing EF activity-upgrade store against the same effective provider and connection value before activation. A selected Design resource is compared with a legacy Design counterpart as well. Publishing's own ledger target is not forced onto that transaction, and separate Design targets remain allowed when the upgrade store is absent. The existing `EfSharedTransaction` still performs its strict check before opening a connection during a live upgrade apply. This checkpoint covers the known upgrade-store relationship; T008 remains open for the remaining integrated source, ownership, and unsupported-layout checks.
+The EF preflight now checks the two Design contexts used by the Publishing EF activity-upgrade store against the same effective provider and connection value before activation. A selected Design resource is compared with a legacy Design counterpart as well. Publishing's own ledger target is not forced onto that transaction, and separate Design targets remain allowed when the upgrade store is absent. The existing `EfSharedTransaction` still performs its strict check before opening a connection during a live upgrade apply. This checkpoint covered the known upgrade-store relationship; later T008 and T041 checks cover the integrated source, ownership and diagnostics-layout constraints.
 
 ```bash
 dotnet test tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj --no-restore --logger 'console;verbosity=quiet' -p:WarningLevel=0
@@ -125,7 +125,7 @@ The T023/T038 contract evidence is distributed across the CLI and EF-owned test 
 | Host context v1 and operation v2, offline module scope, typed refusal and source snapshot | `EfToolingConfigurationContextTests`, `EfToolingHostTests` |
 | Live expected-versus-supplied target mismatch before DbContext, post-migration action or SQLite database creation | `ResourceAwareLiveCliTests` for `apply`, `validate`, and `post-migrate` |
 
-The closed-response tests reject unmapped fields and redact a throwing context disposal. They verify the protocol contract, not a successful release deployment. The standalone PostgreSQL Workbench receipt above supplies the four-module runtime/database/tooling journey; the final current-head release gate remains T045.
+The closed-response tests reject unmapped fields and redact a throwing context disposal. They verify the protocol contract, not a successful release deployment. The standalone PostgreSQL Workbench receipt above supplies the four-module runtime/database/tooling journey; T045 later passed before PR #1974 merged.
 
 ```bash
 dotnet test tests/essentials/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj --no-restore --verbosity quiet
@@ -134,6 +134,43 @@ dotnet test tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj --no-restore --verb
 ```
 
 The recorded local results are EF persistence 375/375, migration/tooling 247/247, and CLI 194/194, all with zero skips. These counts are source and protocol test evidence; they do not substitute for current-head hosted CI or the final rebuilt-host quickstart.
+
+## T040–T043 separate diagnostics checkpoint (2026-09-24)
+
+The resource resolver binds `DiagnosticsStructuredLogsEntityFrameworkCore` and
+`DiagnosticsOpenTelemetryEntityFrameworkCore` to `diagnostics` while Runtime, Design and Publishing inherit
+`primary`. Removing either explicit binding restores default inheritance; malformed bindings refuse without
+exporting their values. EF preflight compares the diagnostics stores' resolved provider and connection rather than
+their resource names. Equal aliases are allowed, unequal physical targets refuse, and an offline comparison stays
+`target-affinity-unverified`. A resource/legacy mix for the two diagnostics stores is unresolved. The existing
+activation preparer invokes this EF validator before feature registration, and the existing live
+`EfSharedTransaction` provider/connection check remains intact.
+
+The rebuilt Workbench receipt uses two disposable PostgreSQL databases and one isolated authored shell copy.
+Both diagnostics migration histories, a nonempty accepted OTLP trace, and captured structured-log records exist
+only on the diagnostics target before and after process restart. A representative reusable activity is published,
+used by a completed workflow and recovered after restart from primary; its design and execution tables are absent
+from diagnostics. The same authored files and inherited environment are staged for CLI `list` and `validate`:
+`--resource diagnostics` selects exactly `Diagnostics.OpenTelemetry` and `Diagnostics.StructuredLogs`, validation
+reports no pending migrations and a matched target, and a supplied primary connection refuses with
+`connection-target-mismatch` without disclosing either connection or the synthetic password. A fresh-database
+negative control binds one diagnostic store to each target; Workbench refuses `resource-context-conflict` before
+creating any table. These checks establish the two supported PostgreSQL layouts, not arbitrary custom splits or
+another provider.
+
+```bash
+pwsh -NoProfile -File ./e2e-tests/diagnostics/Test-SharedDiagnosticsPersistence.ps1
+dotnet test tests/essentials/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj --no-restore
+dotnet test tests/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests.csproj --no-restore
+dotnet test tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj --no-restore
+ELSA_SHARED_PERSISTENCE_REQUIRE_POSTGRESQL=1 dotnet test tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Tests/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj --no-build --no-restore
+```
+
+Local results on the #1969 worktree: the standalone diagnostics receipt passed 3/3, EF persistence 384/384,
+OpenTelemetry EF 76/76, migration/tooling 252/252, EF Modularity 44/44, architecture 262/262, and the full
+shared-resource PostgreSQL suite 9/9, all with zero skips. The staged-host CLI was rerun successfully after
+switching its temporary binary staging from symbolic links to ordinary copies. Current-head hosted checks and
+review are still required before #1969 merges.
 
 ## What success must prove
 
@@ -302,7 +339,7 @@ The placeholder `some-protected-secret-command` is intentionally not a repositor
 
 The diagnostics layout binds both `DiagnosticsStructuredLogsEntityFrameworkCore` and `DiagnosticsOpenTelemetryEntityFrameworkCore` to the diagnostics resource while the shared Runtime/Design/Publishing set remains on the primary resource. Resource names do not prove physical target equality; the tooling must resolve the named references in one context and apply the strict expected-versus-supplied connection check ([target selection](decisions/tooling-target-selection.md#module-cannot-be-partially-validated)).
 
-Use the same explicit context and shell, selecting the diagnostics resource for the diagnostics module set. The final command shape is future contract documentation, not a currently runnable command:
+Use the same explicit context and shell, selecting the diagnostics resource for the diagnostics module set. The CLI supports this syntax when invoked from a built Elsa host and CLI:
 
 ```bash
 dotnet elsa persistence plan \
@@ -325,7 +362,13 @@ dotnet elsa persistence validate \
   --connection-env ELSA_EF_CONNECTION
 ```
 
-Run the existing diagnostics HTTP checks against the rebuilt host after the database proof:
+Run the self-hosted two-target PostgreSQL proof from the repository root. It builds Workbench and the CLI, requires Docker, and checks a representative workflow, both diagnostic stores, restart, target-scoped tooling and a pre-migration split refusal:
+
+```bash
+pwsh -NoProfile -File ./e2e-tests/diagnostics/Test-SharedDiagnosticsPersistence.ps1
+```
+
+Run the existing diagnostics HTTP checks separately against a rebuilt host:
 
 ```bash
 pwsh ./e2e-tests/diagnostics/Test-OpenTelemetryApiMigration.ps1
@@ -349,7 +392,7 @@ POST /elsa/otlp/v1/metrics
 POST /elsa/otlp/v1/logs
 ```
 
-These existing checks prove route composition and diagnostics behavior; they do not yet prove that the diagnostics EF contexts use a second PostgreSQL target. That requires the #1969 resource fixture and database inspection below.
+Those existing checks prove route composition and diagnostics behavior. The new self-hosted PostgreSQL journey above proves the second-target database placement with nonempty OTLP and captured structured-log rows; its authored shell and CLI use the same source files and inherited environment.
 
 ## Artifact compatibility
 
@@ -447,7 +490,7 @@ The rebuilt Workbench/CLI disposable PostgreSQL journey passed 2/2; the isolated
 
 A controlled mutation disabled only `EfToolingConfigurationContext.VerifyExpectedConnection`'s equality refusal. All three public CLI tests for `apply`, `validate`, and `post-migrate` then failed (`expected exit 3, actual 0`). After restoring the source and rebuilding, the same three tests passed. This demonstrates that the negative tests catch removal of the live target guard; it does not prove every possible side effect or every provider. `git status --short` was clean after restoration.
 
-Hosted checks on implementation head `885ff4b9b` passed: Build & test, Core-only build & test, Architecture guards, C# and Python analysis, generated maps, solution filters, all EF container suites (including shared-persistence and CLI acceptance), Secrets EF composition, GitGuardian, and CLA. The alert-on-red-main job was skipped by its normal condition. Automated `github-code-quality` reviews on earlier revisions left repeated LINQ style suggestions; they reported no correctness blocker, and no peer approval was available. The final documentation-only head must pass its own required checks before merge; this paragraph alone does not certify that future head.
+Hosted checks on implementation head `885ff4b9b` passed: Build & test, Core-only build & test, Architecture guards, C# and Python analysis, generated maps, solution filters, all EF container suites (including shared-persistence and CLI acceptance), Secrets EF composition, GitGuardian, and CLA. The alert-on-red-main job was skipped by its normal condition. Automated `github-code-quality` reviews on earlier revisions left repeated LINQ style suggestions; they reported no correctness blocker, and no peer approval was available. The final documentation head `2b71b96f` passed its required hosted checks, PR #1974 merged as `4a162ae1`, and post-merge main CI and Maps passed on that merge commit.
 
 For each run, record:
 
@@ -480,9 +523,8 @@ CShells forced-reload tests cover the two handoff windows, absence of feature ef
 
 ## FR and SC evidence check (2026-09-24)
 
-This records the strongest observed evidence on the shared-persistence branch. “Shared evidenced” means the
-named component or disposable-host check ran on its recorded head; it is not a current-head T045 pass.
-“Partial” identifies the remaining diagnostics or acceptance boundary. The [task mapping](tasks.md#requirements-and-success-criteria-traceability)
+This records the strongest observed evidence across the merged shared slice and current diagnostics branch.
+“Partial” identifies a narrower unproven boundary. The [task mapping](tasks.md#requirements-and-success-criteria-traceability)
 records implementation ownership; this table records what has actually been checked.
 
 | Requirement | State | Evidence and remaining boundary |
@@ -490,43 +532,43 @@ records implementation ownership; this table records what has actually been chec
 | FR-001 | Shared evidenced | [Pure resolver](#t004-pure-resolver-checkpoint-2026-09-23) checks atomic provider/reference selection. |
 | FR-002 | Shared evidenced | [Resolver and authored precedence](#t006-configuration-adapter-checkpoint-2026-09-23) cover binding/default/legacy order; [Workbench](#t015-live-shared-layout-checkpoint-2026-09-24) selects one root default. |
 | FR-003 | Shared evidenced | [Enrollment](#t005-explicit-enrollment-checkpoint-2026-09-23) uses stable IDs; [live shared layout](#t015-live-shared-layout-checkpoint-2026-09-24) checks four enabled modules. |
-| FR-004 | Open #1969 | Two-target diagnostics binding and live placement are T040–T043. |
-| FR-005 | Partial | Authored removal/invalid-value tests are recorded in [T026](tasks.md); diagnostics binding removal remains T040. |
+| FR-004 | Branch evidenced | T040–T043 check both diagnostics bindings, two-target runtime rows, restart, and target-scoped tooling. |
+| FR-005 | Branch evidenced | Authored removal/invalid-value tests and T040 diagnostics binding-removal tests preserve inheritance. |
 | FR-006 | Shared evidenced | [Resolver](#t004-pure-resolver-checkpoint-2026-09-23) and T025/T030 distinguish authored legacy targets from code defaults. |
 | FR-007 | Legacy characterized | [T031](#t031-legacy-control-2026-09-24) covers no-resource Secrets, migrations and isolated Workbench state; full post-restart stimulus delivery remains [#1761](https://github.com/elsa-workflows/elsa-foundation/issues/1761). |
-| FR-008 | Partial | [Negative matrix](#negative-and-refusal-matrix) and [CLI live tests](#t019t023t038-tooling-contract-checkpoint-2026-09-24) cover selected shared targets; diagnostics layouts remain #1969. |
+| FR-008 | Branch evidenced | [Negative matrix](#negative-and-refusal-matrix), CLI live tests and T043 fresh-database split refusal cover both layouts. |
 | FR-009 | Shared evidenced | [Configuration adapter](#t006-configuration-adapter-checkpoint-2026-09-23) and T026 preserve null/empty/false/zero/absence. |
-| FR-010 | Partial | [Live shared journey](#t015-live-shared-layout-checkpoint-2026-09-24) agrees with CLI selection and reload; final equivalent-context gate is T045. |
+| FR-010 | Evidenced for supported layouts | [Live shared journey](#t015-live-shared-layout-checkpoint-2026-09-24) and T043 two-target journey agree with CLI selection; independently running hosts with different environment inputs remain unverified. |
 | FR-011 | Shared evidenced | [Tooling contract checkpoint](#t019t023t038-tooling-contract-checkpoint-2026-09-24) checks JSON versus inherited-environment modes and marks running-host parity unobserved. |
 | FR-012 | Shared evidenced | [Transaction-affinity check](#t008-transaction-affinity-checkpoint-2026-09-24) and migration/tooling suites retain EF-owned schema, pooling and policy. |
-| FR-013 | Partial | Known shared-context constraints are checked by [T008](#t008-transaction-affinity-checkpoint-2026-09-24); separate diagnostics layout refusal remains T041/T043. |
+| FR-013 | Branch evidenced | [T008](#t008-transaction-affinity-checkpoint-2026-09-24) checks transaction affinity; T041 compares resolved diagnostics physical targets and T043 refuses a split before migration. |
 | FR-014 | Shared evidenced | [T019/T023/T038](#t019t023t038-tooling-contract-checkpoint-2026-09-24) check redacted participants, unresolved prerequisites and canaries. |
-| FR-015 | Partial | Public CLI command, worker and host tests plus [live receipt](#t015-live-shared-layout-checkpoint-2026-09-24) check provider/module authority for primary; diagnostics target scope remains #1969. |
+| FR-015 | Branch evidenced | Public CLI, worker and host tests plus live primary and diagnostics receipts check each resource's module scope. |
 | FR-016 | Shared evidenced | [Offline artifact and live-target checkpoints](#artifact-compatibility) separate plan/script from target verification and database effects. |
 | FR-017 | Shared evidenced | [Management preflight](#reload-and-legacy-feature-editor-guard) and T027–T029 refuse before ordinary guards/save/refresh/reload. |
 | FR-018 | Shared evidenced within refusal policy | [Management and reload](#reload-and-legacy-feature-editor-guard) distinguish authored save from activation; general recovery stays #1964. |
 | FR-019 | Shared evidenced | [T034](#t034-source-generation-checkpoint-2026-09-24) and live reload check fresh generation and previous-shell retention. |
 | FR-020 | Shared evidenced | T026/T030 check unknown-field preservation and unresolved unenrolled consumers. |
-| FR-021 | Partial | This guide, [contracts](contracts/persistence-configuration.md), package READMEs, and extension catalogs cover the shared layout, legacy mode, exclusions and checks; #1969 diagnostics proof remains open. |
+| FR-021 | Branch evidenced | This guide, [contracts](contracts/persistence-configuration.md), package READMEs, extension catalogs and the two-target e2e command cover the supported layouts and exclusions. |
 
 | Success criterion | State | Evidence and remaining boundary |
 |---|---|---|
 | SC-001 | Shared evidenced | [PostgreSQL Workbench receipt](#t015-live-shared-layout-checkpoint-2026-09-24) uses one root resource and checks four migration histories/data placements. |
-| SC-002 | Partial | [Tooling/equivalent-context tests](#t019t023t038-tooling-contract-checkpoint-2026-09-24) and live primary receipt pass; T045 final-head acceptance remains. |
-| SC-003 | Partial | [Shared design/publish/execute restart](#t015-live-shared-layout-checkpoint-2026-09-24) passes; separate diagnostics restart/placement is #1969. |
-| SC-004 | Partial | Shared negative/refusal tests and canaries pass on recorded heads; diagnostics negatives and T045 final gate remain. |
-| SC-005 | Partial | [T031](#t031-legacy-control-2026-09-24) characterizes the known #1761 restart defect without hiding it; diagnostics binding removal remains #1969. |
-| SC-006 | Partial | [T034](#t034-source-generation-checkpoint-2026-09-24) and management tests cover shared reload/refusal; T045 current-head acceptance remains. |
+| SC-002 | Evidenced for primary | [Tooling/equivalent-context tests](#t019t023t038-tooling-contract-checkpoint-2026-09-24), live primary receipt and T045 current-head acceptance passed before PR #1974 merged. |
+| SC-003 | Branch evidenced | [Shared design/publish/execute restart](#t015-live-shared-layout-checkpoint-2026-09-24) and T043 two-target workflow/diagnostics restart pass. |
+| SC-004 | Branch evidenced | Shared negative/refusal tests, T043 pre-migration split refusal, wrong-target CLI check and secret canaries pass on recorded heads. |
+| SC-005 | Branch evidenced | [T031](#t031-legacy-control-2026-09-24) characterizes known #1761 without hiding it; T040 proves diagnostics binding removal/inheritance. |
+| SC-006 | Evidenced for shared layout | [T034](#t034-source-generation-checkpoint-2026-09-24), management tests and T045 cover shared reload/refusal; diagnostics authored-reload behavior is outside the two-target startup journey. |
 
 ## Current implementation gaps
 
 This guide deliberately leaves the following as implementation gates rather than pretending they pass:
 
-The live four-module Workbench fixture now sets `Elsa:Persistence:DefaultResource=primary` once, with one named PostgreSQL resource and connection reference; it no longer authors four feature bindings. The stock shell also enables two diagnostics EF features with legacy SQLite connection strings. This first-slice fixture disables those two features because their separate-resource layout belongs to #1969. The CLI still uses `--resource primary` to scope migration commands to the selected target; omitting it lists all ten migration modules, even though the four active shared features resolve through the root default.
+The live four-module Workbench fixture sets `Elsa:Persistence:DefaultResource=primary` once, with one named PostgreSQL resource and connection reference; it does not author four feature bindings. The stock shell also enables two diagnostics EF features with legacy SQLite connection strings. The two-target fixture removes those legacy values from its isolated authored shell copy and binds both diagnostics features to a second named PostgreSQL resource. The CLI uses `--resource primary` or `--resource diagnostics` to scope migration commands; an unscoped list still includes all discovered modules.
 
 - CShells `0.0.30-preview.159` is pinned. The resolver, preparation facade, CShells settings adapter, and Workbench host registration now run together. A live Workbench editor request returned HTTP 409 with the resource-managed prefix before the ordinary EF guard's distinct refusal, and its feature revision stayed unchanged. The EF management preparer evaluates current and candidate graphs; broader transaction-affinity evidence remains open.
 - The shared PostgreSQL journeys cover the four enabled default-shell shared modules through HTTP design/publish/execute/restart, same-target CLI validation, and authored root-resource target reload. The reload journey checks that a successful `POST /_admin/shells/reload/default` advances the generation and moves a published activity to the new target; an unsupported-provider candidate returns `success: false` without a new shell or leaked connection value, while readiness and the previous activity remain available. A second live Workbench shell replaces the comprehensive Runtime EF feature with its seven opt-in EF stores, retains the one root resource default, and confirms all seven activate and place Runtime migrations on the named PostgreSQL target. It preserves their separate signing-key settings. This proves activation and migration placement, not data read/write/restart or tooling equivalence for each opt-in store. The EF shell preparer captures one root source snapshot per invocation, refuses a source change during capture, and redacts unexpected configuration exceptions before the management response. File-provider notification and failed-candidate readiness have focused in-process tests. Management preflight tests cover current-only, candidate-only, invalid-selection and source-change refusal before guard/save/refresh/reload, plus definitions-only and wholly legacy success. Wider compatibility tests remain open.
 - The opt-in shell is **not a full workflow-execution profile**. A real publish-then-execute probe reached HTTP 500 after successful activation and migration. The host reported that a fenced in-memory checkpoint requires the in-memory execution liveness-state store: the opt-in EF operational-state feature selects EF liveness, while the stock checkpoint writer remains in-memory. The comprehensive Runtime EF feature registers the EF checkpoint writer and additional EF scheduler, timer, dispatch and outbox stores required by that writer; the seven opt-in features alone do not supply this complete set. Treat them as partial storage choices, not a replacement for the comprehensive execution profile. Resolve or clearly constrain the composition contract before claiming opt-in execution or restart-safe data behavior; the passing activation test must not be read as readiness proof.
-- The explicit-context CLI protocol, host-owned JSON and JSON-plus-environment source selection, live connection matching, and version-2 script/manifest paths are implemented. A build-only v1 host fixture proves that public `list` still reaches legacy tooling without resource intent, while a root resource key makes implicit `list`, explicit-context `list`, and `script` refuse with `context-capability-unavailable` before invoking v1 tooling or creating an artifact; the synthetic connection-reference canary is absent from output. Worker-level v2 tests prove cancellation reaches the host operation and the worker disposes its context once on cancellation and on a closed host refusal. Public `script` also refuses a factory-only partial API and a full-shaped API advertising unsupported operation version 99 before factory, operation, legacy invocation, or artifact creation, without echoing the supplied connection canary. A packaged SQLite probe host proves public `apply`, `validate`, and `post-migrate` refuse a mismatched named connection before DbContext or post-migration-action construction or SQLite file creation; a matching `validate` reaches both constructors. Neither connection value appears in the refusal. The T023/T038 matrix above covers the full public command paths and secret canaries. Direct observation of ADO connection-object construction is still absent, while the live helper has constructor-ordering probes for all three commands; final current-head acceptance remains T045.
-- The #1968 shared-layout PostgreSQL e2e script and disposable target provisioning path are committed with this implementation. #1969 diagnostics binding does not yet have a PostgreSQL e2e script.
+- The explicit-context CLI protocol, host-owned JSON and JSON-plus-environment source selection, live connection matching, and version-2 script/manifest paths are implemented. A build-only v1 host fixture proves that public `list` still reaches legacy tooling without resource intent, while a root resource key makes implicit `list`, explicit-context `list`, and `script` refuse with `context-capability-unavailable` before invoking v1 tooling or creating an artifact; the synthetic connection-reference canary is absent from output. Worker-level v2 tests prove cancellation reaches the host operation and the worker disposes its context once on cancellation and on a closed host refusal. Public `script` also refuses a factory-only partial API and a full-shaped API advertising unsupported operation version 99 before factory, operation, legacy invocation, or artifact creation, without echoing the supplied connection canary. A packaged SQLite probe host proves public `apply`, `validate`, and `post-migrate` refuse a mismatched named connection before DbContext or post-migration-action construction or SQLite file creation; a matching `validate` reaches both constructors. Neither connection value appears in the refusal. The T023/T038 matrix above covers the full public command paths and secret canaries. Direct observation of ADO connection-object construction is still absent, while the live helper has constructor-ordering probes for all three commands; T045 current-head acceptance passed before #1968 merged.
+- The #1968 shared-layout PostgreSQL e2e script is merged. The #1969 diagnostics branch adds a separate self-hosted two-target e2e script; current-head review and hosted checks remain before it is merged.
 - A green pure resolver, component suite, or existing SQLite e2e run is not database, restart, transaction, or cross-domain target proof.

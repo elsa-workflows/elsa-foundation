@@ -1,10 +1,10 @@
 # Feature Specification: Shared persistence resources
 
-**Feature Branch**: `codex/1968-shared-persistence`
+**Feature Branches**: `codex/1968-shared-persistence` (merged) and `codex/1969-diagnostics-persistence` (active)
 
 **Created**: 2026-09-23
 
-**Status**: In progress — #1967 published in PR #1973; #1968 implementation active
+**Status**: In progress — #1967 published in PR #1973; #1968 merged in PR #1974; #1969 diagnostics implementation active
 
 **Input**: Program [#1959](https://github.com/elsa-workflows/elsa-foundation/issues/1959), specification [#1967](https://github.com/elsa-workflows/elsa-foundation/issues/1967): configure persistence once, retain explicit feature overrides, and make runtime and migration tooling agree. Incorporates reviewed spikes [#1965](https://github.com/elsa-workflows/elsa-foundation/issues/1965#issuecomment-5798240404) and [#1966](https://github.com/elsa-workflows/elsa-foundation/issues/1966#issuecomment-5798450673).
 
