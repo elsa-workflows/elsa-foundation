@@ -24,13 +24,16 @@ public sealed class SharedPersistenceHostFixture : IAsyncDisposable
 
     private readonly WorkbenchShell _shell;
     private readonly PostgreSqlTargetFixture _targets;
+    private readonly Action<string>? _prepareContentRoot;
     private WorkbenchProcess? _process;
 
     public SharedPersistenceHostFixture(
         PostgreSqlTargetFixture targets,
-        IReadOnlyDictionary<string, string>? settings = null)
+        IReadOnlyDictionary<string, string>? settings = null,
+        Action<string>? prepareContentRoot = null)
     {
         _targets = targets;
+        _prepareContentRoot = prepareContentRoot;
         var combined = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["ConnectionStrings:Shared"] = targets.PrimaryConnectionString,
@@ -120,7 +123,7 @@ public sealed class SharedPersistenceHostFixture : IAsyncDisposable
         if (_process is not null)
             throw new InvalidOperationException("The Workbench is already running.");
 
-        _process = await WorkbenchProcess.StartAsync(_shell);
+        _process = await WorkbenchProcess.StartAsync(_shell, _prepareContentRoot);
     }
 
     public async Task RestartAsync()

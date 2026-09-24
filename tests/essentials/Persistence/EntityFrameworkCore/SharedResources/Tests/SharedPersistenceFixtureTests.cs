@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Npgsql;
 using Xunit;
 
@@ -6,6 +7,18 @@ namespace Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests;
 [Collection(PostgreSqlTargetFixture.CollectionName)]
 public sealed class SharedPersistenceFixtureTests(PostgreSqlTargetFixture targets)
 {
+    private static readonly string[] RuntimePersistenceFeatures =
+    [
+        "WorkflowsRuntimeEntityFrameworkCore",
+        "WorkflowsRuntimeWorkflowExecutionEntityFrameworkCorePersistence",
+        "WorkflowsRuntimeActivityExecutionEntityFrameworkCorePersistence",
+        "WorkflowsRuntimeOperationalStateEntityFrameworkCorePersistence",
+        "WorkflowsRuntimeAlterationEntityFrameworkCorePersistence",
+        "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence",
+        "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence",
+        "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence"
+    ];
+
     [SkippableFact]
     public async Task Targets_are_separate_databases_and_writes_do_not_cross()
     {
@@ -67,5 +80,50 @@ public sealed class SharedPersistenceFixtureTests(PostgreSqlTargetFixture target
         Assert.Contains("__EFMigrationsHistory_ElsaWorkflowsDesign", historyTables);
         Assert.Contains("__EFMigrationsHistory_ElsaActivitiesDesign", historyTables);
         Assert.Contains("__EFMigrationsHistory_ElsaPublishingSnapshotReview", historyTables);
+    }
+
+    [SkippableFact]
+    public async Task Opt_in_runtime_persistence_features_activate_with_the_shared_target()
+    {
+        Skip.IfNot(targets.IsAvailable, targets.SkipReason ?? "Docker/PostgreSQL unavailable.");
+
+        await using var host = new SharedPersistenceHostFixture(targets,
+            SharedPersistenceHostFixture.PrimaryResourceSettings(), ConfigureOptInRuntimeShell);
+        await host.StartAsync();
+
+        var catalog = (await host.Process.ReadFeatureCatalogAsync()).ToDictionary(feature => feature.Id, StringComparer.Ordinal);
+        foreach (var feature in RuntimePersistenceFeatures.Skip(1))
+        {
+            Assert.True(catalog.TryGetValue(feature, out var entry) && entry.Runs,
+                $"{feature} did not activate in the shared-resource host.");
+        }
+
+        await using var connection = new NpgsqlConnection(targets.PrimaryConnectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM \"__EFMigrationsHistory_ElsaRuntime\"";
+        Assert.True((long)(await command.ExecuteScalarAsync())! > 0);
+    }
+
+    private static void ConfigureOptInRuntimeShell(string contentRoot)
+    {
+        var path = Path.Combine(contentRoot, "shells.json");
+        var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        var features = root["CShells"]!["Shells"]!["default"]!["Features"]!.AsObject();
+        var comprehensive = features[RuntimePersistenceFeatures[0]]!;
+        var recoveryKey = (string)comprehensive["RecoveryContinuationSigningKey"]!;
+        var hierarchyKey = (string)comprehensive["HierarchyCursorSigningKey"]!;
+        features.Remove(RuntimePersistenceFeatures[0]);
+        features.Remove("WorkflowsDashboardEntityFrameworkCore"); // Its dependency would re-enable the comprehensive store.
+        foreach (var feature in RuntimePersistenceFeatures.Skip(1))
+        {
+            var configuration = new JsonObject();
+            if (feature is not "WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence")
+                configuration["RecoveryContinuationSigningKey"] = recoveryKey;
+            if (feature is "WorkflowsRuntimeActivityExecutionEntityFrameworkCorePersistence")
+                configuration["HierarchyCursorSigningKey"] = hierarchyKey;
+            features[feature] = configuration;
+        }
+        File.WriteAllText(path, root.ToJsonString());
     }
 }
