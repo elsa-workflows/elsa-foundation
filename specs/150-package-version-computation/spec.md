@@ -249,7 +249,8 @@ versions and their floors did not move.
 - A one-off bootstrap publish seeds the last-published record for every package id before the
   mechanism is enabled, so change detection has something to compare against from the first run.
 - Spec 149's freshness check treats the last-published record as publish-written state rather than
-  something regenerated from the tree. Spec 149 does not yet specify this.
+  something regenerated from the tree: it compares only the tree-derived parts of the dependency map,
+  and generation carries each record forward unchanged by package id (spec 149, FR-008 and FR-012).
 - At the 4.0.0 release, every package ships as a clean `4.0.0`, the `-preview` label is dropped, and
   every last-published record is set to `4.0.0`. This is the one deliberate exception to the
   one-past-last-published rule. It is also the one point where a release is a rebuild rather than a
