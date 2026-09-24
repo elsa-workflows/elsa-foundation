@@ -380,6 +380,145 @@ public sealed class EfToolingConfigurationContextTests
             context.InspectUnselectedHost(null, RuntimeFeatureAssemblies, CancellationToken.None)).Code);
     }
 
+    [Fact]
+    public async Task Context_operation_returns_a_closed_typed_negative_inspection()
+    {
+        using var context = ToolingContextForTestAssembly("""
+            { "Elsa": { "Persistence": {
+              "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } }
+            } }, "CShells": { "Shells": { "default": { "Name": "default" } } } }
+            """);
+        using var request = new MemoryStream("""{"version":2,"command":"inspect-context"}"""u8.ToArray());
+        using var response = new MemoryStream();
+
+        var exitCode = await EfToolingContextOperation.RunAsync(request, response, context,
+            [typeof(EfToolingConfigurationContextTests).Assembly, .. RuntimeFeatureAssemblies], CancellationToken.None);
+
+        Assert.Equal(EfToolingExitCode.Success, exitCode);
+        using var document = JsonDocument.Parse(response.ToArray());
+        var root = document.RootElement;
+        Assert.Equal(2, root.GetProperty("version").GetInt32());
+        Assert.Equal("ok", root.GetProperty("status").GetString());
+        Assert.Equal("no-resource-applicable", root.GetProperty("inspectContext").GetProperty("outcome").GetString());
+        var facts = root.GetProperty("configurationContext");
+        Assert.Equal("no-resource-applicable", facts.GetProperty("resolution").GetString());
+        Assert.Equal("not-performed", facts.GetProperty("targetVerification").GetString());
+        Assert.Equal("unobserved", facts.GetProperty("runtimeParity").GetString());
+        Assert.Equal(JsonValueKind.Null, facts.GetProperty("shell").ValueKind);
+        Assert.Equal(JsonValueKind.Null, facts.GetProperty("resource").ValueKind);
+        Assert.Equal(0, facts.GetProperty("participants").GetArrayLength());
+        Assert.False(root.TryGetProperty("error", out _));
+    }
+
+    [Fact]
+    public async Task Context_operation_refuses_positive_intent_and_closed_shape_without_secret_echo()
+    {
+        using var context = ToolingContextForTestAssembly("""
+            { "ConnectionStrings": { "Shared": "connection-value-canary" },
+              "Elsa": { "Persistence": {
+                "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } },
+                "DefaultResource": "primary"
+              } }, "CShells": { "Shells": { "default": {
+                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+              } } } }
+            """);
+        var cases = new (string Payload, string Code)[]
+                 {
+                     ("""{"version":2,"command":"inspect-context"}""", "configuration-context-required"),
+                     ("""{"version":2,"command":"inspect-context","host":{}}""", "invalid-request"),
+                     ("""{"version":2,"command":"inspect-context","shells":[]}""", "invalid-request"),
+                     ("""{"version":2,"command":"inspect-context","capabilitySelection":[]}""", "invalid-request"),
+                     ("""{"version":2,"version":2,"command":"inspect-context"}""", "invalid-request"),
+                     ("""{"version":1,"command":"inspect-context"}""", "unsupported-request-version")
+                 };
+        foreach (var (payload, code) in cases)
+        {
+            using var request = new MemoryStream(Encoding.UTF8.GetBytes(payload));
+            using var response = new MemoryStream();
+            var exitCode = await EfToolingContextOperation.RunAsync(request, response, context,
+                [typeof(EfToolingConfigurationContextTests).Assembly, .. RuntimeFeatureAssemblies], CancellationToken.None);
+
+            Assert.NotEqual(EfToolingExitCode.Success, exitCode);
+            var json = Encoding.UTF8.GetString(response.ToArray());
+            Assert.DoesNotContain("connection-value-canary", json, StringComparison.Ordinal);
+            Assert.DoesNotContain(context.HostDirectory, json, StringComparison.Ordinal);
+            using var document = JsonDocument.Parse(json);
+            var error = document.RootElement.GetProperty("error");
+            Assert.Equal(code, error.GetProperty("code").GetString());
+        }
+    }
+
+    [Fact]
+    public async Task Context_operation_reports_composer_free_legacy_only_without_claiming_a_graph_check()
+    {
+        var hostAssembly = typeof(EfToolingHost).Assembly;
+        using var context = new EfToolingConfigurationContext(
+            EfToolingConfigurationContext.WorkbenchJson,
+            Path.GetDirectoryName(hostAssembly.Location)!, hostAssembly.GetName().Name!,
+            "Production", null, false, new ConfigurationBuilder().Build());
+        using var request = new MemoryStream("""{"version":2,"command":"inspect-context"}"""u8.ToArray());
+        using var response = new MemoryStream();
+
+        var exitCode = await EfToolingHost.RunAsync(request, response, context, CancellationToken.None);
+
+        Assert.Equal(EfToolingExitCode.Success, exitCode);
+        using var document = JsonDocument.Parse(response.ToArray());
+        var root = document.RootElement;
+        Assert.Equal("legacy-only", root.GetProperty("inspectContext").GetProperty("outcome").GetString());
+        Assert.Equal("legacy-only", root.GetProperty("configurationContext").GetProperty("resolution").GetString());
+        Assert.Contains(root.GetProperty("configurationContext").GetProperty("unresolved").EnumerateArray(),
+            item => item.GetString() == "host-not-enrolled");
+    }
+
+    [Fact]
+    public void Context_operation_has_the_exact_reflected_public_signature()
+    {
+        var method = typeof(EfToolingHost).GetMethod("RunAsync",
+            [typeof(Stream), typeof(Stream), typeof(EfToolingConfigurationContext), typeof(CancellationToken)]);
+
+        Assert.NotNull(method);
+        Assert.True(method.IsPublic);
+        Assert.True(method.IsStatic);
+        Assert.Equal(typeof(Task<int>), method.ReturnType);
+    }
+
+    [Fact]
+    public async Task Context_operation_preserves_cancellation_and_refuses_a_disposed_snapshot()
+    {
+        using var context = ToolingContextForTestAssembly("""
+            { "CShells": { "Shells": { "default": { "Name": "default" } } } }
+            """);
+        using var cancelledRequest = new MemoryStream("""{"version":2,"command":"inspect-context"}"""u8.ToArray());
+        using var cancelledResponse = new MemoryStream();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => EfToolingContextOperation.RunAsync(
+            cancelledRequest, cancelledResponse, context,
+            [typeof(EfToolingConfigurationContextTests).Assembly, .. RuntimeFeatureAssemblies], cancellation.Token));
+        Assert.Equal(0, cancelledResponse.Length);
+
+        context.Dispose();
+        using var request = new MemoryStream("""{"version":2,"command":"inspect-context"}"""u8.ToArray());
+        using var response = new MemoryStream();
+        var exitCode = await EfToolingContextOperation.RunAsync(request, response, context,
+            [typeof(EfToolingConfigurationContextTests).Assembly, .. RuntimeFeatureAssemblies], CancellationToken.None);
+        Assert.Equal(EfToolingExitCode.ResolutionFailure, exitCode);
+        using var document = JsonDocument.Parse(response.ToArray());
+        Assert.Equal("configuration-context-disposed", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    private static EfToolingConfigurationContext ToolingContextForTestAssembly(string json)
+    {
+        var hostAssembly = typeof(EfToolingConfigurationContextTests).Assembly;
+        using var source = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        var configuration = new ConfigurationBuilder().AddJsonStream(source).Build();
+        return new EfToolingConfigurationContext(
+            EfToolingConfigurationContext.WorkbenchJson,
+            Path.GetDirectoryName(hostAssembly.Location)!, hostAssembly.GetName().Name!,
+            "Production", null, false, configuration);
+    }
+
     private static EfToolingConfigurationContext Parse(string json)
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));

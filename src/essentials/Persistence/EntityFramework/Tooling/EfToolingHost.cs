@@ -51,6 +51,14 @@ public static class EfToolingHost
         CancellationToken cancellationToken) =>
         EfToolingConfigurationContext.CreateFromRequest(request, cancellationToken);
 
+    /// <summary>Runs a closed version-2 operation against the identical frozen host context.</summary>
+    public static Task<int> RunAsync(
+        Stream request,
+        Stream response,
+        EfToolingConfigurationContext context,
+        CancellationToken cancellationToken) =>
+        EfToolingContextOperation.RunAsync(request, response, context, LoadedAssemblies(), cancellationToken);
+
     /// <summary>
     /// Runs one command, reading the request from <paramref name="request"/> to its end and writing exactly
     /// one response to <paramref name="response"/>. The returned code is the same one the response carries,
