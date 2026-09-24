@@ -7,8 +7,8 @@ Records direct project references only.
 ## Summary
 
 - Source projects: 131
-- Test projects: 111
-- Direct project references: 1128
+- Test projects: 112
+- Direct project references: 1129
 
 ## Projects
 
@@ -186,7 +186,8 @@ Records direct project references only.
 | [Elsa.Cli.Fixtures.NuplaneHost](../../tests/essentials/Cli/Fixtures/NuplaneHost/Elsa.Cli.Fixtures.NuplaneHost.csproj) | test | Elsa.Cli | - | false | Elsa.Persistence.EntityFramework |
 | [Elsa.Cli.Fixtures.ShellsHost](../../tests/essentials/Cli/Fixtures/ShellsHost/Elsa.Cli.Fixtures.ShellsHost.csproj) | test | Elsa.Cli | - | false | Elsa.Secrets.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
 | [Acme.Widgets](../../tests/essentials/Cli/Fixtures/Widgets/Acme.Widgets.csproj) | test | Other | - | false | Elsa.Persistence.EntityFramework |
-| [Elsa.Cli.Tests](../../tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj) | test | Elsa.Cli | - | false | Acme.Widgets<br>Elsa.Cli<br>Elsa.Cli.Fixtures.CollisionHost<br>Elsa.Cli.Fixtures.Host<br>Elsa.Cli.Fixtures.LegacyHost<br>Elsa.Cli.Fixtures.MinimalHost<br>Elsa.Cli.Fixtures.NuplaneCapabilityHost<br>Elsa.Cli.Fixtures.NuplaneHost<br>Elsa.Cli.Fixtures.ShellsHost |
+| [Elsa.Cli.Fixtures.WorkerContextHost](../../tests/essentials/Cli/Fixtures/WorkerContextHost/Elsa.Cli.Fixtures.WorkerContextHost.csproj) | test | Elsa.Cli | - | false | - |
+| [Elsa.Cli.Tests](../../tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj) | test | Elsa.Cli | - | false | Acme.Widgets<br>Elsa.Cli<br>Elsa.Cli.Fixtures.CollisionHost<br>Elsa.Cli.Fixtures.Host<br>Elsa.Cli.Fixtures.LegacyHost<br>Elsa.Cli.Fixtures.MinimalHost<br>Elsa.Cli.Fixtures.NuplaneCapabilityHost<br>Elsa.Cli.Fixtures.NuplaneHost<br>Elsa.Cli.Fixtures.ShellsHost<br>Elsa.Cli.Fixtures.WorkerContextHost |
 | [Elsa.Diagnostics.ConsoleLogStreaming.Tests](../../tests/essentials/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj) | test | Elsa.Diagnostics | - | default | Elsa.Diagnostics.ConsoleLogStreaming |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests](../../tests/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests](../../tests/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore |
@@ -267,7 +268,7 @@ Records direct project references only.
 | Elsa.Architecture | 0 | 2 |
 | Elsa.Attention | 2 | 2 |
 | Elsa.Caching | 2 | 1 |
-| Elsa.Cli | 2 | 9 |
+| Elsa.Cli | 2 | 10 |
 | Elsa.Diagnostics | 8 | 8 |
 | Elsa.Events | 3 | 1 |
 | Elsa.Expressions | 9 | 3 |

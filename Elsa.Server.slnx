@@ -382,6 +382,7 @@
     <Project Path="tests/essentials/Cli/Fixtures/NuplaneCapabilityHost/Elsa.Cli.Fixtures.NuplaneCapabilityHost.csproj" />
     <Project Path="tests/essentials/Cli/Fixtures/NuplaneHost/Elsa.Cli.Fixtures.NuplaneHost.csproj" />
     <Project Path="tests/essentials/Cli/Fixtures/ShellsHost/Elsa.Cli.Fixtures.ShellsHost.csproj" />
+    <Project Path="tests/essentials/Cli/Fixtures/WorkerContextHost/Elsa.Cli.Fixtures.WorkerContextHost.csproj" />
     <Project Path="tests/essentials/Cli/Fixtures/Widgets/Acme.Widgets.csproj" />
   </Folder>
   <Folder Name="/tests/essentials/Diagnostics/" />

@@ -189,7 +189,7 @@ internal static class WorkerRunner
             cancellationToken);
     }
 
-    private static async Task<WorkerResponse> ExecuteExplicitContextAsync(
+    internal static async Task<WorkerResponse> ExecuteExplicitContextAsync(
         ToolingEntryPoint tooling,
         WorkerRequest request,
         string command,

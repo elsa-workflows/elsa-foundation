@@ -35,7 +35,7 @@ public sealed class ToolingEntryPoint
     private readonly MethodInfo select;
     private readonly ToolingContextApi? contextApi;
 
-    private ToolingEntryPoint(
+    internal ToolingEntryPoint(
         MethodInfo runAsync,
         MethodInfo providerPackageId,
         MethodInfo describeBindingFailure,
