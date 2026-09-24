@@ -264,6 +264,21 @@ public sealed class ToolingEntryPointTests
     }
 
     [Fact]
+    public void Context_response_json_refuses_unmapped_fields()
+    {
+        const string response = """
+            {"version":2,"status":"ok","exitCode":0,"command":"inspect-context",
+             "inspectContext":{"outcome":"legacy-only"},
+             "configurationContext":{"source":"workbench-json-v1","environment":"Production",
+               "shell":null,"resource":null,"resolution":"legacy-only","targetVerification":"not-performed",
+               "runtimeParity":"unobserved","participants":[],"unresolved":[]},
+             "futureInstruction":"must not be silently ignored"}
+            """;
+
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<HostContextInspectionResponse>(response, WorkerContract.Json));
+    }
+
+    [Fact]
     public void Reflected_factory_failure_is_redacted_without_a_context_fallback()
     {
         var hostAssembly = typeof(EfToolingHost).Assembly;
@@ -285,6 +300,19 @@ public sealed class ToolingEntryPointTests
         Assert.Equal("configuration-context-invalid", refusal.Code);
         Assert.DoesNotContain("secret-canary", refusal.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain(descriptor.hostDirectory!, refusal.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Context_disposal_failure_is_redacted_and_names_the_context_boundary()
+    {
+        const string sentinel = "context-disposal-secret-canary";
+        var context = new ThrowingDisposeContext(sentinel);
+
+        var refusal = Assert.Throws<WorkerRefusal>(() => ToolingEntryPoint.DisposeConfigurationContext(context));
+
+        Assert.Equal("configuration-context-invalid", refusal.Code);
+        Assert.Equal(1, context.DisposeCount);
+        Assert.DoesNotContain(sentinel, refusal.ToString(), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -313,6 +341,17 @@ public sealed class ToolingEntryPointTests
     {
         public const int Version = 99;
         public void Dispose() { }
+    }
+
+    private sealed class ThrowingDisposeContext(string message) : IDisposable
+    {
+        public int DisposeCount { get; private set; }
+
+        public void Dispose()
+        {
+            DisposeCount++;
+            throw new InvalidOperationException(message);
+        }
     }
 
     private static class CurrentContextProtocol

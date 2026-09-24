@@ -64,6 +64,32 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
     }
 
     [Fact]
+    public async Task Legacy_named_connection_reopens_after_reload_without_resource_enrollment()
+    {
+        var path = NewDbPath();
+        try
+        {
+            await using var host = await StartHostAsync(path, EfMigratePolicy.AutoMigrate, namedConnection: true);
+            var registry = host.Services.GetRequiredService<IShellRegistry>();
+            var first = await registry.GetOrActivateAsync(ShellName);
+            await AssertSchemaAndRepositoryAsync(first.ServiceProvider);
+
+            var reload = await registry.ReloadAsync(ShellName);
+            if (reload.Drain is not null)
+                await reload.Drain.WaitAsync();
+            var second = registry.GetActive(ShellName) ?? await registry.GetOrActivateAsync(ShellName);
+
+            Assert.NotSame(first, second);
+            await AssertSchemaAndRepositoryAsync(second.ServiceProvider);
+            Assert.True(await TableExistsAsync(path, SecretsEfModule.HistoryTableName));
+        }
+        finally
+        {
+            DeleteSqliteFiles(path);
+        }
+    }
+
+    [Fact]
     public async Task Validate_fails_activation_when_migrations_are_pending()
     {
         var path = NewDbPath();
@@ -215,11 +241,14 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
         return count == 1;
     }
 
-    private static async Task<WebApplication> StartHostAsync(string path, EfMigratePolicy policy)
+    private static async Task<WebApplication> StartHostAsync(string path, EfMigratePolicy policy,
+        bool namedConnection = false)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Development });
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Logging.ClearProviders();
+        if (namedConnection)
+            builder.Configuration["ConnectionStrings:LegacySecrets"] = SqliteConnectionString(path);
         builder.Services.AddCShellsAspNetCore(shells =>
         {
             shells
@@ -231,7 +260,8 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
                     .WithFeature<SecretsEntityFrameworkCoreFeature>(feature =>
                     {
                         feature.Provider = "Sqlite";
-                        feature.ConnectionString = SqliteConnectionString(path);
+                        feature.ConnectionString = namedConnection ? null : SqliteConnectionString(path);
+                        feature.ConnectionName = namedConnection ? "LegacySecrets" : null;
                     }));
         });
 
