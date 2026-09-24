@@ -63,8 +63,6 @@ internal static class Report
         {
             case WorkerCommands.List:
                 WriteList(output, tooling.GetProperty("list"));
-                if (tooling.TryGetProperty("configurationContext", out var context))
-                    WriteConfigurationContext(output, context);
                 break;
             case WorkerCommands.Plan:
                 WritePlan(output, tooling.GetProperty("plan"));
@@ -82,6 +80,9 @@ internal static class Report
                 WritePostMigrate(output, tooling.GetProperty("postMigrate"));
                 break;
         }
+
+        if (tooling.TryGetProperty("configurationContext", out var context))
+            WriteConfigurationContext(output, context);
 
         return response.ExitCode;
     }

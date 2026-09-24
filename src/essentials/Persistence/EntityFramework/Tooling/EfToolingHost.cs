@@ -476,6 +476,21 @@ public static class EfToolingHost
         }
     };
 
+    /// <summary>Runs the existing offline planner after a context operation has selected and checked its modules.</summary>
+    internal static EfToolingResponse PlanModules(
+        IReadOnlyList<EfModuleDescriptor> modules,
+        string provider,
+        string? schema,
+        CancellationToken cancellationToken)
+    {
+        var canonical = Canonical(provider);
+        var normalizedSchema = NormalizeSchema(canonical, schema);
+        ValidateProviderSupport(modules, canonical);
+        ValidateEngine(canonical);
+        var actions = PostMigrationActions(modules);
+        return Plan(modules, canonical, normalizedSchema, actions, cancellationToken);
+    }
+
     private static EfToolingResponse Plan(
         IReadOnlyList<EfModuleDescriptor> modules,
         string provider,

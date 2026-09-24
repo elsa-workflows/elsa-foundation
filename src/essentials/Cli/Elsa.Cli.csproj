@@ -37,8 +37,4 @@
     <ProjectReference Include="Worker\Elsa.Cli.Worker.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <InternalsVisibleTo Include="Elsa.Cli.Tests" />
-  </ItemGroup>
-
 </Project>

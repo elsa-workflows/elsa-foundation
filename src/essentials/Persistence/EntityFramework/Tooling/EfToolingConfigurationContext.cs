@@ -158,8 +158,17 @@ public sealed class EfToolingConfigurationContext : IDisposable
             var settings = builder.Build();
             var result = EfPersistencePreparation.Prepare(settings, descriptors, snapshot, closure,
                 verifyConnectionValues: false);
+            var enabled = result.ActiveFeatureIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var usages = EfProviderAgreement.Discover(closure)
+                .Where(usage => enabled.Contains(usage.Feature))
+                .ToArray();
+            var providers = usages.Where(usage => usage.DeclaresProvider)
+                .ToDictionary(usage => usage.Feature,
+                    usage => settings.ConfigurationData.FirstOrDefault(entry =>
+                        StringComparer.OrdinalIgnoreCase.Equals(entry.Key, $"{usage.Feature}:Provider")).Value?.ToString(),
+                    StringComparer.OrdinalIgnoreCase);
             cancellationToken.ThrowIfCancellationRequested();
-            return result;
+            return result with { HostFeatureUsages = usages, ConfiguredProviders = providers };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

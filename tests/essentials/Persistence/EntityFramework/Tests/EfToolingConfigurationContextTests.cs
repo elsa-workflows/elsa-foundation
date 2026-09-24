@@ -467,6 +467,100 @@ public sealed class EfToolingConfigurationContextTests
     }
 
     [Fact]
+    public async Task Context_plan_uses_the_selected_resource_without_an_expected_connection_value()
+    {
+        using var context = ToolingContextForTestAssembly("""
+            { "Elsa": { "Persistence": {
+                "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "MissingUntilDeployment" } },
+                "DefaultResource": "primary"
+              } }, "CShells": { "Shells": { "default": {
+                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+              } } } }
+            """, shell: "default", explicitSelection: true);
+        using var request = new MemoryStream("""{"version":2,"command":"plan","selection":{"kind":"from-host"},"resource":"primary","provider":"Sqlite"}"""u8.ToArray());
+        using var response = new MemoryStream();
+
+        var exitCode = await EfToolingContextOperation.RunAsync(request, response, context,
+            [typeof(EfToolingConfigurationContextTests).Assembly, .. RuntimeFeatureAssemblies], CancellationToken.None);
+
+        Assert.Equal(EfToolingExitCode.Success, exitCode);
+        using var document = JsonDocument.Parse(response.ToArray());
+        var root = document.RootElement;
+        var plan = root.GetProperty("plan");
+        Assert.Equal("Sqlite", plan.GetProperty("provider").GetString());
+        Assert.Equal("Workflows.Runtime", Assert.Single(plan.GetProperty("modules").EnumerateArray()).GetProperty("module").GetString());
+        var facts = root.GetProperty("configurationContext");
+        Assert.Equal("not-performed", facts.GetProperty("targetVerification").GetString());
+        Assert.Contains(facts.GetProperty("unresolved").EnumerateArray(),
+            entry => entry.GetString() == "expected-connection-unchecked");
+    }
+
+    [Fact]
+    public async Task Context_plan_refuses_provider_disagreement_before_building_a_plan()
+    {
+        using var context = ToolingContextForTestAssembly("""
+            { "Elsa": { "Persistence": {
+                "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } },
+                "DefaultResource": "primary"
+              } }, "CShells": { "Shells": { "default": {
+                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+              } } } }
+            """, shell: "default", explicitSelection: true);
+        using var request = new MemoryStream("""{"version":2,"command":"plan","selection":{"kind":"from-host"},"resource":"primary","provider":"PostgreSql"}"""u8.ToArray());
+        using var response = new MemoryStream();
+
+        var exitCode = await EfToolingContextOperation.RunAsync(request, response, context,
+            [typeof(EfToolingConfigurationContextTests).Assembly, .. RuntimeFeatureAssemblies], CancellationToken.None);
+
+        Assert.Equal(EfToolingExitCode.ResolutionFailure, exitCode);
+        using var document = JsonDocument.Parse(response.ToArray());
+        Assert.Equal("provider-disagreement", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+        Assert.False(document.RootElement.TryGetProperty("plan", out _));
+    }
+
+    [Fact]
+    public async Task Context_plan_without_a_resource_preserves_legacy_from_host_selection()
+    {
+        using var context = ToolingContextForTestAssembly("""
+            { "CShells": { "Shells": { "default": {
+                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+              } } } }
+            """, shell: "default", explicitSelection: true);
+        using var request = new MemoryStream("""{"version":2,"command":"plan","selection":{"kind":"from-host"},"provider":"Sqlite"}"""u8.ToArray());
+        using var response = new MemoryStream();
+
+        var exitCode = await EfToolingContextOperation.RunAsync(request, response, context,
+            [typeof(EfToolingConfigurationContextTests).Assembly, .. RuntimeFeatureAssemblies], CancellationToken.None);
+
+        Assert.Equal(EfToolingExitCode.Success, exitCode);
+        using var document = JsonDocument.Parse(response.ToArray());
+        Assert.Equal("Workflows.Runtime", Assert.Single(document.RootElement.GetProperty("plan").GetProperty("modules").EnumerateArray())
+            .GetProperty("module").GetString());
+        Assert.Equal("legacy", document.RootElement.GetProperty("configurationContext").GetProperty("resolution").GetString());
+    }
+
+    [Fact]
+    public async Task Context_plan_checks_the_composed_legacy_provider_for_every_selected_owner()
+    {
+        using var context = ToolingContextForTestAssembly("""
+            { "CShells": { "Shells": { "default": {
+                "Name": "default", "Features": {
+                  "WorkflowsRuntimeEntityFrameworkCore": { "Provider": "PostgreSql" }
+                }
+              } } } }
+            """, shell: "default", explicitSelection: true);
+        using var request = new MemoryStream("""{"version":2,"command":"plan","selection":{"kind":"from-host"},"provider":"Sqlite"}"""u8.ToArray());
+        using var response = new MemoryStream();
+
+        var exitCode = await EfToolingContextOperation.RunAsync(request, response, context,
+            [typeof(EfToolingConfigurationContextTests).Assembly, .. RuntimeFeatureAssemblies], CancellationToken.None);
+
+        Assert.Equal(EfToolingExitCode.ResolutionFailure, exitCode);
+        using var document = JsonDocument.Parse(response.ToArray());
+        Assert.Equal("provider-disagreement", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
     public async Task Context_operation_refuses_positive_intent_and_closed_shape_without_secret_echo()
     {
         using var context = ToolingContextForTestAssembly("""

@@ -44,45 +44,8 @@ internal static class EfToolingContextOperation
                 throw EfToolingRefusal.Resolution("host-composition-unavailable", "The selected host assembly is not loaded in this tooling context.");
 
             var defaults = context.CreateHostDefaults(hostAssembly);
-            if (command == EfToolingCommands.List)
-            {
-                ValidateList(parsed);
-                var prepared = context.PrepareShell(defaults!, closure, cancellationToken);
-                var discovered = EfToolingHost.Discover(closure);
-                var selectedNames = EfToolingTargetSelection.Select(prepared,
-                    discovered.Select(module => module.Name).ToArray(), parsed.Selection, parsed.Resource);
-                var selected = EfModuleOrder.Sort(selectedNames.Select(name => EfModuleCatalog.Find(discovered, name)!).ToArray());
-                var selectedSet = selected.Select(module => module.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                result = new EfToolingContextResponse
-                {
-                    Command = command,
-                    List = EfToolingHost.ListModules(selected).List,
-                    ConfigurationContext = new EfToolingConfigurationContextFacts
-                    {
-                        Source = context.Source,
-                        Environment = context.Environment,
-                        Shell = context.Shell,
-                        Resource = parsed.Resource,
-                        Resolution = prepared.HasApplicableResource ? "resource" : "legacy",
-                        Participants = prepared.ResolvedParticipants
-                            .Where(participant => participant.Participant.ModuleNames.Any(selectedSet.Contains))
-                            .SelectMany(participant => participant.Participant.ModuleNames.Where(selectedSet.Contains),
-                                (participant, module) => new EfToolingContextParticipant
-                                {
-                                    Feature = participant.Participant.FeatureId,
-                                    Module = module,
-                                    Resource = participant.ResourceName,
-                                    Provider = participant.Provider,
-                                    ConnectionReference = participant.ConnectionName,
-                                    Selection = participant.Selection.ToString()
-                                })
-                            .OrderBy(participant => participant.Module, StringComparer.Ordinal)
-                            .ThenBy(participant => participant.Feature, StringComparer.Ordinal)
-                            .ToArray(),
-                        Unresolved = prepared.UnresolvedCodes.Order(StringComparer.Ordinal).ToArray()
-                    }
-                };
-            }
+            if (command is EfToolingCommands.List or EfToolingCommands.Plan)
+                result = RunOffline(parsed, context, defaults!, closure, cancellationToken);
             else if (command == InspectContext)
             {
                 var inspection = context.InspectUnselectedHost(defaults, closure, cancellationToken);
@@ -116,7 +79,7 @@ internal static class EfToolingContextOperation
         {
             // Reflection, discovery, and source failures can contain paths or configuration values.
             result = Failed(command, EfToolingRefusal.Resolution(
-                "configuration-context-invalid", "The selected host context could not be inspected."));
+                "configuration-context-invalid", "The selected host context operation could not be completed."));
         }
 
         await JsonSerializer.SerializeAsync(response, result, EfToolingContextContract.Json, cancellationToken);
@@ -174,6 +137,135 @@ internal static class EfToolingContextOperation
         if (request.Provider is not null || request.Schema is not null || request.Output is not null ||
             request.Engine is not null || request.Packages is not null || request.Connection is not null)
             throw EfToolingRefusal.Usage("invalid-request", "A context list accepts no provider, script, or database fields.");
+    }
+
+    private static EfToolingContextResponse RunOffline(
+        EfToolingContextRequest request,
+        EfToolingConfigurationContext context,
+        IEfToolingShellDefaults defaults,
+        IReadOnlyList<Assembly> closure,
+        CancellationToken cancellationToken)
+    {
+        var isPlan = request.Command == EfToolingCommands.Plan;
+        if (isPlan)
+            ValidatePlan(request);
+        else
+            ValidateList(request);
+
+        var prepared = context.PrepareShell(defaults, closure, cancellationToken);
+        var discovered = EfToolingHost.Discover(closure);
+        var selectedNames = EfToolingTargetSelection.Select(prepared,
+            discovered.Select(module => module.Name).ToArray(), request.Selection, request.Resource);
+        var selected = EfModuleOrder.Sort(selectedNames.Select(name => EfModuleCatalog.Find(discovered, name)!).ToArray());
+        var selectedSet = selected.Select(module => module.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var provider = isPlan ? CheckProviderAgreement(request.Provider!, prepared, selectedSet, context) : null;
+        EfToolingResponse? planned = null;
+        if (provider is not null)
+        {
+            try
+            {
+                planned = EfToolingHost.PlanModules(selected, provider, request.Schema, cancellationToken);
+            }
+            catch (EfToolingRefusal refusal) when (refusal.Code == "provider-engine-unavailable")
+            {
+                throw EfToolingRefusal.Resolution(refusal.Code,
+                    "The selected provider engine is unavailable in this host closure.");
+            }
+        }
+
+        return new EfToolingContextResponse
+        {
+            Command = request.Command,
+            List = isPlan ? null : EfToolingHost.ListModules(selected).List,
+            Plan = planned?.Plan,
+            ConfigurationContext = new EfToolingConfigurationContextFacts
+            {
+                Source = context.Source,
+                Environment = context.Environment,
+                Shell = context.Shell,
+                Resource = request.Resource,
+                Resolution = prepared.HasApplicableResource ? "resource" : "legacy",
+                Participants = prepared.ResolvedParticipants
+                    .Where(participant => participant.Participant.ModuleNames.Any(selectedSet.Contains))
+                    .SelectMany(participant => participant.Participant.ModuleNames.Where(selectedSet.Contains),
+                        (participant, module) => new EfToolingContextParticipant
+                        {
+                            Feature = participant.Participant.FeatureId,
+                            Module = module,
+                            Resource = participant.ResourceName,
+                            Provider = participant.Provider,
+                            ConnectionReference = participant.ConnectionName,
+                            Selection = participant.Selection.ToString()
+                        })
+                    .OrderBy(participant => participant.Module, StringComparer.Ordinal)
+                    .ThenBy(participant => participant.Feature, StringComparer.Ordinal)
+                    .ToArray(),
+                Unresolved = prepared.UnresolvedCodes.Order(StringComparer.Ordinal).ToArray()
+            }
+        };
+    }
+
+    private static void ValidatePlan(EfToolingContextRequest request)
+    {
+        if (request.Selection is null || string.IsNullOrWhiteSpace(request.Provider) ||
+            request.Output is not null || request.Engine is not null || request.Packages is not null ||
+            request.Connection is not null)
+            throw EfToolingRefusal.Usage("invalid-request", "A context plan requires selection and provider, without script or database fields.");
+    }
+
+    private static string CheckProviderAgreement(
+        string requested,
+        EfPersistencePreparationResult prepared,
+        IReadOnlySet<string> selectedModules,
+        EfToolingConfigurationContext context)
+    {
+        string provider;
+        try
+        {
+            provider = EfRelationalProviderBinding.ExpectedProviderName(requested);
+        }
+        catch (ArgumentException)
+        {
+            throw EfToolingRefusal.Usage("unknown-provider", "The requested provider is not supported.");
+        }
+
+        var targets = prepared.ResolvedParticipants.ToDictionary(
+            participant => participant.Participant.FeatureId, StringComparer.OrdinalIgnoreCase);
+        var disagreement = prepared.HostFeatureUsages
+            .Where(usage => usage.DeclaresProvider && usage.Modules.Any(selectedModules.Contains))
+            .Any(usage =>
+            {
+                var configured = targets.TryGetValue(usage.Feature, out var participant) &&
+                                 participant.Selection != PersistenceSelectionKind.Legacy
+                    ? participant.Provider
+                    : prepared.ConfiguredProviders.GetValueOrDefault(usage.Feature);
+                var effective = string.IsNullOrWhiteSpace(configured) ? EfProviderAgreement.UnsetProvider : configured;
+                return !StringComparer.Ordinal.Equals(EfRelationalProviderBinding.Normalize(effective),
+                    EfRelationalProviderBinding.Normalize(provider));
+            });
+        if (disagreement || CapabilityDisagrees(context, provider))
+            throw EfToolingRefusal.Resolution("provider-disagreement",
+                "The requested provider disagrees with an enabled owner or this host's provider selection.");
+        return provider;
+    }
+
+    private static bool CapabilityDisagrees(EfToolingConfigurationContext context, string provider)
+    {
+        var section = context.Configuration.GetSection(EfProviderAgreement.CapabilityKey);
+        var value = section.Value;
+        var option = section["Option"];
+        if (value is null && option is null)
+        {
+            if (section.GetChildren().Any())
+                throw EfToolingRefusal.Resolution("capability-selection-invalid", "The host provider selection has an unsupported shape.");
+            return false;
+        }
+        if (value is not null && option is not null && !StringComparer.Ordinal.Equals(value, option))
+            throw EfToolingRefusal.Resolution("capability-selection-invalid", "The host provider selection is ambiguous.");
+        var options = (option ?? value)!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (options.Length == 0)
+            throw EfToolingRefusal.Resolution("capability-selection-invalid", "The host provider selection is empty.");
+        return EfProviderAgreement.CheckCapabilitySelection(options, provider) is not null;
     }
 
     private static EfToolingContextResponse Failed(string? command, EfToolingRefusal refusal) => new()

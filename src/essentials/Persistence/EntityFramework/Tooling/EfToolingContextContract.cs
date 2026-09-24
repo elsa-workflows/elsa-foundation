@@ -40,6 +40,7 @@ internal sealed class EfToolingContextResponse
     public string? Command { get; init; }
     public EfToolingInspectContextPayload? InspectContext { get; init; }
     public EfToolingListPayload? List { get; init; }
+    public EfToolingPlanPayload? Plan { get; init; }
     public EfToolingConfigurationContextFacts? ConfigurationContext { get; init; }
     public EfToolingErrorPayload? Error { get; init; }
 }

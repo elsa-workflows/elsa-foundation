@@ -37,6 +37,23 @@ public sealed class EfToolingTargetSelectionTests
                 EfToolingTargetSelection.Select(prepared, ["A", "B"], selection, "primary")).Code);
     }
 
+    [Fact]
+    public void A_module_with_an_unenrolled_enabled_owner_cannot_be_selected_by_resource()
+    {
+        var prepared = Prepared([Owner("First", "A", "primary", "PostgreSql", "Shared")]) with
+        {
+            HostFeatureUsages =
+            [
+                new EfFeatureModuleUsage("First", typeof(EfToolingTargetSelectionTests), ["A"], true),
+                new EfFeatureModuleUsage("Unenrolled", typeof(EfToolingTargetSelectionTests), ["A"], true)
+            ]
+        };
+
+        Assert.Equal("resource-target-scope", Assert.Throws<EfToolingRefusal>(() =>
+            EfToolingTargetSelection.Select(prepared, ["A"],
+                new EfToolingSelection { Kind = EfToolingSelection.FromHostKind }, "primary")).Code);
+    }
+
     private static EfPersistencePreparationResult Prepared(IReadOnlyList<PersistenceParticipantResolution> owners)
     {
         var source = new PersistenceSourceProvenance("root", "configuration", false, true);

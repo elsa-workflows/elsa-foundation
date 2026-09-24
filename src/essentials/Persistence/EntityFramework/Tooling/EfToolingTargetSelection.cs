@@ -22,7 +22,9 @@ internal static class EfToolingTargetSelection
         var candidates = group is null
             ? participants
             : participants.Where(participant => InGroup(participant, group.Value)).ToArray();
-        var candidateModules = candidates.SelectMany(participant => participant.Participant.ModuleNames)
+        var candidateModules = (group is null
+                ? preparation.HostFeatureUsages.SelectMany(usage => usage.Modules)
+                : candidates.SelectMany(participant => participant.Participant.ModuleNames))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         IReadOnlyList<string> selected;
@@ -47,9 +49,13 @@ internal static class EfToolingTargetSelection
         if (selected.Any(name => !catalog.Contains(name)))
             throw EfToolingRefusal.Resolution("unknown-module", "A selected module is not declared in this host closure.");
 
+        var resolvedByFeature = participants.ToDictionary(participant => participant.Participant.FeatureId,
+            StringComparer.OrdinalIgnoreCase);
         if (group is not null && selected.Any(name => !candidateModules.Contains(name) ||
                 participants.Any(participant => participant.Participant.ModuleNames.Contains(name, StringComparer.OrdinalIgnoreCase) &&
-                    !InGroup(participant, group.Value))))
+                    !InGroup(participant, group.Value)) ||
+                preparation.HostFeatureUsages.Any(usage => usage.Modules.Contains(name, StringComparer.OrdinalIgnoreCase) &&
+                    (!resolvedByFeature.TryGetValue(usage.Feature, out var owner) || !InGroup(owner, group.Value)))))
             throw EfToolingRefusal.Resolution("resource-target-scope",
                 "A selected module has an enabled owner outside the selected declared target group.");
 

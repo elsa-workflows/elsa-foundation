@@ -226,7 +226,7 @@ public sealed class ToolingEntryPoint
         catch (Exception failure) when (WorkerRunner.IsNonFatal(failure))
         {
             throw WorkerRefusal.Resolution("configuration-context-invalid",
-                "The selected host configuration context could not be inspected.");
+                "The selected host configuration context operation could not be completed.");
         }
 
         cancellationToken.ThrowIfCancellationRequested();

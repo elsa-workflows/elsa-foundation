@@ -177,6 +177,35 @@ public sealed class ToolingEntryPointTests
     }
 
     [Fact]
+    public void Context_plan_response_requires_consistent_order_and_migration_counts()
+    {
+        const string valid = """
+            {"version":2,"status":"ok","exitCode":0,"command":"plan",
+             "plan":{"provider":"Sqlite","modules":[{"order":1,"module":"Workflows.Runtime",
+               "assembly":"Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore","context":"RuntimeDbContext",
+               "historyTable":"__EFMigrationsHistory_Runtime","from":"0","to":"Initial",
+               "count":1,"ids":["Initial"],"dependsOn":[]}]},
+             "configurationContext":{"source":"workbench-json-v1","environment":"Production","shell":"default",
+               "resource":"primary","resolution":"resource","targetVerification":"not-performed","runtimeParity":"unobserved",
+               "participants":[],"unresolved":["expected-connection-unchecked"]}}
+            """;
+        var accepted = JsonSerializer.Deserialize<HostContextInspectionResponse>(valid, WorkerContract.Json)!;
+        Assert.Null(accepted.Validate("plan", ToolExitCode.Success));
+
+        foreach (var invalid in new[]
+                 {
+                     valid.Replace("\"order\":1", "\"order\":2", StringComparison.Ordinal),
+                     valid.Replace("\"count\":1", "\"count\":2", StringComparison.Ordinal),
+                     valid.Replace("\"targetVerification\":\"not-performed\"", "\"targetVerification\":\"matched\"", StringComparison.Ordinal)
+                 })
+        {
+            var parsed = JsonSerializer.Deserialize<HostContextInspectionResponse>(invalid, WorkerContract.Json)!;
+            Assert.Equal("context-capability-unavailable",
+                Assert.Throws<WorkerRefusal>(() => parsed.Validate("plan", ToolExitCode.Success)).Code);
+        }
+    }
+
+    [Fact]
     public void Reflected_factory_failure_is_redacted_without_a_context_fallback()
     {
         var hostAssembly = typeof(EfToolingHost).Assembly;

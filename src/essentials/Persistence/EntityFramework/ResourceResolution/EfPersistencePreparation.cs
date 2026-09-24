@@ -131,7 +131,8 @@ public static class EfPersistencePreparation
                 .Distinct(StringComparer.Ordinal).ToArray())
         {
             ResolvedParticipants = resolution.Participants,
-            ResourceDefinitions = read.Input.RootCatalog.Resources
+            ResourceDefinitions = read.Input.RootCatalog.Resources,
+            ActiveFeatureIds = context.OrderedFeatures.Select(feature => feature.Id).ToArray()
         };
     }
 }
@@ -149,6 +150,10 @@ public sealed record EfPersistencePreparationResult(
     internal IReadOnlyList<PersistenceParticipantResolution> ResolvedParticipants { get; init; } = [];
     internal IReadOnlyDictionary<string, PersistenceResourceDefinition> ResourceDefinitions { get; init; } =
         new Dictionary<string, PersistenceResourceDefinition>(StringComparer.OrdinalIgnoreCase);
+    internal IReadOnlyList<string> ActiveFeatureIds { get; init; } = [];
+    internal IReadOnlyList<EfFeatureModuleUsage> HostFeatureUsages { get; init; } = [];
+    internal IReadOnlyDictionary<string, string?> ConfiguredProviders { get; init; } =
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>One enrolled feature's effective selection, without connection values.</summary>
