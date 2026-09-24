@@ -424,6 +424,31 @@ The legacy feature editor now runs mandatory resource applicability preparation 
 
 ## Evidence record
 
+### T045 local acceptance checkpoint (2026-09-24)
+
+At unsigned source commit `885ff4b9bfe444cc00ad444d2e6ff78b673b29aa`, the root review found no concrete runtime-composition, management-preflight, or CLI context-boundary defect. The focused local suites passed with zero skips: EF persistence 375/375, migrations/tooling 247/247, CLI 194/194, Modularity 195/195, EF Modularity 44/44, Secrets EF 99/99, and architecture 262/262. The following commands were run on this tree (the test-project commands used `--no-restore`):
+
+```bash
+dotnet test tests/essentials/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj --no-restore
+dotnet test tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj --no-restore
+dotnet test tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj --no-restore
+dotnet test tests/essentials/Modularity/Tests/Elsa.Modularity.Tests.csproj --no-restore
+dotnet test tests/essentials/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj --no-restore
+dotnet test tests/essentials/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj --no-restore
+dotnet test tests/essentials/Architecture/Elsa.Architecture.Tests.csproj --no-restore
+pwsh -NoProfile -File ./e2e-tests/composition/Test-SharedPersistence.ps1
+pwsh -NoProfile -File ./e2e-tests/durability/Test-RestartRecovery.ps1
+dotnet run --project tools/maps/Elsa.Maps.Generator -- check
+dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filters-check
+git diff --check origin/main...HEAD
+```
+
+The rebuilt Workbench/CLI disposable PostgreSQL journey passed 2/2; the isolated legacy restart control passed with the exact `KNOWN ISSUE #1761` condition described above. The first PostgreSQL e2e attempt was blocked by a stopped local OrbStack daemon. After it was started, an ignored generated Workbench package-state file said no package was active; it was preserved outside the checkout, and the unchanged journey then passed. Those setup attempts are not product test passes. The PowerShell restart harness parsed successfully, and its separate no-restart control completed the workflow.
+
+A controlled mutation disabled only `EfToolingConfigurationContext.VerifyExpectedConnection`'s equality refusal. All three public CLI tests for `apply`, `validate`, and `post-migrate` then failed (`expected exit 3, actual 0`). After restoring the source and rebuilding, the same three tests passed. This demonstrates that the negative tests catch removal of the live target guard; it does not prove every possible side effect or every provider. `git status --short` was clean after restoration.
+
+Hosted checks on implementation head `885ff4b9b` passed: Build & test, Core-only build & test, Architecture guards, C# and Python analysis, generated maps, solution filters, all EF container suites (including shared-persistence and CLI acceptance), Secrets EF composition, GitGuardian, and CLA. The alert-on-red-main job was skipped by its normal condition. Automated `github-code-quality` reviews on earlier revisions left repeated LINQ style suggestions; they reported no correctness blocker, and no peer approval was available. The final documentation-only head must pass its own required checks before merge; this paragraph alone does not certify that future head.
+
 For each run, record:
 
 ```text
