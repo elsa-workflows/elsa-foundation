@@ -27,6 +27,15 @@ internal enum RestoreVerdict
     /// </summary>
     CapabilityRefused,
 
+    /// <summary>
+    /// At least one package depends on a package the host declares it provides, and the host carries that
+    /// package at a version outside the range the dependency requires, so the cycle refused it rather than
+    /// installing a module that would load against an older assembly than it was built for and fail later at
+    /// a missing member (issue #1951, ADR 0077). Any capability refusal the same cycle recorded travels with
+    /// it, so neither fault hides the other.
+    /// </summary>
+    HostVersionUnsatisfied,
+
     /// <summary>The cycle completed without installing everything it wanted.</summary>
     Degraded
 }
@@ -49,6 +58,12 @@ internal sealed record RestoreOutcome(
     string InstallRoot,
     IReadOnlyList<string> Offenders)
 {
+    /// <summary>
+    /// The capability refusals a <see cref="RestoreVerdict.HostVersionUnsatisfied"/> cycle recorded beside
+    /// its own offenders; empty for every other verdict.
+    /// </summary>
+    public IReadOnlyList<string> CapabilityOffenders { get; private init; } = [];
+
     public static RestoreOutcome AlreadyRecorded(int packages, string stateFile) =>
         new(RestoreVerdict.AlreadyRecorded, packages, stateFile, "", []);
 
@@ -66,6 +81,10 @@ internal sealed record RestoreOutcome(
 
     public static RestoreOutcome CapabilityRefused(IReadOnlyList<string> refusals, string stateFile, string installRoot) =>
         new(RestoreVerdict.CapabilityRefused, 0, stateFile, installRoot, refusals);
+
+    public static RestoreOutcome HostVersionUnsatisfied(
+        IReadOnlyList<string> refusals, IReadOnlyList<string> capabilityRefusals, string stateFile, string installRoot) =>
+        new(RestoreVerdict.HostVersionUnsatisfied, 0, stateFile, installRoot, refusals) { CapabilityOffenders = capabilityRefusals };
 
     public static RestoreOutcome Degraded(IReadOnlyList<string> failed, string stateFile, string installRoot) =>
         new(RestoreVerdict.Degraded, 0, stateFile, installRoot, failed);
@@ -196,10 +215,28 @@ internal static class HostPackageRestore
                     "restore-capability-unresolved",
                     $"These packages need a provider engine the host has not resolvably selected, so the restore into " +
                     $"'{outcome.InstallRoot}' installed neither them nor an engine for them, and nothing is scripted from " +
-                    $"a partial set. Set '{HostCapabilitySelection.Key}' in this host's own " +
-                    $"'{HostAppSettings.BaseFileName}' to one of the options below, or name an engine package as an " +
-                    "explicit root in its package closure — an explicit root wins over the selection. Nuplane refused:",
+                    $"a partial set. {CapabilityRemedy} Nuplane refused:",
                     outcome.Offenders);
+
+            // The other degraded cycle whose cause is not a fault in the feed: the module package is right
+            // there, and what it needs is a newer copy of a package this host says it supplies itself. Named
+            // on its own so the fix names the two things that can change — the host or the module's pin —
+            // rather than sending an operator to look for a package that was never missing. A capability
+            // refusal from the same cycle is listed beside it rather than left for the next run to find.
+            case RestoreVerdict.HostVersionUnsatisfied:
+                throw WorkerRefusal.Resolution(
+                    "restore-host-version-unsatisfied",
+                    "These packages depend on a package this host declares it provides, and the version this host carries " +
+                    $"is outside the range they require, so the restore into '{outcome.InstallRoot}' installed none of them " +
+                    "rather than loading them against an older assembly than they were built for, and nothing is scripted " +
+                    "from a partial set. Run a host at or above the version each one requires, or pin the module to a " +
+                    "version whose requirement this host satisfies." +
+                    (outcome.CapabilityOffenders.Count > 0
+                        ? " The same cycle also refused packages for a provider engine the host has not resolvably " +
+                          $"selected, listed with a capability-* stage below. {CapabilityRemedy}"
+                        : "") +
+                    " Nuplane refused:",
+                    [.. outcome.Offenders, .. outcome.CapabilityOffenders]);
 
             case RestoreVerdict.StoreLocked:
                 throw WorkerRefusal.Resolution(
@@ -221,6 +258,12 @@ internal static class HostPackageRestore
                         : ["The cycle reported itself degraded without naming a package; a feed was unreachable."]);
         }
     }
+
+    /// <summary>What an operator does about a capability refusal, whichever verdict reports it.</summary>
+    private static string CapabilityRemedy =>
+        $"Set '{HostCapabilitySelection.Key}' in this host's own '{HostAppSettings.BaseFileName}' to one of the " +
+        "options below, or name an engine package as an explicit root in its package closure — an explicit root " +
+        "wins over the selection.";
 
     /// <summary>
     /// Turns everything that can go wrong on the way into Nuplane into a named refusal, the way

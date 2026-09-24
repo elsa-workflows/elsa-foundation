@@ -179,6 +179,21 @@ There is no other liveness detection, and none is attempted.
 installed, exits 3 (`restore-incomplete`) listing the failures. A partial package set is never scripted
 from.
 
+Two refusals inside a cycle are named for what is actually wrong, because "could not be installed" would
+send an operator looking for a package that is right there on the feed. Each carries Nuplane's own message
+per package, verbatim, and exits 3:
+
+- `restore-capability-unresolved` — a module declares a capability, such as `ef-provider`, that the host
+  has not resolvably selected; the fix is `Nuplane:Capabilities:<name>` in the host's `appsettings.json`.
+- `restore-host-version-unsatisfied` — a module depends on a package the host declares under
+  `Nuplane:HostProvidedPackages`, and the host's own deps file carries that package at a version outside
+  the range the module requires; the fix is a newer host, or a module version whose requirement this host
+  satisfies. The worker runs on the host's deps file, so this is checked against the host's versions, not
+  the tool's. When the same cycle also refused a module for its capability, that refusal is listed beside
+  it under its own stage, so both are fixed from one run.
+
+See [the feeds guide](../../../docs/foundation-host-feeds.md#what-fails-loudly).
+
 On success the run prints one line on stderr — how many packages were installed, where, and which state
 file records them — and then proceeds exactly as if the state file had been there all along.
 
