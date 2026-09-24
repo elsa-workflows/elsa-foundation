@@ -1,6 +1,7 @@
 using Acme.Widgets;
 using Elsa.Cli.Worker;
 using Elsa.Persistence.EntityFramework.Tooling;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Cli.Tests;
@@ -144,6 +145,34 @@ public sealed class ToolingEntryPointTests
         finally
         {
             ToolingEntryPoint.DisposeConfigurationContext(context);
+        }
+    }
+
+    [Fact]
+    public void Context_list_response_requires_a_closed_success_payload_and_redacted_context_facts()
+    {
+        const string valid = """
+            {"version":2,"status":"ok","exitCode":0,"command":"list",
+             "list":{"modules":[{"module":"Workflows.Runtime","assembly":"Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+               "context":"RuntimeDbContext","historyTable":"__EFMigrationsHistory_Runtime","dependsOn":[],"providers":["Sqlite"]}]},
+             "configurationContext":{"source":"workbench-json-v1","environment":"Production","shell":"default",
+               "resource":"primary","resolution":"resource","targetVerification":"not-performed","runtimeParity":"unobserved",
+               "participants":[],"unresolved":[]}}
+            """;
+        var accepted = JsonSerializer.Deserialize<HostContextInspectionResponse>(valid, WorkerContract.Json)!;
+        Assert.Null(accepted.Validate("list", ToolExitCode.Success));
+
+        foreach (var invalid in new[]
+                 {
+                     valid.Replace("\"list\":{", "\"inspectContext\":{},\"list\":{", StringComparison.Ordinal),
+                     valid.Replace("\"targetVerification\":\"not-performed\"", "\"targetVerification\":\"matched\"", StringComparison.Ordinal),
+                     valid.Replace("\"shell\":\"default\"", "\"shell\":null", StringComparison.Ordinal),
+                     valid.Replace("\"providers\":[\"Sqlite\"]", "\"providers\":null", StringComparison.Ordinal)
+                 })
+        {
+            var parsed = JsonSerializer.Deserialize<HostContextInspectionResponse>(invalid, WorkerContract.Json)!;
+            Assert.Equal("context-capability-unavailable",
+                Assert.Throws<WorkerRefusal>(() => parsed.Validate("list", ToolExitCode.Success)).Code);
         }
     }
 

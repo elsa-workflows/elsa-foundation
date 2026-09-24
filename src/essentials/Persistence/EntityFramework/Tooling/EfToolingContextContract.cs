@@ -39,6 +39,7 @@ internal sealed class EfToolingContextResponse
     public int ExitCode { get; init; }
     public string? Command { get; init; }
     public EfToolingInspectContextPayload? InspectContext { get; init; }
+    public EfToolingListPayload? List { get; init; }
     public EfToolingConfigurationContextFacts? ConfigurationContext { get; init; }
     public EfToolingErrorPayload? Error { get; init; }
 }

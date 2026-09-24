@@ -128,7 +128,11 @@ public static class EfPersistencePreparation
             refusals.Distinct(StringComparer.Ordinal).ToArray(),
             resolution.Evidence.UnverifiedPrerequisites.Concat(read.UnresolvedCodes)
                 .Concat(applicable && !verifyConnectionValues ? ["expected-connection-unchecked"] : [])
-                .Distinct(StringComparer.Ordinal).ToArray());
+                .Distinct(StringComparer.Ordinal).ToArray())
+        {
+            ResolvedParticipants = resolution.Participants,
+            ResourceDefinitions = read.Input.RootCatalog.Resources
+        };
     }
 }
 
@@ -138,7 +142,14 @@ public sealed record EfPersistencePreparationResult(
     bool HasApplicableResource,
     IReadOnlyList<EfPersistenceApplicabilityItem> Participants,
     IReadOnlyList<string> RefusalCodes,
-    IReadOnlyList<string> UnresolvedCodes);
+    IReadOnlyList<string> UnresolvedCodes)
+{
+    // Host-owned tooling needs the complete detached target identities. Runtime and management
+    // callers continue to receive only the public patch/applicability view.
+    internal IReadOnlyList<PersistenceParticipantResolution> ResolvedParticipants { get; init; } = [];
+    internal IReadOnlyDictionary<string, PersistenceResourceDefinition> ResourceDefinitions { get; init; } =
+        new Dictionary<string, PersistenceResourceDefinition>(StringComparer.OrdinalIgnoreCase);
+}
 
 /// <summary>One enrolled feature's effective selection, without connection values.</summary>
 public sealed record EfPersistenceApplicabilityItem(

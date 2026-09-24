@@ -1,4 +1,5 @@
 using Elsa.Cli.Worker;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Cli.Tests;
@@ -41,5 +42,28 @@ public sealed class ConfigurationContextCliTests
 
         Assert.NotEqual(ToolExitCode.Success, run.ExitCode);
         Assert.Contains("--configuration-context", run.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Context_list_report_explains_selection_and_escapes_control_characters()
+    {
+        using var document = JsonDocument.Parse("""
+            {"version":2,"status":"ok","exitCode":0,"command":"list","list":{"modules":[]},
+             "configurationContext":{"source":"workbench-json-v1","environment":"Production","shell":"default",
+               "resource":"primary","resolution":"resource","targetVerification":"not-performed","runtimeParity":"unobserved",
+               "participants":[{"feature":"Feature\nInjected","module":"Runtime","resource":"primary",
+                 "provider":"Sqlite","connectionReference":"Shared","selection":"RootDefault"}],
+               "unresolved":["expected-connection-unchecked"]}}
+            """);
+        var response = new WorkerResponse { Tooling = document.RootElement.Clone() };
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        Assert.Equal(ToolExitCode.Success, Report.Render(WorkerCommands.List, response, output, error));
+        Assert.Contains("Configuration context: workbench-json-v1", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Target verification: not-performed", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Feature\\u000AInjected", output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("Feature\nInjected", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("expected-connection-unchecked", output.ToString(), StringComparison.Ordinal);
     }
 }

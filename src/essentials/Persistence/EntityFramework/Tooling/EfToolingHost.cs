@@ -290,7 +290,7 @@ public static class EfToolingHost
         }
     }
 
-    private static IReadOnlyList<EfModuleDescriptor> Discover(IEnumerable<Assembly> assemblies)
+    internal static IReadOnlyList<EfModuleDescriptor> Discover(IEnumerable<Assembly> assemblies)
     {
         try
         {
@@ -450,7 +450,7 @@ public static class EfToolingHost
             $"The {provider} provider engine could not be bound: {failure} No other provider was tried.");
     }
 
-    private static EfToolingResponse ListModules(IReadOnlyList<EfModuleDescriptor> modules) => new()
+    internal static EfToolingResponse ListModules(IReadOnlyList<EfModuleDescriptor> modules) => new()
     {
         ExitCode = EfToolingExitCode.Success,
         Command = EfToolingCommands.List,

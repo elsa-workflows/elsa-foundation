@@ -63,6 +63,8 @@ internal static class Report
         {
             case WorkerCommands.List:
                 WriteList(output, tooling.GetProperty("list"));
+                if (tooling.TryGetProperty("configurationContext", out var context))
+                    WriteConfigurationContext(output, context);
                 break;
             case WorkerCommands.Plan:
                 WritePlan(output, tooling.GetProperty("plan"));
@@ -109,6 +111,27 @@ internal static class Report
         WriteTable(output, ["MODULE", "ASSEMBLY", "CONTEXT", "HISTORY TABLE", "PROVIDERS"], rows);
         output.WriteLine();
         output.WriteLine($"{rows.Length} module(s).");
+    }
+
+    private static void WriteConfigurationContext(TextWriter output, JsonElement context)
+    {
+        output.WriteLine();
+        output.WriteLine($"Configuration context: {Safe(Text(context, "source"))}; " +
+                         $"shell {Safe(Text(context, "shell"))}; " +
+                         $"resource {Safe(Text(context, "resource"))}; " +
+                         $"resolution {Safe(Text(context, "resolution"))}.");
+        output.WriteLine($"Target verification: {Safe(Text(context, "targetVerification"))}; " +
+                         $"runtime parity: {Safe(Text(context, "runtimeParity"))}.");
+        foreach (var participant in context.GetProperty("participants").EnumerateArray())
+            output.WriteLine($"  {Safe(Text(participant, "feature"))} → {Safe(Text(participant, "module"))}: " +
+                             $"{Safe(Text(participant, "resource"))}, {Safe(Text(participant, "provider"))}, " +
+                             $"connection reference {Safe(Text(participant, "connectionReference"))} " +
+                             $"({Safe(Text(participant, "selection"))}).");
+        foreach (var unresolved in context.GetProperty("unresolved").EnumerateArray())
+            output.WriteLine($"  unresolved: {Safe(unresolved.GetString() ?? "")}");
+
+        static string Safe(string value) => string.Concat(value.Select(character =>
+            char.IsControl(character) ? $"\\u{(int)character:X4}" : character.ToString()));
     }
 
     private static void WritePlan(TextWriter output, JsonElement plan)

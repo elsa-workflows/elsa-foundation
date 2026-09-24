@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using Elsa.Persistence.EntityFramework.ResourceResolution;
 
 namespace Elsa.Persistence.EntityFramework.Tooling;
 
@@ -43,23 +44,65 @@ internal static class EfToolingContextOperation
                 throw EfToolingRefusal.Resolution("host-composition-unavailable", "The selected host assembly is not loaded in this tooling context.");
 
             var defaults = context.CreateHostDefaults(hostAssembly);
-            if (command != InspectContext)
-                throw EfToolingRefusal.Resolution("context-operation-unavailable", "This context operation is not yet available in this host build.");
-            var inspection = context.InspectUnselectedHost(defaults, closure, cancellationToken);
-            result = new EfToolingContextResponse
+            if (command == EfToolingCommands.List)
             {
-                Command = command,
-                InspectContext = new EfToolingInspectContextPayload { Outcome = inspection.Outcome },
-                ConfigurationContext = new EfToolingConfigurationContextFacts
+                ValidateList(parsed);
+                var prepared = context.PrepareShell(defaults!, closure, cancellationToken);
+                var discovered = EfToolingHost.Discover(closure);
+                var selectedNames = EfToolingTargetSelection.Select(prepared,
+                    discovered.Select(module => module.Name).ToArray(), parsed.Selection, parsed.Resource);
+                var selected = EfModuleOrder.Sort(selectedNames.Select(name => EfModuleCatalog.Find(discovered, name)!).ToArray());
+                var selectedSet = selected.Select(module => module.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                result = new EfToolingContextResponse
                 {
-                    Source = context.Source,
-                    Environment = context.Environment,
-                    Shell = context.Shell,
-                    Resource = null,
-                    Resolution = inspection.Outcome,
-                    Unresolved = inspection.UnresolvedCodes
-                }
-            };
+                    Command = command,
+                    List = EfToolingHost.ListModules(selected).List,
+                    ConfigurationContext = new EfToolingConfigurationContextFacts
+                    {
+                        Source = context.Source,
+                        Environment = context.Environment,
+                        Shell = context.Shell,
+                        Resource = parsed.Resource,
+                        Resolution = prepared.HasApplicableResource ? "resource" : "legacy",
+                        Participants = prepared.ResolvedParticipants
+                            .Where(participant => participant.Participant.ModuleNames.Any(selectedSet.Contains))
+                            .SelectMany(participant => participant.Participant.ModuleNames.Where(selectedSet.Contains),
+                                (participant, module) => new EfToolingContextParticipant
+                                {
+                                    Feature = participant.Participant.FeatureId,
+                                    Module = module,
+                                    Resource = participant.ResourceName,
+                                    Provider = participant.Provider,
+                                    ConnectionReference = participant.ConnectionName,
+                                    Selection = participant.Selection.ToString()
+                                })
+                            .OrderBy(participant => participant.Module, StringComparer.Ordinal)
+                            .ThenBy(participant => participant.Feature, StringComparer.Ordinal)
+                            .ToArray(),
+                        Unresolved = prepared.UnresolvedCodes.Order(StringComparer.Ordinal).ToArray()
+                    }
+                };
+            }
+            else if (command == InspectContext)
+            {
+                var inspection = context.InspectUnselectedHost(defaults, closure, cancellationToken);
+                result = new EfToolingContextResponse
+                {
+                    Command = command,
+                    InspectContext = new EfToolingInspectContextPayload { Outcome = inspection.Outcome },
+                    ConfigurationContext = new EfToolingConfigurationContextFacts
+                    {
+                        Source = context.Source,
+                        Environment = context.Environment,
+                        Shell = context.Shell,
+                        Resource = null,
+                        Resolution = inspection.Outcome,
+                        Unresolved = inspection.UnresolvedCodes
+                    }
+                };
+            }
+            else
+                throw EfToolingRefusal.Resolution("context-operation-unavailable", "This context operation is not yet available in this host build.");
         }
         catch (EfToolingRefusal refusal)
         {
@@ -124,6 +167,13 @@ internal static class EfToolingContextOperation
                  modules.Distinct(StringComparer.OrdinalIgnoreCase).Count() == modules.Count)
             return;
         throw EfToolingRefusal.Usage("invalid-request", "The inspection module selection is not valid.");
+    }
+
+    private static void ValidateList(EfToolingContextRequest request)
+    {
+        if (request.Provider is not null || request.Schema is not null || request.Output is not null ||
+            request.Engine is not null || request.Packages is not null || request.Connection is not null)
+            throw EfToolingRefusal.Usage("invalid-request", "A context list accepts no provider, script, or database fields.");
     }
 
     private static EfToolingContextResponse Failed(string? command, EfToolingRefusal refusal) => new()

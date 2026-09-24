@@ -411,6 +411,62 @@ public sealed class EfToolingConfigurationContextTests
     }
 
     [Fact]
+    public async Task Context_list_selects_the_named_resource_from_the_composed_shell_without_reading_its_connection()
+    {
+        using var context = ToolingContextForTestAssembly("""
+            { "ConnectionStrings": { "Shared": "connection-value-canary" },
+              "Elsa": { "Persistence": {
+                "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } },
+                "DefaultResource": "primary"
+              } }, "CShells": { "Shells": { "default": {
+                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+              } } } }
+            """, shell: "default", explicitSelection: true);
+        using var request = new MemoryStream("""{"version":2,"command":"list","selection":{"kind":"from-host"},"resource":"primary"}"""u8.ToArray());
+        using var response = new MemoryStream();
+
+        var exitCode = await EfToolingContextOperation.RunAsync(request, response, context,
+            [typeof(EfToolingConfigurationContextTests).Assembly, .. RuntimeFeatureAssemblies], CancellationToken.None);
+
+        Assert.Equal(EfToolingExitCode.Success, exitCode);
+        var json = Encoding.UTF8.GetString(response.ToArray());
+        Assert.DoesNotContain("connection-value-canary", json, StringComparison.Ordinal);
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        Assert.Equal("Workflows.Runtime", Assert.Single(root.GetProperty("list").GetProperty("modules").EnumerateArray()).GetProperty("module").GetString());
+        var facts = root.GetProperty("configurationContext");
+        Assert.Equal("resource", facts.GetProperty("resolution").GetString());
+        Assert.Equal("primary", facts.GetProperty("resource").GetString());
+        Assert.Equal("not-performed", facts.GetProperty("targetVerification").GetString());
+        Assert.Equal("Shared", Assert.Single(facts.GetProperty("participants").EnumerateArray()).GetProperty("connectionReference").GetString());
+    }
+
+    [Fact]
+    public async Task Context_list_refuses_an_unrelated_resource_before_any_listing()
+    {
+        using var context = ToolingContextForTestAssembly("""
+            { "Elsa": { "Persistence": {
+                "Resources": {
+                  "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" },
+                  "unused": { "Provider": "Sqlite", "ConnectionName": "Other" }
+                }, "DefaultResource": "primary"
+              } }, "CShells": { "Shells": { "default": {
+                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+              } } } }
+            """, shell: "default", explicitSelection: true);
+        using var request = new MemoryStream("""{"version":2,"command":"list","resource":"unused"}"""u8.ToArray());
+        using var response = new MemoryStream();
+
+        var exitCode = await EfToolingContextOperation.RunAsync(request, response, context,
+            [typeof(EfToolingConfigurationContextTests).Assembly, .. RuntimeFeatureAssemblies], CancellationToken.None);
+
+        Assert.Equal(EfToolingExitCode.ResolutionFailure, exitCode);
+        using var document = JsonDocument.Parse(response.ToArray());
+        Assert.Equal("resource-target-scope", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+        Assert.False(document.RootElement.TryGetProperty("list", out _));
+    }
+
+    [Fact]
     public async Task Context_operation_refuses_positive_intent_and_closed_shape_without_secret_echo()
     {
         using var context = ToolingContextForTestAssembly("""
@@ -508,7 +564,8 @@ public sealed class EfToolingConfigurationContextTests
         Assert.Equal("configuration-context-disposed", document.RootElement.GetProperty("error").GetProperty("code").GetString());
     }
 
-    private static EfToolingConfigurationContext ToolingContextForTestAssembly(string json)
+    private static EfToolingConfigurationContext ToolingContextForTestAssembly(
+        string json, string? shell = null, bool explicitSelection = false)
     {
         var hostAssembly = typeof(EfToolingConfigurationContextTests).Assembly;
         using var source = new MemoryStream(Encoding.UTF8.GetBytes(json));
@@ -516,7 +573,7 @@ public sealed class EfToolingConfigurationContextTests
         return new EfToolingConfigurationContext(
             EfToolingConfigurationContext.WorkbenchJson,
             Path.GetDirectoryName(hostAssembly.Location)!, hostAssembly.GetName().Name!,
-            "Production", null, false, configuration);
+            "Production", shell, explicitSelection, configuration);
     }
 
     private static EfToolingConfigurationContext Parse(string json)
