@@ -47,7 +47,7 @@ public sealed class SharedPersistenceHostFixture : IAsyncDisposable
     public WorkbenchProcess Process => _process ?? throw new InvalidOperationException("The Workbench has not started.");
 
     /// <summary>Runs the built CLI against the same authored files and inherited settings as this Workbench.</summary>
-    public async Task<ToolingRun> RunToolingAsync(string command, string? suppliedConnection = null)
+    public async Task<ToolingRun> RunToolingAsync(string command, string? suppliedConnection = null, bool selectResource = true)
     {
         if (command is not ("list" or "validate"))
             throw new ArgumentOutOfRangeException(nameof(command));
@@ -77,9 +77,11 @@ public sealed class SharedPersistenceHostFixture : IAsyncDisposable
         {
             cli, "persistence", command, "--host", hostDirectory,
             "--configuration-context", "workbench-json-environment-v1",
-            "--environment", _shell.Environment, "--shell", "default", "--resource", "primary",
+            "--environment", _shell.Environment, "--shell", "default",
             "--from-host"
         };
+        if (selectResource)
+            arguments.AddRange(["--resource", "primary"]);
         if (command == "validate")
             arguments.AddRange(["--provider", "PostgreSql", "--connection-env", "ELSA_EF_CONNECTION"]);
         var start = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")

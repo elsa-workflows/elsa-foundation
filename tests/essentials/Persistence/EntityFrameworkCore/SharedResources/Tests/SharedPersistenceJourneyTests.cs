@@ -95,6 +95,11 @@ public sealed class SharedPersistenceJourneyTests(PostgreSqlTargetFixture target
         foreach (var module in new[] { "Activities.Design", "Workflows.Design", "Workflows.Publishing", "Workflows.Runtime" })
             Assert.Contains(module, listed.Output, StringComparison.Ordinal);
 
+        var unscoped = await host.RunToolingAsync("list", selectResource: false);
+        AssertTooling(unscoped, 0, targets);
+        Assert.Contains("Identity.Iam", unscoped.Output, StringComparison.Ordinal);
+        Assert.Contains("RootDefault", unscoped.Output, StringComparison.Ordinal);
+
         var validated = await host.RunToolingAsync("validate");
         AssertTooling(validated, 0, targets);
         Assert.Contains("No pending migrations.", validated.Output, StringComparison.Ordinal);
