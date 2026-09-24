@@ -206,6 +206,34 @@ public sealed class ToolingEntryPointTests
     }
 
     [Fact]
+    public void Live_context_response_requires_a_matched_target_and_one_typed_payload()
+    {
+        const string valid = """
+            {"version":2,"status":"ok","exitCode":0,"command":"apply",
+             "apply":{"provider":"Sqlite","modules":[{"order":1,"module":"Workflows.Runtime",
+               "context":"RuntimeDbContext","historyTable":"__EFMigrationsHistory_Runtime","applied":[]}]},
+             "configurationContext":{"source":"workbench-json-v1","environment":"Production","shell":"default",
+               "resource":"primary","resolution":"resource","targetVerification":"matched","runtimeParity":"unobserved",
+               "participants":[],"unresolved":[]}}
+            """;
+        Assert.Null(JsonSerializer.Deserialize<HostContextInspectionResponse>(valid, WorkerContract.Json)!
+            .Validate("apply", ToolExitCode.Success));
+
+        foreach (var invalid in new[]
+                 {
+                     valid.Replace("\"targetVerification\":\"matched\"", "\"targetVerification\":\"not-performed\"", StringComparison.Ordinal),
+                     valid.Replace("\"applied\":[]", "\"applied\":null", StringComparison.Ordinal),
+                     valid.Replace("\"apply\":{", "\"validate\":{},\"apply\":{", StringComparison.Ordinal),
+                     valid.Replace("\"order\":1", "\"order\":2", StringComparison.Ordinal)
+                 })
+        {
+            var parsed = JsonSerializer.Deserialize<HostContextInspectionResponse>(invalid, WorkerContract.Json)!;
+            Assert.Equal("context-capability-unavailable",
+                Assert.Throws<WorkerRefusal>(() => parsed.Validate("apply", ToolExitCode.Success)).Code);
+        }
+    }
+
+    [Fact]
     public void Reflected_factory_failure_is_redacted_without_a_context_fallback()
     {
         var hostAssembly = typeof(EfToolingHost).Assembly;

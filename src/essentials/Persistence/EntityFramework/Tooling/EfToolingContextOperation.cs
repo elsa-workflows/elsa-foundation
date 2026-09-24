@@ -46,6 +46,8 @@ internal static class EfToolingContextOperation
             var defaults = context.CreateHostDefaults(hostAssembly);
             if (command is EfToolingCommands.List or EfToolingCommands.Plan)
                 result = RunOffline(parsed, context, defaults!, closure, cancellationToken);
+            else if (command is EfToolingCommands.Apply or EfToolingCommands.Validate or EfToolingCommands.PostMigrate)
+                result = await RunLiveAsync(parsed, context, defaults!, closure, cancellationToken);
             else if (command == InspectContext)
             {
                 var inspection = context.InspectUnselectedHost(defaults, closure, cancellationToken);
@@ -152,12 +154,7 @@ internal static class EfToolingContextOperation
         else
             ValidateList(request);
 
-        var prepared = context.PrepareShell(defaults, closure, cancellationToken);
-        var discovered = EfToolingHost.Discover(closure);
-        var selectedNames = EfToolingTargetSelection.Select(prepared,
-            discovered.Select(module => module.Name).ToArray(), request.Selection, request.Resource);
-        var selected = EfModuleOrder.Sort(selectedNames.Select(name => EfModuleCatalog.Find(discovered, name)!).ToArray());
-        var selectedSet = selected.Select(module => module.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var (prepared, selected, selectedSet) = SelectModules(request, context, defaults, closure, cancellationToken);
         var provider = isPlan ? CheckProviderAgreement(request.Provider!, prepared, selectedSet, context) : null;
         EfToolingResponse? planned = null;
         if (provider is not null)
@@ -178,32 +175,111 @@ internal static class EfToolingContextOperation
             Command = request.Command,
             List = isPlan ? null : EfToolingHost.ListModules(selected).List,
             Plan = planned?.Plan,
-            ConfigurationContext = new EfToolingConfigurationContextFacts
-            {
-                Source = context.Source,
-                Environment = context.Environment,
-                Shell = context.Shell,
-                Resource = request.Resource,
-                Resolution = prepared.HasApplicableResource ? "resource" : "legacy",
-                Participants = prepared.ResolvedParticipants
-                    .Where(participant => participant.Participant.ModuleNames.Any(selectedSet.Contains))
-                    .SelectMany(participant => participant.Participant.ModuleNames.Where(selectedSet.Contains),
-                        (participant, module) => new EfToolingContextParticipant
-                        {
-                            Feature = participant.Participant.FeatureId,
-                            Module = module,
-                            Resource = participant.ResourceName,
-                            Provider = participant.Provider,
-                            ConnectionReference = participant.ConnectionName,
-                            Selection = participant.Selection.ToString()
-                        })
-                    .OrderBy(participant => participant.Module, StringComparer.Ordinal)
-                    .ThenBy(participant => participant.Feature, StringComparer.Ordinal)
-                    .ToArray(),
-                Unresolved = prepared.UnresolvedCodes.Order(StringComparer.Ordinal).ToArray()
-            }
+            ConfigurationContext = BuildFacts(context, request.Resource, prepared, selectedSet, false)
         };
     }
+
+    private static async Task<EfToolingContextResponse> RunLiveAsync(
+        EfToolingContextRequest request,
+        EfToolingConfigurationContext context,
+        IEfToolingShellDefaults defaults,
+        IReadOnlyList<Assembly> closure,
+        CancellationToken cancellationToken)
+    {
+        if (request.Selection is null || string.IsNullOrWhiteSpace(request.Provider) ||
+            string.IsNullOrWhiteSpace(request.Connection) || request.Output is not null ||
+            request.Engine is not null || request.Packages is not null)
+            throw EfToolingRefusal.Usage("invalid-request", "A live context operation requires selection, provider, and connection, without script or package fields.");
+
+        var (prepared, selected, selectedSet) = SelectModules(request, context, defaults, closure, cancellationToken);
+        var provider = CheckProviderAgreement(request.Provider, prepared, selectedSet, context);
+        var selectedParticipants = prepared.ResolvedParticipants
+            .Where(participant => participant.Selection != PersistenceSelectionKind.Legacy &&
+                participant.Participant.ModuleNames.Any(selectedSet.Contains))
+            .ToArray();
+        if (selectedParticipants.Length > 0 && request.Resource is null)
+            throw EfToolingRefusal.Resolution("resource-required", "A live operation over a persistence resource requires an explicit resource selection.");
+
+        EfToolingResponse result;
+        try
+        {
+            result = await EfToolingHost.RunLiveModulesAsync(selected, request.Command!, provider,
+                request.Schema, request.Connection, () =>
+                {
+                    // The host has checked all options. Verify every selected owner before it can
+                    // construct a DbContext or open a connection for any selected module.
+                    foreach (var name in selectedParticipants.Select(participant => participant.ConnectionName)
+                                 .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.Ordinal))
+                        context.VerifyExpectedConnection(name!, request.Connection);
+                }, cancellationToken);
+        }
+        catch (EfToolingRefusal refusal) when (refusal.Code == "provider-engine-unavailable")
+        {
+            throw EfToolingRefusal.Resolution(refusal.Code,
+                "The selected provider engine is unavailable in this host closure.");
+        }
+
+        return new EfToolingContextResponse
+        {
+            Command = request.Command,
+            Apply = result.Apply,
+            Validate = result.Validate,
+            PostMigrate = result.PostMigrate,
+            ConfigurationContext = BuildFacts(context, request.Resource, prepared, selectedSet,
+                selectedParticipants.Length > 0)
+        };
+    }
+
+    private static (EfPersistencePreparationResult Prepared, IReadOnlyList<EfModuleDescriptor> Selected,
+        HashSet<string> SelectedSet) SelectModules(
+        EfToolingContextRequest request,
+        EfToolingConfigurationContext context,
+        IEfToolingShellDefaults defaults,
+        IReadOnlyList<Assembly> closure,
+        CancellationToken cancellationToken)
+    {
+        var prepared = context.PrepareShell(defaults, closure, cancellationToken);
+        var discovered = EfToolingHost.Discover(closure);
+        var names = EfToolingTargetSelection.Select(prepared,
+            discovered.Select(module => module.Name).ToArray(), request.Selection, request.Resource);
+        var selected = EfModuleOrder.Sort(names.Select(name => EfModuleCatalog.Find(discovered, name)!).ToArray());
+        return (prepared, selected, selected.Select(module => module.Name).ToHashSet(StringComparer.OrdinalIgnoreCase));
+    }
+
+    private static EfToolingConfigurationContextFacts BuildFacts(
+        EfToolingConfigurationContext context,
+        string? resource,
+        EfPersistencePreparationResult prepared,
+        IReadOnlySet<string> selectedSet,
+        bool targetMatched) => new()
+    {
+        Source = context.Source,
+        Environment = context.Environment,
+        Shell = context.Shell,
+        Resource = resource,
+        Resolution = prepared.ResolvedParticipants.Any(participant =>
+            participant.Selection != PersistenceSelectionKind.Legacy &&
+            participant.Participant.ModuleNames.Any(selectedSet.Contains)) ? "resource" : "legacy",
+        TargetVerification = targetMatched ? "matched" : "not-performed",
+        Participants = prepared.ResolvedParticipants
+            .Where(participant => participant.Participant.ModuleNames.Any(selectedSet.Contains))
+            .SelectMany(participant => participant.Participant.ModuleNames.Where(selectedSet.Contains),
+                (participant, module) => new EfToolingContextParticipant
+                {
+                    Feature = participant.Participant.FeatureId,
+                    Module = module,
+                    Resource = participant.ResourceName,
+                    Provider = participant.Provider,
+                    ConnectionReference = participant.ConnectionName,
+                    Selection = participant.Selection.ToString()
+                })
+            .OrderBy(participant => participant.Module, StringComparer.Ordinal)
+            .ThenBy(participant => participant.Feature, StringComparer.Ordinal)
+            .ToArray(),
+        Unresolved = prepared.UnresolvedCodes
+            .Where(code => !targetMatched || code != "expected-connection-unchecked")
+            .Order(StringComparer.Ordinal).ToArray()
+    };
 
     private static void ValidatePlan(EfToolingContextRequest request)
     {

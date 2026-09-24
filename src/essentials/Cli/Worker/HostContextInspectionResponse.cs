@@ -10,6 +10,10 @@ internal sealed class HostContextInspectionResponse
     public HostInspectionPayload? InspectContext { get; init; }
     public HostListPayload? List { get; init; }
     public HostPlanPayload? Plan { get; init; }
+    public HostLivePayload<HostApplyEntry>? Apply { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("validate")]
+    public HostLivePayload<HostValidateEntry>? ValidateOperation { get; init; }
+    public HostLivePayload<HostPostMigrateEntry>? PostMigrate { get; init; }
     public HostConfigurationContextFacts? ConfigurationContext { get; init; }
     public WorkerError? Error { get; init; }
 
@@ -18,14 +22,16 @@ internal sealed class HostContextInspectionResponse
         if (Version != 2 || Command != requestedCommand || ExitCode != returnedExitCode)
             throw InvalidResponse();
         if (Status == "error" && returnedExitCode is >= ToolExitCode.Refusal and <= ToolExitCode.DatabaseFailure &&
-            Error is { Code.Length: > 0, Message.Length: > 0 } && InspectContext is null && List is null && Plan is null)
+            Error is { Code.Length: > 0, Message.Length: > 0 } && InspectContext is null && List is null && Plan is null &&
+            Apply is null && ValidateOperation is null && PostMigrate is null)
             return null;
         if (requestedCommand == "list")
         {
             var listed = List?.Modules;
             var facts = ConfigurationContext;
             if (Status != "ok" || returnedExitCode != ToolExitCode.Success || Error is not null ||
-                InspectContext is not null || Plan is not null || listed is null ||
+                InspectContext is not null || Plan is not null || Apply is not null || ValidateOperation is not null ||
+                PostMigrate is not null || listed is null ||
                 listed.Any(module => module is null || string.IsNullOrWhiteSpace(module.Module) ||
                     string.IsNullOrWhiteSpace(module.Assembly) || string.IsNullOrWhiteSpace(module.Context) ||
                     string.IsNullOrWhiteSpace(module.HistoryTable) || module.Providers is null ||
@@ -41,7 +47,8 @@ internal sealed class HostContextInspectionResponse
             var planned = Plan;
             var entries = planned?.Modules;
             if (Status != "ok" || returnedExitCode != ToolExitCode.Success || Error is not null ||
-                InspectContext is not null || List is not null ||
+                InspectContext is not null || List is not null || Apply is not null || ValidateOperation is not null ||
+                PostMigrate is not null ||
                 planned?.Provider is not ("Sqlite" or "SqlServer" or "PostgreSql" or "MySql") ||
                 entries is null || entries.Count == 0 ||
                 entries.Select((entry, index) => entry is null || entry.Order != index + 1 ||
@@ -56,10 +63,44 @@ internal sealed class HostContextInspectionResponse
                 throw InvalidResponse();
             return null;
         }
+        if (requestedCommand is "apply" or "validate" or "post-migrate")
+        {
+            if (Status != "ok" || returnedExitCode != ToolExitCode.Success || Error is not null ||
+                InspectContext is not null || List is not null || Plan is not null ||
+                (Apply is not null) != (requestedCommand == "apply") ||
+                (ValidateOperation is not null) != (requestedCommand == "validate") ||
+                (PostMigrate is not null) != (requestedCommand == "post-migrate") ||
+                !ValidExplicitContext(ConfigurationContext, live: true))
+                throw InvalidResponse();
+
+            var provider = requestedCommand switch
+            {
+                "apply" => Apply!.Provider,
+                "validate" => ValidateOperation!.Provider,
+                _ => PostMigrate!.Provider
+            };
+            if (provider is not ("Sqlite" or "SqlServer" or "PostgreSql" or "MySql"))
+                throw InvalidResponse();
+
+            var entriesValid = requestedCommand switch
+            {
+                "apply" => ValidEntries(Apply!.Modules, entry => !string.IsNullOrWhiteSpace(entry.HistoryTable) &&
+                    entry.Applied is not null &&
+                    entry.Applied.All(id => !string.IsNullOrWhiteSpace(id))),
+                "validate" => ValidEntries(ValidateOperation!.Modules, entry => !string.IsNullOrWhiteSpace(entry.HistoryTable)),
+                _ => ValidEntries(PostMigrate!.Modules, entry => entry.Declared is not null && entry.Ran is not null &&
+                    entry.Declared.All(id => !string.IsNullOrWhiteSpace(id)) &&
+                    entry.Ran.All(id => !string.IsNullOrWhiteSpace(id)))
+            };
+            if (!entriesValid)
+                throw InvalidResponse();
+            return null;
+        }
         if (requestedCommand != "inspect-context")
             throw InvalidResponse();
         var context = ConfigurationContext;
         if (Status != "ok" || returnedExitCode != ToolExitCode.Success || Error is not null || List is not null || Plan is not null ||
+            Apply is not null || ValidateOperation is not null || PostMigrate is not null ||
             InspectContext?.Outcome is not ("no-resource-applicable" or "legacy-only") ||
             context?.Source is not ("workbench-json-v1" or "workbench-json-environment-v1") ||
             string.IsNullOrWhiteSpace(context.Environment) || context.Shell is not null || context.Resource is not null)
@@ -77,14 +118,57 @@ internal sealed class HostContextInspectionResponse
     private static WorkerRefusal InvalidResponse() => WorkerRefusal.Resolution(
         "context-capability-unavailable", "The selected host returned an invalid persistence context inspection response.");
 
-    private static bool ValidExplicitContext(HostConfigurationContextFacts? facts) =>
+    private static bool ValidExplicitContext(HostConfigurationContextFacts? facts, bool live = false) =>
         facts?.Source is "workbench-json-v1" or "workbench-json-environment-v1" &&
         !string.IsNullOrWhiteSpace(facts.Environment) && !string.IsNullOrWhiteSpace(facts.Shell) &&
-        facts.Resolution is "resource" or "legacy" && facts.TargetVerification == "not-performed" &&
+        facts.Resolution is "resource" or "legacy" &&
+        (live ? (facts.Resolution == "resource" && facts.TargetVerification == "matched" ||
+                 facts.Resolution == "legacy" && facts.TargetVerification == "not-performed") :
+            facts.TargetVerification == "not-performed") &&
+        (!live || (facts.Resolution == "resource" ? !string.IsNullOrWhiteSpace(facts.Resource) : facts.Resource is null)) &&
         facts.RuntimeParity == "unobserved" && facts.Participants is not null && facts.Unresolved is not null &&
+        (!live || facts.TargetVerification != "matched" || !facts.Unresolved.Contains("expected-connection-unchecked")) &&
         !facts.Unresolved.Any(string.IsNullOrWhiteSpace) &&
         !facts.Participants.Any(participant => participant is null || string.IsNullOrWhiteSpace(participant.Feature) ||
             string.IsNullOrWhiteSpace(participant.Module) || string.IsNullOrWhiteSpace(participant.Selection));
+
+    private static bool ValidEntries<T>(IReadOnlyList<T>? entries, Func<T, bool> valid) where T : HostLiveEntry =>
+        entries is { Count: > 0 } &&
+        entries.Select((entry, index) => entry is not null && entry.Order == index + 1 &&
+            !string.IsNullOrWhiteSpace(entry.Module) && !string.IsNullOrWhiteSpace(entry.Context) &&
+            valid(entry)).All(ok => ok) &&
+        entries.Select(entry => entry.Module).Distinct(StringComparer.OrdinalIgnoreCase).Count() == entries.Count;
+}
+
+internal sealed class HostLivePayload<T> where T : HostLiveEntry
+{
+    public string? Provider { get; init; }
+    public string? Schema { get; init; }
+    public IReadOnlyList<T>? Modules { get; init; }
+}
+
+internal class HostLiveEntry
+{
+    public int Order { get; init; }
+    public string? Module { get; init; }
+    public string? Context { get; init; }
+}
+
+internal sealed class HostApplyEntry : HostLiveEntry
+{
+    public string? HistoryTable { get; init; }
+    public IReadOnlyList<string>? Applied { get; init; }
+}
+
+internal sealed class HostValidateEntry : HostLiveEntry
+{
+    public string? HistoryTable { get; init; }
+}
+
+internal sealed class HostPostMigrateEntry : HostLiveEntry
+{
+    public IReadOnlyList<string>? Declared { get; init; }
+    public IReadOnlyList<string>? Ran { get; init; }
 }
 
 internal sealed class HostListPayload

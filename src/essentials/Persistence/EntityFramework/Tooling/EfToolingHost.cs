@@ -491,6 +491,31 @@ public static class EfToolingHost
         return Plan(modules, canonical, normalizedSchema, actions, cancellationToken);
     }
 
+    /// <summary>Runs the existing live module operation after the context boundary verifies every target.</summary>
+    internal static async Task<EfToolingResponse> RunLiveModulesAsync(
+        IReadOnlyList<EfModuleDescriptor> modules,
+        string command,
+        string provider,
+        string? schema,
+        string connection,
+        Action verifyTargets,
+        CancellationToken cancellationToken)
+    {
+        var canonical = Canonical(provider);
+        var normalizedSchema = NormalizeSchema(canonical, schema);
+        ValidateProviderSupport(modules, canonical);
+        ValidateEngine(canonical);
+        var actions = PostMigrationActions(modules);
+        verifyTargets();
+        return command switch
+        {
+            EfToolingCommands.Apply => await Apply(modules, canonical, normalizedSchema, actions, connection, cancellationToken),
+            EfToolingCommands.Validate => await Validate(modules, canonical, normalizedSchema, actions, connection, cancellationToken),
+            EfToolingCommands.PostMigrate => await PostMigrate(modules, canonical, normalizedSchema, actions, connection, cancellationToken),
+            _ => throw EfToolingRefusal.Usage("unknown-command", "The live context operation command is not supported.")
+        };
+    }
+
     private static EfToolingResponse Plan(
         IReadOnlyList<EfModuleDescriptor> modules,
         string provider,

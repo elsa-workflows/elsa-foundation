@@ -560,6 +560,142 @@ public sealed class EfToolingConfigurationContextTests
         Assert.Equal("provider-disagreement", document.RootElement.GetProperty("error").GetProperty("code").GetString());
     }
 
+    [Theory]
+    [InlineData("apply")]
+    [InlineData("validate")]
+    [InlineData("post-migrate")]
+    public async Task Live_context_refuses_a_mismatched_named_target_before_database_access(string command)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"elsa-context-{Guid.NewGuid():N}.db");
+        var actual = $"Data Source={path}";
+        const string expected = "Data Source=expected-connection-value-canary.db";
+        using var context = ToolingContextForTestAssembly($$"""
+            { "ConnectionStrings": { "Shared": "{{expected}}" },
+              "Elsa": { "Persistence": {
+                "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } },
+                "DefaultResource": "primary"
+              } }, "CShells": { "Shells": { "default": {
+                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+              } } } }
+            """, shell: "default", explicitSelection: true);
+        using var request = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            version = 2, command, selection = new { kind = "from-host" }, resource = "primary",
+            provider = "Sqlite", connection = actual
+        }));
+        using var response = new MemoryStream();
+
+        var exitCode = await EfToolingContextOperation.RunAsync(request, response, context,
+            [typeof(EfToolingConfigurationContextTests).Assembly, .. RuntimeFeatureAssemblies], CancellationToken.None);
+
+        Assert.Equal(EfToolingExitCode.ResolutionFailure, exitCode);
+        var json = Encoding.UTF8.GetString(response.ToArray());
+        Assert.DoesNotContain(expected, json, StringComparison.Ordinal);
+        Assert.DoesNotContain(actual, json, StringComparison.Ordinal);
+        Assert.False(File.Exists(path));
+        using var document = JsonDocument.Parse(json);
+        Assert.Equal("connection-target-mismatch", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Live_context_requires_an_explicit_resource_when_a_selected_owner_uses_one()
+    {
+        using var context = ToolingContextForTestAssembly("""
+            { "Elsa": { "Persistence": {
+                "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } },
+                "DefaultResource": "primary"
+              } }, "CShells": { "Shells": { "default": {
+                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+              } } } }
+            """, shell: "default", explicitSelection: true);
+        using var request = new MemoryStream("""{"version":2,"command":"apply","selection":{"kind":"from-host"},"provider":"Sqlite","connection":"Data Source=unused.db"}"""u8.ToArray());
+        using var response = new MemoryStream();
+
+        var exitCode = await EfToolingContextOperation.RunAsync(request, response, context,
+            [typeof(EfToolingConfigurationContextTests).Assembly, .. RuntimeFeatureAssemblies], CancellationToken.None);
+
+        Assert.Equal(EfToolingExitCode.ResolutionFailure, exitCode);
+        using var document = JsonDocument.Parse(response.ToArray());
+        Assert.Equal("resource-required", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Live_context_refuses_an_unresolved_expected_connection()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"elsa-context-{Guid.NewGuid():N}.db");
+        using var context = ToolingContextForTestAssembly("""
+            { "Elsa": { "Persistence": {
+                "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "MissingUntilDeployment" } },
+                "DefaultResource": "primary"
+              } }, "CShells": { "Shells": { "default": {
+                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+              } } } }
+            """, shell: "default", explicitSelection: true);
+        using var request = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            version = 2, command = "apply", selection = new { kind = "from-host" }, resource = "primary",
+            provider = "Sqlite", connection = $"Data Source={path}"
+        }));
+        using var response = new MemoryStream();
+
+        var exitCode = await EfToolingContextOperation.RunAsync(request, response, context,
+            [typeof(EfToolingConfigurationContextTests).Assembly, .. RuntimeFeatureAssemblies], CancellationToken.None);
+
+        Assert.Equal(EfToolingExitCode.ResolutionFailure, exitCode);
+        Assert.False(File.Exists(path));
+        using var document = JsonDocument.Parse(response.ToArray());
+        Assert.Equal("expected-connection-unresolved", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Live_context_applies_and_validates_a_matched_disposable_sqlite_target()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"elsa-context-{Guid.NewGuid():N}.db");
+        var connection = $"Data Source={path}";
+        try
+        {
+            using var context = ToolingContextForTestAssembly($$"""
+                { "ConnectionStrings": { "Shared": "{{connection}}" },
+                  "Elsa": { "Persistence": {
+                    "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } },
+                    "DefaultResource": "primary"
+                  } }, "CShells": { "Shells": { "default": {
+                    "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+                  } } } }
+                """, shell: "default", explicitSelection: true);
+
+            foreach (var command in new[] { "apply", "validate" })
+            {
+                using var request = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(new
+                {
+                    version = 2, command, selection = new { kind = "from-host" }, resource = "primary",
+                    provider = "Sqlite", connection
+                }));
+                using var response = new MemoryStream();
+                var exitCode = await EfToolingContextOperation.RunAsync(request, response, context,
+                    [typeof(EfToolingConfigurationContextTests).Assembly, .. RuntimeFeatureAssemblies], CancellationToken.None);
+
+                Assert.Equal(EfToolingExitCode.Success, exitCode);
+                var json = Encoding.UTF8.GetString(response.ToArray());
+                Assert.DoesNotContain(connection, json, StringComparison.Ordinal);
+                using var document = JsonDocument.Parse(json);
+                var root = document.RootElement;
+                Assert.Equal("matched", root.GetProperty("configurationContext").GetProperty("targetVerification").GetString());
+                Assert.Equal("unobserved", root.GetProperty("configurationContext").GetProperty("runtimeParity").GetString());
+                Assert.DoesNotContain(root.GetProperty("configurationContext").GetProperty("unresolved").EnumerateArray(),
+                    value => value.GetString() == "expected-connection-unchecked");
+                Assert.Equal("Workflows.Runtime", Assert.Single(root.GetProperty(command).GetProperty("modules").EnumerateArray())
+                    .GetProperty("module").GetString());
+            }
+            Assert.True(File.Exists(path));
+        }
+        finally
+        {
+            foreach (var suffix in new[] { "", "-wal", "-shm" })
+                File.Delete(path + suffix);
+        }
+    }
+
     [Fact]
     public async Task Context_operation_refuses_positive_intent_and_closed_shape_without_secret_echo()
     {
