@@ -14,7 +14,20 @@ public sealed class EfPersistenceShellSettingsPreparer(IConfiguration rootConfig
         ArgumentNullException.ThrowIfNull(context);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var result = EfPersistencePreparation.Prepare(context, rootConfiguration);
+        // A shell generation must resolve every field against one view of the host sources.
+        // Reading the live IConfiguration throughout resolution could combine values from
+        // opposite sides of a file reload (for example, a new resource definition with an
+        // old named connection). Capture the composed view for this invocation instead.
+        var sourceToken = rootConfiguration.GetReloadToken();
+        using var snapshot = (ConfigurationRoot)new ConfigurationBuilder()
+            .AddInMemoryCollection(rootConfiguration.AsEnumerable())
+            .Build();
+        if (sourceToken.HasChanged)
+            throw new InvalidOperationException("EF persistence preparation refused: configuration-changed");
+
+        var result = EfPersistencePreparation.Prepare(context, snapshot);
+        if (sourceToken.HasChanged)
+            throw new InvalidOperationException("EF persistence preparation refused: configuration-changed");
         if (result.RefusalCodes.Count != 0)
             throw new InvalidOperationException(
                 $"EF persistence preparation refused: {string.Join(", ", result.RefusalCodes)}");
