@@ -745,6 +745,7 @@ public sealed class EfToolingConfigurationContextTests
                      ("""{"version":2,"command":"inspect-context","shells":[]}""", "invalid-request"),
                      ("""{"version":2,"command":"inspect-context","capabilitySelection":[]}""", "invalid-request"),
                      ("""{"version":2,"version":2,"command":"inspect-context"}""", "invalid-request"),
+                     ("""{"version":2,"command":"inspect-context","selection":{"kind":"all","kind":"modules","modules":["Workflows.Runtime"]}}""", "invalid-request"),
                      ("""{"version":1,"command":"inspect-context"}""", "unsupported-request-version")
                  };
         foreach (var (payload, code) in cases)

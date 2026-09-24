@@ -99,10 +99,8 @@ internal static class EfToolingContextOperation
             using var document = await JsonDocument.ParseAsync(request, cancellationToken: cancellationToken);
             if (document.RootElement.ValueKind != JsonValueKind.Object)
                 throw EfToolingRefusal.Usage("invalid-request", "A context operation request must be an object.");
-            var fields = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var field in document.RootElement.EnumerateObject())
-                if (!fields.Add(field.Name))
-                    throw EfToolingRefusal.Usage("invalid-request", "The context operation request repeats a field.");
+            if (EfToolingContextContract.HasDuplicateFields(document.RootElement))
+                throw EfToolingRefusal.Usage("invalid-request", "The context operation request repeats a field.");
             return document.RootElement.Deserialize<EfToolingContextRequest>(EfToolingContextContract.Json)
                    ?? throw EfToolingRefusal.Usage("invalid-request", "The context operation request is empty.");
         }

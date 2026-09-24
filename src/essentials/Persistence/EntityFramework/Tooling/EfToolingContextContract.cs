@@ -15,6 +15,19 @@ internal static class EfToolingContextContract
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
+
+    public static bool HasDuplicateFields(JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.Array)
+            return value.EnumerateArray().Any(HasDuplicateFields);
+        if (value.ValueKind != JsonValueKind.Object)
+            return false;
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var field in value.EnumerateObject())
+            if (!names.Add(field.Name) || HasDuplicateFields(field.Value))
+                return true;
+        return false;
+    }
 }
 
 /// <summary>Version 2 does not accept caller-supplied host, shell, or capability assertions.</summary>

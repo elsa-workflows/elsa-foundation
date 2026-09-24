@@ -205,10 +205,8 @@ public sealed class EfToolingConfigurationContext : IDisposable
             if (document.RootElement.ValueKind != JsonValueKind.Object)
                 throw EfToolingRefusal.Usage("configuration-context-invalid", "The configuration context request must be an object.");
 
-            var fields = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var field in document.RootElement.EnumerateObject())
-                if (!fields.Add(field.Name))
-                    throw EfToolingRefusal.Usage("configuration-context-invalid", "The configuration context request repeats a field.");
+            if (EfToolingContextContract.HasDuplicateFields(document.RootElement))
+                throw EfToolingRefusal.Usage("configuration-context-invalid", "The configuration context request repeats a field.");
 
             var descriptor = document.RootElement.Deserialize<ContextRequest>(RequestJson)
                 ?? throw EfToolingRefusal.Usage("configuration-context-invalid", "The configuration context request is empty.");
