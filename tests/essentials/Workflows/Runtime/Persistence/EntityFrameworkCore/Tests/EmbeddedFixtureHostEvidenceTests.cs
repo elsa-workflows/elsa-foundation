@@ -9,7 +9,6 @@ using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Sequence;
-using Elsa.Activities.Testing;
 using Elsa.Api.Capabilities;
 using Elsa.Events;
 using Elsa.Expressions;
@@ -17,7 +16,6 @@ using Elsa.Locking.Core;
 using Elsa.Mediator;
 using Elsa.Modularity.EntityFramework.Extensions;
 using Elsa.Primitives.Hosting;
-using Elsa.Primitives.Models;
 using Elsa.Serialization.SystemText;
 using Elsa.Tasks;
 using Elsa.Workflows.Runtime.Api;
@@ -97,7 +95,7 @@ public sealed class EmbeddedFixtureHostEvidenceTests : IDisposable
         Assert.NotEmpty(await context.Database.GetAppliedMigrationsAsync());
         Assert.Empty(await context.Database.GetPendingMigrationsAsync());
 
-        var executable = NewWaitingEventExecutable();
+        var executable = RuntimeEventExecutableTestFixture.Create("embedded");
         await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
         await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(
             new WorkflowExecutableSourceReference(
@@ -205,57 +203,4 @@ public sealed class EmbeddedFixtureHostEvidenceTests : IDisposable
         return services.BuildServiceProvider(validateScopes: true);
     }
 
-    private static WorkflowExecutable NewWaitingEventExecutable()
-    {
-        const string nodeId = "embedded-event";
-        var resumeTargetId = WorkflowExecutableResumeTarget.ComposeScopedId(nodeId, Event.ResumeTargetId);
-        var clrContract = ClrActivityContractTestBuilder.BuildContract(typeof(Event));
-        var contract = new ActivityContract(
-            Event.ActivityType,
-            clrContract.ContractVersion,
-            clrContract.DescriptorKind,
-            clrContract.DescriptorPayload,
-            clrContract.Inputs.Values,
-            clrContract.Result,
-            clrContract.Outcomes,
-            clrContract.Activation);
-        var node = new ExecutableNode(
-            executableNodeId: nodeId,
-            authoredActivityId: "authored-embedded-event",
-            activityType: Event.ActivityType,
-            activityTypeVersion: "1.0.0",
-            descriptorType: WellKnownRuntimeActivityConsumers.ClrActivity,
-            descriptorPayload: contract.DescriptorPayload,
-            inputBindings: ClrActivityContractTestBuilder.CompleteInputBindings(
-                contract,
-                new Dictionary<string, RuntimeInputBinding>
-                {
-                    [nameof(Event.EventName)] = Literal(nameof(Event.EventName), "String", "embedded-ready"),
-                    [nameof(Event.CanStartWorkflow)] = Literal(nameof(Event.CanStartWorkflow), "Boolean", false)
-                }),
-            metadata: new Dictionary<string, string>(),
-            activityContract: contract);
-
-        return new WorkflowExecutable(
-            new WorkflowExecutableIdentity("embedded-event-artifact", "embedded-definition", "embedded-version", "1.0.0", "embedded-hash"),
-            node,
-            new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal)
-            {
-                [resumeTargetId] = new(resumeTargetId, nodeId, "ResumeAsync", new Dictionary<string, string>(), Event.ResumeTargetId)
-            },
-            DateTimeOffset.UtcNow,
-            new Dictionary<string, string>(),
-            IncidentStrategyBuiltIns.FaultReference);
-    }
-
-    private static RuntimeInputBinding Literal(string inputName, string typeAlias, object value)
-    {
-        var type = new ValueTypeDescriptor(typeAlias);
-        return new RuntimeInputBinding(
-            inputName,
-            type,
-            ValueProtectionPolicy.InstanceInline,
-            RuntimeInputBindingSource.Literal,
-            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
-    }
 }
