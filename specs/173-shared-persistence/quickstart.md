@@ -1,6 +1,6 @@
 # Shared persistence validation quickstart
 
-Status: Phase 0 research is complete. #1968 (shared Runtime, Workflows Design, Activities Design and Publishing persistence) and #1969 (separate Structured Logs and OpenTelemetry persistence) are not implementation-complete. Workbench host registration and a bounded PostgreSQL resource-selection proof now exist; the resource-aware CLI and complete host journeys remain open.
+Status: Phase 0 research is complete. #1968 (shared Runtime, Workflows Design, Activities Design and Publishing persistence) and #1969 (separate Structured Logs and OpenTelemetry persistence) are not implementation-complete. Workbench and the resource-aware CLI now pass a standalone same-target PostgreSQL journey for the four enabled default-shell modules; all enrolled Runtime identities, authored reload, and the separate diagnostics layout remain open.
 
 The contract is defined by [the shared-persistence specification](spec.md), [the implementation plan](plan.md), [the authored configuration decision](decisions/authored-persistence.md), [the target-selection decision](decisions/tooling-target-selection.md), [the target-verification decision](decisions/tooling-target-verification.md), and [the configuration-context decision](decisions/tooling-configuration-context.md).
 

@@ -51,14 +51,14 @@ internal static class EfToolingTargetSelection
 
         var resolvedByFeature = participants.ToDictionary(participant => participant.Participant.FeatureId,
             StringComparer.OrdinalIgnoreCase);
-        if (group is not null && selected.Any(name => !candidateModules.Contains(name) ||
+        if (group is { } targetGroup && selected.Any(name => !candidateModules.Contains(name) ||
                 participants.Any(participant => participant.Participant.ModuleNames.Contains(name, StringComparer.OrdinalIgnoreCase) &&
-                    !InGroup(participant, group.Value)) ||
+                    !InGroup(participant, targetGroup)) ||
                 // A providerless bridge (for example Dashboard) reads the registered context but
                 // does not choose its target; only a provider-owning feature can contradict the group.
                 preparation.HostFeatureUsages.Any(usage => usage.DeclaresProvider &&
                     usage.Modules.Contains(name, StringComparer.OrdinalIgnoreCase) &&
-                    (!resolvedByFeature.TryGetValue(usage.Feature, out var owner) || !InGroup(owner, group.Value)))))
+                    (!resolvedByFeature.TryGetValue(usage.Feature, out var owner) || !InGroup(owner, targetGroup)))))
             throw EfToolingRefusal.Resolution("resource-target-scope",
                 "A selected module has an enabled owner outside the selected declared target group.");
 

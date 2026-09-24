@@ -110,16 +110,20 @@ public sealed class EfToolingHostTests : IDisposable
 
         public ConstructionProbeContext(DbContextOptions<ConstructionProbeContext> options) : base(options)
         {
-            Constructions++;
+            IncrementConstructions();
             throw new InvalidOperationException("construction-probe");
         }
+
+        private static void IncrementConstructions() => Interlocked.Increment(ref Constructions);
     }
 
     public sealed class ConstructionProbeAction : IEfPostMigrationAction
     {
         public static int Constructions;
 
-        public ConstructionProbeAction() => Constructions++;
+        public ConstructionProbeAction() => IncrementConstructions();
+
+        private static void IncrementConstructions() => Interlocked.Increment(ref Constructions);
 
         public string Id => "construction-probe";
         public string Kind => "test";
