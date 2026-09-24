@@ -1,9 +1,9 @@
 ---
 status: proposed
 date: 2026-09-22
-amended: 2026-09-23
+amended: 2026-09-24
 decision_context: Questions raised at the 2026-09-21 demo and relayed in the Teams thread on this programme; decided by Sipke Schoorstra on issues #1945, #1946 and #1947, which record the options and the evidence behind each.
-amendment_context: the fifteenth module's declared schema version was wired up — stamped on write and checked first on read in the publication-policy and projection-intent stores — so every count of checking read paths in this ADR now reads fifteen rather than fourteen.
+amendment_context: 2026-09-23, the fifteenth module's declared schema version was wired up — stamped on write and checked first on read in the publication-policy and projection-intent stores — so every count of checking read paths in this ADR now reads fifteen rather than fourteen. 2026-09-24, the destination changed from additive-only to the cluster version gate of ADR 0078, decided by Sipke Schoorstra, after additive-only was found to burden versions that have already shipped and to lose data when an older writer rewrites a newer row.
 ---
 
 # A module upgrades in place only when its persisted schema is unchanged
@@ -79,9 +79,18 @@ normally, and resumption across pods works, because persisted runtime state is g
 `SchemaVersion` check. This is the common case and carries most of the operational value of
 independent release.
 
-**Additive-only within a major is the stated destination, not this decision.** Reaching it means
-changing fifteen modules' read paths and splitting `SchemaVersion` into envelope integrity and a
-readable range, so that a reader tolerates unknown columns and refuses only an unrecognised major.
+**The destination is the cluster version gate of
+[ADR 0078](0078-workflow-executions-are-virtual-actors-and-cluster-membership-is-a-foundation-contract.md),
+not this decision.** A new module version reads its predecessor's rows but keeps writing the old format until
+every live host can read the new one; only then is the new version finalized and written.
+
+*Amended 2026-09-24.* This ADR first named **additive-only within a major** as the destination: readers
+tolerating unknown columns and refusing only an unrecognised major. It was replaced for two reasons. It put
+the compatibility burden on versions that have already shipped, which cannot learn anything new. And it could
+lose data without any error: eighteen entities store their content as a JSON document, and an older version
+resuming a row that a newer one wrote would re-serialise it without the fields it does not know. Resumption
+across pods makes that routine rather than rare. The gate puts the burden on the new version instead, which is
+being written now and can carry it.
 
 ## How this composes with runtime module installation
 
@@ -106,15 +115,15 @@ but "do not let the new version write while the old one is still reading".
 `Validate` prevents a premature migration. It does **not** prevent **ragged activation**: once the
 schema is applied, pods reconcile at their own pace, so the first pod to activate the new module
 begins writing rows the not-yet-reloaded pods refuse. **Runtime module installation through the feed
-and multi-pod do not compose under detect-and-refuse.** This is recorded rather than closed, and it is
-the strongest argument for additive-only — once the older version can read the newer version's rows,
-ragged activation is harmless and runtime installation works on a cluster.
+and multi-pod do not compose under detect-and-refuse.** ADR 0078 closes this by design, though it is not
+yet built: no host writes a new version until every live host can read it, so the order in which pods
+activate stops mattering and runtime installation works on a cluster.
 
 ## Considered options
 
-- **Additive-only within a major, now.** The end state, and what independent release means to an
-  operator. Rejected as immediate work, not as a destination: it changes fifteen modules' read paths
-  and the meaning of a field, which is a larger change than the rule it would support.
+- **Additive-only within a major.** This ADR's original destination, replaced on 2026-09-24 by the
+  cluster version gate of ADR 0078. It burdens versions that have already shipped, and an older writer
+  rewriting a newer row's JSON content drops the fields it does not know without reporting anything.
 - **Detect and refuse, permanently.** Every schema change coordinated, forever. Rejected because it
   permanently caps what independent release can promise, and the ragged-activation gap above shows the
   cap falls exactly where runtime installation is most valuable.
@@ -130,14 +139,15 @@ ragged activation is harmless and runtime installation works on a cluster.
   by a version I do not know".
 - Hot reload gains a refusal path it does not have, which converts a late failure at a missing member
   into an early one naming the package and range.
-- Ragged activation remains unsolved on clusters. Until additive-only lands, installing a
-  schema-changing module at runtime is a single-host capability.
+- Ragged activation remains unsolved on clusters until the gate in ADR 0078 is built. Until then,
+  installing a schema-changing module at runtime is a single-host capability.
 - Quiescing in-flight work before an assembly swap was considered and not adopted. It may be redundant
   if checkpointing already makes a mid-execution swap safe, which should be verified before any work is
   committed to it.
 
 ## Linked decisions
 
+- [ADR 0078](0078-workflow-executions-are-virtual-actors-and-cluster-membership-is-a-foundation-contract.md) — cluster membership, and the cluster version gate that is this ADR's destination
 - [ADR 0067](0067-package-versioning-uses-two-lines-with-computed-patch.md) — the versioning this rule constrains
 - [ADR 0076](0076-persistence-tooling-runs-inside-the-host-closure.md) — D9's activation guards, which this relies on
 - [ADR 0073](0073-ef-core-is-the-only-first-party-persistence-family.md) — the persistence family this applies to
