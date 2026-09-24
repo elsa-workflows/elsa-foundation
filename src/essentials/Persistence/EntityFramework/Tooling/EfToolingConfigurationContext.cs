@@ -94,11 +94,59 @@ public sealed class EfToolingConfigurationContext : IDisposable
         IEnumerable<Assembly> hostAssemblies,
         CancellationToken cancellationToken)
     {
+        if (Shell is null)
+            throw EfToolingRefusal.Usage("configuration-context-invalid", "One shell is required for this tooling operation.");
+        return PrepareShell(Shell, hostDefaults, hostAssemblies, cancellationToken);
+    }
+
+    /// <summary>Checks every configured shell before an unselected invocation may use legacy tooling.</summary>
+    internal EfToolingContextInspection InspectUnselectedHost(
+        IEfToolingShellDefaults? hostDefaults,
+        IEnumerable<Assembly> hostAssemblies,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(hostAssemblies);
+        var snapshot = Configuration;
+        if (ExplicitSelection || Shell is not null)
+            throw EfToolingRefusal.Usage("configuration-context-invalid", "An unselected-host inspection requires no explicit shell.");
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (hostDefaults is null)
+        {
+            if (HasResourceHint(snapshot))
+                throw EfToolingRefusal.Resolution("host-composition-unavailable", "This host has persistence resource configuration but no declared shell composer.");
+            return new EfToolingContextInspection("legacy-only", ["host-not-enrolled"]);
+        }
+
+        var shells = snapshot.GetSection("CShells:Shells").GetChildren()
+            .Select(section => section.Key)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (shells.Length == 0)
+            throw EfToolingRefusal.Resolution("host-composition-unavailable", "The selected host has no configured shells to inspect.");
+
+        var unresolved = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var shell in shells)
+        {
+            var prepared = PrepareShell(shell, hostDefaults, hostAssemblies, cancellationToken);
+            if (prepared.HasApplicableResource)
+                throw EfToolingRefusal.Resolution("configuration-context-required", "This host has an enabled persistence consumer with resource intent; select an explicit configuration context and shell.");
+            foreach (var code in prepared.UnresolvedCodes)
+                unresolved.Add(code);
+        }
+
+        return new EfToolingContextInspection("no-resource-applicable", unresolved.Order(StringComparer.Ordinal).ToArray());
+    }
+
+    private EfPersistencePreparationResult PrepareShell(
+        string shell,
+        IEfToolingShellDefaults hostDefaults,
+        IEnumerable<Assembly> hostAssemblies,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(hostDefaults);
         ArgumentNullException.ThrowIfNull(hostAssemblies);
         var snapshot = Configuration;
-        if (Shell is null)
-            throw EfToolingRefusal.Usage("configuration-context-invalid", "One shell is required for this tooling operation.");
         cancellationToken.ThrowIfCancellationRequested();
 
         try
@@ -106,9 +154,9 @@ public sealed class EfToolingConfigurationContext : IDisposable
             var closure = hostAssemblies.Where(x => !x.IsDynamic).Distinct().ToArray();
             var descriptors = FeatureDiscovery.DiscoverFeatures(closure)
                 .ToDictionary(x => x.Id, StringComparer.OrdinalIgnoreCase);
-            var builder = new ShellBuilder(Shell);
+            var builder = new ShellBuilder(shell);
             hostDefaults.Configure(builder, snapshot);
-            builder.FromConfiguration(snapshot.GetSection($"CShells:Shells:{Shell}"));
+            builder.FromConfiguration(snapshot.GetSection($"CShells:Shells:{shell}"));
             var settings = builder.Build();
             var result = EfPersistencePreparation.Prepare(settings, descriptors, snapshot, closure,
                 verifyConnectionValues: false);
@@ -124,6 +172,19 @@ public sealed class EfToolingConfigurationContext : IDisposable
             // Composition and discovery exceptions can contain authored values or paths.
             throw EfToolingRefusal.Resolution("host-composition-unavailable", "The selected host shell could not be composed for tooling.");
         }
+    }
+
+    private static bool HasResourceHint(IConfiguration snapshot)
+    {
+        if (snapshot.GetSection("Elsa:Persistence").GetChildren().Any(section =>
+                IsKey(section, "Resources") || IsKey(section, "DefaultResource")))
+            return true;
+        return snapshot.GetSection("CShells:Shells").GetChildren().Any(shell =>
+            shell.GetSection("Configuration:Elsa:Persistence").GetChildren().Any(section =>
+                IsKey(section, "DefaultResource") || IsKey(section, "Bindings")));
+
+        static bool IsKey(IConfigurationSection section, string key) =>
+            StringComparer.OrdinalIgnoreCase.Equals(section.Key, key);
     }
 
     /// <summary>Parses the worker's closed metadata-only descriptor before reading the host sources.</summary>
@@ -279,3 +340,5 @@ public sealed class EfToolingConfigurationContext : IDisposable
         public bool? ExplicitSelection { get; init; }
     }
 }
+
+internal sealed record EfToolingContextInspection(string Outcome, IReadOnlyList<string> UnresolvedCodes);

@@ -292,6 +292,94 @@ public sealed class EfToolingConfigurationContextTests
         Assert.Contains("expected-connection-unchecked", result.UnresolvedCodes);
     }
 
+    [Fact]
+    public void Unselected_host_probe_evaluates_code_defaults_and_requires_an_explicit_context()
+    {
+        using var host = new HostFiles();
+        host.WriteRaw("appsettings.json", """
+            { "Elsa": { "Persistence": {
+              "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } }
+            } }, "CShells": { "Shells": { "default": { "Name": "default" } } } }
+            """);
+        using var context = host.Create(EfToolingConfigurationContext.WorkbenchJson,
+            shell: null, explicitSelection: false);
+
+        var refusal = Assert.Throws<EfToolingRefusal>(() => context.InspectUnselectedHost(
+            new ToolingCodeDefaultTestDefaults(), RuntimeFeatureAssemblies, CancellationToken.None));
+
+        Assert.Equal("configuration-context-required", refusal.Code);
+        Assert.DoesNotContain("Shared", refusal.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Unselected_host_probe_checks_resource_intent_in_every_configured_shell()
+    {
+        using var host = new HostFiles();
+        host.WriteRaw("appsettings.json", """
+            { "Elsa": { "Persistence": {
+              "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } },
+              "DefaultResource": "primary"
+            } }, "CShells": { "Shells": {
+              "first": { "Name": "first" },
+              "second": { "Name": "second", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} } }
+            } } }
+            """);
+        using var context = host.Create(EfToolingConfigurationContext.WorkbenchJson,
+            shell: null, explicitSelection: false);
+
+        Assert.Equal("configuration-context-required", Assert.Throws<EfToolingRefusal>(() =>
+            context.InspectUnselectedHost(new ToolingContextTestDefaults(),
+                RuntimeFeatureAssemblies, CancellationToken.None)).Code);
+    }
+
+    [Fact]
+    public void Unselected_host_probe_distinguishes_inert_definitions_from_composer_free_hints()
+    {
+        using var host = new HostFiles();
+        host.WriteRaw("appsettings.json", """
+            { "Elsa": { "Persistence": {
+              "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } }
+            } }, "CShells": { "Shells": { "default": { "Name": "default" } } } }
+            """);
+        using var context = host.Create(EfToolingConfigurationContext.WorkbenchJson,
+            shell: null, explicitSelection: false);
+
+        var inspection = context.InspectUnselectedHost(new ToolingContextTestDefaults(),
+            RuntimeFeatureAssemblies, CancellationToken.None);
+        Assert.Equal("no-resource-applicable", inspection.Outcome);
+        Assert.Equal("host-composition-unavailable", Assert.Throws<EfToolingRefusal>(() =>
+            context.InspectUnselectedHost(null, RuntimeFeatureAssemblies, CancellationToken.None)).Code);
+    }
+
+    [Fact]
+    public void Composer_free_probe_without_resource_hints_is_legacy_only()
+    {
+        using var host = new HostFiles();
+        using var context = host.Create(EfToolingConfigurationContext.WorkbenchJson,
+            shell: null, explicitSelection: false);
+
+        var inspection = context.InspectUnselectedHost(null, RuntimeFeatureAssemblies, CancellationToken.None);
+
+        Assert.Equal("legacy-only", inspection.Outcome);
+        Assert.Contains("host-not-enrolled", inspection.UnresolvedCodes);
+    }
+
+    [Fact]
+    public void Composer_free_probe_refuses_a_null_shell_resource_hint()
+    {
+        using var host = new HostFiles();
+        host.WriteRaw("shells.json", """
+            { "cshells": { "shells": { "default": { "configuration": {
+              "elsa": { "persistence": { "defaultResource": null } }
+            } } } } }
+            """);
+        using var context = host.Create(EfToolingConfigurationContext.WorkbenchJson,
+            shell: null, explicitSelection: false);
+
+        Assert.Equal("host-composition-unavailable", Assert.Throws<EfToolingRefusal>(() =>
+            context.InspectUnselectedHost(null, RuntimeFeatureAssemblies, CancellationToken.None)).Code);
+    }
+
     private static EfToolingConfigurationContext Parse(string json)
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
