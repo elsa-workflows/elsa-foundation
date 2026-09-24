@@ -173,10 +173,13 @@ public sealed class EfToolingConfigurationContextTests
         using var host = new HostFiles();
         host.Write("shells.Production.json", "selected-value");
 
-        using var context = Parse(host.Request());
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(host.Request()));
+        using var context = EfToolingHost.CreateConfigurationContext(stream, CancellationToken.None);
 
         Assert.Equal(EfToolingConfigurationContext.WorkbenchJson, context.Source);
         Assert.Equal(host.Directory, context.HostDirectory);
+        Assert.Equal("selected-value", context.Configuration["Probe:Value"]);
+        host.Write("shells.Production.json", "changed-after-factory");
         Assert.Equal("selected-value", context.Configuration["Probe:Value"]);
     }
 

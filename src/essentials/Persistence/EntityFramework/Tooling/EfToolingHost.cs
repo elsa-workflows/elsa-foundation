@@ -45,6 +45,12 @@ public static class EfToolingHost
 
     private static readonly byte[] Newline = "\n"u8.ToArray();
 
+    /// <summary>Creates one host-owned, frozen configuration context for sequential tooling operations.</summary>
+    public static EfToolingConfigurationContext CreateConfigurationContext(
+        Stream request,
+        CancellationToken cancellationToken) =>
+        EfToolingConfigurationContext.CreateFromRequest(request, cancellationToken);
+
     /// <summary>
     /// Runs one command, reading the request from <paramref name="request"/> to its end and writing exactly
     /// one response to <paramref name="response"/>. The returned code is the same one the response carries,
