@@ -267,9 +267,12 @@ public sealed class EfPersistenceResourceEnrollmentTests
         }).Build();
 
         var result = EfPersistencePreparation.Prepare(context, configuration);
+        var offline = EfPersistencePreparation.Prepare(context, configuration, verifyConnectionValues: false);
 
         Assert.Contains("resource-context-conflict", result.RefusalCodes);
         Assert.Empty(result.Patch.ConfigurationData);
+        Assert.Contains("resource-context-conflict", offline.RefusalCodes);
+        Assert.Empty(offline.Patch.ConfigurationData);
     }
 
     [Fact]
@@ -372,6 +375,33 @@ public sealed class EfPersistenceResourceEnrollmentTests
             Assert.Empty(result.Patch.ConfigurationData);
         }
         Assert.DoesNotContain("Data Source=", System.Text.Json.JsonSerializer.Serialize(result));
+    }
+
+    [Fact]
+    public void Offline_activity_upgrade_with_distinct_references_reports_unverified_affinity()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:Bindings:ActivitiesDesignEntityFrameworkCore"] = "activities",
+            ["Elsa:Persistence:Bindings:WorkflowsDesignEntityFrameworkCore"] = "workflows",
+            ["Elsa:Persistence:Bindings:WorkflowsPublishingEntityFrameworkCore"] = "publishing"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:Resources:activities:Provider"] = "Sqlite",
+            ["Elsa:Persistence:Resources:activities:ConnectionName"] = "Activities",
+            ["Elsa:Persistence:Resources:workflows:Provider"] = "Sqlite",
+            ["Elsa:Persistence:Resources:workflows:ConnectionName"] = "Workflows",
+            ["Elsa:Persistence:Resources:publishing:Provider"] = "Sqlite",
+            ["Elsa:Persistence:Resources:publishing:ConnectionName"] = "Publishing"
+        }).Build();
+
+        var result = EfPersistencePreparation.Prepare(ActivityUpgradeContext(values), configuration,
+            verifyConnectionValues: false);
+
+        Assert.Empty(result.RefusalCodes);
+        Assert.Contains("target-affinity-unverified", result.UnresolvedCodes);
+        Assert.Equal(6, result.Patch.ConfigurationData.Count);
     }
 
     [Fact]

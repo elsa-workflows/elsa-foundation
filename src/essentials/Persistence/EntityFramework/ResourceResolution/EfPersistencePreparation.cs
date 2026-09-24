@@ -88,6 +88,7 @@ public static class EfPersistencePreparation
         var read = PersistenceConfigurationAdapter.Read(context, rootConfiguration, participants, discovered.Keys.ToArray());
         var resolution = new PersistenceResourceResolver().Resolve(read.Input);
         var refusals = resolution.Refusals.Select(x => x.Code).ToList();
+        var unresolved = new List<string>();
         var applicable = resolution.Participants.Any(x => x.Selection != PersistenceSelectionKind.Legacy);
         foreach (var selected in resolution.Participants.Where(x => x.Selection != PersistenceSelectionKind.Legacy))
         {
@@ -101,12 +102,16 @@ public static class EfPersistencePreparation
         }
 
         if (applicable && refusals.Count == 0)
-            refusals.AddRange(EfPersistenceResourceValidator.Validate(
+        {
+            var validation = EfPersistenceResourceValidator.Validate(
                 resolution,
                 EfModuleCatalog.Discover(featureAssemblies),
                 context.ConfigurationData,
                 rootConfiguration,
-                verifyConnectionValues));
+                verifyConnectionValues);
+            refusals.AddRange(validation.Refusals);
+            unresolved.AddRange(validation.UnresolvedCodes);
+        }
 
         var patch = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         if (refusals.Count == 0)
@@ -126,7 +131,7 @@ public static class EfPersistencePreparation
             resolution.Participants.Select(x => new EfPersistenceApplicabilityItem(
                 x.Participant.FeatureId, x.ResourceName, x.Selection.ToString())).ToArray(),
             refusals.Distinct(StringComparer.Ordinal).ToArray(),
-            resolution.Evidence.UnverifiedPrerequisites.Concat(read.UnresolvedCodes)
+            resolution.Evidence.UnverifiedPrerequisites.Concat(read.UnresolvedCodes).Concat(unresolved)
                 .Concat(applicable && !verifyConnectionValues ? ["expected-connection-unchecked"] : [])
                 .Distinct(StringComparer.Ordinal).ToArray())
         {

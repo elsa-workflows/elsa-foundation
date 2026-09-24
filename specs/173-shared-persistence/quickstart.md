@@ -362,6 +362,7 @@ Run each case against a disposable host/target and capture exit code, redacted r
 | Applicable resource plus authored legacy Provider, ConnectionString, or ConnectionName | Refuse as ambiguous; initialized CLR defaults do not count as authored. |
 | Missing resource or incomplete Provider/ConnectionName pair | Refuse selected invalid intent before side effects; never substitute SQLite. |
 | Missing expected named connection value | Live commands refuse before context/connection creation; offline commands leave the live prerequisite unresolved without looking up the value. |
+| Shared Runtime context or Publishing's Design transaction uses distinct connection references | Offline commands report `target-affinity-unverified` without looking up connection values. A live operation checks each selected expected value against the supplied actual connection before DbContext or connection creation; known provider, schema, or pooling conflicts still refuse offline. |
 | Wrong `--provider`, mixed Runtime provider/target, or incompatible target module | Refuse before a context/connection is created. |
 | Offline `list`, `plan`, or `script` | Do not resolve expected live connection values or claim target parity. |
 | `--connection-env` or `--connection-stdin` omitted for a live operation | Refuse; actual input is never manufactured from the expected configured value. |

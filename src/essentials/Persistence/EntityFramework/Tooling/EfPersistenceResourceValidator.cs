@@ -7,7 +7,9 @@ namespace Elsa.Persistence.EntityFramework.Tooling;
 /// <remarks>Connection values are used only for equality and never leave this method.</remarks>
 internal static class EfPersistenceResourceValidator
 {
-    internal static IReadOnlyList<string> Validate(
+    internal sealed record ValidationResult(IReadOnlyList<string> Refusals, IReadOnlyList<string> UnresolvedCodes);
+
+    internal static ValidationResult Validate(
         PersistenceResolutionResult resolution,
         IReadOnlyList<EfModuleDescriptor> modules,
         IReadOnlyDictionary<string, string?> composedSettings,
@@ -20,6 +22,11 @@ internal static class EfPersistenceResourceValidator
         ArgumentNullException.ThrowIfNull(rootConfiguration);
 
         var refusals = new HashSet<string>(StringComparer.Ordinal);
+        var unresolved = new HashSet<string>(StringComparer.Ordinal);
+        var connectionDifferenceCodes = verifyConnectionValues ? refusals : unresolved;
+        var connectionDifferenceCode = verifyConnectionValues
+            ? "resource-context-conflict"
+            : "target-affinity-unverified";
         var targets = new List<Target>();
         // Publishing EF registers the activity-upgrade mutation store, which enlists both
         // Design contexts in one local transaction. Its own ledger target may be separate.
@@ -124,10 +131,11 @@ internal static class EfPersistenceResourceValidator
             var first = group.First();
             if (group.Skip(1).Any(x =>
                     !StringComparer.Ordinal.Equals(x.Provider, first.Provider) ||
-                    !StringComparer.Ordinal.Equals(x.Connection, first.Connection) ||
                     !StringComparer.Ordinal.Equals(x.Schema, first.Schema) ||
                     x.Pooling != first.Pooling))
                 refusals.Add("resource-context-conflict");
+            if (group.Skip(1).Any(x => !StringComparer.Ordinal.Equals(x.Connection, first.Connection)))
+                connectionDifferenceCodes.Add(connectionDifferenceCode);
         }
 
         if (hasActivityUpgradeStore)
@@ -136,9 +144,10 @@ internal static class EfPersistenceResourceValidator
             var workflows = targets.FirstOrDefault(x => x.ModuleName == "Workflows.Design");
             if (activities is null || workflows is null)
                 refusals.Add("resource-ownership-unresolved");
-            else if (!StringComparer.Ordinal.Equals(activities.Provider, workflows.Provider) ||
-                     !StringComparer.Ordinal.Equals(activities.Connection, workflows.Connection))
+            else if (!StringComparer.Ordinal.Equals(activities.Provider, workflows.Provider))
                 refusals.Add("resource-context-conflict");
+            else if (!StringComparer.Ordinal.Equals(activities.Connection, workflows.Connection))
+                connectionDifferenceCodes.Add(connectionDifferenceCode);
         }
 
         // Selection never grants permission to migrate; an invalid authored policy must not
@@ -149,7 +158,8 @@ internal static class EfPersistenceResourceValidator
             (!Enum.TryParse<EfMigratePolicy>(policy, true, out var parsed) || !Enum.IsDefined(parsed)))
             refusals.Add("resource-context-conflict");
 
-        return refusals.Order(StringComparer.Ordinal).ToArray();
+        return new ValidationResult(refusals.Order(StringComparer.Ordinal).ToArray(),
+            unresolved.Order(StringComparer.Ordinal).ToArray());
     }
 
     private static Target? CreateTarget(

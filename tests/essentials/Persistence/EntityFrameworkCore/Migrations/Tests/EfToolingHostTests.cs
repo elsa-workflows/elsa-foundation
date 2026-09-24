@@ -1,6 +1,12 @@
+using CShells.Configuration;
+using Elsa.Api.Capabilities;
+using Elsa.Events;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Publishing;
+using Elsa.Workflows.Runtime.Api;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection;
@@ -12,6 +18,8 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Xunit;
 using Xunit.Sdk;
+
+[assembly: EfToolingShellDefaults(typeof(Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.EfToolingHostTestDefaults))]
 
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
@@ -76,6 +84,59 @@ public sealed class EfToolingHostTests : IDisposable
     }
 
     public static TheoryData<string> Providers() => [.. ServerProviders];
+
+    [Fact]
+    public async Task Offline_plan_does_not_treat_distinct_design_connection_references_as_a_proven_affinity_conflict()
+    {
+        using var context = ToolingContextForTestAssembly("""
+            {
+              "Elsa": { "Persistence": {
+                "Resources": {
+                  "activities": { "Provider": "Sqlite", "ConnectionName": "Activities" },
+                  "workflows": { "Provider": "Sqlite", "ConnectionName": "Workflows" },
+                  "publishing": { "Provider": "Sqlite", "ConnectionName": "Publishing" }
+                }
+              } },
+              "CShells": { "Shells": { "default": {
+                "Name": "default",
+                "Features": {
+                  "ActivitiesDesignEntityFrameworkCore": {},
+                  "WorkflowsDesignEntityFrameworkCore": {},
+                  "WorkflowsPublishingEntityFrameworkCore": {}
+                },
+                "Configuration": { "Elsa": { "Persistence": { "Bindings": {
+                  "ActivitiesDesignEntityFrameworkCore": "activities",
+                  "WorkflowsDesignEntityFrameworkCore": "workflows",
+                  "WorkflowsPublishingEntityFrameworkCore": "publishing"
+                } } } }
+              } } }
+            }
+            """);
+        using var request = new MemoryStream("""{"version":2,"command":"plan","selection":{"kind":"from-host"},"provider":"Sqlite"}"""u8.ToArray());
+        using var response = new MemoryStream();
+
+        var exitCode = await EfToolingContextOperation.RunAsync(request, response, context,
+            [typeof(EfToolingHostTests).Assembly, .. ModuleContextCatalog.Modules,
+                typeof(WorkflowsPublishingFeature).Assembly, typeof(WorkflowsRuntimeApiFeature).Assembly,
+                typeof(EventsFeature).Assembly, typeof(ApiCapabilitiesFeature).Assembly], CancellationToken.None);
+
+        Assert.True(exitCode == EfToolingExitCode.Success,
+            $"Expected success but got {exitCode}: {Encoding.UTF8.GetString(response.ToArray())}");
+        using var document = JsonDocument.Parse(response.ToArray());
+        var root = document.RootElement;
+        var modules = root.GetProperty("plan").GetProperty("modules").EnumerateArray()
+            .Select(module => module.GetProperty("module").GetString())
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.Contains("Activities.Design", modules);
+        Assert.Contains("Workflows.Design", modules);
+        Assert.Contains("Workflows.Publishing", modules);
+        var facts = root.GetProperty("configurationContext");
+        Assert.Equal("unobserved", facts.GetProperty("runtimeParity").GetString());
+        Assert.Contains(facts.GetProperty("unresolved").EnumerateArray(),
+            item => item.GetString() == "target-affinity-unverified");
+        Assert.Contains(facts.GetProperty("unresolved").EnumerateArray(),
+            item => item.GetString() == "expected-connection-unchecked");
+    }
 
     [Theory]
     [InlineData("apply")]
@@ -1066,6 +1127,16 @@ public sealed class EfToolingHostTests : IDisposable
         return new(exitCode, response.RootElement.Clone());
     }
 
+    private static EfToolingConfigurationContext ToolingContextForTestAssembly(string json)
+    {
+        using var source = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        var configuration = new ConfigurationBuilder().AddJsonStream(source).Build();
+        var assembly = typeof(EfToolingHostTests).Assembly;
+        return new EfToolingConfigurationContext(EfToolingConfigurationContext.WorkbenchJson,
+            Path.GetDirectoryName(assembly.Location)!, assembly.GetName().Name!, "Production", "default",
+            explicitSelection: true, configuration);
+    }
+
     private static SortedDictionary<string, byte[]> Artifact(string directory) => new(
         Directory.EnumerateFiles(directory).ToDictionary(path => Path.GetFileName(path), File.ReadAllBytes),
         StringComparer.Ordinal);
@@ -1216,5 +1287,12 @@ public sealed class EfToolingHostTests : IDisposable
         public SelectionBody? Selection { get; init; }
         public string? Schema { get; init; }
         public string? Connection { get; init; }
+    }
+}
+
+public sealed class EfToolingHostTestDefaults : IEfToolingShellDefaults
+{
+    public void Configure(ShellBuilder builder, IConfiguration configuration)
+    {
     }
 }
