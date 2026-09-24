@@ -101,6 +101,11 @@ internal static class WorkerRunner
             if (inspected is not null)
                 return inspected;
         }
+        else if (HostResourceHints.Exist(request.HostDirectory!, request.Environment!))
+        {
+            throw WorkerRefusal.Resolution("context-capability-unavailable",
+                "The selected host has persistence resource configuration but no complete context API to inspect it.");
+        }
 
         if (command == WorkerCommands.List)
             return await Respond(tooling, new { version = 1, command, selection = Selection(request.Selection), shells = Shells(request) }, cancellationToken);
