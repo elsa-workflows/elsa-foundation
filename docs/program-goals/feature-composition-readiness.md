@@ -38,19 +38,18 @@ The [program issue](https://github.com/elsa-workflows/elsa-foundation/issues/195
 
 ## Active Objectives
 
-The initial backlog was published on 2026-09-23. Discovery #1965/#1966 is complete. The generic lifecycle prerequisite [CShells #134](https://github.com/valence-works/cshells/issues/134) is delivered and its published package is verified; #1967 is completing the first persistence specification. Elsa resource-mode implementation has not started. Consult the linked issues/project for current execution state.
+The initial backlog was published on 2026-09-23. The persistence boundary and effective-configuration spikes, the reviewed specification, and the first two delivery stories are complete. [#1960](https://github.com/elsa-workflows/elsa-foundation/issues/1960) closed after [PR #1974](https://github.com/elsa-workflows/elsa-foundation/pull/1974) and [PR #1981](https://github.com/elsa-workflows/elsa-foundation/pull/1981) passed their gates. The active leaf is the [versioned profile and feature-group catalog spike #1982](https://github.com/elsa-workflows/elsa-foundation/issues/1982) under [#1961](https://github.com/elsa-workflows/elsa-foundation/issues/1961). Consult the linked issues/project for current execution state.
 
-1. Discover supported persistence boundaries in [#1965](https://github.com/elsa-workflows/elsa-foundation/issues/1965), then the shared runtime/tooling resolution path in [#1966](https://github.com/elsa-workflows/elsa-foundation/issues/1966). Both discovery leaves are complete; their reports ground the specification.
-2. Reconcile the evidence and specify the bounded delivery slice in [#1967](https://github.com/elsa-workflows/elsa-foundation/issues/1967), using both reviewed spike results. Closing a spike with unknowns does not automatically make implementation ready.
-3. Deliver the shared persistence path in [#1968](https://github.com/elsa-workflows/elsa-foundation/issues/1968), then a proven diagnostics override in [#1969](https://github.com/elsa-workflows/elsa-foundation/issues/1969). The reviewed specification is published in [PR #1973](https://github.com/elsa-workflows/elsa-foundation/pull/1973). #1968 is the active delivery leaf; #1969 remains blocked until shared-layout acceptance. The CShells preparation and catalog compatibility prerequisites are delivered in preview.158; the runtime resource integration remains in progress.
-4. Refine later epic outlines only when their contracts and evidence are concrete. Keep one active integration lane and synchronize issue comments, labels, and project readiness when work changes state.
+1. Use the delivered shared persistence and diagnostics split as the effective-configuration input. The reviewed specification is in [PR #1973](https://github.com/elsa-workflows/elsa-foundation/pull/1973); [#1968](https://github.com/elsa-workflows/elsa-foundation/issues/1968) and [#1969](https://github.com/elsa-workflows/elsa-foundation/issues/1969) have live runtime/tooling acceptance evidence.
+2. Decide catalog ownership, immutable profile/group expansion, dependency explanations, and version/upgrade behavior in [#1982](https://github.com/elsa-workflows/elsa-foundation/issues/1982) before implementing [#1961](https://github.com/elsa-workflows/elsa-foundation/issues/1961). Treat candidate examples as planning fixtures until their host behavior is proven.
+3. Refine later epic outlines only when their contracts and evidence are concrete. Keep one active integration lane and synchronize issue comments, labels, and project readiness when work changes state.
 
 ## Epic Outcomes
 
 | Epic | Initial planning depth |
 |---|---|
-| [Shared persistence and explicit overrides #1960](https://github.com/elsa-workflows/elsa-foundation/issues/1960) | Two discovery spikes, a specification checkpoint, and two blocked outcome stories |
-| [Profiles and feature groups #1961](https://github.com/elsa-workflows/elsa-foundation/issues/1961) | Outcome and unresolved decisions only |
+| [Shared persistence and explicit overrides #1960](https://github.com/elsa-workflows/elsa-foundation/issues/1960) | Complete: reviewed specification, shared-primary story, and diagnostics-override story |
+| [Profiles and feature groups #1961](https://github.com/elsa-workflows/elsa-foundation/issues/1961) | Catalog/profile contract discovery in [#1982](https://github.com/elsa-workflows/elsa-foundation/issues/1982) |
 | [Developer plan, explain, and export #1962](https://github.com/elsa-workflows/elsa-foundation/issues/1962) | Outcome and unresolved decisions only |
 | [Runtime builder UX #1963](https://github.com/elsa-workflows/elsa-foundation/issues/1963) | Outcome and unresolved decisions only |
 | [Apply, evolution, and recovery #1964](https://github.com/elsa-workflows/elsa-foundation/issues/1964) | Outcome and unresolved decisions only |
@@ -68,7 +67,7 @@ Existing [connection-guard #1902](https://github.com/elsa-workflows/elsa-foundat
 
 ## Current Roadmap Notes
 
-- Start with one bounded Runtime/Design/Publishing persistence composition and establish the physical constraints before promising overrides.
+- Keep the supported Runtime/Design/Publishing primary target and two-store diagnostics override as the bounded persistence baseline; other layouts require separate evidence.
 - Use the Feature Composition Explorer before generator implementation; leave unknown, disputed, or inferred activations/settings pending review.
 - Before using generated maps as strong evidence, establish freshness with `dotnet run --project tools/maps/Elsa.Maps.Generator -- check`. If it is red or you cannot run it, refresh the relevant map first and review generated findings before continuing. See the [maps index](../maps/README.md#freshness).
 
