@@ -154,7 +154,7 @@ byte-identical to the one committed before regeneration.
   (source or test), packable state, domain and sub-domain, and role. Each packable node MUST
   additionally record its package id.
 - **FR-004**: Each node MUST record which version line it belongs to, per ADR 0067. Line A membership
-  is the eight packages named there; every other packable project is Line B.
+  is the set of packages named there (ADR 0067, Decision); every other packable project is Line B.
 - **FR-005**: Each edge MUST be typed `internal` or `external`, and MUST record the target package
   identity. Internal edges MUST record the target project path; external edges MUST record the
   declared version.
@@ -227,8 +227,9 @@ byte-identical to the one committed before regeneration.
 - Version computation and selective publishing. That is spec 150, which consumes this dataset.
 - Generating the `SharedAssemblies` list and the host compatibility manifest. Both are named in
   ADR 0067 as future consumers and neither is built here.
-- Ratifying Line A membership beyond the eight packages in ADR 0067. The remaining candidates are
-  deferred to the clean host specification (#1145).
+- Deciding Line A membership. ADR 0067's Decision names the members; this spec only records the line
+  each project is on. Which assemblies each host shares is the clean host specification's concern
+  (#1145).
 - Merging `feature-dependency-map.md` into the dataset, per FR-010.
 - Writing the last-published record. The publish, the bootstrap, and how the updated record reaches
   `main` are spec 150.
