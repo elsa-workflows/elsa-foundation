@@ -31,6 +31,11 @@ available; the script sets `ELSA_SHARED_PERSISTENCE_REQUIRE_POSTGRESQL=1` so mis
 Docker fails rather than silently skipping the journey. Run `pwsh ./e2e-tests/composition/Test-SharedPersistence.ps1`
 from the repository root, or use `powershell -NoProfile -ExecutionPolicy Bypass -File` on Windows.
 
+`durability/Test-RestartRecovery.ps1` also owns its server by default. Build Workbench first; the script copies
+the committed legacy SQLite configuration to a temporary content root and restarts only its own process. Its
+post-restart resume assertion currently fails on the pre-existing defect tracked in
+[#1761](https://github.com/elsa-workflows/elsa-foundation/issues/1761); see [the durability suite](durability/README.md).
+
 ## Running these tests — READ THIS (agents included)
 
 - **Windows runner:** use `powershell -NoProfile -ExecutionPolicy Bypass -File <script>`. This machine has **no

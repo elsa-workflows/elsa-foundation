@@ -1,6 +1,6 @@
 # Resource-aware persistence tooling contract
 
-Status: Integrated design review approved on 2026-09-23 for #1967. Published in PR #1973; implementation and runtime/database verification remain #1968/#1969 work.
+Status: Integrated design review approved on 2026-09-23 for #1967 and published in PR #1973. The shared-resource implementation is in draft PR #1974 under #1968, with focused protocol tests and a disposable PostgreSQL Workbench receipt. Final current-head acceptance remains T045; the separate diagnostics layout belongs to #1969.
 
 This contract specializes the reviewed [configuration-context decision](../decisions/tooling-configuration-context.md), [target-selection decision](../decisions/tooling-target-selection.md), and [strict verification decision](../decisions/tooling-target-verification.md). Configuration shape and enrollment belong to [persistence-configuration.md](persistence-configuration.md). No generic secret-provider or database-identity service is introduced.
 
@@ -124,3 +124,15 @@ Use existing exit-code categories: usage for invalid selector/version/closed sha
 Never emit either connection value, hashes of those values, raw configuration/paths or provider/JSON/reflection exception details. Cover stdout, stderr, thrown exceptions, serialized responses, logs, manifests and process arguments using canaries. Public resource/reference/feature identities must be treated as data and rendered safely. Cancellation retains the existing cancellation outcome and cleanup behavior without a successful operation claim.
 
 Required proof is in [quickstart.md](../quickstart.md): both source modes, old/partial/unknown API compatibility, all public command paths, same-context intermediate calls, zero expected lookups offline, zero context/connection/database creation on live mismatch, alias/shared-context checks, secret canaries, deterministic versioned artifacts, and real rebuilt-host/database agreement. Unit success alone cannot report the layout ready.
+
+## Implemented evidence and limits (2026-09-24)
+
+| Contract area | Executable evidence | Limit |
+|---|---|---|
+| `workbench-json-v1` and `workbench-json-environment-v1` | `EfToolingConfigurationContextTests` and public `ConfigurationContextCliTests` cover source ordering, frozen context, explicit shell/environment, and absence of implicit external sources. | A separate running host's environment is never observed; `runtimeParity` remains `unobserved`. |
+| Context evidence and compatibility | `EfToolingHostTests`, `WorkerProtocolTests`, `WorkerRunnerConfigurationContextTests`, `ToolingEntryPointTests`, and `ScriptCheckCliTests` cover the closed v2 envelope, redacted participants/unresolved codes, v1 compatibility, partial/unknown-host refusal, cancellation and disposal. | Offline `targetVerification: not-performed` does not imply a live connection match. |
+| Module-set selection | EF host tests cover dependency-enabled owners, `--from-host`, explicit modules, and group-scope refusal. The Workbench PostgreSQL receipt selects the four default-shell shared modules and verifies their migration histories. | This does not establish a separate diagnostics target or equivalence of every opt-in Runtime store. |
+| Live expected-target and side effects | `ResourceAwareLiveCliTests` and the public CLI tests cover `apply`, `validate`, and `post-migrate`: a mismatch refuses before DbContext/post-action construction and SQLite file creation. The PostgreSQL receipt checks same-target CLI validation and mismatched-target refusal. | Direct ADO connection-object construction is not separately instrumented; final current-head gate is T045. |
+| Secrets and artifacts | `PersistenceCliTests`, `WorkerLaunchTests`, and `ScriptCheckCliTests` exercise synthetic canaries across output, errors, process arguments, v2 manifests and regeneration differences with identical SQL. | Canary absence is scoped to the tested paths and fixtures. |
+
+The exact commands and observed counts are in the [T019/T023/T038 checkpoint](../quickstart.md#t019t023t038-tooling-contract-checkpoint-2026-09-24) and [shared-layout receipt](../quickstart.md#t015-live-shared-layout-checkpoint-2026-09-24). These are implementation evidence; this contract remains the reviewed selection and refusal rule.
