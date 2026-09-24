@@ -4,7 +4,7 @@
 
 **Input**: specification #1967 / `specs/173-shared-persistence/spec.md`.
 
-**Status**: Phase 0 and Phase 1 complete; the integrated model/contracts/quickstart and 45-task breakdown passed independent design review on 2026-09-23. #1967 was published through PR #1973; #1968 is active in the single delivery queue. This is design readiness, not implementation or runtime/database evidence. The owner approved bounded strict target verification; the upstream prerequisite is published and verified as `0.0.30-preview.158`.
+**Status**: Phase 0 and Phase 1 complete; the integrated model/contracts/quickstart and 45-task breakdown passed independent design review on 2026-09-23. #1967 was published through PR #1973; #1968 is active in the single delivery queue. This is design readiness, not a claim that every implementation gate passes. The owner approved bounded strict target verification; the initial CShells prerequisite was verified as `0.0.30-preview.158`, and its source-generation follow-up is published as `0.0.30-preview.159`.
 
 ## Summary
 
