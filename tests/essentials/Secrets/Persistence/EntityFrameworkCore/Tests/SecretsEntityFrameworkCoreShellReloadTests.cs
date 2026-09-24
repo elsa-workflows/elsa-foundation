@@ -236,6 +236,7 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
         });
 
         var app = builder.Build();
+        Assert.Empty(app.Services.GetServices<IShellSettingsPreparer>());
         app.MapShells();
         await app.StartAsync();
         return app;
