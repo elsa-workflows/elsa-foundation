@@ -216,8 +216,10 @@ versions and their floors did not move.
   to compare against and is its own work unit.
 - The generated release manifest recording which package versions constitute a release.
 - Promote-not-rebuild at release time, which is untestable until there is a release to promote.
-- Ratifying Line A membership beyond the eight packages in ADR 0067; the remainder is deferred to the
-  clean host specification (#1145).
+- Deciding Line A membership. ADR 0067 (amended 2026-09-24) defines it by rule — the contracts every
+  host shares with every feature, closed under dependencies — and lists the ten members; this spec only
+  consumes the line each project is declared on. Which assemblies each host shares is the clean host
+  specification's concern (#1145).
 
 ## Open Questions
 
