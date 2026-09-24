@@ -70,6 +70,40 @@ With an explicit configuration context, the selected host owns the source snapsh
 
 There is no `--connection` flag (D7): giving one is a usage error, not a silently ignored value.
 
+## Resource-aware runs
+
+The [tooling contract](../../../specs/173-shared-persistence/contracts/tooling.md) defines the full
+selection, compatibility, and evidence rules. The supported explicit sources are `workbench-json-v1`
+(the selected Workbench JSON files) and `workbench-json-environment-v1` (those files plus the
+operator-supplied environment inherited by this process). Both require one `--shell`. The second source
+does not inspect another running host and cannot claim runtime parity.
+
+When a resource is selected, module scope must fit that resource's declared target group. `--modules`
+keeps the exact requested set and refuses a module outside the group; `--all` also refuses if any
+discovered module is outside it; `--from-host` selects enabled enrolled candidates associated with the
+resource, including their dependencies. The tool never silently filters an explicit selection or adds a
+dependency from another target group. Context-only `list` and `plan` can describe
+the shell; `script` and live operations involving resource participants require `--resource`. `script-check`
+gets its source, resource, shell, and module selection from the committed manifest and accepts no new
+selection flags.
+
+Offline `list`, `plan`, `script`, and `script-check` validate configuration and module scope but do not
+look up expected connection values. Their `targetVerification: not-performed` evidence is not a live
+connection match. For `apply`, `validate`, and `post-migrate`, the worker compares the explicitly supplied
+environment/stdin connection with the expected named connection from the selected host context before
+constructing a `DbContext` or opening a database. A mismatch refuses; neither connection value, its hash,
+raw configuration paths, nor provider/reflection exception details belong in output, manifests, logs, or
+process arguments.
+
+On a host with the new tooling API, no-selector execution first checks whether enabled consumers have
+resource intent. Applicable intent requires an explicit context; unresolved or malformed intent is not
+treated as legacy. A host without a composer can only report legacy-only when no resource-key hint exists;
+older or partial APIs refuse resource hints rather than downgrading. A legacy invocation with no resource
+intent retains its existing path. These checks do not make arbitrary resource splits ready: the verified
+shared-target receipt covers the enabled default-shell Runtime, Workflows Design, Activities Design, and
+Publishing module set. It does not establish individual data behavior for every opt-in Runtime feature.
+The separate Structured Logs/OpenTelemetry target remains pending its dedicated host/database proof.
+
 ## Restoring a host's package set (`--restore`)
 
 Every command reads the package set already on disk and downloads nothing

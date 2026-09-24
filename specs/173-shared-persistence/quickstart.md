@@ -222,15 +222,19 @@ pwsh ./e2e-tests/durability/Test-RestartRecovery.ps1
 pwsh ./e2e-tests/file-deployment/Test-FileBasedDeployment.ps1
 ```
 
-T031 legacy control (2026-09-24, shared-persistence branch with the isolated harness): the
+### T031 legacy control (2026-09-24)
+
+On the shared-persistence branch, the
 restart script now owns an ephemeral Workbench process and a fresh temporary content root. It verifies
 the copied fixture has no selected persistence resource and that `elsa.db` is created in that root.
-The strict restart run reloaded the same suspended instance with `Set` completed once and `Event`
-suspended, then failed at `resumedCount=0`. A separate no-restart control run on a fresh isolated
+The first strict restart run reloaded the same suspended instance with `Set` completed once and `Event`
+suspended, then failed at `resumedCount=0`. The harness now labels only that precise state as
+`KNOWN ISSUE #1761` and automatically runs the full resume assertion when a stimulus matches.
+A separate no-restart control run on a fresh isolated
 database returned `resumedCount=1` and completed with the original variable intact. This reproduces
 the known pre-existing post-restart stimulus defect in [#1761](https://github.com/elsa-workflows/elsa-foundation/issues/1761),
-so T031 remains open. The failure is neither a passing restart journey nor evidence of a new
-shared-resource regression. The script retains its temporary root and server logs on failure.
+so the full restart journey remains unproven. The known-issue branch is neither a passing resume nor evidence of a new
+shared-resource regression. The script retains its temporary root and server logs on unexpected failure.
 
 `Test-FileBasedDeployment.ps1` proves the concrete `/health/ready` gate, import/publish/execute behavior, and idempotent restart for its file-deployment fixture. It is useful restart evidence, but it does not prove shared PostgreSQL resource routing.
 
@@ -448,6 +452,46 @@ Do not attach raw configuration snapshots, connection strings, passwords, hashes
 [CShells PR #139](https://github.com/valence-works/cshells/pull/139) merged at `49c912633d968197ddd430c5bd826acd9cfcb15d`; [Packages run 159](https://github.com/valence-works/cshells/actions/runs/35980997348) built, tested, packed, and published `0.0.30-preview.159` to Feedz. The restored `CShells` package metadata identifies that exact merge commit. Foundation pins the seven CShells package references to preview.159. A configuration-backed blueprint captures its source reload token before composing shell settings and carries it through CShells' settings copies. CShells checks that token during composition, between composition and the preparer, during preparation, and immediately before feature construction; an observed invalidation refuses the candidate. Custom/code-first blueprints without that configuration source remain unaffected.
 
 CShells forced-reload tests cover the two handoff windows, absence of feature effects, stable activation, and prior-generation retention: focused 12/12 (also rerun by the Foundation integrator), full CShells.Tests 655/655, and the net8/net9/net10 Release build passed. With published preview.159, Foundation's Docker-required shared PostgreSQL journey passed 2/2, EF modularity passed 42/42, and architecture passed 259/259, all zero skipped. The live journey confirms a successful authored-resource reload advances the active generation and a failed candidate leaves the previous generation available. This closes the notifying-configuration-source gap in T034; it does not claim that non-notifying custom sources have a shared source identity or that all other #1968 acceptance gates pass.
+
+## FR and SC evidence check (2026-09-24)
+
+This records the strongest observed evidence on the shared-persistence branch. “Shared evidenced” means the
+named component or disposable-host check ran on its recorded head; it is not a current-head T045 pass.
+“Partial” identifies the remaining diagnostics or acceptance boundary. The [task mapping](tasks.md#requirements-and-success-criteria-traceability)
+records implementation ownership; this table records what has actually been checked.
+
+| Requirement | State | Evidence and remaining boundary |
+|---|---|---|
+| FR-001 | Shared evidenced | [Pure resolver](#t004-pure-resolver-checkpoint-2026-09-23) checks atomic provider/reference selection. |
+| FR-002 | Shared evidenced | [Resolver and authored precedence](#t006-configuration-adapter-checkpoint-2026-09-23) cover binding/default/legacy order; [Workbench](#t015-live-shared-layout-checkpoint-2026-09-24) selects one root default. |
+| FR-003 | Shared evidenced | [Enrollment](#t005-explicit-enrollment-checkpoint-2026-09-23) uses stable IDs; [live shared layout](#t015-live-shared-layout-checkpoint-2026-09-24) checks four enabled modules. |
+| FR-004 | Open #1969 | Two-target diagnostics binding and live placement are T040–T043. |
+| FR-005 | Partial | Authored removal/invalid-value tests are recorded in [T026](tasks.md); diagnostics binding removal remains T040. |
+| FR-006 | Shared evidenced | [Resolver](#t004-pure-resolver-checkpoint-2026-09-23) and T025/T030 distinguish authored legacy targets from code defaults. |
+| FR-007 | Legacy characterized | [T031](#t031-legacy-control-2026-09-24) covers no-resource Secrets, migrations and isolated Workbench state; full post-restart stimulus delivery remains [#1761](https://github.com/elsa-workflows/elsa-foundation/issues/1761). |
+| FR-008 | Partial | [Negative matrix](#negative-and-refusal-matrix) and [CLI live tests](#t019t023t038-tooling-contract-checkpoint-2026-09-24) cover selected shared targets; diagnostics layouts remain #1969. |
+| FR-009 | Shared evidenced | [Configuration adapter](#t006-configuration-adapter-checkpoint-2026-09-23) and T026 preserve null/empty/false/zero/absence. |
+| FR-010 | Partial | [Live shared journey](#t015-live-shared-layout-checkpoint-2026-09-24) agrees with CLI selection and reload; final equivalent-context gate is T045. |
+| FR-011 | Shared evidenced | [Tooling contract checkpoint](#t019t023t038-tooling-contract-checkpoint-2026-09-24) checks JSON versus inherited-environment modes and marks running-host parity unobserved. |
+| FR-012 | Shared evidenced | [Transaction-affinity check](#t008-transaction-affinity-checkpoint-2026-09-24) and migration/tooling suites retain EF-owned schema, pooling and policy. |
+| FR-013 | Partial | Known shared-context constraints are checked by [T008](#t008-transaction-affinity-checkpoint-2026-09-24); separate diagnostics layout refusal remains T041/T043. |
+| FR-014 | Shared evidenced | [T019/T023/T038](#t019t023t038-tooling-contract-checkpoint-2026-09-24) check redacted participants, unresolved prerequisites and canaries. |
+| FR-015 | Partial | Public CLI command, worker and host tests plus [live receipt](#t015-live-shared-layout-checkpoint-2026-09-24) check provider/module authority for primary; diagnostics target scope remains #1969. |
+| FR-016 | Shared evidenced | [Offline artifact and live-target checkpoints](#artifact-compatibility) separate plan/script from target verification and database effects. |
+| FR-017 | Shared evidenced | [Management preflight](#reload-and-legacy-feature-editor-guard) and T027–T029 refuse before ordinary guards/save/refresh/reload. |
+| FR-018 | Shared evidenced within refusal policy | [Management and reload](#reload-and-legacy-feature-editor-guard) distinguish authored save from activation; general recovery stays #1964. |
+| FR-019 | Shared evidenced | [T034](#t034-source-generation-checkpoint-2026-09-24) and live reload check fresh generation and previous-shell retention. |
+| FR-020 | Shared evidenced | T026/T030 check unknown-field preservation and unresolved unenrolled consumers. |
+| FR-021 | Partial | This guide, [contracts](contracts/persistence-configuration.md), package READMEs, and extension catalogs cover the shared layout, legacy mode, exclusions and checks; #1969 diagnostics proof remains open. |
+
+| Success criterion | State | Evidence and remaining boundary |
+|---|---|---|
+| SC-001 | Shared evidenced | [PostgreSQL Workbench receipt](#t015-live-shared-layout-checkpoint-2026-09-24) uses one root resource and checks four migration histories/data placements. |
+| SC-002 | Partial | [Tooling/equivalent-context tests](#t019t023t038-tooling-contract-checkpoint-2026-09-24) and live primary receipt pass; T045 final-head acceptance remains. |
+| SC-003 | Partial | [Shared design/publish/execute restart](#t015-live-shared-layout-checkpoint-2026-09-24) passes; separate diagnostics restart/placement is #1969. |
+| SC-004 | Partial | Shared negative/refusal tests and canaries pass on recorded heads; diagnostics negatives and T045 final gate remain. |
+| SC-005 | Partial | [T031](#t031-legacy-control-2026-09-24) characterizes the known #1761 restart defect without hiding it; diagnostics binding removal remains #1969. |
+| SC-006 | Partial | [T034](#t034-source-generation-checkpoint-2026-09-24) and management tests cover shared reload/refusal; T045 current-head acceptance remains. |
 
 ## Current implementation gaps
 

@@ -1,6 +1,6 @@
 # Persistence configuration contracts
 
-Status: Integrated design review approved on 2026-09-23 for #1967. Published in PR #1973; implementation and runtime/database verification remain #1968/#1969 work.
+Status: Integrated design review approved on 2026-09-23 for #1967 and published in PR #1973. The shared-layout resolver, runtime preparation and PostgreSQL Workbench evidence are in draft PR #1974; T045 remains its final current-head gate. The separate diagnostics layout remains #1969 work.
 
 Canonical decisions:
 
@@ -53,7 +53,7 @@ public sealed record EfPersistenceApplicabilityItem(
     string FeatureId, string? ResourceName, string SelectionKind);
 ```
 
-The context/result types are the public `CShells.Lifecycle` types delivered in preview.157; root configuration is explicitly supplied by the caller. The facade builds detached inputs, invokes the internal resolver and returns only existing scalar patches plus redacted applicability. HasApplicableResource includes malformed selected intent; definitions-only and unknown unenrolled bindings are not applicable. RefusalCodes nonempty requires an empty patch. UnresolvedCodes never mean a readiness pass. Resource-selected participants carry source selection kind even when their selected name is malformed; do not infer applicability from nonnull ResourceName alone.
+The context/result types are the public `CShells.Lifecycle` types introduced in preview.157; Foundation currently pins preview.159 after the catalog and source-generation follow-ups. Root configuration is explicitly supplied by the caller. The facade builds detached inputs, invokes the internal resolver and returns only existing scalar patches plus redacted applicability. HasApplicableResource includes malformed selected intent; definitions-only and unknown unenrolled bindings are not applicable. RefusalCodes nonempty requires an empty patch. UnresolvedCodes never mean a readiness pass. Resource-selected participants carry source selection kind even when their selected name is malformed; do not infer applicability from nonnull ResourceName alone.
 
 The runtime CShells adapter returns Patch only after checking refusals. The management adapter composes complete current/candidate contexts using the shared host composer and public CShells APIs, calls this facade for each and refuses applicable intent before ordinary guards. It must not manufacture an incomplete context from directly enabled IDs. Root/raw configuration must correspond to the same candidate representation when presence is inspected; never combine candidate final settings with stale authored fields from another source generation.
 

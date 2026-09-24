@@ -33,8 +33,8 @@ from the repository root, or use `powershell -NoProfile -ExecutionPolicy Bypass 
 
 `durability/Test-RestartRecovery.ps1` also owns its server by default. Build Workbench first; the script copies
 the committed legacy SQLite configuration to a temporary content root and restarts only its own process. Its
-post-restart resume assertion currently fails on the pre-existing defect tracked in
-[#1761](https://github.com/elsa-workflows/elsa-foundation/issues/1761); see [the durability suite](durability/README.md).
+post-restart resume currently takes a precise `KNOWN ISSUE #1761` tracker branch for the pre-existing defect;
+see [the issue](https://github.com/elsa-workflows/elsa-foundation/issues/1761) and [the durability suite](durability/README.md).
 
 ## Running these tests — READ THIS (agents included)
 
