@@ -106,7 +106,11 @@ The disposable PostgreSQL Workbench fixture now runs a real authenticated HTTP j
 dotnet test tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Tests/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj --no-restore --logger 'console;verbosity=quiet' -p:WarningLevel=0
 ```
 
-The full shared-resource fixture project passed 4/4 with zero skips against disposable PostgreSQL. T015 remains open for its requested module-level tests and broader behavior coverage; T024's documented standalone e2e and tooling-agreement receipt remain open.
+The full shared-resource fixture project passed 4/4 with zero skips against disposable PostgreSQL. T015 remains open for its requested module-level tests and broader behavior coverage. T024's standalone e2e now runs this same-target journey through `e2e-tests/composition/Test-SharedPersistence.ps1`: it builds the Workbench and CLI from the same source configuration, checks four primary migration histories and persisted domain rows, then uses CLI `list` and `validate` against that live target. A mismatched supplied diagnostics connection is refused before database access, and the response is checked for connection values and a synthetic password. The diagnostics database has none of the four primary histories or domain tables. The command below runs the receipt and requires Docker rather than skipping it.
+
+```bash
+pwsh -NoProfile -File ./e2e-tests/composition/Test-SharedPersistence.ps1
+```
 
 ## What success must prove
 
@@ -409,10 +413,8 @@ Do not attach raw configuration snapshots, connection strings, passwords, hashes
 
 This guide deliberately leaves the following as implementation gates rather than pretending they pass:
 
-- CShells `0.0.30-preview.158` is pinned. The resolver, preparation facade, CShells settings adapter, and Workbench host registration now run together. A bounded PostgreSQL test observed the Runtime, Workflows Design, Activities Design, and Publishing migration histories on the selected shared target. A live Workbench editor request returned HTTP 409 with the resource-managed prefix before the ordinary EF guard's distinct refusal, and its feature revision stayed unchanged. The EF management preparer evaluates current and candidate graphs; broader source-drift and transaction-affinity evidence remains open. This is not yet the full design/publish/execute/restart or tooling proof.
-- The shared PostgreSQL fixture exists and passes its bounded container suite. The four enabled default-shell shared modules have a rebuilt-host CLI/database agreement check; the standalone same-target Workbench/tooling e2e receipt, all enrolled Runtime identity coverage, and authored reload proof remain open.
+- CShells `0.0.30-preview.158` is pinned. The resolver, preparation facade, CShells settings adapter, and Workbench host registration now run together. A live Workbench editor request returned HTTP 409 with the resource-managed prefix before the ordinary EF guard's distinct refusal, and its feature revision stayed unchanged. The EF management preparer evaluates current and candidate graphs; broader source-drift and transaction-affinity evidence remains open.
+- The shared PostgreSQL journey covers the four enabled default-shell shared modules through HTTP design/publish/execute/restart and same-target CLI validation. All enrolled Runtime identity coverage and authored reload proof remain open.
 - The explicit-context CLI protocol, host-owned source selection, live connection matching, and version-2 script/manifest paths are implemented. Full command-path, old/partial-host, public-path preconstruction refusal, and broader secret-canary coverage remain open; the direct live helper has constructor-ordering probes for all three commands.
-- No committed #1968 shared-layout or #1969 diagnostics PostgreSQL e2e script exists yet.
-- Current e2e scripts prove SQLite/default-shell HTTP behavior and diagnostics routes, not named-resource target placement.
-- The exact Workbench PostgreSQL launch/profile and disposable target provisioning path must be committed with implementation before this quickstart can be used as a release gate.
+- The #1968 shared-layout PostgreSQL e2e script and disposable target provisioning path are committed with this implementation. #1969 diagnostics binding does not yet have a PostgreSQL e2e script.
 - A green pure resolver, component suite, or existing SQLite e2e run is not database, restart, transaction, or cross-domain target proof.

@@ -76,12 +76,50 @@ public sealed class SharedPersistenceJourneyTests(PostgreSqlTargetFixture target
             count.CommandText = $"SELECT COUNT(*) FROM \"{table}\"";
             Assert.True((long)(await count.ExecuteScalarAsync())! > 0, $"{table} has no persisted rows on the shared target.");
         }
+        foreach (var history in new[]
+                 {
+                     "__EFMigrationsHistory_ElsaActivitiesDesign",
+                     "__EFMigrationsHistory_ElsaWorkflowsDesign",
+                     "__EFMigrationsHistory_ElsaPublishingSnapshotReview",
+                     "__EFMigrationsHistory_ElsaRuntime"
+                 })
+        {
+            await using var count = primary.CreateCommand();
+            count.CommandText = $"SELECT COUNT(*) FROM \"{history}\"";
+            Assert.True((long)(await count.ExecuteScalarAsync())! > 0, $"{history} has no migration row on the shared target.");
+        }
+
+        var listed = await host.RunToolingAsync("list");
+        AssertTooling(listed, 0, targets);
+        Assert.Contains("4 module(s).", listed.Output, StringComparison.Ordinal);
+        foreach (var module in new[] { "Activities.Design", "Workflows.Design", "Workflows.Publishing", "Workflows.Runtime" })
+            Assert.Contains(module, listed.Output, StringComparison.Ordinal);
+
+        var validated = await host.RunToolingAsync("validate");
+        AssertTooling(validated, 0, targets);
+        Assert.Contains("No pending migrations.", validated.Output, StringComparison.Ordinal);
+        Assert.Contains("Target verification: matched", validated.Output, StringComparison.Ordinal);
+
+        var wrongTarget = await host.RunToolingAsync("validate", targets.DiagnosticsConnectionString);
+        AssertTooling(wrongTarget, 3, targets);
+        Assert.Contains("connection-target-mismatch", wrongTarget.Output, StringComparison.Ordinal);
 
         await using var diagnostics = new NpgsqlConnection(targets.DiagnosticsConnectionString);
         await diagnostics.OpenAsync();
         await using var check = diagnostics.CreateCommand();
-        check.CommandText = "SELECT COUNT(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public' AND tablename IN ('__EFMigrationsHistory_ElsaRuntime', '__EFMigrationsHistory_ElsaWorkflowsDesign', '__EFMigrationsHistory_ElsaActivitiesDesign', '__EFMigrationsHistory_ElsaPublishingSnapshotReview')";
+        check.CommandText = "SELECT COUNT(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public' AND tablename IN ('__EFMigrationsHistory_ElsaRuntime', '__EFMigrationsHistory_ElsaWorkflowsDesign', '__EFMigrationsHistory_ElsaActivitiesDesign', '__EFMigrationsHistory_ElsaPublishingSnapshotReview', 'elsa_activity_definitions', 'elsa_workflow_definitions_v2', 'elsa_publication_records', 'elsa_runtime_workflow_execution_state')";
         Assert.Equal(0L, await check.ExecuteScalarAsync());
+    }
+
+    private static void AssertTooling(ToolingRun run, int expectedExitCode, PostgreSqlTargetFixture targets)
+    {
+        Assert.False(run.Output.Contains(targets.PrimaryConnectionString, StringComparison.Ordinal) ||
+                     run.Output.Contains(targets.DiagnosticsConnectionString, StringComparison.Ordinal) ||
+                     run.Output.Contains(PostgreSqlTargetFixture.SyntheticPassword, StringComparison.Ordinal),
+            "The tooling response exposed a connection value.");
+        var safeOutput = run.Output.Replace(targets.PrimaryConnectionString, "<primary>", StringComparison.Ordinal)
+            .Replace(targets.DiagnosticsConnectionString, "<diagnostics>", StringComparison.Ordinal);
+        Assert.True(run.ExitCode == expectedExitCode, safeOutput);
     }
 
     private static object ActivityNode(string versionId, string? text = null) => new

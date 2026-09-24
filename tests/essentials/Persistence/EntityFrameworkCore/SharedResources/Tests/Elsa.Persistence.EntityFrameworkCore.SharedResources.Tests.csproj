@@ -14,5 +14,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../../../Workbench/Tests/Elsa.Workbench.Tests.csproj" />
+    <ProjectReference Include="../../../../../../src/essentials/Cli/Elsa.Cli.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>

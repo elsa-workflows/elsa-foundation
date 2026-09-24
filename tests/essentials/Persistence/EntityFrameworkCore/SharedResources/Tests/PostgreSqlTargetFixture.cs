@@ -9,6 +9,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests;
 public sealed class PostgreSqlTargetFixture : IAsyncLifetime
 {
     public const string CollectionName = "shared-persistence-postgresql";
+    public const string SyntheticPassword = "elsa-shared-persistence-canary";
     private static readonly bool RequirePostgreSql =
         Environment.GetEnvironmentVariable("ELSA_SHARED_PERSISTENCE_REQUIRE_POSTGRESQL") is "1" or "true";
 
@@ -26,7 +27,7 @@ public sealed class PostgreSqlTargetFixture : IAsyncLifetime
             _container = new PostgreSqlBuilder("postgres:16-alpine")
                 .WithDatabase("elsa_fixture")
                 .WithUsername("postgres")
-                .WithPassword("postgres")
+                .WithPassword(SyntheticPassword)
                 .Build();
             await _container.StartAsync();
         }

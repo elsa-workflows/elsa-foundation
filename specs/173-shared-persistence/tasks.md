@@ -9,7 +9,7 @@ description: "Reviewed task list for shared persistence resources"
 
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `contracts/`, and `quickstart.md`.
 
-**Status**: Integrated design review approved on 2026-09-23. #1967 publication completed through PR #1973; implementation is active. One active delivery issue at a time: #1968 owns US1, US2 and US4; #1969 owns US3 after #1968. T001-T007, T009-T011, T014, T016-T017, T020-T022, T027-T028 and T035-T036 are complete; T008 and T015 are in progress. Remaining tasks are open.
+**Status**: Integrated design review approved on 2026-09-23. #1967 publication completed through PR #1973; implementation is active. One active delivery issue at a time: #1968 owns US1, US2 and US4; #1969 owns US3 after #1968. T001-T007, T009-T011, T014, T016-T017, T020-T022, T024, T027-T028 and T035-T036 are complete; T008 and T015 are in progress. Remaining tasks are open.
 
 **Tests**: Tests are required by the specification. Add focused tests before implementation within each user-story phase and retain the existing regression suites.
 
@@ -67,7 +67,7 @@ description: "Reviewed task list for shared persistence resources"
 - [x] T021 [US1] Implement host-owned tooling context creation, resource-aware operation handling, strict expected-connection verification, and per-target module selection in `src/essentials/Persistence/EntityFramework/Tooling/EfToolingHost.cs` and `src/essentials/Persistence/EntityFramework/Tooling/EfToolingConfigurationContext.cs`, refusing before context/connection/database creation on mismatch.
 - [x] T022 [US1] Update CLI source-context metadata and resource transport in `src/essentials/Cli/ShellConfiguration.cs`, `src/essentials/Cli/Worker/HostAppSettings.cs`, `src/essentials/Cli/Worker/WorkerRunner.cs`, and `src/essentials/Cli/ElsaCli.cs`; keep source loading and expected-value lookup host-owned, preserve EF-free front-end behavior, and do not accept new selection flags for script-check.
 - [ ] T023 [US1] Add closed-contract, capability-negotiation, context-lifetime, command-path, redaction, and target-verification tests in `tests/essentials/Cli/Tests/ToolingEntryPointTests.cs`, `tests/essentials/Cli/Tests/PersistenceCliTests.cs`, `tests/essentials/Cli/Tests/WorkerLaunchTests.cs`, and `tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/EfToolingHostTests.cs`.
-- [ ] T024 [US1] Add the rebuilt Workbench shared PostgreSQL journey in `e2e-tests/composition/Test-SharedPersistence.ps1` and document its provisioning, migration-history, design/publish/execute/restart, tooling-agreement, and redacted-evidence receipt in `e2e-tests/README.md`.
+- [x] T024 [US1] Add the rebuilt Workbench shared PostgreSQL journey in `e2e-tests/composition/Test-SharedPersistence.ps1` and document its provisioning, migration-history, design/publish/execute/restart, tooling-agreement, and redacted-evidence receipt in `e2e-tests/README.md`.
 
 **Checkpoint**: The shared-layout portions of SC-001, SC-002, SC-003, and SC-004 pass, with runtime/tooling agreement and no unintended database activity on negative cases. The diagnostics half of SC-003 remains a US3 gate.
 
