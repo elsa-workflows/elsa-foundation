@@ -6,8 +6,8 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 
 ## Summary
 
-- Source projects: 131
-- Test projects: 117
+- Source projects: 132
+- Test projects: 118
 - Domains: 29
 - Direct cross-domain references: 692
 
@@ -30,7 +30,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Http | 3 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Locking | 2 | 0 | contract<br>provider/implementation |
 | Elsa.Mediator | 2 | 1 | contract<br>feature/implementation<br>test |
-| Elsa.Modularity | 4 | 2 | contract<br>feature/implementation<br>test |
+| Elsa.Modularity | 5 | 3 | contract<br>feature/implementation<br>test |
 | Elsa.Persistence | 1 | 8 | feature/implementation<br>test |
 | Elsa.Pipelines | 1 | 0 | contract |
 | Elsa.Primitives | 2 | 2 | feature/implementation<br>test |
@@ -122,6 +122,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Modularity.Core](../../src/essentials/Modularity/Core/Elsa.Modularity.Core.csproj) | source | Elsa.Modularity | Core | contract | - |
 | [Elsa.Modularity.EntityFramework](../../src/essentials/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj) | source | Elsa.Modularity | EntityFramework | feature/implementation | Elsa.Modularity.Core<br>Elsa.Persistence.EntityFramework |
 | [Elsa.Modularity.Nuplane](../../src/essentials/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj) | source | Elsa.Modularity | Nuplane | feature/implementation | Elsa.Modularity.Core |
+| [Elsa.Modularity.Planning](../../src/essentials/Modularity/Planning/Elsa.Modularity.Planning.csproj) | source | Elsa.Modularity | Planning | feature/implementation | - |
 | [Elsa.Persistence.EntityFramework](../../src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | source | Elsa.Persistence | EntityFramework | feature/implementation | - |
 | [Elsa.Pipelines.Core](../../src/essentials/Pipelines/Core/Elsa.Pipelines.Core.csproj) | source | Elsa.Pipelines | Core | contract | - |
 | [Elsa.Primitives.Hosting](../../src/essentials/Primitives/Hosting/Elsa.Primitives.Hosting.csproj) | source | Elsa.Primitives | Hosting | feature/implementation | Elsa.Primitives |
@@ -247,6 +248,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Http.Tests](../../tests/essentials/Http/Tests/Elsa.Http.Tests.csproj) | test | Elsa.Http | Tests | test | Elsa.Api.AspNetCore<br>Elsa.Http<br>Elsa.Testing |
 | [Elsa.Mediator.Tests](../../tests/essentials/Mediator/Tests/Elsa.Mediator.Tests.csproj) | test | Elsa.Mediator | Tests | test | Elsa.Mediator |
 | [Elsa.Modularity.EntityFramework.Tests](../../tests/essentials/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj) | test | Elsa.Modularity | EntityFramework.Tests | test | Elsa.Modularity.EntityFramework<br>Elsa.Modularity.Nuplane<br>Elsa.Secrets.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
+| [Elsa.Modularity.Planning.Tests](../../tests/essentials/Modularity/Planning/Tests/Elsa.Modularity.Planning.Tests.csproj) | test | Elsa.Modularity | Planning.Tests | test | Elsa.Modularity.Planning |
 | [Elsa.Modularity.Tests](../../tests/essentials/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Modularity | Tests | test | Elsa.Agent.Anthropic<br>Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Host<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane<br>Elsa.Workbench<br>Elsa.Workflows.Design.Reconciliation.Git |
 | [Elsa.Persistence.EntityFramework.BindingDriftTests](../../tests/essentials/Persistence/EntityFramework/BindingDriftTests/Elsa.Persistence.EntityFramework.BindingDriftTests.csproj) | test | Elsa.Persistence | EntityFramework.BindingDriftTests | test | Elsa.Persistence.EntityFramework |
 | [Elsa.Persistence.EntityFramework.Tests](../../tests/essentials/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj) | test | Elsa.Persistence | EntityFramework.Tests | test | Elsa.Activities.Design.Persistence.EntityFrameworkCore<br>Elsa.Persistence.EntityFramework<br>Elsa.Tasks<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Resumption |

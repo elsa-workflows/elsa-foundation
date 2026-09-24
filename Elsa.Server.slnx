@@ -191,6 +191,7 @@
     <Project Path="src/essentials/Modularity/Core/Elsa.Modularity.Core.csproj" />
     <Project Path="src/essentials/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj" />
     <Project Path="src/essentials/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj" />
+    <Project Path="src/essentials/Modularity/Planning/Elsa.Modularity.Planning.csproj" />
   </Folder>
   <Folder Name="/src/essentials/Persistence/">
     <Project Path="src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
@@ -441,6 +442,9 @@
   </Folder>
   <Folder Name="/tests/essentials/Modularity/EntityFramework/">
     <Project Path="tests/essentials/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/essentials/Modularity/Planning/">
+    <Project Path="tests/essentials/Modularity/Planning/Tests/Elsa.Modularity.Planning.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/essentials/Primitives/">
     <Project Path="tests/essentials/Primitives/Tests/Elsa.Primitives.Tests.csproj" />

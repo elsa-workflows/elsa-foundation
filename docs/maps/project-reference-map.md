@@ -6,9 +6,9 @@ Records direct project references only.
 
 ## Summary
 
-- Source projects: 131
-- Test projects: 117
-- Direct project references: 1146
+- Source projects: 132
+- Test projects: 118
+- Direct project references: 1147
 
 ## Projects
 
@@ -87,6 +87,7 @@ Records direct project references only.
 | [Elsa.Modularity.Core](../../src/essentials/Modularity/Core/Elsa.Modularity.Core.csproj) | source | Elsa.Modularity | - | default | - |
 | [Elsa.Modularity.EntityFramework](../../src/essentials/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj) | source | Elsa.Modularity | - | default | Elsa.Modularity.Core<br>Elsa.Persistence.EntityFramework |
 | [Elsa.Modularity.Nuplane](../../src/essentials/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj) | source | Elsa.Modularity | - | default | Elsa.Modularity.Core |
+| [Elsa.Modularity.Planning](../../src/essentials/Modularity/Planning/Elsa.Modularity.Planning.csproj) | source | Elsa.Modularity | - | default | - |
 | [Elsa.Persistence.EntityFramework](../../src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | source | Elsa.Persistence | - | default | - |
 | [Elsa.Pipelines.Core](../../src/essentials/Pipelines/Core/Elsa.Pipelines.Core.csproj) | source | Elsa.Pipelines | - | default | - |
 | [Elsa.Primitives.Hosting](../../src/essentials/Primitives/Hosting/Elsa.Primitives.Hosting.csproj) | source | Elsa.Primitives | - | default | Elsa.Primitives |
@@ -212,6 +213,7 @@ Records direct project references only.
 | [Elsa.Http.Tests](../../tests/essentials/Http/Tests/Elsa.Http.Tests.csproj) | test | Elsa.Http | - | default | Elsa.Api.AspNetCore<br>Elsa.Http<br>Elsa.Testing |
 | [Elsa.Mediator.Tests](../../tests/essentials/Mediator/Tests/Elsa.Mediator.Tests.csproj) | test | Elsa.Mediator | - | default | Elsa.Mediator |
 | [Elsa.Modularity.EntityFramework.Tests](../../tests/essentials/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj) | test | Elsa.Modularity | - | false | Elsa.Modularity.EntityFramework<br>Elsa.Modularity.Nuplane<br>Elsa.Secrets.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
+| [Elsa.Modularity.Planning.Tests](../../tests/essentials/Modularity/Planning/Tests/Elsa.Modularity.Planning.Tests.csproj) | test | Elsa.Modularity | - | default | Elsa.Modularity.Planning |
 | [Elsa.Modularity.Tests](../../tests/essentials/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Modularity | - | default | Elsa.Agent.Anthropic<br>Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Host<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane<br>Elsa.Workbench<br>Elsa.Workflows.Design.Reconciliation.Git |
 | [Elsa.Persistence.EntityFramework.BindingDriftTests](../../tests/essentials/Persistence/EntityFramework/BindingDriftTests/Elsa.Persistence.EntityFramework.BindingDriftTests.csproj) | test | Elsa.Persistence | - | false | Elsa.Persistence.EntityFramework |
 | [Elsa.Persistence.EntityFramework.Tests](../../tests/essentials/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj) | test | Elsa.Persistence | - | default | Elsa.Activities.Design.Persistence.EntityFrameworkCore<br>Elsa.Persistence.EntityFramework<br>Elsa.Tasks<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Resumption |
@@ -282,7 +284,7 @@ Records direct project references only.
 | Elsa.Http | 3 | 1 |
 | Elsa.Locking | 2 | 0 |
 | Elsa.Mediator | 2 | 1 |
-| Elsa.Modularity | 4 | 2 |
+| Elsa.Modularity | 5 | 3 |
 | Elsa.Persistence | 1 | 8 |
 | Elsa.Pipelines | 1 | 0 |
 | Elsa.Primitives | 2 | 2 |

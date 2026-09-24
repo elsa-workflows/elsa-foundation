@@ -1,10 +1,10 @@
 # Feature Specification: Pinned profile selection planner
 
-**Feature Branch**: `codex/1984-profile-planner-spec`
+**Feature Branch**: `codex/1984-profile-planner-spec` (specification); `codex/1986-profile-planner` (implementation)
 
 **Created**: 2026-09-24
 
-**Status**: Draft — specification task #1984; implementation and live-profile acceptance remain separate
+**Status**: Implemented — #1986 pure planner; live-profile acceptance remains separate
 
 **Input**: [Program #1959](https://github.com/elsa-workflows/elsa-foundation/issues/1959), [profiles epic #1961](https://github.com/elsa-workflows/elsa-foundation/issues/1961), [task #1984](https://github.com/elsa-workflows/elsa-foundation/issues/1984), and the [proposed profile-catalog decision record](../../docs/reports/runtime-composition/profile-catalog-contract.md). This specification defines a pure planner contract, not a released profile catalog or runtime activation path.
 
@@ -128,4 +128,4 @@ The [v1 selection-planner contract](contracts/selection-planner-v1.md) specifies
 - The first consumer is a developer planning command; a future builder uses the same plan result. Neither consumer, package delivery, nor server-side draft storage is implemented by this unit.
 - A supplied host inventory represents one named target and observation time. A later host check must revalidate drift before activation; #1145/#1951 own package delivery/compatibility, #1159 owns unknown requested-feature runtime behavior, and #1815 owns module layout.
 - The [shared-persistence specification](../173-shared-persistence/spec.md) owns effective provider/connection resolution and physical-layout checks. A selected persistence feature alone does not prove the resource layout or authorize migration.
-- This specification remains `Draft` after publication until a later work unit approves an implementation boundary. It does not ratify a framework-wide settings taxonomy or alter the constitution.
+- This specification was published as `Draft` under #1984 and approved for the bounded pure-planner implementation under #1986. It does not ratify a framework-wide settings taxonomy or alter the constitution.
