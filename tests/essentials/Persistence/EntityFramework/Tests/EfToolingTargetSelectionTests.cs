@@ -54,6 +54,24 @@ public sealed class EfToolingTargetSelectionTests
                 new EfToolingSelection { Kind = EfToolingSelection.FromHostKind }, "primary")).Code);
     }
 
+    [Fact]
+    public void A_read_only_bridge_without_a_provider_does_not_own_the_module_target()
+    {
+        var prepared = Prepared([Owner("First", "A", "primary", "PostgreSql", "Shared")]) with
+        {
+            HostFeatureUsages =
+            [
+                new EfFeatureModuleUsage("First", typeof(EfToolingTargetSelectionTests), ["A"], true),
+                new EfFeatureModuleUsage("DashboardReader", typeof(EfToolingTargetSelectionTests), ["A"], false)
+            ]
+        };
+
+        var selected = EfToolingTargetSelection.Select(prepared, ["A"],
+            new EfToolingSelection { Kind = EfToolingSelection.FromHostKind }, "primary");
+
+        Assert.Equal(["A"], selected);
+    }
+
     private static EfPersistencePreparationResult Prepared(IReadOnlyList<PersistenceParticipantResolution> owners)
     {
         var source = new PersistenceSourceProvenance("root", "configuration", false, true);
