@@ -112,6 +112,29 @@ The full shared-resource fixture project passed 4/4 with zero skips against disp
 pwsh -NoProfile -File ./e2e-tests/composition/Test-SharedPersistence.ps1
 ```
 
+## T019/T023/T038 tooling contract checkpoint (2026-09-24)
+
+The v2 offline plan composes Activities Design, Workflows Design, and Publishing from the actual feature dependency closure. Different connection references remain selected and produce `target-affinity-unverified` plus `expected-connection-unchecked`; the offline plan never claims physical equality. All eight enrolled Runtime participants materialize the same resource Provider and ConnectionName and pass the existing EF tooling provider-agreement check. Applying only the four shared-layout modules to one SQLite database installs exactly their four declared migration-history tables. Separate preparation tests prove equal live values are accepted, unequal live values refuse, and a known schema conflict still refuses offline.
+
+The T023/T038 contract evidence is distributed across the CLI and EF-owned test projects because the front end, worker, and host each own a distinct boundary:
+
+| Boundary | Executable evidence |
+|---|---|
+| Public selectors, both source modes, all command paths, old/partial host capability, no downgrade | `ConfigurationContextCliTests`, `PersistenceCliTests`, `ScriptCheckCliTests`, `ToolingEntryPointTests` |
+| WorkerContract v2, closed response shape, cancellation/disposal, process arguments and redaction | `WorkerProtocolTests`, `WorkerRunnerConfigurationContextTests`, `ToolingEntryPointTests`, `WorkerLaunchTests` |
+| Host context v1 and operation v2, offline module scope, typed refusal and source snapshot | `EfToolingConfigurationContextTests`, `EfToolingHostTests` |
+| Live expected-versus-supplied target mismatch before DbContext, post-migration action or SQLite database creation | `ResourceAwareLiveCliTests` for `apply`, `validate`, and `post-migrate` |
+
+The closed-response tests reject unmapped fields and redact a throwing context disposal. They verify the protocol contract, not a successful release deployment. The standalone PostgreSQL Workbench receipt above supplies the four-module runtime/database/tooling journey; the final current-head release gate remains T045.
+
+```bash
+dotnet test tests/essentials/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj --no-restore --verbosity quiet
+dotnet test tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj --no-restore --verbosity quiet
+dotnet test tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj --no-restore --verbosity quiet
+```
+
+The recorded local results are EF persistence 375/375, migration/tooling 247/247, and CLI 194/194, all with zero skips. These counts are source and protocol test evidence; they do not substitute for current-head hosted CI or the final rebuilt-host quickstart.
+
 ## What success must prove
 
 The shared layout selects one named PostgreSQL resource for every enabled enrolled Runtime, Workflows Design, Activities Design and Publishing consumer. The diagnostics layout selects a second named resource for both Structured Logs and OpenTelemetry while leaving the primary consumers on their original target. The first slice does not redirect host-owned OpenIddict, private stores, or unknown persistence consumers ([spec](spec.md#normative-supported-participants-and-constraints)).
