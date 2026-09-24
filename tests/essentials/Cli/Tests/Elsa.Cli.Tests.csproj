@@ -28,6 +28,7 @@
          a deps file and the assemblies beside them — exactly what an operator with no source tree has. -->
     <ProjectReference Include="..\Fixtures\Host\Elsa.Cli.Fixtures.Host.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Fixtures\MinimalHost\Elsa.Cli.Fixtures.MinimalHost.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Fixtures\LegacyHost\Elsa.Cli.Fixtures.LegacyHost.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Fixtures\CollisionHost\Elsa.Cli.Fixtures.CollisionHost.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Fixtures\NuplaneHost\Elsa.Cli.Fixtures.NuplaneHost.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Fixtures\NuplaneCapabilityHost\Elsa.Cli.Fixtures.NuplaneCapabilityHost.csproj" ReferenceOutputAssembly="false" />

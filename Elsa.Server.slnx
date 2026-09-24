@@ -376,6 +376,8 @@
     <Project Path="tests/essentials/Cli/Fixtures/Collision/Acme.Widgets.Collision.csproj" />
     <Project Path="tests/essentials/Cli/Fixtures/CollisionHost/Elsa.Cli.Fixtures.CollisionHost.csproj" />
     <Project Path="tests/essentials/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj" />
+    <Project Path="tests/essentials/Cli/Fixtures/LegacyHost/Elsa.Cli.Fixtures.LegacyHost.csproj" />
+    <Project Path="tests/essentials/Cli/Fixtures/LegacyPersistence/Elsa.Cli.Fixtures.LegacyPersistence.csproj" />
     <Project Path="tests/essentials/Cli/Fixtures/MinimalHost/Elsa.Cli.Fixtures.MinimalHost.csproj" />
     <Project Path="tests/essentials/Cli/Fixtures/NuplaneCapabilityHost/Elsa.Cli.Fixtures.NuplaneCapabilityHost.csproj" />
     <Project Path="tests/essentials/Cli/Fixtures/NuplaneHost/Elsa.Cli.Fixtures.NuplaneHost.csproj" />

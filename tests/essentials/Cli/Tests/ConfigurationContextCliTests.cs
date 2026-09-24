@@ -91,4 +91,50 @@ public sealed class ConfigurationContextCliTests
         Assert.Contains("--configuration-context", run.Text, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Resource_intent_on_a_v1_only_host_never_downgrades_to_legacy_tooling()
+    {
+        using var host = new TempDirectory("elsa-legacy-context-host-");
+        foreach (var file in Directory.EnumerateFiles(DotnetElsa.Host("LegacyHost")))
+            File.Copy(file, host.File(Path.GetFileName(file)));
+        var marker = host.File("v1-invoked.txt");
+        var environment = new Dictionary<string, string> { ["ELSA_LEGACY_TOOLING_MARKER"] = marker };
+
+        var legacy = DotnetElsa.Run(environment, "persistence", "list", "--host", host.Path);
+        Assert.Equal(ToolExitCode.Success, legacy.ExitCode);
+        Assert.Contains("0 module(s).", legacy.Output, StringComparison.Ordinal);
+        Assert.True(File.Exists(marker), "The fixture must reach its v1 entry point without resource intent.");
+
+        File.Delete(marker);
+        File.WriteAllText(host.File("appsettings.json"), """
+            { "Elsa": { "Persistence": { "Resources": {
+                "primary": { "Provider": "Sqlite", "ConnectionName": "secret-canary" }
+            } } } }
+            """);
+        var list = DotnetElsa.Run(environment, "persistence", "list", "--host", host.Path);
+
+        Assert.Equal(ToolExitCode.ResolutionFailure, list.ExitCode);
+        Assert.Contains("context-capability-unavailable", list.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret-canary", list.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(host.Path, list.Text, StringComparison.Ordinal);
+        Assert.False(File.Exists(marker), "The resource-aware request must not call the v1 entry point.");
+
+        var selected = DotnetElsa.Run(environment, "persistence", "list", "--host", host.Path,
+            "--configuration-context", WorkerContextSources.WorkbenchJson,
+            "--shell", "default", "--resource", "primary");
+        Assert.Equal(ToolExitCode.ResolutionFailure, selected.ExitCode);
+        Assert.Contains("context-capability-unavailable", selected.Text, StringComparison.Ordinal);
+        Assert.False(File.Exists(marker));
+
+        var output = host.File("sql");
+        var script = DotnetElsa.Run(environment, "persistence", "script", "--host", host.Path,
+            "--provider", "PostgreSql", "--modules", "Acme.Widgets", "--output", output);
+
+        Assert.Equal(ToolExitCode.ResolutionFailure, script.ExitCode);
+        Assert.Contains("context-capability-unavailable", script.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret-canary", script.Text, StringComparison.Ordinal);
+        Assert.False(File.Exists(marker));
+        Assert.False(Directory.Exists(output));
+    }
+
 }
