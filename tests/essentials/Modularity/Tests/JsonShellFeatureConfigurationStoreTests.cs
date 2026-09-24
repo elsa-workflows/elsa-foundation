@@ -84,6 +84,32 @@ public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task SavePreservesUnknownEnabledFeatureAndSettingValuesWhenRoundTripped()
+    {
+        await WriteDefaultFeaturesAsync("""
+            {"FutureFeature":{"Flag":false,"Limit":0,"Label":"","Optional":null},"Existing":{"FutureSetting":{"Mode":"next"}}}
+            """);
+        var document = JsonNode.Parse(await File.ReadAllTextAsync(_shellsPath))!.AsObject();
+        document["Elsa"] = JsonNode.Parse("""{"Persistence":{"DefaultResource":"primary","Resources":{"primary":{"Provider":"PostgreSql","ConnectionName":"Shared"}}}}""");
+        await File.WriteAllTextAsync(_shellsPath, document.ToJsonString());
+        var store = CreateStore();
+        var snapshot = await store.LoadAsync();
+
+        await store.SaveAsync(snapshot.Revision,
+            snapshot.Features.Select(feature => new FeatureConfigurationChange(feature.Key, true, feature.Value)).ToArray());
+
+        var reloaded = await store.LoadAsync();
+        var future = reloaded.Features["FutureFeature"];
+        Assert.False(future.GetProperty("Flag").GetBoolean());
+        Assert.Equal(0, future.GetProperty("Limit").GetInt32());
+        Assert.Equal("", future.GetProperty("Label").GetString());
+        Assert.Equal(JsonValueKind.Null, future.GetProperty("Optional").ValueKind);
+        Assert.Equal("next", reloaded.Features["Existing"].GetProperty("FutureSetting").GetProperty("Mode").GetString());
+        var persisted = JsonNode.Parse(await File.ReadAllTextAsync(_shellsPath))!;
+        Assert.Equal("Shared", (string?)persisted["Elsa"]?["Persistence"]?["Resources"]?["primary"]?["ConnectionName"]);
+    }
+
+    [Fact]
     public async Task SaveRejectsStaleRevision()
     {
         var store = CreateStore();

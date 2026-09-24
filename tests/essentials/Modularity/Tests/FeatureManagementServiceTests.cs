@@ -99,6 +99,24 @@ public sealed class FeatureManagementServiceTests
     }
 
     [Fact]
+    public async Task ApplyRoundTripsEnabledUnknownFeaturesAndTheirUnrecognizedSettings()
+    {
+        _store.Features["FutureFeature"] = Json("""{"Flag":false,"Limit":0,"Label":"","Optional":null}""");
+        var service = CreateService();
+        var catalog = await service.GetCatalogAsync();
+        var feature = Assert.Single(catalog.Features, item => item.Id == "FutureFeature");
+
+        await service.ApplyAsync(new FeatureApplyRequest(catalog.Revision,
+            [new(feature.Id, true, feature.Configuration)]));
+
+        var preserved = _store.Features["FutureFeature"];
+        Assert.False(preserved.GetProperty("Flag").GetBoolean());
+        Assert.Equal(0, preserved.GetProperty("Limit").GetInt32());
+        Assert.Equal("", preserved.GetProperty("Label").GetString());
+        Assert.Equal(JsonValueKind.Null, preserved.GetProperty("Optional").ValueKind);
+    }
+
+    [Fact]
     public async Task ApplyMatchesEnabledFeatureIdsCaseInsensitively()
     {
         _store.Features["KeepMe"] = Json("{}");
