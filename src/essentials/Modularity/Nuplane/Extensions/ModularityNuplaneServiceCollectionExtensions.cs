@@ -9,6 +9,7 @@ public static class ModularityNuplaneServiceCollectionExtensions
 {
     public static IServiceCollection AddNuplaneFeatureCatalog(this IServiceCollection services)
     {
+        services.TryAddScoped<IFeatureActivationContextPreparer, LegacyFeatureActivationContextPreparer>();
         services.TryAddScoped<IFeatureManagementService, FeatureManagementService>();
         // Bundled + host-referenced features are discovered by CShells' runtime feature catalog (IRuntimeFeatureCatalog,
         // registered by AddCShells); this contributor projects that catalog into the feature listing. The package

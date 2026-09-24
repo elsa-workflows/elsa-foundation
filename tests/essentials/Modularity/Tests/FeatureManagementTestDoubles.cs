@@ -16,6 +16,7 @@ namespace Elsa.Modularity.Tests;
 internal sealed class FakeShellStore(IEqualityComparer<string>? featureIdComparer = null) : IShellFeatureConfigurationStore
 {
     public Dictionary<string, JsonElement> Features { get; } = new(featureIdComparer ?? StringComparer.OrdinalIgnoreCase);
+    public int SaveCount { get; private set; }
 
     public Task<ShellFeatureConfigurationSnapshot> LoadAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult(Snapshot());
@@ -25,6 +26,7 @@ internal sealed class FakeShellStore(IEqualityComparer<string>? featureIdCompare
         IReadOnlyList<FeatureConfigurationChange> features,
         CancellationToken cancellationToken = default)
     {
+        SaveCount++;
         var current = Snapshot();
         if (expectedRevision != current.Revision)
             throw new FeatureCatalogRevisionConflictException(expectedRevision, current.Revision);
@@ -42,30 +44,6 @@ internal sealed class FakeShellStore(IEqualityComparer<string>? featureIdCompare
         var content = string.Join('|', Features.OrderBy(x => x.Key).Select(x => $"{x.Key}:{x.Value.GetRawText()}"));
         var revision = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
         return new ShellFeatureConfigurationSnapshot("default", revision, Features);
-    }
-}
-
-internal sealed class FakeRuntimeFeatureCatalog(params ShellFeatureDescriptor[] descriptors) : IRuntimeFeatureCatalog
-{
-    public int RefreshCount { get; private set; }
-
-    public Task<RuntimeFeatureCatalogSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult(Build());
-
-    public Task<RuntimeFeatureCatalogSnapshot> RefreshAsync(CancellationToken cancellationToken = default)
-    {
-        RefreshCount++;
-        return Task.FromResult(Build());
-    }
-
-    private RuntimeFeatureCatalogSnapshot Build()
-    {
-        var map = new Dictionary<string, ShellFeatureDescriptor>(StringComparer.OrdinalIgnoreCase);
-        foreach (var descriptor in descriptors)
-            if (!string.IsNullOrWhiteSpace(descriptor.Id))
-                map[descriptor.Id] = descriptor;
-
-        return new RuntimeFeatureCatalogSnapshot(1, [], descriptors, map, DateTimeOffset.UnixEpoch);
     }
 }
 

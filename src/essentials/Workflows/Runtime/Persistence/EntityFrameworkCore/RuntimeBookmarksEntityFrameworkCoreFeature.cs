@@ -16,6 +16,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
     Description = "Opt-in EF Core persistence for runtime bookmark state and stimulus lookup.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
 [UsesEfModule("Workflows.Runtime")]
+[EfPersistenceResourceParticipant]
 public class RuntimeBookmarksEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(

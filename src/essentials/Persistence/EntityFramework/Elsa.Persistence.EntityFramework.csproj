@@ -4,7 +4,8 @@
     <Description>
       Shared EF Core persistence policy for first-party Elsa modules under accepted ADR 0073:
       per-module history table naming, provider guard, and migrate vs validate apply modes.
-      This package references EF Core + Relational only — never a database provider engine.
+      This package references EF Core + Relational and the CShells composition contract,
+      but never a database provider engine.
     </Description>
   </PropertyGroup>
 
@@ -12,8 +13,17 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="CShells" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Test-only visibility for the pure resolver. Production adapters use the public preparation facade. -->
+    <InternalsVisibleTo Include="Elsa.Persistence.EntityFramework.Tests" />
+    <InternalsVisibleTo Include="Elsa.Persistence.EntityFrameworkCore.Migrations.Tests" />
   </ItemGroup>
 
 </Project>
