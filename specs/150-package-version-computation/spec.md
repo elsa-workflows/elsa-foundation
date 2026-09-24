@@ -122,10 +122,19 @@ versions and their floors did not move.
   floor it already declares.
 - A publish that succeeds for some packages and fails for others: the last-published record moves
   only for the packages whose push succeeded, so the failed ones are still changed and the next run
-  recomputes the same version for them. Pushes of identical versions are no-ops.
-- A publish whose pushes succeed but whose record update does not land: the record is left stale, so
-  the next run computes versions the feed already holds. FR-011 fails the push rather than publishing
-  changed content at an already-published version.
+  recomputes the same version for them. Those versions were never pushed, so the retry is an ordinary
+  push.
+- A push that reaches the feed but is not recorded — the run crashes before its write-back, or a push
+  times out after the upload completed: the next run computes a version the feed already holds, and the
+  feed rejects the push. FR-018 compares the rejected package's input fingerprint with the feed's copy.
+  When they match, the push had in fact happened, so the record advances and the run continues; nobody
+  intervenes. Without this, every later run would recompute the same version and fail on it
+  indefinitely, because the record could otherwise be repaired from nowhere: not from the feed
+  (FR-013) and not through a pull request (FR-015).
+- A genuine collision — the feed holds the computed version with different inputs, for example after
+  history was rewritten or a record was lost: FR-018 fails the publish naming the package, the version
+  and both fingerprints, and an operator settles it with the repair workflow (FR-019). The feed's copy
+  is never overwritten.
 - A revert: it is a change against the last published state, so it increments the patch. A revert
   that restores exactly the last published state, before anything else has been published since, is
   not a change and publishes nothing.
@@ -146,8 +155,9 @@ versions and their floors did not move.
 - A package id renamed: the new id has no record and starts at patch 0; the old id's record is kept,
   unchanged, in case that id is ever reused.
 - A package id whose last-published record is lost while the feed still holds versions of it: the
-  computation produces a version the feed already has, and FR-011 fails the push rather than
-  publishing over it silently. A bad bootstrap can still cause this; FR-015 stops a pull request
+  computation produces a version the feed already has, and FR-018 fails the publish rather than
+  overwriting it, since the feed's copy was built from different inputs; the repair workflow (FR-019)
+  then sets the record from the feed. A bad bootstrap can still cause this; FR-015 stops a pull request
   from causing it.
 
 ## Requirements *(mandatory)*
@@ -204,17 +214,23 @@ versions and their floors did not move.
   clock, build number and working-directory state.
 - **FR-010**: The last-published record MUST supply only the patch. Major and minor MUST come from
   the MSBuild properties, so the version is defined in one place.
-- **FR-011**: `--skip-duplicate` MUST remain only as re-run idempotency for packages the pipeline has
-  determined are unchanged. Pushing changed content at an already-published version MUST fail.
+- **FR-011**: The pipeline MUST NOT push with `--skip-duplicate`. An unchanged package is never pushed
+  (FR-006), so a push rejected because the version already exists always concerns a changed package,
+  and it MUST be settled by FR-018 rather than skipped. The feed answers a push of an existing version
+  the same way whether its content is identical or different, so skipping would hide exactly the
+  collision this requirement exists to catch.
 - **FR-012**: A monotonicity gate MUST fail the build when a changed package's computed version is
   not greater than its last published version, naming the package, both versions, and the paths that
   marked it changed. The patch is monotonic by construction, always one past the last published
   value, rather than a count that happens to increase (ADR 0067, Consequences).
 - **FR-013**: The pipeline MUST NOT repair or infer a last-published record from the feed; doing so
-  would reintroduce the feed dependency FR-006 forbids. Publishing depends on the dependency map and
+  would reintroduce the feed dependency FR-006 forbids. Two narrow reads are permitted, and neither
+  derives what to publish: FR-018 reads the fingerprint of the one version a rejected push just
+  targeted, to confirm a push the pipeline itself made; and the operator-run repair workflow (FR-019)
+  reads the metadata of the version it is asked to settle. Publishing depends on the dependency map and
   the record file being correct, not merely present: a record that lags the feed makes the pipeline
-  compute a version the feed already holds, and FR-011 is the backstop, failing the push rather than
-  publishing changed content at an existing version.
+  compute a version the feed already holds, and FR-018 is the backstop: it settles a push that had
+  already landed, and fails the publish rather than overwriting the feed when the inputs differ.
 - **FR-014**: The last-published record MUST be stored in
   `tools/publishing/published-versions.json`, one entry per package id, sorted by package id, with
   deterministic serialization and no timestamps, so the file's diff reflects only substantive
@@ -225,13 +241,35 @@ versions and their floors did not move.
   `tools/publishing/published-versions.json`, naming the file. The only exception is the one-off
   bootstrap, if its seeded records reach `main` through a pull request; that single pull request
   MUST be exempted explicitly, by reference to it, not by a standing rule. A record rolled back by a
-  merged pull request makes the next publish compute a version the feed already holds, and FR-011
+  merged pull request makes the next publish compute a version the feed already holds, and FR-018
   would only catch that after merge, as a failed publish on `main`.
 - **FR-016**: The record file MUST NOT be treated as a package-affecting input. FR-002's change
   detection MUST ignore it, and it MUST NOT count as a repository-wide input under FR-004, so a
   publish write-back to the record file never marks any package changed.
 - **FR-017**: A publish write-back MUST change only the record file, so the publish trigger can
   recognise the write-back commit by the paths it touches and skip publishing for it.
+- **FR-018**: Every packed package MUST carry, in its metadata, an **input fingerprint** — a digest of
+  exactly the package-affecting inputs FR-002 compares — and the commit it was built from, as the
+  nuspec's `repository` `commit`. The fingerprint MUST NOT be computed from the built bytes: assemblies
+  embed the source commit in their informational version, so identical inputs built at two commits
+  produce different bytes. When a push is rejected because the version already exists, the pipeline
+  MUST read that version's fingerprint from the feed. If it equals the fingerprint just packed, the push
+  had already happened: the pipeline MUST record the version as published (FR-014) and continue. If it
+  differs, or cannot be read, the pipeline MUST fail the publish naming the package, the version and
+  both fingerprints, and MUST NOT overwrite the feed's copy.
+- **FR-019**: A genuine collision MUST be settleable by a manually triggered repair workflow run from
+  `main`. It takes one package id and a stated reason, reads the version the feed holds at the
+  collision together with that version's source commit (FR-018), and sets the package's record entry to
+  them, so the next publish computes one past the feed's version and publishes the current content.
+  It MUST refuse an entry lower than the current one, keeping the record monotonic (FR-012), and its
+  write-back commit MUST name the package, the old and new entries, the reason and who ran it. It is
+  the only writer of the record besides a publish; FR-015 does not apply to it because it does not go
+  through a pull request.
+- **FR-020**: Publish runs MUST be serialized — at most one publishing at a time, with a run in
+  progress never cancelled. A queued run MAY be dropped in favour of a newer one, because change
+  detection compares against each record's commit rather than the previous run, so the newer run
+  publishes every change the dropped run would have. Without serialization, two quick merges compute the same
+  version for the same package and their write-back commits race.
 
 ### Key Entities
 
@@ -304,7 +342,12 @@ versions and their floors did not move.
 
 - ADR 0067 settles that the last-published record lives in its own committed file, not a git ref
   (ADR 0067, Decision). Open is how the updated record reaches `main` after a publish: a write-back
-  commit by the publish run is the obvious route. It must not be blocked by branch protection.
+  commit by the publish run is the obvious route. It must not be blocked by branch protection — and
+  as configured it would be: `main`'s active rulesets require the `Build & test` and `Generated maps
+  fresh` checks and refuse non-fast-forward pushes, so a direct write-back from the publish run is
+  rejected unless the identity it pushes as is a ruleset bypass actor. Deciding that identity — a
+  GitHub App, ideally allowed to bypass only for commits touching the record file — is a repository
+  administration decision. The repair workflow (FR-019) pushes the same way and needs the same bypass.
   Because a write-back touches only the record file (FR-017), not triggering a publish of its own
   can be done by recognising that path, rather than needing a separate signal.
 - `4.0.0` sorts below the `4.0.N-preview` versions already published. Should the 4.0 release instead
