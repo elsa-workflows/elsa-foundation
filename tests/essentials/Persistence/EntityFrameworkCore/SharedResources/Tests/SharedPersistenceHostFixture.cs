@@ -10,17 +10,15 @@ public sealed class SharedPersistenceHostFixture : IAsyncDisposable
     {
         var settings = new Dictionary<string, string>
         {
+            ["Elsa:Persistence:DefaultResource"] = "primary",
             ["Elsa:Persistence:Resources:primary:Provider"] = "PostgreSql",
-            ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared"
+            ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared",
+            // Diagnostics has authored SQLite connection strings in the stock Workbench shell.
+            // Its separate-target layout belongs to #1969; keep this first slice on the four
+            // shared modules while proving that one default covers their entire active graph.
+            ["CShells:Shells:default:Features:DiagnosticsOpenTelemetryEntityFrameworkCore"] = "false",
+            ["CShells:Shells:default:Features:DiagnosticsStructuredLogsEntityFrameworkCore"] = "false"
         };
-        foreach (var feature in new[]
-                 {
-                     "WorkflowsRuntimeEntityFrameworkCore",
-                     "WorkflowsDesignEntityFrameworkCore",
-                     "ActivitiesDesignEntityFrameworkCore",
-                     "WorkflowsPublishingEntityFrameworkCore"
-                 })
-            settings[$"CShells:Shells:default:Configuration:Elsa:Persistence:Bindings:{feature}"] = "primary";
         return settings;
     }
 
