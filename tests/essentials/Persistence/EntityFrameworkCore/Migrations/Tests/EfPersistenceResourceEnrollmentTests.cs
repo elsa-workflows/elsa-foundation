@@ -251,6 +251,46 @@ public sealed class EfPersistenceResourceEnrollmentTests
     }
 
     [Fact]
+    public void Features_sharing_runtime_context_must_agree_on_schema_even_with_one_default_resource()
+    {
+        var context = RuntimePairContext(new Dictionary<string, string?>
+        {
+            ["WorkflowsRuntimeEntityFrameworkCore:Schema"] = "runtime_first",
+            ["WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence:Schema"] = "runtime_second"
+        });
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:DefaultResource"] = "primary",
+            ["Elsa:Persistence:Resources:primary:Provider"] = "PostgreSql",
+            ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared",
+            ["ConnectionStrings:Shared"] = "Host=localhost;Database=unused"
+        }).Build();
+
+        var result = EfPersistencePreparation.Prepare(context, configuration);
+
+        Assert.Contains("resource-context-conflict", result.RefusalCodes);
+        Assert.Empty(result.Patch.ConfigurationData);
+    }
+
+    [Fact]
+    public void Invalid_migration_policy_refuses_selected_resource_without_patching()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:DefaultResource"] = "primary",
+            ["Elsa:Persistence:Resources:primary:Provider"] = "PostgreSql",
+            ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared",
+            ["ConnectionStrings:Shared"] = "Host=localhost;Database=unused",
+            ["Elsa:Persistence:EntityFramework:Migrate:Policy"] = "InvalidPolicy"
+        }).Build();
+
+        var result = EfPersistencePreparation.Prepare(PreparationContext(), configuration);
+
+        Assert.Contains("resource-context-conflict", result.RefusalCodes);
+        Assert.Empty(result.Patch.ConfigurationData);
+    }
+
+    [Fact]
     public void Different_connection_names_can_share_the_shells_effective_runtime_target()
     {
         var context = RuntimePairContext(new Dictionary<string, string?>
