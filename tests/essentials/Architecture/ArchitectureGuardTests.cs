@@ -29,7 +29,10 @@ public sealed partial class ArchitectureGuardTests
         // The shared-persistence resolver stays internal to the EF policy assembly. Focused unit
         // and migration metadata tests inspect detached plans without widening its production API.
         ("Elsa.Persistence.EntityFramework", "Elsa.Persistence.EntityFramework.Tests"),
-        ("Elsa.Persistence.EntityFramework", "Elsa.Persistence.EntityFrameworkCore.Migrations.Tests")
+        ("Elsa.Persistence.EntityFramework", "Elsa.Persistence.EntityFrameworkCore.Migrations.Tests"),
+        // The worker's reflected host-context API stays internal; CLI tests verify exact and
+        // partial shape negotiation without making those details part of its public surface.
+        ("Elsa.Cli.Worker", "Elsa.Cli.Tests")
     ];
 
     private static readonly Regex AssemblyInternalsVisibleToPattern = new(@"assembly\s*:\s*InternalsVisibleTo", RegexOptions.Compiled);

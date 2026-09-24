@@ -89,6 +89,88 @@ public sealed class ToolingEntryPointTests
         Assert.Contains("4.0.0-preview.999", refusal.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Context_capability_requires_the_complete_exact_host_api()
+    {
+        var entryPoint = ToolingEntryPoint.Resolve(typeof(EfToolingHost).Assembly,
+            "4.0.0-preview.1", "4.0.0-preview.1");
+        Assert.True(entryPoint.SupportsConfigurationContext);
+
+        Assert.Null(ToolingEntryPoint.BindContextApi(typeof(LegacyHost), null, null));
+        Assert.NotNull(ToolingEntryPoint.BindContextApi(typeof(CompleteContextHost),
+            typeof(TestContext), typeof(CurrentContextProtocol)));
+
+        foreach (var (host, context, protocol) in new (Type, Type?, Type?)[]
+                 {
+                     (typeof(PartialContextHost), typeof(TestContext), typeof(CurrentContextProtocol)),
+                     (typeof(CompleteContextHost), typeof(TestContext), null),
+                     (typeof(CompleteContextHost), typeof(TestContext), typeof(UnknownContextProtocol)),
+                     (typeof(UnknownContextHost), typeof(UnknownVersionContext), typeof(CurrentContextProtocol))
+                 })
+        {
+            var refusal = Assert.Throws<WorkerRefusal>(() =>
+                ToolingEntryPoint.BindContextApi(host, context, protocol));
+            Assert.Equal("context-capability-unavailable", refusal.Code);
+            Assert.Equal(ToolExitCode.ResolutionFailure, refusal.ExitCode);
+        }
+    }
+
+    [Fact]
+    public async Task Reflected_context_invocation_returns_only_a_validated_typed_legacy_outcome()
+    {
+        var hostAssembly = typeof(EfToolingHost).Assembly;
+        var entryPoint = ToolingEntryPoint.Resolve(hostAssembly, "4.0.0-preview.1", "4.0.0-preview.1");
+        var descriptor = new
+        {
+            contextVersion = 1,
+            source = "workbench-json-v1",
+            hostDirectory = Path.GetDirectoryName(hostAssembly.Location),
+            hostName = hostAssembly.GetName().Name,
+            environment = "Production",
+            shell = (string?)null,
+            explicitSelection = false
+        };
+        var context = entryPoint.CreateConfigurationContext(descriptor, CancellationToken.None);
+        try
+        {
+            var (exitCode, response, outcome) = await entryPoint.InspectConfigurationContextAsync(
+                context, selection: null, CancellationToken.None);
+
+            Assert.Equal(ToolExitCode.Success, exitCode);
+            Assert.Equal("legacy-only", outcome);
+            Assert.Equal("legacy-only", response.GetProperty("inspectContext").GetProperty("outcome").GetString());
+            Assert.Equal("not-performed", response.GetProperty("configurationContext").GetProperty("targetVerification").GetString());
+        }
+        finally
+        {
+            ToolingEntryPoint.DisposeConfigurationContext(context);
+        }
+    }
+
+    [Fact]
+    public void Reflected_factory_failure_is_redacted_without_a_context_fallback()
+    {
+        var hostAssembly = typeof(EfToolingHost).Assembly;
+        var entryPoint = ToolingEntryPoint.Resolve(hostAssembly, "4.0.0-preview.1", "4.0.0-preview.1");
+        var descriptor = new
+        {
+            contextVersion = 1,
+            source = "secret-canary-invalid-source",
+            hostDirectory = Path.GetDirectoryName(hostAssembly.Location),
+            hostName = hostAssembly.GetName().Name,
+            environment = "Production",
+            shell = (string?)null,
+            explicitSelection = false
+        };
+
+        var refusal = Assert.Throws<WorkerRefusal>(() =>
+            entryPoint.CreateConfigurationContext(descriptor, CancellationToken.None));
+
+        Assert.Equal("configuration-context-invalid", refusal.Code);
+        Assert.DoesNotContain("secret-canary", refusal.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(descriptor.hostDirectory!, refusal.ToString(), StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// The fixture module is a third-party one, and the entry point it is discovered through is the host's
     /// own: nothing about this assembly is known to Elsa (spec 171 User Story 6).
@@ -101,5 +183,48 @@ public sealed class ToolingEntryPointTests
         Assert.Equal("Acme.Widgets", descriptor.Name);
         Assert.Equal("__EFMigrationsHistory_AcmeWidgets", descriptor.HistoryTableName);
         Assert.Null(descriptor.ProviderContext("MySql"));
+    }
+
+    private static class LegacyHost { }
+
+    private sealed class TestContext : IDisposable
+    {
+        public const int Version = 1;
+        public void Dispose() { }
+    }
+
+    private sealed class UnknownVersionContext : IDisposable
+    {
+        public const int Version = 99;
+        public void Dispose() { }
+    }
+
+    private static class CurrentContextProtocol
+    {
+        public const int Version = 2;
+    }
+
+    private static class UnknownContextProtocol
+    {
+        public const int Version = 99;
+    }
+
+    private static class PartialContextHost
+    {
+        public static TestContext CreateConfigurationContext(Stream request, CancellationToken cancellationToken) => new();
+    }
+
+    private static class CompleteContextHost
+    {
+        public static TestContext CreateConfigurationContext(Stream request, CancellationToken cancellationToken) => new();
+        public static Task<int> RunAsync(Stream request, Stream response, TestContext context,
+            CancellationToken cancellationToken) => Task.FromResult(0);
+    }
+
+    private static class UnknownContextHost
+    {
+        public static UnknownVersionContext CreateConfigurationContext(Stream request, CancellationToken cancellationToken) => new();
+        public static Task<int> RunAsync(Stream request, Stream response, UnknownVersionContext context,
+            CancellationToken cancellationToken) => Task.FromResult(0);
     }
 }

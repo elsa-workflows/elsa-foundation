@@ -63,10 +63,8 @@ public sealed class EfToolingConfigurationContext : IDisposable
         ArgumentNullException.ThrowIfNull(hostAssembly);
         try
         {
-            var expected = Path.Join(HostDirectory, $"{HostName}.dll");
-            var pathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
             if (!string.Equals(hostAssembly.GetName().Name, HostName, StringComparison.Ordinal) ||
-                !string.Equals(Path.GetFullPath(hostAssembly.Location), expected, pathComparison))
+                !SameHostAssemblyPath(hostAssembly.Location, HostDirectory, HostName))
                 throw EfToolingRefusal.Resolution("configuration-context-invalid", "The selected host assembly does not match the configuration context.");
 
             var composerType = EfToolingShellDefaultsDeclaration.ResolveComposerType(hostAssembly, required: false);
@@ -328,6 +326,27 @@ public sealed class EfToolingConfigurationContext : IDisposable
         value != "." && value != ".." &&
         value.IndexOfAny([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar]) < 0 &&
         !value.Contains(':', StringComparison.Ordinal);
+
+    internal static bool SameHostAssemblyPath(string assemblyLocation, string hostDirectory, string hostName)
+    {
+        // Assembly.Location resolves parent symlinks (for example macOS /var -> /private/var).
+        // Resolve the selected directory the same way without changing the configuration source path.
+        var expected = Path.Join(ResolvePhysicalDirectory(hostDirectory), $"{hostName}.dll");
+        return string.Equals(Path.GetFullPath(assemblyLocation), expected,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    }
+
+    private static string ResolvePhysicalDirectory(string path)
+    {
+        var root = Path.GetPathRoot(path)!;
+        var resolved = root;
+        foreach (var segment in path[root.Length..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
+        {
+            resolved = Path.Join(resolved, segment);
+            resolved = new DirectoryInfo(resolved).ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? resolved;
+        }
+        return resolved;
+    }
 
     private sealed class ContextRequest
     {

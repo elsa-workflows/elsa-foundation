@@ -38,7 +38,7 @@ internal static class EfToolingContextOperation
             var closure = assemblies.Where(assembly => !assembly.IsDynamic).Distinct().ToArray();
             var hostAssembly = closure.FirstOrDefault(assembly =>
                 StringComparer.Ordinal.Equals(assembly.GetName().Name, context.HostName) &&
-                SamePath(assembly.Location, Path.Join(context.HostDirectory, $"{context.HostName}.dll")));
+                EfToolingConfigurationContext.SameHostAssemblyPath(assembly.Location, context.HostDirectory, context.HostName));
             if (hostAssembly is null)
                 throw EfToolingRefusal.Resolution("host-composition-unavailable", "The selected host assembly is not loaded in this tooling context.");
 
@@ -123,10 +123,6 @@ internal static class EfToolingContextOperation
             return;
         throw EfToolingRefusal.Usage("invalid-request", "The inspection module selection is not valid.");
     }
-
-    private static bool SamePath(string left, string right) =>
-        string.Equals(Path.GetFullPath(left), right,
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     private static EfToolingContextResponse Failed(string? command, EfToolingRefusal refusal) => new()
     {

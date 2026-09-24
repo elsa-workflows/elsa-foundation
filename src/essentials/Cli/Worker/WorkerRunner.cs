@@ -94,6 +94,14 @@ internal static class WorkerRunner
             deps.ForAssembly(HostClosure.PersistenceAssemblyName)?.Version,
             ToolVersion);
 
+        if (tooling.SupportsConfigurationContext)
+        {
+            HostClosure.LoadHostAssembly(request.HostDirectory!, request.HostName!);
+            var inspected = await InspectUnselectedHostAsync(tooling, request, cancellationToken);
+            if (inspected is not null)
+                return inspected;
+        }
+
         if (command == WorkerCommands.List)
             return await Respond(tooling, new { version = 1, command, selection = Selection(request.Selection), shells = Shells(request) }, cancellationToken);
 
@@ -165,6 +173,40 @@ internal static class WorkerRunner
             tooling,
             ScriptRequest(request, provider, ModulePackages(listed, deps, packages), engine, capabilitySelection),
             cancellationToken);
+    }
+
+    private static async Task<WorkerResponse?> InspectUnselectedHostAsync(
+        ToolingEntryPoint tooling,
+        WorkerRequest request,
+        CancellationToken cancellationToken)
+    {
+        var descriptor = new
+        {
+            contextVersion = 1,
+            source = "workbench-json-v1",
+            hostDirectory = request.HostDirectory,
+            hostName = request.HostName,
+            environment = request.Environment,
+            shell = (string?)null,
+            explicitSelection = false
+        };
+        var context = tooling.CreateConfigurationContext(descriptor, cancellationToken);
+        try
+        {
+            var (exitCode, response, outcome) = await tooling.InspectConfigurationContextAsync(
+                context, Selection(request.Selection), cancellationToken);
+            if (exitCode != ToolExitCode.Success)
+                return new WorkerResponse { ExitCode = exitCode, Tooling = response };
+            // The response validator returns an outcome only for these two typed negatives.
+            if (outcome is "no-resource-applicable" or "legacy-only")
+                return null;
+            throw WorkerRefusal.Resolution("context-capability-unavailable",
+                "The selected host did not return a legacy-compatible context outcome.");
+        }
+        finally
+        {
+            ToolingEntryPoint.DisposeConfigurationContext(context);
+        }
     }
 
     private static string Validate(WorkerRequest request)
