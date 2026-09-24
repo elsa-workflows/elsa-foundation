@@ -25,7 +25,9 @@ design and publishing modules on SQLite).
 `composition/Test-SharedPersistence.ps1` is self-hosted and does not use port 5095 or the separately started
 SQLite server. It builds the Workbench and CLI through its test project's references, provisions two disposable
 PostgreSQL databases with Testcontainers, runs Workbench in a child process, and disposes its processes and
-container. Docker must be available; the script sets `ELSA_SHARED_PERSISTENCE_REQUIRE_POSTGRESQL=1` so missing
+container. It also changes the authored resource target, checks a successful shell reload and persisted writes on
+the new target, then verifies that an invalid candidate keeps the active generation available. Docker must be
+available; the script sets `ELSA_SHARED_PERSISTENCE_REQUIRE_POSTGRESQL=1` so missing
 Docker fails rather than silently skipping the journey. Run `pwsh ./e2e-tests/composition/Test-SharedPersistence.ps1`
 from the repository root, or use `powershell -NoProfile -ExecutionPolicy Bypass -File` on Windows.
 
@@ -65,7 +67,7 @@ A candidate is retired from here only once its in-process replacement exists.
 | `scheduling` | true e2e | hosted durable-timer / recurring-trigger pumps |
 | `runtime-alterations` | true e2e | durable plan admission, capture, hosted orchestration, checkpoint outcomes, replay and restart |
 | `bpmn`, `composition` | true e2e | waited `DispatchWorkflow` + BPMN error boundary |
-| `composition/Test-SharedPersistence.ps1` | true e2e | disposable PostgreSQL, real Workbench HTTP design/publish/execute/restart, and same-target CLI validation |
+| `composition/Test-SharedPersistence.ps1` | true e2e | disposable PostgreSQL, real Workbench HTTP design/publish/execute/restart, authored-resource reload, and same-target CLI validation |
 | `logging` | mixed | `Test-ValueCapture` is runtime e2e; `Test-DiagnosticsSettings` is a read-only contract check |
 | `workflow-version-override` | true e2e | exact-version preflight and promotion through live HTTP + persistence |
 | `file-deployment` | true e2e | server restart with a mounted definitions folder; startup reconcile + publish-on-reconcile, readiness gate, restart idempotency (spec 147) |
@@ -92,7 +94,7 @@ The former `get-endpoints` and `write-endpoints` suites (GET / CRUD status-and-s
 | `single-outcome/Test-WhileCounter.ps1` | `While` driven by a JS-incremented counter — body reads/writes a variable from JS via `getVariable` (#984 + #977) |
 | `branching/Test-ParallelFork.ps1` | `Parallel` fork/join |
 | `composition/Test-ChildWorkflowInput.ps1` | parent dispatches a child **and passes it an input**; child echoes it; correlate the child by correlationId |
-| `composition/Test-SharedPersistence.ps1` | opt-in shared-resource journey: create/publish reusable activity, publish/execute workflow, restart and read persisted state, check primary/diagnostics database placement, then run resource-scoped CLI `list` and `validate` against the same target and refuse a different supplied target |
+| `composition/Test-SharedPersistence.ps1` | opt-in shared-resource journeys: create/publish reusable activity, publish/execute workflow, restart and read persisted state, check primary/diagnostics database placement, run same-target resource-scoped CLI `list` and `validate` and refuse a different target; change the authored resource target, reload the shell, verify writes move, then reject an invalid candidate while the active shell remains available |
 | `javascript/Test-JavaScriptExpressions.ps1` | pure-ES JS in a Sync HTTP response body (array/object/json/optional-chaining/nullish/flat/replaceAll) |
 | `http/Test-HttpMethods.ps1` | one HttpEndpoint accepting GET/POST/PUT/DELETE, each returning a sync response |
 | `http/Test-HttpEcho.ps1` | capture request data (`ParsedContent`/`RouteData`/`Request`) into workflow variables and echo it back in a sync response (request-body, route-parameter, query-parameter, header; #972/#984) |

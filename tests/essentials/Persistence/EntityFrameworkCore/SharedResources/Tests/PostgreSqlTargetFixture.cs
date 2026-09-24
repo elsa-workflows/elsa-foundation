@@ -49,6 +49,16 @@ public sealed class PostgreSqlTargetFixture : IAsyncLifetime
             await _container.DisposeAsync();
     }
 
+    /// <summary>Allocates independent databases for a reload journey without changing the collection's baseline targets.</summary>
+    public async Task<(string First, string Second)> CreateIsolatedTargetsAsync()
+    {
+        if (!IsAvailable || _container is null)
+            throw new InvalidOperationException("PostgreSQL is not available for this fixture.");
+        var admin = _container.GetConnectionString();
+        return (await CreateDatabaseAsync(admin, "reload_first"),
+            await CreateDatabaseAsync(admin, "reload_second"));
+    }
+
     private static async Task<string> CreateDatabaseAsync(string adminConnection, string role)
     {
         var name = $"elsa_{role}_{Guid.NewGuid():N}";

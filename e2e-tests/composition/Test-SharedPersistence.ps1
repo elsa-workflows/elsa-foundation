@@ -11,7 +11,7 @@ $previous = [Environment]::GetEnvironmentVariable('ELSA_SHARED_PERSISTENCE_REQUI
 
 try {
     [Environment]::SetEnvironmentVariable('ELSA_SHARED_PERSISTENCE_REQUIRE_POSTGRESQL', '1', 'Process')
-    & dotnet test $project --configuration $Configuration --filter 'FullyQualifiedName~Shared_resource_preserves_reusable_activity_published_workflow_and_execution_after_restart' --verbosity quiet
+    & dotnet test $project --configuration $Configuration --filter 'FullyQualifiedName~SharedPersistenceJourneyTests' --verbosity quiet
     if ($LASTEXITCODE -ne 0) {
         throw "Shared persistence end-to-end journey failed with exit code $LASTEXITCODE."
     }

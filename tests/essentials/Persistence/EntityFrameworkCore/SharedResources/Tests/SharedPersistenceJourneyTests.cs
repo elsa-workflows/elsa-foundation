@@ -111,6 +111,104 @@ public sealed class SharedPersistenceJourneyTests(PostgreSqlTargetFixture target
         Assert.Equal(0L, await check.ExecuteScalarAsync());
     }
 
+    [SkippableFact]
+    public async Task Authored_resource_reload_moves_the_target_and_failed_candidate_keeps_the_active_generation()
+    {
+        Skip.IfNot(targets.IsAvailable, targets.SkipReason ?? "Docker/PostgreSQL unavailable.");
+        var (firstConnection, secondConnection) = await targets.CreateIsolatedTargetsAsync();
+        var settings = SharedPersistenceHostFixture.PrimaryResourceSettings()
+            .Where(pair => !pair.Key.StartsWith("Elsa:Persistence:Resources:primary:", StringComparison.Ordinal))
+            .ToDictionary(pair => pair.Key, pair => pair.Value);
+        settings["ConnectionStrings:ReloadFirst"] = firstConnection;
+        settings["ConnectionStrings:ReloadSecond"] = secondConnection;
+        var shell = WorkbenchShell.Development with { Settings = settings };
+        string? appsettings = null;
+        await using var host = await WorkbenchProcess.StartAsync(shell, directory =>
+        {
+            appsettings = Path.Combine(directory, "appsettings.json");
+            WriteAuthoredResource(appsettings, "PostgreSql", "ReloadFirst");
+        });
+        var initialGeneration = await ReadinessGenerationAsync(host.Client);
+        Assert.True(await HasTableAsync(firstConnection, "__EFMigrationsHistory_ElsaActivitiesDesign"));
+        Assert.False(await HasTableAsync(secondConnection, "__EFMigrationsHistory_ElsaActivitiesDesign"));
+
+        WriteAuthoredResource(appsettings!, "PostgreSql", "ReloadSecond");
+        await Task.Delay(TimeSpan.FromSeconds(1)); // Allow the host's JSON provider to observe the authored file change.
+        var promoted = await ReloadAsync(host);
+        Assert.True((bool?)promoted["success"] is true);
+        var nextGeneration = (int?)promoted["newShell"]?["generation"];
+        Assert.True(nextGeneration > initialGeneration);
+        Assert.Equal(nextGeneration, await ReadinessGenerationAsync(host.Client));
+        Assert.True(await HasTableAsync(secondConnection, "__EFMigrationsHistory_ElsaActivitiesDesign"));
+
+        await SignInAsync(host.Client);
+        var sequenceId = await ActivityVersionIdAsync(host.Client, "Elsa.Activities.Sequence.Activities.Sequence");
+        var writeLineId = await ActivityVersionIdAsync(host.Client, "Elsa.Activities.Primitives.Activities.WriteLine");
+        var marker = $"reload-target-{Guid.NewGuid():N}";
+        var published = await PublishReusableActivityAsync(host.Client, marker, sequenceId, writeLineId);
+        Assert.True(await HasActivityAsync(secondConnection, marker));
+        Assert.False(await HasActivityAsync(firstConnection, marker));
+
+        WriteAuthoredResource(appsettings!, "Oracle", "ReloadSecond");
+        await Task.Delay(TimeSpan.FromSeconds(1));
+        var refused = await ReloadAsync(host);
+        Assert.True((bool?)refused["success"] is false);
+        Assert.NotNull(refused["error"]);
+        Assert.Null(refused["newShell"]);
+        var refusal = refused.ToJsonString();
+        Assert.DoesNotContain(firstConnection, refusal, StringComparison.Ordinal);
+        Assert.DoesNotContain(secondConnection, refusal, StringComparison.Ordinal);
+        Assert.DoesNotContain(PostgreSqlTargetFixture.SyntheticPassword, refusal, StringComparison.Ordinal);
+        Assert.Equal(nextGeneration, await ReadinessGenerationAsync(host.Client));
+        Assert.True(await HasActivityAsync(secondConnection, marker));
+        var catalog = await GetAsync(host.Client, $"design/activities/definitions?search={Uri.EscapeDataString(marker)}");
+        Assert.Contains(catalog["items"]!.AsArray(), item =>
+            StringComparer.Ordinal.Equals((string?)item?["definition"]?["definitionId"], published.DefinitionId));
+    }
+
+    private static void WriteAuthoredResource(string appsettings, string provider, string connectionName)
+    {
+        var root = JsonNode.Parse(File.ReadAllText(appsettings))!.AsObject();
+        root["Elsa"]!["Persistence"]!["Resources"]!["primary"] = new JsonObject
+        {
+            ["Provider"] = provider,
+            ["ConnectionName"] = connectionName
+        };
+        var candidate = appsettings + ".candidate";
+        File.WriteAllText(candidate, root.ToJsonString());
+        File.Move(candidate, appsettings, overwrite: true);
+    }
+
+    private static async Task<JsonNode> ReloadAsync(WorkbenchProcess host)
+    {
+        using var response = await host.ManagementClient.PostAsync("/_admin/shells/reload/default", null);
+        Assert.True(response.IsSuccessStatusCode, $"Shell reload returned {(int)response.StatusCode}.");
+        return (await response.Content.ReadFromJsonAsync<JsonNode>())!;
+    }
+
+    private static async Task<int> ReadinessGenerationAsync(HttpClient client) =>
+        (int)(await GetAsync(client, "health/ready"))["generation"]!;
+
+    private static async Task<bool> HasTableAsync(string connectionString, string table)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_tables WHERE schemaname = 'public' AND tablename = @table)";
+        command.Parameters.AddWithValue("table", table);
+        return (bool)(await command.ExecuteScalarAsync())!;
+    }
+
+    private static async Task<bool> HasActivityAsync(string connectionString, string displayName)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT EXISTS (SELECT 1 FROM \"elsa_activity_definitions\" WHERE \"DisplayName\" = @name)";
+        command.Parameters.AddWithValue("name", displayName);
+        return (bool)(await command.ExecuteScalarAsync())!;
+    }
+
     private static void AssertTooling(ToolingRun run, int expectedExitCode, PostgreSqlTargetFixture targets)
     {
         Assert.False(run.Output.Contains(targets.PrimaryConnectionString, StringComparison.Ordinal) ||
