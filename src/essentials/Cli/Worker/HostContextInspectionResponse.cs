@@ -10,6 +10,7 @@ internal sealed class HostContextInspectionResponse
     public HostInspectionPayload? InspectContext { get; init; }
     public HostListPayload? List { get; init; }
     public HostPlanPayload? Plan { get; init; }
+    public HostScriptPayload? Script { get; init; }
     public HostLivePayload<HostApplyEntry>? Apply { get; init; }
     [System.Text.Json.Serialization.JsonPropertyName("validate")]
     public HostLivePayload<HostValidateEntry>? ValidateOperation { get; init; }
@@ -22,7 +23,7 @@ internal sealed class HostContextInspectionResponse
         if (Version != 2 || Command != requestedCommand || ExitCode != returnedExitCode)
             throw InvalidResponse();
         if (Status == "error" && returnedExitCode is >= ToolExitCode.Refusal and <= ToolExitCode.DatabaseFailure &&
-            Error is { Code.Length: > 0, Message.Length: > 0 } && InspectContext is null && List is null && Plan is null &&
+            Error is { Code.Length: > 0, Message.Length: > 0 } && InspectContext is null && List is null && Plan is null && Script is null &&
             Apply is null && ValidateOperation is null && PostMigrate is null)
             return null;
         if (requestedCommand == "list")
@@ -30,7 +31,7 @@ internal sealed class HostContextInspectionResponse
             var listed = List?.Modules;
             var facts = ConfigurationContext;
             if (Status != "ok" || returnedExitCode != ToolExitCode.Success || Error is not null ||
-                InspectContext is not null || Plan is not null || Apply is not null || ValidateOperation is not null ||
+                InspectContext is not null || Plan is not null || Script is not null || Apply is not null || ValidateOperation is not null ||
                 PostMigrate is not null || listed is null ||
                 listed.Any(module => module is null || string.IsNullOrWhiteSpace(module.Module) ||
                     string.IsNullOrWhiteSpace(module.Assembly) || string.IsNullOrWhiteSpace(module.Context) ||
@@ -47,7 +48,7 @@ internal sealed class HostContextInspectionResponse
             var planned = Plan;
             var entries = planned?.Modules;
             if (Status != "ok" || returnedExitCode != ToolExitCode.Success || Error is not null ||
-                InspectContext is not null || List is not null || Apply is not null || ValidateOperation is not null ||
+                InspectContext is not null || List is not null || Script is not null || Apply is not null || ValidateOperation is not null ||
                 PostMigrate is not null ||
                 planned?.Provider is not ("Sqlite" or "SqlServer" or "PostgreSql" or "MySql") ||
                 entries is null || entries.Count == 0 ||
@@ -63,10 +64,26 @@ internal sealed class HostContextInspectionResponse
                 throw InvalidResponse();
             return null;
         }
+        if (requestedCommand == "script")
+        {
+            var files = Script?.Files;
+            if (Status != "ok" || returnedExitCode != ToolExitCode.Success || Error is not null ||
+                InspectContext is not null || List is not null || Plan is not null || Apply is not null ||
+                ValidateOperation is not null || PostMigrate is not null ||
+                Script?.Manifest != "migration-plan.json" || !Sha256(Script.ManifestSha256) ||
+                files is not { Count: > 0 } ||
+                files.Select((file, index) => file is null || file.Order != index + 1 ||
+                    string.IsNullOrWhiteSpace(file.Module) || string.IsNullOrWhiteSpace(file.File) ||
+                    file.File != Path.GetFileName(file.File) || !Sha256(file.Sha256)).Any(invalid => invalid) ||
+                files.Select(file => file.Module).Distinct(StringComparer.OrdinalIgnoreCase).Count() != files.Count ||
+                !ValidExplicitContext(ConfigurationContext))
+                throw InvalidResponse();
+            return null;
+        }
         if (requestedCommand is "apply" or "validate" or "post-migrate")
         {
             if (Status != "ok" || returnedExitCode != ToolExitCode.Success || Error is not null ||
-                InspectContext is not null || List is not null || Plan is not null ||
+                InspectContext is not null || List is not null || Plan is not null || Script is not null ||
                 (Apply is not null) != (requestedCommand == "apply") ||
                 (ValidateOperation is not null) != (requestedCommand == "validate") ||
                 (PostMigrate is not null) != (requestedCommand == "post-migrate") ||
@@ -99,7 +116,7 @@ internal sealed class HostContextInspectionResponse
         if (requestedCommand != "inspect-context")
             throw InvalidResponse();
         var context = ConfigurationContext;
-        if (Status != "ok" || returnedExitCode != ToolExitCode.Success || Error is not null || List is not null || Plan is not null ||
+        if (Status != "ok" || returnedExitCode != ToolExitCode.Success || Error is not null || List is not null || Plan is not null || Script is not null ||
             Apply is not null || ValidateOperation is not null || PostMigrate is not null ||
             InspectContext?.Outcome is not ("no-resource-applicable" or "legacy-only") ||
             context?.Source is not ("workbench-json-v1" or "workbench-json-environment-v1") ||
@@ -117,6 +134,9 @@ internal sealed class HostContextInspectionResponse
 
     private static WorkerRefusal InvalidResponse() => WorkerRefusal.Resolution(
         "context-capability-unavailable", "The selected host returned an invalid persistence context inspection response.");
+
+    private static bool Sha256(string? value) =>
+        value is { Length: 64 } && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
 
     private static bool ValidExplicitContext(HostConfigurationContextFacts? facts, bool live = false) =>
         facts?.Source is "workbench-json-v1" or "workbench-json-environment-v1" &&
@@ -145,6 +165,21 @@ internal sealed class HostLivePayload<T> where T : HostLiveEntry
     public string? Provider { get; init; }
     public string? Schema { get; init; }
     public IReadOnlyList<T>? Modules { get; init; }
+}
+
+internal sealed class HostScriptPayload
+{
+    public string? Manifest { get; init; }
+    public string? ManifestSha256 { get; init; }
+    public IReadOnlyList<HostScriptFile>? Files { get; init; }
+}
+
+internal sealed class HostScriptFile
+{
+    public int Order { get; init; }
+    public string? Module { get; init; }
+    public string? File { get; init; }
+    public string? Sha256 { get; init; }
 }
 
 internal class HostLiveEntry

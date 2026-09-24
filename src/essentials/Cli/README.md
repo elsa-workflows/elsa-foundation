@@ -1,7 +1,6 @@
 # dotnet-elsa
 
-The `dotnet elsa` command-line tool: `list`, `plan`, `script`, `script-check`, `apply` and `validate`.
-`post-migrate` is not in this build.
+The `dotnet elsa` command-line tool: `list`, `plan`, `script`, `script-check`, `apply`, `validate` and `post-migrate`.
 
 Designed by [spec 171](../../../specs/171-persistence-script-cli/spec.md) and
 [ADR 0076](../../../docs/adr/0076-persistence-tooling-runs-inside-the-host-closure.md).
@@ -23,7 +22,7 @@ dotnet exec --runtimeconfig <host>.runtimeconfig.json --depsfile <host>.deps.jso
 The worker resolves assemblies exactly as that host's own process would, reaches one frozen entry point
 already inside it — `Tooling.EfToolingHost.RunAsync` in the host's `Elsa.Persistence.EntityFramework` —
 reflectively, and exchanges versioned JSON with it over two streams. The request travels over **stdin**, not
-in process arguments: arguments are world-readable, which is also why `apply` and `validate` take their
+in process arguments: arguments are world-readable, which is also why `apply`, `validate` and `post-migrate` take their
 connection exclusively via `--connection-env`/`--connection-stdin`
 ([#1876](https://github.com/elsa-workflows/elsa-foundation/issues/1876)) and never as a flag value. With
 `--connection-env NAME` (default `ELSA_EF_CONNECTION`), only the variable's *name* travels to the worker;
@@ -47,9 +46,9 @@ extracts into its install root, which no other command may do to directories it 
 | `persistence script-check <dir>` | Regenerates that directory's artifact from its own plan and byte-compares. |
 | `persistence apply` | Runs each selected module's compiled migrations against a database, through `EfDatabaseMigrator`/`DbContext.Database.MigrateAsync`. |
 | `persistence validate` | Fails (exit 1) if any selected module has a pending migration against a database. Applies nothing. |
+| `persistence post-migrate` | Runs selected modules' required post-migration actions against a database. |
 
-`post-migrate` is not in this build; asking for it is a usage error rather than a command that quietly does
-nothing.
+With an explicit configuration context, the selected host owns the source snapshot, resource selection and provider agreement. Offline commands report `targetVerification: not-performed`; live commands match the supplied connection against the selected resource's expected named connection before database access. This does not observe a separately running host.
 
 ## Flags
 
@@ -58,14 +57,16 @@ nothing.
 | `--host <dir>` | Required. The host's published or built output directory. |
 | `--packages <dir>` | Repeatable. A package root to resolve modules from; never populated by this tool. |
 | `--restore` | Off by default and implied by nothing. Populates *this host's own* package set from its own Nuplane configuration, once, when it records none. Single-point version pins only. Cannot be combined with `--packages` (exit 2). See [Restoring a host's package set](#restoring-a-hosts-package-set---restore). |
-| `--provider` | Required for `plan`, `script`, `apply` and `validate`, and authoritative: no command substitutes another. |
-| `--modules`, `--all`, `--from-host` | Exactly one, for `plan`, `script`, `apply` and `validate`. `--from-host` selects every module the host's own enabled shell features declare a dependency on. `list` defaults to every module; `script-check` takes none of them, because the committed plan is what it checks against. |
+| `--provider` | Required for `plan`, `script`, `apply`, `validate` and `post-migrate`, and authoritative: no command substitutes another. |
+| `--modules`, `--all`, `--from-host` | Exactly one, for `plan`, `script`, `apply`, `validate` and `post-migrate`. `--from-host` selects every module the host's own enabled shell features declare a dependency on. `list` defaults to every module; `script-check` takes none of them, because the committed plan is what it checks against. |
 | `--shell <name>` | The shell whose features are read. With none given, every shell the host configures is read. |
+| `--configuration-context <source>` | Opts into host-owned source resolution. Accepts `workbench-json-v1` (Workbench JSON files) or `workbench-json-environment-v1` (those files plus inherited .NET environment values). Requires exactly one `--shell`. |
+| `--resource <name>` | Selects one named persistence resource in the explicit context. Requires `--configuration-context`; selected modules must belong to that target. A resource-backed `script` requires this selection. |
 | `--schema`, `--output` | `--output` is required for `script`. |
 | `--environment <name>` | Which `shells.<name>.json` overlay is read, and what the manifest records. Default `Production` — ASP.NET Core's own default, never this tool's own `ASPNETCORE_ENVIRONMENT`. |
 | `--idempotent` | Accepted and implied: every script is idempotent. |
-| `--connection-env <NAME>` | `apply`/`validate` only. Default `ELSA_EF_CONNECTION`. Reads the connection from this process's own named environment variable. |
-| `--connection-stdin` | `apply`/`validate` only. Reads the connection from this process's own stdin instead. |
+| `--connection-env <NAME>` | `apply`/`validate`/`post-migrate` only. Default `ELSA_EF_CONNECTION`. Reads the connection from this process's own named environment variable. |
+| `--connection-stdin` | `apply`/`validate`/`post-migrate` only. Reads the connection from this process's own stdin instead. |
 
 There is no `--connection` flag (D7): giving one is a usage error, not a silently ignored value.
 

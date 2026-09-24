@@ -141,7 +141,7 @@ primary target:     <shared-primary-database>
 diagnostics target: <diagnostics-database>
 ```
 
-The repository currently documents the Workbench project and HTTP profile, but does not yet contain a committed PostgreSQL resource fixture or a resource-aware e2e script. Add the exact fixture/profile path when #1968 implementation lands; do not substitute a guessed launch profile.
+The repository has a bounded shared-resource PostgreSQL fixture, but it does not yet have a committed Workbench resource-aware e2e script or launch profile. Add that exact provisioning and launch path before using this guide as a release gate; do not substitute a guessed launch profile.
 
 T001 pins all seven CShells packages to `0.0.30-preview.158`, which includes the preparation hook and the detailed catalog compatibility fix required by Elsa. The published prerequisite and its evidence are recorded in [research R2](research.md#r2-cshells-lifecycle-integration). Verify the implementation branch with:
 
@@ -199,7 +199,7 @@ pwsh ./e2e-tests/file-deployment/Test-FileBasedDeployment.ps1
 
 ## Shared layout proof (#1968)
 
-After the resource-aware implementation and fixture exist, use one explicit shell and one explicit shared resource. The proposed invocation shape is intentionally shown as a contract example only:
+Use one explicit shell and one explicit shared resource. The CLI implements this invocation shape; the full sequence still needs a disposable PostgreSQL target and the committed Workbench e2e fixture:
 
 ```bash
 dotnet elsa persistence list \
@@ -228,7 +228,7 @@ dotnet elsa persistence apply \
   --connection-env ELSA_EF_CONNECTION
 ```
 
-`--configuration-context` and `--resource` are proposed #1967/#1968 flags. `--shell` exists in the current CLI, but its resource-context semantics and negotiated transport are future contract work. The current CLI does not implement this resource-aware contract; do not run these commands against the current build and do not report them as passing until the protocol, host capability negotiation, and target-selection implementation land.
+`--configuration-context` requires one explicit `--shell`. The selected host creates the source snapshot and resolves its resource; the CLI transports only source, shell, environment, and resource selectors. The offline `list`, `plan`, and `script` paths and the live `apply`, `validate`, and `post-migrate` paths now use the version-2 host context operation. Capability negotiation refuses an old or partial host rather than silently falling back to the legacy operation.
 
 The expected shared participant set is the eight Runtime feature identities, `WorkflowsDesignEntityFrameworkCore`, `ActivitiesDesignEntityFrameworkCore`, and `WorkflowsPublishingEntityFrameworkCore` ([spec](spec.md#normative-supported-participants-and-constraints)). `--from-host` must include dependency-enabled participants before deriving modules. A hand-written module list must not silently omit another enabled participant sharing the same Runtime context.
 
@@ -313,6 +313,8 @@ These existing checks prove route composition and diagnostics behavior; they do 
 ## Artifact compatibility
 
 Keep legacy script/manifest version 1 behavior unchanged. Explicit context produces the version-2 artifact in [the tooling contract](contracts/tooling.md). Verify repeated generation is byte-identical and changes to serialized non-secret context/evidence are reported even when SQL is unchanged. Script-check reconstructs context/resource/shell/environment selection from the committed manifest; it does not accept the new selection flags. Test old/partial host capabilities and malformed version-2 responses before permitting legacy execution or output. Neither offline artifact version resolves expected connection values.
+
+The 2026-09-24 offline checkpoint used a rebuilt, disposable Workbench host directory with a single enabled `WorkflowsRuntimeEntityFrameworkCore` feature, a `primary` PostgreSQL resource, and a synthetic canary in `ConnectionStrings:Shared`. An explicit-context `script --modules Workflows.Runtime --resource primary` wrote one SQL file and a schema-version-2 manifest; `script-check` regenerated it as up to date. Changing only the selected resource's `ConnectionName` from `ChangedReference` to `Shared` made `script-check` exit 1 with `manifest differs, SQL identical` and a `configurationContext.participants[0].connectionReference` difference. The synthetic connection-value canary was absent from both artifact files. This one-module offline check does not prove a live PostgreSQL target match, the complete shared participant set, or direct no-DbContext refusal ordering.
 
 ## Database proof and restart
 
@@ -404,8 +406,8 @@ Do not attach raw configuration snapshots, connection strings, passwords, hashes
 This guide deliberately leaves the following as implementation gates rather than pretending they pass:
 
 - CShells `0.0.30-preview.158` is pinned. The resolver, preparation facade, CShells settings adapter, and Workbench host registration now run together. A bounded PostgreSQL test observed the Runtime, Workflows Design, Activities Design, and Publishing migration histories on the selected shared target. A live Workbench editor request returned HTTP 409 with the resource-managed prefix before the ordinary EF guard's distinct refusal, and its feature revision stayed unchanged. The EF management preparer evaluates current and candidate graphs; broader source-drift and transaction-affinity evidence remains open. This is not yet the full design/publish/execute/restart or tooling proof.
-- The shared PostgreSQL fixture exists and passes its bounded container suite. The rebuilt Workbench resource journey and its authored reload proof remain open.
-- The proposed `--configuration-context` and `--resource` protocol fields, resource-aware `--shell` transport, and old-host capability negotiation are not implemented by the current CLI.
+- The shared PostgreSQL fixture exists and passes its bounded container suite. The rebuilt Workbench resource journey, tooling agreement against its actual target, and authored reload proof remain open.
+- The explicit-context CLI protocol, host-owned source selection, live connection matching, and version-2 script/manifest paths are implemented. Full command-path, old/partial-host, direct no-DbContext refusal instrumentation, and secret-canary coverage remain open.
 - No committed #1968 shared-layout or #1969 diagnostics PostgreSQL e2e script exists yet.
 - Current e2e scripts prove SQLite/default-shell HTTP behavior and diagnostics routes, not named-resource target placement.
 - The exact Workbench PostgreSQL launch/profile and disposable target provisioning path must be committed with implementation before this quickstart can be used as a release gate.

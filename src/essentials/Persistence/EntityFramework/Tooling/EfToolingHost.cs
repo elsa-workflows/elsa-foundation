@@ -491,6 +491,29 @@ public static class EfToolingHost
         return Plan(modules, canonical, normalizedSchema, actions, cancellationToken);
     }
 
+    /// <summary>Scripts the selected context modules with host-owned identity and redacted selection facts.</summary>
+    internal static EfToolingResponse ScriptModules(
+        IReadOnlyList<EfModuleDescriptor> modules,
+        string provider,
+        string? schema,
+        string output,
+        EfToolingEngineFacts engine,
+        IReadOnlyList<EfToolingPackageFacts> packages,
+        EfToolingHostFacts host,
+        EfToolingConfigurationContextFacts contextFacts,
+        CancellationToken cancellationToken)
+    {
+        var canonical = Canonical(provider);
+        if (canonical == "Sqlite")
+            throw EfToolingRefusal.Usage("sqlite-script-refused", SqliteScriptRefusal);
+        var normalizedSchema = NormalizeSchema(canonical, schema);
+        ValidateProviderSupport(modules, canonical);
+        ValidateEngine(canonical);
+        var actions = PostMigrationActions(modules);
+        var request = new EfToolingRequest { Output = output, Engine = engine, Packages = packages, Host = host };
+        return Script(modules, canonical, normalizedSchema, actions, request, cancellationToken, contextFacts);
+    }
+
     /// <summary>Runs the existing live module operation after the context boundary verifies every target.</summary>
     internal static async Task<EfToolingResponse> RunLiveModulesAsync(
         IReadOnlyList<EfModuleDescriptor> modules,
@@ -560,7 +583,8 @@ public static class EfToolingHost
         string? schema,
         IReadOnlyDictionary<string, IReadOnlyList<IEfPostMigrationAction>> actions,
         EfToolingRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        EfToolingConfigurationContextFacts? contextFacts = null)
     {
         var engine = ValidateEngineFacts(request.Engine!, provider);
         var host = ValidateHostFacts(request.Host!);
@@ -601,7 +625,7 @@ public static class EfToolingHost
             })
             .ToArray();
 
-        var manifest = EfMigrationPlan.Render(new(provider, engine, EfCoreVersion(), schema, host), artifacts);
+        var manifest = EfMigrationPlan.Render(new(provider, engine, EfCoreVersion(), schema, host, contextFacts), artifacts);
         EfMigrationPlan.Write(output, artifacts, manifest);
 
         return new()

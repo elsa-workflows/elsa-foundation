@@ -41,6 +41,7 @@ internal sealed class EfToolingContextResponse
     public EfToolingInspectContextPayload? InspectContext { get; init; }
     public EfToolingListPayload? List { get; init; }
     public EfToolingPlanPayload? Plan { get; init; }
+    public EfToolingScriptPayload? Script { get; init; }
     public EfToolingApplyPayload? Apply { get; init; }
     public EfToolingValidatePayload? Validate { get; init; }
     public EfToolingPostMigratePayload? PostMigrate { get; init; }

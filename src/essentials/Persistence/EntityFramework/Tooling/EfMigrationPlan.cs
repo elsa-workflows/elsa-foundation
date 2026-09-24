@@ -42,7 +42,8 @@ internal sealed record EfMigrationPlanFacts(
     EfToolingEngineFacts Engine,
     string EfCoreVersion,
     string? Schema,
-    EfToolingHostFacts Host);
+    EfToolingHostFacts Host,
+    EfToolingConfigurationContextFacts? ConfigurationContext = null);
 
 /// <summary>
 /// UTF-8 without a byte-order mark, LF endings, one trailing newline — the exact normalization
@@ -107,6 +108,7 @@ internal static class EfMigrationPlan
 {
     public const string FileName = "migration-plan.json";
     public const int SchemaVersion = 1;
+    public const int ContextSchemaVersion = 2;
     public const string Ordering = "dependsOn-then-name";
 
     /// <summary>The canonical name lower-cased with dots replaced by hyphens.</summary>
@@ -124,7 +126,7 @@ internal static class EfMigrationPlan
         using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = true, IndentCharacter = ' ', IndentSize = 2, NewLine = "\n" }))
         {
             writer.WriteStartObject();
-            writer.WriteNumber("schemaVersion", SchemaVersion);
+            writer.WriteNumber("schemaVersion", facts.ConfigurationContext is null ? SchemaVersion : ContextSchemaVersion);
             writer.WriteString("provider", facts.Provider);
             writer.WriteStartObject("engine");
             writer.WriteString("package", facts.Engine.Package);
@@ -141,6 +143,8 @@ internal static class EfMigrationPlan
             writer.WriteString("shell", facts.Host.Shell);
             writer.WriteString("environment", facts.Host.Environment);
             writer.WriteEndObject();
+            if (facts.ConfigurationContext is { } context)
+                WriteConfigurationContext(writer, context);
             writer.WriteStartArray("modules");
             foreach (var module in modules)
                 WriteModule(writer, module, facts.Provider);
@@ -149,6 +153,36 @@ internal static class EfMigrationPlan
         }
 
         return [.. buffer.WrittenSpan, (byte)'\n'];
+    }
+
+    private static void WriteConfigurationContext(Utf8JsonWriter writer, EfToolingConfigurationContextFacts context)
+    {
+        writer.WriteStartObject("configurationContext");
+        writer.WriteString("source", context.Source);
+        writer.WriteString("environment", context.Environment);
+        writer.WriteString("shell", context.Shell);
+        writer.WriteString("resource", context.Resource);
+        writer.WriteString("resolution", context.Resolution);
+        writer.WriteString("targetVerification", context.TargetVerification);
+        writer.WriteString("runtimeParity", context.RuntimeParity);
+        writer.WriteStartArray("participants");
+        foreach (var participant in context.Participants)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("feature", participant.Feature);
+            writer.WriteString("module", participant.Module);
+            writer.WriteString("resource", participant.Resource);
+            writer.WriteString("provider", participant.Provider);
+            writer.WriteString("connectionReference", participant.ConnectionReference);
+            writer.WriteString("selection", participant.Selection);
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+        writer.WriteStartArray("unresolved");
+        foreach (var code in context.Unresolved)
+            writer.WriteStringValue(code);
+        writer.WriteEndArray();
+        writer.WriteEndObject();
     }
 
     /// <summary>

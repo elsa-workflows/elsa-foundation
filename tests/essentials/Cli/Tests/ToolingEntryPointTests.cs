@@ -234,6 +234,36 @@ public sealed class ToolingEntryPointTests
     }
 
     [Fact]
+    public void Script_context_response_requires_one_typed_payload_and_offline_target_evidence()
+    {
+        const string valid = """
+            {"version":2,"status":"ok","exitCode":0,"command":"script",
+             "script":{"manifest":"migration-plan.json","manifestSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+               "files":[{"order":1,"module":"Workflows.Runtime","file":"01-workflows-runtime.sql",
+                 "sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]},
+             "configurationContext":{"source":"workbench-json-v1","environment":"Production","shell":"default",
+               "resource":"primary","resolution":"resource","targetVerification":"not-performed","runtimeParity":"unobserved",
+               "participants":[],"unresolved":["expected-connection-unchecked"]}}
+            """;
+        Assert.Null(JsonSerializer.Deserialize<HostContextInspectionResponse>(valid, WorkerContract.Json)!
+            .Validate("script", ToolExitCode.Success));
+
+        foreach (var invalid in new[]
+                 {
+                     valid.Replace("\"targetVerification\":\"not-performed\"", "\"targetVerification\":\"matched\"", StringComparison.Ordinal),
+                     valid.Replace("\"script\":{", "\"plan\":{},\"script\":{", StringComparison.Ordinal),
+                     valid.Replace("\"order\":1", "\"order\":2", StringComparison.Ordinal),
+                     valid.Replace("\"manifestSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"",
+                         "\"manifestSha256\":\"invalid\"", StringComparison.Ordinal)
+                 })
+        {
+            var parsed = JsonSerializer.Deserialize<HostContextInspectionResponse>(invalid, WorkerContract.Json)!;
+            Assert.Equal("context-capability-unavailable",
+                Assert.Throws<WorkerRefusal>(() => parsed.Validate("script", ToolExitCode.Success)).Code);
+        }
+    }
+
+    [Fact]
     public void Reflected_factory_failure_is_redacted_without_a_context_fallback()
     {
         var hostAssembly = typeof(EfToolingHost).Assembly;

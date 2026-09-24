@@ -68,7 +68,8 @@ internal static class Report
                 WritePlan(output, tooling.GetProperty("plan"));
                 break;
             case WorkerCommands.Script:
-                WriteScript(output, tooling.GetProperty("script"));
+                WriteScript(output, tooling.GetProperty("script"),
+                    tooling.TryGetProperty("configurationContext", out var scriptContext) ? scriptContext : null);
                 break;
             case WorkerCommands.Apply:
                 WriteApply(output, tooling.GetProperty("apply"));
@@ -165,12 +166,14 @@ internal static class Report
         "running host's own environment-variable configuration overrides are invisible to this check, so " +
         "its effective provider can differ from the one verified here.";
 
-    private static void WriteScript(TextWriter output, JsonElement script)
+    private static void WriteScript(TextWriter output, JsonElement script, JsonElement? context)
     {
         foreach (var file in script.GetProperty("files").EnumerateArray())
             output.WriteLine($"{Text(file, "file")}  {Text(file, "sha256")}  {Text(file, "module")}");
         output.WriteLine($"{Text(script, "manifest")}  {Text(script, "manifestSha256")}");
-        output.WriteLine(ProviderAgreementNote);
+        output.WriteLine(context is { } selected
+            ? $"note: providerAgreement was checked against {Text(selected, "source")}; runtime parity remains unobserved."
+            : ProviderAgreementNote);
     }
 
     private static void WriteApply(TextWriter output, JsonElement apply)

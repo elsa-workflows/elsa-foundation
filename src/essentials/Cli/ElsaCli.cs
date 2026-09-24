@@ -148,9 +148,23 @@ internal static class ElsaCli
                     Provider = plan.Provider,
                     Schema = plan.Schema,
                     Output = regenerated.FullName,
-                    HostName = plan.HostName
+                    HostName = plan.SchemaVersion == MigrationPlan.ContextSchemaVersion ? layout.Name : plan.HostName
                 };
-                request = WithHostConfiguration(request, layout, plan.HostEnvironment, plan.HostShell);
+                if (plan.ConfigurationContext is { } context)
+                {
+                    if (!string.Equals(plan.HostName, layout.Name, StringComparison.Ordinal))
+                        throw CliRefusal.Resolution("plan-host-mismatch", "The committed plan names a different host than the selected host directory.");
+                    request = request with
+                    {
+                        Environment = plan.HostEnvironment,
+                        Shell = plan.HostShell,
+                        ContextSource = context.Source,
+                        ContextVersion = 1,
+                        Resource = context.Resource
+                    };
+                }
+                else
+                    request = WithHostConfiguration(request, layout, plan.HostEnvironment, plan.HostShell);
 
                 var response = await WorkerProcess.RunAsync(layout, request, cancellationToken);
                 if (response.ExitCode != ToolExitCode.Success)

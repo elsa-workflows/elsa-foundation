@@ -100,7 +100,7 @@ internal static class WorkerRunner
                 throw WorkerRefusal.Resolution("context-capability-unavailable",
                     "The selected host has no complete persistence configuration-context API.");
             HostClosure.LoadHostAssembly(request.HostDirectory!, request.HostName!);
-            return await ExecuteExplicitContextAsync(tooling, request, command, cancellationToken);
+            return await ExecuteExplicitContextAsync(tooling, request, command, deps, packages, cancellationToken);
         }
 
         if (tooling.SupportsConfigurationContext)
@@ -193,6 +193,8 @@ internal static class WorkerRunner
         ToolingEntryPoint tooling,
         WorkerRequest request,
         string command,
+        HostDepsFile deps,
+        NuplanePackageSet packages,
         CancellationToken cancellationToken)
     {
         var descriptor = new
@@ -208,6 +210,55 @@ internal static class WorkerRunner
         var context = tooling.CreateConfigurationContext(descriptor, cancellationToken);
         try
         {
+            if (command == WorkerCommands.Script)
+            {
+                var provider = tooling.CanonicalProvider(request.Provider ?? throw WorkerRefusal.Usage(
+                    "invalid-request", "'script' needs a provider."));
+                var engine = Unused();
+                object[] modulePackages = [];
+                if (provider != SqliteProvider)
+                {
+                    var (listExitCode, listResponse, _) = await tooling.InvokeConfigurationContextAsync(context,
+                        new { version = 2, command = WorkerCommands.List, selection = Selection(request.Selection), resource = request.Resource },
+                        WorkerCommands.List, cancellationToken);
+                    if (listExitCode != ToolExitCode.Success)
+                        return new WorkerResponse { ExitCode = listExitCode, Tooling = listResponse };
+                    var modules = listResponse.GetProperty("list").GetProperty("modules").EnumerateArray()
+                        .Select(module => (Module: module.GetProperty("module").GetString()!,
+                            Assembly: module.GetProperty("assembly").GetString()!)).ToArray();
+                    try
+                    {
+                        engine = ResolveEngine(tooling, provider, deps, packages, request);
+                        modulePackages = ModulePackages(modules, deps, packages);
+                    }
+                    catch (WorkerRefusal refusal) when (refusal.Code is
+                               "provider-engine-unavailable" or "packages-never-reconciled" or "package-metadata-missing")
+                    {
+                        throw WorkerRefusal.Resolution(refusal.Code, refusal.Code switch
+                        {
+                            "packages-never-reconciled" => "The selected host's package set has not been reconciled; start the host or use --restore.",
+                            "package-metadata-missing" => "The selected modules have no complete package metadata in this host closure.",
+                            _ => "The selected provider engine is unavailable in this host closure."
+                        });
+                    }
+                }
+
+                var (scriptExitCode, scriptResponse, _) = await tooling.InvokeConfigurationContextAsync(context,
+                    new
+                    {
+                        version = 2,
+                        command,
+                        selection = Selection(request.Selection),
+                        resource = request.Resource,
+                        provider,
+                        schema = request.Schema,
+                        output = request.Output,
+                        engine = new { package = engine.Id, version = engine.Version, source = engine.Source },
+                        packages = modulePackages
+                    }, command, cancellationToken);
+                return new WorkerResponse { ExitCode = scriptExitCode, Tooling = scriptResponse };
+            }
+
             var operation = new
             {
                 version = 2,

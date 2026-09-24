@@ -46,6 +46,8 @@ internal static class EfToolingContextOperation
             var defaults = context.CreateHostDefaults(hostAssembly);
             if (command is EfToolingCommands.List or EfToolingCommands.Plan)
                 result = RunOffline(parsed, context, defaults!, closure, cancellationToken);
+            else if (command == EfToolingCommands.Script)
+                result = RunScript(parsed, context, defaults!, closure, cancellationToken);
             else if (command is EfToolingCommands.Apply or EfToolingCommands.Validate or EfToolingCommands.PostMigrate)
                 result = await RunLiveAsync(parsed, context, defaults!, closure, cancellationToken);
             else if (command == InspectContext)
@@ -218,7 +220,6 @@ internal static class EfToolingContextOperation
             throw EfToolingRefusal.Resolution(refusal.Code,
                 "The selected provider engine is unavailable in this host closure.");
         }
-
         return new EfToolingContextResponse
         {
             Command = request.Command,
@@ -227,6 +228,58 @@ internal static class EfToolingContextOperation
             PostMigrate = result.PostMigrate,
             ConfigurationContext = BuildFacts(context, request.Resource, prepared, selectedSet,
                 selectedParticipants.Length > 0)
+        };
+    }
+
+    private static EfToolingContextResponse RunScript(
+        EfToolingContextRequest request,
+        EfToolingConfigurationContext context,
+        IEfToolingShellDefaults defaults,
+        IReadOnlyList<Assembly> closure,
+        CancellationToken cancellationToken)
+    {
+        if (request.Selection is null || string.IsNullOrWhiteSpace(request.Provider) ||
+            string.IsNullOrWhiteSpace(request.Output) || request.Engine is null || request.Packages is null ||
+            request.Connection is not null)
+            throw EfToolingRefusal.Usage("invalid-request", "A context script requires selection, provider, output, engine and package facts, without a database connection.");
+
+        var (prepared, selected, selectedSet) = SelectModules(request, context, defaults, closure, cancellationToken);
+        var provider = CheckProviderAgreement(request.Provider, prepared, selectedSet, context);
+        if (request.Resource is null && prepared.ResolvedParticipants.Any(participant =>
+                participant.Selection != PersistenceSelectionKind.Legacy &&
+                participant.Participant.ModuleNames.Any(selectedSet.Contains)))
+            throw EfToolingRefusal.Resolution("resource-required", "A script over a persistence resource requires an explicit resource selection.");
+
+        var facts = BuildFacts(context, request.Resource, prepared, selectedSet, false);
+        EfToolingResponse scripted;
+        try
+        {
+            scripted = EfToolingHost.ScriptModules(selected, provider, request.Schema, request.Output,
+                request.Engine, request.Packages,
+                new EfToolingHostFacts
+                {
+                    Name = context.HostName,
+                    ProviderAgreement = EfToolingProviderAgreement.Checked,
+                    Shell = context.Shell,
+                    Environment = context.Environment
+                }, facts, cancellationToken);
+        }
+        catch (EfToolingRefusal refusal) when (refusal.Code == "provider-engine-unavailable")
+        {
+            throw EfToolingRefusal.Resolution(refusal.Code,
+                "The selected provider engine is unavailable in this host closure.");
+        }
+        catch (EfToolingRefusal refusal) when (refusal.Code is "module-generation-failed" or "output-write-failed")
+        {
+            throw EfToolingRefusal.Resolution(refusal.Code,
+                "The context script could not be generated or written for the selected host.");
+        }
+
+        return new EfToolingContextResponse
+        {
+            Command = request.Command,
+            Script = scripted.Script,
+            ConfigurationContext = facts
         };
     }
 

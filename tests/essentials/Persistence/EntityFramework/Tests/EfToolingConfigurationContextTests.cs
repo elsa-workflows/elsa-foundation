@@ -560,6 +560,36 @@ public sealed class EfToolingConfigurationContextTests
         Assert.Equal("provider-disagreement", document.RootElement.GetProperty("error").GetProperty("code").GetString());
     }
 
+    [Fact]
+    public async Task Context_script_requires_explicit_resource_selection_before_writing_an_artifact()
+    {
+        using var context = ToolingContextForTestAssembly("""
+            { "Elsa": { "Persistence": {
+                "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } },
+                "DefaultResource": "primary"
+              } }, "CShells": { "Shells": { "default": {
+                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+              } } } }
+            """, shell: "default", explicitSelection: true);
+        var output = Path.Combine(Path.GetTempPath(), $"elsa-context-script-{Guid.NewGuid():N}");
+        using var request = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            version = 2, command = "script", selection = new { kind = "from-host" },
+            provider = "Sqlite", output,
+            engine = new { package = "unused", version = "unused", source = "host-deps-file" },
+            packages = Array.Empty<object>()
+        }));
+        using var response = new MemoryStream();
+
+        var exitCode = await EfToolingContextOperation.RunAsync(request, response, context,
+            [typeof(EfToolingConfigurationContextTests).Assembly, .. RuntimeFeatureAssemblies], CancellationToken.None);
+
+        Assert.Equal(EfToolingExitCode.ResolutionFailure, exitCode);
+        Assert.False(Directory.Exists(output));
+        using var document = JsonDocument.Parse(response.ToArray());
+        Assert.Equal("resource-required", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+    }
+
     [Theory]
     [InlineData("apply")]
     [InlineData("validate")]

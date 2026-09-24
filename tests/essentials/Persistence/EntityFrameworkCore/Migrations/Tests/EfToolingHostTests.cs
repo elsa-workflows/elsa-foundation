@@ -77,6 +77,60 @@ public sealed class EfToolingHostTests : IDisposable
 
     public static TheoryData<string> Providers() => [.. ServerProviders];
 
+    [Fact]
+    public void Context_script_manifest_is_version_two_deterministic_and_contains_only_redacted_target_evidence()
+    {
+        var module = EfModuleCatalog.Find(Descriptors, "Secrets")!;
+        var output = Path.Join(root, "context-script");
+        var engine = new EfToolingEngineFacts
+        {
+            Package = "Npgsql.EntityFrameworkCore.PostgreSQL", Version = "10.0.0", Source = EfToolingPackageSource.HostDepsFile
+        };
+        var packages = new[]
+        {
+            new EfToolingPackageFacts
+            {
+                Assembly = module.Assembly.GetName().Name, Id = "Elsa.Secrets.Persistence.EntityFrameworkCore",
+                Version = "1.0.0", Source = EfToolingPackageSource.HostDepsFile
+            }
+        };
+        var host = new EfToolingHostFacts
+        {
+            Name = "Fixture.Host", ProviderAgreement = EfToolingProviderAgreement.Checked,
+            Shell = "default", Environment = "Production"
+        };
+        var context = new EfToolingConfigurationContextFacts
+        {
+            Source = EfToolingConfigurationContext.WorkbenchJson,
+            Environment = "Production", Shell = "default", Resource = "primary", Resolution = "resource",
+            Participants = [new EfToolingContextParticipant
+            {
+                Feature = "SecretsEntityFrameworkCore", Module = "Secrets", Resource = "primary",
+                Provider = "PostgreSql", ConnectionReference = "Shared", Selection = "RootDefault"
+            }],
+            Unresolved = ["expected-connection-unchecked"]
+        };
+
+        var response = EfToolingHost.ScriptModules([module], "PostgreSql", null, output,
+            engine, packages, host, context, CancellationToken.None);
+        var manifest = File.ReadAllBytes(Path.Join(output, EfMigrationPlan.FileName));
+        using var document = JsonDocument.Parse(manifest);
+        var plan = document.RootElement;
+        Assert.NotNull(response.Script);
+        Assert.Equal(2, plan.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal("checked", plan.GetProperty("host").GetProperty("providerAgreement").GetString());
+        Assert.Equal("primary", plan.GetProperty("configurationContext").GetProperty("resource").GetString());
+        Assert.Equal("Shared", Assert.Single(plan.GetProperty("configurationContext").GetProperty("participants").EnumerateArray())
+            .GetProperty("connectionReference").GetString());
+        Assert.DoesNotContain("connection-value-canary", Encoding.UTF8.GetString(manifest), StringComparison.Ordinal);
+        Assert.DoesNotContain(root, Encoding.UTF8.GetString(manifest), StringComparison.Ordinal);
+
+        var repeated = Path.Join(root, "context-script-repeated");
+        EfToolingHost.ScriptModules([module], "PostgreSql", null, repeated,
+            engine, packages, host, context, CancellationToken.None);
+        Assert.Equal(manifest, File.ReadAllBytes(Path.Join(repeated, EfMigrationPlan.FileName)));
+    }
+
     [Theory]
     [MemberData(nameof(Providers))]
     public async Task Script_is_byte_stable_and_independent_of_the_order_modules_were_given(string provider)
