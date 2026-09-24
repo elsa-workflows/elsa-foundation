@@ -27,10 +27,10 @@ public sealed class EfPersistenceActivationContextPreparer(
         ArgumentNullException.ThrowIfNull(context);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var sourceToken = rootConfiguration.GetReloadToken();
-        var catalog = await featureCatalog.GetSnapshotAsync(cancellationToken);
         try
         {
+            var sourceToken = rootConfiguration.GetReloadToken();
+            var catalog = await featureCatalog.GetSnapshotAsync(cancellationToken);
             var current = Compose(context.Shell.ShellId, context.Shell.Configuration,
                 context.Shell.Features.Select(x => new FeatureApplyItem(x.Key, true, x.Value)), catalog);
             var candidate = Compose(context.Shell.ShellId, context.Shell.Configuration,

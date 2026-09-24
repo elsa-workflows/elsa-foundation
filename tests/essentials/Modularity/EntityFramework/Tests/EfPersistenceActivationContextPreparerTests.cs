@@ -11,6 +11,7 @@ using Elsa.Testing;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Primitives;
 using Xunit;
 
 namespace Elsa.Modularity.EntityFramework.Tests;
@@ -218,6 +219,22 @@ public sealed class EfPersistenceActivationContextPreparerTests
         AssertNoManagementEffects(management);
     }
 
+    [Fact]
+    public async Task Configuration_token_failure_is_redacted_before_management_guards_or_side_effects()
+    {
+        var root = new ThrowingReloadTokenConfiguration(new ConfigurationBuilder().Build());
+        var management = Management(root);
+        var catalog = await management.Service.GetCatalogAsync();
+
+        var error = await Assert.ThrowsAsync<FeatureActivationRefusedException>(() =>
+            management.Service.ApplyAsync(new FeatureApplyRequest(catalog.Revision, [])));
+
+        Assert.StartsWith("[resource-managed-configuration]", Assert.Single(error.Refusals).Reason,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("connection-value-canary", error.ToString(), StringComparison.Ordinal);
+        AssertNoManagementEffects(management);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -333,6 +350,20 @@ public sealed class EfPersistenceActivationContextPreparerTests
     {
         public void Configure(ShellBuilder builder, IConfiguration configuration) =>
             ((IConfigurationRoot)configuration).Reload();
+    }
+
+    private sealed class ThrowingReloadTokenConfiguration(IConfiguration inner) : IConfiguration
+    {
+        public string? this[string key]
+        {
+            get => inner[key];
+            set => inner[key] = value;
+        }
+
+        public IEnumerable<IConfigurationSection> GetChildren() => inner.GetChildren();
+        public IChangeToken GetReloadToken() =>
+            throw new InvalidOperationException("connection-value-canary");
+        public IConfigurationSection GetSection(string key) => inner.GetSection(key);
     }
 
     private sealed class DeferredEffectHostDefaults : IEfToolingShellDefaults
