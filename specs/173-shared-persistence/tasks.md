@@ -83,7 +83,7 @@ description: "Reviewed task list for shared persistence resources"
 
 ### Tests for User Story 2
 
-- [ ] T025 [P] [US2] Extend legacy characterization tests in `tests/essentials/Persistence/EntityFramework/Tests/CommittedCompositionConnectionTests.cs`, `tests/essentials/Persistence/EntityFramework/Tests/EfConnectionDefaultsTests.cs`, `tests/essentials/Persistence/EntityFramework/Tests/EfMigrateOptionsTests.cs`, and `tests/essentials/Persistence/EntityFramework/Tests/EfSchemaTests.cs` for legacy precedence, missing named connections, provider defaults, schema, pooling, migration policy, OpenTelemetry, and host-owned OpenIddict.
+- [x] T025 [P] [US2] Extend legacy characterization tests in `tests/essentials/Persistence/EntityFramework/Tests/CommittedCompositionConnectionTests.cs`, `tests/essentials/Persistence/EntityFramework/Tests/EfConnectionDefaultsTests.cs`, `tests/essentials/Persistence/EntityFramework/Tests/EfMigrateOptionsTests.cs`, and `tests/essentials/Persistence/EntityFramework/Tests/EfSchemaTests.cs` for legacy precedence, missing named connections, provider defaults, schema, pooling, migration policy, OpenTelemetry, and host-owned OpenIddict. Existing `ModuleSchemaTests` cover pooling and `WorkbenchOpenIddictVendorTests` cover host-owned OpenIddict; the dedicated OpenTelemetry fallback regression closes the remaining connection-default gap.
 - [x] T026 [P] [US2] Add authored-preservation tests in `tests/essentials/Modularity/Tests/JsonShellFeatureConfigurationStoreTests.cs` and `tests/essentials/Modularity/Tests/FeatureManagementServiceTests.cs` for unknown feature/settings, explicit false/zero/empty/null, reset/removal, masked secrets, and unchanged legacy requests.
 
 ### Implementation for User Story 2
