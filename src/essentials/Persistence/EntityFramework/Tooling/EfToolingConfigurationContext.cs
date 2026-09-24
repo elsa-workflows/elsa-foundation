@@ -1,6 +1,9 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CShells.Configuration;
+using CShells.Features;
+using Elsa.Persistence.EntityFramework.ResourceResolution;
 using Microsoft.Extensions.Configuration;
 
 namespace Elsa.Persistence.EntityFramework.Tooling;
@@ -82,6 +85,44 @@ public sealed class EfToolingConfigurationContext : IDisposable
         catch (Exception failure) when (EfToolingHost.IsNonFatal(failure))
         {
             throw EfToolingRefusal.Resolution("host-composition-unavailable", "The selected host composer could not be verified.");
+        }
+    }
+
+    /// <summary>Resolves one shell's resource intent from the frozen sources and selected host closure.</summary>
+    internal EfPersistencePreparationResult PrepareShell(
+        IEfToolingShellDefaults hostDefaults,
+        IEnumerable<Assembly> hostAssemblies,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(hostDefaults);
+        ArgumentNullException.ThrowIfNull(hostAssemblies);
+        var snapshot = Configuration;
+        if (Shell is null)
+            throw EfToolingRefusal.Usage("configuration-context-invalid", "One shell is required for this tooling operation.");
+        cancellationToken.ThrowIfCancellationRequested();
+
+        try
+        {
+            var closure = hostAssemblies.Where(x => !x.IsDynamic).Distinct().ToArray();
+            var descriptors = FeatureDiscovery.DiscoverFeatures(closure)
+                .ToDictionary(x => x.Id, StringComparer.OrdinalIgnoreCase);
+            var builder = new ShellBuilder(Shell);
+            hostDefaults.Configure(builder, snapshot);
+            builder.FromConfiguration(snapshot.GetSection($"CShells:Shells:{Shell}"));
+            var settings = builder.Build();
+            var result = EfPersistencePreparation.Prepare(settings, descriptors, snapshot, closure,
+                verifyConnectionValues: false);
+            cancellationToken.ThrowIfCancellationRequested();
+            return result;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception failure) when (EfToolingHost.IsNonFatal(failure))
+        {
+            // Composition and discovery exceptions can contain authored values or paths.
+            throw EfToolingRefusal.Resolution("host-composition-unavailable", "The selected host shell could not be composed for tooling.");
         }
     }
 

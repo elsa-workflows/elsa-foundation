@@ -1,3 +1,5 @@
+using CShells;
+using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Microsoft.Extensions.Configuration;
@@ -7,9 +9,46 @@ namespace Elsa.Persistence.EntityFramework.ResourceResolution;
 /// <summary>A metadata-only preparation boundary for runtime and management callers.</summary>
 public static class EfPersistencePreparation
 {
+    /// <summary>Expands the final CShells graph without constructing features or running configurators.</summary>
+    public static EfPersistencePreparationResult Prepare(
+        ShellSettings settings,
+        IReadOnlyDictionary<string, ShellFeatureDescriptor> featureMap,
+        IConfiguration rootConfiguration,
+        IEnumerable<System.Reflection.Assembly>? hostAssemblies = null,
+        bool verifyConnectionValues = true)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(featureMap);
+        ArgumentNullException.ThrowIfNull(rootConfiguration);
+
+        var requested = settings.EnabledFeatures.ToArray();
+        var orderedIds = new FeatureDependencyResolver().GetOrderedFeatures(
+            requested.Where(featureMap.ContainsKey), featureMap);
+        var ordered = orderedIds.Select(id =>
+        {
+            var feature = featureMap[id];
+            return new ShellFeaturePreparationDescriptor(
+                id, feature.Dependencies, feature.StartupType,
+                settings.FeatureConfigurators.ContainsKey(id));
+        }).ToArray();
+        var context = new ShellSettingsPreparationContext(
+            settings.Id,
+            settings.ConfigurationData.ToDictionary(x => x.Key, x => x.Value?.ToString(), StringComparer.OrdinalIgnoreCase),
+            orderedIds,
+            settings.DisabledFeatures,
+            settings.FeatureSettingResets,
+            ordered,
+            requested,
+            orderedIds.Except(requested, StringComparer.OrdinalIgnoreCase).ToArray(),
+            requested.Where(id => !featureMap.ContainsKey(id)).ToArray());
+        return Prepare(context, rootConfiguration, hostAssemblies, verifyConnectionValues);
+    }
+
     public static EfPersistencePreparationResult Prepare(
         ShellSettingsPreparationContext context,
-        IConfiguration rootConfiguration)
+        IConfiguration rootConfiguration,
+        IEnumerable<System.Reflection.Assembly>? hostAssemblies = null,
+        bool verifyConnectionValues = true)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(rootConfiguration);
@@ -17,8 +56,9 @@ public static class EfPersistencePreparation
         // Known enrollment includes inactive and metadata-only IDs, so startup types from
         // this graph alone are insufficient. Dynamic assemblies are not part of a host's
         // stable package closure and may include deliberately malformed test declarations.
-        var loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies()
+        var loadedAssemblies = (hostAssemblies ?? AppDomain.CurrentDomain.GetAssemblies())
             .Where(x => !x.IsDynamic)
+            .Distinct()
             .ToArray();
         var featureAssemblies = context.OrderedFeatures
             .Select(x => x.StartupType?.Assembly)
@@ -65,7 +105,8 @@ public static class EfPersistencePreparation
                 resolution,
                 EfModuleCatalog.Discover(featureAssemblies),
                 context.ConfigurationData,
-                rootConfiguration));
+                rootConfiguration,
+                verifyConnectionValues));
 
         var patch = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         if (refusals.Count == 0)
@@ -86,6 +127,7 @@ public static class EfPersistencePreparation
                 x.Participant.FeatureId, x.ResourceName, x.Selection.ToString())).ToArray(),
             refusals.Distinct(StringComparer.Ordinal).ToArray(),
             resolution.Evidence.UnverifiedPrerequisites.Concat(read.UnresolvedCodes)
+                .Concat(applicable && !verifyConnectionValues ? ["expected-connection-unchecked"] : [])
                 .Distinct(StringComparer.Ordinal).ToArray());
     }
 }

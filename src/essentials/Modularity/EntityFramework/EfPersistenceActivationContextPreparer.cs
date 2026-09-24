@@ -4,7 +4,6 @@ using System.Text.Json.Nodes;
 using CShells;
 using CShells.Configuration;
 using CShells.Features;
-using CShells.Lifecycle;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Exceptions;
 using Elsa.Modularity.Core.Models;
@@ -94,29 +93,7 @@ public sealed class EfPersistenceActivationContextPreparer(
         hostDefaults.Configure(builder, rootConfiguration);
         builder.FromConfiguration(authored.GetSection("Shell"));
         var settings = builder.Build();
-
-        var featureMap = catalog.FeatureMap;
-        var requested = settings.EnabledFeatures.ToArray();
-        var orderedIds = new FeatureDependencyResolver().GetOrderedFeatures(
-            requested.Where(featureMap.ContainsKey), featureMap);
-        var ordered = orderedIds.Select(id =>
-        {
-            var feature = featureMap[id];
-            return new ShellFeaturePreparationDescriptor(
-                id, feature.Dependencies, feature.StartupType,
-                settings.FeatureConfigurators.ContainsKey(id));
-        }).ToArray();
-        var prepared = new ShellSettingsPreparationContext(
-            settings.Id,
-            settings.ConfigurationData.ToDictionary(x => x.Key, x => x.Value?.ToString(), StringComparer.OrdinalIgnoreCase),
-            orderedIds,
-            settings.DisabledFeatures,
-            settings.FeatureSettingResets,
-            ordered,
-            requested,
-            orderedIds.Except(requested, StringComparer.OrdinalIgnoreCase).ToArray(),
-            requested.Where(id => !featureMap.ContainsKey(id)).ToArray());
-        return EfPersistencePreparation.Prepare(prepared, rootConfiguration);
+        return EfPersistencePreparation.Prepare(settings, catalog.FeatureMap, rootConfiguration);
     }
 
     private static FeatureActivationRefusedException Refused(string reason) =>

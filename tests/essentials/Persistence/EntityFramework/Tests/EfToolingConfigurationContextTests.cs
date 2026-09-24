@@ -1,7 +1,11 @@
 using System.Text;
 using System.Text.Json;
+using System.Reflection;
 using CShells.Configuration;
 using Elsa.Persistence.EntityFramework.Tooling;
+using Elsa.Tasks;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Runtime.Resumption;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
@@ -11,6 +15,13 @@ namespace Elsa.Persistence.EntityFramework.Tests;
 
 public sealed class EfToolingConfigurationContextTests
 {
+    private static readonly Assembly[] RuntimeFeatureAssemblies =
+    [
+        typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
+        typeof(WorkflowsRuntimeResumptionFeature).Assembly,
+        typeof(TasksFeature).Assembly
+    ];
+
     [Fact]
     public void Files_are_layered_once_in_runtime_order()
     {
@@ -228,6 +239,56 @@ public sealed class EfToolingConfigurationContextTests
             Assert.Throws<EfToolingRefusal>(() => selected.CreateHostDefaults(hostAssembly)).Code);
     }
 
+    [Fact]
+    public void Tooling_composes_the_dependency_expanded_shell_without_expected_value_lookup()
+    {
+        using var host = new HostFiles();
+        host.WriteRaw("appsettings.json", """
+            {
+              "Elsa": { "Persistence": {
+                "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } },
+                "DefaultResource": "primary"
+              } },
+              "CShells": { "Shells": { "default": {
+                "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+              } } }
+            }
+            """);
+        using var context = host.Create(EfToolingConfigurationContext.WorkbenchJson);
+        Assert.Equal("Sqlite", context.Configuration["Elsa:Persistence:Resources:primary:Provider"]);
+        Assert.Equal("Shared", context.Configuration["Elsa:Persistence:Resources:primary:ConnectionName"]);
+
+        var result = context.PrepareShell(new ToolingContextTestDefaults(),
+            RuntimeFeatureAssemblies, CancellationToken.None);
+
+        Assert.True(result.HasApplicableResource);
+        Assert.Empty(result.RefusalCodes);
+        Assert.Contains("expected-connection-unchecked", result.UnresolvedCodes);
+        Assert.Equal("Sqlite", result.Patch.ConfigurationData["WorkflowsRuntimeEntityFrameworkCore:Provider"]);
+        Assert.Equal("Shared", result.Patch.ConfigurationData["WorkflowsRuntimeEntityFrameworkCore:ConnectionName"]);
+        Assert.Equal("primary", Assert.Single(result.Participants).ResourceName);
+    }
+
+    [Fact]
+    public void Tooling_sees_code_only_feature_and_default_resource_selection()
+    {
+        using var host = new HostFiles();
+        host.WriteRaw("appsettings.json", """
+            { "Elsa": { "Persistence": {
+              "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } }
+            } } }
+            """);
+        using var context = host.Create(EfToolingConfigurationContext.WorkbenchJson);
+
+        var result = context.PrepareShell(new ToolingCodeDefaultTestDefaults(),
+            RuntimeFeatureAssemblies, CancellationToken.None);
+
+        Assert.True(result.HasApplicableResource);
+        Assert.Empty(result.RefusalCodes);
+        Assert.Equal("primary", Assert.Single(result.Participants).ResourceName);
+        Assert.Contains("expected-connection-unchecked", result.UnresolvedCodes);
+    }
+
     private static EfToolingConfigurationContext Parse(string json)
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
@@ -275,4 +336,11 @@ public sealed class EfToolingConfigurationContextTests
 public sealed class ToolingContextTestDefaults : IEfToolingShellDefaults
 {
     public void Configure(ShellBuilder builder, IConfiguration configuration) { }
+}
+
+public sealed class ToolingCodeDefaultTestDefaults : IEfToolingShellDefaults
+{
+    public void Configure(ShellBuilder builder, IConfiguration configuration) =>
+        builder.WithFeature<RuntimeEntityFrameworkCoreFeature>()
+            .WithConfiguration("Elsa:Persistence:DefaultResource", "primary");
 }

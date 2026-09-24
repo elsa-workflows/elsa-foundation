@@ -11,7 +11,8 @@ internal static class EfPersistenceResourceValidator
         PersistenceResolutionResult resolution,
         IReadOnlyList<EfModuleDescriptor> modules,
         IReadOnlyDictionary<string, string?> composedSettings,
-        IConfiguration rootConfiguration)
+        IConfiguration rootConfiguration,
+        bool verifyConnectionValues = true)
     {
         ArgumentNullException.ThrowIfNull(resolution);
         ArgumentNullException.ThrowIfNull(modules);
@@ -38,7 +39,11 @@ internal static class EfPersistenceResourceValidator
                 continue;
             }
 
-            var connection = ConnectionString(selected.ConnectionName, composedSettings, rootConfiguration);
+            // Offline tooling compares declared reference identities. Expected values are looked up only
+            // for a live operation, immediately before database construction.
+            var connection = verifyConnectionValues
+                ? ConnectionString(selected.ConnectionName, composedSettings, rootConfiguration)
+                : $"reference:{selected.ConnectionName}";
             if (string.IsNullOrWhiteSpace(connection))
             {
                 refusals.Add("resource-definition-invalid");
@@ -63,18 +68,33 @@ internal static class EfPersistenceResourceValidator
 
             var provider = Get(composedSettings, $"{participant.FeatureId}:Provider") ??
                            EfProviderAgreement.UnsetProvider;
-            var connection = Get(composedSettings, $"{participant.FeatureId}:ConnectionString");
-            if (string.IsNullOrWhiteSpace(connection))
+            string? connection;
+            if (!verifyConnectionValues)
             {
+                if (composedSettings.Keys.Any(key => StringComparer.OrdinalIgnoreCase.Equals(
+                        key, $"{participant.FeatureId}:ConnectionString")))
+                {
+                    refusals.Add("resource-context-conflict");
+                    continue;
+                }
                 var authoredName = Get(composedSettings, $"{participant.FeatureId}:ConnectionName");
-                var name = string.IsNullOrWhiteSpace(authoredName)
-                    ? module.DefaultConnectionName
-                    : authoredName;
-                connection = ConnectionString(name, composedSettings, rootConfiguration);
-                if (string.IsNullOrWhiteSpace(connection) &&
-                    string.IsNullOrWhiteSpace(authoredName) &&
-                    EfRelationalProviderBinding.Normalize(provider) == "sqlite")
-                    connection = module.DefaultSqliteConnectionString;
+                connection = $"reference:{(string.IsNullOrWhiteSpace(authoredName) ? module.DefaultConnectionName : authoredName)}";
+            }
+            else
+            {
+                connection = Get(composedSettings, $"{participant.FeatureId}:ConnectionString");
+                if (string.IsNullOrWhiteSpace(connection))
+                {
+                    var authoredName = Get(composedSettings, $"{participant.FeatureId}:ConnectionName");
+                    var name = string.IsNullOrWhiteSpace(authoredName)
+                        ? module.DefaultConnectionName
+                        : authoredName;
+                    connection = ConnectionString(name, composedSettings, rootConfiguration);
+                    if (string.IsNullOrWhiteSpace(connection) &&
+                        string.IsNullOrWhiteSpace(authoredName) &&
+                        EfRelationalProviderBinding.Normalize(provider) == "sqlite")
+                        connection = module.DefaultSqliteConnectionString;
+                }
             }
 
             if (string.IsNullOrWhiteSpace(connection))
