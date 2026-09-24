@@ -31,10 +31,10 @@ internal static class EfToolingContextOperation
                 throw EfToolingRefusal.Usage("unsupported-request-version", "This host does not support the supplied context operation version.");
             if (command != InspectContext && !EfToolingCommands.All.Contains(command, StringComparer.Ordinal))
                 throw EfToolingRefusal.Usage("unknown-command", "The context operation command is not supported.");
-            if (command != InspectContext)
-                throw EfToolingRefusal.Resolution("context-operation-unavailable", "This context operation is not yet available in this host build.");
-
-            ValidateInspection(parsed, context);
+            if (command == InspectContext)
+                ValidateInspection(parsed, context);
+            else if (!context.ExplicitSelection || context.Shell is null)
+                throw EfToolingRefusal.Usage("invalid-request", "A context operation requires an explicitly selected shell.");
             var closure = assemblies.Where(assembly => !assembly.IsDynamic).Distinct().ToArray();
             var hostAssembly = closure.FirstOrDefault(assembly =>
                 StringComparer.Ordinal.Equals(assembly.GetName().Name, context.HostName) &&
@@ -43,6 +43,8 @@ internal static class EfToolingContextOperation
                 throw EfToolingRefusal.Resolution("host-composition-unavailable", "The selected host assembly is not loaded in this tooling context.");
 
             var defaults = context.CreateHostDefaults(hostAssembly);
+            if (command != InspectContext)
+                throw EfToolingRefusal.Resolution("context-operation-unavailable", "This context operation is not yet available in this host build.");
             var inspection = context.InspectUnselectedHost(defaults, closure, cancellationToken);
             result = new EfToolingContextResponse
             {

@@ -63,8 +63,8 @@ public sealed class WorkerLaunchTests
 
         Assert.Equal(
             [
-                "Command", "Connection", "ConnectionEnv", "DepsFile", "Environment", "HostDirectory", "HostName",
-                "Output", "PackageRoots", "Provider", "Restore", "Schema", "Selection", "Shell", "Shells", "Version"
+                "Command", "Connection", "ConnectionEnv", "ContextSource", "ContextVersion", "DepsFile", "Environment", "HostDirectory", "HostName",
+                "Output", "PackageRoots", "Provider", "Resource", "Restore", "Schema", "Selection", "Shell", "Shells", "Version"
             ],
             fields);
         Assert.Equal(typeof(bool), typeof(WorkerRequest).GetProperty(nameof(WorkerRequest.Restore))!.PropertyType);

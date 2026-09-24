@@ -94,6 +94,15 @@ internal static class WorkerRunner
             deps.ForAssembly(HostClosure.PersistenceAssemblyName)?.Version,
             ToolVersion);
 
+        if (request.ContextSource is not null)
+        {
+            if (!tooling.SupportsConfigurationContext)
+                throw WorkerRefusal.Resolution("context-capability-unavailable",
+                    "The selected host has no complete persistence configuration-context API.");
+            HostClosure.LoadHostAssembly(request.HostDirectory!, request.HostName!);
+            return await ExecuteExplicitContextAsync(tooling, request, command, cancellationToken);
+        }
+
         if (tooling.SupportsConfigurationContext)
         {
             HostClosure.LoadHostAssembly(request.HostDirectory!, request.HostName!);
@@ -180,6 +189,46 @@ internal static class WorkerRunner
             cancellationToken);
     }
 
+    private static async Task<WorkerResponse> ExecuteExplicitContextAsync(
+        ToolingEntryPoint tooling,
+        WorkerRequest request,
+        string command,
+        CancellationToken cancellationToken)
+    {
+        var descriptor = new
+        {
+            contextVersion = request.ContextVersion,
+            source = request.ContextSource,
+            hostDirectory = request.HostDirectory,
+            hostName = request.HostName,
+            environment = request.Environment,
+            shell = request.Shell,
+            explicitSelection = true
+        };
+        var context = tooling.CreateConfigurationContext(descriptor, cancellationToken);
+        try
+        {
+            var operation = new
+            {
+                version = 2,
+                command,
+                selection = Selection(request.Selection),
+                resource = request.Resource,
+                provider = request.Provider,
+                schema = request.Schema,
+                output = request.Output,
+                connection = WorkerCommands.OpensDatabase(command) ? ResolveConnection(request) : null
+            };
+            var (exitCode, response, _) = await tooling.InvokeConfigurationContextAsync(
+                context, operation, command, cancellationToken);
+            return new WorkerResponse { ExitCode = exitCode, Tooling = response };
+        }
+        finally
+        {
+            ToolingEntryPoint.DisposeConfigurationContext(context);
+        }
+    }
+
     private static async Task<WorkerResponse?> InspectUnselectedHostAsync(
         ToolingEntryPoint tooling,
         WorkerRequest request,
@@ -238,6 +287,16 @@ internal static class WorkerRunner
             .ToArray();
         if (missing.Length > 0)
             throw WorkerRefusal.Usage("invalid-request", "The worker request is not valid.", missing);
+
+        if (request.ContextSource is not null)
+        {
+            if (request.ContextVersion != 1 || !WorkerContextSources.IsSupported(request.ContextSource) ||
+                string.IsNullOrWhiteSpace(request.Shell) || request.Shells is not null ||
+                (request.Resource is not null && string.IsNullOrWhiteSpace(request.Resource)))
+                throw WorkerRefusal.Usage("invalid-request", "The configuration context selectors are not valid.");
+        }
+        else if (request.ContextVersion is not null || request.Resource is not null)
+            throw WorkerRefusal.Usage("invalid-request", "A resource requires a supported configuration context.");
 
         return request.Command;
     }

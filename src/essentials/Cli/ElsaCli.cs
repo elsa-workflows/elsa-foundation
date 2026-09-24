@@ -218,11 +218,21 @@ internal static class ElsaCli
             DefaultValueFactory = _ => "Production"
         };
 
+        public Option<string?> ConfigurationContext { get; } = new("--configuration-context")
+        {
+            Description = "Host-owned configuration source: workbench-json-v1 or workbench-json-environment-v1. Requires --shell."
+        };
+
+        public Option<string?> Resource { get; } = new("--resource")
+        {
+            Description = "A named persistence resource in the selected configuration context."
+        };
+
         /// <summary>A command carrying every shared option, plus whatever else that command takes.</summary>
         public Command Build(string name, string description, params Option[] extra)
         {
             var command = new Command(name, description);
-            foreach (var option in new Option[] { Host, Packages, Restore, Modules, All, FromHost, Shell, Environment }.Concat(extra))
+            foreach (var option in new Option[] { Host, Packages, Restore, Modules, All, FromHost, Shell, Environment, ConfigurationContext, Resource }.Concat(extra))
                 command.Add(option);
             return command;
         }
@@ -234,7 +244,30 @@ internal static class ElsaCli
             {
                 Selection = Selection(result, Modules, All, FromHost, selectionRequired)
             };
-            return (layout, WithHostConfiguration(request, layout, result.GetRequiredValue(Environment), result.GetValue(Shell)));
+            var source = result.GetValue(ConfigurationContext);
+            var resource = result.GetValue(Resource);
+            var shell = result.GetValue(Shell);
+            var environment = result.GetRequiredValue(Environment);
+            if (resource is not null && source is null)
+                throw CliRefusal.Usage("invalid-selection", "--resource requires --configuration-context.");
+            if (source is not null)
+            {
+                if (!WorkerContextSources.IsSupported(source))
+                    throw CliRefusal.Usage("invalid-configuration-context", "The selected configuration context source is not supported.");
+                if (string.IsNullOrWhiteSpace(shell))
+                    throw CliRefusal.Usage("invalid-selection", "--configuration-context requires exactly one --shell.");
+                if (resource is not null && string.IsNullOrWhiteSpace(resource))
+                    throw CliRefusal.Usage("invalid-selection", "--resource must name a resource.");
+                return (layout, request with
+                {
+                    Environment = environment,
+                    Shell = shell,
+                    ContextSource = source,
+                    ContextVersion = 1,
+                    Resource = resource
+                });
+            }
+            return (layout, WithHostConfiguration(request, layout, environment, shell));
         }
     }
 

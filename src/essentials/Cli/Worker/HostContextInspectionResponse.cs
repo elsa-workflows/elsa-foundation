@@ -11,13 +11,15 @@ internal sealed class HostContextInspectionResponse
     public HostConfigurationContextFacts? ConfigurationContext { get; init; }
     public WorkerError? Error { get; init; }
 
-    public string? Validate(int returnedExitCode)
+    public string? Validate(string requestedCommand, int returnedExitCode)
     {
-        if (Version != 2 || Command != "inspect-context" || ExitCode != returnedExitCode)
+        if (Version != 2 || Command != requestedCommand || ExitCode != returnedExitCode)
             throw InvalidResponse();
-        if (Status == "error" && returnedExitCode is >= ToolExitCode.NegativeResult and <= ToolExitCode.DatabaseFailure &&
+        if (Status == "error" && returnedExitCode is >= ToolExitCode.Refusal and <= ToolExitCode.DatabaseFailure &&
             Error is { Code.Length: > 0, Message.Length: > 0 } && InspectContext is null)
             return null;
+        if (requestedCommand != "inspect-context")
+            throw InvalidResponse();
         var context = ConfigurationContext;
         if (Status != "ok" || returnedExitCode != ToolExitCode.Success || Error is not null ||
             InspectContext?.Outcome is not ("no-resource-applicable" or "legacy-only") ||

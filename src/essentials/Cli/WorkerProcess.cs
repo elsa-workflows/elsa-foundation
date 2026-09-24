@@ -98,9 +98,8 @@ public static class WorkerProcess
     }
 
     /// <summary>
-    /// A worker that answered anything but one response document is a worker that did not run: reporting
-    /// what it did say, and with which code it exited, is the difference between a diagnosable failure and
-    /// a silent one.
+    /// A worker that answered anything but one version-matched response document did not complete this
+    /// private protocol. Its raw output can contain host values and is never echoed in a refusal.
     /// </summary>
     private static WorkerResponse Parse(string output, int exitCode)
     {
@@ -108,16 +107,26 @@ public static class WorkerProcess
         {
             try
             {
-                if (JsonSerializer.Deserialize<WorkerResponse>(output, WorkerContract.Json) is { } response)
+                using var document = JsonDocument.Parse(output);
+                if (document.RootElement.ValueKind == JsonValueKind.Object &&
+                    document.RootElement.TryGetProperty("version", out _) &&
+                    document.RootElement.TryGetProperty("exitCode", out _) &&
+                    !WorkerContract.HasDuplicateFields(document.RootElement) &&
+                    document.RootElement.Deserialize<WorkerResponse>(WorkerContract.Json) is { } response &&
+                    response.Version == WorkerContract.Version && response.ExitCode == exitCode &&
+                    (response.Tooling is not null) != (response.Error is not null) &&
+                    (response.Error is null ||
+                     (response.ExitCode != ToolExitCode.Success &&
+                      !string.IsNullOrWhiteSpace(response.Error.Code) && !string.IsNullOrWhiteSpace(response.Error.Message))))
                     return response;
             }
-            catch (JsonException failure)
+            catch (JsonException)
             {
-                throw CliRefusal.Resolution(
-                    "worker-response-invalid",
-                    $"The worker exited with code {exitCode} and did not answer with a response this tool understands: {failure.Message}",
-                    [Excerpt(output)]);
+                // A malformed response may include a connection value; neither it nor the parser's
+                // excerpt of it belongs in diagnostics.
             }
+            throw CliRefusal.Resolution("worker-response-invalid",
+                $"The worker exited with code {exitCode} and did not answer with this tool's response version.");
         }
 
         throw CliRefusal.Resolution(
@@ -125,8 +134,6 @@ public static class WorkerProcess
             $"The worker exited with code {exitCode} without answering. Its own diagnostics, if any, were written above.");
     }
 
-    private static string Excerpt(string output) =>
-        output.Length <= 500 ? output.Trim() : output[..500].Trim() + "…";
 }
 
 /// <summary>

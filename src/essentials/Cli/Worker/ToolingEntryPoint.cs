@@ -192,14 +192,22 @@ public sealed class ToolingEntryPoint
     internal async Task<(int ExitCode, JsonElement Response, string? Outcome)> InspectConfigurationContextAsync(
         IDisposable context,
         object? selection,
+        CancellationToken cancellationToken) =>
+        await InvokeConfigurationContextAsync(context,
+            new { version = 2, command = "inspect-context", selection }, "inspect-context", cancellationToken);
+
+    /// <summary>Invokes the context operation and validates the closed host response before forwarding it.</summary>
+    internal async Task<(int ExitCode, JsonElement Response, string? Outcome)> InvokeConfigurationContextAsync(
+        IDisposable context,
+        object operation,
+        string command,
         CancellationToken cancellationToken)
     {
         var api = contextApi ?? throw WorkerRefusal.Resolution("context-capability-unavailable",
             "The selected host has no persistence configuration-context API.");
         if (!api.ContextType.IsInstanceOfType(context))
             throw WorkerRefusal.Resolution("configuration-context-invalid", "The selected host context has the wrong type.");
-        using var input = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(
-            new { version = 2, command = "inspect-context", selection }, RequestJson));
+        using var input = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(operation, RequestJson));
         using var output = new MemoryStream();
         int exitCode;
         try
@@ -231,7 +239,7 @@ public sealed class ToolingEntryPoint
             var parsed = document.RootElement.Deserialize<HostContextInspectionResponse>(WorkerContract.Json)
                          ?? throw WorkerRefusal.Resolution("context-capability-unavailable",
                              "The selected host returned an empty context inspection response.");
-            var outcome = parsed.Validate(exitCode);
+            var outcome = parsed.Validate(command, exitCode);
             return (exitCode, document.RootElement.Clone(), outcome);
         }
         catch (JsonException)
