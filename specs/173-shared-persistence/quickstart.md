@@ -145,9 +145,9 @@ primary target:     <shared-primary-database>
 diagnostics target: <diagnostics-database>
 ```
 
-The repository has a bounded shared-resource PostgreSQL fixture, but it does not yet have a committed Workbench resource-aware e2e script or launch profile. Add that exact provisioning and launch path before using this guide as a release gate; do not substitute a guessed launch profile.
+The repository also has the committed resource-aware Workbench journey at [`e2e-tests/composition/Test-SharedPersistence.ps1`](../../e2e-tests/composition/Test-SharedPersistence.ps1). Run it against its disposable PostgreSQL targets when using this guide as a release gate; the bounded fixture above remains the focused test for the host and resource contract.
 
-T001 pins all seven CShells packages to `0.0.30-preview.158`, which includes the preparation hook and the detailed catalog compatibility fix required by Elsa. The published prerequisite and its evidence are recorded in [research R2](research.md#r2-cshells-lifecycle-integration). Verify the implementation branch with:
+The seven CShells packages are currently pinned to `0.0.30-preview.159`, which includes the preparation hook, detailed catalog compatibility fix, and configuration-source reload guard required by this slice. The original T001 prerequisite is recorded in [research R2](research.md#r2-cshells-lifecycle-integration), and the later reload-guard upgrade is recorded below. Verify the implementation branch with:
 
 ```bash
 rg -n 'PackageVersion Include="CShells(|\.Abstractions|\.AspNetCore|\.AspNetCore\.Abstractions|\.FastEndpoints|\.FastEndpoints\.Abstractions|\.Management\.Api)"' Directory.Packages.props

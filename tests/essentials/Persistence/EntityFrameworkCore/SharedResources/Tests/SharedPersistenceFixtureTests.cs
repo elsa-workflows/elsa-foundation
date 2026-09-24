@@ -83,7 +83,7 @@ public sealed class SharedPersistenceFixtureTests(PostgreSqlTargetFixture target
     }
 
     [SkippableFact]
-    public async Task Opt_in_runtime_persistence_features_activate_with_the_shared_target()
+    public async Task Partial_opt_in_runtime_stores_activate_without_the_comprehensive_execution_profile()
     {
         Skip.IfNot(targets.IsAvailable, targets.SkipReason ?? "Docker/PostgreSQL unavailable.");
 
@@ -92,6 +92,8 @@ public sealed class SharedPersistenceFixtureTests(PostgreSqlTargetFixture target
         await host.StartAsync();
 
         var catalog = (await host.Process.ReadFeatureCatalogAsync()).ToDictionary(feature => feature.Id, StringComparer.Ordinal);
+        Assert.False(catalog.TryGetValue(RuntimePersistenceFeatures[0], out var comprehensive) && comprehensive.Runs,
+            "The comprehensive Runtime feature would mask an opt-in activation failure.");
         foreach (var feature in RuntimePersistenceFeatures.Skip(1))
         {
             Assert.True(catalog.TryGetValue(feature, out var entry) && entry.Runs,
