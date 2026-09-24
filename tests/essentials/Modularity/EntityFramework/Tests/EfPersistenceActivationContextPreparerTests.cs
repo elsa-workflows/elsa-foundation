@@ -7,6 +7,7 @@ using Elsa.Modularity.Core.Models;
 using Elsa.Modularity.EntityFramework;
 using Elsa.Modularity.Nuplane.Services;
 using Elsa.Persistence.EntityFramework.Tooling;
+using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Testing;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -83,6 +84,38 @@ public sealed class EfPersistenceActivationContextPreparerTests
             preparer.PrepareAsync(context));
 
         Assert.Equal(FeatureId, Assert.Single(error.Refusals).Feature);
+    }
+
+    [Fact]
+    public async Task Opaque_configurator_on_resource_consumer_refuses_without_running_feature_code()
+    {
+        var context = Context([], [new FeatureApplyItem(FeatureId, true, Empty)]);
+
+        var error = await Assert.ThrowsAsync<FeatureActivationRefusedException>(() =>
+            Preparer(SelectedResource(), new OpaqueRuntimeHostDefaults()).PrepareAsync(context));
+
+        Assert.Equal(FeatureId, Assert.Single(error.Refusals).Feature);
+    }
+
+    [Fact]
+    public async Task Root_default_and_binding_do_not_claim_an_unenrolled_private_store()
+    {
+        const string secretsId = "SecretsEntityFrameworkCore";
+        var authored = Json("""{"Provider":"Sqlite","ConnectionString":"Data Source=private-store.db"}""");
+        var context = Context([secretsId], [new FeatureApplyItem(secretsId, true, authored)]);
+        var root = SelectedResource();
+        root[$"CShells:Shells:default:Configuration:Elsa:Persistence:Bindings:{secretsId}"] = "primary";
+        var preparer = new EfPersistenceActivationContextPreparer(
+            root,
+            new FakeRuntimeFeatureCatalog(new ShellFeatureDescriptor(secretsId)
+            {
+                StartupType = typeof(SecretsEntityFrameworkCoreFeature)
+            }),
+            new NoHostDefaults());
+
+        Assert.Same(context, await preparer.PrepareAsync(context));
+        Assert.Equal("Data Source=private-store.db",
+            context.Request.Features[0].Configuration.GetProperty("ConnectionString").GetString());
     }
 
     [Fact]
@@ -344,6 +377,13 @@ public sealed class EfPersistenceActivationContextPreparerTests
     {
         public void Configure(ShellBuilder builder, IConfiguration configuration) =>
             builder.WithConfiguration("Elsa:Persistence:DefaultResource", "primary");
+    }
+
+    private sealed class OpaqueRuntimeHostDefaults : IEfToolingShellDefaults
+    {
+        public void Configure(ShellBuilder builder, IConfiguration configuration) =>
+            builder.WithFeature<RuntimeEntityFrameworkCoreFeature>(_ => throw new InvalidOperationException(
+                "Feature configurators must not run during preflight."));
     }
 
     private sealed class ReloadingHostDefaults : IEfToolingShellDefaults
