@@ -119,6 +119,8 @@ internal static class HostAssessment
                 throw new SelectionDocumentException("invalid-field", "An inventory feature row has invalid evidence fields.");
             if (row.HostBundled && row.Package is not null)
                 throw new SelectionDocumentException("invalid-field", "A host-bundled feature cannot also have a package identity.");
+            if (row.RuntimeDependencies is not null && row.Availability != "loaded")
+                throw new SelectionDocumentException("invalid-field", "Runtime descriptor edges require a loaded feature observation.");
             if (row.Package is { } package && (string.IsNullOrWhiteSpace(package.PackageId) || string.IsNullOrWhiteSpace(package.PackageVersion) || string.IsNullOrWhiteSpace(package.ManifestDigest)))
                 throw new SelectionDocumentException("invalid-field", "An observed package needs its ID, version and manifest digest.");
             if (row.RuntimeDependencies is { } runtime && (runtime.IsDefault || runtime.Any(string.IsNullOrWhiteSpace) || runtime.Distinct(StringComparer.Ordinal).Count() != runtime.Length))

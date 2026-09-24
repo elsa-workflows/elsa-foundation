@@ -81,6 +81,14 @@ public sealed class HostAssessmentTests
         Assert.Equal("invalid-field", Assert.Throws<SelectionDocumentException>(() => ForSingle("A", duplicateEdges)).Code);
     }
 
+    [Fact]
+    public void Unloaded_feature_cannot_claim_authoritative_runtime_edges()
+    {
+        var stale = PlannerFixture.Packaged("A", manifestDependencies: [new InventoryDependency("B", true)]) with
+        { RuntimeDependencies = ["B"] };
+        Assert.Equal("invalid-field", Assert.Throws<SelectionDocumentException>(() => ForSingle("A", stale)).Code);
+    }
+
     private static SelectionPlan ForSingle(string id, InventoryFeature row) => ForSingle(id, PlannerFixture.Inventory(row));
 
     private static SelectionPlan ForSingle(string id, HostInventory inventory)
