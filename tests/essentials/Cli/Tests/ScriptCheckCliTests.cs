@@ -163,6 +163,30 @@ public sealed class ScriptCheckCliTests(CommittedArtifact artifact) : IClassFixt
         Assert.Contains("unknown-module", run.Error, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Version_two_script_check_refuses_a_committed_host_identity_mismatch_before_regeneration()
+    {
+        Rewrite(plan =>
+        {
+            plan["schemaVersion"] = MigrationPlan.ContextSchemaVersion;
+            plan["host"]!["name"] = "Other.Host";
+            plan["host"]!["providerAgreement"] = "checked";
+            plan["host"]!["shell"] = "default";
+            plan["modules"]![0]!["sha256"] = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+                File.ReadAllBytes(committed.File(ScriptFile))));
+            plan["configurationContext"] = System.Text.Json.Nodes.JsonNode.Parse("""
+                { "source": "workbench-json-v1", "environment": "Production", "shell": "default",
+                  "resource": null, "resolution": "legacy", "targetVerification": "not-performed",
+                  "runtimeParity": "unobserved", "participants": [], "unresolved": [] }
+                """);
+        });
+
+        var run = Check();
+
+        Assert.Equal(ToolExitCode.ResolutionFailure, run.ExitCode);
+        Assert.Contains("plan-host-mismatch", run.Error, StringComparison.Ordinal);
+    }
+
     /// <summary>The check takes no selection of its own: the plan is what the artifact claims to be (FR-044).</summary>
     [Fact]
     public void The_check_takes_no_module_selection_of_its_own()

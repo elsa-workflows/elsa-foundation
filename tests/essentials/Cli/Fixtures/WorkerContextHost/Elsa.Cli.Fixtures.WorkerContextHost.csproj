@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <Description>A reflection-compatible v2 host API for worker context lifetime tests.</Description>
+  </PropertyGroup>
+
+</Project>

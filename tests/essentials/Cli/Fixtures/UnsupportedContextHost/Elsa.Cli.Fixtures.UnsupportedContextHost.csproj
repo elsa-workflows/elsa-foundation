@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <Description>A packaged host whose persistence context API advertises an unsupported version.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\UnsupportedContextPersistence\Elsa.Cli.Fixtures.UnsupportedContextPersistence.csproj" />
+  </ItemGroup>
+
+</Project>

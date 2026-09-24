@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="CShells" />
     <!-- One engine, and the only one: a provider the guard cannot bind is part of what these tests
          drive, so a second engine here would quietly turn that case into a passing one. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
@@ -18,7 +19,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../../../../Shared/FakeRuntimeFeatureCatalog.cs" Link="FakeRuntimeFeatureCatalog.cs" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
     <!-- The two-module feature with no Provider setting of its own, and the features that register the
          migrations it is evaluated through (FR-065). -->

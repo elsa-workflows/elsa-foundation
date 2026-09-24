@@ -18,6 +18,8 @@ public sealed class ToolingEntryPoint
     private const string ToolingHostTypeName = "Elsa.Persistence.EntityFramework.Tooling.EfToolingHost";
     private const string ProviderBindingTypeName = "Elsa.Persistence.EntityFramework.EfRelationalProviderBinding";
     private const string RequestTypeName = "Elsa.Persistence.EntityFramework.Tooling.EfToolingRequest";
+    private const string ContextTypeName = "Elsa.Persistence.EntityFramework.Tooling.EfToolingConfigurationContext";
+    private const string ContextContractTypeName = "Elsa.Persistence.EntityFramework.Tooling.EfToolingContextContract";
     private const string CapabilitySelectionField = "CapabilitySelection";
 
     /// <summary>Serialized the way the frozen tooling contract reads it: camelCase, and no null for a field a command would refuse.</summary>
@@ -31,18 +33,21 @@ public sealed class ToolingEntryPoint
     private readonly MethodInfo providerPackageId;
     private readonly MethodInfo describeBindingFailure;
     private readonly MethodInfo select;
+    private readonly ToolingContextApi? contextApi;
 
-    private ToolingEntryPoint(
+    internal ToolingEntryPoint(
         MethodInfo runAsync,
         MethodInfo providerPackageId,
         MethodInfo describeBindingFailure,
         MethodInfo select,
-        bool supportsCapabilitySelection)
+        bool supportsCapabilitySelection,
+        ToolingContextApi? contextApi)
     {
         this.runAsync = runAsync;
         this.providerPackageId = providerPackageId;
         this.describeBindingFailure = describeBindingFailure;
         this.select = select;
+        this.contextApi = contextApi;
         SupportsCapabilitySelection = supportsCapabilitySelection;
     }
 
@@ -58,6 +63,9 @@ public sealed class ToolingEntryPoint
     /// </remarks>
     public bool SupportsCapabilitySelection { get; }
 
+    /// <summary>True only when the exact context factory, operation, disposable type, and versions agree.</summary>
+    public bool SupportsConfigurationContext => contextApi is not null;
+
     /// <summary>
     /// Binds the entry point in <paramref name="persistence"/>, refusing when that build predates it
     /// (FR-010).
@@ -71,8 +79,8 @@ public sealed class ToolingEntryPoint
     /// </remarks>
     public static ToolingEntryPoint Resolve(Assembly persistence, string? pinnedVersion, string toolVersion)
     {
-        var run = persistence.GetType(ToolingHostTypeName, throwOnError: false)
-            ?.GetMethod("RunAsync", BindingFlags.Public | BindingFlags.Static, [typeof(Stream), typeof(Stream)]);
+        var hostType = persistence.GetType(ToolingHostTypeName, throwOnError: false);
+        var run = hostType?.GetMethod("RunAsync", BindingFlags.Public | BindingFlags.Static, [typeof(Stream), typeof(Stream)]);
         var binding = persistence.GetType(ProviderBindingTypeName, throwOnError: false);
         var packageId = binding?.GetMethod("ProviderPackageId", BindingFlags.Public | BindingFlags.Static, [typeof(string)]);
         var describe = binding?.GetMethod("DescribeBindingFailure", BindingFlags.Public | BindingFlags.Static, [typeof(string)]);
@@ -91,8 +99,180 @@ public sealed class ToolingEntryPoint
 
         var capabilitySelection = persistence.GetType(RequestTypeName, throwOnError: false)
             ?.GetProperty(CapabilitySelectionField, BindingFlags.Public | BindingFlags.Instance) is not null;
+        var contextApi = BindContextApi(
+            hostType!,
+            persistence.GetType(ContextTypeName, throwOnError: false),
+            persistence.GetType(ContextContractTypeName, throwOnError: false));
 
-        return new(run, packageId, describe, canonical, capabilitySelection);
+        return new(run, packageId, describe, canonical, capabilitySelection, contextApi);
+    }
+
+    /// <summary>Refuses partial or version-skewed host context APIs instead of silently choosing v1.</summary>
+    internal static ToolingContextApi? BindContextApi(Type hostType, Type? contextType, Type? operationContract)
+    {
+        try
+        {
+            return BindContextApiCore(hostType, contextType, operationContract);
+        }
+        catch (WorkerRefusal)
+        {
+            throw;
+        }
+        catch (Exception failure) when (WorkerRunner.IsNonFatal(failure))
+        {
+            throw WorkerRefusal.Resolution("context-capability-unavailable",
+                "The selected host's persistence context API could not be inspected.");
+        }
+    }
+
+    private static ToolingContextApi? BindContextApiCore(Type hostType, Type? contextType, Type? operationContract)
+    {
+        ArgumentNullException.ThrowIfNull(hostType);
+        var factoryCandidates = hostType.GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Where(method => method.Name == "CreateConfigurationContext").ToArray();
+        var contextRuns = hostType.GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Where(method => method.Name == "RunAsync" && method.GetParameters() is { Length: 4 } parameters &&
+                             parameters[2].ParameterType.FullName == ContextTypeName)
+            .ToArray();
+        if (contextType is null && operationContract is null && factoryCandidates.Length == 0 && contextRuns.Length == 0)
+            return null;
+
+        var factory = hostType.GetMethod("CreateConfigurationContext", BindingFlags.Public | BindingFlags.Static,
+            [typeof(Stream), typeof(CancellationToken)]);
+        var run = contextType is null ? null : hostType.GetMethod("RunAsync", BindingFlags.Public | BindingFlags.Static,
+            [typeof(Stream), typeof(Stream), contextType, typeof(CancellationToken)]);
+        var contextVersion = contextType?.GetField("Version", BindingFlags.Public | BindingFlags.Static);
+        var operationVersion = operationContract?.GetField("Version", BindingFlags.Public | BindingFlags.Static);
+        if (contextType is null || !contextType.IsSealed || !typeof(IDisposable).IsAssignableFrom(contextType) ||
+            factory is null || factory.ReturnType != contextType ||
+            run is null || run.ReturnType != typeof(Task<int>) ||
+            contextVersion?.IsLiteral != true || contextVersion.GetRawConstantValue() is not 1 ||
+            operationVersion?.IsLiteral != true || operationVersion.GetRawConstantValue() is not 2)
+            throw WorkerRefusal.Resolution("context-capability-unavailable",
+                "The selected host exposes an incomplete or unsupported persistence configuration-context API.");
+
+        return new ToolingContextApi(factory, run, contextType);
+    }
+
+    /// <summary>Creates one opaque host snapshot; no configuration value is projected into this worker.</summary>
+    internal IDisposable CreateConfigurationContext(object descriptor, CancellationToken cancellationToken)
+    {
+        var api = contextApi ?? throw WorkerRefusal.Resolution("context-capability-unavailable",
+            "The selected host has no persistence configuration-context API.");
+        using var input = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(descriptor, RequestJson));
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var created = api.Factory.Invoke(null, [input, cancellationToken]);
+            return created is IDisposable disposable && api.ContextType.IsInstanceOfType(created)
+                ? disposable
+                : throw WorkerRefusal.Resolution("configuration-context-invalid",
+                    "The selected host did not return a usable configuration context.");
+        }
+        catch (TargetInvocationException failure) when (failure.InnerException is OperationCanceledException && cancellationToken.IsCancellationRequested)
+        {
+            throw (OperationCanceledException)failure.InnerException!;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (WorkerRefusal)
+        {
+            throw;
+        }
+        catch (Exception failure) when (WorkerRunner.IsNonFatal(failure))
+        {
+            throw WorkerRefusal.Resolution("configuration-context-invalid",
+                "The selected host configuration context could not be created.");
+        }
+    }
+
+    /// <summary>Inspects resource applicability and validates the closed v2 response before any legacy fallback.</summary>
+    internal async Task<(int ExitCode, JsonElement Response, string? Outcome)> InspectConfigurationContextAsync(
+        IDisposable context,
+        object? selection,
+        CancellationToken cancellationToken) =>
+        await InvokeConfigurationContextAsync(context,
+            new { version = 2, command = "inspect-context", selection }, "inspect-context", cancellationToken);
+
+    /// <summary>Invokes the context operation and validates the closed host response before forwarding it.</summary>
+    internal async Task<(int ExitCode, JsonElement Response, string? Outcome)> InvokeConfigurationContextAsync(
+        IDisposable context,
+        object operation,
+        string command,
+        CancellationToken cancellationToken)
+    {
+        var api = contextApi ?? throw WorkerRefusal.Resolution("context-capability-unavailable",
+            "The selected host has no persistence configuration-context API.");
+        if (!api.ContextType.IsInstanceOfType(context))
+            throw WorkerRefusal.Resolution("configuration-context-invalid", "The selected host context has the wrong type.");
+        using var input = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(operation, RequestJson));
+        using var output = new MemoryStream();
+        int exitCode;
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            exitCode = await (Task<int>)api.RunAsync.Invoke(null, [input, output, context, cancellationToken])!;
+        }
+        catch (TargetInvocationException failure) when (failure.InnerException is OperationCanceledException && cancellationToken.IsCancellationRequested)
+        {
+            throw (OperationCanceledException)failure.InnerException!;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception failure) when (WorkerRunner.IsNonFatal(failure))
+        {
+            throw WorkerRefusal.Resolution("configuration-context-invalid",
+                "The selected host configuration context operation could not be completed.");
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            using var document = JsonDocument.Parse(output.ToArray());
+            if (HasDuplicateFields(document.RootElement))
+                throw WorkerRefusal.Resolution("context-capability-unavailable",
+                    "The selected host returned a repeated context response field.");
+            var parsed = document.RootElement.Deserialize<HostContextInspectionResponse>(WorkerContract.Json)
+                         ?? throw WorkerRefusal.Resolution("context-capability-unavailable",
+                             "The selected host returned an empty context inspection response.");
+            var outcome = parsed.Validate(command, exitCode);
+            return (exitCode, document.RootElement.Clone(), outcome);
+        }
+        catch (JsonException)
+        {
+            throw WorkerRefusal.Resolution("context-capability-unavailable",
+                "The selected host returned an invalid context inspection response.");
+        }
+    }
+
+    internal static void DisposeConfigurationContext(IDisposable context)
+    {
+        try
+        {
+            context.Dispose();
+        }
+        catch (Exception failure) when (WorkerRunner.IsNonFatal(failure))
+        {
+            throw WorkerRefusal.Resolution("configuration-context-invalid",
+                "The selected host configuration context could not be released.");
+        }
+    }
+
+    private static bool HasDuplicateFields(JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.Array)
+            return value.EnumerateArray().Any(HasDuplicateFields);
+        if (value.ValueKind != JsonValueKind.Object)
+            return false;
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var field in value.EnumerateObject())
+            if (!names.Add(field.Name) || HasDuplicateFields(field.Value))
+                return true;
+        return false;
     }
 
     /// <summary>
@@ -155,3 +335,5 @@ public sealed class ToolingEntryPoint
         return (exitCode, document.RootElement.Clone());
     }
 }
+
+internal sealed record ToolingContextApi(MethodInfo Factory, MethodInfo RunAsync, Type ContextType);

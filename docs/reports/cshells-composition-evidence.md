@@ -21,6 +21,8 @@ Source-of-truth boundary:
 - Concrete `IShellFeature` classes now have explicit `ShellFeature` IDs. Abstract feature bases may remain unannotated unless base metadata becomes useful.
 - The new map reports zero concrete features missing an explicit feature ID.
 
+Snapshot note (2026-09-24): the current [feature dependency map](../maps/feature-dependency-map.md) reports one concrete class without an explicit ID, the Workbench-local `RuntimeFaultStackTraceFeature`. The zero count above describes the earlier snapshot. The [profile catalog investigation](runtime-composition/profile-catalog-contract.md) classifies this before treating ID coverage as a distributable-catalog guarantee.
+
 ## Existing Evidence
 
 Feature identity:
