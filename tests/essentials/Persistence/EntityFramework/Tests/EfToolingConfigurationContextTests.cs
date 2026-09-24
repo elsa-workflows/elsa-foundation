@@ -518,6 +518,41 @@ public sealed class EfToolingConfigurationContextTests
         Assert.False(document.RootElement.TryGetProperty("plan", out _));
     }
 
+    [Theory]
+    [InlineData("apply")]
+    [InlineData("validate")]
+    [InlineData("post-migrate")]
+    public async Task Live_context_refuses_resource_provider_disagreement_before_database_access(string command)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"elsa-provider-disagreement-{Guid.NewGuid():N}.db");
+        var connection = $"Data Source={path}";
+        using var context = ToolingContextForTestAssembly($$"""
+            { "ConnectionStrings": { "Shared": "{{connection}}" },
+              "Elsa": { "Persistence": {
+                "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } },
+                "DefaultResource": "primary"
+              } }, "CShells": { "Shells": { "default": {
+                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+              } } } }
+            """, shell: "default", explicitSelection: true);
+        using var request = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            version = 2, command, selection = new { kind = "from-host" }, resource = "primary",
+            provider = "PostgreSql", connection
+        }));
+        using var response = new MemoryStream();
+
+        var exitCode = await EfToolingContextOperation.RunAsync(request, response, context,
+            [typeof(EfToolingConfigurationContextTests).Assembly, .. RuntimeFeatureAssemblies], CancellationToken.None);
+
+        Assert.Equal(EfToolingExitCode.ResolutionFailure, exitCode);
+        Assert.False(File.Exists(path));
+        var json = Encoding.UTF8.GetString(response.ToArray());
+        Assert.DoesNotContain(connection, json, StringComparison.Ordinal);
+        using var document = JsonDocument.Parse(json);
+        Assert.Equal("provider-disagreement", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+    }
+
     [Fact]
     public async Task Context_plan_without_a_resource_preserves_legacy_from_host_selection()
     {
