@@ -1,6 +1,6 @@
 # Persistence configuration contracts
 
-Status: Integrated design review approved on 2026-09-23 for #1967 and published in PR #1973. The shared-layout resolver, runtime preparation and PostgreSQL Workbench evidence are in draft PR #1974; T045 remains its final current-head gate. The separate diagnostics layout remains #1969 work.
+Status: Integrated design review approved on 2026-09-23 for #1967 and published in PR #1973. The shared-layout resolver, runtime preparation and PostgreSQL Workbench evidence merged in PR #1974 after T045 acceptance. The separate diagnostics layout is active #1969 work.
 
 Canonical decisions:
 

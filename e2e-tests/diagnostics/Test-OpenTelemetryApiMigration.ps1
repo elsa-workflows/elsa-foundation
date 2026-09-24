@@ -7,6 +7,8 @@
     query succeeds, the authenticated SSE surface is reachable, and accepted OTLP/HTTP returns
     the established 204 response. Authentication-before-body-read remains covered by the owner
     integration test because a remote REST client cannot observe server-side stream reads.
+    For persisted-data placement in the explicit two-target resource layout, run
+    Test-SharedDiagnosticsPersistence.ps1, which uses a nonempty OTLP trace and inspects PostgreSQL.
 #>
 [CmdletBinding()]
 param(

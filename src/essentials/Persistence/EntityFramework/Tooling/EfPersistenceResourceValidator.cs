@@ -150,6 +150,26 @@ internal static class EfPersistenceResourceValidator
                 connectionDifferenceCodes.Add(connectionDifferenceCode);
         }
 
+        // The supported diagnostics exception moves both local stores together. They do not
+        // share an EF transaction, but independently splitting them is not a proven runtime
+        // layout. Compare resolved targets, not resource names: aliases can name one target.
+        var diagnostics = targets.Where(x => x.ModuleName is
+            "Diagnostics.StructuredLogs" or "Diagnostics.OpenTelemetry").ToArray();
+        if (diagnostics.Length == 2)
+        {
+            if (!StringComparer.Ordinal.Equals(diagnostics[0].Provider, diagnostics[1].Provider))
+                refusals.Add("resource-context-conflict");
+            if (!StringComparer.Ordinal.Equals(diagnostics[0].Connection, diagnostics[1].Connection))
+                connectionDifferenceCodes.Add(connectionDifferenceCode);
+        }
+
+        var diagnosticsSelections = resolution.Participants.Where(x => x.Participant.ModuleNames.Any(name =>
+            name is "Diagnostics.StructuredLogs" or "Diagnostics.OpenTelemetry")).ToArray();
+        if (diagnosticsSelections.Length == 2 &&
+            diagnosticsSelections.Any(x => x.Selection == PersistenceSelectionKind.Legacy) &&
+            diagnosticsSelections.Any(x => x.Selection != PersistenceSelectionKind.Legacy))
+            refusals.Add("resource-ownership-unresolved");
+
         // Selection never grants permission to migrate; an invalid authored policy must not
         // silently fall back to AutoMigrate. No migration probe runs in this validator.
         var policy = Get(composedSettings, $"{EfMigrateOptions.SectionName}:Policy") ??

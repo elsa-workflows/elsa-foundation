@@ -4,7 +4,7 @@ Backend **end-to-end** tests that drive the `Elsa.Workbench` REST API through th
 full workflow lifecycle (login -> design/submit -> publish -> execute/runtime -> observe) against the default
 **SQLite** composition. These are the black-box counterpart to the in-process C# tests under `tests/`: they
 exercise the real HTTP + persistence + runtime-pump path that unit/integration tests stub out. .NET 10.
-The opt-in shared-persistence journey uses two disposable PostgreSQL databases in Docker instead of SQLite.
+The opt-in shared-persistence journeys use two disposable PostgreSQL databases in Docker instead of SQLite.
 
 ## Prerequisites
 
@@ -30,6 +30,13 @@ the new target, then verifies that an invalid candidate keeps the active generat
 available; the script sets `ELSA_SHARED_PERSISTENCE_REQUIRE_POSTGRESQL=1` so missing
 Docker fails rather than silently skipping the journey. Run `pwsh ./e2e-tests/composition/Test-SharedPersistence.ps1`
 from the repository root, or use `powershell -NoProfile -ExecutionPolicy Bypass -File` on Windows.
+
+`diagnostics/Test-SharedDiagnosticsPersistence.ps1` likewise owns a disposable Workbench and two PostgreSQL
+databases. It binds Structured Logs and OpenTelemetry to the diagnostics resource, verifies migration histories
+and persisted diagnostic rows stay on that target across restart, and checks resource-scoped CLI selection,
+same-target validation, wrong-target refusal, and a split-layout refusal before migrations. It requires Docker.
+`diagnostics/Test-OpenTelemetryApiMigration.ps1` remains the separate route/authentication/accepted-OTLP smoke
+against a running Workbench; its empty OTLP payloads do not prove persisted diagnostic data.
 
 `durability/Test-RestartRecovery.ps1` also owns its server by default. Build Workbench first; the script copies
 the committed legacy SQLite configuration to a temporary content root and restarts only its own process. Its
@@ -73,6 +80,7 @@ A candidate is retired from here only once its in-process replacement exists.
 | `runtime-alterations` | true e2e | durable plan admission, capture, hosted orchestration, checkpoint outcomes, replay and restart |
 | `bpmn`, `composition` | true e2e | waited `DispatchWorkflow` + BPMN error boundary |
 | `composition/Test-SharedPersistence.ps1` | true e2e | disposable PostgreSQL, real Workbench HTTP design/publish/execute/restart, authored-resource reload, and same-target CLI validation |
+| `diagnostics/Test-SharedDiagnosticsPersistence.ps1` | true e2e | disposable PostgreSQL, real Workbench OTLP and structured-log writes, restart, two-target placement, scoped CLI validation and negative layout refusal |
 | `logging` | mixed | `Test-ValueCapture` is runtime e2e; `Test-DiagnosticsSettings` is a read-only contract check |
 | `workflow-version-override` | true e2e | exact-version preflight and promotion through live HTTP + persistence |
 | `file-deployment` | true e2e | server restart with a mounted definitions folder; startup reconcile + publish-on-reconcile, readiness gate, restart idempotency (spec 147) |
@@ -100,6 +108,7 @@ The former `get-endpoints` and `write-endpoints` suites (GET / CRUD status-and-s
 | `branching/Test-ParallelFork.ps1` | `Parallel` fork/join |
 | `composition/Test-ChildWorkflowInput.ps1` | parent dispatches a child **and passes it an input**; child echoes it; correlate the child by correlationId |
 | `composition/Test-SharedPersistence.ps1` | opt-in shared-resource journeys: create/publish reusable activity, publish/execute workflow, restart and read persisted state, check primary/diagnostics database placement, run same-target resource-scoped CLI `list` and `validate` and refuse a different target; change the authored resource target, reload the shell, verify writes move, then reject an invalid candidate while the active shell remains available |
+| `diagnostics/Test-SharedDiagnosticsPersistence.ps1` | opt-in two-target Workbench journey: persist OTLP and structured logs on the diagnostics target, restart, validate module scope with CLI and refuse a split diagnostics layout before database migration |
 | `javascript/Test-JavaScriptExpressions.ps1` | pure-ES JS in a Sync HTTP response body (array/object/json/optional-chaining/nullish/flat/replaceAll) |
 | `http/Test-HttpMethods.ps1` | one HttpEndpoint accepting GET/POST/PUT/DELETE, each returning a sync response |
 | `http/Test-HttpEcho.ps1` | capture request data (`ParsedContent`/`RouteData`/`Request`) into workflow variables and echo it back in a sync response (request-body, route-parameter, query-parameter, header; #972/#984) |

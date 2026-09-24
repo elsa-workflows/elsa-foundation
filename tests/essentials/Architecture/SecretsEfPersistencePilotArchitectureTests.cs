@@ -159,6 +159,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "tests/essentials/Persistence/EntityFramework/BindingDriftTests/EfRelationalProviderBindingDriftTests.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/CommittedCompositionConnectionTests.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/ConfigurationServices.cs",
+        "tests/essentials/Persistence/EntityFramework/Tests/DiagnosticsPersistenceBindingTests.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/EfConnectionDefaultsTests.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/EfDatabaseMigratorTests.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/EfMigrateOptionsTests.cs",
