@@ -87,11 +87,11 @@ check fails naming the dataset.
    fails and names the dataset.
 3. **Given** a documentation-only edit that touches no project input, **When** the check runs,
    **Then** it passes.
-4. **Given** a committed dataset whose records differ from what any regeneration would produce, such
-   as a publish write-back that changed only a record, **When** the freshness check runs, **Then**
-   it passes, because records are not compared.
-5. **Given** a committed dataset carrying records, **When** the check runs, **Then** no record is
-   rewritten, dropped or reset.
+4. **Given** a committed dataset whose records, attached or retired, differ from what any
+   regeneration would produce, such as a publish write-back that changed only a record, **When** the
+   freshness check runs, **Then** it passes, because records are not compared.
+5. **Given** a committed dataset carrying records, attached or retired, **When** the check runs,
+   **Then** no record is rewritten, dropped or reset.
 
 ---
 
@@ -109,17 +109,50 @@ byte-identical to the one committed before regeneration.
 
 **Acceptance Scenarios**:
 
-1. **Given** a committed dataset carrying records, **When** generation runs, **Then** every record
-   whose package id still has a node is byte-identical to the one it replaces.
+1. **Given** a committed dataset carrying records, **When** generation runs, **Then** every record,
+   attached or retired, is byte-identical to the one it replaces.
 2. **Given** a project whose directory moves but whose package id is unchanged, **When** generation
    runs, **Then** its node's path changes and it keeps its record, because records are carried by
    package id, not by path.
 3. **Given** a project whose package id changes, **When** generation runs, **Then** the new id has no
-   record, because spec 150 treats it as a new package, and the old id's record is then in the same
-   position as a deleted project's.
+   record, because spec 150 treats it as a new package, and the old id's record becomes a retired
+   record.
 4. **Given** a newly added packable project, **When** generation runs, **Then** its node has no
    record, and that is valid.
 5. **Given** any generation run, **When** it executes, **Then** it makes no request to the feed.
+6. **Given** a project deleted while its package id has a record, **When** generation runs, **Then**
+   the record moves to the retired records rather than being dropped.
+7. **Given** a project deleted while its package id had a record, **When** the project is later
+   re-added with the same package id, **Then** its node carries the old record again, reattached from
+   the retired records.
+
+---
+
+### User Story 5 - Reject a pull request that edits a record (Priority: P2)
+
+A contributor's branch regenerated the map before a publish wrote new records to `main`. The merge
+conflicts on `dependency-map.json`, and the conflict is resolved by taking the branch's copy, which
+would roll records back. CI rejects it before merge.
+
+**Why this priority**: A record rolled back makes the next publish compute a version the feed already
+holds. Spec 150's FR-011 only catches that after merge, as a red publish on `main`, whose only repair
+is a hand edit to a record, which the rules forbid.
+
+**Independent Test**: Open a pull request whose dataset differs from its merge base only in a record,
+and confirm the guard fails naming the package id and both values; open one that only moves, adds or
+deletes projects, and confirm it passes.
+
+**Acceptance Scenarios**:
+
+1. **Given** a pull request that changes a record's version or commit, **When** the guard runs,
+   **Then** it fails, naming the package id.
+2. **Given** a pull request that resolves a merge conflict by taking a stale record, **When** the
+   guard runs, **Then** it fails.
+3. **Given** a pull request that moves, adds or deletes projects, **When** the guard runs, **Then**
+   it passes.
+4. **Given** a pull request that touches no record, **When** the guard runs, **Then** it passes.
+5. **Given** the one-off bootstrap's records reaching `main` through a pull request, **When** the
+   guard runs on that pull request, **Then** it is exempted explicitly, and no other pull request is.
 
 ---
 
@@ -136,11 +169,11 @@ byte-identical to the one committed before regeneration.
   keeps its last-published record, because the record is keyed by package id, not by path.
 - A non-packable node: it carries no last-published record.
 - A package id changes: spec 150 treats it as a new package. The new id starts with no record, and
-  the old id's record is then in the same position as a deleted project's record (see the next
-  bullet).
-- A project is deleted while its package id has a record: the node goes. Whether the record must be
-  retained apart from the nodes is an open question (see Open Questions); if it is lost, spec 150's
-  FR-011 is the backstop.
+  the old id's record becomes a retired record, carried forward apart from the nodes; it reattaches
+  if a node with that id appears again.
+- A project is deleted while its package id has a record: the node goes and the record becomes a
+  retired record, carried forward apart from the nodes; it reattaches if a project with that package
+  id is re-added.
 
 ## Requirements *(mandatory)*
 
@@ -164,9 +197,9 @@ byte-identical to the one committed before regeneration.
   produce a byte-identical dataset, with stable ordering and no timestamps or run identifiers.
 - **FR-008**: The existing maps freshness check MUST compare only the tree-derived parts of the
   dataset and fail when they no longer describe the tree. It MUST preserve the last-published
-  records and MUST NOT regenerate, reset or wipe them, and a difference confined to records MUST NOT
-  fail it. Correctness of the record is guarded by spec 150 (FR-011, FR-012 monotonicity gate), not
-  by this check.
+  records, attached or retired, and MUST NOT regenerate, reset or wipe them, and a difference
+  confined to records MUST NOT fail it. Correctness of the record is guarded by spec 150 (FR-011,
+  FR-012 monotonicity gate), not by this check.
 - **FR-009**: The dataset MUST NOT enumerate individual source files. Ownership is derived from
   project paths, so that the dataset changes only when the project graph changes or a publish writes
   a last-published record.
@@ -178,9 +211,30 @@ byte-identical to the one committed before regeneration.
 - **FR-012**: The last-published record is publish-written state, written by spec 150's publish from
   `main` and its bootstrap. Generation MUST carry each record forward from the committed dataset
   unchanged, matched by package id, and MUST NOT create, modify or infer a record, and MUST NOT drop
-  one while its package id still has a node. It MUST NOT read the feed.
+  one. Generation MUST move a record to the retired records when its package id loses its node, and
+  MUST reattach it when the id reappears; moving or reattaching a record is not modifying it, because
+  its content is unchanged. It MUST NOT read the feed.
 - **FR-013**: The markdown projections MUST NOT include the last-published record, so a publish
   write-back changes only the dataset and never obliges regenerating a projection.
+- **FR-014**: When a package id that has a record no longer has a node, because the project was
+  deleted or its package id was renamed, the record MUST be kept in the dataset as a retired record,
+  apart from the nodes, keyed by package id, and carried forward by generation like any other record.
+  If a node with that package id appears again, the record reattaches to it, so the next publish is
+  one past the last published version rather than a version the feed already holds. Retired records
+  are never pruned. The dataset then lists every package id ever published.
+- **FR-015**: A pull-request check, separate from the freshness check, MUST fail when any record in
+  the pull request's dataset, attached or retired, differs from the record for the same package id at
+  the pull request's merge base. That covers a record added, changed or removed. The failure names
+  the package id and both values. Records are compared by package id, not by position, so a pull
+  request that moves, adds or deletes projects passes: moving keeps the record, adding creates none,
+  and deleting retires it unchanged. The freshness check stays tree-only (FR-008). Publishes write
+  records back to `main` without a pull request, so they are not subject to it; how the write-back
+  reaches `main` is spec 150's open question. If the one-off bootstrap's records ever reach `main`
+  through a pull request, that single pull request MUST be exempted explicitly, and no other.
+- **FR-016**: The dataset's serialization MUST place each record, attached or retired, on its own
+  lines apart from the tree-derived fields. A pull request that changes the project graph and a
+  publish write-back that changes records then touch different lines, and git merges them without a
+  conflict. The FR-015 guard catches any conflict that is still resolved by taking a stale copy.
 
 ### Key Entities
 
@@ -191,9 +245,12 @@ byte-identical to the one committed before regeneration.
 - **Last-published record**: per package id, the version last pushed to the feed and the commit
   that version was built from. Committed state, written only by publishing from `main` and the
   one-off bootstrap publish, never by a contributor, a pull request or the generator.
-- **Dataset**: the tree-derived nodes and edges, the last-published records, and the freshness
-  fingerprint, which covers only the tree-derived parts, versioned by a schema version so consumers
-  can detect an incompatible shape.
+- **Retired record**: a last-published record whose package id has no node, kept apart from the
+  nodes, keyed by package id. Reattaches to a node with the same package id if one appears again.
+  Never pruned.
+- **Dataset**: the tree-derived nodes and edges, the last-published records, the retired records, and
+  the freshness fingerprint, which covers only the tree-derived parts, versioned by a schema version
+  so consumers can detect an incompatible shape.
 
 ## Success Criteria *(mandatory)*
 
@@ -210,6 +267,10 @@ byte-identical to the one committed before regeneration.
 - **SC-006**: Regenerating and running the freshness check on a dataset that carries records leaves
   every record byte-identical, and a difference confined to records passes the check.
 - **SC-007**: A project moved to a new directory keeps its last-published record.
+- **SC-008**: Deleting a project and later re-adding one with the same package id restores its
+  last-published record.
+- **SC-009**: A pull request that alters any record fails the guard, and one that only adds, moves or
+  deletes projects passes.
 
 ## Assumptions
 
@@ -242,10 +303,3 @@ byte-identical to the one committed before regeneration.
   third-party version bumps.
 - Should the schema version be enforced by consumers at read time, or is a mismatch a build-time
   concern only?
-- Should a record whose package id no longer has a node, because the project was deleted, be
-  retained apart from the nodes, so a re-added package id does not recompute a version the feed
-  already holds? Or should it be dropped, with spec 150's FR-011 as the backstop if the package id
-  returns?
-- Should the freshness check, or another guard, reject a pull request that edits a record, given
-  spec 150 says only publishing writes one? That needs the base commit's dataset, which a tree-only
-  check does not have.
