@@ -91,6 +91,8 @@ public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
             """);
         var document = JsonNode.Parse(await File.ReadAllTextAsync(_shellsPath))!.AsObject();
         document["Elsa"] = JsonNode.Parse("""{"Persistence":{"DefaultResource":"primary","Resources":{"primary":{"Provider":"PostgreSql","ConnectionName":"Shared"}}}}""");
+        document["CShells"]!["Shells"]!["default"]!["Configuration"] =
+            JsonNode.Parse("""{"Elsa":{"Persistence":{"Bindings":{"FutureFeature":"primary"}}}}""");
         await File.WriteAllTextAsync(_shellsPath, document.ToJsonString());
         var store = CreateStore();
         var snapshot = await store.LoadAsync();
@@ -107,6 +109,7 @@ public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
         Assert.Equal("next", reloaded.Features["Existing"].GetProperty("FutureSetting").GetProperty("Mode").GetString());
         var persisted = JsonNode.Parse(await File.ReadAllTextAsync(_shellsPath))!;
         Assert.Equal("Shared", (string?)persisted["Elsa"]?["Persistence"]?["Resources"]?["primary"]?["ConnectionName"]);
+        Assert.Equal("primary", (string?)persisted["CShells"]?["Shells"]?["default"]?["Configuration"]?["Elsa"]?["Persistence"]?["Bindings"]?["FutureFeature"]);
     }
 
     [Fact]

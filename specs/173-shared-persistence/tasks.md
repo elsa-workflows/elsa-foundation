@@ -9,7 +9,7 @@ description: "Reviewed task list for shared persistence resources"
 
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `contracts/`, and `quickstart.md`.
 
-**Status**: Integrated design review approved on 2026-09-23. #1967 publication completed through PR #1973; implementation is active. One active delivery issue at a time: #1968 owns US1, US2 and US4; #1969 owns US3 after #1968. T001-T007, T009-T011, T013-T014, T016-T017, T020-T022, T024, T027-T028, T033-T037 are complete; T008 and T015 are in progress. Remaining tasks are open.
+**Status**: Integrated design review approved on 2026-09-23. #1967 publication completed through PR #1973; implementation is active. One active delivery issue at a time: #1968 owns US1, US2 and US4; #1969 owns US3 after #1968. T001-T007, T009-T011, T013-T014, T016-T017, T020-T022, T024, T026-T028, T033-T037 are complete; T008 and T015 are in progress. Remaining tasks are open.
 
 **Tests**: Tests are required by the specification. Add focused tests before implementation within each user-story phase and retain the existing regression suites.
 
@@ -84,7 +84,7 @@ description: "Reviewed task list for shared persistence resources"
 ### Tests for User Story 2
 
 - [ ] T025 [P] [US2] Extend legacy characterization tests in `tests/essentials/Persistence/EntityFramework/Tests/CommittedCompositionConnectionTests.cs`, `tests/essentials/Persistence/EntityFramework/Tests/EfConnectionDefaultsTests.cs`, `tests/essentials/Persistence/EntityFramework/Tests/EfMigrateOptionsTests.cs`, and `tests/essentials/Persistence/EntityFramework/Tests/EfSchemaTests.cs` for legacy precedence, missing named connections, provider defaults, schema, pooling, migration policy, OpenTelemetry, and host-owned OpenIddict.
-- [ ] T026 [P] [US2] Add authored-preservation tests in `tests/essentials/Modularity/Tests/JsonShellFeatureConfigurationStoreTests.cs` and `tests/essentials/Modularity/Tests/FeatureManagementServiceTests.cs` for unknown feature/settings, explicit false/zero/empty/null, reset/removal, masked secrets, and unchanged legacy requests.
+- [x] T026 [P] [US2] Add authored-preservation tests in `tests/essentials/Modularity/Tests/JsonShellFeatureConfigurationStoreTests.cs` and `tests/essentials/Modularity/Tests/FeatureManagementServiceTests.cs` for unknown feature/settings, explicit false/zero/empty/null, reset/removal, masked secrets, and unchanged legacy requests.
 
 ### Implementation for User Story 2
 
