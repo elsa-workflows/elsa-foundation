@@ -37,7 +37,7 @@ public sealed class SharedPersistenceHostFixture : IAsyncDisposable
 
     public static void RemoveLegacyDiagnosticsTargets(string contentRoot)
     {
-        var path = Path.Combine(contentRoot, "shells.json");
+        var path = Path.Join(contentRoot, "shells.json");
         var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
         var features = root["CShells"]!["Shells"]!["default"]!["Features"]!.AsObject();
         features["DiagnosticsStructuredLogsEntityFrameworkCore"]!.AsObject().Remove("ConnectionString");
@@ -100,8 +100,8 @@ public sealed class SharedPersistenceHostFixture : IAsyncDisposable
         if (_shell.EnvironmentOverlay is { } shellOverlay)
             sources.Add((shellOverlay, $"shells.{_shell.Environment}.json"));
         foreach (var (source, target) in sources)
-            if (!File.ReadAllBytes(stageAuthoredConfig ? Path.Combine(Process.ContentRoot, target) : WorkbenchBuild.SourceFile(source))
-                    .SequenceEqual(File.ReadAllBytes(Path.Combine(hostDirectory, target))))
+            if (!File.ReadAllBytes(stageAuthoredConfig ? Path.Join(Process.ContentRoot, target) : WorkbenchBuild.SourceFile(source))
+                    .SequenceEqual(File.ReadAllBytes(Path.Join(hostDirectory, target))))
                 throw new InvalidOperationException($"The CLI host's {target} differs from the running Workbench source.");
 
         var arguments = new List<string>
@@ -191,12 +191,12 @@ public sealed class SharedPersistenceHostFixture : IAsyncDisposable
                 if (name.StartsWith("appsettings", StringComparison.OrdinalIgnoreCase) ||
                     name.StartsWith("shells", StringComparison.OrdinalIgnoreCase) || name == ".nuplane" || name == "packages")
                     continue;
-                CopyEntry(entry, Path.Combine(staged, name));
+                CopyEntry(entry, Path.Join(staged, name));
             }
             foreach (var file in Directory.EnumerateFiles(Process.ContentRoot, "*.json")
                          .Where(file => Path.GetFileName(file).StartsWith("appsettings", StringComparison.OrdinalIgnoreCase) ||
                                         Path.GetFileName(file).StartsWith("shells", StringComparison.OrdinalIgnoreCase)))
-                File.Copy(file, Path.Combine(staged, Path.GetFileName(file)));
+                File.Copy(file, Path.Join(staged, Path.GetFileName(file)));
             return _stagedToolingHost = staged;
         }
         catch
@@ -220,7 +220,7 @@ public sealed class SharedPersistenceHostFixture : IAsyncDisposable
         {
             Directory.CreateDirectory(destination);
             foreach (var child in Directory.EnumerateFileSystemEntries(source))
-                CopyEntry(child, Path.Combine(destination, Path.GetFileName(child)));
+                CopyEntry(child, Path.Join(destination, Path.GetFileName(child)));
         }
         else
             File.Copy(source, destination);

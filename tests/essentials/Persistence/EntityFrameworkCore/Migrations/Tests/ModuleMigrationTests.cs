@@ -99,7 +99,7 @@ public sealed class ModuleMigrationTests : IDisposable
         Assert.Equal(primaryNames.Length, primary.Length);
         Assert.Equal(diagnosticsNames.Length, diagnostics.Length);
 
-        var diagnosticsPath = Path.Combine(Path.GetTempPath(), $"elsa-ef-diagnostics-{Guid.NewGuid():N}.db");
+        var diagnosticsPath = Path.Join(Path.GetTempPath(), $"elsa-ef-diagnostics-{Guid.NewGuid():N}.db");
         var diagnosticsConnection = $"Data Source={diagnosticsPath};Pooling=False";
         try
         {

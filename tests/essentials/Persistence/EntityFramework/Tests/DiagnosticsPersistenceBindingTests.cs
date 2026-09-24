@@ -143,9 +143,8 @@ public sealed class DiagnosticsPersistenceBindingTests
                 }
             }
         });
-        var configuration = new ConfigurationBuilder()
-            .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json)))
-            .Build();
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        var configuration = new ConfigurationBuilder().AddJsonStream(stream).Build();
         var featureIds = Participants.Select(participant => participant.FeatureId).ToArray();
         var context = new ShellSettingsPreparationContext(
             new ShellId("default"),

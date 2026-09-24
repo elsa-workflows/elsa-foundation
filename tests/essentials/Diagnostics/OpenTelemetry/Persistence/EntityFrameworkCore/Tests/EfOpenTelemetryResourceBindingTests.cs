@@ -92,9 +92,11 @@ public sealed class EfOpenTelemetryResourceBindingTests
         extraBinding is null ? null : $"\"{extraBinding}\": \"primary\""
     }.OfType<string>());
 
-    private static IConfiguration CreateConfiguration(string json) => new ConfigurationBuilder()
-        .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json)))
-        .Build();
+    private static IConfiguration CreateConfiguration(string json)
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        return new ConfigurationBuilder().AddJsonStream(stream).Build();
+    }
 
     private static ShellSettingsPreparationContext Context()
     {
