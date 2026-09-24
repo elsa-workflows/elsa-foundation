@@ -8,6 +8,7 @@ public sealed class FeatureManagementService(
     IShellFeatureConfigurationStore shellStore,
     IEnumerable<IFeatureCatalogContributor> contributors,
     IEnumerable<IFeatureActivationGuard> activationGuards,
+    IFeatureActivationContextPreparer activationContextPreparer,
     IRuntimeFeatureCatalogRefresher runtimeFeatureCatalogRefresher,
     IShellReloader shellReloader) : IFeatureManagementService
 {
@@ -23,11 +24,14 @@ public sealed class FeatureManagementService(
         var current = await BuildCatalogAsync(shell, cancellationToken);
         request = RestoreSecrets(request, shell);
         ValidateRequest(request, current);
+        var activationContext = await activationContextPreparer.PrepareAsync(
+            new FeatureActivationContext(shell, request), cancellationToken);
+        ArgumentNullException.ThrowIfNull(activationContext);
         // After validation and before the save, so a guard sees the request exactly as it would be stored —
         // secrets restored — and a refusal costs nothing: no save, no catalog refresh, no shell reload
         // (FR-060). A host that composes no guard keeps today's ordering, where the shell's own Validate-policy
         // check refuses later, after shells.json has already been written (FR-070).
-        await EnsureActivationAllowedAsync(request, shell, cancellationToken);
+        await EnsureActivationAllowedAsync(activationContext, cancellationToken);
 
         var changes = request.Features
             .Select(feature => new FeatureConfigurationChange(feature.Id, feature.Enabled, feature.Configuration.Clone()))
@@ -56,11 +60,9 @@ public sealed class FeatureManagementService(
     /// rather than discovering them one apply at a time.
     /// </summary>
     private async Task EnsureActivationAllowedAsync(
-        FeatureApplyRequest request,
-        ShellFeatureConfigurationSnapshot shell,
+        FeatureActivationContext context,
         CancellationToken cancellationToken)
     {
-        var context = new FeatureActivationContext(shell, request);
         var refusals = new List<FeatureActivationRefusal>();
         foreach (var guard in activationGuards)
             refusals.AddRange((await guard.EvaluateAsync(context, cancellationToken)).Refusals);

@@ -94,6 +94,28 @@ internal static class WorkerRunner
             deps.ForAssembly(HostClosure.PersistenceAssemblyName)?.Version,
             ToolVersion);
 
+        if (request.ContextSource is not null)
+        {
+            if (!tooling.SupportsConfigurationContext)
+                throw WorkerRefusal.Resolution("context-capability-unavailable",
+                    "The selected host has no complete persistence configuration-context API.");
+            HostClosure.LoadHostAssembly(request.HostDirectory!, request.HostName!);
+            return await ExecuteExplicitContextAsync(tooling, request, command, deps, packages, cancellationToken);
+        }
+
+        if (tooling.SupportsConfigurationContext)
+        {
+            HostClosure.LoadHostAssembly(request.HostDirectory!, request.HostName!);
+            var inspected = await InspectUnselectedHostAsync(tooling, request, cancellationToken);
+            if (inspected is not null)
+                return inspected;
+        }
+        else if (HostResourceHints.Exist(request.HostDirectory!, request.Environment!))
+        {
+            throw WorkerRefusal.Resolution("context-capability-unavailable",
+                "The selected host has persistence resource configuration but no complete context API to inspect it.");
+        }
+
         if (command == WorkerCommands.List)
             return await Respond(tooling, new { version = 1, command, selection = Selection(request.Selection), shells = Shells(request) }, cancellationToken);
 
@@ -167,6 +189,131 @@ internal static class WorkerRunner
             cancellationToken);
     }
 
+    internal static async Task<WorkerResponse> ExecuteExplicitContextAsync(
+        ToolingEntryPoint tooling,
+        WorkerRequest request,
+        string command,
+        HostDepsFile deps,
+        NuplanePackageSet packages,
+        CancellationToken cancellationToken)
+    {
+        var descriptor = new
+        {
+            contextVersion = request.ContextVersion,
+            source = request.ContextSource,
+            hostDirectory = request.HostDirectory,
+            hostName = request.HostName,
+            environment = request.Environment,
+            shell = request.Shell,
+            explicitSelection = true
+        };
+        var context = tooling.CreateConfigurationContext(descriptor, cancellationToken);
+        try
+        {
+            if (command == WorkerCommands.Script)
+            {
+                var provider = tooling.CanonicalProvider(request.Provider ?? throw WorkerRefusal.Usage(
+                    "invalid-request", "'script' needs a provider."));
+                var engine = Unused();
+                object[] modulePackages = [];
+                if (provider != SqliteProvider)
+                {
+                    var (listExitCode, listResponse, _) = await tooling.InvokeConfigurationContextAsync(context,
+                        new { version = 2, command = WorkerCommands.List, selection = Selection(request.Selection), resource = request.Resource },
+                        WorkerCommands.List, cancellationToken);
+                    if (listExitCode != ToolExitCode.Success)
+                        return new WorkerResponse { ExitCode = listExitCode, Tooling = listResponse };
+                    var modules = listResponse.GetProperty("list").GetProperty("modules").EnumerateArray()
+                        .Select(module => (Module: module.GetProperty("module").GetString()!,
+                            Assembly: module.GetProperty("assembly").GetString()!)).ToArray();
+                    try
+                    {
+                        engine = ResolveEngine(tooling, provider, deps, packages, request);
+                        modulePackages = ModulePackages(modules, deps, packages);
+                    }
+                    catch (WorkerRefusal refusal) when (refusal.Code is
+                               "provider-engine-unavailable" or "packages-never-reconciled" or "package-metadata-missing")
+                    {
+                        throw WorkerRefusal.Resolution(refusal.Code, refusal.Code switch
+                        {
+                            "packages-never-reconciled" => "The selected host's package set has not been reconciled; start the host or use --restore.",
+                            "package-metadata-missing" => "The selected modules have no complete package metadata in this host closure.",
+                            _ => "The selected provider engine is unavailable in this host closure."
+                        });
+                    }
+                }
+
+                var (scriptExitCode, scriptResponse, _) = await tooling.InvokeConfigurationContextAsync(context,
+                    new
+                    {
+                        version = 2,
+                        command,
+                        selection = Selection(request.Selection),
+                        resource = request.Resource,
+                        provider,
+                        schema = request.Schema,
+                        output = request.Output,
+                        engine = new { package = engine.Id, version = engine.Version, source = engine.Source },
+                        packages = modulePackages
+                    }, command, cancellationToken);
+                return new WorkerResponse { ExitCode = scriptExitCode, Tooling = scriptResponse };
+            }
+
+            var operation = new
+            {
+                version = 2,
+                command,
+                selection = Selection(request.Selection),
+                resource = request.Resource,
+                provider = request.Provider,
+                schema = request.Schema,
+                output = request.Output,
+                connection = WorkerCommands.OpensDatabase(command) ? ResolveConnection(request) : null
+            };
+            var (exitCode, response, _) = await tooling.InvokeConfigurationContextAsync(
+                context, operation, command, cancellationToken);
+            return new WorkerResponse { ExitCode = exitCode, Tooling = response };
+        }
+        finally
+        {
+            ToolingEntryPoint.DisposeConfigurationContext(context);
+        }
+    }
+
+    private static async Task<WorkerResponse?> InspectUnselectedHostAsync(
+        ToolingEntryPoint tooling,
+        WorkerRequest request,
+        CancellationToken cancellationToken)
+    {
+        var descriptor = new
+        {
+            contextVersion = 1,
+            source = "workbench-json-v1",
+            hostDirectory = request.HostDirectory,
+            hostName = request.HostName,
+            environment = request.Environment,
+            shell = (string?)null,
+            explicitSelection = false
+        };
+        var context = tooling.CreateConfigurationContext(descriptor, cancellationToken);
+        try
+        {
+            var (exitCode, response, outcome) = await tooling.InspectConfigurationContextAsync(
+                context, Selection(request.Selection), cancellationToken);
+            if (exitCode != ToolExitCode.Success)
+                return new WorkerResponse { ExitCode = exitCode, Tooling = response };
+            // The response validator returns an outcome only for these two typed negatives.
+            if (outcome is "no-resource-applicable" or "legacy-only")
+                return null;
+            throw WorkerRefusal.Resolution("context-capability-unavailable",
+                "The selected host did not return a legacy-compatible context outcome.");
+        }
+        finally
+        {
+            ToolingEntryPoint.DisposeConfigurationContext(context);
+        }
+    }
+
     private static string Validate(WorkerRequest request)
     {
         if (request.Version != WorkerContract.Version)
@@ -191,6 +338,16 @@ internal static class WorkerRunner
             .ToArray();
         if (missing.Length > 0)
             throw WorkerRefusal.Usage("invalid-request", "The worker request is not valid.", missing);
+
+        if (request.ContextSource is not null)
+        {
+            if (request.ContextVersion != 1 || !WorkerContextSources.IsSupported(request.ContextSource) ||
+                string.IsNullOrWhiteSpace(request.Shell) || request.Shells is not null ||
+                (request.Resource is not null && string.IsNullOrWhiteSpace(request.Resource)))
+                throw WorkerRefusal.Usage("invalid-request", "The configuration context selectors are not valid.");
+        }
+        else if (request.ContextVersion is not null || request.Resource is not null)
+            throw WorkerRefusal.Usage("invalid-request", "A resource requires a supported configuration context.");
 
         return request.Command;
     }

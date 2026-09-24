@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <Description>A host whose persistence assembly supports v1 tooling but has no configuration-context API.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LegacyPersistence\Elsa.Cli.Fixtures.LegacyPersistence.csproj" />
+  </ItemGroup>
+
+</Project>

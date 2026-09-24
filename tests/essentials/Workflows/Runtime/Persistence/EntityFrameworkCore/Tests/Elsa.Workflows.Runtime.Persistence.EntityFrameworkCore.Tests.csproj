@@ -23,6 +23,7 @@
     <!-- The EF Runtime feature depends on these features; shell activation resolves them from their assemblies. -->
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Tasks\Elsa.Tasks.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
     <ProjectReference Include="..\..\..\..\..\Activities\Testing\Elsa.Activities.Testing.csproj" />
     <!-- A parent waiting on a DispatchWorkflow child, run end to end on the EF stores. -->
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />

@@ -15,6 +15,7 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
     Description = "Opt-in EF Core persistence for OpenTelemetry. It applies or validates its own migrations on shell activation;",
     DependsOn = new object[] { "DiagnosticsOpenTelemetry" })]
 [UsesEfModule("Diagnostics.OpenTelemetry")]
+[EfPersistenceResourceParticipant]
 public class EfOpenTelemetryFeature : IShellFeature
 {
     [ManifestSetting(DisplayName = "Provider", Description = "Relational provider: Sqlite, SqlServer, PostgreSql, or MySql.", Category = "Persistence")]

@@ -20,4 +20,8 @@
     <ProjectReference Include="..\..\..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../../../../../Shared/FakeRuntimeFeatureCatalog.cs" Link="FakeRuntimeFeatureCatalog.cs" />
+  </ItemGroup>
+
 </Project>

@@ -10,6 +10,30 @@ There is no replacement contract in this package. Modules own derived `DbContext
 Hosts register the derived context that matches the selected relational provider and call
 `EfDatabaseMigrator.ApplyAsync` with that provider's expected `Database.ProviderName`.
 
+## Persistence resource enrollment and host composition
+
+`EfPersistenceResourceParticipantAttribute` is the explicit enrollment marker for a shell feature
+whose EF target may come from a named resource. Place it on the owning feature class alongside its
+existing `ShellFeature` and `UsesEfModule` metadata. The EF participant catalog combines those
+declarations with `EfModule` context ownership; it does not infer enrollment from setting names or
+construct feature instances. The first-slice enrolled identities and exclusions are listed in the
+[shared-persistence contract](../../../../specs/173-shared-persistence/contracts/persistence-configuration.md#enrollment-and-existing-metadata).
+
+A host that enables resource preparation supplies one assembly-level
+`EfToolingShellDefaultsAttribute` naming a type that implements `IEfToolingShellDefaults`. Its
+`Configure(ShellBuilder, IConfiguration)` method declares that host's defaults without constructing
+features or activating a shell. The same declared composer is used by runtime enrollment and EF tooling,
+so the two paths share host-default composition. The Workbench integration is registered through
+`AddEfPersistenceResources` in `Elsa.Modularity.EntityFramework`; legacy-only hosts need not opt in.
+
+The verified first layout uses one target for enabled enrolled Runtime, Workflows Design, Activities
+Design, and Publishing consumers. Runtime participants share `RuntimeDbContext` and must agree; they
+are not independent stores. The separate Structured Logs/OpenTelemetry layout is modeled and enrolled,
+but remains unverified until its dedicated two-target host/database proof is complete. Host-owned
+OpenIddict, IAM/provider configuration, Secrets, distributed/private stores, Dashboard readers, and
+unknown/custom consumers are not automatically redirected. A selected resource contributes only
+Provider and ConnectionName; schema, pooling, and migration policy retain their existing owners.
+
 ## Module descriptor
 
 An assembly-level `[EfModule(name, contextType, ...)]` (`AllowMultiple`) is a module's single,

@@ -11,6 +11,24 @@ The Modularity API feature owns the shell feature-management surface.
 | `IRuntimeFeatureCatalogAccessor` | `RuntimeFeatureCatalogAccessor` (`Elsa.Modularity.Nuplane`) | The host uses another runtime catalog source instead of CShells feature assembly providers. |
 | `IRuntimeFeatureCatalogRefresher` | `RuntimeFeatureCatalogRefresher` (`Elsa.Modularity.Nuplane`) | The host needs custom refresh/reload reporting semantics. |
 
+## Activation context preparation
+
+`IFeatureActivationContextPreparer` (`Elsa.Modularity.Core`) is the single replacement seam for preparing
+the current and candidate activation context before ordinary guards run. The Nuplane default
+implementation passes the existing context through. A host opting into EF persistence resources uses
+`AddEfPersistenceResources` from `Elsa.Modularity.EntityFramework`, which replaces that default with the
+resource-aware preflight and requires the host's declared defaults composer. This service is not an
+ordered collection of guards or mutating preprocessors.
+
+`FeatureManagementService` invokes preparation after request validation and secret restoration, then runs
+the existing `IFeatureActivationGuard` loop only when preparation succeeds. For applicable resource-mode
+intent, the EF preparer refuses before every ordinary guard, save, catalog refresh, or shell reload; the
+existing API reports the refusal as HTTP 409. The legacy feature editor remains a legacy editor: change
+resource/default/binding configuration through its authored source and reload explicitly. When no
+resource applies, existing legacy guard and save behavior continues. See the
+[runtime and management contract](../../../../specs/173-shared-persistence/contracts/runtime-management.md#mandatory-management-preparation-seam)
+for current/candidate evaluation, refusal semantics, and limits.
+
 ## Implementable contributor interfaces
 
 | Contract | Purpose |

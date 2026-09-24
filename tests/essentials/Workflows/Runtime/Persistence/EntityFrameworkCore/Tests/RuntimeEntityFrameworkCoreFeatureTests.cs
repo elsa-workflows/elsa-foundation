@@ -208,7 +208,7 @@ public sealed class RuntimeEntityFrameworkCoreFeatureTests : IDisposable
         public void ConfigureServices(IServiceCollection services) => services.AddWorkflowRuntime();
     }
 
-    private sealed class ProcessLockProvider : IDistributedLockProvider
+    internal sealed class ProcessLockProvider : IDistributedLockProvider
     {
         public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
         public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());

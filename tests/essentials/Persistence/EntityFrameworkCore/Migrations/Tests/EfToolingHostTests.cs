@@ -1,6 +1,12 @@
+using CShells.Configuration;
+using Elsa.Api.Capabilities;
+using Elsa.Events;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Publishing;
+using Elsa.Workflows.Runtime.Api;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection;
@@ -12,6 +18,8 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Xunit;
 using Xunit.Sdk;
+
+[assembly: EfToolingShellDefaults(typeof(Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.EfToolingHostTestDefaults))]
 
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
@@ -76,6 +84,175 @@ public sealed class EfToolingHostTests : IDisposable
     }
 
     public static TheoryData<string> Providers() => [.. ServerProviders];
+
+    [Fact]
+    public async Task Offline_plan_does_not_treat_distinct_design_connection_references_as_a_proven_affinity_conflict()
+    {
+        using var context = ToolingContextForTestAssembly("""
+            {
+              "Elsa": { "Persistence": {
+                "Resources": {
+                  "activities": { "Provider": "Sqlite", "ConnectionName": "Activities" },
+                  "workflows": { "Provider": "Sqlite", "ConnectionName": "Workflows" },
+                  "publishing": { "Provider": "Sqlite", "ConnectionName": "Publishing" }
+                }
+              } },
+              "CShells": { "Shells": { "default": {
+                "Name": "default",
+                "Features": {
+                  "ActivitiesDesignEntityFrameworkCore": {},
+                  "WorkflowsDesignEntityFrameworkCore": {},
+                  "WorkflowsPublishingEntityFrameworkCore": {}
+                },
+                "Configuration": { "Elsa": { "Persistence": { "Bindings": {
+                  "ActivitiesDesignEntityFrameworkCore": "activities",
+                  "WorkflowsDesignEntityFrameworkCore": "workflows",
+                  "WorkflowsPublishingEntityFrameworkCore": "publishing"
+                } } } }
+              } } }
+            }
+            """);
+        using var request = new MemoryStream("""{"version":2,"command":"plan","selection":{"kind":"from-host"},"provider":"Sqlite"}"""u8.ToArray());
+        using var response = new MemoryStream();
+
+        var exitCode = await EfToolingContextOperation.RunAsync(request, response, context,
+            [typeof(EfToolingHostTests).Assembly, .. ModuleContextCatalog.Modules,
+                typeof(WorkflowsPublishingFeature).Assembly, typeof(WorkflowsRuntimeApiFeature).Assembly,
+                typeof(EventsFeature).Assembly, typeof(ApiCapabilitiesFeature).Assembly], CancellationToken.None);
+
+        Assert.True(exitCode == EfToolingExitCode.Success,
+            $"Expected success but got {exitCode}: {Encoding.UTF8.GetString(response.ToArray())}");
+        using var document = JsonDocument.Parse(response.ToArray());
+        var root = document.RootElement;
+        var modules = root.GetProperty("plan").GetProperty("modules").EnumerateArray()
+            .Select(module => module.GetProperty("module").GetString())
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.Contains("Activities.Design", modules);
+        Assert.Contains("Workflows.Design", modules);
+        Assert.Contains("Workflows.Publishing", modules);
+        var facts = root.GetProperty("configurationContext");
+        Assert.Equal("unobserved", facts.GetProperty("runtimeParity").GetString());
+        Assert.Contains(facts.GetProperty("unresolved").EnumerateArray(),
+            item => item.GetString() == "target-affinity-unverified");
+        Assert.Contains(facts.GetProperty("unresolved").EnumerateArray(),
+            item => item.GetString() == "expected-connection-unchecked");
+    }
+
+    [Theory]
+    [InlineData("apply")]
+    [InlineData("validate")]
+    [InlineData("post-migrate")]
+    public async Task Live_target_refusal_precedes_DbContext_construction(string command)
+    {
+        var module = new EfModuleDescriptor("Construction.Probe", typeof(ConstructionProbeContext), "ConstructionProbe",
+            typeof(ConstructionProbeContext), null, null, null, [], [typeof(ConstructionProbeAction)], typeof(EfToolingHostTests).Assembly);
+        var connection = $"Data Source={Path.Join(root, "construction-probe.db")}";
+        ConstructionProbeContext.Constructions = 0;
+        ConstructionProbeAction.Constructions = 0;
+
+        var refusal = await Assert.ThrowsAsync<InvalidOperationException>(() => EfToolingHost.RunLiveModulesAsync(
+            [module], command, "Sqlite", null, connection,
+            () => throw new InvalidOperationException("target-mismatch-canary"), CancellationToken.None));
+
+        Assert.Equal("target-mismatch-canary", refusal.Message);
+        Assert.Equal(0, ConstructionProbeContext.Constructions);
+        Assert.Equal(0, ConstructionProbeAction.Constructions);
+        Assert.False(File.Exists(Path.Join(root, "construction-probe.db")));
+
+        await Assert.ThrowsAsync<EfToolingRefusal>(() => EfToolingHost.RunLiveModulesAsync(
+            [module], command, "Sqlite", null, connection, () => { }, CancellationToken.None));
+        Assert.Equal(1, ConstructionProbeContext.Constructions);
+        Assert.Equal(1, ConstructionProbeAction.Constructions);
+    }
+
+    public sealed class ConstructionProbeContext : DbContext
+    {
+        public static int Constructions;
+
+        public ConstructionProbeContext(DbContextOptions<ConstructionProbeContext> options) : base(options)
+        {
+            IncrementConstructions();
+            throw new InvalidOperationException("construction-probe");
+        }
+
+        private static void IncrementConstructions() => Interlocked.Increment(ref Constructions);
+    }
+
+    public sealed class ConstructionProbeAction : IEfPostMigrationAction
+    {
+        public static int Constructions;
+
+        public ConstructionProbeAction() => IncrementConstructions();
+
+        private static void IncrementConstructions() => Interlocked.Increment(ref Constructions);
+
+        public string Id => "construction-probe";
+        public string Kind => "test";
+        public string RequiredWhen => "never";
+        public string Audit => "none";
+        public Task<bool> AuditAsync(DbContext context, CancellationToken cancellationToken = default) => Task.FromResult(false);
+        public Task RunAsync(DbContext context, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    [Fact]
+    public void Context_script_manifest_is_version_two_deterministic_and_contains_only_redacted_target_evidence()
+    {
+        var module = EfModuleCatalog.Find(Descriptors, "Secrets")!;
+        var output = Path.Join(root, "context-script");
+        var engine = new EfToolingEngineFacts
+        {
+            Package = "Npgsql.EntityFrameworkCore.PostgreSQL", Version = "10.0.0", Source = EfToolingPackageSource.HostDepsFile
+        };
+        var packages = new[]
+        {
+            new EfToolingPackageFacts
+            {
+                Assembly = module.Assembly.GetName().Name, Id = "Elsa.Secrets.Persistence.EntityFrameworkCore",
+                Version = "1.0.0", Source = EfToolingPackageSource.HostDepsFile
+            }
+        };
+        var host = new EfToolingHostFacts
+        {
+            Name = "Fixture.Host", ProviderAgreement = EfToolingProviderAgreement.Checked,
+            Shell = "default", Environment = "Production"
+        };
+        var context = new EfToolingConfigurationContextFacts
+        {
+            Source = EfToolingConfigurationContext.WorkbenchJson,
+            Environment = "Production", Shell = "default", Resource = "primary", Resolution = "resource",
+            Participants = [new EfToolingContextParticipant
+            {
+                Feature = "SecretsEntityFrameworkCore", Module = "Secrets", Resource = "primary",
+                Provider = "PostgreSql", ConnectionReference = "Shared", Selection = "RootDefault"
+            }],
+            Unresolved = ["expected-connection-unchecked"]
+        };
+
+        var response = EfToolingHost.ScriptModules([module], "PostgreSql", null, output,
+            engine, packages, host, context, CancellationToken.None);
+        var manifest = File.ReadAllBytes(Path.Join(output, EfMigrationPlan.FileName));
+        using var document = JsonDocument.Parse(manifest);
+        var plan = document.RootElement;
+        var configurationContext = plan.GetProperty("configurationContext");
+        var serializedManifest = Encoding.UTF8.GetString(manifest);
+        Assert.NotNull(response.Script);
+        Assert.Equal(2, plan.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal("checked", plan.GetProperty("host").GetProperty("providerAgreement").GetString());
+        Assert.Equal("workbench-json-v1", configurationContext.GetProperty("source").GetString());
+        Assert.Equal("not-performed", configurationContext.GetProperty("targetVerification").GetString());
+        Assert.Equal("unobserved", configurationContext.GetProperty("runtimeParity").GetString());
+        Assert.Equal(["expected-connection-unchecked"],
+            configurationContext.GetProperty("unresolved").EnumerateArray().Select(value => value.GetString()));
+        Assert.Equal("primary", configurationContext.GetProperty("resource").GetString());
+        Assert.Equal("Shared", Assert.Single(configurationContext.GetProperty("participants").EnumerateArray())
+            .GetProperty("connectionReference").GetString());
+        Assert.DoesNotContain(root, serializedManifest, StringComparison.Ordinal);
+
+        var repeated = Path.Join(root, "context-script-repeated");
+        EfToolingHost.ScriptModules([module], "PostgreSql", null, repeated,
+            engine, packages, host, context, CancellationToken.None);
+        Assert.Equal(manifest, File.ReadAllBytes(Path.Join(repeated, EfMigrationPlan.FileName)));
+    }
 
     [Theory]
     [MemberData(nameof(Providers))]
@@ -950,6 +1127,16 @@ public sealed class EfToolingHostTests : IDisposable
         return new(exitCode, response.RootElement.Clone());
     }
 
+    private static EfToolingConfigurationContext ToolingContextForTestAssembly(string json)
+    {
+        using var source = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        var configuration = new ConfigurationBuilder().AddJsonStream(source).Build();
+        var assembly = typeof(EfToolingHostTests).Assembly;
+        return new EfToolingConfigurationContext(EfToolingConfigurationContext.WorkbenchJson,
+            Path.GetDirectoryName(assembly.Location)!, assembly.GetName().Name!, "Production", "default",
+            explicitSelection: true, configuration);
+    }
+
     private static SortedDictionary<string, byte[]> Artifact(string directory) => new(
         Directory.EnumerateFiles(directory).ToDictionary(path => Path.GetFileName(path), File.ReadAllBytes),
         StringComparer.Ordinal);
@@ -1100,5 +1287,12 @@ public sealed class EfToolingHostTests : IDisposable
         public SelectionBody? Selection { get; init; }
         public string? Schema { get; init; }
         public string? Connection { get; init; }
+    }
+}
+
+public sealed class EfToolingHostTestDefaults : IEfToolingShellDefaults
+{
+    public void Configure(ShellBuilder builder, IConfiguration configuration)
+    {
     }
 }

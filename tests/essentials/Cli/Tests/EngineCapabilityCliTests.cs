@@ -268,9 +268,9 @@ public sealed class EngineCapabilityCliTests : IDisposable
         var run = Script(output.Path);
 
         Assert.Equal(ToolExitCode.ResolutionFailure, run.ExitCode);
-        Assert.Contains("capability-selection-unreadable", run.Text, StringComparison.Ordinal);
-        Assert.Contains(host.Path, run.Text, StringComparison.Ordinal);
-        Assert.Contains(Key, run.Text, StringComparison.Ordinal);
+        Assert.Contains("configuration-context-invalid", run.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(host.Path, run.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("this is not JSON", run.Text, StringComparison.Ordinal);
         Assert.Empty(Directory.EnumerateFileSystemEntries(output.Path));
     }
 

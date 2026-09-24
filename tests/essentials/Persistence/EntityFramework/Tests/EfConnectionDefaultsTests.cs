@@ -65,6 +65,17 @@ public sealed class EfConnectionDefaultsTests
     }
 
     [Fact]
+    public void OpenTelemetry_keeps_its_private_sqlite_file_when_only_the_shared_connection_is_configured()
+    {
+        var configured = Configured((EfConnectionDefaults.ConnectionName, "Data Source=shared.db"));
+
+        Assert.Equal("Data Source=elsa-opentelemetry.db", EfConnectionDefaults.ResolveConnectionString(
+            configured, "OpenTelemetry", "Sqlite", null, null, "ElsaOpenTelemetry", "Data Source=elsa-opentelemetry.db"));
+        Assert.Equal("Data Source=shared.db", EfConnectionDefaults.ResolveConnectionString(
+            configured, "OpenTelemetry", "Sqlite", null, EfConnectionDefaults.ConnectionName, "ElsaOpenTelemetry", "Data Source=elsa-opentelemetry.db"));
+    }
+
+    [Fact]
     public void A_non_sqlite_provider_without_a_connection_is_refused()
     {
         var exception = Assert.Throws<InvalidOperationException>(() => Resolve(new ConfigurationServices(null), "MySql", null, null));
