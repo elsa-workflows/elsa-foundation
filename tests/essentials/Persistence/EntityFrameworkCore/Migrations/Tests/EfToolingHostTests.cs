@@ -77,6 +77,58 @@ public sealed class EfToolingHostTests : IDisposable
 
     public static TheoryData<string> Providers() => [.. ServerProviders];
 
+    [Theory]
+    [InlineData("apply")]
+    [InlineData("validate")]
+    [InlineData("post-migrate")]
+    public async Task Live_target_refusal_precedes_DbContext_construction(string command)
+    {
+        var module = new EfModuleDescriptor("Construction.Probe", typeof(ConstructionProbeContext), "ConstructionProbe",
+            typeof(ConstructionProbeContext), null, null, null, [], [typeof(ConstructionProbeAction)], typeof(EfToolingHostTests).Assembly);
+        var connection = $"Data Source={Path.Join(root, "construction-probe.db")}";
+        ConstructionProbeContext.Constructions = 0;
+        ConstructionProbeAction.Constructions = 0;
+
+        var refusal = await Assert.ThrowsAsync<InvalidOperationException>(() => EfToolingHost.RunLiveModulesAsync(
+            [module], command, "Sqlite", null, connection,
+            () => throw new InvalidOperationException("target-mismatch-canary"), CancellationToken.None));
+
+        Assert.Equal("target-mismatch-canary", refusal.Message);
+        Assert.Equal(0, ConstructionProbeContext.Constructions);
+        Assert.Equal(0, ConstructionProbeAction.Constructions);
+        Assert.False(File.Exists(Path.Join(root, "construction-probe.db")));
+
+        await Assert.ThrowsAsync<EfToolingRefusal>(() => EfToolingHost.RunLiveModulesAsync(
+            [module], command, "Sqlite", null, connection, () => { }, CancellationToken.None));
+        Assert.Equal(1, ConstructionProbeContext.Constructions);
+        Assert.Equal(1, ConstructionProbeAction.Constructions);
+    }
+
+    public sealed class ConstructionProbeContext : DbContext
+    {
+        public static int Constructions;
+
+        public ConstructionProbeContext(DbContextOptions<ConstructionProbeContext> options) : base(options)
+        {
+            Constructions++;
+            throw new InvalidOperationException("construction-probe");
+        }
+    }
+
+    public sealed class ConstructionProbeAction : IEfPostMigrationAction
+    {
+        public static int Constructions;
+
+        public ConstructionProbeAction() => Constructions++;
+
+        public string Id => "construction-probe";
+        public string Kind => "test";
+        public string RequiredWhen => "never";
+        public string Audit => "none";
+        public Task<bool> AuditAsync(DbContext context, CancellationToken cancellationToken = default) => Task.FromResult(false);
+        public Task RunAsync(DbContext context, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
     [Fact]
     public void Context_script_manifest_is_version_two_deterministic_and_contains_only_redacted_target_evidence()
     {

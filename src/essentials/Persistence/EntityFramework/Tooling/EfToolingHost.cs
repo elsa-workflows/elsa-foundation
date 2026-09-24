@@ -528,8 +528,8 @@ public static class EfToolingHost
         var normalizedSchema = NormalizeSchema(canonical, schema);
         ValidateProviderSupport(modules, canonical);
         ValidateEngine(canonical);
-        var actions = PostMigrationActions(modules);
         verifyTargets();
+        var actions = PostMigrationActions(modules);
         return command switch
         {
             EfToolingCommands.Apply => await Apply(modules, canonical, normalizedSchema, actions, connection, cancellationToken),
