@@ -1,9 +1,11 @@
 using System.Text.Json;
 using CShells.Configuration;
 using CShells.Features;
+using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Exceptions;
 using Elsa.Modularity.Core.Models;
 using Elsa.Modularity.EntityFramework;
+using Elsa.Modularity.Nuplane.Services;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Testing;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
@@ -155,6 +157,94 @@ public sealed class EfPersistenceActivationContextPreparerTests
             StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Current_only_resource_selection_refuses_before_management_guards_or_side_effects()
+    {
+        var management = Management(
+            SelectedResource(),
+            new Dictionary<string, JsonElement> { [FeatureId] = Empty });
+        var catalog = await management.Service.GetCatalogAsync();
+
+        var error = await Assert.ThrowsAsync<FeatureActivationRefusedException>(() =>
+            management.Service.ApplyAsync(new FeatureApplyRequest(catalog.Revision,
+                [new FeatureApplyItem(FeatureId, false, Empty)])));
+
+        Assert.Equal(FeatureId, Assert.Single(error.Refusals).Feature);
+        AssertNoManagementEffects(management);
+    }
+
+    [Fact]
+    public async Task Candidate_only_resource_selection_refuses_before_management_guards_or_side_effects()
+    {
+        var management = Management(SelectedResource());
+        var catalog = await management.Service.GetCatalogAsync();
+
+        var error = await Assert.ThrowsAsync<FeatureActivationRefusedException>(() =>
+            management.Service.ApplyAsync(new FeatureApplyRequest(catalog.Revision,
+                [new FeatureApplyItem(FeatureId, true, Empty)])));
+
+        Assert.Equal(FeatureId, Assert.Single(error.Refusals).Feature);
+        AssertNoManagementEffects(management);
+    }
+
+    [Fact]
+    public async Task Invalid_candidate_resource_selection_refuses_before_management_guards_or_side_effects()
+    {
+        var root = Configuration(
+            ("Elsa:Persistence:DefaultResource", "missing"));
+        var management = Management(root);
+        var catalog = await management.Service.GetCatalogAsync();
+
+        var error = await Assert.ThrowsAsync<FeatureActivationRefusedException>(() =>
+            management.Service.ApplyAsync(new FeatureApplyRequest(catalog.Revision,
+                [new FeatureApplyItem(FeatureId, true, Empty)])));
+
+        Assert.Equal(FeatureId, Assert.Single(error.Refusals).Feature);
+        AssertNoManagementEffects(management);
+    }
+
+    [Fact]
+    public async Task Changed_configuration_source_refuses_before_management_guards_or_side_effects()
+    {
+        var root = new ConfigurationBuilder().AddInMemoryCollection().Build();
+        var management = Management(root, defaults: new ReloadingHostDefaults());
+        var catalog = await management.Service.GetCatalogAsync();
+
+        var error = await Assert.ThrowsAsync<FeatureActivationRefusedException>(() =>
+            management.Service.ApplyAsync(new FeatureApplyRequest(catalog.Revision, [])));
+
+        Assert.Contains("changed during validation", Assert.Single(error.Refusals).Reason,
+            StringComparison.Ordinal);
+        AssertNoManagementEffects(management);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Definitions_only_and_legacy_edits_still_reach_the_ordinary_management_pipeline(
+        bool includeUnselectedResourceDefinitions)
+    {
+        var root = includeUnselectedResourceDefinitions
+            ? ResourceDefinitionsOnly()
+            : new ConfigurationBuilder().Build();
+        var stored = LegacyFeatureConfiguration("Data Source=before.db");
+        var candidate = LegacyFeatureConfiguration("Data Source=after.db");
+        var management = Management(root, new Dictionary<string, JsonElement> { [FeatureId] = stored });
+        var catalog = await management.Service.GetCatalogAsync();
+
+        await management.Service.ApplyAsync(new FeatureApplyRequest(catalog.Revision,
+            [new FeatureApplyItem(FeatureId, true, candidate)]));
+
+        Assert.Equal(1, management.Guard.EvaluationCount);
+        Assert.Equal(1, management.Store.SaveCount);
+        Assert.Equal(1, management.Refresher.RefreshCount);
+        Assert.Equal(1, management.Reloader.ReloadCount);
+        Assert.Equal("Data Source=after.db",
+            management.Guard.Seen!.Request.Features[0].Configuration.GetProperty("ConnectionString").GetString());
+        Assert.Equal("Data Source=after.db",
+            management.Store.Snapshot.Features[FeatureId].GetProperty("ConnectionString").GetString());
+    }
+
     private static EfPersistenceActivationContextPreparer Preparer(
         IConfiguration root, IEfToolingShellDefaults? defaults = null) =>
         new(root, new FakeRuntimeFeatureCatalog(
@@ -186,6 +276,41 @@ public sealed class EfPersistenceActivationContextPreparerTests
         new KeyValuePair<string, string?>("Elsa:Persistence:Resources:primary:Provider", "Sqlite"),
         new KeyValuePair<string, string?>("Elsa:Persistence:Resources:primary:ConnectionName", "Shared")
     ]).Build();
+
+    private static IConfiguration Configuration(params (string Key, string Value)[] values) =>
+        new ConfigurationBuilder().AddInMemoryCollection(values.Select(x =>
+            new KeyValuePair<string, string?>(x.Key, x.Value))).Build();
+
+    private static JsonElement LegacyFeatureConfiguration(string connectionString) =>
+        Json($$"""{"Provider":"Sqlite","ConnectionString":"{{connectionString}}"}""");
+
+    private static ManagementProbe Management(
+        IConfiguration root,
+        IReadOnlyDictionary<string, JsonElement>? features = null,
+        IEfToolingShellDefaults? defaults = null)
+    {
+        var store = new ManagementShellStore(new ShellFeatureConfigurationSnapshot(
+            "default", "revision", features ?? new Dictionary<string, JsonElement>(), Empty));
+        var guard = new CountingActivationGuard();
+        var refresher = new CountingRefresher();
+        var reloader = new CountingReloader();
+        var service = new FeatureManagementService(
+            store,
+            Array.Empty<IFeatureCatalogContributor>(),
+            [guard],
+            Preparer(root, defaults),
+            refresher,
+            reloader);
+        return new ManagementProbe(service, store, guard, refresher, reloader);
+    }
+
+    private static void AssertNoManagementEffects(ManagementProbe management)
+    {
+        Assert.Equal(0, management.Guard.EvaluationCount);
+        Assert.Equal(0, management.Store.SaveCount);
+        Assert.Equal(0, management.Refresher.RefreshCount);
+        Assert.Equal(0, management.Reloader.ReloadCount);
+    }
 
     private static JsonElement Json(string json)
     {
@@ -231,5 +356,72 @@ public sealed class EfPersistenceActivationContextPreparerTests
 
         public void ConfigureServices(IServiceCollection services) => throw new InvalidOperationException(
             "Feature services must not be configured during preflight.");
+    }
+
+    private sealed record ManagementProbe(
+        FeatureManagementService Service,
+        ManagementShellStore Store,
+        CountingActivationGuard Guard,
+        CountingRefresher Refresher,
+        CountingReloader Reloader);
+
+    private sealed class ManagementShellStore(ShellFeatureConfigurationSnapshot snapshot)
+        : IShellFeatureConfigurationStore
+    {
+        public ShellFeatureConfigurationSnapshot Snapshot { get; private set; } = snapshot;
+
+        public int SaveCount { get; private set; }
+
+        public Task<ShellFeatureConfigurationSnapshot> LoadAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(Snapshot);
+
+        public Task<ShellFeatureConfigurationSnapshot> SaveAsync(
+            string expectedRevision,
+            IReadOnlyList<FeatureConfigurationChange> features,
+            CancellationToken cancellationToken = default)
+        {
+            if (expectedRevision != Snapshot.Revision)
+                throw new FeatureCatalogRevisionConflictException(expectedRevision, Snapshot.Revision);
+
+            SaveCount++;
+            Snapshot = Snapshot with
+            {
+                Revision = $"revision-{SaveCount}",
+                Features = features.Where(x => x.Enabled)
+                    .ToDictionary(x => x.Id, x => x.Configuration.Clone(), StringComparer.OrdinalIgnoreCase)
+            };
+            return Task.FromResult(Snapshot);
+        }
+    }
+
+    private sealed class CountingActivationGuard : IFeatureActivationGuard
+    {
+        public int EvaluationCount { get; private set; }
+
+        public FeatureActivationContext? Seen { get; private set; }
+
+        public Task<FeatureActivationDecision> EvaluateAsync(
+            FeatureActivationContext context, CancellationToken cancellationToken = default)
+        {
+            EvaluationCount++;
+            Seen = context;
+            return Task.FromResult(FeatureActivationDecision.Allowed);
+        }
+    }
+
+    private sealed class CountingRefresher : IRuntimeFeatureCatalogRefresher
+    {
+        public int RefreshCount { get; private set; }
+
+        public Task<int> RefreshAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(++RefreshCount);
+    }
+
+    private sealed class CountingReloader : IShellReloader
+    {
+        public int ReloadCount { get; private set; }
+
+        public Task<int> ReloadAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(++ReloadCount);
     }
 }
