@@ -4,6 +4,7 @@ using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
@@ -65,6 +66,56 @@ public sealed class ModuleMigrationTests : IDisposable
     public async Task Every_sqlite_module_installs_into_one_fresh_database_with_its_own_history()
     {
         await ModuleContextCatalog.InstallAllAsync("Sqlite", ConnectionString);
+    }
+
+    [Fact]
+    public async Task Shared_resource_module_selection_installs_only_its_migration_histories()
+    {
+        var selected = new[]
+        {
+            "Activities.Design", "Workflows.Design", "Workflows.Publishing", "Workflows.Runtime"
+        };
+        var descriptors = EfModuleCatalog.Discover(ModuleContextCatalog.Modules)
+            .Where(descriptor => selected.Contains(descriptor.Name, StringComparer.Ordinal))
+            .OrderBy(descriptor => descriptor.Name, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(selected.Order(StringComparer.Ordinal), descriptors.Select(descriptor => descriptor.Name));
+
+        await InstallModulesAsync(descriptors, ConnectionString);
+        var installedHistoryTables = await ReadHistoryTablesAsync(ConnectionString);
+
+        Assert.Equal(descriptors.Select(descriptor => descriptor.HistoryTableName).Order(StringComparer.Ordinal),
+            installedHistoryTables.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task Separate_diagnostics_migrations_install_only_on_the_selected_target()
+    {
+        string[] primaryNames = ["Activities.Design", "Workflows.Design", "Workflows.Publishing", "Workflows.Runtime"];
+        string[] diagnosticsNames = ["Diagnostics.StructuredLogs", "Diagnostics.OpenTelemetry"];
+        var modules = EfModuleCatalog.Discover(ModuleContextCatalog.Modules);
+        var primary = modules.Where(descriptor => primaryNames.Contains(descriptor.Name, StringComparer.Ordinal)).ToArray();
+        var diagnostics = modules.Where(descriptor => diagnosticsNames.Contains(descriptor.Name, StringComparer.Ordinal)).ToArray();
+        Assert.Equal(primaryNames.Length, primary.Length);
+        Assert.Equal(diagnosticsNames.Length, diagnostics.Length);
+
+        var diagnosticsPath = Path.Join(Path.GetTempPath(), $"elsa-ef-diagnostics-{Guid.NewGuid():N}.db");
+        var diagnosticsConnection = $"Data Source={diagnosticsPath};Pooling=False";
+        try
+        {
+            await InstallModulesAsync(primary, ConnectionString);
+            await InstallModulesAsync(diagnostics, diagnosticsConnection);
+
+            Assert.Equal(primary.Select(x => x.HistoryTableName).Order(StringComparer.Ordinal),
+                (await ReadHistoryTablesAsync(ConnectionString)).Order(StringComparer.Ordinal));
+            Assert.Equal(diagnostics.Select(x => x.HistoryTableName).Order(StringComparer.Ordinal),
+                (await ReadHistoryTablesAsync(diagnosticsConnection)).Order(StringComparer.Ordinal));
+        }
+        finally
+        {
+            if (File.Exists(diagnosticsPath))
+                File.Delete(diagnosticsPath);
+        }
     }
 
     [Fact]
@@ -143,6 +194,28 @@ public sealed class ModuleMigrationTests : IDisposable
     {
         if (File.Exists(databasePath))
             File.Delete(databasePath);
+    }
+
+    private static async Task InstallModulesAsync(IEnumerable<EfModuleDescriptor> modules, string connection)
+    {
+        foreach (var module in modules)
+        {
+            await using var context = ModuleContextCatalog.Create(module.RequireProviderContext("Sqlite"), connection);
+            await EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite, EfMigratePolicy.AutoMigrate);
+        }
+    }
+
+    private static async Task<HashSet<string>> ReadHistoryTablesAsync(string connection)
+    {
+        var tables = new HashSet<string>(StringComparer.Ordinal);
+        await using var database = new SqliteConnection(connection);
+        await database.OpenAsync();
+        await using var command = database.CreateCommand();
+        command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE '__EFMigrationsHistory_%'";
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            tables.Add(reader.GetString(0));
+        return tables;
     }
 
     private sealed class ReadsActivitiesOnInitialization(IServiceScopeFactory scopes) : IShellInitializer

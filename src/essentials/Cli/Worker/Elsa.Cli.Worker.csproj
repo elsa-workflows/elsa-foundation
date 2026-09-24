@@ -17,6 +17,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Exact host API negotiation is internal to the worker. CLI tests exercise partial and
+         version-skewed reflection shapes without widening the shipped worker surface. -->
+    <InternalsVisibleTo Include="Elsa.Cli.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Compile-time only, and deliberately so (ADR 0076 D1/D12): the worker runs on the host's deps file,
          so every Nuplane assembly it calls must be the host's own copy. Copying these beside the worker
          would put a second, tool-pinned Nuplane in the probing path; excluding the runtime assets means a

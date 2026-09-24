@@ -11,6 +11,7 @@
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Publishing\Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Tasks\Core\Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->

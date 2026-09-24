@@ -23,9 +23,14 @@
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Publishing\Persistence\EntityFrameworkCore\Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Publishing\Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Events\Elsa.Events.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->

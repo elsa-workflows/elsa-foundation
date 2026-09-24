@@ -17,14 +17,14 @@ Console.CancelKeyPress += (_, eventArgs) =>
 WorkerResponse result;
 try
 {
-    var request = await JsonSerializer.DeserializeAsync<WorkerRequest>(Console.OpenStandardInput(), WorkerContract.Json, cancellation.Token);
+    var request = await WorkerContract.ReadRequestAsync(Console.OpenStandardInput(), cancellation.Token);
     result = request is null
         ? Failed("invalid-request", "The worker was given an empty request.")
         : await WorkerRunner.RunAsync(request, cancellation.Token);
 }
-catch (JsonException failure)
+catch (JsonException)
 {
-    result = Failed("invalid-request", $"The worker was not given valid request JSON: {failure.Message}");
+    result = Failed("invalid-request", "The worker was not given a valid closed request.");
 }
 catch (OperationCanceledException)
 {

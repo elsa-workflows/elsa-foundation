@@ -21,6 +21,8 @@ public sealed class ModularityApiFeatureTests
         Assert.Contains(services, x => x.ServiceType == typeof(IShellFeatureConfigurationStore));
         Assert.Contains(services, x => x.ServiceType == typeof(IShellReloader));
         Assert.Contains(services, x => x.ServiceType == typeof(IRuntimeFeatureCatalogRefresher));
+        Assert.Equal(typeof(LegacyFeatureActivationContextPreparer),
+            SingleImplementation<IFeatureActivationContextPreparer>(services));
     }
 
     [Fact]

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>Elsa.Persistence.EntityFramework</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <Description>A v1-only persistence tooling surface for public CLI compatibility tests.</Description>
+  </PropertyGroup>
+
+</Project>

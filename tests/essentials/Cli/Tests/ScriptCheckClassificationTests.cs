@@ -144,6 +144,41 @@ public sealed class ScriptCheckClassificationTests : IDisposable
         Assert.Contains(report.Lines, line => line.Contains("modules[0].package.id", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void Version_two_context_evidence_change_with_identical_sql_is_not_called_a_version_change()
+    {
+        Write(committed, "CREATE TABLE acme_widgets;\n");
+        Write(regenerated, "CREATE TABLE acme_widgets;\n");
+        UpgradeToContext(committed, "primary");
+        UpgradeToContext(regenerated, "secondary");
+
+        var plan = MigrationPlan.Read(committed.Path);
+        var report = ScriptCheck.Compare(committed.Path, regenerated.Path, plan);
+
+        Assert.Equal(MigrationPlan.ContextSchemaVersion, plan.SchemaVersion);
+        Assert.Equal("workbench-json-v1", plan.ConfigurationContext?.Source);
+        Assert.Equal("primary", plan.ConfigurationContext?.Resource);
+        Assert.Equal(ToolExitCode.NegativeResult, report.ExitCode);
+        Assert.Equal("manifest differs, SQL identical", report.Headline);
+        Assert.Contains(report.Lines, line => line.Contains("configurationContext.resource", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Version_two_manifest_rejects_unknown_context_fields()
+    {
+        Write(committed, "CREATE TABLE acme_widgets;\n");
+        UpgradeToContext(committed, "primary");
+        var path = committed.File(MigrationPlan.FileName);
+        var root = System.Text.Json.Nodes.JsonNode.Parse(System.IO.File.ReadAllText(path))!;
+        root["configurationContext"]!["connection"] = "connection-value-canary";
+        System.IO.File.WriteAllText(path, root.ToJsonString());
+
+        var refusal = Assert.Throws<CliRefusal>(() => MigrationPlan.Read(committed.Path));
+        Assert.Equal("plan-unreadable", refusal.Code);
+        Assert.DoesNotContain("connection-value-canary", refusal.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(path, refusal.Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("efCoreVersion", true)]
     [InlineData("engine.version", true)]
@@ -160,6 +195,23 @@ public sealed class ScriptCheckClassificationTests : IDisposable
 
     private ScriptCheckReport Compare() =>
         ScriptCheck.Compare(committed.Path, regenerated.Path, MigrationPlan.Read(committed.Path));
+
+    private static void UpgradeToContext(TempDirectory directory, string resource)
+    {
+        var path = directory.File(MigrationPlan.FileName);
+        var root = System.Text.Json.Nodes.JsonNode.Parse(System.IO.File.ReadAllText(path))!;
+        root["schemaVersion"] = MigrationPlan.ContextSchemaVersion;
+        root["host"]!["providerAgreement"] = "checked";
+        root["host"]!["shell"] = "default";
+        root["modules"]![0]!["sha256"] = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+            System.IO.File.ReadAllBytes(directory.File(File1))));
+        root["configurationContext"] = System.Text.Json.Nodes.JsonNode.Parse($$"""
+            { "source": "workbench-json-v1", "environment": "Production", "shell": "default",
+              "resource": "{{resource}}", "resolution": "resource", "targetVerification": "not-performed",
+              "runtimeParity": "unobserved", "participants": [], "unresolved": ["expected-connection-unchecked"] }
+            """);
+        System.IO.File.WriteAllText(path, root.ToJsonString());
+    }
 
     private static void Write(
         TempDirectory directory,

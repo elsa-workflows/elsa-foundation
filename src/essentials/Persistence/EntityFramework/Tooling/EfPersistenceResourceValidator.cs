@@ -1,0 +1,251 @@
+using Elsa.Persistence.EntityFramework.ResourceResolution;
+using Microsoft.Extensions.Configuration;
+
+namespace Elsa.Persistence.EntityFramework.Tooling;
+
+/// <summary>Checks EF-owned constraints on a detached resource plan before feature activation.</summary>
+/// <remarks>Connection values are used only for equality and never leave this method.</remarks>
+internal static class EfPersistenceResourceValidator
+{
+    internal sealed record ValidationResult(IReadOnlyList<string> Refusals, IReadOnlyList<string> UnresolvedCodes);
+
+    internal static ValidationResult Validate(
+        PersistenceResolutionResult resolution,
+        IReadOnlyList<EfModuleDescriptor> modules,
+        IReadOnlyDictionary<string, string?> composedSettings,
+        IConfiguration rootConfiguration,
+        bool verifyConnectionValues = true)
+    {
+        ArgumentNullException.ThrowIfNull(resolution);
+        ArgumentNullException.ThrowIfNull(modules);
+        ArgumentNullException.ThrowIfNull(composedSettings);
+        ArgumentNullException.ThrowIfNull(rootConfiguration);
+
+        var refusals = new HashSet<string>(StringComparer.Ordinal);
+        var unresolved = new HashSet<string>(StringComparer.Ordinal);
+        var connectionDifferenceCodes = verifyConnectionValues ? refusals : unresolved;
+        var connectionDifferenceCode = verifyConnectionValues
+            ? "resource-context-conflict"
+            : "target-affinity-unverified";
+        var targets = new List<Target>();
+        // Publishing EF registers the activity-upgrade mutation store, which enlists both
+        // Design contexts in one local transaction. Its own ledger target may be separate.
+        var hasActivityUpgradeStore = resolution.Participants.Any(x =>
+            StringComparer.Ordinal.Equals(x.Participant.FeatureId, "WorkflowsPublishingEntityFrameworkCore"));
+        foreach (var selected in resolution.Participants.Where(x => x.Selection != PersistenceSelectionKind.Legacy))
+        {
+            if (selected.Provider is null || selected.ConnectionName is null)
+                continue; // The resolver has already refused an incomplete selection.
+
+            var participant = selected.Participant;
+            if (participant.ModuleNames.Count != 1 ||
+                EfModuleCatalog.Find(modules, participant.ModuleNames[0]) is not { } module ||
+                !StringComparer.Ordinal.Equals(module.ContextType.FullName, participant.ContextIdentity))
+            {
+                refusals.Add("resource-ownership-unresolved");
+                continue;
+            }
+
+            // Offline tooling compares declared reference identities. Expected values are looked up only
+            // for a live operation, immediately before database construction.
+            var connection = verifyConnectionValues
+                ? ConnectionString(selected.ConnectionName, composedSettings, rootConfiguration)
+                : $"reference:{selected.ConnectionName}";
+            if (string.IsNullOrWhiteSpace(connection))
+            {
+                refusals.Add("resource-definition-invalid");
+                continue;
+            }
+            if (CreateTarget(participant.FeatureId, module, selected.Provider, connection,
+                    composedSettings, rootConfiguration, refusals) is { } target)
+                targets.Add(target);
+        }
+
+        // A resource binding on one Runtime feature cannot silently split the same context
+        // from another Runtime feature that retained legacy settings.
+        var selectedContexts = targets.Select(x => x.ContextType).ToHashSet();
+        foreach (var legacy in resolution.Participants.Where(x => x.Selection == PersistenceSelectionKind.Legacy))
+        {
+            var participant = legacy.Participant;
+            if (participant.ModuleNames.Count != 1 ||
+                EfModuleCatalog.Find(modules, participant.ModuleNames[0]) is not { } module ||
+                !selectedContexts.Contains(module.ContextType) &&
+                !(hasActivityUpgradeStore && IsActivityUpgradeDesignModule(module.Name)))
+                continue;
+
+            // A legacy configurator can replace the provider, connection or shared context
+            // options at feature binding time. The detached plan cannot establish agreement
+            // with a resource-selected owner without executing that code.
+            if (participant.HasOpaqueConfigurator)
+            {
+                refusals.Add("resource-ownership-unresolved");
+                continue;
+            }
+
+            var provider = Get(composedSettings, $"{participant.FeatureId}:Provider") ??
+                           EfProviderAgreement.UnsetProvider;
+            string? connection;
+            if (!verifyConnectionValues)
+            {
+                if (composedSettings.Keys.Any(key => StringComparer.OrdinalIgnoreCase.Equals(
+                        key, $"{participant.FeatureId}:ConnectionString")))
+                {
+                    refusals.Add("resource-context-conflict");
+                    continue;
+                }
+                var authoredName = Get(composedSettings, $"{participant.FeatureId}:ConnectionName");
+                connection = $"reference:{(string.IsNullOrWhiteSpace(authoredName) ? module.DefaultConnectionName : authoredName)}";
+            }
+            else
+            {
+                connection = Get(composedSettings, $"{participant.FeatureId}:ConnectionString");
+                if (string.IsNullOrWhiteSpace(connection))
+                {
+                    var authoredName = Get(composedSettings, $"{participant.FeatureId}:ConnectionName");
+                    var name = string.IsNullOrWhiteSpace(authoredName)
+                        ? module.DefaultConnectionName
+                        : authoredName;
+                    connection = ConnectionString(name, composedSettings, rootConfiguration);
+                    if (string.IsNullOrWhiteSpace(connection) &&
+                        string.IsNullOrWhiteSpace(authoredName) &&
+                        EfRelationalProviderBinding.Normalize(provider) == "sqlite")
+                        connection = module.DefaultSqliteConnectionString;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(connection))
+            {
+                refusals.Add("resource-context-conflict");
+                continue;
+            }
+
+            if (CreateTarget(participant.FeatureId, module, provider, connection,
+                    composedSettings, rootConfiguration, refusals) is { } target)
+                targets.Add(target);
+        }
+
+        // Several Runtime features configure the same DbContext. The resource name is not a
+        // physical-target identity: compare the resolved connection and all shared options.
+        foreach (var group in targets.GroupBy(x => x.ContextType))
+        {
+            var first = group.First();
+            if (group.Skip(1).Any(x =>
+                    !StringComparer.Ordinal.Equals(x.Provider, first.Provider) ||
+                    !StringComparer.Ordinal.Equals(x.Schema, first.Schema) ||
+                    x.Pooling != first.Pooling))
+                refusals.Add("resource-context-conflict");
+            if (group.Skip(1).Any(x => !StringComparer.Ordinal.Equals(x.Connection, first.Connection)))
+                connectionDifferenceCodes.Add(connectionDifferenceCode);
+        }
+
+        if (hasActivityUpgradeStore)
+        {
+            var activities = targets.FirstOrDefault(x => x.ModuleName == "Activities.Design");
+            var workflows = targets.FirstOrDefault(x => x.ModuleName == "Workflows.Design");
+            if (activities is null || workflows is null)
+                refusals.Add("resource-ownership-unresolved");
+            else if (!StringComparer.Ordinal.Equals(activities.Provider, workflows.Provider))
+                refusals.Add("resource-context-conflict");
+            else if (!StringComparer.Ordinal.Equals(activities.Connection, workflows.Connection))
+                connectionDifferenceCodes.Add(connectionDifferenceCode);
+        }
+
+        // The supported diagnostics exception moves both local stores together. They do not
+        // share an EF transaction, but independently splitting them is not a proven runtime
+        // layout. Compare resolved targets, not resource names: aliases can name one target.
+        var diagnostics = targets.Where(x => x.ModuleName is
+            "Diagnostics.StructuredLogs" or "Diagnostics.OpenTelemetry").ToArray();
+        if (diagnostics.Length == 2)
+        {
+            if (!StringComparer.Ordinal.Equals(diagnostics[0].Provider, diagnostics[1].Provider))
+                refusals.Add("resource-context-conflict");
+            if (!StringComparer.Ordinal.Equals(diagnostics[0].Connection, diagnostics[1].Connection))
+                connectionDifferenceCodes.Add(connectionDifferenceCode);
+        }
+
+        var diagnosticsSelections = resolution.Participants.Where(x => x.Participant.ModuleNames.Any(name =>
+            name is "Diagnostics.StructuredLogs" or "Diagnostics.OpenTelemetry")).ToArray();
+        if (diagnosticsSelections.Length == 2 &&
+            diagnosticsSelections.Any(x => x.Selection == PersistenceSelectionKind.Legacy) &&
+            diagnosticsSelections.Any(x => x.Selection != PersistenceSelectionKind.Legacy))
+            refusals.Add("resource-ownership-unresolved");
+
+        // Selection never grants permission to migrate; an invalid authored policy must not
+        // silently fall back to AutoMigrate. No migration probe runs in this validator.
+        var policy = Get(composedSettings, $"{EfMigrateOptions.SectionName}:Policy") ??
+                     rootConfiguration[$"{EfMigrateOptions.SectionName}:Policy"];
+        if (!string.IsNullOrWhiteSpace(policy) &&
+            (!Enum.TryParse<EfMigratePolicy>(policy, true, out var parsed) || !Enum.IsDefined(parsed)))
+            refusals.Add("resource-context-conflict");
+
+        return new ValidationResult(refusals.Order(StringComparer.Ordinal).ToArray(),
+            unresolved.Order(StringComparer.Ordinal).ToArray());
+    }
+
+    private static Target? CreateTarget(
+        string featureId,
+        EfModuleDescriptor module,
+        string provider,
+        string connection,
+        IReadOnlyDictionary<string, string?> composedSettings,
+        IConfiguration rootConfiguration,
+        ISet<string> refusals)
+    {
+        try
+        {
+            provider = EfRelationalProviderBinding.Normalize(provider);
+            if (module.ProviderContext(provider) is null ||
+                EfRelationalProviderBinding.DescribeBindingFailure(provider) is not null)
+            {
+                refusals.Add("resource-context-conflict");
+                return null;
+            }
+        }
+        catch (ArgumentException)
+        {
+            refusals.Add("resource-context-conflict");
+            return null;
+        }
+
+        var schema = Get(composedSettings, $"{featureId}:Schema") ??
+                     Get(composedSettings, EfSchema.ConfigurationKey) ??
+                     rootConfiguration[EfSchema.ConfigurationKey];
+        try
+        {
+            schema = EfSchema.Normalize(module.Owner, provider, schema);
+        }
+        catch (InvalidOperationException)
+        {
+            refusals.Add("resource-context-conflict");
+            return null;
+        }
+
+        var poolingValue = Get(composedSettings, $"{featureId}:Pooling");
+        if (poolingValue is not null && !bool.TryParse(poolingValue, out _))
+        {
+            refusals.Add("resource-context-conflict");
+            return null;
+        }
+
+        return new Target(module.Name, module.ContextType, provider, connection, schema,
+            bool.TryParse(poolingValue, out var pooling) && pooling);
+    }
+
+    private static bool IsActivityUpgradeDesignModule(string moduleName) =>
+        moduleName is "Activities.Design" or "Workflows.Design";
+
+    private static string? Get(IReadOnlyDictionary<string, string?> settings, string key)
+    {
+        if (settings.TryGetValue(key, out var value))
+            return value;
+        return settings.FirstOrDefault(x => StringComparer.OrdinalIgnoreCase.Equals(x.Key, key)).Value;
+    }
+
+    private static string? ConnectionString(
+        string name,
+        IReadOnlyDictionary<string, string?> composedSettings,
+        IConfiguration rootConfiguration) =>
+        Get(composedSettings, $"ConnectionStrings:{name}") ?? rootConfiguration.GetConnectionString(name);
+
+    private sealed record Target(string ModuleName, Type ContextType, string Provider, string Connection, string? Schema, bool Pooling);
+}

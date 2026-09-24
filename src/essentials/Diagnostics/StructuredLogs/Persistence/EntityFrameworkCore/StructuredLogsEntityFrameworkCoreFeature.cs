@@ -15,6 +15,7 @@ namespace Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore;
     Description = "Opt-in EF Core persistence for Structured Logs. It applies or validates its own migrations on shell activation;",
     DependsOn = new object[] { "DiagnosticsStructuredLogs" })]
 [UsesEfModule("Diagnostics.StructuredLogs")]
+[EfPersistenceResourceParticipant]
 public class StructuredLogsEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(

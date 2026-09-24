@@ -1,6 +1,6 @@
 # Persistence configuration contracts
 
-Status: Integrated design review approved on 2026-09-23 for #1967. Publication is pending; implementation and runtime/database verification remain #1968/#1969 work.
+Status: Integrated design review approved on 2026-09-23 for #1967 and published in PR #1973. The shared-layout resolver, runtime preparation and PostgreSQL Workbench evidence merged in PR #1974 after T045 acceptance. The separate diagnostics layout is active #1969 work.
 
 Canonical decisions:
 
@@ -53,7 +53,7 @@ public sealed record EfPersistenceApplicabilityItem(
     string FeatureId, string? ResourceName, string SelectionKind);
 ```
 
-The context/result types are the public `CShells.Lifecycle` types delivered in preview.157; root configuration is explicitly supplied by the caller. The facade builds detached inputs, invokes the internal resolver and returns only existing scalar patches plus redacted applicability. HasApplicableResource includes malformed selected intent; definitions-only and unknown unenrolled bindings are not applicable. RefusalCodes nonempty requires an empty patch. UnresolvedCodes never mean a readiness pass. Resource-selected participants carry source selection kind even when their selected name is malformed; do not infer applicability from nonnull ResourceName alone.
+The context/result types are the public `CShells.Lifecycle` types introduced in preview.157; Foundation currently pins preview.159 after the catalog and source-generation follow-ups. Root configuration is explicitly supplied by the caller. The facade builds detached inputs, invokes the internal resolver and returns only existing scalar patches plus redacted applicability. HasApplicableResource includes malformed selected intent; definitions-only and unknown unenrolled bindings are not applicable. RefusalCodes nonempty requires an empty patch. UnresolvedCodes never mean a readiness pass. Resource-selected participants carry source selection kind even when their selected name is malformed; do not infer applicability from nonnull ResourceName alone.
 
 The runtime CShells adapter returns Patch only after checking refusals. The management adapter composes complete current/candidate contexts using the shared host composer and public CShells APIs, calls this facade for each and refuses applicable intent before ordinary guards. It must not manufacture an incomplete context from directly enabled IDs. Root/raw configuration must correspond to the same candidate representation when presence is inspected; never combine candidate final settings with stale authored fields from another source generation.
 
@@ -77,6 +77,7 @@ Selection semantics are:
 - Root feature bindings and shell-local resource catalogs are unsupported in this slice.
 - Deleting the owning key reveals the next lower-priority value.
 - Null, empty, blank, wrong-type, unknown, or incomplete selected values refuse; null is never deletion.
+- New resource and connection-reference names use the conservative identifier-like rule in [the authored-configuration decision](../decisions/authored-persistence.md#configuration-surface); boolean/numeric-looking scalar tokens are reserved because `IConfiguration` erases their original JSON token type. Legacy feature values retain their existing syntax.
 
 ## Enrollment and existing metadata
 
@@ -140,7 +141,7 @@ The pure resolver is not the EF validator. EF-owned validation consumes the reso
 
 EfConnectionDefaults.ResolveConnectionString remains the runtime/legacy connection sidecar. It runs only after resource materialization inside the trusted host. Tooling expected-value lookup is a separate trusted sidecar. Neither sidecar is part of the pure resolver, and no resolved secret returns through the resolver or tooling protocol.
 
-Resource names and aliases express reference-level grouping only; they do not prove physical database equality or transaction affinity. Different references are not automatically incompatible. Physical equality is unverified offline and checked strictly only by the trusted live operation when required.
+Resource names and aliases express reference-level grouping only; they do not prove physical database equality or transaction affinity. Different references are not automatically incompatible. When one shared context or required local transaction spans distinct references, offline validation reports `target-affinity-unverified` instead of a physical mismatch. Physical equality is checked strictly only by the trusted live operation when required; known provider, schema, and pooling conflicts still refuse offline.
 
 The shared Runtime, Workflows Design, Activities Design, and Publishing layout and the separate diagnostics layout remain configuration candidates. Diagnostics split proof and live host/database evidence remain owned by #1968 and #1969.
 
@@ -150,7 +151,7 @@ Refuse before side effects for missing, blank, null, wrong-type, unknown, or inc
 
 Preserve unknown resources and fields when not selected, unknown feature IDs/settings, disabled/reset state, unrelated authored feature fields, host-owned/private stores, and sources outside the selected context. A source-collection race refuses or retries the candidate snapshot; it does not claim an atomic configuration transaction. No refusal may disclose a secret or cause an unintended migration probe, context construction, database access, save, refresh, or reload.
 
-Stable configuration refusal codes are `resource-selection-invalid` (null/blank/wrong-type selection), `resource-not-found`, `resource-definition-invalid` (selected incomplete/unsupported resource shape), `resource-legacy-conflict`, `resource-configurator-unsupported`, `resource-required-feature-disabled`, `resource-context-conflict`, and `resource-source-changed`. Unknown unenrolled bindings use unresolved code `resource-participant-unenrolled`; unsupported authored scopes use `resource-scope-unsupported`. They remain preserved and do not by themselves activate or refuse a legacy composition. If requested executable scope requires ownership that cannot be established, refuse `resource-ownership-unresolved`. Refusal identity fields follow the detached model; safe adapters format these codes without raw values. Tooling-specific and management-specific codes are defined in their own contracts.
+Stable configuration refusal codes are `resource-selection-invalid` (null/blank/wrong-type selection), `resource-not-found`, `resource-definition-invalid` (selected incomplete/unsupported resource shape), `resource-legacy-conflict`, `resource-configurator-unsupported`, `resource-required-feature-disabled`, `resource-context-conflict`, and `resource-source-changed`. Unknown unenrolled bindings use unresolved code `resource-participant-unenrolled`; unsupported authored scopes use `resource-scope-unsupported`; distinct references whose required physical affinity cannot be checked offline use `target-affinity-unverified`. They remain preserved and do not by themselves activate or refuse a legacy composition. If requested executable scope requires ownership that cannot be established, refuse `resource-ownership-unresolved`. Refusal identity fields follow the detached model; safe adapters format these codes without raw values. Tooling-specific and management-specific codes are defined in their own contracts.
 
 ## Functional-requirement mapping
 

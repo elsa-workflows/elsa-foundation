@@ -84,6 +84,34 @@ Oracle container leg is the first of the three conditions ADR 0075 requires to r
 | `UnicodeOrdinalCasingTable` | The pinned Unicode simple-uppercase mappings that Secrets and OpenTelemetry project persisted ordinal-ignore-case search keys from; each consumer pins `ComputeMappingFingerprint()` in its algorithm id, so the table is never edited in place |
 | `EfPayloadCodec` / `EfPayloadColumns` | Encode a module's payload columns in band (`elsaz1.<codec>.<base64>`), so compressed and uncompressed rows coexist in one column with no schema change; refuses a declaration that is keyed, indexed, length-bounded, or on the excluded `ContentAuthority` family |
 
+## Shared persistence resources
+
+Workbench can opt into named persistence resources through `AddEfPersistenceResources`. A resource
+selects a `Provider` and `ConnectionName` together; the connection value remains in the host's existing
+`ConnectionStrings` configuration. An enabled enrolled feature inherits, in order, its shell binding,
+the shell default, the root `Elsa:Persistence:DefaultResource`, or its existing legacy settings. A
+resource definition by itself does not select or enable a feature. See the
+[configuration contract](../../../../specs/173-shared-persistence/contracts/persistence-configuration.md)
+for the authored shape, precedence, and refusal rules.
+
+The first-slice shared layout assigns enabled enrolled Runtime, Workflows Design, Activities Design, and
+Publishing consumers to one target. The current Workbench live receipt exercises the enabled default-shell
+module set across those four groups. All eight enrolled Runtime feature identities use one
+`RuntimeDbContext`; selecting a Runtime feature does not create a separate Runtime store, and all enabled
+Runtime participants must agree on its provider and context options. The four-module Workbench journey
+proves the default-shell workflow path. Opt-in Runtime identities have activation and migration-placement
+evidence, but that does not establish each one's data behavior. The separate diagnostics layout for
+Structured Logs and OpenTelemetry is enrolled and modeled, but its two-target host/database proof remains
+pending; do not treat it as a verified layout yet.
+
+Resource selection supplies only provider and connection-name patches. It does not set schema, pooling,
+migration policy, or migration permission. Without applicable resource selection, legacy configuration
+keeps its existing behavior. With applicable selection, authored `Provider`, `ConnectionName`, or
+`ConnectionString` fields are ambiguous and refuse. Host-owned OpenIddict, IAM/provider configuration,
+Secrets, distributed stores, Dashboard readers, private stores, and unknown/custom consumers do not
+inherit a resource automatically. Resource names are references, not proof that two contexts share a
+physical database or transaction; required affinity is checked by the owning EF/runtime operation.
+
 ## Retry policy
 
 Accepted [ADR 0074](../../../../docs/adr/0074-first-party-ef-stores-retry-in-bounded-application-loops.md):
