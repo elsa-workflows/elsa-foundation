@@ -18,7 +18,7 @@ namespace Elsa.Cli.Worker;
 public static class WorkerContract
 {
     /// <summary>The only envelope version this build speaks in either direction.</summary>
-    public const int Version = 1;
+    public const int Version = 2;
 
     /// <summary>
     /// Case-sensitive camelCase with unmapped members refused, matching the tooling contract: a worker and a
@@ -32,6 +32,29 @@ public static class WorkerContract
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
+
+    /// <summary>Reads the private envelope without accepting duplicate or unknown fields.</summary>
+    internal static async Task<WorkerRequest?> ReadRequestAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        if (document.RootElement.ValueKind != JsonValueKind.Object ||
+            !document.RootElement.TryGetProperty("version", out _) || HasDuplicateFields(document.RootElement))
+            throw new JsonException("The worker request is not a closed versioned object.");
+        return document.RootElement.Deserialize<WorkerRequest>(Json);
+    }
+
+    public static bool HasDuplicateFields(JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.Array)
+            return value.EnumerateArray().Any(HasDuplicateFields);
+        if (value.ValueKind != JsonValueKind.Object)
+            return false;
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var field in value.EnumerateObject())
+            if (!names.Add(field.Name) || HasDuplicateFields(field.Value))
+                return true;
+        return false;
+    }
 }
 
 /// <summary>The commands this worker backs.</summary>
@@ -48,6 +71,16 @@ public static class WorkerCommands
 
     /// <summary>The commands that open the host's database and so need a connection (D7).</summary>
     public static bool OpensDatabase(string command) => command is Apply or Validate or PostMigrate;
+}
+
+/// <summary>Source identifiers shared by the EF-free CLI front end and worker.</summary>
+public static class WorkerContextSources
+{
+    public const string WorkbenchJson = "workbench-json-v1";
+    public const string WorkbenchJsonEnvironment = "workbench-json-environment-v1";
+
+    public static bool IsSupported(string? source) =>
+        source is WorkbenchJson or WorkbenchJsonEnvironment;
 }
 
 /// <summary>
@@ -108,6 +141,15 @@ public sealed record WorkerRequest
 
     /// <summary>The <c>--shell</c> the provider-agreement check was narrowed to, or <c>null</c> for every configured shell.</summary>
     public string? Shell { get; init; }
+
+    /// <summary>Host-owned source selected by --configuration-context, absent for legacy commands.</summary>
+    public string? ContextSource { get; init; }
+
+    /// <summary>Context factory protocol version 1, supplied only with an explicit source.</summary>
+    public int? ContextVersion { get; init; }
+
+    /// <summary>Optional selected named resource identity; its provider and connection stay host-owned.</summary>
+    public string? Resource { get; init; }
 
     /// <summary>
     /// The host's enabled shell features, read from <c>shells.json</c> plus its <c>--environment</c> overlay

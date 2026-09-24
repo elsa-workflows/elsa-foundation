@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>Elsa.Persistence.EntityFramework</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <Description>A persistence tooling surface with a factory but no context operation.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../ContextApiShared/ToolingBase.cs" Link="ToolingBase.cs" />
+  </ItemGroup>
+
+</Project>

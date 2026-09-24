@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.Loader;
 
 namespace Elsa.Cli.Worker;
 
@@ -35,6 +36,28 @@ public static class HostClosure
                 // Deliberately silent: a module assembly that fails to load surfaces as an unresolved module
                 // with its own named refusal, and warning about every unrelated one would bury it.
             }
+        }
+    }
+
+    /// <summary>Loads the selected application itself; its deps assets alone do not include the entry assembly.</summary>
+    public static void LoadHostAssembly(string hostDirectory, string hostName)
+    {
+        var expected = Path.Join(hostDirectory, $"{hostName}.dll");
+        try
+        {
+            var host = AssemblyLoadContext.Default.LoadFromAssemblyPath(expected);
+            if (!StringComparer.Ordinal.Equals(host.GetName().Name, hostName))
+                throw WorkerRefusal.Resolution("host-composition-unavailable",
+                    "The selected host assembly does not match its validated layout.");
+        }
+        catch (WorkerRefusal)
+        {
+            throw;
+        }
+        catch (Exception failure) when (failure is BadImageFormatException || WorkerRunner.IsNonFatal(failure))
+        {
+            throw WorkerRefusal.Resolution("host-composition-unavailable",
+                "The selected host assembly could not be loaded for configuration inspection.");
         }
     }
 

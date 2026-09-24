@@ -42,7 +42,7 @@ The initial backlog was published on 2026-09-23. Discovery #1965/#1966 is comple
 
 1. Discover supported persistence boundaries in [#1965](https://github.com/elsa-workflows/elsa-foundation/issues/1965), then the shared runtime/tooling resolution path in [#1966](https://github.com/elsa-workflows/elsa-foundation/issues/1966). Both discovery leaves are complete; their reports ground the specification.
 2. Reconcile the evidence and specify the bounded delivery slice in [#1967](https://github.com/elsa-workflows/elsa-foundation/issues/1967), using both reviewed spike results. Closing a spike with unknowns does not automatically make implementation ready.
-3. Deliver the shared persistence path in [#1968](https://github.com/elsa-workflows/elsa-foundation/issues/1968), then a proven diagnostics override in [#1969](https://github.com/elsa-workflows/elsa-foundation/issues/1969). Both stories are initially blocked and require specification refinement.
+3. Deliver the shared persistence path in [#1968](https://github.com/elsa-workflows/elsa-foundation/issues/1968), then a proven diagnostics override in [#1969](https://github.com/elsa-workflows/elsa-foundation/issues/1969). The reviewed specification is published in [PR #1973](https://github.com/elsa-workflows/elsa-foundation/pull/1973). #1968 is the active delivery leaf; #1969 remains blocked until shared-layout acceptance. The CShells preparation and catalog compatibility prerequisites are delivered in preview.158; the runtime resource integration remains in progress.
 4. Refine later epic outlines only when their contracts and evidence are concrete. Keep one active integration lane and synchronize issue comments, labels, and project readiness when work changes state.
 
 ## Epic Outcomes

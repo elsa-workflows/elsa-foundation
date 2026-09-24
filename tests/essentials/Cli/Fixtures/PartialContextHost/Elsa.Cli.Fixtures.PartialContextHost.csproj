@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <Description>A packaged host exposing only part of the persistence context API.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PartialContextPersistence\Elsa.Cli.Fixtures.PartialContextPersistence.csproj" />
+  </ItemGroup>
+
+</Project>

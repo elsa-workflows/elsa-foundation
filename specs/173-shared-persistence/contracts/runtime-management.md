@@ -1,14 +1,14 @@
 # Runtime preparation and legacy management contract
 
-Status: Integrated design review approved on 2026-09-23 for #1967. Publication is pending; implementation and runtime/database verification remain #1968/#1969 work.
+Status: Integrated design review approved on 2026-09-23 for #1967 and published in PR #1973. The shared-layout implementation and live reload/management evidence are in draft PR #1974; T045 is the final current-head gate. The separate diagnostics layout remains #1969 work.
 
 The [persistence configuration contract](persistence-configuration.md) owns resource shape, presence, enrollment and resolution. The [tooling contract](tooling.md) owns the shared host-default declaration. This document specifies when runtime and management invoke that resolution and which side effects are permitted.
 
 ## Runtime enrollment
 
-Add one root registration extension, `AddEfPersistenceResources(IServiceCollection services, IConfiguration configuration, Assembly hostAssembly)`, owned by Elsa.Modularity.EntityFramework. It validates that the explicit host assembly carries the tooling contract's single defaults-composer declaration. The declaration is mandatory for resource activation, including code-selected defaults. Do not scan unrelated loaded assemblies for a substitute. Legacy-only hosts need not register the adapter or declare a composer.
+The delivered root registration extension is `AddEfPersistenceResources(IServiceCollection services, IConfiguration configuration, Assembly hostAssembly)`, owned by Elsa.Modularity.EntityFramework. It validates that the explicit host assembly carries the tooling contract's single defaults-composer declaration. The declaration is mandatory for resource activation, including code-selected defaults. Do not scan unrelated loaded assemblies for a substitute. Legacy-only hosts need not register the adapter or declare a composer.
 
-Registration installs exactly one CShells `IShellSettingsPreparer` and the EF management context-preparation implementation. Use the delivered CShells 0.0.30-preview.157 public contract. Duplicate preparers retain CShells' fail-fast refusal; do not create an implicit preparer chain. Root configuration is an explicit dependency because the CShells callback contains only composed shell configuration.
+Registration installs exactly one CShells `IShellSettingsPreparer` and the EF management context-preparation implementation. The public preparation contract arrived in preview.157 and the detailed catalog fix in preview.158; the current Foundation package pin is preview.159, which also checks configuration-source changes before feature construction. Duplicate preparers retain CShells' fail-fast refusal; do not create an implicit preparer chain. Root configuration is an explicit dependency because the CShells callback contains only composed shell configuration.
 
 For each fresh shell generation:
 
@@ -37,7 +37,7 @@ Configuration-provider change detection is scoped to candidate construction. The
 
 ## Mandatory management preparation seam
 
-Introduce one provider-neutral replacement service in Elsa.Modularity.Core using the existing context and refusal exception:
+The provider-neutral replacement service in Elsa.Modularity.Core uses the existing context and refusal exception:
 
 ```csharp
 public interface IFeatureActivationContextPreparer
@@ -50,7 +50,7 @@ public interface IFeatureActivationContextPreparer
 
 Return the prepared context on success; refuse by throwing the existing FeatureActivationRefusedException carrying existing redacted FeatureActivationRefusal entries. No new parallel result hierarchy is needed. The default returns the input context unchanged. FeatureManagementService constructs the context after RestoreSecrets and ValidateRequest, invokes preparation, then passes the returned context into EnsureActivationAllowedAsync instead of reconstructing it there. Save retains the original restored authored request. The existing API maps the refusal to HTTP 409.
 
-The current snapshot includes shell Configuration; the candidate request changes feature states only. EnabledFeatures is merely the directly enabled candidate set, so it is not a final composition graph. The EF adapter reads root IConfiguration explicitly and composes both current and candidate feature states with shell Configuration, host defaults and public dependency expansion. It checks source-generation changes around preparation and refuses/retries unstable input. No feature constructors/configurators run. Do not infer complete participant applicability from the management catalog or its Features-only revision.
+The current snapshot includes shell Configuration; the candidate request changes feature states only. EnabledFeatures is merely the directly enabled candidate set, so it is not a final composition graph. The EF adapter reads root IConfiguration explicitly and composes both current and candidate feature states with shell Configuration, host defaults and public dependency expansion. It checks source-generation changes around preparation and refuses unstable input. No feature constructors/configurators run. Do not infer complete participant applicability from the management catalog or its Features-only revision.
 
 The default implementation in Elsa.Modularity.Nuplane preserves existing legacy context construction. Elsa.Modularity.EntityFramework supplies the single replacement implementing the bounded policy below. Core and Nuplane gain no EF dependency, resource DTO or provider engine reference. Declare replacement kind on the contract through the repository's existing metadata mechanism. Registration selects one implementation explicitly and detects duplicate implementations with a clear startup diagnostic; it is not an ordered collection of mutating preprocessors.
 

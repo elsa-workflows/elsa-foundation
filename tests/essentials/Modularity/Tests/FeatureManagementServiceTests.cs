@@ -99,6 +99,24 @@ public sealed class FeatureManagementServiceTests
     }
 
     [Fact]
+    public async Task ApplyRoundTripsEnabledUnknownFeaturesAndTheirUnrecognizedSettings()
+    {
+        _store.Features["FutureFeature"] = Json("""{"Flag":false,"Limit":0,"Label":"","Optional":null}""");
+        var service = CreateService();
+        var catalog = await service.GetCatalogAsync();
+        var feature = Assert.Single(catalog.Features, item => item.Id == "FutureFeature");
+
+        await service.ApplyAsync(new FeatureApplyRequest(catalog.Revision,
+            [new(feature.Id, true, feature.Configuration)]));
+
+        var preserved = _store.Features["FutureFeature"];
+        Assert.False(preserved.GetProperty("Flag").GetBoolean());
+        Assert.Equal(0, preserved.GetProperty("Limit").GetInt32());
+        Assert.Equal("", preserved.GetProperty("Label").GetString());
+        Assert.Equal(JsonValueKind.Null, preserved.GetProperty("Optional").ValueKind);
+    }
+
+    [Fact]
     public async Task ApplyMatchesEnabledFeatureIdsCaseInsensitively()
     {
         _store.Features["KeepMe"] = Json("{}");
@@ -203,7 +221,8 @@ public sealed class FeatureManagementServiceTests
     {
         var store = new FakeShellStore(StringComparer.Ordinal);
         store.Features[SecuredFeatureId] = Json($$"""{"SigningKey":"{{SigningKeyValue}}"}""");
-        var service = new FeatureManagementService(store, [SecuredFeature()], _guards, _refresher, _reloader);
+        var service = new FeatureManagementService(store, [SecuredFeature()], _guards,
+            new LegacyFeatureActivationContextPreparer(), _refresher, _reloader);
         var catalog = await service.GetCatalogAsync();
 
         await service.ApplyAsync(new FeatureApplyRequest(
@@ -282,6 +301,7 @@ public sealed class FeatureManagementServiceTests
         Assert.Equal("module 'Sample' has a pending migration", exception.Message);
         Assert.Equal("NewFeature", Assert.Single(exception.Refusals).Feature);
         Assert.False(_store.Features.ContainsKey("NewFeature"));
+        Assert.Equal(0, _store.SaveCount);
         Assert.Equal(0, _refresher.RefreshCount);
         Assert.Equal(0, _reloader.ReloadCount);
     }
@@ -322,6 +342,7 @@ public sealed class FeatureManagementServiceTests
             service.ApplyAsync(new FeatureApplyRequest(catalog.Revision, [new("NewFeature", true, Json("{}"))])));
 
         Assert.False(_store.Features.ContainsKey("NewFeature"));
+        Assert.Equal(0, _store.SaveCount);
         Assert.Equal(0, _refresher.RefreshCount);
         Assert.Equal(0, _reloader.ReloadCount);
     }
@@ -349,6 +370,68 @@ public sealed class FeatureManagementServiceTests
         Assert.Equal(SecuredFeatureId, seen.Id);
         Assert.Equal(SigningKeyValue, seen.Configuration.GetProperty("SigningKey").GetString());
         Assert.Equal(catalog.Revision, guard.Context.Shell.Revision);
+    }
+
+    [Fact]
+    public async Task Preparation_sees_restored_secrets_and_its_returned_context_reaches_guards_only()
+    {
+        _store.Features[SecuredFeatureId] = Json($$"""{"SigningKey":"{{SigningKeyValue}}"}""");
+        var preparer = new ProjectingActivationContextPreparer();
+        var guard = new CapturingActivationGuard();
+        _guards.Add(guard);
+        var service = new FeatureManagementService(_store, [SecuredFeature()], _guards, preparer,
+            _refresher, _reloader);
+        var catalog = await service.GetCatalogAsync();
+
+        await service.ApplyAsync(new FeatureApplyRequest(catalog.Revision,
+            [new(SecuredFeatureId, true, Json($$"""{"SigningKey":"{{SecretSettingMask.Placeholder}}"}"""))]));
+
+        Assert.Equal(1, preparer.CallCount);
+        Assert.Equal(SigningKeyValue,
+            Assert.Single(preparer.Seen!.EnabledFeatures).Configuration.GetProperty("SigningKey").GetString());
+        Assert.Equal("prepared",
+            Assert.Single(guard.Context!.EnabledFeatures).Configuration.GetProperty("Marker").GetString());
+        Assert.False(_store.Features[SecuredFeatureId].TryGetProperty("Marker", out _));
+        Assert.Equal(SigningKeyValue, _store.Features[SecuredFeatureId].GetProperty("SigningKey").GetString());
+    }
+
+    [Fact]
+    public async Task Preparation_refusal_stops_every_guard_and_mutation()
+    {
+        var preparer = new RefusingActivationContextPreparer();
+        var guard = new CapturingActivationGuard();
+        _guards.Add(guard);
+        var service = new FeatureManagementService(_store,
+            [new ContributingFeatureCatalogContributor("NewFeature")], _guards, preparer,
+            _refresher, _reloader);
+        var catalog = await service.GetCatalogAsync();
+
+        var exception = await Assert.ThrowsAsync<FeatureActivationRefusedException>(() =>
+            service.ApplyAsync(new FeatureApplyRequest(catalog.Revision,
+                [new("NewFeature", true, Json("{}"))])));
+
+        Assert.Equal(1, preparer.CallCount);
+        Assert.Null(guard.Context);
+        Assert.Equal("NewFeature", Assert.Single(exception.Refusals).Feature);
+        Assert.False(_store.Features.ContainsKey("NewFeature"));
+        Assert.Equal(0, _store.SaveCount);
+        Assert.Equal(0, _refresher.RefreshCount);
+        Assert.Equal(0, _reloader.ReloadCount);
+    }
+
+    [Fact]
+    public async Task Invalid_request_is_rejected_before_preparation()
+    {
+        var preparer = new ProjectingActivationContextPreparer();
+        var service = new FeatureManagementService(_store, [], _guards, preparer,
+            _refresher, _reloader);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.ApplyAsync(new FeatureApplyRequest("", [])));
+
+        Assert.Equal(0, preparer.CallCount);
+        Assert.Equal(0, _refresher.RefreshCount);
+        Assert.Equal(0, _reloader.ReloadCount);
     }
 
     /// <summary>
@@ -390,7 +473,7 @@ public sealed class FeatureManagementServiceTests
     }
 
     private FeatureManagementService CreateService(params IFeatureCatalogContributor[] contributors) =>
-        new(_store, contributors, _guards, _refresher, _reloader);
+        new(_store, contributors, _guards, new LegacyFeatureActivationContextPreparer(), _refresher, _reloader);
 
     private static JsonElement Json(string json) =>
         JsonDocument.Parse(json).RootElement.Clone();
@@ -429,6 +512,38 @@ public sealed class FeatureManagementServiceTests
         {
             Context = context;
             return Task.FromResult(FeatureActivationDecision.Allowed);
+        }
+    }
+
+    private sealed class ProjectingActivationContextPreparer : IFeatureActivationContextPreparer
+    {
+        public int CallCount { get; private set; }
+        public FeatureActivationContext? Seen { get; private set; }
+
+        public Task<FeatureActivationContext> PrepareAsync(
+            FeatureActivationContext context, CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            Seen = context;
+            var feature = Assert.Single(context.Request.Features);
+            var projected = context.Request with
+            {
+                Features = [feature with { Configuration = Json("""{"Marker":"prepared"}""") }]
+            };
+            return Task.FromResult(new FeatureActivationContext(context.Shell, projected));
+        }
+    }
+
+    private sealed class RefusingActivationContextPreparer : IFeatureActivationContextPreparer
+    {
+        public int CallCount { get; private set; }
+
+        public Task<FeatureActivationContext> PrepareAsync(
+            FeatureActivationContext context, CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            throw new FeatureActivationRefusedException(
+                [new FeatureActivationRefusal("NewFeature", "[resource-managed-configuration] test refusal")]);
         }
     }
 }

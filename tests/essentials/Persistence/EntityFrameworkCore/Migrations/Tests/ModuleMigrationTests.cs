@@ -4,6 +4,7 @@ using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
@@ -65,6 +66,41 @@ public sealed class ModuleMigrationTests : IDisposable
     public async Task Every_sqlite_module_installs_into_one_fresh_database_with_its_own_history()
     {
         await ModuleContextCatalog.InstallAllAsync("Sqlite", ConnectionString);
+    }
+
+    [Fact]
+    public async Task Shared_resource_module_selection_installs_only_its_migration_histories()
+    {
+        var selected = new[]
+        {
+            "Activities.Design", "Workflows.Design", "Workflows.Publishing", "Workflows.Runtime"
+        };
+        var descriptors = EfModuleCatalog.Discover(ModuleContextCatalog.Modules)
+            .Where(descriptor => selected.Contains(descriptor.Name, StringComparer.Ordinal))
+            .OrderBy(descriptor => descriptor.Name, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(selected.Order(StringComparer.Ordinal), descriptors.Select(descriptor => descriptor.Name));
+
+        foreach (var descriptor in descriptors)
+        {
+            await using var context = ModuleContextCatalog.Create(
+                descriptor.RequireProviderContext("Sqlite"), ConnectionString);
+            await EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite, EfMigratePolicy.AutoMigrate);
+        }
+
+        var installedHistoryTables = new HashSet<string>(StringComparer.Ordinal);
+        await using (var connection = new SqliteConnection(ConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE '__EFMigrationsHistory_%'";
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                installedHistoryTables.Add(reader.GetString(0));
+        }
+
+        Assert.Equal(descriptors.Select(descriptor => descriptor.HistoryTableName).Order(StringComparer.Ordinal),
+            installedHistoryTables.Order(StringComparer.Ordinal));
     }
 
     [Fact]

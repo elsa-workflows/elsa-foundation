@@ -41,23 +41,34 @@ public sealed class WorkbenchOpenIddictVendorTests
         var directory = Directory.CreateTempSubdirectory("elsa-workbench-openiddict-");
         try
         {
-            var configuration = DurableConfiguration(Path.Combine(directory.FullName, "tokens.db"), autoMigrate: true);
-            string id;
-            await using (var writer = CreateProvider(configuration))
-            {
-                await StartAsync(writer);
-                await using var scope = writer.CreateAsyncScope();
-                var database = scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>().Database;
-                Assert.True(database.IsSqlite());
-                Assert.Single(await database.GetAppliedMigrationsAsync());
-                id = await CreateTokenAsync(scope.ServiceProvider, "durable-workbench-user");
-            }
+            var databasePath = Path.Combine(directory.FullName, "tokens.db");
+            await AssertDurableSqliteStoreAsync(DurableConfiguration(databasePath, autoMigrate: true), databasePath);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
 
-            await using var reader = CreateProvider(configuration);
-            await StartAsync(reader);
-            await using var readScope = reader.CreateAsyncScope();
-            var manager = readScope.ServiceProvider.GetRequiredService<IOpenIddictTokenManager>();
-            Assert.NotNull(await manager.FindByIdAsync(id));
+    [Fact]
+    public async Task Shared_elsa_resource_does_not_redirect_the_host_owned_openiddict_store()
+    {
+        var directory = Directory.CreateTempSubdirectory("elsa-workbench-openiddict-resource-");
+        try
+        {
+            var databasePath = Path.Combine(directory.FullName, "tokens.db");
+            var configuration = new ConfigurationBuilder()
+                .AddConfiguration(DurableConfiguration(databasePath, autoMigrate: true))
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Elsa:Persistence:DefaultResource"] = "primary",
+                    ["Elsa:Persistence:Resources:primary:Provider"] = "PostgreSql",
+                    ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared",
+                    ["ConnectionStrings:Shared"] = "Host=resource-should-not-be-opened;Database=elsa;Username=elsa;Password=canary"
+                })
+                .Build();
+
+            await AssertDurableSqliteStoreAsync(configuration, databasePath);
         }
         finally
         {
@@ -96,6 +107,27 @@ public sealed class WorkbenchOpenIddictVendorTests
                 ["CShells:Shells:default:Features:FoundationIdentityOpenIddict:AutoMigrate"] = autoMigrate.ToString()
             })
             .Build();
+
+    private static async Task AssertDurableSqliteStoreAsync(IConfiguration configuration, string databasePath)
+    {
+        string id;
+        await using (var writer = CreateProvider(configuration))
+        {
+            await StartAsync(writer);
+            await using var scope = writer.CreateAsyncScope();
+            var database = scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>().Database;
+            Assert.True(database.IsSqlite());
+            Assert.Single(await database.GetAppliedMigrationsAsync());
+            id = await CreateTokenAsync(scope.ServiceProvider, "durable-workbench-user");
+        }
+
+        Assert.True(File.Exists(databasePath));
+        await using var reader = CreateProvider(configuration);
+        await StartAsync(reader);
+        await using var readScope = reader.CreateAsyncScope();
+        var manager = readScope.ServiceProvider.GetRequiredService<IOpenIddictTokenManager>();
+        Assert.NotNull(await manager.FindByIdAsync(id));
+    }
 
     private static ServiceProvider CreateProvider(IConfiguration configuration)
     {

@@ -8,6 +8,7 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 
 [ShellFeature(name: "ActivitiesDesignEntityFrameworkCore", DisplayName = "Activities Design Entity Framework Core Persistence", Description = "Opt-in EF Core persistence for Activities Design.")]
 [UsesEfModule("Activities.Design")]
+[EfPersistenceResourceParticipant]
 public sealed class ActivitiesDesignEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(DisplayName = "Provider", Description = "Sqlite, SqlServer, PostgreSql, or MySql.", Category = "Persistence")]
