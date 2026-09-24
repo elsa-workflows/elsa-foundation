@@ -20,17 +20,7 @@ public static class ModularityEntityFrameworkServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(hostAssembly);
 
-        var declarations = hostAssembly.GetCustomAttributes<EfToolingShellDefaultsAttribute>().ToArray();
-        if (declarations.Length != 1)
-            throw new InvalidOperationException(
-                "EF persistence resources require exactly one shell-default composer declaration on the explicit host assembly.");
-        var composerType = declarations[0].ComposerType;
-        if (!(composerType.IsPublic || composerType.IsNestedPublic) ||
-            !typeof(IEfToolingShellDefaults).IsAssignableFrom(composerType) ||
-            composerType.IsAbstract ||
-            composerType.GetConstructor(Type.EmptyTypes) is null)
-            throw new InvalidOperationException(
-                "The declared EF shell-default composer must be a concrete implementation with a public parameterless constructor.");
+        var composerType = EfToolingShellDefaultsDeclaration.ResolveComposerType(hostAssembly, required: true)!;
 
         var shellPreparers = services.Count(x => x.ServiceType == typeof(IShellSettingsPreparer));
         if (shellPreparers != 0)
@@ -48,15 +38,7 @@ public static class ModularityEntityFrameworkServiceCollectionExtensions
             throw new InvalidOperationException(
                 "EF persistence resources require one replaceable default feature-activation preparer; conflicting registrations were found.");
 
-        IEfToolingShellDefaults composer;
-        try
-        {
-            composer = (IEfToolingShellDefaults)Activator.CreateInstance(composerType)!;
-        }
-        catch (Exception)
-        {
-            throw new InvalidOperationException("The declared EF shell-default composer could not be constructed.");
-        }
+        var composer = EfToolingShellDefaultsDeclaration.Construct(composerType);
         foreach (var old in managementPreparers)
             services.Remove(old);
         services.AddSingleton(composer);

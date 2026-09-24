@@ -1,3 +1,6 @@
+using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Configuration;
 
 namespace Elsa.Persistence.EntityFramework.Tooling;
@@ -14,9 +17,16 @@ public sealed class EfToolingConfigurationContext : IDisposable
 
     private readonly IConfigurationRoot configuration;
     private bool disposed;
+    private static readonly JsonSerializerOptions RequestJson = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = false,
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
+    };
 
     internal EfToolingConfigurationContext(
         string source,
+        string hostDirectory,
         string hostName,
         string environment,
         string? shell,
@@ -24,6 +34,7 @@ public sealed class EfToolingConfigurationContext : IDisposable
         IConfigurationRoot configuration)
     {
         Source = source;
+        HostDirectory = hostDirectory;
         HostName = hostName;
         Environment = environment;
         Shell = shell;
@@ -32,6 +43,7 @@ public sealed class EfToolingConfigurationContext : IDisposable
     }
 
     internal string Source { get; }
+    internal string HostDirectory { get; }
     internal string HostName { get; }
     internal string Environment { get; }
     internal string? Shell { get; }
@@ -40,6 +52,78 @@ public sealed class EfToolingConfigurationContext : IDisposable
     internal IConfiguration Configuration => disposed
         ? throw EfToolingRefusal.Resolution("configuration-context-disposed", "The selected configuration context is no longer available.")
         : configuration;
+
+    /// <summary>Uses only the assembly at the selected host layout, sharing runtime's composer declaration rule.</summary>
+    internal IEfToolingShellDefaults? CreateHostDefaults(Assembly hostAssembly)
+    {
+        _ = Configuration;
+        ArgumentNullException.ThrowIfNull(hostAssembly);
+        try
+        {
+            var expected = Path.Join(HostDirectory, $"{HostName}.dll");
+            var pathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            if (!string.Equals(hostAssembly.GetName().Name, HostName, StringComparison.Ordinal) ||
+                !string.Equals(Path.GetFullPath(hostAssembly.Location), expected, pathComparison))
+                throw EfToolingRefusal.Resolution("configuration-context-invalid", "The selected host assembly does not match the configuration context.");
+
+            var composerType = EfToolingShellDefaultsDeclaration.ResolveComposerType(hostAssembly, required: false);
+            if (composerType is null)
+            {
+                if (ExplicitSelection)
+                    throw EfToolingRefusal.Resolution("host-not-enrolled", "The selected host does not declare an EF shell-default composer.");
+                return null;
+            }
+            return EfToolingShellDefaultsDeclaration.Construct(composerType);
+        }
+        catch (EfToolingRefusal)
+        {
+            throw;
+        }
+        catch (Exception failure) when (EfToolingHost.IsNonFatal(failure))
+        {
+            throw EfToolingRefusal.Resolution("host-composition-unavailable", "The selected host composer could not be verified.");
+        }
+    }
+
+    /// <summary>Parses the worker's closed metadata-only descriptor before reading the host sources.</summary>
+    internal static EfToolingConfigurationContext CreateFromRequest(Stream request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            using var document = JsonDocument.Parse(request);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+                throw EfToolingRefusal.Usage("configuration-context-invalid", "The configuration context request must be an object.");
+
+            var fields = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var field in document.RootElement.EnumerateObject())
+                if (!fields.Add(field.Name))
+                    throw EfToolingRefusal.Usage("configuration-context-invalid", "The configuration context request repeats a field.");
+
+            var descriptor = document.RootElement.Deserialize<ContextRequest>(RequestJson)
+                ?? throw EfToolingRefusal.Usage("configuration-context-invalid", "The configuration context request is empty.");
+            if (descriptor.ContextVersion != Version || descriptor.ExplicitSelection is null)
+                throw EfToolingRefusal.Usage("configuration-context-invalid", "The configuration context version or selection is not supported.");
+
+            cancellationToken.ThrowIfCancellationRequested();
+            return Create(descriptor.Source!, descriptor.HostDirectory!, descriptor.HostName!,
+                descriptor.Environment!, descriptor.Shell, descriptor.ExplicitSelection.Value, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (EfToolingRefusal)
+        {
+            throw;
+        }
+        catch (Exception failure) when (EfToolingHost.IsNonFatal(failure))
+        {
+            // Parser failures may include the original JSON text or path. Emit neither.
+            throw EfToolingRefusal.Usage("configuration-context-invalid", "The configuration context request is not valid.");
+        }
+    }
 
     /// <summary>
     /// Checks one selected resource's named target against the separately supplied live connection.
@@ -105,7 +189,7 @@ public sealed class EfToolingConfigurationContext : IDisposable
                 (snapshot as IDisposable)?.Dispose();
                 cancellationToken.ThrowIfCancellationRequested();
             }
-            return new EfToolingConfigurationContext(source, hostName, environment, shell, explicitSelection, snapshot);
+            return new EfToolingConfigurationContext(source, hostDirectory, hostName, environment, shell, explicitSelection, snapshot);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -142,4 +226,15 @@ public sealed class EfToolingConfigurationContext : IDisposable
         value != "." && value != ".." &&
         value.IndexOfAny([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar]) < 0 &&
         !value.Contains(':', StringComparison.Ordinal);
+
+    private sealed class ContextRequest
+    {
+        public int? ContextVersion { get; init; }
+        public string? Source { get; init; }
+        public string? HostDirectory { get; init; }
+        public string? HostName { get; init; }
+        public string? Environment { get; init; }
+        public string? Shell { get; init; }
+        public bool? ExplicitSelection { get; init; }
+    }
 }

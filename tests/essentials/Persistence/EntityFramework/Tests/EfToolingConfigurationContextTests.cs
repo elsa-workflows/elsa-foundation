@@ -1,6 +1,11 @@
+using System.Text;
 using System.Text.Json;
+using CShells.Configuration;
 using Elsa.Persistence.EntityFramework.Tooling;
+using Microsoft.Extensions.Configuration;
 using Xunit;
+
+[assembly: EfToolingShellDefaults(typeof(Elsa.Persistence.EntityFramework.Tests.ToolingContextTestDefaults))]
 
 namespace Elsa.Persistence.EntityFramework.Tests;
 
@@ -151,6 +156,84 @@ public sealed class EfToolingConfigurationContextTests
         }
     }
 
+    [Fact]
+    public void Closed_descriptor_selects_one_host_owned_snapshot()
+    {
+        using var host = new HostFiles();
+        host.Write("shells.Production.json", "selected-value");
+
+        using var context = Parse(host.Request());
+
+        Assert.Equal(EfToolingConfigurationContext.WorkbenchJson, context.Source);
+        Assert.Equal(host.Directory, context.HostDirectory);
+        Assert.Equal("selected-value", context.Configuration["Probe:Value"]);
+    }
+
+    [Fact]
+    public void Closed_descriptor_refuses_unknown_duplicate_and_unsupported_fields_without_echoing_input()
+    {
+        using var host = new HostFiles();
+        var valid = host.Request();
+        var malformed = new[]
+        {
+            valid[..^1] + ",\"connection-value-canary\":\"secret-canary\"}",
+            valid[..^1] + ",\"source\":\"workbench-json-environment-v1\"}",
+            valid.Replace("\"contextVersion\":1", "\"contextVersion\":2", StringComparison.Ordinal),
+            valid.Replace("\"explicitSelection\":true", "\"otherSelection\":true", StringComparison.Ordinal),
+            "[\"not-an-object\"]"
+        };
+
+        foreach (var request in malformed)
+        {
+            var refusal = Assert.Throws<EfToolingRefusal>(() => Parse(request));
+            Assert.Equal("configuration-context-invalid", refusal.Code);
+            Assert.DoesNotContain("canary", refusal.ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain(host.Directory, refusal.ToString(), StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void Selected_host_assembly_uses_the_same_declared_composer_as_runtime()
+    {
+        var hostAssembly = typeof(EfToolingConfigurationContextTests).Assembly;
+        var hostDirectory = Path.GetDirectoryName(hostAssembly.Location)!;
+        using var context = EfToolingConfigurationContext.Create(
+            EfToolingConfigurationContext.WorkbenchJson, hostDirectory, hostAssembly.GetName().Name!,
+            "Production", "default", explicitSelection: true, CancellationToken.None);
+
+        Assert.IsType<ToolingContextTestDefaults>(context.CreateHostDefaults(hostAssembly));
+
+        using var mismatched = EfToolingConfigurationContext.Create(
+            EfToolingConfigurationContext.WorkbenchJson, hostDirectory, "DifferentHost",
+            "Production", "default", explicitSelection: true, CancellationToken.None);
+        Assert.Equal("configuration-context-invalid",
+            Assert.Throws<EfToolingRefusal>(() => mismatched.CreateHostDefaults(hostAssembly)).Code);
+    }
+
+    [Fact]
+    public void Composer_free_host_allows_probe_but_refuses_explicit_selection()
+    {
+        var hostAssembly = typeof(EfToolingConfigurationContext).Assembly;
+        var hostDirectory = Path.GetDirectoryName(hostAssembly.Location)!;
+        var hostName = hostAssembly.GetName().Name!;
+        using var probe = EfToolingConfigurationContext.Create(
+            EfToolingConfigurationContext.WorkbenchJson, hostDirectory, hostName,
+            "Production", null, explicitSelection: false, CancellationToken.None);
+        using var selected = EfToolingConfigurationContext.Create(
+            EfToolingConfigurationContext.WorkbenchJson, hostDirectory, hostName,
+            "Production", "default", explicitSelection: true, CancellationToken.None);
+
+        Assert.Null(probe.CreateHostDefaults(hostAssembly));
+        Assert.Equal("host-not-enrolled",
+            Assert.Throws<EfToolingRefusal>(() => selected.CreateHostDefaults(hostAssembly)).Code);
+    }
+
+    private static EfToolingConfigurationContext Parse(string json)
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        return EfToolingConfigurationContext.CreateFromRequest(stream, CancellationToken.None);
+    }
+
     private sealed class HostFiles : IDisposable
     {
         public string Directory { get; } = Path.Join(Path.GetTempPath(), $"elsa-tooling-context-{Guid.NewGuid():N}");
@@ -165,6 +248,17 @@ public sealed class EfToolingConfigurationContextTests
             EfToolingConfigurationContext.Create(
                 source, Directory, "Host", "Production", shell, explicitSelection, cancellationToken);
 
+        public string Request() => JsonSerializer.Serialize(new
+        {
+            contextVersion = EfToolingConfigurationContext.Version,
+            source = EfToolingConfigurationContext.WorkbenchJson,
+            hostDirectory = Directory,
+            hostName = "Host",
+            environment = "Production",
+            shell = "default",
+            explicitSelection = true
+        });
+
         public void Write(string fileName, string value, string key = "Probe") =>
             WriteRaw(fileName, JsonSerializer.Serialize(new Dictionary<string, object>
             {
@@ -176,4 +270,9 @@ public sealed class EfToolingConfigurationContextTests
 
         public void Dispose() => System.IO.Directory.Delete(Directory, recursive: true);
     }
+}
+
+public sealed class ToolingContextTestDefaults : IEfToolingShellDefaults
+{
+    public void Configure(ShellBuilder builder, IConfiguration configuration) { }
 }
