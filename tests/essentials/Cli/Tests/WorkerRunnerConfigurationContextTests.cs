@@ -53,6 +53,25 @@ public sealed class WorkerRunnerConfigurationContextTests
         Assert.Equal(WorkerCommands.List, FakeContextHost.OperationCommand);
     }
 
+    [Fact]
+    public async Task Malformed_host_response_refuses_and_disposes_the_created_context_once()
+    {
+        FakeContextHost.Reset();
+        FakeContextHost.ReturnMalformedResponse = true;
+
+        var refusal = await Assert.ThrowsAsync<WorkerRefusal>(() => WorkerRunner.ExecuteExplicitContextAsync(
+            CreateToolingEntryPoint(), Request(), WorkerCommands.List,
+            HostDepsFile.Read(Path.ChangeExtension(typeof(WorkerRunnerConfigurationContextTests).Assembly.Location, ".deps.json")),
+            NuplanePackageSet.None, CancellationToken.None));
+
+        Assert.Equal("context-capability-unavailable", refusal.Code);
+        Assert.Equal(1, FakeContextHost.ContextsCreated);
+        Assert.Equal(1, FakeContextHost.OperationsInvoked);
+        Assert.Equal(1, FakeContextHost.ContextsDisposed);
+        Assert.Equal(2, FakeContextHost.OperationVersion);
+        Assert.Equal(WorkerCommands.List, FakeContextHost.OperationCommand);
+    }
+
     private static ToolingEntryPoint CreateToolingEntryPoint()
     {
         var host = typeof(FakeContextHost);

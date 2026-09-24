@@ -14,6 +14,7 @@ public static class FakeContextHost
     public static int OperationsInvoked;
     public static int ContextsDisposed;
     public static bool ReturnRefusal;
+    public static bool ReturnMalformedResponse;
     public static bool FactoryReceivedExpectedToken;
     public static bool OperationReceivedExpectedToken;
     public static CancellationToken ExpectedCancellationToken;
@@ -27,6 +28,7 @@ public static class FakeContextHost
         OperationsInvoked = 0;
         ContextsDisposed = 0;
         ReturnRefusal = false;
+        ReturnMalformedResponse = false;
         FactoryReceivedExpectedToken = false;
         OperationReceivedExpectedToken = false;
         ExpectedCancellationToken = default;
@@ -59,8 +61,14 @@ public static class FakeContextHost
         OperationReceivedExpectedToken = cancellationToken == ExpectedCancellationToken;
         OperationEntered.TrySetResult();
 
-        if (!ReturnRefusal)
+        if (!ReturnRefusal && !ReturnMalformedResponse)
             await Task.Delay(Timeout.Infinite, cancellationToken);
+
+        if (ReturnMalformedResponse)
+        {
+            await response.WriteAsync("{\"version\":2,"u8.ToArray(), cancellationToken);
+            return 0;
+        }
 
         await response.WriteAsync(System.Text.Encoding.UTF8.GetBytes(RefusalResponse), cancellationToken);
         return 2;
