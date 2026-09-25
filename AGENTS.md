@@ -255,5 +255,5 @@ New work should move toward this rule:
 <!-- SPECKIT START -->
 For additional context about technologies, project structure, shell commands, contracts, and
 validation scenarios for the active work unit, read
-`specs/176-composition-file-bridge/plan.md`.
+`specs/177-file-deployed-activation/plan.md`.
 <!-- SPECKIT END -->

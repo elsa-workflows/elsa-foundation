@@ -1,0 +1,84 @@
+# Implementation Plan: File-deployed composition activation and recovery
+
+**Branch**: `codex/2036-file-deployed-activation` | **Date**: 2026-09-25 | **Spec**: [spec.md](spec.md)
+
+**Input**: [Issue #2036](https://github.com/elsa-workflows/elsa-foundation/issues/2036), the [apply/recovery boundary](../../docs/reports/runtime-composition/apply-recovery-boundary.md), and the delivered [file bridge](../176-composition-file-bridge/spec.md).
+
+## Summary
+
+Define an honest path from a reviewed local composition candidate to an externally deployed default-shell activation. The first implementation-sized slice adds a safe, opaque handoff at the file bridge's publication boundary and rechecks all included files; an existing deployment owner remains responsible for artifact integrity, complete-bundle switching, and source rollback. A later host-observation slice reads authenticated reload, active generation, and default-shell readiness as separate outcomes. It must report candidate match **unverified** until a host-produced, generation-bound source marker is proven. Do not extend the legacy feature-only editor or claim an atomic in-process bundle write.
+
+[Research](research.md) records the source and security findings. The [data model](data-model.md), [v1 contract](contracts/activation-v1.md), and [quickstart](quickstart.md) define safe states and test fixtures. The first implementation issue may cover candidate handoff only; a focused host-attestation spike gates any implementation that would say the exact candidate became active.
+
+## Technical Context
+
+**Language/Version**: C# / .NET 10 for the existing CLI, Modularity planning library, and Workbench host.
+
+**Primary Dependencies**: Existing `System.Text.Json`, `System.CommandLine`, CShells `0.0.30-preview.159` management/lifecycle APIs, and the file bridge from spec 176. No new runtime package or database dependency is required for the first slice.
+
+**Storage**: The file bridge's fresh local candidate directory and invocation-local source snapshot. V1 does not add a Foundation-managed live store. An external deployment owner supplies immutable artifact and previous-release storage; its receipt is not treated as host-source truth.
+
+**Testing**: Focused Planning/CLI source and handoff tests with changed selected/unselected files and redaction canaries. Existing Modularity readiness/fault tests prove lifecycle boundaries. A disposable rebuilt Workbench host and test deployment owner are required before the host-attestation or recovery implementation claims verified activation. Architecture guard, generated-map check and diff review gate each implementation PR. EF container suites apply only if a later story actually changes EF behavior or claims database/migration readiness.
+
+**Target Platform**: Cross-platform developer CLI and a Workbench-style ASP.NET Core host. The first verified-activation target is the configured default shell in one explicit environment.
+
+**Project Type**: Pure handoff projection plus CLI local-file adapter first; future host-owned, authenticated observation seam only after the attestation gate. No browser client or generic resource editor.
+
+**Performance Goals**: No new latency target is justified for a specification/file handoff. The operation remains bounded by reading the same supported local bundle as the existing generator. Host reload retains its existing lifecycle timing and is not a performance claim in this work unit.
+
+**Constraints**: No raw source values, physical paths, management credential, unkeyed secret-bearing file digest, or raw blueprint response in shareable output. All copied files rechecked at handoff. No blind retry after uncertain deployment/reload. No candidate-match claim without generation-bound host evidence. Process overrides and loaded packages remain separate from static file inspection.
+
+**Scale/Scope**: One Workbench-style host, configured default shell, base plus at most one selected overlay, all supported sibling files copied; one external deployment owner. Multi-shell transactions, arbitrary hosts, live resource writes, Foundation-owned bundle switching, database movement, and production builder UI remain outside v1.
+
+## Constitution Check
+
+- Framework [§2.1–2.2](../../.specify/memory/constitution-framework.md): keep pure candidate identity/projection with the existing Modularity planning boundary and filesystem/console work in CLI. Host-control observation belongs to the Workbench root, not a reverse dependency from Core or a shell feature.
+- Framework [§2.7](../../.specify/memory/constitution-framework.md): the bridge and future host observer are adapters around externally owned source/deployment/lifecycle APIs; they do not redefine the authored selection model or infer package activation from files.
+- Framework [§2.19](../../.specify/memory/constitution-framework.md): exact feature IDs and dependency findings remain with the existing planner. Handoff identity is not a second selection policy.
+- Framework [§2.21, §2.23](../../.specify/memory/constitution-framework.md): stable safe refusal classes, canary redaction tests, and a real host failure/recovery fixture are required before outward success claims.
+- Framework [§3 and §4.2](../../.specify/memory/constitution-framework.md): do not assume an implementation package or process override can be hot-reloaded into a changed host baseline; package/host compatibility is a separate evidence gate.
+- Elsa [§E2, §E5](../../.specify/memory/constitution.md): Workbench is a development/demo host, not a product host. This contract does not turn it into a general hosted builder API.
+- [ADR 0037](../../docs/adr/0037-studio-management-bridge-keeps-host-management-key-server-side.md): root management credential remains server-side; a browser gets only a sanitized outcome after a separately designed bridge.
+- Framework §2.12 and Elsa §E4 are deferred. This plan does not ratify a global settings/secret taxonomy or change configuration precedence.
+
+No constitution exception is requested. Phase 1 design rechecks the same gates: an opaque handoff plus private all-file recheck avoids disclosure, the external deployer retains mutation ownership, and the host match remains explicitly unverified until a measured source-to-generation seam exists.
+
+## Project Structure
+
+```text
+src/essentials/Modularity/Planning/
+  Bridge/                           # existing source/candidate semantics and safe role projection
+src/essentials/Cli/
+  CompositionGenerateCommand.cs     # existing reviewed candidate flow; first handoff integration point
+  CompositionFilePublisher.cs       # existing fresh-directory publication and all-file recheck
+  CompositionHandoffFileVerifier.cs # prospective post-publication candidate-byte recheck
+tests/essentials/Modularity/Planning/Tests/
+  CompositionBridgeSourceTests.cs   # existing source and redaction fixture
+  CompositionHandoffTests.cs        # first implementation slice
+tests/essentials/Cli/Tests/
+  CompositionGenerateCliTests.cs    # existing process fixture, extend for safe handoff and drift
+src/apps/Elsa.Workbench/
+  Program.cs                        # existing root management key and reload mapping
+  Readiness/                         # existing default-shell generation/readiness observation
+  Composition/CompositionGenerationMarker.cs # conditional on host-attestation proof
+tests/essentials/Modularity/Tests/
+  ServerReadinessTests.cs            # existing real-registry failed-reload proof
+specs/177-file-deployed-activation/
+  spec.md plan.md research.md data-model.md quickstart.md contracts/ tasks.md
+```
+
+**Structure decision**: The first code change stays in CLI/Planning and publishes no runtime-ready result. A future Workbench-owned observer needs its own reviewed design and must not proxy the existing management `GET /{name}` blueprint payload, which can contain secrets. Do not create a generic management library or extra EF test project for this boundary.
+
+## Phase 0: Research
+
+[research.md](research.md) resolves candidate/deployment authority, why shareable raw file digests are inappropriate for secret-bearing configuration, current CShells reload/readiness evidence, and the generation-bound attestation gap. The gap is a **gate**, not an implicit assumption that the existing APIs already prove candidate equality.
+
+## Phase 1: Design and contracts
+
+[data-model.md](data-model.md) separates handoff, external deployment receipt, reload, readiness, candidate match, and recovery. [contracts/activation-v1.md](contracts/activation-v1.md) defines safe projection, statuses, refusal classes, actor responsibility and the host-attestation gate. [quickstart.md](quickstart.md) distinguishes currently runnable baseline tests from future disposable host acceptance steps. The contract requires only the default shell because Workbench readiness currently observes that shell.
+
+## Delivery and verification boundary
+
+Cut one small, file-only handoff implementation story after this specification is reviewed. Its independent fixture is candidate generation plus opaque safe handoff, changed-file refusal, and zero canary leakage; it neither deploys nor activates. Cut a separate **host-attestation spike** to prove whether a Workbench-owned marker can be tied to a successfully promoted generation while preserving process-override and secret boundaries. Do not cut an implementation story that advertises `candidateMatch=verified` until that proof passes. If it fails, retain `unverified` and revise the product flow before implementing a server bridge.
+
+The local gate for the first story is focused Planning/CLI tests, architecture guard, generated-map check and diff review; the PR CI selector may skip unrelated EF container suites. A later host-observation story needs rebuilt-host reload/readiness/failure/recovery tests and explicit evidence for any provider, migration, or package claims. After merge, check `main` CI and Maps before closing each issue.
