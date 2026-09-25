@@ -56,7 +56,7 @@ public static partial class EfSuiteSelector
         foreach (var rawPath in changedPaths)
         {
             var path = Normalize(rawPath);
-            if (IsDocumentation(path))
+            if (HasNoEfImpact(path))
                 continue;
             if (MustRunFull(path))
                 return Full(suites, $"shared or selector input changed: {path}");
@@ -81,7 +81,7 @@ public static partial class EfSuiteSelector
         }
 
         if (changedProjects.Count == 0)
-            return new EfSuiteSelection("none", "documentation-only PR", []);
+            return new EfSuiteSelection("none", "PR changes have no EF impact", []);
 
         var selected = suites
             .Where(suite => DependencyClosure(projects, suite.Project).Overlaps(changedProjects))
@@ -222,10 +222,11 @@ public static partial class EfSuiteSelector
         return closure;
     }
 
-    private static bool IsDocumentation(string path) =>
+    // Speckit's active-spec pointer is metadata; all other .specify paths still fail closed.
+    private static bool HasNoEfImpact(string path) =>
         path.StartsWith("docs/", StringComparison.Ordinal) ||
         (path.StartsWith("specs/", StringComparison.Ordinal) && path.EndsWith(".md", StringComparison.OrdinalIgnoreCase)) ||
-        path is "README.md" or "AGENTS.md" or "EXTENSION_POINTS.md";
+        path is ".specify/feature.json" or "README.md" or "AGENTS.md" or "EXTENSION_POINTS.md";
 
     private static bool MustRunFull(string path) =>
         path.StartsWith(".github/", StringComparison.Ordinal) ||

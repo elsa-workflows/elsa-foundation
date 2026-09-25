@@ -23,6 +23,10 @@ public static class EfSuiteSelectorContractTests
 
         Assert(EfSuiteSelector.SelectPaths(suites, projects, ["docs/report.md"]), "none");
         Assert(EfSuiteSelector.SelectPaths(suites, projects, ["specs/123-idea/spec.md"]), "none");
+        Assert(EfSuiteSelector.SelectPaths(suites, projects,
+            [".specify/feature.json", "specs/176-composition-file-bridge/spec.md", "docs/maps/spec-status-map.md"]), "none");
+        Assert(EfSuiteSelector.SelectPaths(suites, projects, [".specify/other.json"]), "full", "publishing", "runtime");
+        Assert(EfSuiteSelector.SelectPaths(suites, projects, [".specify/scripts/bash/common.sh"]), "full", "publishing", "runtime");
         Assert(EfSuiteSelector.SelectPaths(suites, projects, ["src/Publishing/Publish.cs"]), "selected", "publishing");
         Assert(EfSuiteSelector.SelectPaths(suites, projects, ["tests/Publishing/Case.cs"]), "selected", "publishing");
         Assert(EfSuiteSelector.SelectPaths(suites, projects, ["tests/Publishing/Publishing.Tests.csproj"]), "selected", "publishing");
