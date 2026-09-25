@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Runtime builder · interaction studies</title>
+  <link rel="stylesheet" href="prototype.css">
+  <script src="prototype.js" defer></script>
+</head>
+<body>
+  <header class="site-head">
+    <div><span class="eyebrow">Interaction study · #2029</span><h1>Build a runtime without losing the details.</h1></div>
+    <p>Three different ways into one proposed composition. These screens use a synthetic fixture. They do not read a host, run Elsa's planner, write CShells files, or apply anything.</p>
+  </header>
+  <nav class="concept-nav" aria-label="Compare interaction models">
+    <button type="button" data-show="ledger" aria-current="page"><b>01</b> Profile ledger</button>
+    <button type="button" data-show="workorder"><b>02</b> Work order</button>
+    <button type="button" data-show="expert"><b>03</b> Expert workbench</button>
+  </nav>
+
+  <main>
+    <section id="ledger" class="concept ledger" data-view="ledger" aria-labelledby="ledger-title">
+      <div class="concept-top"><div><span class="eyebrow">Profile and groups first</span><h2 id="ledger-title">Composition ledger</h2><p>Start with a provisional profile. Every shortcut expands into an inspectable feature decision.</p></div><span class="boundary">Candidate files only · no live apply</span></div>
+      <div class="ledger-grid">
+        <aside class="ledger-rail panel">
+          <h3>Starting point</h3>
+          <button type="button" class="choice" data-act="profile">Worker <small>provisional · runtime + HTTP</small></button>
+          <button type="button" class="choice" data-act="reset">Custom <small>empty draft</small></button>
+          <button type="button" class="minor" data-act="import">Import sample shell snapshot</button>
+          <h3>Flat groups</h3>
+          <button type="button" class="choice" data-act="diagnostics">Diagnostics with EF stores <small>4 exact feature IDs</small></button>
+          <p class="hint">Profile and group names are research fixtures, not released Elsa catalogs.</p>
+        </aside>
+        <div class="ledger-editor">
+          <div class="panel"><div class="section-line"><h3>Shared persistence</h3><span>One default + explicit exceptions</span></div>
+            <p>Connection references are names. Their values remain outside this prototype.</p>
+            <button type="button" data-act="primary">Set primary · PostgreSQL / ConnectionStrings:Elsa</button>
+            <button type="button" data-act="isolate">Route diagnostics · PostgreSQL / ConnectionStrings:Diagnostics</button>
+            <div class="resource-readout" data-resources></div>
+          </div>
+          <details class="panel exact"><summary>Inspect and edit exact features <span data-count></span></summary><div data-features></div></details>
+          <div class="panel"><h3>One reviewed setting path</h3><p><code>WorkflowsRuntimeEntityFrameworkCore.WorkflowExecutableCacheCapacity</code> exists in the Workbench shell. The UI mapping here is proposed.</p><label>Executable cache capacity <select data-setting><option value="128">128</option><option value="256" selected>256</option><option value="512">512</option></select></label><p class="hint" data-setting-origin></p><p class="hint" data-unknown></p></div>
+        </div>
+        <aside class="ledger-impact panel" aria-label="Impact ledger"><span class="eyebrow">Always visible</span><h3>Resolved proposal</h3><div data-summary></div><h4>Evidence boundary</h4><p class="hint">Synthetic dependencies and source snapshot only. Package availability, process overrides, database topology, and live runtime state are unchecked.</p><div class="actions"><button type="button" data-act="export">Export mock candidate</button><button type="button" class="minor" data-act="reopen">Reopen last export</button></div><div class="feedback" data-feedback role="status" aria-live="polite"></div></aside>
+      </div>
+    </section>
+
+    <section id="workorder" class="concept workorder" data-view="workorder" aria-labelledby="workorder-title" hidden>
+      <div class="concept-top"><div><span class="eyebrow">Task and questions first</span><h2 id="workorder-title">A work order for this host</h2><p>Say what you are trying to change. The draft shows the exact consequences before export.</p></div><span class="boundary">Candidate files only · no live apply</span></div>
+      <div class="order-layout"><div class="order-steps">
+        <article class="order-card"><span class="step">01 / SOURCE</span><h3>Where are you starting?</h3><p>Use a sample local shell snapshot or start a new candidate. No running host is queried.</p><button type="button" data-act="import">Import sample shell snapshot</button><button type="button" class="minor" data-act="reset">New composition</button></article>
+        <article class="order-card"><span class="step">02 / OUTCOME</span><h3>What should this runtime do?</h3><button type="button" data-act="profile">Run workflows over HTTP <small>proposes Worker</small></button><button type="button" data-act="diagnostics">Record diagnostics in EF stores</button><p class="hint">These answers suggest a starting selection. Feature IDs stay editable below.</p></article>
+        <article class="order-card"><span class="step">03 / INFRASTRUCTURE</span><h3>Where should state go?</h3><button type="button" data-act="primary">Primary PostgreSQL · ConnectionStrings:Elsa</button><button type="button" data-act="isolate">Separate diagnostics · ConnectionStrings:Diagnostics</button><div class="resource-readout" data-resources></div></article>
+        <article class="order-card"><span class="step">04 / EXCEPTIONS</span><h3>Inspect the exact choices</h3><details class="exact"><summary>Open feature decisions <span data-count></span></summary><div data-features></div></details><label>Executable cache capacity <select data-setting><option value="128">128</option><option value="256" selected>256</option><option value="512">512</option></select></label><p class="hint" data-setting-origin></p><p class="hint" data-unknown></p></article>
+        <article class="order-card final-card"><span class="step">05 / REVIEW</span><h3>Review and export a candidate</h3><p>Export is a mock JSON illustration. It is not a CShells file or a change to a running host.</p><button type="button" data-act="export">Export mock candidate</button><button type="button" class="minor" data-act="reopen">Reopen last export</button><div class="feedback" data-feedback role="status" aria-live="polite"></div></article>
+      </div><aside class="order-preview"><span class="eyebrow">Live draft preview</span><h3>What the work order means</h3><div data-summary></div><h4>Unchecked</h4><p>Actual host state, packages, secrets, process overrides, provider connectivity, and topology.</p></aside></div>
+    </section>
+
+    <section id="expert" class="concept expert" data-view="expert" aria-labelledby="expert-title" hidden>
+      <div class="concept-top"><div><span class="eyebrow">Search and exact edits first</span><h2 id="expert-title">Composition workbench</h2><p>Begin from a source snapshot, search feature IDs, then review explicit edits.</p></div><span class="boundary">Candidate files only · no live apply</span></div>
+      <div class="expert-toolbar"><label for="expert-search">Search IDs or provenance</label><input id="expert-search" data-search type="search" placeholder="Try diagnostics, runtime, imported…"><button type="button" data-act="export">Export mock candidate</button></div>
+      <div class="expert-grid"><aside class="expert-sources"><h3>Sources</h3><button type="button" data-act="import">Import sample shell</button><button type="button" data-act="reset">New blank draft</button><h3>Starters</h3><button type="button" data-act="profile">Worker · provisional</button><button type="button" data-act="diagnostics">Add diagnostics group</button><h3>Facets</h3><p>Search is a view. It never changes enabled state.</p></aside>
+        <div class="expert-results"><div class="section-line"><h3>Feature decisions</h3><span data-count></span></div><div data-features></div></div>
+        <aside class="expert-inspector"><h3>Inspector</h3><p>Resource edits materialize a default and feature-specific bindings.</p><button type="button" data-act="primary">Primary PostgreSQL</button><button type="button" data-act="isolate">Bind diagnostics separately</button><div class="resource-readout" data-resources></div><h4>Reviewed setting path</h4><label>Executable cache capacity <select data-setting><option value="128">128</option><option value="256" selected>256</option><option value="512">512</option></select></label><p class="hint" data-setting-origin></p><p class="hint" data-unknown></p></aside>
+      </div><div class="expert-bottom"><div><strong>Review ledger</strong><div data-summary></div></div><div><button type="button" class="minor" data-act="reopen">Reopen last export</button><div class="feedback" data-feedback role="status" aria-live="polite"></div></div></div>
+    </section>
+  </main>
+  <footer>Research fixture only. Compare each concept against the same task script in <a href="README.md">README.md</a>. No connection values are held by this page.</footer>
+</body>
+</html>
