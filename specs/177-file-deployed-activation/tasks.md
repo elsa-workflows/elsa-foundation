@@ -6,6 +6,8 @@
 
 **Readiness**: T001–T009 (US1) are delivered by #2038. T010–T011 are the #2039 host-attestation spike; its current-host decision is no-go for exact candidate matching. #2041 delivers only T013–T014's safe default-shell reload/readback subset. T012 and T015–T021 still require separate deployment-receipt, marker, and recovery work. No current implementation may claim candidate-match verification.
 
+The #2042 follow-up records a conditional CShells generation seam and a continued no-go for current Workbench source/package correlation in the [attestation report](../../docs/reports/runtime-composition/source-generation-attestation.md). It does not complete T015 or relax the remaining proof gate.
+
 ## Phase 1: Setup and fixture
 
 - [X] T001 Extend the disposable two-shell base/Production/Staging fixture in `tests/essentials/Cli/Tests/Fixtures/CompositionBridge/` with explicit default-shell selection, a second copied shell, connection and unknown-field canaries, and a candidate file changed after review; keep the original spec 176 fixture behavior intact.
