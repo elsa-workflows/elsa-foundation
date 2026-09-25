@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-25
 
-**Status**: Draft
+**Status**: In progress — import delivered; reviewed generation under #2023
 
 **Input**: [Task #2009](https://github.com/elsa-workflows/elsa-foundation/issues/2009), the [source-boundary investigation](../../docs/reports/runtime-composition/import-export-boundary.md), the [selection planner](../174-profile-selection-planner/spec.md), and the [offline plan command](../175-offline-composition-plan/spec.md).
 
@@ -27,7 +27,7 @@ A developer selects one local host, shell, environment, and pinned catalog. They
 
 ### User Story 2 - Generate a reviewed host-file candidate (Priority: P2)
 
-From accepted authored intent and explicit local sources, a developer previews a redacted source-to-output diff and writes a candidate to a new directory. The candidate changes only reviewed feature/settings/resource intent; unedited shells, layers, and unrelated configuration stay intact. It does not replace the live host.
+From accepted authored intent and explicit local sources, a developer previews a redacted source-to-output diff and writes a candidate to a new directory. The candidate changes reviewed existing setting paths and logical resource references; unedited shells, layers, and unrelated configuration stay intact. A changed feature selection without a reviewed activation-layer mapping refuses. It does not replace the live host.
 
 **Why this priority**: Portable selection is useful only when it produces a host-file candidate without destroying existing configuration or pretending to validate the running host.
 
@@ -84,7 +84,7 @@ From accepted authored intent and explicit local sources, a developer previews a
 
 ## Assumptions
 
-- This Draft specifies the bounded first slice from [#2005](https://github.com/elsa-workflows/elsa-foundation/issues/2005). The [v1 contract](contracts/file-bridge-v1.md) supplies exact source/output and refusal examples for implementation planning; no converter is claimed here.
+- This bounded first slice comes from [#2005](https://github.com/elsa-workflows/elsa-foundation/issues/2005). The [v1 contract](contracts/file-bridge-v1.md) supplies exact source/output and refusal examples. The file-only import checkpoint was delivered under #2019; generation is tracked under [#2023](https://github.com/elsa-workflows/elsa-foundation/issues/2023).
 - Authored composition v1 remains strict at the top level. Invocation-scoped source context keeps base/overlay files available; it is not serialized into settings, resources, or a shareable sidecar.
 - A portable document can name an existing logical resource. The local host files retain its provider, connection name, and connection value. Unknown values remain local until a later reviewed portability contract exists.
 - The first target is an existing CShells host with a selected base file and at most one selected environment overlay. In-place apply, whole-bundle revision/recovery, live host checks, process-override parity, and arbitrary third-party layouts belong to later work under [#1964](https://github.com/elsa-workflows/elsa-foundation/issues/1964) or [#1962](https://github.com/elsa-workflows/elsa-foundation/issues/1962).

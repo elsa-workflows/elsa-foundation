@@ -17,7 +17,9 @@ internal static class PseudoTerminalCli
         timeout_seconds = float(sys.argv[1])
         expected_prompt = base64.b64decode(sys.argv[2])
         response = base64.b64decode(sys.argv[3]) + b"\n"
-        command = sys.argv[4:]
+        mutation_path = base64.b64decode(sys.argv[4]).decode("utf-8")
+        mutation_content = base64.b64decode(sys.argv[5])
+        command = sys.argv[6:]
         try:
             pid, master = pty.fork()
         except (OSError, AttributeError, NotImplementedError):
@@ -74,6 +76,9 @@ internal static class PseudoTerminalCli
 
             if not response_sent and expected_prompt in captured:
                 try:
+                    if mutation_path:
+                        with open(mutation_path, "wb") as file:
+                            file.write(mutation_content)
                     os.write(master, response)
                     response_sent = True
                 except OSError:
@@ -116,13 +121,17 @@ internal static class PseudoTerminalCli
         string expectedPrompt,
         string reviewResponse,
         IReadOnlyList<string> cliArguments,
-        TimeSpan? timeout = null) =>
+        TimeSpan? timeout = null,
+        string? beforeResponsePath = null,
+        string? beforeResponseText = null) =>
         RunProcessAsync(
             DotnetMuxer.Path(),
             ["exec", DotnetElsa.ToolAssembly, .. cliArguments],
             expectedPrompt,
             reviewResponse,
-            timeout);
+            timeout,
+            beforeResponsePath,
+            beforeResponseText);
 
     /// <summary>Runs a process through the same PTY bridge; exposed internally for a small harness self-test.</summary>
     internal static async Task<PseudoTerminalCliRun> RunProcessAsync(
@@ -130,7 +139,9 @@ internal static class PseudoTerminalCli
         IReadOnlyList<string> arguments,
         string expectedPrompt,
         string reviewResponse,
-        TimeSpan? timeout = null)
+        TimeSpan? timeout = null,
+        string? beforeResponsePath = null,
+        string? beforeResponseText = null)
     {
         if (OperatingSystem.IsWindows())
             throw new PlatformNotSupportedException("Interactive CLI tests require a Unix PTY; Windows is not supported.");
@@ -140,6 +151,8 @@ internal static class PseudoTerminalCli
         ArgumentNullException.ThrowIfNull(reviewResponse);
         if (reviewResponse.Contains('\r') || reviewResponse.Contains('\n'))
             throw new ArgumentException("The review response must be one line.", nameof(reviewResponse));
+        if ((beforeResponsePath is null) != (beforeResponseText is null))
+            throw new ArgumentException("Both pre-response mutation values must be supplied together.");
 
         var deadline = timeout ?? TimeSpan.FromSeconds(30);
         if (deadline <= TimeSpan.Zero)
@@ -156,6 +169,8 @@ internal static class PseudoTerminalCli
         startInfo.ArgumentList.Add(deadline.TotalSeconds.ToString("R", CultureInfo.InvariantCulture));
         startInfo.ArgumentList.Add(Convert.ToBase64String(Encoding.UTF8.GetBytes(expectedPrompt)));
         startInfo.ArgumentList.Add(Convert.ToBase64String(Encoding.UTF8.GetBytes(reviewResponse)));
+        startInfo.ArgumentList.Add(Convert.ToBase64String(Encoding.UTF8.GetBytes(beforeResponsePath ?? string.Empty)));
+        startInfo.ArgumentList.Add(Convert.ToBase64String(Encoding.UTF8.GetBytes(beforeResponseText ?? string.Empty)));
         startInfo.ArgumentList.Add(Path.IsPathRooted(executable) ? Path.GetFullPath(executable) : executable);
         foreach (var argument in arguments)
             startInfo.ArgumentList.Add(argument);

@@ -1,6 +1,6 @@
 # File bridge v1 contract
 
-Status: proposed under [#2009](https://github.com/elsa-workflows/elsa-foundation/issues/2009). This narrows the [source investigation](../../../docs/reports/runtime-composition/import-export-boundary.md) for planning; it is not an implemented converter.
+Status: file-only import delivered under [#2019](https://github.com/elsa-workflows/elsa-foundation/issues/2019); reviewed candidate generation under [#2023](https://github.com/elsa-workflows/elsa-foundation/issues/2023). This narrows the [source investigation](../../../docs/reports/runtime-composition/import-export-boundary.md) to supported local files. It does not claim a running-host converter or in-place apply.
 
 ## Authority and source association
 

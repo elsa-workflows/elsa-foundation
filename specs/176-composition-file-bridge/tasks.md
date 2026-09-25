@@ -2,7 +2,7 @@
 
 **Input**: [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md), [data-model.md](data-model.md), [semantic contract](contracts/file-bridge-v1.md), [CLI contract](contracts/cli-file-bridge-v1.md), and [setting review input](contracts/setting-review-v1.md).
 
-**Tests**: Required by spec 176's independent tests and success criteria. Write focused behavior tests before implementing each story. T001 is completed by the pinned-package spike. T002–T014 form the implemented import checkpoint; generation and release tasks remain open.
+**Tests**: Required by spec 176's independent tests and success criteria. Write focused behavior tests before implementing each story. T001 is completed by the pinned-package spike. T002–T014 form the implemented import checkpoint. T015–T022 have local generation evidence under [#2023](https://github.com/elsa-workflows/elsa-foundation/issues/2023); PR evidence and release status follow the merge gate.
 
 ## Phase 1: Setup and package-semantics prerequisite
 
@@ -50,22 +50,22 @@
 
 ### Tests for User Story 2
 
-- [ ] T015 [P] [US2] Add semantic patch/diff tests for existing-layer edits, unknown-node preservation, unreviewed/new-field refusal, resource-name validation, and candidate/accepted selection drift in `tests/essentials/Modularity/Planning/Tests/CompositionCandidateTests.cs`.
-- [ ] T016 [P] [US2] Add real-process generation tests for diff approval, non-TTY/cancellation, existing destination, changed selected/unselected file, output failure cleanup, and both canary streams in `tests/essentials/Cli/Tests/CompositionGenerateCliTests.cs`.
+- [x] T015 [P] [US2] Add semantic patch/diff tests for existing-layer edits, unknown-node preservation, unreviewed/new-field refusal, resource-name validation, and candidate/accepted selection drift in `tests/essentials/Modularity/Planning/Tests/CompositionCandidateTests.cs`.
+- [x] T016 [P] [US2] Add real-process generation tests for diff approval, non-TTY/cancellation, existing destination, changed selected/unselected file, output failure cleanup, and both canary streams in `tests/essentials/Cli/Tests/CompositionGenerateCliTests.cs`.
 
 ### Implementation for User Story 2
 
-- [ ] T017 [US2] Compute a reviewed JSON patch against original source layers and a redacted semantic diff in `src/essentials/Modularity/Planning/Bridge/CompositionCandidateBuilder.cs`; never infer a target layer for a new field or reconstruct host files from `SelectionPlan`.
-- [ ] T018 [US2] Register `composition generate` without the persistence worker in `src/essentials/Cli/ElsaCli.cs` and implement strict authored/catalog/review validation plus one explicit diff decision in `src/essentials/Cli/CompositionGenerateCommand.cs`.
-- [ ] T019 [US2] Copy all supported frozen files to private same-volume staging, patch only approved paths, recheck every source file, and no-overwrite rename a complete fresh directory in `src/essentials/Cli/CompositionFilePublisher.cs`; clean staging on any refusal.
-- [ ] T020 [US2] Run the full fixture before/after comparison and Workbench preservation sample in `specs/176-composition-file-bridge/quickstart.md`, including byte-identical source checks and parsed-subtree equality outside reviewed paths.
+- [x] T017 [US2] Compute a reviewed JSON patch against original source layers and a redacted semantic diff in `src/essentials/Modularity/Planning/Bridge/CompositionCandidateBuilder.cs`; never infer a target layer for a new field or reconstruct host files from `SelectionPlan`.
+- [x] T018 [US2] Register `composition generate` without the persistence worker in `src/essentials/Cli/ElsaCli.cs` and implement strict authored/catalog/review validation plus one explicit diff decision in `src/essentials/Cli/CompositionGenerateCommand.cs`.
+- [x] T019 [US2] Copy all supported frozen files to private same-volume staging, patch only approved paths, recheck every source file, and no-overwrite rename a complete fresh directory in `src/essentials/Cli/CompositionFilePublisher.cs`; clean staging on any refusal.
+- [x] T020 [US2] Run the full fixture before/after comparison and Workbench preservation sample in `specs/176-composition-file-bridge/quickstart.md`, including byte-identical source checks and parsed-subtree equality outside reviewed paths.
 
 **Checkpoint**: Import and generation are separately reviewable and atomic. A generated bundle is a candidate, not a validated runtime or in-place apply.
 
 ## Phase 5: Polish and delivery gates
 
-- [ ] T021 [P] Add one shared safe rendering/refusal helper only where import and generate duplicate logic in `src/essentials/Cli/CompositionFileBridgeOutput.cs`; keep raw exceptions, paths, and source excerpts out of diagnostics.
-- [ ] T022 Run the whole affected Planning and CLI test projects plus `tests/essentials/Architecture/Elsa.Architecture.Tests.csproj`, refresh/check maps, check solution filters and `git diff --check`, and review the source/output/canary diff in the implementation worktree.
+- [x] T021 [P] Add one shared safe rendering/refusal helper only where import and generate duplicate logic in `src/essentials/Cli/CompositionFileBridgeOutput.cs`; keep raw exceptions, paths, and source excerpts out of diagnostics.
+- [x] T022 Run the whole affected Planning and CLI test projects plus `tests/essentials/Architecture/Elsa.Architecture.Tests.csproj`, refresh/check maps, check solution filters and `git diff --check`, and review the source/output/canary diff in the implementation worktree.
 - [ ] T023 Mutate and restore one redaction or source-change assertion in `tests/essentials/Cli/Tests/CompositionGenerateCliTests.cs`, show the focused test fails then passes, and record exact-head evidence on the implementation PR and linked issue before merge.
 - [ ] T024 Update `specs/176-composition-file-bridge/spec.md` status and `docs/program-goals/feature-composition-readiness.md` only after both stories and the file-only boundary are actually delivered; do not claim runtime, package, EF, or database readiness.
 
