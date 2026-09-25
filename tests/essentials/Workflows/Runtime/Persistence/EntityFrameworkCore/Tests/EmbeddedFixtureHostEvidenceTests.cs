@@ -13,6 +13,7 @@ using Elsa.Api.Capabilities;
 using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Locking.Core;
+using Elsa.Locking.FileSystem;
 using Elsa.Mediator;
 using Elsa.Modularity.EntityFramework.Extensions;
 using Elsa.Primitives.Hosting;
@@ -35,8 +36,8 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// Exercises the proposed Embedded selection in a generic CShells host. The authored 12 IDs are
-/// kept separate from CShells' dependency closure.
+/// Exercises the proposed Embedded selection and its explicit, deployable closure in a generic CShells host.
+/// The original authored 12 IDs are kept separate from CShells' dependency closure.
 /// No ASP.NET host or HTTP request is used.
 /// </summary>
 public sealed class EmbeddedFixtureHostEvidenceTests : IDisposable
@@ -46,6 +47,7 @@ public sealed class EmbeddedFixtureHostEvidenceTests : IDisposable
     private const string RecoverySigningKey = "embedded-runtime-recovery-signing-key-32-bytes";
     private const string HierarchySigningKey = "embedded-runtime-hierarchy-signing-key-32-bytes";
     private readonly string databasePath = Path.Join(Path.GetTempPath(), $"elsa-embedded-fixture-{Guid.NewGuid():N}.db");
+    private readonly string locksFolderPath = Path.Join(Path.GetTempPath(), $"elsa-embedded-locks-{Guid.NewGuid():N}");
 
     private string ConnectionString => $"Data Source={databasePath};Pooling=False";
 
@@ -84,6 +86,54 @@ public sealed class EmbeddedFixtureHostEvidenceTests : IDisposable
             SelectedFeatureIds.Concat(DependencyFeatureIds).OrderBy(id => id, StringComparer.Ordinal),
             effectiveIds);
 
+        await ExerciseRuntimeAsync(shell);
+    }
+
+    [Fact]
+    public async Task Explicit_embedded_closure_uses_file_locking_without_test_provider()
+    {
+        var selectedIds = SelectedFeatureIds.Concat(DependencyFeatureIds)
+            .Append("FileSystemDistributedLocking")
+            .ToArray();
+        await using var host = CreateHost(selectedIds, registerTestLockProvider: false);
+        var shell = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+        var settings = shell.ServiceProvider.GetRequiredService<ShellSettings>();
+        Assert.Equal(selectedIds.OrderBy(id => id, StringComparer.Ordinal),
+            settings.EnabledFeatures.OrderBy(id => id, StringComparer.Ordinal));
+        Assert.IsType<DistributedLockProviderAdaptor>(
+            shell.ServiceProvider.GetRequiredService<IDistributedLockProvider>());
+
+        await ExerciseRuntimeAsync(shell);
+    }
+
+    [Fact]
+    public async Task Embedded_runtime_without_lock_provider_refuses_activation()
+    {
+        await using var host = CreateHost(SelectedFeatureIds.Concat(DependencyFeatureIds).ToArray(),
+            registerTestLockProvider: false);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            host.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName));
+        Assert.Contains(nameof(IDistributedLockProvider), error.ToString());
+    }
+
+    [Fact]
+    public async Task Raw_cshells_configuration_readds_explicitly_disabled_runtime_dependency()
+    {
+        var selectedIds = SelectedFeatureIds.Concat(DependencyFeatureIds)
+            .Where(id => id != "WorkflowsRuntimeResumption")
+            .Append("FileSystemDistributedLocking")
+            .ToArray();
+        await using var host = CreateHost(selectedIds, registerTestLockProvider: false,
+            disabledFeatureIds: ["WorkflowsRuntimeResumption"]);
+
+        var shell = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+        Assert.Contains("WorkflowsRuntimeResumption",
+            shell.ServiceProvider.GetRequiredService<ShellSettings>().EnabledFeatures);
+    }
+
+    private async Task ExerciseRuntimeAsync(IShell shell)
+    {
         await using var scope = shell.ServiceProvider.CreateAsyncScope();
         var options = scope.ServiceProvider.GetRequiredService<RuntimeWorkflowExecutionEntityFrameworkCoreOptions>();
         Assert.Equal("Sqlite", options.Provider);
@@ -159,27 +209,43 @@ public sealed class EmbeddedFixtureHostEvidenceTests : IDisposable
         SqliteConnection.ClearAllPools();
         foreach (var path in new[] { databasePath, $"{databasePath}-wal", $"{databasePath}-shm" })
             File.Delete(path);
+        if (Directory.Exists(locksFolderPath))
+            Directory.Delete(locksFolderPath, recursive: true);
     }
 
-    private ServiceProvider CreateHost()
+    private ServiceProvider CreateHost(
+        IReadOnlyCollection<string>? selectedFeatureIds = null,
+        bool registerTestLockProvider = true,
+        IReadOnlyCollection<string>? disabledFeatureIds = null)
     {
+        selectedFeatureIds ??= SelectedFeatureIds;
+        var selectFileLocking = selectedFeatureIds.Contains("FileSystemDistributedLocking");
+        if (selectFileLocking)
+            Directory.CreateDirectory(locksFolderPath);
+        var values = new Dictionary<string, string?>
+        {
+            ["Elsa:Persistence:DefaultResource"] = "primary",
+            ["Elsa:Persistence:Resources:primary:Provider"] = "Sqlite",
+            [$"Elsa:Persistence:Resources:primary:ConnectionName"] = ResourceName,
+            [$"ConnectionStrings:{ResourceName}"] = ConnectionString,
+            [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey"] = RecoverySigningKey,
+            [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey"] = HierarchySigningKey
+        };
+        if (selectFileLocking)
+            values[$"CShells:Shells:{ShellName}:Features:FileSystemDistributedLocking:LocksFolderPath"] = locksFolderPath;
+        foreach (var id in selectedFeatureIds)
+            values[$"CShells:Shells:{ShellName}:Features:{id}"] = null;
+        if (disabledFeatureIds is not null)
+            foreach (var id in disabledFeatureIds)
+                values[$"CShells:Shells:{ShellName}:Features:{id}"] = "false";
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Elsa:Persistence:DefaultResource"] = "primary",
-                ["Elsa:Persistence:Resources:primary:Provider"] = "Sqlite",
-                [$"Elsa:Persistence:Resources:primary:ConnectionName"] = ResourceName,
-                [$"ConnectionStrings:{ResourceName}"] = ConnectionString,
-                [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey"] = RecoverySigningKey,
-                [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey"] = HierarchySigningKey
-            }.Concat(SelectedFeatureIds.Select(id => KeyValuePair.Create(
-                $"CShells:Shells:{ShellName}:Features:{id}",
-                (string?)null))))
+            .AddInMemoryCollection(values)
             .Build();
 
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddSingleton<IDistributedLockProvider, RuntimeEntityFrameworkCoreFeatureTests.ProcessLockProvider>();
+        if (registerTestLockProvider)
+            services.AddSingleton<IDistributedLockProvider, RuntimeEntityFrameworkCoreFeatureTests.ProcessLockProvider>();
         services.AddSingleton<IConfiguration>(configuration);
         services.AddEfPersistenceResources(configuration, typeof(EmbeddedFixtureHostEvidenceTests).Assembly);
         services.AddCShells(shells => shells
@@ -198,6 +264,7 @@ public sealed class EmbeddedFixtureHostEvidenceTests : IDisposable
                 typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
                 typeof(WorkflowsRuntimeResumptionFeature).Assembly,
                 typeof(TasksFeature).Assembly)
+            .WithAssemblies(typeof(FileSystemLockingFeature).Assembly)
             .WithConfigurationProvider(configuration));
 
         return services.BuildServiceProvider(validateScopes: true);

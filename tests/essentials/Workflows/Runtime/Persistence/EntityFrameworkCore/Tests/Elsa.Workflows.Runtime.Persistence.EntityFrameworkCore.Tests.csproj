@@ -25,6 +25,7 @@
     <!-- The EF Runtime feature depends on these features; shell activation resolves them from their assemblies. -->
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Tasks\Elsa.Tasks.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Locking\FileSystem\Elsa.Locking.FileSystem.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />

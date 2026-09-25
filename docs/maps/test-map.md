@@ -7,8 +7,8 @@ Records direct test-project references and test source-file inventory; it does n
 ## Summary
 
 - Test projects: 118
-- Source projects directly referenced by at least one test project: 152
-- Source projects not directly referenced by test projects: 6
+- Source projects directly referenced by at least one test project: 153
+- Source projects not directly referenced by test projects: 5
 
 ## Test Projects
 
@@ -126,7 +126,7 @@ Records direct test-project references and test source-file inventory; it does n
 | [Elsa.Workflows.Runtime.Distributed.Tests](../../tests/essentials/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj) | Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Distributed |
 | [Elsa.Workflows.Runtime.Http.Tests](../../tests/essentials/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj) | Elsa.Http.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Http |
 | [Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests](../../tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj) | Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
-| [Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests](../../tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj) | Elsa.Activities.ControlFlow<br>Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Sequence<br>Elsa.Activities.Testing<br>Elsa.Api.Capabilities<br>Elsa.Events<br>Elsa.Expressions<br>Elsa.Mediator<br>Elsa.Modularity.EntityFramework<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.SystemText<br>Elsa.Tasks<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Resumption |
+| [Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests](../../tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj) | Elsa.Activities.ControlFlow<br>Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Sequence<br>Elsa.Activities.Testing<br>Elsa.Api.Capabilities<br>Elsa.Events<br>Elsa.Expressions<br>Elsa.Locking.FileSystem<br>Elsa.Mediator<br>Elsa.Modularity.EntityFramework<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.SystemText<br>Elsa.Tasks<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Resumption |
 | [Elsa.Workflows.Runtime.Reconciliation.ExecutionProbe](../../tests/essentials/Workflows/Runtime/Reconciliation/ExecutionProbe/Elsa.Workflows.Runtime.Reconciliation.ExecutionProbe.csproj) | Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Activities.Testing<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Reconciliation<br>Elsa.Workflows.Runtime.Reconciliation.Core<br>Elsa.Workflows.Runtime.Resumption |
 | [Elsa.Workflows.Runtime.Reconciliation.Tests](../../tests/essentials/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj) | Elsa.Activities.Testing<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Reconciliation<br>Elsa.Workflows.Runtime.Reconciliation.Core |
 | [Elsa.Workflows.Runtime.Resumption.Tests](../../tests/essentials/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj) | Elsa.Testing<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Resumption |
@@ -264,5 +264,4 @@ Records direct test-project references and test source-file inventory; it does n
 | [Elsa.Foundation.Identity.OpenIddict.Behavior](../../src/essentials/Foundation/Identity/OpenIddict/Behavior/Elsa.Foundation.Identity.OpenIddict.Behavior.csproj) | Elsa.Foundation |
 | [Elsa.Git](../../src/essentials/Git/Elsa.Git.csproj) | Elsa.Git |
 | [Elsa.Http.JavaScript](../../src/essentials/Http/JavaScript/Elsa.Http.JavaScript.csproj) | Elsa.Http |
-| [Elsa.Locking.FileSystem](../../src/essentials/Locking/FileSystem/Elsa.Locking.FileSystem.csproj) | Elsa.Locking |
 | [Elsa.Pipelines.Core](../../src/essentials/Pipelines/Core/Elsa.Pipelines.Core.csproj) | Elsa.Pipelines |
