@@ -18,6 +18,16 @@ public sealed record SelectionFinding(
     string EvidenceSource,
     string Explanation);
 
+public sealed record DependencyEvidence(
+    string FeatureId,
+    string DependencyId,
+    string Mode,
+    string EvidenceKind,
+    bool TargetSelected)
+{
+    public string EvidenceSource { get; init; } = string.Empty;
+}
+
 public sealed record SelectionPlan(
     CatalogPin Catalog,
     string? InventoryId,
@@ -28,7 +38,10 @@ public sealed record SelectionPlan(
     ImmutableArray<SelectionFinding> Findings,
     ImmutableArray<FeatureLock> ObservedLocks,
     AcceptedSelection Accepted,
-    PersistenceEvidence Persistence);
+    PersistenceEvidence Persistence)
+{
+    public ImmutableArray<DependencyEvidence> DependencyEvidence { get; init; } = [];
+}
 
 public sealed record SelectionDifference<T>(T? Old, T? Candidate);
 

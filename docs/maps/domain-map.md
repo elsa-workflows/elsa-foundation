@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 132
 - Test projects: 118
 - Domains: 29
-- Direct cross-domain references: 707
+- Direct cross-domain references: 709
 
 ## Domains
 
@@ -79,7 +79,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Attention.Core](../../src/essentials/Attention/Core/Elsa.Attention.Core.csproj) | source | Elsa.Attention | Core | contract | - |
 | [Elsa.Caching.Core](../../src/essentials/Caching/Core/Elsa.Caching.Core.csproj) | source | Elsa.Caching | Core | contract | - |
 | [Elsa.Caching.Memory](../../src/essentials/Caching/Memory/Elsa.Caching.Memory.csproj) | source | Elsa.Caching | Memory | feature/implementation | Elsa.Caching.Core |
-| [Elsa.Cli](../../src/essentials/Cli/Elsa.Cli.csproj) | source | Elsa.Cli | (root) | feature/implementation | Elsa.Cli.Worker |
+| [Elsa.Cli](../../src/essentials/Cli/Elsa.Cli.csproj) | source | Elsa.Cli | (root) | feature/implementation | Elsa.Cli.Worker<br>Elsa.Modularity.Planning |
 | [Elsa.Cli.Worker](../../src/essentials/Cli/Worker/Elsa.Cli.Worker.csproj) | source | Elsa.Cli | Worker | feature/implementation | - |
 | [Elsa.Diagnostics.ConsoleLogStreaming](../../src/essentials/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj) | source | Elsa.Diagnostics | ConsoleLogStreaming | feature/implementation | - |
 | [Elsa.Diagnostics.OpenTelemetry.Core](../../src/essentials/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj) | source | Elsa.Diagnostics | OpenTelemetry.Core | contract | - |
@@ -228,7 +228,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Cli.Fixtures.UnsupportedContextPersistence](../../tests/essentials/Cli/Fixtures/UnsupportedContextPersistence/Elsa.Cli.Fixtures.UnsupportedContextPersistence.csproj) | test | Elsa.Cli | Fixtures.UnsupportedContextPersistence | test | - |
 | [Acme.Widgets](../../tests/essentials/Cli/Fixtures/Widgets/Acme.Widgets.csproj) | test | Other | - | test | Elsa.Persistence.EntityFramework |
 | [Elsa.Cli.Fixtures.WorkerContextHost](../../tests/essentials/Cli/Fixtures/WorkerContextHost/Elsa.Cli.Fixtures.WorkerContextHost.csproj) | test | Elsa.Cli | Fixtures.WorkerContextHost | test | - |
-| [Elsa.Cli.Tests](../../tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj) | test | Elsa.Cli | Tests | test | Acme.Widgets<br>Elsa.Cli<br>Elsa.Cli.Fixtures.CollisionHost<br>Elsa.Cli.Fixtures.Host<br>Elsa.Cli.Fixtures.LegacyHost<br>Elsa.Cli.Fixtures.MinimalHost<br>Elsa.Cli.Fixtures.NuplaneCapabilityHost<br>Elsa.Cli.Fixtures.NuplaneHost<br>Elsa.Cli.Fixtures.PartialContextHost<br>Elsa.Cli.Fixtures.ResourceAwareLiveHost<br>Elsa.Cli.Fixtures.ShellsHost<br>Elsa.Cli.Fixtures.UnsupportedContextHost<br>Elsa.Cli.Fixtures.WorkerContextHost |
+| [Elsa.Cli.Tests](../../tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj) | test | Elsa.Cli | Tests | test | Acme.Widgets<br>Elsa.Cli<br>Elsa.Cli.Fixtures.CollisionHost<br>Elsa.Cli.Fixtures.Host<br>Elsa.Cli.Fixtures.LegacyHost<br>Elsa.Cli.Fixtures.MinimalHost<br>Elsa.Cli.Fixtures.NuplaneCapabilityHost<br>Elsa.Cli.Fixtures.NuplaneHost<br>Elsa.Cli.Fixtures.PartialContextHost<br>Elsa.Cli.Fixtures.ResourceAwareLiveHost<br>Elsa.Cli.Fixtures.ShellsHost<br>Elsa.Cli.Fixtures.UnsupportedContextHost<br>Elsa.Cli.Fixtures.WorkerContextHost<br>Elsa.Modularity.Planning |
 | [Elsa.Diagnostics.ConsoleLogStreaming.Tests](../../tests/essentials/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj) | test | Elsa.Diagnostics | ConsoleLogStreaming.Tests | test | Elsa.Diagnostics.ConsoleLogStreaming |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests](../../tests/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Diagnostics | OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests | test | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests](../../tests/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Diagnostics | OpenTelemetry.Persistence.EntityFrameworkCore.Tests | test | Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore |
@@ -524,6 +524,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Attention.Api](../../src/essentials/Attention/Api/Elsa.Attention.Api.csproj) | Elsa.Attention | [Elsa.Foundation.Identity](../../src/essentials/Foundation/Identity/Elsa.Foundation.Identity.csproj) | Elsa.Foundation |
 | [Elsa.Attention.Api](../../src/essentials/Attention/Api/Elsa.Attention.Api.csproj) | Elsa.Attention | [Elsa.Foundation.Identity.Core](../../src/essentials/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj) | Elsa.Foundation |
 | [Elsa.Attention.Api.Tests](../../tests/essentials/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj) | Elsa.Attention | [Elsa.Testing](../../tests/essentials/Testing/Elsa.Testing.csproj) | Elsa.Testing |
+| [Elsa.Cli](../../src/essentials/Cli/Elsa.Cli.csproj) | Elsa.Cli | [Elsa.Modularity.Planning](../../src/essentials/Modularity/Planning/Elsa.Modularity.Planning.csproj) | Elsa.Modularity |
 | [Elsa.Cli.Fixtures.CollisionHost](../../tests/essentials/Cli/Fixtures/CollisionHost/Elsa.Cli.Fixtures.CollisionHost.csproj) | Elsa.Cli | [Acme.Widgets](../../tests/essentials/Cli/Fixtures/Widgets/Acme.Widgets.csproj) | Other |
 | [Elsa.Cli.Fixtures.CollisionHost](../../tests/essentials/Cli/Fixtures/CollisionHost/Elsa.Cli.Fixtures.CollisionHost.csproj) | Elsa.Cli | [Acme.Widgets.Collision](../../tests/essentials/Cli/Fixtures/Collision/Acme.Widgets.Collision.csproj) | Other |
 | [Elsa.Cli.Fixtures.Host](../../tests/essentials/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj) | Elsa.Cli | [Acme.Widgets](../../tests/essentials/Cli/Fixtures/Widgets/Acme.Widgets.csproj) | Other |
@@ -547,6 +548,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Cli.Fixtures.ShellsHost](../../tests/essentials/Cli/Fixtures/ShellsHost/Elsa.Cli.Fixtures.ShellsHost.csproj) | Elsa.Cli | [Elsa.Workflows.Design.Persistence.EntityFrameworkCore](../../src/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj) | Elsa.Workflows |
 | [Elsa.Cli.Fixtures.ShellsHost](../../tests/essentials/Cli/Fixtures/ShellsHost/Elsa.Cli.Fixtures.ShellsHost.csproj) | Elsa.Cli | [Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore](../../src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj) | Elsa.Workflows |
 | [Elsa.Cli.Tests](../../tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj) | Elsa.Cli | [Acme.Widgets](../../tests/essentials/Cli/Fixtures/Widgets/Acme.Widgets.csproj) | Other |
+| [Elsa.Cli.Tests](../../tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj) | Elsa.Cli | [Elsa.Modularity.Planning](../../src/essentials/Modularity/Planning/Elsa.Modularity.Planning.csproj) | Elsa.Modularity |
 | [Elsa.Diagnostics.OpenTelemetry](../../src/essentials/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | Elsa.Diagnostics | [Elsa.Api.AspNetCore](../../src/essentials/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |
 | [Elsa.Diagnostics.OpenTelemetry](../../src/essentials/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | Elsa.Diagnostics | [Elsa.Foundation.Identity](../../src/essentials/Foundation/Identity/Elsa.Foundation.Identity.csproj) | Elsa.Foundation |
 | [Elsa.Diagnostics.OpenTelemetry](../../src/essentials/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | Elsa.Diagnostics | [Elsa.Foundation.Identity.Core](../../src/essentials/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj) | Elsa.Foundation |

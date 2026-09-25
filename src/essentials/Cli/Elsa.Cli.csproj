@@ -32,6 +32,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Offline composition inspection uses the shared pure planner; it never enters the persistence worker. -->
+    <ProjectReference Include="..\Modularity\Planning\Elsa.Modularity.Planning.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- The worker ships inside this tool's own package and is launched from beside it. The reference also
          gives both halves one definition of the protocol they speak. -->
     <ProjectReference Include="Worker\Elsa.Cli.Worker.csproj" />
