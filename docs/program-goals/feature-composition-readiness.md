@@ -61,6 +61,7 @@ Existing [connection-guard #1902](https://github.com/elsa-workflows/elsa-foundat
 - [CShells composition evidence](../reports/cshells-composition-evidence.md)
 - [Authoring fixture host proof](../reports/runtime-composition/authoring-host-proof.md)
 - [Embedded fixture host proof](../reports/runtime-composition/embedded-host-proof.md)
+- [First starting-profile decision](../reports/runtime-composition/first-profile-decision.md)
 - [Worker fixture host proof](../reports/runtime-composition/worker-host-proof.md)
 - [Developer plan command contract](../reports/runtime-composition/developer-plan-command-contract.md)
 - [Selected-host evidence investigation](../reports/runtime-composition/selected-host-evidence-boundary.md)
