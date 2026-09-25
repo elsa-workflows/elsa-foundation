@@ -95,7 +95,8 @@ internal static class CompositionInitCommand
             throw CliRefusal.Resolution("composition-output-exists", "The authored composition output already exists.");
 
         var fileName = Path.GetFileName(fullPath);
-        var stagingPath = Path.Combine(directory, $".{fileName}.{Guid.NewGuid():N}.tmp");
+        var stagingFileName = $".{fileName}.{Guid.NewGuid():N}.tmp";
+        var stagingPath = Path.Join(directory, stagingFileName);
         try
         {
             var options = new FileStreamOptions

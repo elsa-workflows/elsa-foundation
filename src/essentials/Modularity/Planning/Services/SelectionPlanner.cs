@@ -95,8 +95,9 @@ public static class SelectionPlanner
                      .DistinctBy(edge => (edge.FeatureId, edge.DependencyId)))
         {
             var observed = inventory?.Features.FirstOrDefault(row => row.FeatureId == edge.FeatureId);
-            if (observed?.RuntimeDependencies is not null ||
-                observed?.ManifestDependencies is not null && observed.ManifestReadStatus == "read")
+            var hasRuntimeDependencies = observed is { RuntimeDependencies: not null };
+            var hasReadableManifestDependencies = observed is { ManifestDependencies: not null, ManifestReadStatus: "read" };
+            if (hasRuntimeDependencies || hasReadableManifestDependencies)
                 continue;
             var removed = orderedReasons.Any(reason => reason.FeatureId == edge.DependencyId && reason.Action == "removed");
             findings.Add(new SelectionFinding(
