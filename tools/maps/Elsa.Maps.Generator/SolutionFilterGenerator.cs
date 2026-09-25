@@ -66,6 +66,16 @@ public static class SolutionFilterGenerator
         return SelectRoots(manifest, ReadSolution(repo, manifest), profile);
     }
 
+    /// <summary>Returns the validated solution graph for impact checks that need reverse consumers.</summary>
+    public static IReadOnlyDictionary<string, IReadOnlyList<string>> GetProjectReferences(RepoContext repo)
+    {
+        var solution = ReadSolution(repo, ReadManifest(repo));
+        return solution.Projects.ToDictionary(
+            project => project.Key,
+            project => project.Value.References,
+            StringComparer.OrdinalIgnoreCase);
+    }
+
     /// <summary>Returns zero when committed filters match freshly generated output, one otherwise.</summary>
     public static int Check(RepoContext repo)
     {

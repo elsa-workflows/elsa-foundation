@@ -7,6 +7,7 @@ using Elsa.Maps.Generator;
 //   domain | extension-points | architecture-reference | feature-dependency | maps | all | check
 //   solution-filters | solution-filters-check | solution-filters-self-test
 //   solution-filter-roots <filter-path>
+//   ef-suites-select <event> [<base-sha> <head-sha>] | ef-suites-self-test
 
 // "maps" first: the v2 findings report reads summary lines out of the v1 maps, so they must exist first.
 string[] knownLayers = ["maps", "domain", "extension-points", "architecture-reference", "feature-dependency"];
@@ -41,6 +42,20 @@ try
         return 0;
     }
 
+    if (layers.SequenceEqual(["ef-suites-self-test"], StringComparer.Ordinal))
+    {
+        EfSuiteSelectorContractTests.Run();
+        return 0;
+    }
+
+    if ((layers.Length is 2 or 4) && string.Equals(layers[0], "ef-suites-select", StringComparison.Ordinal))
+    {
+        Console.WriteLine(EfSuiteSelector.Select(repo, layers[1],
+            layers.Length == 4 ? layers[2] : null,
+            layers.Length == 4 ? layers[3] : null).ToJson());
+        return 0;
+    }
+
     // Freshness check: regenerates into a scratch directory and compares the bytes with what is
     // committed. Writes nothing into the repository, so it is safe to run in CI while generation
     // itself stays manually initiated.
@@ -56,7 +71,7 @@ try
     // writing part of the maps and then throwing.
     var requested = layers.Contains("all", StringComparer.Ordinal) ? knownLayers : layers;
     if (requested.FirstOrDefault(layer => !knownLayers.Contains(layer, StringComparer.Ordinal)) is { } unknown)
-        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>.");
+        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>, ef-suites-select <event> [<base-sha> <head-sha>], ef-suites-self-test.");
 
     var projects = ProjectGraph.Read(repo);
     var written = new List<string>();

@@ -1,0 +1,94 @@
+{
+  "suites": [
+    {
+      "suite": "migrations",
+      "project": "tests/essentials/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj",
+      "require": "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX"
+    },
+    {
+      "suite": "runtime",
+      "project": "tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "require": "ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
+      "suite": "runtime-distributed",
+      "project": "tests/essentials/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "require": "ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
+      "suite": "dashboard",
+      "project": "tests/essentials/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "require": "ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
+      "suite": "activities-design",
+      "project": "tests/essentials/Activities/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "require": "ELSA_ACTIVITIES_DESIGN_EF_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
+      "suite": "publishing",
+      "project": "tests/essentials/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests.csproj",
+      "require": "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX"
+    },
+    {
+      "suite": "elsa3-import",
+      "project": "src/extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "require": "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX"
+    },
+    {
+      "suite": "workflows-design",
+      "project": "tests/essentials/Workflows/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "require": ""
+    },
+    {
+      "suite": "identity",
+      "project": "tests/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "require": ""
+    },
+    {
+      "suite": "opentelemetry",
+      "project": "tests/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "require": ""
+    },
+    {
+      "suite": "structured-logs",
+      "project": "tests/essentials/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "require": ""
+    },
+    {
+      "suite": "studio-preferences",
+      "project": "tests/essentials/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "require": ""
+    },
+    {
+      "suite": "secrets-sqlserver",
+      "project": "tests/essentials/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj",
+      "require": ""
+    },
+    {
+      "suite": "secrets-mysql",
+      "project": "tests/essentials/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj",
+      "require": ""
+    },
+    {
+      "suite": "transaction-topology",
+      "project": "tests/essentials/Persistence/EntityFrameworkCore/TransactionTopology/Tests/Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests.csproj",
+      "require": ""
+    },
+    {
+      "suite": "shared-persistence-fixture",
+      "project": "tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Tests/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj",
+      "require": "ELSA_SHARED_PERSISTENCE_REQUIRE_POSTGRESQL"
+    },
+    {
+      "suite": "mysql-feasibility",
+      "project": "tests/essentials/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj",
+      "require": ""
+    },
+    {
+      "suite": "cli-acceptance",
+      "project": "tests/essentials/Persistence/EntityFrameworkCore/CliAcceptance/ProviderTests/Elsa.Persistence.EntityFrameworkCore.CliAcceptance.ProviderTests.csproj",
+      "require": "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX"
+    }
+  ]
+}

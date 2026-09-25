@@ -58,6 +58,11 @@ on:
 permissions:
   contents: read
 
+# A newer head supersedes only its own PR. Main and manual runs keep every full-matrix proof.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build-and-test:
     name: Build & test
@@ -137,86 +142,61 @@ jobs:
       - name: Test (fast unit tests, no containers)
         run: dotnet test Elsa.Server.test.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603
 
-  # Every EF test project that starts Testcontainers. The fast "Build & test" lane excludes any
-  # project that reaches Testcontainers, so without this job these suites would run in no gate at
-  # all. One matrix leg per project keeps each family inside the timeout and names the failure.
-  #
-  # A project missing from this matrix is the same hole from the other side: until #1803's ADR 0075
-  # review, the dashboard suite reached Testcontainers only through a ProjectReference, so the
-  # generator classified it container-free, the fast lane ran it without Docker, and its fixtures
-  # self-skipped while that job reported green.
-  #
-  # `require` arms the suite's own required-provider variable, measured per project rather than
-  # assumed: a fixture that reads a different name would otherwise leave the lane silently skipping
-  # while the job still reported green. Legs with an empty `require` have no such variable in their
-  # fixtures; they self-skip when a container is unavailable, which is recorded rather than hidden.
+  # The manifest is the single suite list; the selector uses the validated solution-reference
+  # graph to run affected legs on PRs, and selects every leg on main and manual dispatch.
+  select-ef-suites:
+    name: Select EF suites
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+      count: ${{ steps.select.outputs.count }}
+      mode: ${{ steps.select.outputs.mode }}
+    steps:
+      - name: Checkout full history for the PR diff
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Verify selector contract
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -v:q -- ef-suites-self-test
+
+      - name: Select affected suites
+        id: select
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          selection=$(dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- ef-suites-select "$GITHUB_EVENT_NAME" "$BASE_SHA" "$HEAD_SHA")
+          {
+            echo "matrix=$(jq -c '.matrix' <<< "$selection")"
+            echo "count=$(jq -r '.count' <<< "$selection")"
+            echo "mode=$(jq -r '.mode' <<< "$selection")"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### EF container selection"
+            echo "Mode: $(jq -r '.mode' <<< "$selection")"
+            echo "Reason: $(jq -r '.reason' <<< "$selection")"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ $(jq -r '.count' <<< "$selection") == 0 ]]; then
+            echo "No EF container suites selected." >> "$GITHUB_STEP_SUMMARY"
+          else
+            jq -r '.matrix.include[].suite | "- " + .' <<< "$selection" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   ef-container-suites:
     name: EF container suites (${{ matrix.suite }})
+    needs: select-ef-suites
+    if: ${{ needs.select-ef-suites.outputs.count != '0' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - suite: migrations
-            project: tests/essentials/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj
-            require: ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX
-          - suite: runtime
-            project: tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj
-            require: ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS
-          - suite: runtime-distributed
-            project: tests/essentials/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj
-            require: ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS
-          # The dashboard smokes take the Runtime ProviderTests' own RuntimeBookmarks*Fixture types by
-          # project reference, so the variable their container support reads is the Runtime one.
-          - suite: dashboard
-            project: tests/essentials/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests.csproj
-            require: ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS
-          - suite: activities-design
-            project: tests/essentials/Activities/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj
-            require: ELSA_ACTIVITIES_DESIGN_EF_REQUIRE_NATIVE_PROVIDERS
-          - suite: publishing
-            project: tests/essentials/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests.csproj
-            require: ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX
-          - suite: elsa3-import
-            project: src/extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj
-            require: ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX
-          - suite: workflows-design
-            project: tests/essentials/Workflows/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj
-            require: ''
-          - suite: identity
-            project: tests/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj
-            require: ''
-          - suite: opentelemetry
-            project: tests/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests.csproj
-            require: ''
-          - suite: structured-logs
-            project: tests/essentials/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests.csproj
-            require: ''
-          - suite: studio-preferences
-            project: tests/essentials/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj
-            require: ''
-          - suite: secrets-sqlserver
-            project: tests/essentials/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj
-            require: ''
-          - suite: secrets-mysql
-            project: tests/essentials/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj
-            require: ''
-          - suite: transaction-topology
-            project: tests/essentials/Persistence/EntityFrameworkCore/TransactionTopology/Tests/Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests.csproj
-            require: ''
-          - suite: shared-persistence-fixture
-            project: tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Tests/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj
-            require: ELSA_SHARED_PERSISTENCE_REQUIRE_POSTGRESQL
-          - suite: mysql-feasibility
-            project: tests/essentials/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj
-            require: ''
-          # Issue #1875: dotnet-elsa persistence script against a built host, a raw ADO client applying the
-          # result twice per engine (proving idempotency), then a real Workbench process starting under
-          # Migrate:Policy=Validate against that same database.
-          - suite: cli-acceptance
-            project: tests/essentials/Persistence/EntityFrameworkCore/CliAcceptance/ProviderTests/Elsa.Persistence.EntityFrameworkCore.CliAcceptance.ProviderTests.csproj
-            require: ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX
+      matrix: ${{ fromJSON(needs.select-ef-suites.outputs.matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -242,6 +222,44 @@ jobs:
 
       - name: Test
         run: dotnet test ${{ matrix.project }} -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+
+  # Stable result for branch rules and reviewers, including an explicit no-impact PR.
+  ef-container-result:
+    name: EF container suites
+    if: ${{ always() }}
+    needs: [select-ef-suites, ef-container-suites, secrets-ef-composition]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify selected suite results
+        env:
+          SELECT_RESULT: ${{ needs.select-ef-suites.result }}
+          SUITES_RESULT: ${{ needs.ef-container-suites.result }}
+          SECRETS_RESULT: ${{ needs.secrets-ef-composition.result }}
+          COUNT: ${{ needs.select-ef-suites.outputs.count }}
+          MODE: ${{ needs.select-ef-suites.outputs.mode }}
+        run: |
+          if [[ "$SELECT_RESULT" != success ]]; then
+            echo "::error::EF suite selection failed; this is not a no-impact PR."
+            exit 1
+          fi
+          if [[ "$SECRETS_RESULT" != success ]]; then
+            echo "::error::The always-run Secrets EF host proof did not pass."
+            exit 1
+          fi
+          if [[ "$GITHUB_EVENT_NAME" != pull_request && "$MODE" != full ]]; then
+            echo "::error::Main and manual runs must select the full EF matrix."
+            exit 1
+          fi
+          if [[ "$COUNT" == 0 && "$SUITES_RESULT" == skipped ]]; then
+            echo "No EF suite impact; selection succeeded."
+            exit 0
+          fi
+          if [[ "$COUNT" =~ ^[1-9][0-9]*$ && "$SUITES_RESULT" == success ]]; then
+            echo "All $COUNT selected EF suites passed."
+            exit 0
+          fi
+          echo "::error::EF suites did not pass (count=$COUNT, result=$SUITES_RESULT)."
+          exit 1
 
   # Secrets EF composition on a native PostgreSQL: configuration-driven CShells composition,
   # migration/validation, CRUD/OCC, runtime resolution, restart persistence and the packed-module
@@ -382,8 +400,7 @@ jobs:
     name: Alert on a red main
     needs:
       - build-and-test
-      - ef-container-suites
-      - secrets-ef-composition
+      - ef-container-result
       - architecture-guards
       - core-only
     if: ${{ failure() && github.event_name == 'push' }}
