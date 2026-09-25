@@ -1,6 +1,6 @@
 # Runtime-builder interaction study
 
-Issue [#2029](https://github.com/elsa-workflows/elsa-foundation/issues/2029), under builder UX epic [#1963](https://github.com/elsa-workflows/elsa-foundation/issues/1963). Open [the three interactive mocks](index.html) in a browser. These are independent research screens over one synthetic fixture. They make no network call, contain no connection value, do not use the production planner, and do not generate a deployable CShells file. Their JSON download illustrates a review shape only.
+Issue [#2029](https://github.com/elsa-workflows/elsa-foundation/issues/2029), under builder UX epic [#1963](https://github.com/elsa-workflows/elsa-foundation/issues/1963). Open [the three interactive mocks](index.html) in a browser. These are independent research screens over one synthetic fixture. They make no network call, contain no connection value, do not use the production planner, and do not generate a deployable CShells file. Their JSON download illustrates a review shape only. The later [Embedded runtime profile](../../../reference/embedded-runtime-profile.md) is published; the mock's Worker starter remains provisional.
 
 ## What is known, and what is hypothesized
 
@@ -33,7 +33,7 @@ Each concept supports the same actions. With the provided shortcuts, the designe
 | File-versus-host risk | Persistent candidate label and unchecked list. | Explicit export step and unchecked preview. | Candidate label and edit ledger; experts may still infer that “workbench” is live. |
 | Accessibility risk | Sticky ledger may become long; feature drawer must retain keyboard access. | Conditional steps must keep focus and announce changed questions. | Dense panes and search syntax need a table/list alternative and visible keyboard path. |
 
-**Recommendation for the next product design iteration:** Use the profile ledger as the default shell, with the exact searchable workbench as its advanced view. Its always-visible impact and provenance fit a configuration tool that must make hidden feature expansion inspectable. Keep the task-led work order as a candidate onboarding flow only after real users show they need it; otherwise it adds another maintained mapping. Treat the three screens as alternatives for testing, not product components to combine wholesale. None of the profiles should be released until the Embedded API, Authoring authorization, and Worker production-identity decisions are resolved under [#1961](https://github.com/elsa-workflows/elsa-foundation/issues/1961).
+**Recommendation for the next product design iteration:** Use the profile ledger as the default shell, with the exact searchable workbench as its advanced view. Its always-visible impact and provenance fit a configuration tool that must make hidden feature expansion inspectable. Keep the task-led work order as a candidate onboarding flow only after real users show they need it; otherwise it adds another maintained mapping. Treat the three screens as alternatives for testing, not product components to combine wholesale. The published Embedded profile makes its Runtime API membership explicit; Authoring authorization and [Worker production identity](../worker-http-identity-boundary.md) remain unresolved under [#1961](https://github.com/elsa-workflows/elsa-foundation/issues/1961).
 
 ## Real-user evaluation before implementation
 
