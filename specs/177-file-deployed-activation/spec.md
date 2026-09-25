@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-25
 
-**Status**: In progress — #2038 adds the file-only candidate handoff (US1); deployment, activation, and recovery (US2/US3) remain unimplemented
+**Status**: In progress — #2038 delivered the file-only candidate handoff (US1); #2039 found no sound exact-candidate marker in the current host path, so deployment observation and recovery (US2/US3) remain unimplemented and verified candidate matching remains gated
 
 **Input**: [Issue #2036](https://github.com/elsa-workflows/elsa-foundation/issues/2036), the [apply/recovery boundary](../../docs/reports/runtime-composition/apply-recovery-boundary.md), and the delivered [file bridge](../176-composition-file-bridge/spec.md).
 
@@ -30,6 +30,8 @@ A developer has accepted an authored composition and generated a candidate for a
 An operator deploys the reviewed complete bundle through an existing deployment process, then requests an authorized reload of the selected shell. The result tells them whether the reviewed candidate is deployed, whether a new shell generation became active, and whether that generation is ready. A successful file deployment never masquerades as successful runtime activation.
 
 **Why this priority**: Operators need a trustworthy answer to “what is active?” after applying a composition, particularly when feature activation and persistence preparation can fail after files change.
+
+**Current delivery boundary after #2039**: The first host-observation implementation may confirm an externally attested deployment switch and a ready active default-shell generation, but must return `candidateMatch=unverified`. Scenario 1's exact `candidate active` result and any exact-match or mismatch attribution to an active generation require a new host-produced, generation-bound marker proof. A mismatched external deployment receipt can still be refused without such a marker.
 
 **Independent Test**: Supply a known candidate and externally deploy it to a disposable host. Observe the selected shell before and after a successful reload, including a generation change and readiness. Repeat with the same shell but a mismatched deployment identity and verify that the result does not claim the candidate is active.
 
@@ -76,7 +78,7 @@ An operator sees a candidate fail activation or loses the response after deploym
 - **FR-004**: For v1, an existing operator/deployment process MUST own the complete-bundle switch and source rollback. Foundation MUST NOT modify live source files as part of candidate generation or claim an atomic multi-file switch it does not own.
 - **FR-005**: Activation verification MUST compare the reviewed candidate identity with a trustworthy observation of the deployed source and selected shell generation. Where that correlation cannot be established, the result MUST say unverified rather than infer a match.
 - **FR-006**: Only an authorized host-control actor MAY initiate reload. Host management credentials MUST stay server-side and MUST NOT appear in a browser, portable authored document, candidate handoff, report, or log.
-- **FR-007**: A successful activation result MUST identify the selected shell, new active generation, readiness, and the candidate/deployment identity used for the claim. A per-shell reload failure MUST not be reported as activation success.
+- **FR-007**: A successful host-observation result MUST identify the selected shell, new active generation, readiness, and the separately observed deployment identity. It MUST report candidate matching as unverified until a generation-bound marker proves the exact reviewed candidate was loaded. A per-shell reload failure MUST not be reported as activation success.
 - **FR-008**: Failure results MUST distinguish refusal before deployment, candidate-only, deployed-but-not-active, active, and uncertain outcomes. They MUST provide safe reasons and an operation identity without exposing raw source values, connection values, or vendor error details.
 - **FR-009**: After a timeout, interrupted response, or other uncertain result, the flow MUST read back deployed identity and active generation before retry. A stale review decision MUST NOT authorize a blind replay against a changed deployment.
 - **FR-010**: A failed candidate MUST leave an existing active generation available when the host lifecycle supports it. Recovery MUST allow a fresh repair or external source rollback followed by explicit reload and verification; it MUST NOT claim database or migration rollback.
@@ -98,7 +100,7 @@ An operator sees a candidate fail activation or loses the response after deploym
 
 - **SC-001**: In the two-shell fixture, 100% of included files are checked at handoff; changing any one before handoff refuses and requires fresh review. A later deployment relies on its own artifact-integrity evidence.
 - **SC-002**: In every defined success, failure, timeout, and mismatch scenario, the operator sees separate candidate, deployed-source, and active-generation states; zero scenarios label generated-only or deployed-only output as active.
-- **SC-003**: A failed candidate initializer leaves the previously observed ready generation serving in the disposable host; repair or source rollback plus explicit reload produces a newly verified ready generation.
+- **SC-003**: A failed candidate initializer leaves the previously observed ready generation serving in the disposable host; repair or source rollback plus explicit reload produces a newly observed ready generation. Exact candidate matching remains a separate proof gate.
 - **SC-004**: Canary connection and unknown-setting values occur zero times in shareable handoff, standard output, standard error, logs, and safe error results.
 - **SC-005**: The initial flow works for one supported host/shell/environment without introducing an in-process whole-bundle editor or requiring a browser-held management credential.
 

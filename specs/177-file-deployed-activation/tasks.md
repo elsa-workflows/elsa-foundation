@@ -4,7 +4,7 @@
 
 **Tests**: Required by the independent tests and success criteria in spec 177. Write a focused failing behavior test before each implementation slice. The list is future implementation work; #2036 itself delivers only specification artifacts.
 
-**Readiness**: T001–T009 (US1) can become one file-only implementation issue after spec review. T010–T011 are a separate host-attestation spike. T012–T021 (US2/US3) must not be turned into an implementation issue that claims candidate-match verification until T010 proves the generation-bound marker and T011 reconciles the contract. If it fails, report `unverified`, revise the spec/tasks and cut a narrower story.
+**Readiness**: T001–T009 (US1) are delivered by #2038. T010–T011 are the #2039 host-attestation spike; its current-host decision is no-go for exact candidate matching. T012–T021 (US2/US3) must be split into narrower host-observation and recovery work that reports `candidateMatch=unverified`. No implementation issue may claim candidate-match verification until a future marker proof passes the unchanged gate.
 
 ## Phase 1: Setup and fixture
 
@@ -41,8 +41,8 @@
 
 ## Phase 4: Host-attestation prerequisite for verified activation
 
-- [ ] T010 Probe a generation-bound, secret-safe loaded-bundle marker in a disposable Workbench host in `tests/essentials/Modularity/Tests/CompositionHostAttestationProbeTests.cs`; vary every included file, process overrides and package generation, fail an initializer, and compare previous/new active generation without exposing blueprint configuration.
-- [ ] T011 Record the proof or no-go in `specs/177-file-deployed-activation/research.md`, `specs/177-file-deployed-activation/contracts/activation-v1.md`, and the linked #1964 issue. If the marker is not trustworthy, revise US2/US3 acceptance to keep candidate match unverified and stop before implementation claims `candidate active`.
+- [X] T010 Probe the current generation/loaded-source seam in disposable Workbench hosts in `tests/essentials/Workbench/Tests/CompositionHostAttestationProbeTests.cs`, alongside controlled initializer and observer-timeout tests in `tests/essentials/Modularity/Tests/ServerReadinessTests.cs`. Vary six candidate file roles, a process override, and loadable package versions across host starts; compare previous/new active generations and safe response surfaces. The current seam has no sound complete-bundle marker. Same-process package reconciliation and actual lost HTTP response remain future full-activation gates, not proven by this spike.
+- [X] T011 Record the no-go in `specs/177-file-deployed-activation/research.md`, `specs/177-file-deployed-activation/contracts/activation-v1.md`, and #1964/#2039. US2/US3 now keep candidate match unverified; #2041 is the narrow host-observation story and #2042 investigates a future marker. No current implementation may claim `candidate active`.
 
 **Checkpoint**: A real-host marker is either proven with exact scope and redaction, or verified candidate matching remains blocked. T010–T011 form a separate spike, not a hidden part of US1.
 

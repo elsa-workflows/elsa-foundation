@@ -1,6 +1,6 @@
 # File-deployed activation v1 contract
 
-Status: Draft for #2036. The first implementable slice is the safe candidate handoff. A `candidateMatch=verified` outcome requires the separately proven host-attestation gate in [research.md](../research.md); no current endpoint supplies it.
+Status: Draft for #2036. The safe candidate handoff is implemented. The #2039 [host-attestation decision](../research.md#3-existing-host-observations-prove-shell-lifecycle-not-exact-candidate-match) found no generation-bound reviewed-bundle marker in the current Workbench/CShells path. The next implementable slice is sanitized host observation with `candidateMatch=unverified`; `candidateMatch=verified` remains a separate, unimplemented gate.
 
 ## Actors and authority
 
@@ -44,7 +44,7 @@ If any included file changes during the handoff check, return `candidate-changed
 
 The deployment owner supplies a trusted receipt containing its release/artifact ID, selected host/environment, expected-current and actual-current release IDs, complete-switch outcome, and observation time. It must verify all files in the artifact under its own integrity mechanism and retain the previous complete release. Foundation does not specify the deployer's storage or atomic-switch mechanism in v1. If the owner cannot attest a complete switch and compare expected-current, report `deployment-unverified` and do not request a verified activation claim.
 
-A successful receipt still does not prove the selected shell loaded that release. Environment and command-line providers can override JSON, and a process may have a different package generation. The host-attestation gate must decide how those facts are represented without exposing values.
+A successful receipt still does not prove the selected shell loaded that release. Environment and command-line providers can override JSON, and a process may have a different package generation. Until a new generation-bound marker is proven, represent those facts as unchecked without exposing their values.
 
 ## Host observation and outcome
 
@@ -61,7 +61,7 @@ One operation keeps these dimensions separate:
 | Candidate match | `verified`, `mismatch`, `unverified` | `verified` requires a host-produced marker bound to the active generation and the exact reviewed bundle. Current Workbench evidence only permits `unverified`. |
 | Broader checks | named `verified`/`unverified`/`refused` findings | Package, provider, connection, migration and transaction claims remain separately evidenced. |
 
-A ready default shell with `candidateMatch=unverified` is reported as **active generation observed, candidate match unverified**. It is not described as “candidate active.” A failed reload can leave the prior generation ready; record both deployment source and that prior active generation. If the reload response is lost, read back deployment receipt and active generation before any retry. Readback may remain inconclusive; do not replace `uncertain` with a guessed success or failure.
+A ready default shell with `candidateMatch=unverified` is reported as **active generation observed, candidate match unverified**. It is not described as “candidate active.” This is the maximum positive outcome supported by the current Workbench observation path, even when the external deployer attests a complete switch. A failed reload can leave the prior generation ready; record both deployment source and that prior active generation. If the reload response is lost, read back deployment receipt and active generation before any retry. Readback may remain inconclusive; do not replace `uncertain` with a guessed success or failure. A later marker design must separately prove exact reviewed-file, process-override, and package-generation correlation before this contract permits `verified`.
 
 ## Recovery
 
@@ -73,4 +73,4 @@ Shareable output can contain safe shell/feature IDs, logical resource names, fil
 
 ## Validation gate
 
-Use the [quickstart](../quickstart.md) and a disposable Workbench host. The candidate handoff is independently implementable with file-only tests. Before any implementation advertises `candidateMatch=verified`, demonstrate a host-produced, generation-bound marker that changes with every included source file, survives successful promotion, is absent on failed candidate promotion, distinguishes process overrides from source identity, and leaks neither canary. If this gate fails, keep the match unverified and file an investigation rather than weaken the contract.
+Use the [quickstart](../quickstart.md) and a disposable Workbench host. The candidate handoff is independently implementable with file-only tests. #2039's current-host gate did not find a sound marker, so the next host-observation implementation must return `candidateMatch=unverified` and keep exact candidate activation outside its success claim. Before any later implementation advertises `candidateMatch=verified`, demonstrate a host-produced, generation-bound marker that changes with every included source file, survives successful promotion, is absent on failed candidate promotion, distinguishes process overrides and package generation from source identity, and leaks neither canary. Preserve this gate instead of weakening it.
