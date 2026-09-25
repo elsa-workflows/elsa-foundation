@@ -54,6 +54,55 @@ public sealed class FeatureManagementServiceTests
     }
 
     [Fact]
+    public async Task RefreshFailureLeavesTheSavedSelectionAheadOfActivation()
+    {
+        _refresher.Failure = new InvalidOperationException("refresh failed");
+        var service = CreateService(new ContributingFeatureCatalogContributor("NewFeature"));
+        var catalog = await service.GetCatalogAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.ApplyAsync(
+            new FeatureApplyRequest(catalog.Revision, [new("NewFeature", true, Json("{}"))])));
+
+        Assert.True(_store.Features.ContainsKey("NewFeature"));
+        Assert.Equal(1, _store.SaveCount);
+        Assert.Equal(1, _refresher.RefreshCount);
+        Assert.Equal(0, _reloader.ReloadCount);
+    }
+
+    [Fact]
+    public async Task ReloadFailureLeavesTheSavedSelectionAndDoesNotReturnAnApplyResult()
+    {
+        _reloader.Failure = new InvalidOperationException("reload failed");
+        var service = CreateService(new ContributingFeatureCatalogContributor("NewFeature"));
+        var catalog = await service.GetCatalogAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.ApplyAsync(
+            new FeatureApplyRequest(catalog.Revision, [new("NewFeature", true, Json("{}"))])));
+
+        Assert.True(_store.Features.ContainsKey("NewFeature"));
+        Assert.Equal(1, _store.SaveCount);
+        Assert.Equal(1, _refresher.RefreshCount);
+        Assert.Equal(1, _reloader.ReloadCount);
+    }
+
+    [Fact]
+    public async Task ReportedReloadFailureReturnsSuccessWithZeroReloadedShells()
+    {
+        _reloader.Result = 0;
+        var service = CreateService(new ContributingFeatureCatalogContributor("NewFeature"));
+        var catalog = await service.GetCatalogAsync();
+
+        var result = await service.ApplyAsync(
+            new FeatureApplyRequest(catalog.Revision, [new("NewFeature", true, Json("{}"))]));
+
+        Assert.True(_store.Features.ContainsKey("NewFeature"));
+        Assert.Equal(1, _store.SaveCount);
+        Assert.Equal(1, _refresher.RefreshCount);
+        Assert.Equal(1, _reloader.ReloadCount);
+        Assert.Equal(0, result.ReloadedShellCount);
+    }
+
+    [Fact]
     public async Task ApplyRejectsStaleRevision()
     {
         var service = CreateService();
