@@ -8,8 +8,8 @@ using static Elsa.Cli.CompositionFileBridgeOutput;
 
 namespace Elsa.Cli;
 
-/// <summary>Reviews existing local CShells files and writes an accepted portable baseline.</summary>
-internal static class CompositionImportCommand
+/// <summary>Reviews a source-preserving local host-file candidate before publishing it.</summary>
+internal static class CompositionGenerateCommand
 {
     private static readonly JsonSerializerOptions s_json = new()
     {
@@ -24,11 +24,12 @@ internal static class CompositionImportCommand
         var shell = Required("--shell", "Selected shell ID.");
         var environment = Required("--environment", "Selected environment name.");
         var catalog = Required("--catalog", "Pinned selection catalog JSON.");
+        var composition = Required("--composition", "Accepted authored composition JSON.");
         var review = new Option<string>("--setting-review") { Description = "Optional local setting safety review JSON." };
-        var output = Required("--output", "Fresh authored composition file.");
-        var command = new Command("import", "Review existing local feature configuration and accept a portable baseline.")
+        var output = Required("--output-dir", "Fresh candidate host-file directory.");
+        var command = new Command("generate", "Review and publish a fresh candidate host-file directory.")
         {
-            host, shell, environment, catalog, review, output
+            host, shell, environment, catalog, composition, review, output
         };
 
         command.SetAction((result, cancellationToken) => Task.FromResult(Guarded(() => Run(
@@ -36,9 +37,10 @@ internal static class CompositionImportCommand
             result.GetRequiredValue(shell),
             result.GetRequiredValue(environment),
             result.GetRequiredValue(catalog),
+            result.GetRequiredValue(composition),
             result.GetValue(review),
             result.GetRequiredValue(output),
-            cancellationToken), "imported")));
+            cancellationToken), "generated")));
         return command;
     }
 
@@ -47,46 +49,36 @@ internal static class CompositionImportCommand
         string shellId,
         string environment,
         string catalogPath,
+        string compositionPath,
         string? reviewPath,
-        string outputPath,
+        string outputDirectory,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var source = CompositionFileSource.Open(hostDirectory, shellId, environment);
-        var snapshot = source.Snapshot;
         var catalog = SelectionJsonReader.ParseCatalog(ReadInput(catalogPath));
+        var authored = SelectionJsonReader.ParseComposition(ReadInput(compositionPath));
         var settingReview = reviewPath is null ? null : SettingReviewReader.Parse(ReadInput(reviewPath));
-        var imported = CompositionImporter.Import(
-            snapshot.ReadText("shells.json"),
-            snapshot.ReadText(snapshot.Selection.ShellOverlayFileName),
-            snapshot.ReadText("appsettings.json"),
-            snapshot.Selection.AppsettingsOverlayFileName is { } appOverlay ? snapshot.ReadText(appOverlay) : null,
-            shellId,
-            environment,
-            catalog,
-            settingReview);
+        var candidate = CompositionCandidateBuilder.Build(source.Snapshot, catalog, authored, settingReview);
 
-        var findings = SafeFindings(imported.Plan);
-        var preview = JsonSerializer.Serialize(new { imported.Preview, Findings = findings }, s_json);
-        Console.Out.WriteLine(preview);
+        var findings = SafeFindings(candidate.Plan);
+        Console.Out.WriteLine(JsonSerializer.Serialize(new { Changes = SafeChanges(candidate.Changes).ToArray(), Findings = findings }, s_json));
 
         if (Console.IsInputRedirected)
-            throw CliRefusal.Usage("bridge-review-required", "An interactive review decision is required.");
+            throw CliRefusal.Usage("bridge-review-required", "An interactive diff approval is required.");
 
-        Console.Error.Write("Type accept to write the authored composition: ");
-        if (!string.Equals(Console.ReadLine(), "accept", StringComparison.Ordinal))
-            throw CliRefusal.Usage("bridge-review-required", "The composition preview was not accepted.");
+        Console.Error.Write("Type generate to write the candidate: ");
+        if (!string.Equals(Console.ReadLine(), "generate", StringComparison.Ordinal))
+            throw CliRefusal.Usage("bridge-review-required", "The candidate diff was not approved.");
 
         cancellationToken.ThrowIfCancellationRequested();
-        var authoredJson = JsonSerializer.Serialize(imported.Authored, s_json);
-        _ = SelectionJsonReader.ParseComposition(authoredJson);
-        CompositionFilePublisher.PublishAuthored(
-            outputPath,
+        CompositionFilePublisher.PublishCandidate(
+            outputDirectory,
             hostDirectory,
-            System.Text.Encoding.UTF8.GetBytes(authoredJson),
+            candidate.Files,
             source.VerifyUnchanged,
             cancellationToken);
-        Console.Out.WriteLine("Authored composition accepted.");
+        Console.Out.WriteLine("Candidate host files generated.");
         return ToolExitCode.Success;
     }
 

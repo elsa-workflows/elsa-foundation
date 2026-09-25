@@ -1,6 +1,6 @@
 # CLI file bridge v1
 
-This command contract implements the [semantic file bridge v1 contract](file-bridge-v1.md). `composition import` is the first implemented checkpoint; `composition generate` remains planned. `composition plan` remains a separate, read-only command.
+This command contract implements the [semantic file bridge v1 contract](file-bridge-v1.md). `composition import` and `composition generate` are separate, explicitly reviewed file-only actions. `composition plan` remains a separate, read-only command.
 
 ```text
 dotnet elsa composition import
@@ -17,6 +17,8 @@ dotnet elsa composition generate
 `--host-dir` is a file source, not the persistence worker's runtime host argument. No package root, connection, restore, migration, or save option is accepted. Both commands require an interactive terminal for the review decision. The import command displays a redacted selected-file preview and shared planner findings, then asks for explicit acceptance before writing an authored file. The generate command reopens the source bundle, validates the accepted document/catalog pin, displays a redacted semantic diff, and asks for a separate approval before writing a candidate directory. A noninteractive call or cancellation returns `bridge-review-required`; there is no `--yes` option. The review input is the [local setting review v1 file](setting-review-v1.md), not an instruction to copy unknown fields.
 
 The source layout is the root-level Workbench-style base `shells.json` and `appsettings.json`, plus `shells.<Environment>.json` and `appsettings.<Environment>.json` when present. An explicitly named environment whose shell overlay is absent refuses. Every supported sibling shell/appsettings environment file is copied, frozen, and rechecked, even if it is not inspected for selected effective values. Symlinks, path escapes, duplicates, and unsupported layer shapes refuse. An import preview computes effective values over selected files only; process environment, command-line overrides, and unselected overlays remain unchecked.
+
+Generation patches only existing reviewed setting paths in their observed base or selected-overlay layer, and existing logical persistence default/binding references to names found in the local resource definitions. It refuses a changed feature selection, a new physical field, or an unmapped resource reference. This first file bridge does not provide activation-layer editing; such an edit needs a separate source mapping instead of being silently dropped.
 
 Normal stdout shows only safe feature IDs, reviewed values, masked identities/types, logical resource names, provenance labels, redacted planner findings, and the outcome. Prompts and refusals use stderr. Neither stream includes source path strings, connection values, raw unknown values, exception messages, or full source excerpts. A successful import creates one fresh, strict authored v1 file. A successful generate creates one fresh candidate directory with supported files; it does not modify the selected host. `--output` and `--output-dir` must not exist or overlap the source; all writes use private staging and no-overwrite publication. The authored and generated files have separate review decisions and are atomic independently.
 

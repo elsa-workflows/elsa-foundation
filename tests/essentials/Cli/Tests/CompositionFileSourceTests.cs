@@ -85,6 +85,30 @@ public sealed class CompositionFileSourceTests
         source.VerifyUnchanged();
     }
 
+    [Fact]
+    public void Disposable_workbench_files_generate_an_unchanged_candidate_without_host_activation()
+    {
+        using var fixture = new LocalFixture();
+        fixture.UseWorkbenchFiles();
+        var source = CompositionFileSource.Open(fixture.Directory, "default", "Production");
+        var snapshot = source.Snapshot;
+        var draft = new SelectionCatalog("1", "workbench-compatibility", "1", "elsa-foundation", new string('0', 64), [], []);
+        var catalog = draft with { Digest = SelectionDigest.ComputeCatalogDigest(draft) };
+        var imported = CompositionImporter.Import(
+            snapshot.ReadText("shells.json"),
+            snapshot.ReadText(snapshot.Selection.ShellOverlayFileName),
+            snapshot.ReadText("appsettings.json"),
+            snapshot.Selection.AppsettingsOverlayFileName is { } appOverlay ? snapshot.ReadText(appOverlay) : null,
+            "default", "Production", catalog);
+
+        var candidate = CompositionCandidateBuilder.Build(snapshot, catalog, imported.Authored, review: null);
+
+        Assert.Equal(snapshot.FileNames.Order(StringComparer.Ordinal), candidate.Files.Keys.Order(StringComparer.Ordinal));
+        Assert.All(candidate.Files, file => Assert.Equal(snapshot.CopyBytes(file.Key), file.Value));
+        Assert.All(candidate.Changes, change => Assert.False(change.Changed));
+        source.VerifyUnchanged();
+    }
+
     private sealed class LocalFixture : IDisposable
     {
         public string Directory { get; } = Path.Join(Path.GetTempPath(), "elsa-composition-source-" + Guid.NewGuid().ToString("N"));
