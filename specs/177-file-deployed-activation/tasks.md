@@ -4,7 +4,7 @@
 
 **Tests**: Required by the independent tests and success criteria in spec 177. Write a focused failing behavior test before each implementation slice. The list is future implementation work; #2036 itself delivers only specification artifacts.
 
-**Readiness**: T001–T009 (US1) are delivered by #2038. T010–T011 are the #2039 host-attestation spike; its current-host decision is no-go for exact candidate matching. T012–T021 (US2/US3) must be split into narrower host-observation and recovery work that reports `candidateMatch=unverified`. No implementation issue may claim candidate-match verification until a future marker proof passes the unchanged gate.
+**Readiness**: T001–T009 (US1) are delivered by #2038. T010–T011 are the #2039 host-attestation spike; its current-host decision is no-go for exact candidate matching. #2041 delivers only T013–T014's safe default-shell reload/readback subset. T012 and T015–T021 still require separate deployment-receipt, marker, and recovery work. No current implementation may claim candidate-match verification.
 
 ## Phase 1: Setup and fixture
 
@@ -55,11 +55,11 @@
 ### Tests for User Story 2
 
 - [ ] T012 [P] [US2] Write failing contract tests for complete-switch receipt, expected-current conflict, missing artifact integrity, and safe outcome classes in `tests/essentials/Modularity/Tests/CompositionDeploymentReceiptTests.cs`.
-- [ ] T013 [P] [US2] Write failing rebuilt-host tests for authenticated per-shell reload body, default-shell generation/readiness, absent/mismatched marker, non-default refusal and redaction in `tests/essentials/Modularity/Tests/CompositionActivationObservationTests.cs`; rerun `tests/essentials/Modularity/EntityFramework/Tests/EfPersistenceActivationContextPreparerTests.cs` to assert the legacy resource-managed edit still refuses before save.
+- [X] T013 [P] [US2] Write failing rebuilt-host tests for management-key authorization, no prior active generation, successful default-shell reload/readback, failed candidate with retained prior generation, non-default route refusal, and redaction in `tests/essentials/Workbench/Tests/CompositionActivationObservationTests.cs`. Exercise controlled initializer failure and observer-timeout readback in `tests/essentials/Modularity/Tests/ServerReadinessTests.cs`. Exact candidate marker and external receipt cases remain separate.
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] Add a Workbench-root, server-side sanitized observation service in `src/apps/Elsa.Workbench/Composition/CompositionActivationObserver.cs`; project only selected shell/generation/status and never relay `GET /_admin/shells/{name}` blueprint configuration or raw exception text.
+- [X] T014 [US2] Add Workbench-root, management-key-protected default-shell GET observation and POST reload in `src/apps/Elsa.Workbench/Composition/CompositionActivationObservationEndpoints.cs`; project only generation/readiness/status with `candidateMatch=unverified`, never relay blueprint configuration or raw exception text, and exclude these root routes from lazy shell resolution.
 - [ ] T015 [US2] Implement the generation-bound marker only through the seam proven by T010 in `src/apps/Elsa.Workbench/Composition/CompositionGenerationMarker.cs` and wire its authenticated observation in `src/apps/Elsa.Workbench/Program.cs`, preserving ADR 0037's server-side key boundary; otherwise record candidate match as unverified.
 - [ ] T016 [US2] Reconcile the host observation and external receipt into the status dimensions in `src/apps/Elsa.Workbench/Composition/CompositionActivationOutcome.cs`; report observed shell readiness separately from unchecked package, connection and migration facts.
 
@@ -95,7 +95,7 @@ T001–T002 prepare the fixture/contract; T003–T004 confirm the existing sourc
 
 ## Parallel opportunities
 
-T001 fixture details and T002 contract example can be reviewed independently. T005 pure projection tests and T006 real-process CLI tests target different files after their shared output shape is fixed. T012 receipt tests and T013 host tests can be authored independently after T011, but no competing implementation PRs should start. T017 and T018 cover distinct host/deployer failures. The root owner integrates and validates every result.
+T001 fixture details and T002 contract example can be reviewed independently. T005 pure projection tests and T006 real-process CLI tests target different files after their shared output shape is fixed. T013 host tests are delivered independently of T012's future receipt tests; no competing implementation PRs should start. T017 and T018 cover distinct host/deployer failures. The root owner integrates and validates every result.
 
 ## Implementation strategy
 

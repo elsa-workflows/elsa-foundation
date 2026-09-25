@@ -52,6 +52,7 @@ using Elsa.Studio.Preferences.Core;
 using Elsa.Tasks;
 using Elsa.Workbench;
 using Elsa.Workbench.Boot;
+using Elsa.Workbench.Composition;
 using Elsa.Workbench.Readiness;
 using Elsa.Workflows.Dashboard;
 using Elsa.Workflows.Design.Api;
@@ -330,7 +331,8 @@ builder.Services.AddCShellsAspNetCore(shells =>
         .WithWebRouting(options =>
         {
             options.EnablePathRouting = true;
-            options.ExcludePaths = ["/health/live", "/health/ready"];
+            // Host observation must not activate the default shell merely by reading its state.
+            options.ExcludePaths = ["/health/live", "/health/ready", "/_admin/composition/default-shell"];
         })
         .ConfigureAllShells(shell => new WorkbenchEfToolingShellDefaults().Configure(shell, configuration));
 });
@@ -402,6 +404,7 @@ app.MapShellManagementApi("/_admin/shells")
         "Elsa.Workbench"))
     .WithHostCredentialEnforcement(ManagementApiKeyAuthentication.HeaderName, "Elsa.Workbench")
     .AddEndpointFilter(ManagementApiKeyAuthentication.RequireAsync);
+app.MapCompositionActivationObservation();
 
 // Root-hosted console log streaming: recent/sources HTTP endpoints + the live SignalR hub (see the registration
 // note above). Mapped after UseCors so the Studio cross-origin policy applies, and behind RequireAuthorization so

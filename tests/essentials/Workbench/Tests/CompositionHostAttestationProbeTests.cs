@@ -65,7 +65,7 @@ public sealed class CompositionHostAttestationProbeTests
         // while the previously active generation remains the one served by readiness.
         var failedGeneration = (int)readiness["generation"]!;
         var failedOverlay = Path.Combine(host.ContentRoot, "shells.Development.json");
-        WriteSigningKey(failedOverlay, Canary);
+        WorkbenchConfigurationFile.WriteOpenIddictSigningKey(failedOverlay, Canary);
         await Task.Delay(TimeSpan.FromMilliseconds(1200));
         using (var response = await host.ManagementClient.PostAsync("/_admin/shells/reload/default", null))
         {
@@ -134,37 +134,7 @@ public sealed class CompositionHostAttestationProbeTests
         return (await response.Content.ReadFromJsonAsync<JsonNode>())!;
     }
 
-    private static void WriteSetting(string path, int value)
-    {
-        var root = File.Exists(path) ? JsonNode.Parse(File.ReadAllText(path))?.AsObject() : null;
-        root ??= new JsonObject();
-        SetPath(root, ["CShells", "Shells", "default", "Features", FeatureSetting, "MaxSegmentCheckpoints"], value);
-        AtomicWrite(path, root.ToJsonString());
-    }
-
-    private static void WriteSigningKey(string path, string value)
-    {
-        var root = JsonNode.Parse(File.ReadAllText(path))?.AsObject() ?? new JsonObject();
-        SetPath(root, ["CShells", "Shells", "default", "Features", "FoundationIdentityOpenIddict", "SigningKey"], value);
-        AtomicWrite(path, root.ToJsonString());
-    }
-
-    private static void AtomicWrite(string path, string contents)
-    {
-        var temporary = path + ".candidate";
-        File.WriteAllText(temporary, contents);
-        File.Move(temporary, path, overwrite: true);
-    }
-
-    private static void SetPath(JsonObject root, IReadOnlyList<string> path, object value)
-    {
-        var current = root;
-        foreach (var segment in path.Take(path.Count - 1))
-        {
-            current[segment] ??= new JsonObject();
-            current = current[segment]!.AsObject();
-        }
-
-        current[path[^1]] = JsonValue.Create(value);
-    }
+    private static void WriteSetting(string path, int value) =>
+        WorkbenchConfigurationFile.WriteValue(
+            path, ["CShells", "Shells", "default", "Features", FeatureSetting, "MaxSegmentCheckpoints"], value);
 }

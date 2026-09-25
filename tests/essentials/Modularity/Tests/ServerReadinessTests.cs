@@ -1,5 +1,8 @@
 using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json.Nodes;
 using CShells.Lifecycle;
+using Elsa.Workbench;
 using Elsa.Workbench.Readiness;
 using Xunit;
 
@@ -236,5 +239,84 @@ public sealed class ServerReadinessTests
         Assert.Equal(HttpStatusCode.OK, ready.StatusCode);
         Assert.Equal(initial.Descriptor.Generation, ready.Body.Generation);
         Assert.Equal(ShellReadinessStatus.Ready, fixture.ReadinessState.Snapshot.Status);
+    }
+
+    [Fact]
+    public async Task Host_observer_reports_no_prior_active_generation_and_sanitized_initializer_failure()
+    {
+        await using var fixture = await ServerReadinessFixture.StartAsync();
+        var initialGate = fixture.RouteInitialization.For(ServerReadinessFixture.DefaultShellName);
+        await fixture.WaitForDefaultRouteInitializationAsync();
+        var pending = await SendCompositionAsync(fixture, HttpMethod.Get, "observation");
+        Assert.Null((int?)pending["activeGeneration"]);
+        Assert.False((bool?)pending["ready"]);
+
+        initialGate.Release();
+        await fixture.WaitUntilReadyAsync();
+        var initialGeneration = fixture.Registry.GetActive(ServerReadinessFixture.DefaultShellName)!.Descriptor.Generation;
+        var reloadGate = fixture.RouteInitialization.PrepareNext(ServerReadinessFixture.DefaultShellName);
+        reloadGate.Failure = new InvalidOperationException("sensitive candidate detail");
+        var reload = SendCompositionAsync(fixture, HttpMethod.Post, "reload");
+        await reloadGate.WaitUntilEnteredAsync();
+        reloadGate.Release();
+        var outcome = await reload;
+
+        Assert.Equal("reload-failed", (string?)outcome["outcome"]);
+        Assert.Equal(initialGeneration, (int?)outcome["previousGeneration"]);
+        Assert.Null((int?)outcome["reportedGeneration"]);
+        Assert.Equal(initialGeneration, (int?)outcome["activeGeneration"]);
+        Assert.True((bool?)outcome["ready"]);
+        Assert.Equal("unverified", (string?)outcome["candidateMatch"]);
+        Assert.DoesNotContain("sensitive candidate detail", outcome.ToJsonString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Host_observer_timeout_readback_stays_uncertain_until_promotion()
+    {
+        await using var fixture = await ServerReadinessFixture.StartAsync();
+        var initialGate = fixture.RouteInitialization.For(ServerReadinessFixture.DefaultShellName);
+        await fixture.WaitForDefaultRouteInitializationAsync();
+        initialGate.Release();
+        await fixture.WaitUntilReadyAsync();
+        var initialGeneration = fixture.Registry.GetActive(ServerReadinessFixture.DefaultShellName)!.Descriptor.Generation;
+
+        var reloadGate = fixture.RouteInitialization.PrepareNext(ServerReadinessFixture.DefaultShellName);
+        var reload = SendCompositionAsync(fixture, HttpMethod.Post, "reload");
+        await reloadGate.WaitUntilEnteredAsync();
+        await Assert.ThrowsAsync<TimeoutException>(() => reload.WaitAsync(TimeSpan.Zero));
+        var during = await SendCompositionAsync(fixture, HttpMethod.Get, "observation");
+        Assert.Equal(initialGeneration, (int?)during["activeGeneration"]);
+        Assert.True((bool?)during["ready"]);
+        Assert.Equal("unverified", (string?)during["candidateMatch"]);
+
+        reloadGate.Release();
+        var outcome = await reload;
+        Assert.Equal("ready", (string?)outcome["outcome"]);
+        Assert.True((int?)outcome["activeGeneration"] > initialGeneration);
+    }
+
+    [Fact]
+    public async Task Host_observer_sanitizes_a_reload_exception_as_uncertain()
+    {
+        await using var fixture = await ServerReadinessFixture.StartAsync(defaultShellName: "absent");
+        await fixture.WaitForStatusAsync(ShellReadinessStatus.Failed);
+
+        var outcome = await SendCompositionAsync(fixture, HttpMethod.Post, "reload");
+        Assert.Equal("reload-uncertain", (string?)outcome["outcome"]);
+        Assert.Null((int?)outcome["previousGeneration"]);
+        Assert.Null((int?)outcome["reportedGeneration"]);
+        Assert.Null((int?)outcome["activeGeneration"]);
+        Assert.False((bool?)outcome["ready"]);
+        Assert.Equal("unverified", (string?)outcome["candidateMatch"]);
+        Assert.DoesNotContain("Exception", outcome.ToJsonString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static async Task<JsonNode> SendCompositionAsync(ServerReadinessFixture fixture, HttpMethod method, string action)
+    {
+        using var request = new HttpRequestMessage(method, $"/_admin/composition/default-shell/{action}");
+        request.Headers.Add(ManagementApiKeyAuthentication.HeaderName, ServerReadinessFixture.ManagementKey);
+        using var response = await fixture.Client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return (await response.Content.ReadFromJsonAsync<JsonNode>())!;
     }
 }

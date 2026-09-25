@@ -22,7 +22,7 @@ Define an honest path from a reviewed local composition candidate to an external
 
 **Target Platform**: Cross-platform developer CLI and a Workbench-style ASP.NET Core host. The first verified-activation target is the configured default shell in one explicit environment.
 
-**Project Type**: Pure handoff projection plus CLI local-file adapter first; future host-owned, authenticated observation seam only after the attestation gate. No browser client or generic resource editor.
+**Project Type**: Pure handoff projection plus CLI local-file adapter first; host-owned, authenticated default-shell observation after the #2039 attestation decision. No browser client or generic resource editor.
 
 **Performance Goals**: No new latency target is justified for a specification/file handoff. The operation remains bounded by reading the same supported local bundle as the existing generator. Host reload retains its existing lifecycle timing and is not a performance claim in this work unit.
 
@@ -33,7 +33,7 @@ Define an honest path from a reviewed local composition candidate to an external
 ## Constitution Check
 
 - Framework [§2.1–2.2](../../.specify/memory/constitution-framework.md): keep pure candidate identity/projection with the existing Modularity planning boundary and filesystem/console work in CLI. Host-control observation belongs to the Workbench root, not a reverse dependency from Core or a shell feature.
-- Framework [§2.7](../../.specify/memory/constitution-framework.md): the bridge and future host observer are adapters around externally owned source/deployment/lifecycle APIs; they do not redefine the authored selection model or infer package activation from files.
+- Framework [§2.7](../../.specify/memory/constitution-framework.md): the bridge and host observer are adapters around externally owned source/deployment/lifecycle APIs; they do not redefine the authored selection model or infer package activation from files.
 - Framework [§2.19](../../.specify/memory/constitution-framework.md): exact feature IDs and dependency findings remain with the existing planner. Handoff identity is not a second selection policy.
 - Framework [§2.21, §2.23](../../.specify/memory/constitution-framework.md): stable safe refusal classes, canary redaction tests, and a real host failure/recovery fixture are required before outward success claims.
 - Framework [§3 and §4.2](../../.specify/memory/constitution-framework.md): do not assume an implementation package or process override can be hot-reloaded into a changed host baseline; package/host compatibility is a separate evidence gate.
@@ -81,6 +81,6 @@ The accepted authored v1 schema remains the input. The safe handoff is a separat
 
 ## Delivery and verification boundary
 
-Cut one small, file-only handoff implementation story after this specification is reviewed. Its independent fixture is candidate generation plus opaque safe handoff, changed-file refusal, and zero canary leakage; it neither deploys nor activates. Cut a separate **host-attestation spike** to prove whether a Workbench-owned marker can be tied to a successfully promoted generation while preserving process-override and secret boundaries. Do not cut an implementation story that advertises `candidateMatch=verified` until that proof passes. If it fails, retain `unverified` and revise the product flow before implementing a server bridge.
+The file-only handoff shipped in #2038. The #2039 **host-attestation spike** found no generation-bound reviewed-bundle marker in the current path. #2041 therefore implements only a secret-safe default-shell reload/readback surface, with `candidateMatch=unverified`. Do not advertise `candidateMatch=verified` until a future marker proof passes; a server bridge and external deployment receipt remain later work.
 
-The local gate for the first story is focused Planning/CLI tests, architecture guard, generated-map check and diff review; the PR CI selector may skip unrelated EF container suites. A later host-observation story needs rebuilt-host reload/readiness/failure/recovery tests and explicit evidence for any provider, migration, or package claims. After merge, check `main` CI and Maps before closing each issue.
+The local gate for the first story is focused Planning/CLI tests, architecture guard, generated-map check and diff review; the PR CI selector may skip unrelated EF container suites. #2041 needs rebuilt-host reload/readiness/failure and controlled timeout-readback tests, with no provider, migration, or package claim. After merge, check `main` CI and Maps before closing each issue.

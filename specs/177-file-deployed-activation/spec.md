@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-25
 
-**Status**: In progress — #2038 delivered the file-only candidate handoff (US1); #2039 found no sound exact-candidate marker in the current host path, so deployment observation and recovery (US2/US3) remain unimplemented and verified candidate matching remains gated
+**Status**: In progress — #2038 delivered the file-only candidate handoff (US1); #2039 found no sound exact-candidate marker in the current host path; #2041 adds safe default-shell generation/readiness observation without candidate attribution. External deployment receipt, exact-match proof and recovery (US2/US3) remain open
 
 **Input**: [Issue #2036](https://github.com/elsa-workflows/elsa-foundation/issues/2036), the [apply/recovery boundary](../../docs/reports/runtime-composition/apply-recovery-boundary.md), and the delivered [file bridge](../176-composition-file-bridge/spec.md).
 
@@ -31,7 +31,7 @@ An operator deploys the reviewed complete bundle through an existing deployment 
 
 **Why this priority**: Operators need a trustworthy answer to “what is active?” after applying a composition, particularly when feature activation and persistence preparation can fail after files change.
 
-**Current delivery boundary after #2039**: The first host-observation implementation may confirm an externally attested deployment switch and a ready active default-shell generation, but must return `candidateMatch=unverified`. Scenario 1's exact `candidate active` result and any exact-match or mismatch attribution to an active generation require a new host-produced, generation-bound marker proof. A mismatched external deployment receipt can still be refused without such a marker.
+**Current delivery boundary after #2041**: The host observer reports default-shell reload outcome, active generation and readiness with `candidateMatch=unverified`. It does not consume an external deployment receipt or attribute a reviewed candidate to the generation. Scenario 1's exact `candidate active` result requires a new host-produced, generation-bound marker proof. A future external receipt flow can refuse a mismatched deployment independently of such a marker.
 
 **Independent Test**: Supply a known candidate and externally deploy it to a disposable host. Observe the selected shell before and after a successful reload, including a generation change and readiness. Repeat with the same shell but a mismatched deployment identity and verify that the result does not claim the candidate is active.
 
