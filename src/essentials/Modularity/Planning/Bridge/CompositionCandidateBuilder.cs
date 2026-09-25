@@ -26,6 +26,7 @@ public sealed record CompositionCandidate(
 /// <summary>Builds a fresh file bundle by patching only reviewed, existing settings in their observed source layer.</summary>
 public static class CompositionCandidateBuilder
 {
+    // Temporary CI selector probe; this validation PR is intentionally closed without merging.
     public static CompositionCandidate Build(
         SourceSnapshot snapshot,
         SelectionCatalog catalog,
