@@ -24,6 +24,7 @@ public static class SelectionPlanner
         var findings = ImmutableArray.CreateBuilder<SelectionFinding>();
         var reasons = ImmutableArray.CreateBuilder<SelectionReason>();
         var selected = new HashSet<string>(StringComparer.Ordinal);
+        var selectedDefinitions = new List<SelectionDefinition>();
         var suppliedProfiles = workspaceProfiles ?? Array.Empty<WorkspaceProfile>();
         ValidateWorkspaceProfiles(suppliedProfiles);
 
@@ -37,7 +38,10 @@ public static class SelectionPlanner
         {
             var definition = Resolve(profile, catalogMatches ? catalog.Profiles : [], suppliedProfiles, findings);
             if (definition is not null)
+            {
+                selectedDefinitions.Add(definition);
                 AddMembers(definition, profile.Origin == "workspace" ? "workspace-profile" : "profile", selected, reasons);
+            }
         }
         foreach (var group in authored.Groups)
         {
@@ -45,7 +49,10 @@ public static class SelectionPlanner
                 throw new SelectionDocumentException("invalid-field", "Only Foundation group references are supported in v1.");
             var definition = Resolve(group, catalogMatches ? catalog.Groups : [], suppliedProfiles, findings);
             if (definition is not null)
+            {
+                selectedDefinitions.Add(definition);
                 AddMembers(definition, "group", selected, reasons);
+            }
         }
 
         foreach (var featureId in authored.Add)
@@ -72,8 +79,26 @@ public static class SelectionPlanner
         if (!exact.SequenceEqual(authored.Accepted.FeatureIds.OrderBy(x => x, StringComparer.Ordinal), StringComparer.Ordinal))
             findings.Add(new SelectionFinding("candidate-re-resolution", "advisory", null, null, "accepted-lock", "The candidate exact selection differs from the previously accepted expansion."));
 
-        var (hostFindings, locks) = HostAssessment.Assess(exact, orderedReasons, inventory);
+        var (hostFindings, locks, hostDependencies) = HostAssessment.Assess(exact, orderedReasons, inventory);
         findings.AddRange(hostFindings);
+        var reviewedDependencies = selectedDefinitions
+            .SelectMany(definition => definition.DependencyExplanations
+                .Where(explanation => selected.Contains(explanation.FeatureId))
+                .Select(explanation => new DependencyEvidence(
+                    explanation.FeatureId,
+                    explanation.DependencyId,
+                    explanation.Mode,
+                    "reviewed-definition",
+                    selected.Contains(explanation.DependencyId)) { EvidenceSource = definition.Id }));
+        var dependencyEvidence = reviewedDependencies.Concat(hostDependencies)
+            .Distinct()
+            .OrderBy(edge => edge.FeatureId, StringComparer.Ordinal)
+            .ThenBy(edge => edge.DependencyId, StringComparer.Ordinal)
+            .ThenBy(edge => edge.Mode, StringComparer.Ordinal)
+            .ThenBy(edge => edge.EvidenceKind, StringComparer.Ordinal)
+            .ThenBy(edge => edge.EvidenceSource, StringComparer.Ordinal)
+            .ThenBy(edge => edge.TargetSelected)
+            .ToImmutableArray();
         var checkedPersistence = ValidatePersistence(persistence);
         if (checkedPersistence.Status != "checked")
             findings.Add(new SelectionFinding("persistence-unverified", "unresolved", null, null, checkedPersistence.Provenance, "Provider, connection, schema, migration and physical layout were not all verified by supplied persistence evidence."));
@@ -100,7 +125,10 @@ public static class SelectionPlanner
             orderedFindings,
             locks.OrderBy(x => x.FeatureId, StringComparer.Ordinal).ToImmutableArray(),
             accepted,
-            checkedPersistence);
+            checkedPersistence)
+        {
+            DependencyEvidence = dependencyEvidence
+        };
     }
 
     private static SelectionDefinition? Resolve(

@@ -6,19 +6,20 @@ namespace Elsa.Modularity.Planning.Services;
 
 internal static class HostAssessment
 {
-    public static (ImmutableArray<SelectionFinding> Findings, ImmutableArray<FeatureLock> Locks) Assess(
+    public static (ImmutableArray<SelectionFinding> Findings, ImmutableArray<FeatureLock> Locks, ImmutableArray<DependencyEvidence> Dependencies) Assess(
         ImmutableArray<string> selected,
         ImmutableArray<SelectionReason> reasons,
         HostInventory? inventory)
     {
         if (inventory is null)
-            return ([new SelectionFinding("inventory-unverified", "unresolved", null, null, "none", "No target-host inventory was supplied.")], []);
+            return ([new SelectionFinding("inventory-unverified", "unresolved", null, null, "none", "No target-host inventory was supplied.")], [], []);
 
         Validate(inventory);
         var rows = inventory.Features.ToDictionary(x => x.FeatureId, StringComparer.Ordinal);
         var set = selected.ToHashSet(StringComparer.Ordinal);
         var findings = ImmutableArray.CreateBuilder<SelectionFinding>();
         var locks = ImmutableArray.CreateBuilder<FeatureLock>();
+        var dependencies = ImmutableArray.CreateBuilder<DependencyEvidence>();
 
         foreach (var featureId in selected)
         {
@@ -63,12 +64,16 @@ internal static class HostAssessment
             if (runtimeEdges is not null)
             {
                 foreach (var dependencyId in runtimeEdges.Value)
+                {
+                    dependencies.Add(new DependencyEvidence(featureId, dependencyId, "required", "runtime-descriptor", set.Contains(dependencyId)) { EvidenceSource = row.EvidenceSource });
                     CheckRequired(dependencyId, "runtime-descriptor", featureId, set, reasons, findings);
+                }
             }
             else if (manifestEdges is not null && row.ManifestReadStatus == "read")
             {
                 foreach (var edge in manifestEdges.Value)
                 {
+                    dependencies.Add(new DependencyEvidence(featureId, edge.Id, edge.Optional ? "optional" : "required", "package-manifest", set.Contains(edge.Id)) { EvidenceSource = row.EvidenceSource });
                     if (edge.Optional)
                     {
                         if (!set.Contains(edge.Id))
@@ -82,7 +87,7 @@ internal static class HostAssessment
                 findings.Add(Finding("dependency-evidence-unavailable", featureId, null, row.EvidenceSource, "No readable dependency evidence was supplied for this feature."));
         }
 
-        return (findings.ToImmutable(), locks.ToImmutable());
+        return (findings.ToImmutable(), locks.ToImmutable(), dependencies.ToImmutable());
     }
 
     private static void CheckRequired(

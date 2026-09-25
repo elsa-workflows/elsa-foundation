@@ -1,6 +1,6 @@
 namespace Elsa.Modularity.Planning.Json;
 
-internal static class SelectionValueRules
+public static class SelectionValueRules
 {
     public static bool IsDigest(string? value) => value is { Length: 64 } && value.All(char.IsAsciiHexDigitLower);
 

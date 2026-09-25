@@ -91,7 +91,7 @@ public static class SelectionJsonReader
             OptionalOpaqueObject(root, "resources"));
     }
 
-    private static JsonDocument ParseStrict(string json)
+    internal static JsonDocument ParseStrict(string json)
     {
         ArgumentNullException.ThrowIfNull(json);
         ValidateUnicode(json);
@@ -298,7 +298,7 @@ public static class SelectionJsonReader
             throw new SelectionDocumentException("schema-unsupported", $"Selection schema version {version} is unsupported.");
     }
 
-    private static void RequireFields(JsonElement element, string code, params string[] allowed)
+    internal static void RequireFields(JsonElement element, string code, params string[] allowed)
     {
         var names = new HashSet<string>(allowed, s_comparer);
         foreach (var property in element.EnumerateObject())
@@ -306,23 +306,23 @@ public static class SelectionJsonReader
                 throw new SelectionDocumentException(code, $"Unknown field {property.Name}.");
     }
 
-    private static JsonElement RequireObject(JsonElement element, string name) =>
+    internal static JsonElement RequireObject(JsonElement element, string name) =>
         element.ValueKind == JsonValueKind.Object ? element : throw new SelectionDocumentException("invalid-field", $"{name} must be an object.");
 
-    private static JsonElement RequiredObject(JsonElement element, string name) => RequireObject(RequiredProperty(element, name), name);
+    internal static JsonElement RequiredObject(JsonElement element, string name) => RequireObject(RequiredProperty(element, name), name);
 
-    private static JsonElement RequiredArray(JsonElement element, string name)
+    internal static JsonElement RequiredArray(JsonElement element, string name)
     {
         var value = RequiredProperty(element, name);
         return value.ValueKind == JsonValueKind.Array ? value : throw new SelectionDocumentException("invalid-field", $"{name} must be an array.");
     }
 
-    private static JsonElement RequiredProperty(JsonElement element, string name) =>
+    internal static JsonElement RequiredProperty(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) ? value : throw new SelectionDocumentException("invalid-field", $"Required field {name} is missing.");
 
-    private static string RequiredString(JsonElement element, string name) => RequiredNonemptyString(RequiredProperty(element, name));
+    internal static string RequiredString(JsonElement element, string name) => RequiredNonemptyString(RequiredProperty(element, name));
 
-    private static string RequiredNonemptyString(JsonElement element)
+    internal static string RequiredNonemptyString(JsonElement element)
     {
         if (element.ValueKind != JsonValueKind.String || string.IsNullOrEmpty(element.GetString()))
             throw new SelectionDocumentException("invalid-field", "A required value must be a nonempty string.");
