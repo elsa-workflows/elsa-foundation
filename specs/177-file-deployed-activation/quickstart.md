@@ -32,7 +32,7 @@ The external deployer must provide an artifact-integrity receipt in a later fixt
 
 ## Host-attestation gate before verified activation
 
-Use a disposable rebuilt Workbench with one configured **default** shell and a prior ready generation. The gate is not passed by the existing tests alone. It needs a host-produced observation tied to the generation being promoted:
+The #2039 probes established that the current Workbench can report default-shell generation/readiness and private package/configuration state, but cannot bind a reviewed complete bundle to that generation. The gate remains open for a future verified-match implementation. Use a disposable rebuilt Workbench with one configured **default** shell and a prior ready generation; a future gate needs a host-produced observation tied to the generation being promoted:
 
 1. Deploy a reviewed complete bundle through a test deployment owner that records previous/current artifact identities and can restore the prior complete bundle. Observe a successful root reload, active generation, and default-shell readiness. Separately prove the host's generation-bound candidate marker equals the reviewed artifact; otherwise report match `unverified`.
 2. Alter one included file, then change a process-level override or loaded package generation. Show which source identity and effective-host facts the marker actually covers. Any uncovered fact stays unresolved; a mismatch cannot be called verified.
@@ -40,4 +40,4 @@ Use a disposable rebuilt Workbench with one configured **default** shell and a p
 4. Drop or time out the reload response. Read back deployed artifact identity and active generation before retry; do not send a blind second apply. If state remains ambiguous, keep an `uncertain` result.
 5. Include a non-default shell as a refusal case for v1 verified activation, and scan all outward results for canary values, blueprint configuration, management key and raw exception text.
 
-Do not publish a `candidate active` result or cut a corresponding implementation story until this gate passes with a secret-safe host observation. No test here treats shell readiness as evidence of database migration, connection affinity or data rollback; those remain separate program dependencies.
+The next narrow host-observation story may report `active generation observed; candidate match unverified`. Do not publish a `candidate active` result or cut a verified-match implementation story until this gate passes with a secret-safe host observation. The #2039 package test varied versions across host starts, not within one process, and its response-loss test stopped a registry observer, not an HTTP request. A later full activation/recovery test must exercise those remaining boundaries. No test here treats shell readiness as evidence of database migration, connection affinity or data rollback; those remain separate program dependencies.

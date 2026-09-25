@@ -188,6 +188,31 @@ public sealed class ServerReadinessTests
     }
 
     [Fact]
+    public async Task ReadbackAfterObserverTimeoutCannotDetermineWhetherReloadWillPromote()
+    {
+        await using var fixture = await ServerReadinessFixture.StartAsync();
+        var initialGate = fixture.RouteInitialization.For(ServerReadinessFixture.DefaultShellName);
+        await fixture.WaitForDefaultRouteInitializationAsync();
+        initialGate.Release();
+        await fixture.WaitUntilReadyAsync();
+        var initialGeneration = fixture.Registry.GetActive(ServerReadinessFixture.DefaultShellName)!.Descriptor.Generation;
+
+        var reloadGate = fixture.RouteInitialization.PrepareNext(ServerReadinessFixture.DefaultShellName);
+        var reload = fixture.Registry.ReloadAsync(ServerReadinessFixture.DefaultShellName);
+        await reloadGate.WaitUntilEnteredAsync();
+
+        // Only the observer stops waiting; the host operation continues. A timeout is not a failed promotion.
+        await Assert.ThrowsAsync<TimeoutException>(() => reload.WaitAsync(TimeSpan.Zero));
+        var beforePromotion = await fixture.ReadReadyAsync();
+        Assert.Equal(initialGeneration, beforePromotion.Body.Generation);
+
+        reloadGate.Release();
+        await reload;
+        var afterPromotion = await fixture.ReadReadyAsync();
+        Assert.True(afterPromotion.Body.Generation > initialGeneration);
+    }
+
+    [Fact]
     public async Task FailedReloadKeepsThePreviousGenerationReady()
     {
         await using var fixture = await ServerReadinessFixture.StartAsync();
