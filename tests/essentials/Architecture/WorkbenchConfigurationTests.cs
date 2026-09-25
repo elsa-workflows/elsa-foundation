@@ -70,6 +70,23 @@ public sealed class WorkbenchConfigurationTests
     }
 
     [Fact]
+    public async Task Pinned_cshells_package_can_add_and_disable_in_object_map_overlay()
+    {
+        const string baseJson = """
+            {"CShells":{"Shells":{"default":{"Features":{"A":{"Flag":true}}}}}}
+            """;
+        const string overlayJson = """
+            {"CShells":{"Shells":{"default":{"Features":{"A":false,"B":true}}}}}
+            """;
+
+        var shell = await ComposePinnedShellAsync(baseJson, overlayJson);
+
+        Assert.Contains("B", shell.EnabledFeatures);
+        Assert.Contains("A", shell.DisabledFeatures);
+        Assert.DoesNotContain("A:Flag", shell.ConfigurationData.Keys);
+    }
+
+    [Fact]
     public async Task Pinned_cshells_package_treats_array_enabled_field_as_setting()
     {
         const string json = """
