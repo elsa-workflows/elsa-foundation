@@ -46,6 +46,31 @@ public static class EfSuiteSelectorContractTests
         Assert(EfSuiteSelector.SelectPaths(suites, projects, ["src/essentials/Modularity/Nuplane/FeatureManagementService.cs"]), "full", "publishing", "runtime");
         Assert(EfSuiteSelector.SelectPaths(suites, projects, ["src/essentials/Modularity/Unknown/Unowned.cs"]), "full", "publishing", "runtime");
         Assert(EfSuiteSelector.SelectPaths(suites, projects, ["docs/report.md", "src/Publishing/Publish.cs"]), "selected", "publishing");
+        string[] generatedFilters = ["Elsa.Server.Workflows.Runtime.slnf"];
+        Assert(EfSuiteSelector.SelectPaths(suites, projects,
+            ["Elsa.Server.Workflows.Runtime.slnf", "src/Runtime/Run.cs"],
+            generatedSolutionFilters: generatedFilters), "selected", "runtime");
+        Assert(EfSuiteSelector.SelectPaths(suites, projects,
+            ["Elsa.Server.Workflows.Runtime.slnf"],
+            generatedSolutionFilters: generatedFilters), "none");
+        Assert(EfSuiteSelector.SelectPaths(suites, projects,
+            ["Elsa.Server.Unlisted.slnf"],
+            generatedSolutionFilters: generatedFilters), "full", "publishing", "runtime");
+        Assert(EfSuiteSelector.SelectPaths(suites, projects,
+            ["Elsa.Server.Workflows.Runtime.slnf"]), "full", "publishing", "runtime");
+        Assert(EfSuiteSelector.SelectPaths(suites, projects,
+            ["Elsa.Server.slnx"],
+            generatedSolutionFilters: generatedFilters), "full", "publishing", "runtime");
+        Assert(EfSuiteSelector.SelectPaths(suites, new Dictionary<string, IReadOnlyList<string>>(),
+            ["Elsa.Server.Workflows.Runtime.slnf"],
+            generatedSolutionFilters: generatedFilters), "full", "publishing", "runtime");
+        Assert(EfSuiteSelector.SelectPaths(suites,
+            new Dictionary<string, IReadOnlyList<string>>(projects)
+            {
+                ["src/Runtime/Runtime.csproj"] = ["src/Missing/Missing.csproj"]
+            },
+            ["Elsa.Server.Workflows.Runtime.slnf"],
+            generatedSolutionFilters: generatedFilters), "full", "publishing", "runtime");
         Assert(EfSuiteSelector.SelectPaths(suites, projects, ["tests/Shared/Guard.cs"],
             new Dictionary<string, IReadOnlyList<string>>
             {
@@ -72,6 +97,8 @@ public static class EfSuiteSelectorContractTests
             throw new InvalidOperationException("Main and an unavailable PR diff must fail closed to the full matrix.");
 
         var actualProjects = SolutionFilterGenerator.GetProjectReferences(repo);
+        if (!SolutionFilterGenerator.GetOutputPaths(repo).Contains("Elsa.Server.Workflows.Runtime.slnf", StringComparer.Ordinal))
+            throw new InvalidOperationException("The generated Runtime filter must be manifest-owned.");
         var cliAcceptance = new EfSuite("cli-acceptance",
             "tests/essentials/Persistence/EntityFrameworkCore/CliAcceptance/ProviderTests/Elsa.Persistence.EntityFrameworkCore.CliAcceptance.ProviderTests.csproj", "");
         Assert(EfSuiteSelector.SelectPaths([cliAcceptance], actualProjects,

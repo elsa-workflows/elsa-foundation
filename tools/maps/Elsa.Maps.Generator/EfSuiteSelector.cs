@@ -17,7 +17,10 @@ public static partial class EfSuiteSelector
     {
         var suites = ReadSuites(repo);
         if (eventName is "push" or "workflow_dispatch")
+        {
+            ReadValidatedProjects(repo, suites);
             return Full(suites, $"{eventName} always runs the full EF matrix");
+        }
         if (eventName != "pull_request")
             throw new InvalidOperationException($"Unsupported EF selection event: {eventName}");
 
@@ -32,9 +35,10 @@ public static partial class EfSuiteSelector
                 .ToArray();
             if (addedOrDeletedProjects.Length > 0)
                 return Full(suites, "project added or removed in the PR diff");
-            var projects = SolutionFilterGenerator.GetProjectReferences(repo);
+            var projects = ReadValidatedProjects(repo, suites);
             var linkedSources = ReadLinkedSourceOwners(repo, projects.Keys);
-            return SelectPaths(suites, projects, changedPaths, linkedSources);
+            var generatedSolutionFilters = SolutionFilterGenerator.GetOutputPaths(repo);
+            return SelectPaths(suites, projects, changedPaths, linkedSources, generatedSolutionFilters);
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or System.Xml.XmlException or System.ComponentModel.Win32Exception)
         {
@@ -47,8 +51,13 @@ public static partial class EfSuiteSelector
         IReadOnlyList<EfSuite> suites,
         IReadOnlyDictionary<string, IReadOnlyList<string>> projects,
         IReadOnlyList<string> changedPaths,
-        IReadOnlyDictionary<string, IReadOnlyList<string>>? linkedSourceOwners = null)
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? linkedSourceOwners = null,
+        IReadOnlyCollection<string>? generatedSolutionFilters = null)
     {
+        if (suites.Any(suite => !projects.ContainsKey(suite.Project)) ||
+            projects.Values.SelectMany(references => references).Any(reference => !projects.ContainsKey(reference)))
+            return Full(suites, "project graph is incomplete");
+
         if (changedPaths.Count == 0)
             return new EfSuiteSelection("none", "PR diff is empty", []);
 
@@ -56,6 +65,10 @@ public static partial class EfSuiteSelector
         foreach (var rawPath in changedPaths)
         {
             var path = Normalize(rawPath);
+            // The solution-filter freshness gate validates these manifest-owned outputs separately.
+            // An unknown root filter still takes the full, fail-closed path below.
+            if (generatedSolutionFilters?.Contains(path, StringComparer.Ordinal) == true)
+                continue;
             if (HasNoEfImpact(path))
                 continue;
             if (MustRunFull(path))
@@ -108,15 +121,22 @@ public static partial class EfSuiteSelector
         if (suites.Select(suite => suite.Suite).Distinct(StringComparer.Ordinal).Count() != suites.Count ||
             suites.Select(suite => suite.Project).Distinct(StringComparer.OrdinalIgnoreCase).Count() != suites.Count)
             throw new InvalidOperationException("EF suite manifest contains duplicate suites or projects");
-        var solutionProjects = SolutionFilterGenerator.GetProjectReferences(repo).Keys.ToArray();
+        return suites.OrderBy(suite => suite.Suite, StringComparer.Ordinal).ToArray();
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> ReadValidatedProjects(
+        RepoContext repo,
+        IReadOnlyList<EfSuite> suites)
+    {
+        var projects = SolutionFilterGenerator.GetProjectReferences(repo);
         var allTestProjects = Directory.GetFiles(repo.Absolute("tests"), "*.csproj", SearchOption.AllDirectories)
             .Concat(Directory.GetFiles(repo.Absolute("src"), "*.csproj", SearchOption.AllDirectories)
                 .Where(path => Normalize(path).Contains("/tests/", StringComparison.OrdinalIgnoreCase)))
             .Select(path => Normalize(Path.GetRelativePath(repo.Root, path)))
             .ToArray();
         ValidateCoverage(suites, SolutionFilterGenerator.GetRoots(repo, IntegrationFilterPath),
-            allTestProjects, solutionProjects);
-        return suites.OrderBy(suite => suite.Suite, StringComparer.Ordinal).ToArray();
+            allTestProjects, projects.Keys.ToArray());
+        return projects;
     }
 
     public static void ValidateCoverage(
