@@ -50,17 +50,26 @@ internal sealed class FakeShellStore(IEqualityComparer<string>? featureIdCompare
 internal sealed class FakeRuntimeRefresher : IRuntimeFeatureCatalogRefresher
 {
     public int RefreshCount { get; private set; }
+    public Exception? Failure { get; set; }
 
-    public Task<int> RefreshAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult(++RefreshCount);
+    public Task<int> RefreshAsync(CancellationToken cancellationToken = default)
+    {
+        RefreshCount++;
+        return Failure is null ? Task.FromResult(RefreshCount) : Task.FromException<int>(Failure);
+    }
 }
 
 internal sealed class FakeShellReloader : IShellReloader
 {
     public int ReloadCount { get; private set; }
+    public Exception? Failure { get; set; }
+    public int? Result { get; set; }
 
-    public Task<int> ReloadAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult(++ReloadCount);
+    public Task<int> ReloadAsync(CancellationToken cancellationToken = default)
+    {
+        ReloadCount++;
+        return Failure is null ? Task.FromResult(Result ?? ReloadCount) : Task.FromException<int>(Failure);
+    }
 }
 
 internal sealed class FakeNuplaneAdminOperations : INuplaneAdminOperations
