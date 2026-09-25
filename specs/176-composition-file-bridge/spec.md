@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-25
 
-**Status**: In progress — import delivered; reviewed generation under #2023
+**Status**: Implemented — file-only import and reviewed candidate generation; live-host and in-place apply remain separate
 
 **Input**: [Task #2009](https://github.com/elsa-workflows/elsa-foundation/issues/2009), the [source-boundary investigation](../../docs/reports/runtime-composition/import-export-boundary.md), the [selection planner](../174-profile-selection-planner/spec.md), and the [offline plan command](../175-offline-composition-plan/spec.md).
 

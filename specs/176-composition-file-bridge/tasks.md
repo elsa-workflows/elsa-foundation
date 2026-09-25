@@ -2,7 +2,7 @@
 
 **Input**: [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md), [data-model.md](data-model.md), [semantic contract](contracts/file-bridge-v1.md), [CLI contract](contracts/cli-file-bridge-v1.md), and [setting review input](contracts/setting-review-v1.md).
 
-**Tests**: Required by spec 176's independent tests and success criteria. Write focused behavior tests before implementing each story. T001 is completed by the pinned-package spike. T002–T014 form the implemented import checkpoint. T015–T022 have local generation evidence under [#2023](https://github.com/elsa-workflows/elsa-foundation/issues/2023); PR evidence and release status follow the merge gate.
+**Tests**: Required by spec 176's independent tests and success criteria. Write focused behavior tests before implementing each story. T001 is completed by the pinned-package spike. T002–T014 form the implemented import checkpoint. T015–T024 complete the file-only release candidate under [#2023](https://github.com/elsa-workflows/elsa-foundation/issues/2023). Exact-head CI and review remain required before merge.
 
 ## Phase 1: Setup and package-semantics prerequisite
 
@@ -66,8 +66,8 @@
 
 - [x] T021 [P] Add one shared safe rendering/refusal helper only where import and generate duplicate logic in `src/essentials/Cli/CompositionFileBridgeOutput.cs`; keep raw exceptions, paths, and source excerpts out of diagnostics.
 - [x] T022 Run the whole affected Planning and CLI test projects plus `tests/essentials/Architecture/Elsa.Architecture.Tests.csproj`, refresh/check maps, check solution filters and `git diff --check`, and review the source/output/canary diff in the implementation worktree.
-- [ ] T023 Mutate and restore one redaction or source-change assertion in `tests/essentials/Cli/Tests/CompositionGenerateCliTests.cs`, show the focused test fails then passes, and record exact-head evidence on the implementation PR and linked issue before merge.
-- [ ] T024 Update `specs/176-composition-file-bridge/spec.md` status and `docs/program-goals/feature-composition-readiness.md` only after both stories and the file-only boundary are actually delivered; do not claim runtime, package, EF, or database readiness.
+- [x] T023 Mutate and restore one redaction or source-change assertion in `tests/essentials/Cli/Tests/CompositionGenerateCliTests.cs`, show the focused test fails then passes, and record exact-head evidence on the implementation PR and linked issue before merge.
+- [x] T024 Update `specs/176-composition-file-bridge/spec.md` status and `docs/program-goals/feature-composition-readiness.md` only after both stories and the file-only boundary are actually delivered; do not claim runtime, package, EF, or database readiness.
 
 ## Dependencies and execution order
 
