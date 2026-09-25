@@ -44,6 +44,32 @@ public sealed class WorkbenchConfigurationTests
     }
 
     [Fact]
+    public async Task Pinned_cshells_package_scalar_object_overlays_retain_base_scalar_values()
+    {
+        const string disabledBase = """
+            {"CShells":{"Shells":{"default":{"Features":{"A":false}}}}}
+            """;
+        const string objectOverlay = """
+            {"CShells":{"Shells":{"default":{"Features":{"A":{"Flag":true}}}}}}
+            """;
+        const string settingsBase = """
+            {"CShells":{"Shells":{"default":{"Features":{"A":{"Flag":false}}}}}}
+            """;
+        const string resetOverlay = """
+            {"CShells":{"Shells":{"default":{"Features":{"A":true}}}}}
+            """;
+
+        var stillDisabled = await ComposePinnedShellAsync(disabledBase, objectOverlay);
+        var reset = await ComposePinnedShellAsync(settingsBase, resetOverlay);
+
+        Assert.Contains("A", stillDisabled.DisabledFeatures);
+        Assert.DoesNotContain("A:Flag", stillDisabled.ConfigurationData.Keys);
+        Assert.Contains("A", reset.EnabledFeatures);
+        Assert.Contains("A", reset.FeatureSettingResets);
+        Assert.DoesNotContain("A:Flag", reset.ConfigurationData.Keys);
+    }
+
+    [Fact]
     public async Task Pinned_cshells_package_treats_array_enabled_field_as_setting()
     {
         const string json = """

@@ -1,6 +1,6 @@
 # CLI file bridge v1
 
-This command contract implements the [semantic file bridge v1 contract](file-bridge-v1.md). It describes a planned interface, not an existing CLI. `composition plan` remains a separate, read-only command.
+This command contract implements the [semantic file bridge v1 contract](file-bridge-v1.md). `composition import` is the first implemented checkpoint; `composition generate` remains planned. `composition plan` remains a separate, read-only command.
 
 ```text
 dotnet elsa composition import

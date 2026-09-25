@@ -1,0 +1,16 @@
+{
+  "CShells": {
+    "Shells": {
+      "default": {
+        "Features": {
+          "A": {
+            "StagingOnly": "preserve-this-unselected-overlay"
+          }
+        }
+      }
+    }
+  },
+  "StagingAnnotation": {
+    "Keep": true
+  }
+}

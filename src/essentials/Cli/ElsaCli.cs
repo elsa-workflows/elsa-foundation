@@ -22,9 +22,10 @@ internal static class ElsaCli
             OpensDatabase(WorkerCommands.PostMigrate, "Run each selected module's required post-migration actions against a database. The only command that runs one.")
         };
 
-        var composition = new Command("composition", "Inspect authored feature selections.")
+        var composition = new Command("composition", "Inspect and review feature selections.")
         {
-            CompositionPlanCommand.Build()
+            CompositionPlanCommand.Build(),
+            CompositionImportCommand.Build()
         };
 
         return new RootCommand("Elsa command-line tool.") { persistence, composition };
