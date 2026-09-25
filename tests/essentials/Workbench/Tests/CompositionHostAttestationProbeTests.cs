@@ -14,7 +14,8 @@ namespace Elsa.Workbench.Tests;
 public sealed class CompositionHostAttestationProbeTests
 {
     private const string FeatureSetting = "WorkflowsRuntimeCheckpointPersistence";
-    private const string ProcessValue = "731";
+    // A distinctive valid integer avoids matching unrelated numbers in lifecycle JSON during redaction checks.
+    private const string ProcessValue = "73190483";
     private const string Canary = "host-attestation-secret-canary-2039";
     private const string PackageId = "Elsa.AttestationProbe.Loadable";
 
