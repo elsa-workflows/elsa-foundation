@@ -47,7 +47,8 @@ public sealed class WorkbenchProcess : IAsyncDisposable
 
     public static async Task<WorkbenchProcess> StartAsync(
         WorkbenchShell shell,
-        Action<string>? prepareContentRoot = null)
+        Action<string>? prepareContentRoot = null,
+        bool waitForReady = true)
     {
         var directory = Directory.CreateTempSubdirectory("elsa-workbench-smoke-").FullName;
         CopySourceFile(shell.ShellFile, directory, "shells.json");
@@ -97,7 +98,7 @@ public sealed class WorkbenchProcess : IAsyncDisposable
         var workbench = new WorkbenchProcess(new Process { StartInfo = startInfo }, directory, managementKey);
         try
         {
-            await workbench.StartAndWaitUntilReadyAsync();
+            await workbench.StartAndWaitUntilReadyAsync(waitForReady);
             return workbench;
         }
         catch
@@ -173,7 +174,7 @@ public sealed class WorkbenchProcess : IAsyncDisposable
         }
     }
 
-    private async Task StartAndWaitUntilReadyAsync()
+    private async Task StartAndWaitUntilReadyAsync(bool waitForReady)
     {
         _process.OutputDataReceived += (_, line) => Append(line.Data);
         _process.ErrorDataReceived += (_, line) => Append(line.Data);
@@ -194,6 +195,8 @@ public sealed class WorkbenchProcess : IAsyncDisposable
             }
 
             var readiness = Client.BaseAddress is null ? null : await TryReadReadinessAsync();
+            if (!waitForReady && readiness is not null)
+                return;
             if (readiness?.Status == "ready")
                 return;
             if (readiness?.Status == "failed")

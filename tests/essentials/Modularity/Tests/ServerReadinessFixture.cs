@@ -5,6 +5,8 @@ using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
+using Elsa.Workbench;
+using Elsa.Workbench.Composition;
 using Elsa.Workbench.Readiness;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -18,6 +20,7 @@ namespace Elsa.Modularity.Tests;
 
 public sealed class ServerReadinessFixture : IAsyncDisposable
 {
+    public const string ManagementKey = "readiness-fixture-management-key";
     public const string DefaultShellName = "default";
     public const string OtherShellName = "other";
     public const string LivePath = "/health/live";
@@ -61,6 +64,7 @@ public sealed class ServerReadinessFixture : IAsyncDisposable
         var warmupLogger = new RecordingLogger<DefaultShellWarmup>();
 
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Development });
+        builder.Configuration[ManagementApiKeyAuthentication.ConfigurationKey] = ManagementKey;
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Logging.ClearProviders();
         builder.Services.AddSingleton(readinessState);
@@ -75,7 +79,7 @@ public sealed class ServerReadinessFixture : IAsyncDisposable
             {
                 options.EnablePathRouting = true;
                 options.EnableHostRouting = false;
-                options.ExcludePaths = [LivePath, ReadyPath];
+                options.ExcludePaths = [LivePath, ReadyPath, "/_admin/composition/default-shell"];
             })
             .AddShell(DefaultShellName, shell => shell.WithFeature<ReadinessProbeFeature>(feature =>
             {
@@ -93,6 +97,7 @@ public sealed class ServerReadinessFixture : IAsyncDisposable
         var app = builder.Build();
         app.MapShellReadiness();
         app.MapShells();
+        app.MapCompositionActivationObservation();
         await app.StartAsync();
 
         var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
