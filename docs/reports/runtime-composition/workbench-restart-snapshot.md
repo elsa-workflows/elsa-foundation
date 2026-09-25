@@ -24,3 +24,7 @@ The new host test passed 1/1, and the full attestation probe class passed 4/4. I
 4. After restart, an authorized observer may report the new process and default-shell readiness. It must keep candidate matching unverified until a trusted deployed-artifact receipt, private process-start source/override identity, applied-package cohort, and generation correlation are all available. Startup failure cannot be described as preserving the previous process unless the external deployment topology actually retained it. Database migration and rollback state are separate.
 
 The next implementation boundary is a deployer/host handshake around a retained complete artifact and a private process-start receipt, followed by applied-package evidence. A shell-only blueprint marker or later directory scan would repeat the false-attribution risk found in [#2046](workbench-source-snapshot.md).
+
+## Follow-up observation (#2062)
+
+Workbench now returns an opaque process instance ID beside the default-shell generation in its management-key-protected GET and POST responses. That ID stays stable across shell reloads within one process and changes for a separately started process, so two equal generation numbers no longer imply the same host instance. The ID does not identify the deployment artifact, selected environment, effective overrides, or package cohort. The no-go for verified candidate matching above remains unchanged.

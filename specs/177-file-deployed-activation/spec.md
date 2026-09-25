@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-25
 
-**Status**: In progress — #2038 delivered the file-only candidate handoff (US1); #2039 found no sound exact-candidate marker in the current host path; #2041 added safe default-shell generation/readiness observation without candidate attribution. #2046 ruled out a complete hot-reload source snapshot in the current Workbench; #2060 demonstrated a conditional restart-scoped file boundary and the risk of file-at-a-time deployment, while process-override capture and source identity remain unproven. External deployment receipt, exact-match proof and recovery (US2/US3) remain open
+**Status**: In progress — #2038 delivered the file-only candidate handoff (US1); #2039 found no sound exact-candidate marker in the current host path; #2041 added safe default-shell generation/readiness observation and #2062 added process-instance identity without candidate attribution. #2046 ruled out a complete hot-reload source snapshot in the current Workbench; #2060 demonstrated a conditional restart-scoped file boundary and the risk of file-at-a-time deployment, while process-override capture and source identity remain unproven. External deployment receipt, exact-match proof and recovery (US2/US3) remain open
 
 **Input**: [Issue #2036](https://github.com/elsa-workflows/elsa-foundation/issues/2036), the [apply/recovery boundary](../../docs/reports/runtime-composition/apply-recovery-boundary.md), and the delivered [file bridge](../176-composition-file-bridge/spec.md).
 
