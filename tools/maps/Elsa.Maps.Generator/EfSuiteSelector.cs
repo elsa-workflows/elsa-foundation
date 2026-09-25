@@ -233,7 +233,10 @@ public static partial class EfSuiteSelector
         path.StartsWith("tools/", StringComparison.Ordinal) ||
         path.StartsWith("src/apps/", StringComparison.Ordinal) ||
         path.StartsWith("src/essentials/Persistence/EntityFramework", StringComparison.Ordinal) ||
-        path.StartsWith("src/essentials/Modularity/", StringComparison.Ordinal) ||
+        path.StartsWith("src/essentials/Modularity/Api/", StringComparison.Ordinal) ||
+        path.StartsWith("src/essentials/Modularity/Core/", StringComparison.Ordinal) ||
+        path.StartsWith("src/essentials/Modularity/EntityFramework/", StringComparison.Ordinal) ||
+        path.StartsWith("src/essentials/Modularity/Nuplane/", StringComparison.Ordinal) ||
         path.EndsWith(".props", StringComparison.OrdinalIgnoreCase) ||
         path.EndsWith(".targets", StringComparison.OrdinalIgnoreCase) ||
         path.EndsWith(".slnx", StringComparison.OrdinalIgnoreCase) ||
