@@ -1,0 +1,41 @@
+{
+  "CShells": {
+    "Shells": {
+      "default": {
+        "Name": "default",
+        "Features": {
+          "A": {
+            "Flag": false,
+            "Limit": 0,
+            "Future": {
+              "x": null,
+              "Canary": "COMPOSITION_BRIDGE_UNKNOWN_CANARY_NOT_A_SECRET"
+            }
+          },
+          "B": false
+        },
+        "Configuration": {
+          "Elsa": {
+            "Persistence": {
+              "DefaultResource": "primary",
+              "Bindings": {
+                "A": "primary"
+              }
+            }
+          }
+        }
+      },
+      "tenant-b": {
+        "Name": "tenant-b",
+        "Features": {
+          "TenantOnly": {
+            "Keep": "unchanged"
+          }
+        }
+      }
+    }
+  },
+  "CustomRoot": {
+    "Keep": true
+  }
+}

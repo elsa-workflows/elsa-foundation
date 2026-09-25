@@ -1,0 +1,16 @@
+{
+  "CShells": {
+    "Shells": {
+      "default": {
+        "Features": {
+          "A": {
+            "Flag": true
+          }
+        }
+      }
+    }
+  },
+  "ProductionAnnotation": {
+    "Keep": "production-root-value"
+  }
+}

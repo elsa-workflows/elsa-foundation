@@ -26,6 +26,7 @@ dotnet test tests/essentials/Architecture/Elsa.Architecture.Tests.csproj -c Rele
 | Input | Observed composed view | Bridge consequence |
 |---|---|---|
 | Object-map `A` with settings, `B: false`; overlay changes `A.Flag` | A enabled, B disabled; overlay Flag wins while base Limit remains | Explicit disable is supported in object-map syntax; setting provenance requires raw layers. |
+| Base object-map `A: false`; overlay `A: {"Flag":true}` | A stays disabled; the base scalar value survives beside overlay children | Refuse scalar/object changes for one feature across layers rather than claiming the overlay re-enables it. A scalar `true` overlay over an object resets prior settings. |
 | Array `[{"Name":"A","Enabled":false}]` | A remains enabled; `Enabled` is flattened as a setting | Array syntax has no explicit disabled-state encoding in this package. Refuse an authored removal targeting an array instead of inventing a translation. |
 | Base array `["A","B"]`; overlay `["C"]` | Effective enabled array is C, B | The overlay replaces numeric index 0, not feature ID A; untouched base index 1 survives. Duplicate effective IDs must refuse. |
 | Object-map base with array overlay | Composition rejects mixed numeric and named `Features` children | Keep cross-shape overlay refusal in v1. |
