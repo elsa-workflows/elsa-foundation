@@ -35,7 +35,7 @@
 
 - [X] T014 Run both whole affected test projects, canonical architecture restore/guard, maps refresh/check, solution-filter check, and diff review in the #2001 worktree.
 - [X] T015 Mutate the new redaction or missing-edge behavior, show a focused test goes red, restore and show the complete affected suites green; record evidence for the PR.
-- [ ] T016 Mark `specs/175-offline-composition-plan/spec.md` Implemented only in the implementation PR, update `docs/program-goals/feature-composition-readiness.md`, and publish PR gate evidence before merge.
+- [X] T016 Mark `specs/175-offline-composition-plan/spec.md` Implemented only in the implementation PR, update `docs/program-goals/feature-composition-readiness.md`, and publish PR gate evidence before merge.
 
 ## Dependencies and delivery
 
