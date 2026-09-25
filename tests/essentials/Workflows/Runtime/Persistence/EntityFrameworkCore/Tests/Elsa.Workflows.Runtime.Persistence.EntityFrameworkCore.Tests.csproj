@@ -27,6 +27,7 @@
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Tasks\Elsa.Tasks.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Locking\FileSystem\Elsa.Locking.FileSystem.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Modularity\Planning\Elsa.Modularity.Planning.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Mediator\Elsa.Mediator.csproj" />

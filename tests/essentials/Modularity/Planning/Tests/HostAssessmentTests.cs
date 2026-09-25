@@ -21,6 +21,36 @@ public sealed class HostAssessmentTests
     }
 
     [Fact]
+    public void Reviewed_required_edge_blocks_removed_member_without_host_inventory()
+    {
+        var profile = PlannerFixture.Definition("profile", "starter", ["A", "B"],
+            explanations: [new DependencyExplanation("A", "B", "required", "A needs B.")]);
+        var catalog = PlannerFixture.Catalog(profiles: [profile]);
+        var authored = PlannerFixture.Authored(catalog, profile: PlannerFixture.Ref(profile), remove: ["B"], accepted: ["A"]);
+
+        var plan = SelectionPlanner.Plan(catalog, authored);
+
+        Assert.Equal(["A"], plan.SelectedFeatureIds.ToArray());
+        Assert.Contains(plan.Findings, x => x.Code == "required-dependency-missing" && x.EvidenceSource == "reviewed-definition" &&
+            x.FeatureId == "A" && x.DependencyId == "B" && x.Severity == "unresolved");
+        Assert.Contains(plan.Findings, x => x.Code == "inventory-unverified");
+    }
+
+    [Fact]
+    public void Loaded_descriptor_with_no_dependencies_overrides_reviewed_required_edge()
+    {
+        var profile = PlannerFixture.Definition("profile", "starter", ["A", "B"],
+            explanations: [new DependencyExplanation("A", "B", "required", "Reviewed expectation.")]);
+        var catalog = PlannerFixture.Catalog(profiles: [profile]);
+        var authored = PlannerFixture.Authored(catalog, profile: PlannerFixture.Ref(profile), remove: ["B"], accepted: ["A"]);
+
+        var plan = SelectionPlanner.Plan(catalog, authored, PlannerFixture.Inventory(PlannerFixture.Bundled("A")));
+
+        Assert.DoesNotContain(plan.Findings, x => x.Code == "required-dependency-missing");
+        Assert.Contains(plan.DependencyEvidence, x => x.EvidenceKind == "reviewed-definition" && !x.TargetSelected);
+    }
+
+    [Fact]
     public void Manifest_optional_companion_is_advisory_and_not_auto_selected()
     {
         var plan = ForSingle("A", PlannerFixture.Packaged("A", manifestDependencies: [new InventoryDependency("B", true)]));

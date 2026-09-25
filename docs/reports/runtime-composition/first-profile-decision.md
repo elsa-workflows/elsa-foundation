@@ -1,6 +1,6 @@
 # First runtime starting-profile decision (#2048)
 
-Status: proposed first delivery direction on 2026-09-25 under [#1961](https://github.com/elsa-workflows/elsa-foundation/issues/1961). This chooses an evidence-backed **candidate**, not a published profile or a claim that all three fixture hosts are production ready.
+Status: first delivery direction proposed on 2026-09-25 under [#1961](https://github.com/elsa-workflows/elsa-foundation/issues/1961). The initial candidate/proof is retained here; [spec 178](../../../specs/178-embedded-runtime-profile/spec.md) and the [developer reference](../../reference/embedded-runtime-profile.md) describe the first published `embedded-runtime@1` selection. This is not a claim that all three fixture hosts are production ready.
 
 Follow-up: the [deployable-lock host proof](embedded-lock-host-proof.md) supports `FileSystemDistributedLocking` as an explicit sixteenth candidate member. It also found that raw CShells configuration re-adds an explicitly disabled required dependency; publication needs a planner-to-host refusal gate. The 15-ID and test-provider discussion below records the evidence available at this decision point.
 

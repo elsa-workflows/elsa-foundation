@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "1",
+  "id": "elsa-foundation",
+  "version": "1",
+  "publisher": "elsa-foundation",
+  "digest": "0a62934830eccd0e27e829ac7e17e6c2e44e85babd959a2aace53b15569f0149",
+  "profiles": [
+    {
+      "kind": "profile",
+      "id": "embedded-runtime",
+      "version": "1",
+      "digest": "84765f93718964b00ee47f4dae07dbf2572f60d53741fd7ba68426bc696928ea",
+      "members": [
+        "ActivitiesControlFlow",
+        "ActivitiesPrimitives",
+        "ActivitiesRuntime",
+        "ActivitiesSequence",
+        "ApiCapabilities",
+        "Events",
+        "Expressions",
+        "FileSystemDistributedLocking",
+        "Mediator",
+        "Primitives",
+        "Serialization",
+        "Tasks",
+        "WorkflowsRuntimeApi",
+        "WorkflowsRuntimeEntityFrameworkCore",
+        "WorkflowsRuntimeResumption",
+        "WorkflowsRuntimeTriggers"
+      ],
+      "rationale": "The explicit 16-feature closure was exercised in a generic in-process host with durable runtime persistence, resumption, trigger scheduling and the deployable local filesystem lock provider. This is a starting selection: the persistence resource, connection, lock directory, signing and migration choices remain host-owned. Runtime API is included and can expose endpoints when a web host maps it.",
+      "title": "Embedded runtime",
+      "description": "Run and resume workflows inside your process using a durable runtime store and local filesystem locking. Review the Runtime API feature and supply host-specific prerequisites separately.",
+      "dependencyExplanations": [
+        {
+          "featureId": "WorkflowsRuntimeApi",
+          "dependencyId": "ApiCapabilities",
+          "mode": "required",
+          "reason": "The Runtime API feature registers its routes through API capabilities."
+        },
+        {
+          "featureId": "WorkflowsRuntimeEntityFrameworkCore",
+          "dependencyId": "WorkflowsRuntimeResumption",
+          "mode": "required",
+          "reason": "Durable runtime persistence requires the workflow resumption feature."
+        },
+        {
+          "featureId": "WorkflowsRuntimeResumption",
+          "dependencyId": "Tasks",
+          "mode": "required",
+          "reason": "Runtime resumption schedules its pump through the Tasks feature."
+        },
+        {
+          "featureId": "WorkflowsRuntimeTriggers",
+          "dependencyId": "WorkflowsRuntimeApi",
+          "mode": "required",
+          "reason": "Runtime trigger endpoints are supplied by the Runtime API feature."
+        }
+      ]
+    }
+  ],
+  "groups": []
+}

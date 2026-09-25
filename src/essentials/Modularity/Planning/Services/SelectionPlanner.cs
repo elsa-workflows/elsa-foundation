@@ -90,6 +90,20 @@ public static class SelectionPlanner
                     explanation.Mode,
                     "reviewed-definition",
                     selected.Contains(explanation.DependencyId)) { EvidenceSource = definition.Id }));
+        foreach (var edge in reviewedDependencies
+                     .Where(edge => edge.Mode == "required" && !edge.TargetSelected)
+                     .DistinctBy(edge => (edge.FeatureId, edge.DependencyId)))
+        {
+            var observed = inventory?.Features.FirstOrDefault(row => row.FeatureId == edge.FeatureId);
+            if (observed?.RuntimeDependencies is not null ||
+                observed?.ManifestDependencies is not null && observed.ManifestReadStatus == "read")
+                continue;
+            var removed = orderedReasons.Any(reason => reason.FeatureId == edge.DependencyId && reason.Action == "removed");
+            findings.Add(new SelectionFinding(
+                "required-dependency-missing", "unresolved", edge.FeatureId, edge.DependencyId, "reviewed-definition",
+                removed ? "The reviewed required feature was explicitly removed and remains absent." :
+                    "The reviewed required feature is absent from the exact selection."));
+        }
         var dependencyEvidence = reviewedDependencies.Concat(hostDependencies)
             .Distinct()
             .OrderBy(edge => edge.FeatureId, StringComparer.Ordinal)

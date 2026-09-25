@@ -24,6 +24,7 @@ internal static class ElsaCli
 
         var composition = new Command("composition", "Inspect and review feature selections.")
         {
+            CompositionInitCommand.Build(),
             CompositionPlanCommand.Build(),
             CompositionImportCommand.Build(),
             CompositionGenerateCommand.Build()

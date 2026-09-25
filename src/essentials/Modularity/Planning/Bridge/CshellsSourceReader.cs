@@ -95,7 +95,11 @@ public static class CshellsSourceReader
             if (previous is not null)
             {
                 var baseValue = effective[previous].Value;
-                if ((baseValue.ValueKind == JsonValueKind.Object) != (value.ValueKind == JsonValueKind.Object))
+                // CShells accepts an overlay false as an environment-local disable for a base
+                // feature object. The inverse (base false, overlay object) stays unsupported:
+                // the base disable wins in the pinned package.
+                if ((baseValue.ValueKind == JsonValueKind.Object) != (value.ValueKind == JsonValueKind.Object) &&
+                    !(baseValue.ValueKind == JsonValueKind.Object && value.ValueKind == JsonValueKind.False))
                     throw Invalid();
             }
 

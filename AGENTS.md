@@ -255,5 +255,5 @@ New work should move toward this rule:
 <!-- SPECKIT START -->
 For additional context about technologies, project structure, shell commands, contracts, and
 validation scenarios for the active work unit, read
-`specs/177-file-deployed-activation/plan.md`.
+`specs/178-embedded-runtime-profile/plan.md`.
 <!-- SPECKIT END -->
