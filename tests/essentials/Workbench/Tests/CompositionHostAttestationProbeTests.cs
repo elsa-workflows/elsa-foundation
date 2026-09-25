@@ -19,6 +19,43 @@ public sealed class CompositionHostAttestationProbeTests
     private const string PackageId = "Elsa.AttestationProbe.Loadable";
 
     [Fact]
+    public async Task Shell_reload_can_advance_while_startup_bound_host_configuration_stays_old()
+    {
+        const string oldOrigin = "https://old-studio.example.invalid";
+        const string newOrigin = "https://new-studio.example.invalid";
+        await using var host = await WorkbenchProcess.StartAsync(WorkbenchShell.Development, directory =>
+        {
+            WorkbenchConfigurationFile.WriteValue(
+                Path.Join(directory, "appsettings.Development.json"),
+                ["Cors", "AllowedOrigins", "0"], oldOrigin);
+            WriteSetting(Path.Join(directory, "shells.Development.json"), 401);
+        });
+
+        Assert.True(await CorsAllowsAsync(host, oldOrigin));
+        Assert.False(await CorsAllowsAsync(host, newOrigin));
+        var before = await ReadinessAsync(host);
+
+        WorkbenchConfigurationFile.WriteValue(
+            Path.Join(host.ContentRoot, "appsettings.Development.json"),
+            ["Cors", "AllowedOrigins", "0"], newOrigin);
+        WriteSetting(Path.Join(host.ContentRoot, "shells.Development.json"), 402);
+        await Task.Delay(TimeSpan.FromMilliseconds(1200));
+
+        using var response = await host.ManagementClient.PostAsync("/_admin/shells/reload/default", null);
+        response.EnsureSuccessStatusCode();
+        var reload = (await response.Content.ReadFromJsonAsync<JsonNode>())!;
+        Assert.True((bool?)reload["success"] is true);
+        var after = await ReadinessAsync(host);
+        Assert.True((int?)after["generation"] > (int?)before["generation"]);
+
+        // CShells reads the changed shell source, while Program.cs's root CORS policy retains its startup value.
+        var blueprint = await host.ManagementClient.GetStringAsync("/_admin/shells/default/blueprint");
+        Assert.Contains("402", blueprint, StringComparison.Ordinal);
+        Assert.True(await CorsAllowsAsync(host, oldOrigin));
+        Assert.False(await CorsAllowsAsync(host, newOrigin));
+    }
+
+    [Fact]
     public async Task All_six_bundle_files_and_process_override_have_no_generation_bound_marker()
     {
         var overrideKey = $"CShells:Shells:default:Features:{FeatureSetting}:MaxSegmentCheckpoints";
@@ -132,6 +169,16 @@ public sealed class CompositionHostAttestationProbeTests
         using var response = await host.Client.GetAsync("/health/ready");
         Assert.True(response.IsSuccessStatusCode);
         return (await response.Content.ReadFromJsonAsync<JsonNode>())!;
+    }
+
+    private static async Task<bool> CorsAllowsAsync(WorkbenchProcess host, string origin)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/");
+        request.Headers.Add("Origin", origin);
+        using var response = await host.Client.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        return response.Headers.TryGetValues("Access-Control-Allow-Origin", out var allowed) &&
+               allowed.Contains(origin, StringComparer.Ordinal);
     }
 
     private static void WriteSetting(string path, int value) =>
