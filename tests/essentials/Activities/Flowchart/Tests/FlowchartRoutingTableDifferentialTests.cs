@@ -95,12 +95,18 @@ public sealed class FlowchartRoutingTableDifferentialTests
                 Connection("a", "c", "False")
             ]);
 
-        RoutingStructureMaterializationDiagnostics.Reset();
-        var first = node.GetOrAddRoutingStructure(FlowchartGraph.From);
-        var second = node.GetOrAddRoutingStructure(FlowchartGraph.From);
+        var materializations = 0;
+        FlowchartGraph Build(ExecutableNode executableNode)
+        {
+            materializations++;
+            return FlowchartGraph.From(executableNode);
+        }
+
+        var first = node.GetOrAddRoutingStructure(Build);
+        var second = node.GetOrAddRoutingStructure(Build);
 
         Assert.Same(first, second);
-        Assert.Equal(1, RoutingStructureMaterializationDiagnostics.Count);
+        Assert.Equal(1, materializations);
 
         // The memo must not diverge from routing the walk would produce off a freshly built graph.
         var fresh = FlowchartGraph.From(node);
