@@ -4,7 +4,7 @@
 
 **Tests**: Required by the independent tests and success criteria in spec 177. Write a focused failing behavior test before each implementation slice. The list is future implementation work; #2036 itself delivers only specification artifacts.
 
-**Readiness**: T001–T009 (US1) are delivered by #2038. T010–T011 are the #2039 host-attestation spike; its current-host decision is no-go for exact candidate matching. #2041 delivers only T013–T014's safe default-shell reload/readback subset. T012 and T015–T021 still require separate deployment-receipt, marker, and recovery work. No current implementation may claim candidate-match verification.
+**Readiness**: T001–T009 (US1) are delivered by #2038. T010–T011 are the #2039 host-attestation spike; its current-host decision is no-go for exact candidate matching. #2041 delivered only T013–T014's safe default-shell reload/readback subset. #2046 ruled out complete Workbench hot-reload attribution; #2060 proved the conditional fresh-process boundary and mixed-source copy risk. T012 and T015–T021 remain unstarted and must be refined for process restart versus eligible shell-only reload before implementation. No current implementation may claim candidate-match verification.
 
 The #2042 follow-up records a conditional CShells generation seam and a continued no-go for current Workbench source/package correlation in the [attestation report](../../docs/reports/runtime-composition/source-generation-attestation.md). It does not complete T015 or relax the remaining proof gate.
 
@@ -50,9 +50,9 @@ The #2042 follow-up records a conditional CShells generation seam and a continue
 
 ## Phase 5: User Story 2 - Verify an externally deployed composition (P2)
 
-**Goal**: Correlate an externally attested complete deployment with a sanitized host reload, default-shell generation, readiness, and (only if T010 passed) exact candidate match.
+**Goal**: Correlate an externally attested complete deployment with a fresh-process start for startup-bound changes or an eligible shell-only reload, default-shell generation, readiness, and exact candidate match only after the later source/package proof gates pass.
 
-**Independent test**: Supply a trusted test deployment receipt and disposable host independently of US1's CLI. A successful reload shows new generation/readiness; mismatched or absent attestation never returns `candidateMatch=verified`.
+**Independent test**: Supply a trusted test deployment receipt and disposable host independently of US1's CLI. A successful restart reports process identity and shell readiness; an eligible reload reports its generation. Mismatched or absent attestation never returns `candidateMatch=verified`.
 
 ### Tests for User Story 2
 
@@ -62,16 +62,16 @@ The #2042 follow-up records a conditional CShells generation seam and a continue
 ### Implementation for User Story 2
 
 - [X] T014 [US2] Add Workbench-root, management-key-protected default-shell GET observation and POST reload in `src/apps/Elsa.Workbench/Composition/CompositionActivationObservationEndpoints.cs`; project only generation/readiness/status with `candidateMatch=unverified`, never relay blueprint configuration or raw exception text, and exclude these root routes from lazy shell resolution.
-- [ ] T015 [US2] Implement the generation-bound marker only through the seam proven by T010 in `src/apps/Elsa.Workbench/Composition/CompositionGenerationMarker.cs` and wire its authenticated observation in `src/apps/Elsa.Workbench/Program.cs`, preserving ADR 0037's server-side key boundary; otherwise record candidate match as unverified.
+- [ ] T015 [US2] After a later complete source/override and package-cohort proof, implement a process- and generation-bound marker through that proven seam, preserving ADR 0037's server-side key boundary; until then record candidate match as unverified. The previously proposed `CompositionGenerationMarker.cs` location is illustrative, not an implementation-ready contract.
 - [ ] T016 [US2] Reconcile the host observation and external receipt into the status dimensions in `src/apps/Elsa.Workbench/Composition/CompositionActivationOutcome.cs`; report observed shell readiness separately from unchecked package, connection and migration facts.
 
 **Checkpoint**: US2 can report a real active generation without overclaiming exact candidate identity. A verified match requires T010's accepted proof and the matching test fixture.
 
 ## Phase 6: User Story 3 - Recover from failed or uncertain activation (P3)
 
-**Goal**: Preserve/read back the prior active generation after a failed candidate, and require a fresh repair or external rollback decision before another reload.
+**Goal**: Read back the active process/generation after a failed candidate and require a fresh repair or external rollback decision before another restart or eligible reload. A previous process is available only when the deployment topology retains and observes it.
 
-**Independent test**: With a supplied test deployment owner, inject initializer failure after a complete switch and a lost reload response. The prior generation stays ready; current deployment and active generation are read before retry; repair/rollback plus reload yields an explicit new outcome.
+**Independent test**: With a supplied test deployment owner, inject initializer failure during an eligible reload and separately fail a fresh-process start. Read current deployment and active process/generation before retry; report a previous ready instance only when observed. Repair/rollback plus restart or eligible reload yields an explicit new outcome.
 
 ### Tests for User Story 3
 
@@ -81,7 +81,7 @@ The #2042 follow-up records a conditional CShells generation seam and a continue
 ### Implementation for User Story 3
 
 - [ ] T019 [US3] Add readback-before-retry and safe `uncertain`/`deployment-changed-not-active` evaluation in `src/apps/Elsa.Workbench/Composition/CompositionActivationOutcome.cs`; do not auto-replay a stale candidate ID.
-- [ ] T020 [US3] Keep rollback as an explicit external deployment action in `src/apps/Elsa.Workbench/Composition/CompositionActivationObserver.cs`; observe the resulting reload/generation without writing host files or data stores.
+- [ ] T020 [US3] Keep rollback as an explicit external deployment action; observe the resulting restart/process or eligible reload/generation without writing host files or data stores. Revisit the proposed `CompositionActivationObserver.cs` location after the deployment-owner contract is fixed.
 - [ ] T021 [US3] Run the disposable failure, response-loss, repair and rollback scenarios in `specs/177-file-deployed-activation/quickstart.md`, scanning all outward results for connection/unknown-setting canaries, key material, blueprint data and raw exceptions.
 
 **Checkpoint**: Failure and recovery states are independently observable. No successful status implies schema or data rollback.
@@ -93,7 +93,7 @@ The #2042 follow-up records a conditional CShells generation seam and a continue
 
 ## Dependencies and execution order
 
-T001–T002 prepare the fixture/contract; T003–T004 confirm the existing source/output seam. T005–T006 are written before T007–T008 behavior so they show the missing handoff; T009 closes US1 independently. T010–T011 are the separate host-attestation gate. T012–T016 (US2) require a decision from that gate before any verified-match implementation claim; T017–T021 (US3) require the same result plus a working deployment receipt/host observer. T022–T023 apply to each scoped implementation PR, not only a final combined change. The program's one-active-leaf rule still governs issue/PR delivery.
+T001–T002 prepare the fixture/contract; T003–T004 confirm the existing source/output seam. T005–T006 are written before T007–T008 behavior so they show the missing handoff; T009 closes US1 independently. T010–T011 are the separate host-attestation gate. The #2046/#2060 findings require a trusted complete-artifact owner and restart-aware source/override and package proof before T015 or verified-match claims. T012–T016 (US2) and T017–T021 (US3) must be refined against that boundary and a working deployment receipt/host observer. T022–T023 apply to each scoped implementation PR, not only a final combined change. The program's one-active-leaf rule still governs issue/PR delivery.
 
 ## Parallel opportunities
 
