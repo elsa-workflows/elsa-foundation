@@ -214,3 +214,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [173-shared-persistence](../../specs/173-shared-persistence/spec.md) | Shared persistence resources | In progress — #1967 published in PR #1973; #1968 merged in PR #1974; #1969 diagnostics implementation active | - | 45 | 0 | retained, deferred |
 | [174-profile-selection-planner](../../specs/174-profile-selection-planner/spec.md) | Pinned profile selection planner | Implemented — #1986 pure planner; live-profile acceptance remains separate | - | 23 | 1 | - |
 | [175-offline-composition-plan](../../specs/175-offline-composition-plan/spec.md) | Offline composition plan command | Implemented — #2001 offline command delivery | - | 16 | 0 | - |
+| [176-composition-file-bridge](../../specs/176-composition-file-bridge/spec.md) | Local composition file bridge | Draft | - | 0 | 0 | deferred |
