@@ -66,6 +66,15 @@ public static class SolutionFilterGenerator
         return SelectRoots(manifest, ReadSolution(repo, manifest), profile);
     }
 
+    /// <summary>Returns the validated, manifest-owned generated filter paths.</summary>
+    public static IReadOnlyList<string> GetOutputPaths(RepoContext repo)
+    {
+        var profiles = ReadManifest(repo).Profiles;
+        foreach (var profile in profiles)
+            ValidateProfile(profile);
+        return profiles.Select(profile => Normalize(profile.OutputPath)).ToArray();
+    }
+
     /// <summary>Returns the validated solution graph for impact checks that need reverse consumers.</summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<string>> GetProjectReferences(RepoContext repo)
     {

@@ -26,6 +26,18 @@ public static class SolutionFilterGeneratorContractTests
                 "Package selectors must use parsed PackageReference elements, ignore comment text, and follow "
                 + "ProjectReference edges so a project that only reaches the package transitively still counts.");
             AssertProjects(root, "Fast.slnf", ["tests/Comment.csproj"]);
+            Assert(SolutionFilterGenerator.Check(repo) == 0,
+                "Fresh manifest-owned solution filters must pass the independent freshness gate.");
+            var featureFilterPath = Path.Join(root, "Feature.slnf");
+            File.AppendAllText(featureFilterPath, " ");
+            Assert(SolutionFilterGenerator.Check(repo) == 1,
+                "A changed generated filter must fail the independent freshness gate.");
+            SolutionFilterGenerator.Generate(repo);
+            var orphanFilterPath = Path.Join(root, "Elsa.Server.Obsolete.slnf");
+            File.WriteAllText(orphanFilterPath, "{}");
+            Assert(SolutionFilterGenerator.Check(repo) == 1,
+                "An unlisted Elsa.Server filter must fail the independent freshness gate.");
+            File.Delete(orphanFilterPath);
 
             var first = File.ReadAllBytes(Path.Join(root, "Feature.slnf"));
             SolutionFilterGenerator.Generate(repo);
