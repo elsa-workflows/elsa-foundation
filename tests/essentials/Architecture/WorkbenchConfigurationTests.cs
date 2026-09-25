@@ -1,5 +1,8 @@
+using CShells;
+using CShells.Lifecycle.Blueprints;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 using YamlDotNet.RepresentationModel;
@@ -8,6 +11,133 @@ namespace Elsa.Architecture.Tests;
 
 public sealed class WorkbenchConfigurationTests
 {
+    [Fact]
+    public async Task Pinned_cshells_package_merges_object_map_settings_and_disabled_state()
+    {
+        const string baseJson = """
+            {"CShells":{"Shells":{"default":{"Features":{"A":{"Flag":false,"Limit":0,"Optional":null,"Empty":"","EmptyObject":{},"EmptyArray":[]},"B":false}}}}}
+            """;
+        const string overlayJson = """
+            {"CShells":{"Shells":{"default":{"Features":{"A":{"Flag":true}}}}}}
+            """;
+
+        var shell = await ComposePinnedShellAsync(baseJson, overlayJson);
+
+        Assert.Contains("A", shell.EnabledFeatures);
+        Assert.Contains("B", shell.DisabledFeatures);
+        Assert.Equal("True", shell.ConfigurationData["A:Flag"]);
+        Assert.Equal("0", shell.ConfigurationData["A:Limit"]);
+        Assert.Equal("", shell.ConfigurationData["A:Empty"]);
+        Assert.DoesNotContain("A:Optional", shell.ConfigurationData.Keys);
+        Assert.DoesNotContain("A:EmptyObject", shell.ConfigurationData.Keys);
+        Assert.Equal("", shell.ConfigurationData["A:EmptyArray"]);
+
+        using var raw = JsonDocument.Parse(baseJson);
+        var feature = raw.RootElement.GetProperty("CShells").GetProperty("Shells")
+            .GetProperty("default").GetProperty("Features").GetProperty("A");
+        Assert.Equal(JsonValueKind.False, feature.GetProperty("Flag").ValueKind);
+        Assert.Equal(JsonValueKind.Number, feature.GetProperty("Limit").ValueKind);
+        Assert.Equal(JsonValueKind.Null, feature.GetProperty("Optional").ValueKind);
+        Assert.Equal(JsonValueKind.String, feature.GetProperty("Empty").ValueKind);
+        Assert.Equal(JsonValueKind.Object, feature.GetProperty("EmptyObject").ValueKind);
+        Assert.Equal(JsonValueKind.Array, feature.GetProperty("EmptyArray").ValueKind);
+    }
+
+    [Fact]
+    public async Task Pinned_cshells_package_treats_array_enabled_field_as_setting()
+    {
+        const string json = """
+            {"CShells":{"Shells":{"default":{"Features":["B",{"Name":"A","Enabled":false,"Limit":0}]}}}}
+            """;
+
+        var shell = await ComposePinnedShellAsync(json);
+
+        Assert.Contains("A", shell.EnabledFeatures);
+        Assert.Contains("B", shell.EnabledFeatures);
+        Assert.Empty(shell.DisabledFeatures);
+        Assert.Equal("False", shell.ConfigurationData["A:Enabled"]);
+        Assert.Equal("0", shell.ConfigurationData["A:Limit"]);
+    }
+
+    [Fact]
+    public async Task Pinned_cshells_package_merges_array_overlays_by_index()
+    {
+        const string baseJson = """
+            {"CShells":{"Shells":{"default":{"Features":["A","B"]}}}}
+            """;
+        const string overlayJson = """
+            {"CShells":{"Shells":{"default":{"Features":["C"]}}}}
+            """;
+
+        var shell = await ComposePinnedShellAsync(baseJson, overlayJson);
+
+        Assert.Equal(["C", "B"], shell.EnabledFeatures);
+    }
+
+    [Fact]
+    public async Task Pinned_cshells_package_rejects_cross_shape_overlay()
+    {
+        const string baseJson = """
+            {"CShells":{"Shells":{"default":{"Features":{"A":true}}}}}
+            """;
+        const string overlayJson = """
+            {"CShells":{"Shells":{"default":{"Features":["B"]}}}}
+            """;
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => ComposePinnedShellAsync(baseJson, overlayJson));
+
+        Assert.Contains("ambiguous 'Features' section", error.Message);
+    }
+
+    [Fact]
+    public async Task Pinned_cshells_package_rejects_case_equivalent_array_feature_ids()
+    {
+        const string json = """
+            {"CShells":{"Shells":{"default":{"Features":["A","a"]}}}}
+            """;
+        const string baseJson = """
+            {"CShells":{"Shells":{"default":{"Features":["A","B"]}}}}
+            """;
+        const string overlayJson = """
+            {"CShells":{"Shells":{"default":{"Features":["b"]}}}}
+            """;
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => ComposePinnedShellAsync(json));
+        var layeredError = await Assert.ThrowsAsync<InvalidOperationException>(() => ComposePinnedShellAsync(baseJson, overlayJson));
+
+        Assert.Contains("duplicate configured feature name", error.Message);
+        Assert.Contains("duplicate configured feature name", layeredError.Message);
+    }
+
+    [Fact]
+    public async Task Pinned_cshells_package_collapses_null_and_empty_feature_objects()
+    {
+        const string nullJson = """
+            {"CShells":{"Shells":{"default":{"Features":{"A":null}}}}}
+            """;
+        const string emptyJson = """
+            {"CShells":{"Shells":{"default":{"Features":{"A":{}}}}}}
+            """;
+
+        var nullShell = await ComposePinnedShellAsync(nullJson);
+        var emptyShell = await ComposePinnedShellAsync(emptyJson);
+
+        Assert.Equal(nullShell.EnabledFeatures, emptyShell.EnabledFeatures);
+        Assert.Equal(nullShell.ConfigurationData, emptyShell.ConfigurationData);
+    }
+
+    private static async Task<ShellSettings> ComposePinnedShellAsync(string baseJson, string? overlayJson = null)
+    {
+        using var baseStream = new MemoryStream(Encoding.UTF8.GetBytes(baseJson));
+        var builder = new ConfigurationBuilder().AddJsonStream(baseStream);
+        using var overlayStream = overlayJson is null ? null : new MemoryStream(Encoding.UTF8.GetBytes(overlayJson));
+        if (overlayStream is not null)
+            builder.AddJsonStream(overlayStream);
+
+        var section = builder.Build().GetSection("CShells:Shells:default");
+        return await new ConfigurationShellBlueprint("default", section).ComposeAsync();
+    }
+
     [Fact]
     public void Server_environment_variables_override_shell_json_and_command_line_remains_last()
     {

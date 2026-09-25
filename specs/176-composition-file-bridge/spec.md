@@ -41,7 +41,7 @@ From accepted authored intent and explicit local sources, a developer previews a
 
 ### Edge Cases
 
-- Object-map and array feature shapes preserve explicit disabled state. Duplicate IDs within one file/layer, including case-equivalent IDs, refuse; a selected overlay may override an ID from the base layer.
+- Object-map `false` preserves explicit disabled state. Array entries are enabled declarations in the pinned CShells package; an `Enabled` field on an array object is a setting, not a disable marker. Import may preserve an array's raw source and enabled entries, but an authored explicit removal targeting array syntax refuses in v1. Duplicate IDs within one file/layer, including case-equivalent IDs, refuse; a selected object-map overlay may override an ID from the base layer. Array overlays merge by numeric index, so an effective duplicate also refuses.
 - Missing, unreadable, malformed, or duplicated selected files refuse; a change to any copied file refuses with a stable class and no partial published output.
 - Explicit false, zero, null, empty string, empty object, and empty array remain distinguishable in source-preserving output.
 - An inline credential or unknown nonempty field cannot become a portable value by inference. A named external reference is not proof that it resolves or that a database is reachable.
@@ -53,7 +53,7 @@ From accepted authored intent and explicit local sources, a developer previews a
 ### Functional Requirements
 
 - **FR-001**: The bridge MUST require an explicit local host source, selected shell, selected environment, and pinned catalog. It MUST identify selected source files and provenance without treating the caller process's environment as host evidence.
-- **FR-002**: Import preview MUST distinguish authored feature selections from effective values in selected base and overlay files, including disabled entries and explicit false/zero/null/empty values. It MUST preserve unknown feature IDs and JSON fields in the local source association.
+- **FR-002**: Import preview MUST distinguish authored feature selections from effective values in selected base and overlay files, including object-map disabled entries and explicit false/zero/null/empty values. It MUST preserve unknown feature IDs and JSON fields in the local source association. An array entry MUST NOT be interpreted as explicitly disabled from a field named `Enabled` or `State`.
 - **FR-003**: The first slice MUST use a local, invocation-scoped source association. It MUST NOT add a source layer or raw source bundle to the portable authored schema. Every file copied into a candidate, including unselected environment files, MUST belong to the frozen source snapshot and be checked for change before publication; a changed snapshot refuses.
 - **FR-004**: Acceptance MUST be an explicit action on a displayed preview. The accepted v1 document MUST be pinned to the supplied catalog, have no invented starting profile or package locks, and record exact enabled and disabled decisions without a second feature-selection algorithm.
 - **FR-005**: Portable authored output MUST contain only reviewed safe values and logical external references. Known named persistence references MAY be carried as names; provider, connection, secret material, unknown opaque values, and host-owned/private store settings remain local unless separately reviewed and mapped under a later contract.
@@ -76,7 +76,7 @@ From accepted authored intent and explicit local sources, a developer previews a
 
 ### Measurable Outcomes
 
-- **SC-001**: Across the two-shell fixture and Workbench source sample, every selected feature ID and explicit enabled/disabled state is accounted for in preview; zero unknown IDs or unrelated JSON nodes disappear from generated files.
+- **SC-001**: Across the two-shell fixture and Workbench source sample, every selected feature ID and every explicit state the source shape can express is accounted for in preview; zero unknown IDs or unrelated JSON nodes disappear from generated files.
 - **SC-002**: All false/zero/null/empty and base/overlay provenance examples produce documented distinctions; repeated runs over unchanged inputs produce the same redacted preview and semantically equivalent generated candidate.
 - **SC-003**: Canary credentials placed in a connection value and an unknown setting appear zero times in standard output, standard error, logs, plan output, and portable authored output. Existing values may appear only in local source/generated host files.
 - **SC-004**: Every refusal/cancellation example leaves source files byte-identical and publishes zero partial destination files; a successful write changes only reviewed candidate fields.
