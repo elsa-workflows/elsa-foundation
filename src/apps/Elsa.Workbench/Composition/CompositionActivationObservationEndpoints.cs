@@ -12,6 +12,7 @@ namespace Elsa.Workbench.Composition;
 public static class CompositionActivationObservationEndpoints
 {
     private const string CandidateMatch = "unverified";
+    private static readonly string ProcessInstanceId = Guid.NewGuid().ToString("N");
 
     public static IEndpointRouteBuilder MapCompositionActivationObservation(this IEndpointRouteBuilder endpoints)
     {
@@ -24,8 +25,8 @@ public static class CompositionActivationObservationEndpoints
             .AddEndpointFilter(ManagementApiKeyAuthentication.RequireAsync);
 
         group.MapGet("/observation", (IShellRegistry registry, ShellReadinessState readiness,
-                IOptions<ShellReadinessOptions> options, WorkbenchProcessInstance process) =>
-            Results.Json(Observe(registry, readiness, options.Value.DefaultShellName, process)));
+                IOptions<ShellReadinessOptions> options) =>
+            Results.Json(Observe(registry, readiness, options.Value.DefaultShellName)));
         group.MapPost("/reload", ReloadAsync);
         return endpoints;
     }
@@ -34,11 +35,10 @@ public static class CompositionActivationObservationEndpoints
         IShellRegistry registry,
         ShellReadinessState readiness,
         IOptions<ShellReadinessOptions> options,
-        IHostApplicationLifetime lifetime,
-        WorkbenchProcessInstance process)
+        IHostApplicationLifetime lifetime)
     {
         var shellName = options.Value.DefaultShellName;
-        var previousGeneration = Observe(registry, readiness, shellName, process).ActiveGeneration;
+        var previousGeneration = Observe(registry, readiness, shellName).ActiveGeneration;
         int? reportedGeneration = null;
         var reloadFailed = false;
         try
@@ -55,13 +55,13 @@ public static class CompositionActivationObservationEndpoints
         {
             // The host cannot establish whether an interrupted/throwing reload promoted a shell.
             // Do not serialize provider exceptions or raw configuration into this response.
-            var uncertain = Observe(registry, readiness, shellName, process);
+            var uncertain = Observe(registry, readiness, shellName);
             return Results.Json(new ReloadObservation("reload-uncertain", previousGeneration,
                 reportedGeneration, uncertain.ActiveGeneration, uncertain.Ready, CandidateMatch,
                 uncertain.ProcessInstanceId));
         }
 
-        var current = Observe(registry, readiness, shellName, process);
+        var current = Observe(registry, readiness, shellName);
         var outcome = reloadFailed
             ? current.ActiveGeneration == previousGeneration ? "reload-failed" : "reload-uncertain"
             : current.Ready && current.ActiveGeneration == reportedGeneration ? "ready" : "reload-uncertain";
@@ -69,14 +69,13 @@ public static class CompositionActivationObservationEndpoints
             current.ActiveGeneration, current.Ready, CandidateMatch, current.ProcessInstanceId));
     }
 
-    private static ShellObservation Observe(IShellRegistry registry, ShellReadinessState readiness, string shellName,
-        WorkbenchProcessInstance process)
+    private static ShellObservation Observe(IShellRegistry registry, ShellReadinessState readiness, string shellName)
     {
         var active = registry.GetActive(shellName);
         var isActive = active?.State == ShellLifecycleState.Active;
         var ready = isActive && readiness.Snapshot.Status is ShellReadinessStatus.Ready or ShellReadinessStatus.Disabled;
         return new ShellObservation(shellName, isActive ? active!.Descriptor.Generation : null, ready,
-            CandidateMatch, process.Id);
+            CandidateMatch, ProcessInstanceId);
     }
 
     private sealed record ShellObservation(string Shell, int? ActiveGeneration, bool Ready, string CandidateMatch,
@@ -90,9 +89,4 @@ public static class CompositionActivationObservationEndpoints
         bool Ready,
         string CandidateMatch,
         string ProcessInstanceId);
-}
-
-internal sealed class WorkbenchProcessInstance
-{
-    public string Id { get; } = Guid.NewGuid().ToString("N");
 }
