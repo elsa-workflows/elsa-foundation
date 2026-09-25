@@ -26,9 +26,9 @@ public sealed class CompositionHostAttestationProbeTests
         await using var host = await WorkbenchProcess.StartAsync(WorkbenchShell.Development, directory =>
         {
             WorkbenchConfigurationFile.WriteValue(
-                Path.Combine(directory, "appsettings.Development.json"),
+                Path.Join(directory, "appsettings.Development.json"),
                 ["Cors", "AllowedOrigins", "0"], oldOrigin);
-            WriteSetting(Path.Combine(directory, "shells.Development.json"), 401);
+            WriteSetting(Path.Join(directory, "shells.Development.json"), 401);
         });
 
         Assert.True(await CorsAllowsAsync(host, oldOrigin));
@@ -36,9 +36,9 @@ public sealed class CompositionHostAttestationProbeTests
         var before = await ReadinessAsync(host);
 
         WorkbenchConfigurationFile.WriteValue(
-            Path.Combine(host.ContentRoot, "appsettings.Development.json"),
+            Path.Join(host.ContentRoot, "appsettings.Development.json"),
             ["Cors", "AllowedOrigins", "0"], newOrigin);
-        WriteSetting(Path.Combine(host.ContentRoot, "shells.Development.json"), 402);
+        WriteSetting(Path.Join(host.ContentRoot, "shells.Development.json"), 402);
         await Task.Delay(TimeSpan.FromMilliseconds(1200));
 
         using var response = await host.ManagementClient.PostAsync("/_admin/shells/reload/default", null);
