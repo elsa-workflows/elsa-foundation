@@ -68,14 +68,26 @@ internal sealed class CompositionBridgeFixture : IDisposable
     public Task<PseudoTerminalCliRun> RunGenerateInteractiveAsync(
         string response,
         string? sourceFileToChangeAtReview = null,
-        string? outputDirectory = null) => PseudoTerminalCli.RunElsaAsync(
-        "Type generate to write the candidate: ", response,
-        ["composition", "generate", "--host-dir", HostDirectory, "--shell", "default",
+        string? outputDirectory = null,
+        string? handoffHost = null)
+    {
+        var args = new List<string>
+        {
+            "composition", "generate", "--host-dir", HostDirectory, "--shell", "default",
             "--environment", "Production", "--catalog", CatalogPath,
             "--composition", OutputPath, "--setting-review", ReviewPath,
-            "--output-dir", outputDirectory ?? CandidateDirectory],
-        beforeResponsePath: sourceFileToChangeAtReview is null ? null : Path.Join(HostDirectory, sourceFileToChangeAtReview),
-        beforeResponseText: sourceFileToChangeAtReview is null ? null : "{}");
+            "--output-dir", outputDirectory ?? CandidateDirectory
+        };
+        if (handoffHost is not null)
+        {
+            args.Add("--handoff-host");
+            args.Add(handoffHost);
+        }
+        return PseudoTerminalCli.RunElsaAsync(
+            "Type generate to write the candidate: ", response, args.ToArray(),
+            beforeResponsePath: sourceFileToChangeAtReview is null ? null : Path.Join(HostDirectory, sourceFileToChangeAtReview),
+            beforeResponseText: sourceFileToChangeAtReview is null ? null : "{}");
+    }
 
     public void WriteAcceptedComposition(int limit = 0)
     {

@@ -69,6 +69,8 @@ specs/177-file-deployed-activation/
 
 **Structure decision**: The first code change stays in CLI/Planning and publishes no runtime-ready result. A future Workbench-owned observer needs its own reviewed design and must not proxy the existing management `GET /{name}` blueprint payload, which can contain secrets. Do not create a generic management library or extra EF test project for this boundary.
 
+The accepted authored v1 schema remains the input. The safe handoff is a separate, optional CLI output requested with an explicit host alias; it adds no top-level authored field and carries no source bytes or private change token.
+
 ## Phase 0: Research
 
 [research.md](research.md) resolves candidate/deployment authority, why shareable raw file digests are inappropriate for secret-bearing configuration, current CShells reload/readiness evidence, and the generation-bound attestation gap. The gap is a **gate**, not an implicit assumption that the existing APIs already prove candidate equality.

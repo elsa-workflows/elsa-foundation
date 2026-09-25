@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-25
 
-**Status**: Draft — specification for #2036; no activation implementation is claimed
+**Status**: In progress — #2038 adds the file-only candidate handoff (US1); deployment, activation, and recovery (US2/US3) remain unimplemented
 
 **Input**: [Issue #2036](https://github.com/elsa-workflows/elsa-foundation/issues/2036), the [apply/recovery boundary](../../docs/reports/runtime-composition/apply-recovery-boundary.md), and the delivered [file bridge](../176-composition-file-bridge/spec.md).
 

@@ -17,6 +17,7 @@ internal static class CompositionGenerateCommand
         WriteIndented = true,
         Converters = { new JsonStringEnumConverter() }
     };
+    private static readonly JsonSerializerOptions s_handoffJson = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     public static Command Build()
     {
@@ -27,9 +28,10 @@ internal static class CompositionGenerateCommand
         var composition = Required("--composition", "Accepted authored composition JSON.");
         var review = new Option<string>("--setting-review") { Description = "Optional local setting safety review JSON." };
         var output = Required("--output-dir", "Fresh candidate host-file directory.");
+        var handoffHost = new Option<string>("--handoff-host") { Description = "Safe host alias for an optional candidate handoff. Does not deploy or activate." };
         var command = new Command("generate", "Review and publish a fresh candidate host-file directory.")
         {
-            host, shell, environment, catalog, composition, review, output
+            host, shell, environment, catalog, composition, review, output, handoffHost
         };
 
         command.SetAction((result, cancellationToken) => Task.FromResult(Guarded(() => Run(
@@ -40,6 +42,7 @@ internal static class CompositionGenerateCommand
             result.GetRequiredValue(composition),
             result.GetValue(review),
             result.GetRequiredValue(output),
+            result.GetValue(handoffHost),
             cancellationToken), "generated")));
         return command;
     }
@@ -52,6 +55,7 @@ internal static class CompositionGenerateCommand
         string compositionPath,
         string? reviewPath,
         string outputDirectory,
+        string? handoffHost,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -71,6 +75,13 @@ internal static class CompositionGenerateCommand
         if (!string.Equals(Console.ReadLine(), "generate", StringComparison.Ordinal))
             throw CliRefusal.Usage("bridge-review-required", "The candidate diff was not approved.");
 
+        var handoff = handoffHost is null ? null : CompositionHandoff.Create(
+            handoffHost,
+            source.Snapshot,
+            authored.Catalog,
+            authored.Accepted.FeatureIds,
+            candidate.Files,
+            candidate.Plan.Findings.Select(finding => finding.Code));
         cancellationToken.ThrowIfCancellationRequested();
         CompositionFilePublisher.PublishCandidate(
             outputDirectory,
@@ -78,8 +89,28 @@ internal static class CompositionGenerateCommand
             candidate.Files,
             source.VerifyUnchanged,
             cancellationToken);
+        if (handoff is not null)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            VerifyHandoffSource(source);
+            CompositionHandoffFileVerifier.Verify(outputDirectory, candidate.Files);
+            VerifyHandoffSource(source);
+            cancellationToken.ThrowIfCancellationRequested();
+            Console.Out.WriteLine(JsonSerializer.Serialize(new { Handoff = handoff }, s_handoffJson));
+        }
         Console.Out.WriteLine("Candidate host files generated.");
         return ToolExitCode.Success;
     }
 
+    private static void VerifyHandoffSource(CompositionFileSource source)
+    {
+        try
+        {
+            source.VerifyUnchanged();
+        }
+        catch (CliRefusal refusal) when (refusal.Code == "bridge-source-changed")
+        {
+            throw CliRefusal.Resolution("candidate-changed", "The candidate source changed after review; generate a fresh candidate.");
+        }
+    }
 }

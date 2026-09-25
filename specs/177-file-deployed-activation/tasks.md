@@ -8,15 +8,15 @@
 
 ## Phase 1: Setup and fixture
 
-- [ ] T001 Extend the disposable two-shell base/Production/Staging fixture in `tests/essentials/Cli/Tests/Fixtures/CompositionBridge/` with explicit default-shell selection, a second copied shell, connection and unknown-field canaries, and a candidate file changed after review; keep the original spec 176 fixture behavior intact.
-- [ ] T002 Add a safe handoff JSON example and expected refusal/outcome cases to `specs/177-file-deployed-activation/contracts/activation-v1.md` and `specs/177-file-deployed-activation/quickstart.md` after validating them against the fixture; do not add an unkeyed source-file digest.
+- [X] T001 Extend the disposable two-shell base/Production/Staging fixture in `tests/essentials/Cli/Tests/Fixtures/CompositionBridge/` with explicit default-shell selection, a second copied shell, connection and unknown-field canaries, and a candidate file changed after review; keep the original spec 176 fixture behavior intact.
+- [X] T002 Add a safe handoff JSON example and expected refusal/outcome cases to `specs/177-file-deployed-activation/contracts/activation-v1.md` and `specs/177-file-deployed-activation/quickstart.md` after validating them against the fixture; do not add an unkeyed source-file digest.
 
 **Checkpoint**: One fixture has complete file roles and canaries before new code projects an identity.
 
 ## Phase 2: Foundational candidate boundary
 
-- [ ] T003 Re-run the existing selected/unselected change and publication tests in `tests/essentials/Cli/Tests/CompositionFileSourceTests.cs` and `tests/essentials/Cli/Tests/CompositionGenerateCliTests.cs`, then record any fixture mismatch in `specs/177-file-deployed-activation/research.md` before altering the bridge.
-- [ ] T004 Compare the proposed handoff fields in `specs/177-file-deployed-activation/contracts/activation-v1.md` with the strict authored v1 schema in `src/essentials/Modularity/Planning/Models/SelectionDocuments.cs`; document the separate-output boundary in `specs/177-file-deployed-activation/plan.md` so no new top-level authored field is inferred.
+- [X] T003 Re-run the existing selected/unselected change and publication tests in `tests/essentials/Cli/Tests/CompositionFileSourceTests.cs` and `tests/essentials/Cli/Tests/CompositionGenerateCliTests.cs`, then record any fixture mismatch in `specs/177-file-deployed-activation/research.md` before altering the bridge.
+- [X] T004 Compare the proposed handoff fields in `specs/177-file-deployed-activation/contracts/activation-v1.md` with the strict authored v1 schema in `src/essentials/Modularity/Planning/Models/SelectionDocuments.cs`; document the separate-output boundary in `specs/177-file-deployed-activation/plan.md` so no new top-level authored field is inferred.
 
 **Checkpoint**: Existing file-source behavior and the separate handoff output are confirmed before new behavior tests. No new shared infrastructure is needed for US1.
 
@@ -28,14 +28,14 @@
 
 ### Tests for User Story 1
 
-- [ ] T005 [P] [US1] Write failing pure tests for opaque ID scope, catalog/accepted selection, repeated file roles, unresolved facts and zero raw values in `tests/essentials/Modularity/Planning/Tests/CompositionHandoffTests.cs`.
-- [ ] T006 [P] [US1] Write failing real-process tests for selected/unselected file changes, cancellation, handoff publication and canary scans in `tests/essentials/Cli/Tests/CompositionGenerateCliTests.cs`.
+- [X] T005 [P] [US1] Write failing pure tests for opaque ID scope, catalog/accepted selection, repeated file roles, unresolved facts and zero raw values in `tests/essentials/Modularity/Planning/Tests/CompositionHandoffTests.cs`.
+- [X] T006 [P] [US1] Write failing real-process tests for selected/unselected file changes, cancellation, handoff publication and canary scans in `tests/essentials/Cli/Tests/CompositionGenerateCliTests.cs`.
 
 ### Implementation for User Story 1
 
-- [ ] T007 [US1] Implement the opaque-ID, safe file-role and unchecked-finding projection from the reviewed candidate in `src/essentials/Modularity/Planning/Bridge/CompositionHandoff.cs`; keep `AuthoredComposition` v1 unchanged and never derive a shareable raw-file hash.
-- [ ] T008 [US1] Integrate handoff generation after the existing diff approval and candidate publication in `src/essentials/Cli/CompositionGenerateCommand.cs`; recheck both the source through `CompositionFileSource.VerifyUnchanged` and every published candidate file against the reviewed in-memory bytes through `src/essentials/Cli/CompositionHandoffFileVerifier.cs` before reporting success.
-- [ ] T009 [US1] Run the handoff fixture and redaction cases in `specs/177-file-deployed-activation/quickstart.md`; compare source/candidate trees and assert no host reload, management-save, package or database call.
+- [X] T007 [US1] Implement the opaque-ID, safe file-role and unchecked-finding projection from the reviewed candidate in `src/essentials/Modularity/Planning/Bridge/CompositionHandoff.cs`; keep `AuthoredComposition` v1 unchanged and never derive a shareable raw-file hash.
+- [X] T008 [US1] Integrate handoff generation after the existing diff approval and candidate publication in `src/essentials/Cli/CompositionGenerateCommand.cs`; recheck both the source through `CompositionFileSource.VerifyUnchanged` and every published candidate file against the reviewed in-memory bytes through `src/essentials/Cli/CompositionHandoffFileVerifier.cs` before reporting success.
+- [X] T009 [US1] Run the handoff fixture and redaction cases in `specs/177-file-deployed-activation/quickstart.md`; compare source/candidate trees and assert no host reload, management-save, package or database call.
 
 **Checkpoint**: US1 is useful by itself as an operator handoff. It is a candidate label, not a deployment receipt or active-host claim. Complete its own PR before moving the program lane to the host gate.
 
@@ -86,7 +86,7 @@
 
 ## Phase 7: Polish and delivery gates
 
-- [ ] T022 Update `docs/program-goals/feature-composition-readiness.md`, `specs/177-file-deployed-activation/spec.md` status, and affected `docs/maps/` generated files only for outcomes actually delivered by the relevant PR; keep US2/US3 Draft if their host proof is still pending.
+- [X] T022 Update `docs/program-goals/feature-composition-readiness.md`, `specs/177-file-deployed-activation/spec.md` status, and affected `docs/maps/` generated files only for outcomes actually delivered by the relevant PR; keep US2/US3 Draft if their host proof is still pending.
 - [ ] T023 Run the affected CLI/Planning and rebuilt-host suites for the delivered story, `tests/essentials/Architecture/Elsa.Architecture.Tests.csproj`, `dotnet run --project tools/maps/Elsa.Maps.Generator -- check`, `git diff --check`, and a diff/redaction review; post exact-head results on each PR and verify post-merge `main` CI/Maps.
 
 ## Dependencies and execution order
