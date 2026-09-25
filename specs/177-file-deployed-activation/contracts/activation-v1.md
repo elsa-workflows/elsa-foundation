@@ -15,27 +15,30 @@ The v1 target is the configured Workbench **default shell** in one explicit envi
 
 ## Candidate handoff
 
-After explicit file-bridge review and candidate publication, the local handoff performs a fresh all-file check. A safe shareable projection may have this shape:
+Pass `--handoff-host <safe-alias>` to `composition generate` to request a handoff in the same reviewed invocation. The alias is an operator label, never inferred from the host directory path. The existing generation command remains available without a handoff. After explicit file-bridge review and candidate publication, the local handoff rechecks the source and all published candidate files. The CLI prints one compact `handoff` JSON line only after those checks succeed. The shareable projection has this shape:
 
 ```json
 {
-  "schemaVersion": "1",
-  "candidateId": "opaque-random-id",
-  "host": "selected-host-alias",
-  "shell": "default",
-  "environment": "Production",
-  "catalog": { "id": "reviewed-catalog", "version": "1", "digest": "catalog-definition-digest" },
-  "acceptedFeatureIds": ["A"],
-  "includedFileRoles": ["shells-base", "shells-selected-overlay", "appsettings-base", "appsettings-selected-overlay", "unselected-copy"],
-  "unresolved": ["package-inventory-unchecked", "connection-target-unchecked"],
-  "deploymentIntegrity": "external-attestation-required",
-  "activation": "unchecked"
+  "handoff": {
+    "schemaVersion": "1",
+    "candidateId": "opaque-random-id",
+    "host": "selected-host-alias",
+    "shell": "default",
+    "environment": "Production",
+    "catalog": { "id": "reviewed-catalog", "version": "1", "digest": "catalog-definition-digest" },
+    "acceptedFeatureIds": ["A"],
+    "includedFiles": [{ "role": "shells-base", "ordinal": 1 }, { "role": "unselected-copy", "ordinal": 1 }],
+    "unresolved": ["package-inventory-unchecked", "connection-target-unchecked"],
+    "deploymentIntegrity": "external-attestation-required",
+    "activation": "unchecked",
+    "createdAt": "2026-09-25T00:00:00Z"
+  }
 }
 ```
 
-The example is schematic; `includedFileRoles` records one entry per included file and a safe disambiguator if a role repeats, without a physical path or raw filename that can escape the selected host. It must account for unselected files copied into the candidate. The catalog digest covers reviewed public catalog definitions, not source configuration. `candidateId` is a random label for one reviewed artifact; it is **not** a content hash, signed artifact, or replay authorization. The private invocation snapshot checks source/candidate bytes before handoff; it is never serialized into this projection. A later process with only this JSON must re-review or rely on a trusted external artifact receipt before treating files as unchanged. Do not put a public unkeyed digest of secret-bearing source files into the handoff.
+The example is abbreviated: `includedFiles` contains **one entry for every copied file**, with a safe role and an ordinal that disambiguates repeated roles. It contains neither physical paths nor raw filenames. The catalog digest covers reviewed public catalog definitions, not source configuration. `candidateId` is a random label for one reviewed artifact; it is **not** a content hash, signed artifact, or replay authorization. The private invocation snapshot checks source/candidate bytes before handoff; it is never serialized into this projection. A later process with only this JSON must re-review or rely on a trusted external artifact receipt before treating files as unchanged. Do not put a public unkeyed digest of secret-bearing source files into the handoff. A failed post-publication check leaves a local directory that must be discarded or freshly reviewed; it emits no successful handoff.
 
-If any included file changes during the handoff check, return `candidate-changed` and publish no successful handoff. An absent accepted composition, catalog mismatch, unsupported file shape, non-default activation target, or incomplete candidate returns a safe refusal. The existing bridge refusal codes remain the authority for its own preview/generation stage; this contract does not rename them.
+If any included file changes during the handoff check, return `candidate-changed` and publish no successful handoff. An absent accepted composition, catalog mismatch, unsupported file shape, unsafe host alias, or incomplete candidate returns a safe refusal. File-only handoff can label another selected shell; it never asserts default-shell readiness or runtime activation. The existing bridge refusal codes remain the authority for its own preview/generation stage; this contract does not rename them.
 
 ## External deployment receipt
 

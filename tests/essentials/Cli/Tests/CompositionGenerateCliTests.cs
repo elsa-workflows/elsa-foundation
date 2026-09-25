@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Cli.Worker;
 using Xunit;
@@ -51,6 +52,72 @@ public sealed class CompositionGenerateCliTests
         Assert.Contains(UnknownCanary, File.ReadAllText(Path.Join(fixture.CandidateDirectory, "shells.json")), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Approved_generation_can_emit_a_complete_secret_safe_handoff()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        using var fixture = new CompositionBridgeFixture();
+        fixture.WriteAcceptedComposition(limit: 1);
+
+        var run = await fixture.RunGenerateInteractiveAsync("generate", handoffHost: "workbench-a");
+
+        Assert.Equal(ToolExitCode.Success, run.ExitCode);
+        var line = Assert.Single(run.Output.Split('\n'), item => item.StartsWith("{\"handoff\":", StringComparison.Ordinal));
+        using var document = JsonDocument.Parse(line);
+        var handoff = document.RootElement.GetProperty("handoff");
+        Assert.True(Guid.TryParseExact(handoff.GetProperty("candidateId").GetString(), "N", out _));
+        Assert.Equal("workbench-a", handoff.GetProperty("host").GetString());
+        Assert.Equal("default", handoff.GetProperty("shell").GetString());
+        Assert.Equal("Production", handoff.GetProperty("environment").GetString());
+        Assert.Equal(6, handoff.GetProperty("includedFiles").GetArrayLength());
+        Assert.Equal("external-attestation-required", handoff.GetProperty("deploymentIntegrity").GetString());
+        Assert.Equal("unchecked", handoff.GetProperty("activation").GetString());
+        Assert.True(Directory.Exists(fixture.CandidateDirectory));
+        Assert.DoesNotContain(fixture.HostDirectory, run.Output + run.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("shells.Staging.json", line, StringComparison.Ordinal);
+        AssertRedacted(run.Output + run.Error);
+    }
+
+    [Fact]
+    public async Task Unsafe_handoff_host_refuses_before_candidate_publication()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        using var fixture = new CompositionBridgeFixture();
+        fixture.WriteAcceptedComposition(limit: 1);
+
+        var run = await fixture.RunGenerateInteractiveAsync("generate", handoffHost: "../host");
+
+        Assert.Equal(ToolExitCode.Refusal, run.ExitCode);
+        Assert.Contains("candidate-incomplete", run.Output + run.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"handoff\":", run.Output, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(fixture.CandidateDirectory));
+        AssertRedacted(run.Output + run.Error);
+    }
+
+    [Theory]
+    [InlineData("shells.Production.json")]
+    [InlineData("shells.Staging.json")]
+    public async Task Changed_selected_or_unselected_source_refuses_handoff_without_success(string fileName)
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        using var fixture = new CompositionBridgeFixture();
+        fixture.WriteAcceptedComposition(limit: 1);
+
+        var run = await fixture.RunGenerateInteractiveAsync("generate", sourceFileToChangeAtReview: fileName, handoffHost: "workbench-a");
+
+        Assert.Equal(ToolExitCode.ResolutionFailure, run.ExitCode);
+        Assert.Contains("bridge-source-changed", run.Output + run.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"handoff\":", run.Output, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(fixture.CandidateDirectory));
+        AssertRedacted(run.Output + run.Error);
+    }
+
     [Theory]
     [InlineData("decline")]
     [InlineData("")]
@@ -62,10 +129,11 @@ public sealed class CompositionGenerateCliTests
         using var fixture = new CompositionBridgeFixture();
         fixture.WriteAcceptedComposition(limit: 1);
 
-        var run = await fixture.RunGenerateInteractiveAsync(response);
+        var run = await fixture.RunGenerateInteractiveAsync(response, handoffHost: "workbench-a");
 
         Assert.Equal(ToolExitCode.Refusal, run.ExitCode);
         Assert.Contains("bridge-review-required", run.Output + run.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"handoff\":", run.Output, StringComparison.Ordinal);
         Assert.False(Directory.Exists(fixture.CandidateDirectory));
         AssertRedacted(run.Output + run.Error);
     }

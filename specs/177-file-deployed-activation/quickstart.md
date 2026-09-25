@@ -20,6 +20,8 @@ Run `dotnet run --project tools/maps/Elsa.Maps.Generator -- check` before relyin
 
 Use the two-shell base/Production overlay fixture from [file bridge v1](../176-composition-file-bridge/contracts/file-bridge-v1.md). Keep its connection and unknown-setting canaries. Generate a fresh reviewed candidate as that contract describes. The new handoff test must:
 
+To request the safe handoff from the CLI, add `--handoff-host workbench-a` to the existing `composition generate` command. The alias is explicit and contains no path. The command still requires typing `generate` after reviewing its diff. On success it prints one compact `handoff` JSON line with an opaque ID and role inventory; save that line alongside the externally managed artifact if needed. The line is not a deployment receipt or proof that Workbench loaded those files. Without `--handoff-host`, generation retains its prior file-only behavior.
+
 1. Record the configured default shell and selected environment, accepted catalog/feature pin, every copied file's safe role, unresolved package/connection checks, and one opaque candidate ID.
 2. Change each selected and unselected copied file in turn between review and handoff. Each change must refuse; neither a stale handoff nor a raw source value may be published.
 3. Regenerate the same source independently. The new candidate may receive a different opaque ID; the test must not assume content-addressed public IDs.
