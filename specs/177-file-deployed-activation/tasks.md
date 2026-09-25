@@ -4,7 +4,7 @@
 
 **Tests**: Required by the independent tests and success criteria in spec 177. Write a focused failing behavior test before each implementation slice. The list is future implementation work; #2036 itself delivers only specification artifacts.
 
-**Readiness**: T001–T009 (US1) are delivered by #2038. T010–T011 are the #2039 host-attestation spike; its current-host decision is no-go for exact candidate matching. #2041 delivered only T013–T014's safe default-shell reload/readback subset. #2046 ruled out complete Workbench hot-reload attribution; #2060 proved the conditional fresh-process boundary and mixed-source copy risk. T012 and T015–T021 remain unstarted and must be refined for process restart versus eligible shell-only reload before implementation. No current implementation may claim candidate-match verification.
+**Readiness**: T001–T009 (US1) are delivered by #2038. T010–T011 are the #2039 host-attestation spike; its current-host decision is no-go for exact candidate matching. #2041 delivered T013–T014's safe default-shell reload/readback subset; #2062 adds a process instance ID to that observation. #2046 ruled out complete Workbench hot-reload attribution; #2060 proved the conditional fresh-process boundary and mixed-source copy risk. T012 and T015–T021 remain unstarted and must be refined for process restart versus eligible shell-only reload before implementation. No current implementation may claim candidate-match verification.
 
 The #2042 follow-up records a conditional CShells generation seam and a continued no-go for current Workbench source/package correlation in the [attestation report](../../docs/reports/runtime-composition/source-generation-attestation.md). It does not complete T015 or relax the remaining proof gate.
 
@@ -61,7 +61,7 @@ The #2042 follow-up records a conditional CShells generation seam and a continue
 
 ### Implementation for User Story 2
 
-- [X] T014 [US2] Add Workbench-root, management-key-protected default-shell GET observation and POST reload in `src/apps/Elsa.Workbench/Composition/CompositionActivationObservationEndpoints.cs`; project only generation/readiness/status with `candidateMatch=unverified`, never relay blueprint configuration or raw exception text, and exclude these root routes from lazy shell resolution.
+- [X] T014 [US2] Add Workbench-root, management-key-protected default-shell GET observation and POST reload in `src/apps/Elsa.Workbench/Composition/CompositionActivationObservationEndpoints.cs`; project only process instance ID, generation/readiness/status with `candidateMatch=unverified`, never relay blueprint configuration or raw exception text, and exclude these root routes from lazy shell resolution.
 - [ ] T015 [US2] After a later complete source/override and package-cohort proof, implement a process- and generation-bound marker through that proven seam, preserving ADR 0037's server-side key boundary; until then record candidate match as unverified. The previously proposed `CompositionGenerationMarker.cs` location is illustrative, not an implementation-ready contract.
 - [ ] T016 [US2] Reconcile the host observation and external receipt into the status dimensions in `src/apps/Elsa.Workbench/Composition/CompositionActivationOutcome.cs`; report observed shell readiness separately from unchecked package, connection and migration facts.
 

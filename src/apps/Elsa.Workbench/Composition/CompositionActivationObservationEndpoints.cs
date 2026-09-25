@@ -23,8 +23,9 @@ public static class CompositionActivationObservationEndpoints
             .WithHostCredentialEnforcement(ManagementApiKeyAuthentication.HeaderName, "Elsa.Workbench")
             .AddEndpointFilter(ManagementApiKeyAuthentication.RequireAsync);
 
-        group.MapGet("/observation", (IShellRegistry registry, ShellReadinessState readiness, IOptions<ShellReadinessOptions> options) =>
-            Results.Json(Observe(registry, readiness, options.Value.DefaultShellName)));
+        group.MapGet("/observation", (IShellRegistry registry, ShellReadinessState readiness,
+                IOptions<ShellReadinessOptions> options, WorkbenchProcessInstance process) =>
+            Results.Json(Observe(registry, readiness, options.Value.DefaultShellName, process)));
         group.MapPost("/reload", ReloadAsync);
         return endpoints;
     }
@@ -33,10 +34,11 @@ public static class CompositionActivationObservationEndpoints
         IShellRegistry registry,
         ShellReadinessState readiness,
         IOptions<ShellReadinessOptions> options,
-        IHostApplicationLifetime lifetime)
+        IHostApplicationLifetime lifetime,
+        WorkbenchProcessInstance process)
     {
         var shellName = options.Value.DefaultShellName;
-        var previousGeneration = Observe(registry, readiness, shellName).ActiveGeneration;
+        var previousGeneration = Observe(registry, readiness, shellName, process).ActiveGeneration;
         int? reportedGeneration = null;
         var reloadFailed = false;
         try
@@ -53,28 +55,32 @@ public static class CompositionActivationObservationEndpoints
         {
             // The host cannot establish whether an interrupted/throwing reload promoted a shell.
             // Do not serialize provider exceptions or raw configuration into this response.
-            var uncertain = Observe(registry, readiness, shellName);
+            var uncertain = Observe(registry, readiness, shellName, process);
             return Results.Json(new ReloadObservation("reload-uncertain", previousGeneration,
-                reportedGeneration, uncertain.ActiveGeneration, uncertain.Ready, CandidateMatch));
+                reportedGeneration, uncertain.ActiveGeneration, uncertain.Ready, CandidateMatch,
+                uncertain.ProcessInstanceId));
         }
 
-        var current = Observe(registry, readiness, shellName);
+        var current = Observe(registry, readiness, shellName, process);
         var outcome = reloadFailed
             ? current.ActiveGeneration == previousGeneration ? "reload-failed" : "reload-uncertain"
             : current.Ready && current.ActiveGeneration == reportedGeneration ? "ready" : "reload-uncertain";
         return Results.Json(new ReloadObservation(outcome, previousGeneration, reportedGeneration,
-            current.ActiveGeneration, current.Ready, CandidateMatch));
+            current.ActiveGeneration, current.Ready, CandidateMatch, current.ProcessInstanceId));
     }
 
-    private static ShellObservation Observe(IShellRegistry registry, ShellReadinessState readiness, string shellName)
+    private static ShellObservation Observe(IShellRegistry registry, ShellReadinessState readiness, string shellName,
+        WorkbenchProcessInstance process)
     {
         var active = registry.GetActive(shellName);
         var isActive = active?.State == ShellLifecycleState.Active;
         var ready = isActive && readiness.Snapshot.Status is ShellReadinessStatus.Ready or ShellReadinessStatus.Disabled;
-        return new ShellObservation(shellName, isActive ? active!.Descriptor.Generation : null, ready, CandidateMatch);
+        return new ShellObservation(shellName, isActive ? active!.Descriptor.Generation : null, ready,
+            CandidateMatch, process.Id);
     }
 
-    private sealed record ShellObservation(string Shell, int? ActiveGeneration, bool Ready, string CandidateMatch);
+    private sealed record ShellObservation(string Shell, int? ActiveGeneration, bool Ready, string CandidateMatch,
+        string ProcessInstanceId);
 
     private sealed record ReloadObservation(
         string Outcome,
@@ -82,5 +88,11 @@ public static class CompositionActivationObservationEndpoints
         int? ReportedGeneration,
         int? ActiveGeneration,
         bool Ready,
-        string CandidateMatch);
+        string CandidateMatch,
+        string ProcessInstanceId);
+}
+
+internal sealed class WorkbenchProcessInstance
+{
+    public string Id { get; } = Guid.NewGuid().ToString("N");
 }

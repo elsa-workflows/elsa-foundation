@@ -13,15 +13,36 @@ public sealed class CompositionActivationObservationTests
     private const string Canary = "composition-observation-secret-canary-2041";
 
     [Fact]
+    public async Task Fresh_processes_have_distinct_identities_even_when_shell_generations_coincide()
+    {
+        Observation first;
+        await using (var firstHost = await WorkbenchProcess.StartAsync(WorkbenchShell.Development))
+            first = await ReadObservationAsync(firstHost);
+
+        await using var secondHost = await WorkbenchProcess.StartAsync(WorkbenchShell.Development);
+        var second = await ReadObservationAsync(secondHost);
+
+        Assert.True(Guid.TryParseExact(first.ProcessInstanceId, "N", out _));
+        Assert.True(Guid.TryParseExact(second.ProcessInstanceId, "N", out _));
+        Assert.NotEqual(first.ProcessInstanceId, second.ProcessInstanceId);
+        Assert.Equal(first.ActiveGeneration, second.ActiveGeneration);
+        Assert.Equal("unverified", first.CandidateMatch);
+        Assert.Equal("unverified", second.CandidateMatch);
+    }
+
+    [Fact]
     public async Task Observation_and_reload_require_the_management_key()
     {
         await using var host = await WorkbenchProcess.StartAsync(WorkbenchShell.Development);
         var initial = await ReadinessGenerationAsync(host);
+        var processId = (await ReadObservationAsync(host)).ProcessInstanceId;
 
         using var anonymousRead = await host.Client.GetAsync(ObservationPath);
         using var anonymousReload = await host.Client.PostAsync(ReloadPath, null);
         Assert.Equal(HttpStatusCode.Unauthorized, anonymousRead.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, anonymousReload.StatusCode);
+        Assert.DoesNotContain(processId, await anonymousRead.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.DoesNotContain(processId, await anonymousReload.Content.ReadAsStringAsync(), StringComparison.Ordinal);
 
         using var wrongKey = new HttpClient { BaseAddress = host.Client.BaseAddress };
         wrongKey.DefaultRequestHeaders.Add(WorkbenchProcess.ManagementKeyHeader, "not-the-management-key");
@@ -29,6 +50,8 @@ public sealed class CompositionActivationObservationTests
         using var wrongKeyReload = await wrongKey.PostAsync(ReloadPath, null);
         Assert.Equal(HttpStatusCode.Unauthorized, wrongKeyRead.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, wrongKeyReload.StatusCode);
+        Assert.DoesNotContain(processId, await wrongKeyRead.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.DoesNotContain(processId, await wrongKeyReload.Content.ReadAsStringAsync(), StringComparison.Ordinal);
         Assert.Equal(initial, await ReadinessGenerationAsync(host));
     }
 
@@ -54,6 +77,13 @@ public sealed class CompositionActivationObservationTests
         Assert.Equal(body.ReportedGeneration, body.ActiveGeneration);
         Assert.True(body.Ready);
         Assert.Equal("unverified", body.CandidateMatch);
+        Assert.Equal(before.ProcessInstanceId, body.ProcessInstanceId);
+        Assert.Equal(before.ProcessInstanceId, (await ReadObservationAsync(host)).ProcessInstanceId);
+
+        var rawBody = await response.Content.ReadAsStringAsync();
+        var managementKey = host.ManagementClient.DefaultRequestHeaders
+            .GetValues(WorkbenchProcess.ManagementKeyHeader).Single();
+        Assert.DoesNotContain(managementKey, rawBody, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -79,6 +109,7 @@ public sealed class CompositionActivationObservationTests
         Assert.Equal(body.ReportedGeneration, body.ActiveGeneration);
         Assert.True(body.Ready);
         Assert.Equal("unverified", body.CandidateMatch);
+        Assert.Equal(before.ProcessInstanceId, body.ProcessInstanceId);
     }
 
     [Fact]
@@ -101,6 +132,7 @@ public sealed class CompositionActivationObservationTests
         Assert.Equal(before.ActiveGeneration, body.ActiveGeneration);
         Assert.True(body.Ready);
         Assert.Equal("unverified", body.CandidateMatch);
+        Assert.Equal(before.ProcessInstanceId, body.ProcessInstanceId);
 
         Assert.DoesNotContain(Canary, rawBody, StringComparison.Ordinal);
         Assert.DoesNotContain("Exception", rawBody, StringComparison.OrdinalIgnoreCase);
@@ -151,7 +183,8 @@ public sealed class CompositionActivationObservationTests
         }
     }
 
-    private sealed record Observation(string Shell, int? ActiveGeneration, bool Ready, string CandidateMatch);
+    private sealed record Observation(string Shell, int? ActiveGeneration, bool Ready, string CandidateMatch,
+        string ProcessInstanceId);
 
     private sealed record ReloadObservation(
         string Outcome,
@@ -159,7 +192,8 @@ public sealed class CompositionActivationObservationTests
         int? ReportedGeneration,
         int? ActiveGeneration,
         bool Ready,
-        string CandidateMatch);
+        string CandidateMatch,
+        string ProcessInstanceId);
 
     private sealed record Readiness(int Generation);
 }

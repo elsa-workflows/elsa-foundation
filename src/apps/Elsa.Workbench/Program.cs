@@ -166,6 +166,7 @@ builder.Services
     .Validate(options => !string.IsNullOrWhiteSpace(options.DefaultShellName), "A non-empty default shell name is required.")
     .ValidateOnStart();
 builder.Services.AddSingleton(new ShellReadinessState(TimeProvider.System));
+builder.Services.AddSingleton(new WorkbenchProcessInstance());
 builder.Services.AddSingleton<DefaultShellWarmup>();
 builder.Services.AddHostedService(services => services.GetRequiredService<DefaultShellWarmup>());
 
