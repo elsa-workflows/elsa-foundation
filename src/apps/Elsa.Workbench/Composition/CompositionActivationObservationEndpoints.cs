@@ -47,7 +47,9 @@ public static class CompositionActivationObservationEndpoints
             reportedGeneration = result.NewShell?.Descriptor.Generation;
             reloadFailed = result.Error is not null || result.NewShell is null;
         }
-        catch (Exception)
+        catch (Exception exception) when (exception is not OutOfMemoryException
+                                         and not StackOverflowException
+                                         and not AccessViolationException)
         {
             // The host cannot establish whether an interrupted/throwing reload promoted a shell.
             // Do not serialize provider exceptions or raw configuration into this response.
