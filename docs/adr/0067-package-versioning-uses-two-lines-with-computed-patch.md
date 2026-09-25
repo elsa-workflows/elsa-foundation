@@ -3,7 +3,7 @@ status: proposed
 date: 2026-08-07
 amended: 2026-09-25
 decision_context: FR-1 discussion on issue #1144, agreed by Joey Barten, Sipke Schoorstra and Frans van Ek
-amendment_context: 2026-09-22, patch derivation changed from commit height to last-published state after the rename hazard was measured; agreed on PR #1948 by Frans van Ek, Joey Barten and Sipke Schoorstra, the same three who agreed the original. 2026-09-24, Line A membership is defined by a rule rather than a heuristic, which settles the six undecided packages; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten. 2026-09-24, the last-published record moves out of the generated dependency map into its own committed file that only publishing, or its audited repair workflow, writes; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten.
+amendment_context: 2026-09-22, patch derivation changed from commit height to last-published state after the rename hazard was measured; agreed on PR #1948 by Frans van Ek, Joey Barten and Sipke Schoorstra, the same three who agreed the original. 2026-09-24, Line A membership is defined by a rule rather than a heuristic, which settles the six undecided packages; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten. 2026-09-24, the last-published record moves out of the generated dependency map into its own committed file that only publishing, or its audited repair workflow, writes, and on 2026-09-25 onto a dedicated publish-state branch so that writing it needs no bypass of main's protection; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten.
 ---
 
 # Package versioning uses two version lines with a computed patch digit
@@ -84,13 +84,17 @@ The change is confined to how the digit is derived. Everything else this decisio
 lines, selective publishing, derived floors with an upper bound, release-shaped previews, and the
 absence of authored version elements — is unaffected, and the reasons for them are untouched.
 
-*Amended 2026-09-24.* The last-published record is kept in its own committed file beside the dependency
-map rather than inside it. The map is generated from the tree and changes through pull requests; the
-record is written only from `main`, by a publish or by its audited repair workflow. Holding both in one
-file would give it two writers, so every publish write-back would contend with pull requests that
-regenerate the map, and the map would stop being a function of the tree alone. The record is keyed by
-package id and joined to the map's nodes when the patch is computed. No record is ever removed, so a
-package id that returns after being deleted or renamed continues from its last published version.
+*Amended 2026-09-24, and on 2026-09-25.* The last-published record is kept in its own committed file,
+not inside the dependency map, and on a dedicated `publish-state` branch rather than on `main`. The map
+is generated from the tree and changes through pull requests; holding both in one file would give it
+two writers, so every publish write-back would contend with pull requests that regenerate the map, and
+the map would stop being a function of the tree alone. Keeping the file off `main` follows from the
+same separation: writing to `main` would need an identity able to bypass `main`'s required checks, and
+GitHub cannot limit such a bypass to one file, so the record's own branch lets the publishing workflow
+write it with its own token while `main`'s protection stays absolute. It is written only by a publish,
+or by its audited repair workflow. The record is keyed by package id and joined to the map's nodes when
+the patch is computed. No record is ever removed, so a package id that returns after being deleted or
+renamed continues from its last published version.
 
 **Publishing is selective.** Only packages whose own files changed are published. Unchanged packages
 keep their last published version, so dependency floors are never restamped for a change the package
@@ -189,8 +193,8 @@ propagates through the reverse closure.
   merely present: a stale or wrong record yields a wrong version. For the map this deepens an existing
   dependency rather than adding one, since the map already resolves floors and change detection and
   already carries a freshness gate. The record is not derived from the tree, so no freshness gate can
-  check it; it is protected instead by letting only publishing and its audited repair workflow write
-  it.
+  check it; it is protected instead by living on a branch of its own that only publishing and its
+  audited repair workflow write to.
 - Consumers hold a release number rather than a package version. A generated release manifest records
   which package versions constitute a given release.
 - Line A membership follows from the rule rather than from judgment, and a new package is placed the

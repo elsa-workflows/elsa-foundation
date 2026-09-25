@@ -129,8 +129,8 @@ versions and their floors did not move.
   feed rejects the push. FR-018 compares the rejected package's input fingerprint with the feed's copy.
   When they match, the push had in fact happened, so the record advances and the run continues; nobody
   intervenes. Without this, every later run would recompute the same version and fail on it
-  indefinitely, because the record could otherwise be repaired from nowhere: not from the feed
-  (FR-013) and not through a pull request (FR-015).
+  indefinitely until an operator stepped in, because nothing else may write the record: not a read
+  of the feed (FR-013), and not a pull request, since the record is not on `main` (FR-014).
 - A genuine collision — the feed holds the computed version with different inputs, for example after
   history was rewritten or a record was lost: FR-018 fails the publish naming the package, the version
   and both fingerprints, and an operator settles it with the repair workflow (FR-019). The feed's copy
@@ -157,8 +157,8 @@ versions and their floors did not move.
 - A package id whose last-published record is lost while the feed still holds versions of it: the
   computation produces a version the feed already has, and FR-018 fails the publish rather than
   overwriting it, since the feed's copy was built from different inputs; the repair workflow (FR-019)
-  then sets the record from the feed. A bad bootstrap can still cause this; FR-015 stops a pull request
-  from causing it.
+  then sets the record from the feed. A bad bootstrap can still cause this; a pull request cannot,
+  because the record does not live on `main` (FR-014).
 
 ## Requirements *(mandatory)*
 
@@ -210,8 +210,9 @@ versions and their floors did not move.
 - **FR-007**: Every nuspec dependency range MUST carry an upper bound at the next major.
 - **FR-008**: While the 4.0 line is unreleased, every produced package MUST carry a `-preview` label
   with no counter. Builds from a branch MUST carry a branch-scoped label instead.
-- **FR-009**: Version computation MUST be deterministic for a given commit, independent of machine,
-  clock, build number and working-directory state.
+- **FR-009**: Version computation MUST be deterministic for a given commit and a given revision of the
+  last-published record (FR-014), independent of machine, clock, build number and working-directory
+  state.
 - **FR-010**: The last-published record MUST supply only the patch. Major and minor MUST come from
   the MSBuild properties, so the version is defined in one place.
 - **FR-011**: The pipeline MUST NOT push with `--skip-duplicate`. An unchanged package is never pushed
@@ -231,23 +232,26 @@ versions and their floors did not move.
   the record file being correct, not merely present: a record that lags the feed makes the pipeline
   compute a version the feed already holds, and FR-018 is the backstop: it settles a push that had
   already landed, and fails the publish rather than overwriting the feed when the inputs differ.
-- **FR-014**: The last-published record MUST be stored in
-  `tools/publishing/published-versions.json`, one entry per package id, sorted by package id, with
-  deterministic serialization and no timestamps, so the file's diff reflects only substantive
-  changes. It MUST be written only by a publish from `main` or by the one-off bootstrap. A publish
-  MUST add or update only the entries for packages whose push succeeded (FR-006). No entry MUST ever
-  be removed.
-- **FR-015**: A check MUST fail any pull request that modifies
-  `tools/publishing/published-versions.json`, naming the file. The only exception is the one-off
-  bootstrap, if its seeded records reach `main` through a pull request; that single pull request
-  MUST be exempted explicitly, by reference to it, not by a standing rule. A record rolled back by a
-  merged pull request makes the next publish compute a version the feed already holds, and FR-018
-  would only catch that after merge, as a failed publish on `main`.
-- **FR-016**: The record file MUST NOT be treated as a package-affecting input. FR-002's change
-  detection MUST ignore it, and it MUST NOT count as a repository-wide input under FR-004, so a
-  publish write-back to the record file never marks any package changed.
-- **FR-017**: A publish write-back MUST change only the record file, so the publish trigger can
-  recognise the write-back commit by the paths it touches and skip publishing for it.
+- **FR-014**: The last-published record MUST be stored as `published-versions.json` on a dedicated
+  `publish-state` branch, never on `main`: one entry per package id, sorted by package id, with
+  deterministic serialization and no timestamps, so each commit's diff reflects only substantive
+  changes. The file MUST also name the `main` commit its most recent publish was built from (FR-021).
+  It MUST be written only by a publish from `main`, by the repair workflow (FR-019), or by the one-off
+  bootstrap. A publish MUST add or update only the entries for packages whose push succeeded (FR-006).
+  No entry MUST ever be removed.
+- **FR-015**: `publish-state` MUST be protected against deletion and force pushes and MUST require no
+  status checks, so the workflow's own token can push to it while its history cannot be rewritten.
+  The record is kept off `main` deliberately: writing to `main` would need an identity able to bypass
+  `main`'s required checks, and GitHub cannot limit such a bypass to a single file, so it would be an
+  identity able to push any unchecked commit to `main`. Because the record is not on `main`, no pull
+  request can change it and no check is needed to stop one. Only a publish, the repair workflow and
+  the bootstrap push to `publish-state`; any other commit there is a defect, visible in its history.
+- **FR-016**: Because the record never lives on `main`, no commit on `main` changes it: FR-002's
+  change detection and FR-004's repository-wide inputs never see it, and a write-back never marks any
+  package changed.
+- **FR-017**: Write-backs MUST be pushed with the workflow's own token (`GITHUB_TOKEN`). Pushes made
+  with that token start no further workflow runs, and they land on `publish-state` rather than
+  `main`, so a write-back can never trigger a publish of its own.
 - **FR-018**: Every packed package MUST carry, in its metadata, an **input fingerprint** — a digest of
   exactly the package-affecting inputs FR-002 compares — and the commit it was built from, as the
   nuspec's `repository` `commit`. The fingerprint MUST NOT be computed from the built bytes: assemblies
@@ -262,22 +266,26 @@ versions and their floors did not move.
   collision together with that version's source commit (FR-018), and sets the package's record entry to
   them, so the next publish computes one past the feed's version and publishes the current content.
   It MUST refuse an entry lower than the current one, keeping the record monotonic (FR-012), and its
-  write-back commit MUST name the package, the old and new entries, the reason and who ran it. It is
-  the only writer of the record besides a publish; FR-015 does not apply to it because it does not go
-  through a pull request.
+  write-back commit MUST name the package, the old and new entries, the reason and who ran it. It
+  writes to `publish-state` the same way a publish does (FR-017), and besides a publish and the one-off
+  bootstrap it is the record's only writer.
 - **FR-020**: Publish runs MUST be serialized — at most one publishing at a time, with a run in
   progress never cancelled. A queued run MAY be dropped in favour of a newer one, because change
   detection compares against each record's commit rather than the previous run, so the newer run
-  publishes every change the dropped run would have. Without serialization, two quick merges compute the same
-  version for the same package and their write-back commits race.
+  publishes every change the dropped run would have. Without serialization, two quick merges compute
+  the same version for the same package and their write-back commits race.
+- **FR-021**: A publish MUST only move forward along `main`. It MUST refuse to publish unless the commit
+  it is building is the `main` commit the record names as its most recent publish (FR-014), or a
+  descendant of it. Otherwise a re-run of an older workflow run would compare its older content with a
+  newer record and could publish that older content at a higher version.
 
 ### Key Entities
 
 - **Version line**: Line A or Line B, declared per project in the dependency map.
-- **Last-published record**: per package id, in `tools/publishing/published-versions.json`, not in
-  spec 149's dependency map: the version last pushed to the feed and the commit that version was
-  built from. Committed state, written only by publishing from `main`, never by a contributor or a
-  pull request. A one-off bootstrap publish seeds it for every package id before the mechanism is
+- **Last-published record**: per package id, in `published-versions.json` on the `publish-state`
+  branch (FR-014) — not in spec 149's dependency map, and not on `main`: the version last pushed to the
+  feed and the commit that version was built from. Committed state, written only by a publish from
+  `main`, the repair workflow or the bootstrap, never by a contributor or a pull request. A one-off bootstrap publish seeds it for every package id before the mechanism is
   enabled. Never removed: a record whose package id no longer has a project — the project was
   deleted, or the package id was renamed — stays in the file, so an id that returns continues from
   its last published version rather than restarting.
@@ -298,19 +306,21 @@ versions and their floors did not move.
 - **SC-006**: A preview build republishes no package whose owned files did not change.
 - **SC-007**: A build advancing only a contract package leaves every dependent package's published
   artifact untouched, and those artifacts still resolve against the new contract version.
-- **SC-008**: The affected set is computed with no network access, and is identical when the same
-  commit is built on a machine with no feed connectivity, because the commit's checkout carries the
-  record file alongside the dependency map.
+- **SC-008**: The affected set is computed without contacting the feed, and is identical whenever the
+  same commit is built against the same revision of `publish-state`, on any machine: both come from
+  the repository.
 - **SC-009**: A commit that changes only documentation advances no package version and publishes
   nothing.
 - **SC-010**: A package moved to a new directory with no content change publishes at exactly one
   past its last published version.
 - **SC-011**: No produced package version is lower than or equal to its last published version
   (monotonicity gate).
-- **SC-012**: A pull request that modifies `tools/publishing/published-versions.json` fails the
-  guard (FR-015), except the one exempted bootstrap pull request.
+- **SC-012**: A publish write-back changes nothing on `main` and starts no workflow run
+  (FR-016, FR-017).
 - **SC-013**: A package id whose project is deleted and later re-added, or renamed and later reused,
   publishes at exactly one past its last published version, because its record was never removed.
+- **SC-014**: A re-run of a publish for a commit older than the record's most recent publish refuses
+  to publish (FR-021).
 
 ## Assumptions
 
@@ -340,16 +350,6 @@ versions and their floors did not move.
 
 ## Open Questions
 
-- ADR 0067 settles that the last-published record lives in its own committed file, not a git ref
-  (ADR 0067, Decision). Open is how the updated record reaches `main` after a publish: a write-back
-  commit by the publish run is the obvious route. It must not be blocked by branch protection — and
-  as configured it would be: `main`'s active rulesets require the `Build & test` and `Generated maps
-  fresh` checks and refuse non-fast-forward pushes, so a direct write-back from the publish run is
-  rejected unless the identity it pushes as is a ruleset bypass actor. Deciding that identity — a
-  GitHub App, ideally allowed to bypass only for commits touching the record file — is a repository
-  administration decision. The repair workflow (FR-019) pushes the same way and needs the same bypass.
-  Because a write-back touches only the record file (FR-017), not triggering a publish of its own
-  can be done by recognising that path, rather than needing a separate signal.
 - `4.0.0` sorts below the `4.0.N-preview` versions already published. Should the 4.0 release instead
   ship each package at its current patch with the label dropped (`4.0.N`), which keeps every package
   monotonic?
