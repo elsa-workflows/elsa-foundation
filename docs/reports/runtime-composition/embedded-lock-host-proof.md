@@ -1,0 +1,25 @@
+# Embedded starter with deployable filesystem locking (#2050)
+
+Status: host proof on 2026-09-25. This establishes one concrete **candidate** for `embedded-runtime@1`, not a published profile or a general host compatibility guarantee.
+
+## Decision
+
+Include `FileSystemDistributedLocking` as the **sixteenth explicit member** of the first Embedded starter. A user selecting this starter needs a lock provider; making the existing [filesystem feature](../../../src/essentials/Locking/FileSystem/FileSystemLockingFeature.cs) visible preserves exact feature control and avoids a hidden host-owned service. The host must supply a writable, isolated `LocksFolderPath`. The profile definition supplies neither that path nor a connection string, signing key, or migration authorization. This candidate targets one process/host with a local filesystem and SQLite resource. Shared-filesystem or multi-host lock correctness was not tested.
+
+The full proposed membership is `Primitives`, `Serialization`, `Mediator`, `Events`, `Expressions`, `ActivitiesRuntime`, `ActivitiesPrimitives`, `ActivitiesControlFlow`, `ActivitiesSequence`, `WorkflowsRuntimeEntityFrameworkCore`, `WorkflowsRuntimeResumption`, `WorkflowsRuntimeTriggers`, `ApiCapabilities`, `Tasks`, `WorkflowsRuntimeApi`, and `FileSystemDistributedLocking`. The first 15 come from the [earlier closure decision](first-profile-decision.md); the sixteenth replaces the earlier test-only lock registration. All 16 were explicitly selected in the [generic host proof](../../../tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EmbeddedFixtureHostEvidenceTests.cs), and its effective `ShellSettings.EnabledFeatures` matched that set exactly.
+
+## What the host proof establishes
+
+The fixture constructs a plain `ServiceCollection` and `ServiceProvider`, discovers the [filesystem locking assembly](../../../src/essentials/Locking/FileSystem/Elsa.Locking.FileSystem.csproj), and configures an isolated lock directory. It does not register a process-local `IDistributedLockProvider`. Shell activation resolves the feature's real `DistributedLockProviderAdaptor`. The same shell uses the external `Elsa:Persistence` named resource `primary` with SQLite; the EF context points to that database, applies its migrations, and has no pending migration. A saved Event executable then starts, suspends with an EF bookmark, resumes through the bookmark dispatcher, and completes with EF state updated. These assertions run in `Explicit_embedded_closure_uses_file_locking_without_test_provider`; the original 12-authored-ID fixture remains as a separate comparison.
+
+The proof creates no ASP.NET host or `WebApplication`, maps no route, starts no HTTP server, and sends no HTTP request. The selected `WorkflowsRuntimeApi` feature remains an honest dependency in the feature list; the absence of a listener follows from this particular generic host construction, not from the feature being API-free in every host.
+
+## Negative controls and activation boundary
+
+Without `FileSystemDistributedLocking` or the original test provider, this same generic host refuses shell activation with an unresolved `IDistributedLockProvider`. A lock provider is therefore an actual startup prerequisite, not merely a suggested setting. The fixture requires an explicit, writable lock directory for the positive case; it does not test an unwritable path or crash/restart cleanup.
+
+An explicitly disabled required dependency reveals a **different boundary**. When `WorkflowsRuntimeResumption` is set to `false` in raw CShells configuration while `WorkflowsRuntimeEntityFrameworkCore` remains selected, CShells activates and includes resumption anyway. The [characterization test](../../../tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EmbeddedFixtureHostEvidenceTests.cs) asserts this observed behavior. The [pure planner test](../../../tests/essentials/Modularity/Planning/Tests/HostAssessmentTests.cs) already proves that an authored `remove` keeps a required dependency absent and emits `required-dependency-missing` with unresolved severity. **A production profile activation path must gate on that planner result before handing features to CShells.** Raw `Features:<id>=false` alone is not an implementation of the builder's explicit-removal contract. This spike cannot claim activation-time refusal for that negative control; profile publication remains conditional on a demonstrated planner-to-host gate.
+
+## Publication boundary
+
+The first profile publication story can use the 16 IDs above, with a separate persistence choice, signing secrets, an explicit lock directory, and visible Runtime API membership. It must prove that an unresolved planner finding prevents activation when a user removes a required member. It must also verify pinned catalog version/digest and no silent upgrades under the [catalog contract](profile-catalog-contract.md). This proof does not establish package loading, other database providers, multiple hosts, process-restart recovery, web-host route exposure, or production readiness for Worker and Authoring profiles.

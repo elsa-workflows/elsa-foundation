@@ -2,6 +2,8 @@
 
 Status: proposed first delivery direction on 2026-09-25 under [#1961](https://github.com/elsa-workflows/elsa-foundation/issues/1961). This chooses an evidence-backed **candidate**, not a published profile or a claim that all three fixture hosts are production ready.
 
+Follow-up: the [deployable-lock host proof](embedded-lock-host-proof.md) supports `FileSystemDistributedLocking` as an explicit sixteenth candidate member. It also found that raw CShells configuration re-adds an explicitly disabled required dependency; publication needs a planner-to-host refusal gate. The 15-ID and test-provider discussion below records the evidence available at this decision point.
+
 ## Decision
 
 **Work toward `embedded-runtime@1` first.** Present it as an in-process runtime starting point, with its exact feature closure and host prerequisites visible. Do not call it “API-free”: the current required dependency graph includes `WorkflowsRuntimeApi` and `ApiCapabilities` even when the selected host creates no HTTP listener. A versioned profile should name all 15 closure IDs explicitly so the pure planner does not report three missing required edges that CShells would later auto-resolve. The final definition must also settle how a deployable lock provider is selected. Persistence stays a separate named-resource choice; no connection value belongs in the profile definition.
