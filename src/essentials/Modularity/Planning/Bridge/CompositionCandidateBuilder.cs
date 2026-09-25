@@ -9,7 +9,7 @@ using Elsa.Modularity.Planning.Services;
 
 namespace Elsa.Modularity.Planning.Bridge;
 
-/// <summary>A redacted semantic description of one reviewed setting change.</summary>
+/// <summary>A redacted semantic description of one reviewed configuration change.</summary>
 public sealed record CompositionCandidateChange(
     string FeatureId,
     string Pointer,
@@ -23,7 +23,7 @@ public sealed record CompositionCandidate(
     ImmutableArray<CompositionCandidateChange> Changes,
     SelectionPlan Plan);
 
-/// <summary>Builds a fresh file bundle by patching only reviewed, existing settings in their observed source layer.</summary>
+/// <summary>Builds a fresh file bundle from reviewed feature selection and existing setting paths.</summary>
 public static class CompositionCandidateBuilder
 {
     public static CompositionCandidate Build(
@@ -78,17 +78,18 @@ public static class CompositionCandidateBuilder
         {
             throw Refuse("bridge-authored-invalid", "The authored composition or selection catalog is invalid.");
         }
-        if (plan.Findings.Any(finding => finding.Code is "catalog-pin-unresolved" or "accepted-pin-unresolved" or "candidate-re-resolution"))
+        if (plan.Findings.Any(finding => finding.Code is "catalog-pin-unresolved" or "definition-pin-unresolved" or "accepted-pin-unresolved" or "candidate-re-resolution"))
             throw Refuse("bridge-selection-drift", "The authored selection no longer matches its accepted selection.");
         if (!plan.SelectedFeatureIds.SequenceEqual(authored.Accepted.FeatureIds.Order(StringComparer.Ordinal), StringComparer.Ordinal))
             throw Refuse("bridge-selection-drift", "The authored selection no longer matches its accepted selection.");
-        if (!source.EnabledFeatureIds.Order(StringComparer.Ordinal).SequenceEqual(plan.SelectedFeatureIds, StringComparer.Ordinal))
-            throw Refuse("bridge-selection-drift", "The authored selection cannot be applied to this source without an explicit activation mapping.");
+        if (plan.Findings.Any(finding => finding.Code == "required-dependency-missing" && finding.Severity == "unresolved"))
+            throw Refuse("bridge-required-dependency-missing", "The exact selection omits a known required feature.");
 
         var settingRoot = ReadOptionalObject(authored.Settings, "Authored settings must be an object.");
         var patches = ReadSettingPatches(settingRoot, source, review);
         var baseShellRoot = ParseObject(baseShellJson, "The base shell document is malformed or unsupported.");
         var overlayShellRoot = ParseObject(overlayShellJson, "The selected shell overlay is malformed or unsupported.");
+        var activationChanges = PatchFeatureSelection(baseShellRoot, overlayShellRoot, selection.ShellId, source, plan.SelectedFeatureIds);
         foreach (var patch in patches)
         {
             var target = patch.SourceLayer == CshellsSourceLayer.Base ? baseShellRoot : overlayShellRoot;
@@ -106,7 +107,7 @@ public static class CompositionCandidateBuilder
 
         if (patches.Any(patch => patch.Changed && patch.SourceLayer == CshellsSourceLayer.Base) || resourceChanges.Any(change => change.SourceLayer == "base" && change.Changed && change.Prefix == "/shell/"))
             files[baseShellName] = Serialize(baseShellRoot);
-        if (patches.Any(patch => patch.Changed && patch.SourceLayer == CshellsSourceLayer.Overlay) || resourceChanges.Any(change => change.SourceLayer == "overlay" && change.Changed && change.Prefix == "/shell/"))
+        if (activationChanges.Length > 0 || patches.Any(patch => patch.Changed && patch.SourceLayer == CshellsSourceLayer.Overlay) || resourceChanges.Any(change => change.SourceLayer == "overlay" && change.Changed && change.Prefix == "/shell/"))
             files[overlayShellName] = Serialize(overlayShellRoot);
         if (resourceChanges.Any(change => change.SourceLayer == "base" && change.Changed && change.Prefix == "/appsettings/"))
             files[baseAppsettingsName] = Serialize(baseAppRoot);
@@ -121,11 +122,95 @@ public static class CompositionCandidateBuilder
                 patch.Changed))
             .Concat(resourceChanges.Select(change => new CompositionCandidateChange(
                 change.FeatureId, change.Pointer, "resource-name", change.SourceLayer, change.Changed)))
+            .Concat(activationChanges)
             .OrderBy(item => item.FeatureId, StringComparer.Ordinal)
             .ThenBy(item => item.Pointer, StringComparer.Ordinal)
             .ToImmutableArray();
 
+        CshellsSource candidateSource;
+        try
+        {
+            candidateSource = CshellsSourceReader.Read(
+                Encoding.UTF8.GetString(files[baseShellName]),
+                Encoding.UTF8.GetString(files[overlayShellName]),
+                selection.ShellId);
+        }
+        catch (CshellsSourceException)
+        {
+            throw Refuse("bridge-activation-readback-mismatch", "The candidate feature selection could not be read back.");
+        }
+        if (!candidateSource.EnabledFeatureIds.SequenceEqual(plan.SelectedFeatureIds, StringComparer.Ordinal))
+            throw Refuse("bridge-activation-readback-mismatch", "The candidate feature selection differs from the accepted plan.");
+
         return new CompositionCandidate(files, changes, plan);
+    }
+
+    private static ImmutableArray<CompositionCandidateChange> PatchFeatureSelection(
+        JsonObject baseRoot,
+        JsonObject overlayRoot,
+        string shellId,
+        CshellsSource source,
+        ImmutableArray<string> selectedIds)
+    {
+        var selected = selectedIds.ToHashSet(StringComparer.Ordinal);
+        var current = source.EnabledFeatureIds.ToHashSet(StringComparer.Ordinal);
+        var additions = selected.Except(current, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var removals = current.Except(selected, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        if (additions.Length == 0 && removals.Length == 0)
+            return [];
+        if (source.FeatureShape != CshellsFeatureShape.ObjectMap)
+            throw Refuse("bridge-activation-shape-unsupported", "Feature selection edits require an object-map source.");
+
+        var baseFeatures = GetProperty(GetProperty(GetProperty(GetProperty(baseRoot, "CShells") as JsonObject, "Shells") as JsonObject, shellId) as JsonObject, "Features") as JsonObject
+            ?? throw Refuse("bridge-activation-shape-unsupported", "The base feature map is unavailable.");
+        var overlayShells = EnsureObject(EnsureObject(overlayRoot, "CShells"), "Shells");
+        var overlayShell = EnsureObject(overlayShells, shellId);
+        var overlayFeatures = EnsureObject(overlayShell, "Features");
+        var changes = ImmutableArray.CreateBuilder<CompositionCandidateChange>();
+
+        foreach (var id in additions)
+        {
+            RefuseCaseAlias(baseFeatures, id);
+            RefuseCaseAlias(overlayFeatures, id);
+            if (GetProperty(baseFeatures, id) is JsonValue baseValue && baseValue.TryGetValue<bool>(out var baseEnabled) && !baseEnabled)
+                throw Refuse("bridge-activation-base-disabled", "A base-disabled feature cannot be enabled from the selected overlay.");
+            var prior = GetProperty(overlayFeatures, id);
+            if (prior is JsonObject or JsonArray)
+                throw Refuse("bridge-activation-mapping-unresolved", "Enabling this feature would discard local settings.");
+            var baseEntry = GetProperty(baseFeatures, id);
+            if (prior is not null && baseEntry is not null)
+                overlayFeatures.Remove(FindPropertyName(overlayFeatures, id)!);
+            else
+                overlayFeatures[FindPropertyName(overlayFeatures, id) ?? id] = true;
+            changes.Add(new CompositionCandidateChange(id, "/features/" + id, "feature-enabled", "overlay", true));
+        }
+        foreach (var id in removals)
+        {
+            RefuseCaseAlias(baseFeatures, id);
+            RefuseCaseAlias(overlayFeatures, id);
+            var prior = GetProperty(overlayFeatures, id);
+            if (prior is JsonObject or JsonArray)
+                throw Refuse("bridge-activation-mapping-unresolved", "Disabling this feature would discard selected-overlay settings.");
+            overlayFeatures[FindPropertyName(overlayFeatures, id) ?? id] = false;
+            changes.Add(new CompositionCandidateChange(id, "/features/" + id, "feature-disabled", "overlay", true));
+        }
+        return changes.ToImmutable();
+    }
+
+    private static JsonObject EnsureObject(JsonObject parent, string name)
+    {
+        var existingName = FindPropertyName(parent, name);
+        if (existingName is null)
+            return (JsonObject)(parent[name] = new JsonObject())!;
+        return parent[existingName] as JsonObject
+            ?? throw Refuse("bridge-activation-shape-unsupported", "A selected activation layer is not an object.");
+    }
+
+    private static void RefuseCaseAlias(JsonObject map, string id)
+    {
+        var actual = FindPropertyName(map, id);
+        if (actual is not null && !string.Equals(actual, id, StringComparison.Ordinal))
+            throw Refuse("bridge-activation-mapping-unresolved", "A case-equivalent feature ID makes activation ambiguous.");
     }
 
     private static ImmutableArray<SettingPatch> ReadSettingPatches(

@@ -16,6 +16,7 @@ using Elsa.Locking.Core;
 using Elsa.Locking.FileSystem;
 using Elsa.Mediator;
 using Elsa.Modularity.EntityFramework.Extensions;
+using Elsa.Modularity.Planning.Catalog;
 using Elsa.Primitives.Hosting;
 using Elsa.Serialization.SystemText;
 using Elsa.Tasks;
@@ -92,9 +93,11 @@ public sealed class EmbeddedFixtureHostEvidenceTests : IDisposable
     [Fact]
     public async Task Explicit_embedded_closure_uses_file_locking_without_test_provider()
     {
-        var selectedIds = SelectedFeatureIds.Concat(DependencyFeatureIds)
-            .Append("FileSystemDistributedLocking")
-            .ToArray();
+        var profile = Assert.Single(FoundationSelectionCatalog.Load().Profiles);
+        Assert.Equal("embedded-runtime", profile.Id);
+        Assert.Equal("1", profile.Version);
+        var selectedIds = profile.Members.ToArray();
+        Assert.Equal(16, selectedIds.Length);
         await using var host = CreateHost(selectedIds, registerTestLockProvider: false);
         var shell = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
         var settings = shell.ServiceProvider.GetRequiredService<ShellSettings>();

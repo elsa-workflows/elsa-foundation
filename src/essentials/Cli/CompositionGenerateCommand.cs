@@ -2,6 +2,7 @@ using System.CommandLine;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Cli.Worker;
+using Elsa.Modularity.Planning.Catalog;
 using Elsa.Modularity.Planning.Bridge;
 using Elsa.Modularity.Planning.Json;
 using static Elsa.Cli.CompositionFileBridgeOutput;
@@ -24,7 +25,7 @@ internal static class CompositionGenerateCommand
         var host = Required("--host-dir", "Local Workbench-style host directory.");
         var shell = Required("--shell", "Selected shell ID.");
         var environment = Required("--environment", "Selected environment name.");
-        var catalog = Required("--catalog", "Pinned selection catalog JSON.");
+        var catalog = new Option<string>("--catalog") { Description = "Optional pinned selection catalog JSON. Defaults to the bundled Foundation catalog." };
         var composition = Required("--composition", "Accepted authored composition JSON.");
         var review = new Option<string>("--setting-review") { Description = "Optional local setting safety review JSON." };
         var output = Required("--output-dir", "Fresh candidate host-file directory.");
@@ -38,7 +39,7 @@ internal static class CompositionGenerateCommand
             result.GetRequiredValue(host),
             result.GetRequiredValue(shell),
             result.GetRequiredValue(environment),
-            result.GetRequiredValue(catalog),
+            result.GetValue(catalog),
             result.GetRequiredValue(composition),
             result.GetValue(review),
             result.GetRequiredValue(output),
@@ -51,7 +52,7 @@ internal static class CompositionGenerateCommand
         string hostDirectory,
         string shellId,
         string environment,
-        string catalogPath,
+        string? catalogPath,
         string compositionPath,
         string? reviewPath,
         string outputDirectory,
@@ -60,7 +61,9 @@ internal static class CompositionGenerateCommand
     {
         cancellationToken.ThrowIfCancellationRequested();
         var source = CompositionFileSource.Open(hostDirectory, shellId, environment);
-        var catalog = SelectionJsonReader.ParseCatalog(ReadInput(catalogPath));
+        var catalog = catalogPath is null
+            ? FoundationSelectionCatalog.Load()
+            : SelectionJsonReader.ParseCatalog(ReadInput(catalogPath));
         var authored = SelectionJsonReader.ParseComposition(ReadInput(compositionPath));
         var settingReview = reviewPath is null ? null : SettingReviewReader.Parse(ReadInput(reviewPath));
         var candidate = CompositionCandidateBuilder.Build(source.Snapshot, catalog, authored, settingReview);

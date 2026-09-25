@@ -85,7 +85,7 @@ public sealed class CompositionCandidateTests
         var (snapshot, catalog, authored, review) = Fixture();
         var drift = authored with { Accepted = authored.Accepted with { FeatureIds = [] } };
         AssertCode("bridge-selection-drift", () => CompositionCandidateBuilder.Build(snapshot, catalog, drift, review));
-        var changedSelection = PlannerFixture.Authored(catalog, add: ["A", "C"], remove: ["B"], accepted: ["A", "C"],
+        var changedSelection = PlannerFixture.Authored(catalog, add: ["A", "C"], remove: ["B"], accepted: ["A"],
             settings: authored.Settings, resources: authored.Resources);
         AssertCode("bridge-selection-drift", () => CompositionCandidateBuilder.Build(snapshot, catalog, changedSelection, review));
         AssertCode("bridge-catalog-mismatch", () => CompositionCandidateBuilder.Build(snapshot, catalog,
@@ -122,6 +122,70 @@ public sealed class CompositionCandidateTests
         AssertCode("bridge-portable-unsafe", () => CompositionCandidateBuilder.Build(snapshot, catalog,
             WithSettings(authored, """{"A":{"ConnectionString":"do-not-disclose"}}"""), connectionReview));
     }
+
+    [Fact]
+    public void Adds_and_disables_features_only_in_selected_overlay_and_reads_back_exact_ids()
+    {
+        var (snapshot, catalog, _, _) = Fixture();
+        snapshot = WithShells(snapshot,
+            """{"CShells":{"Shells":{"default":{"Features":{"A":{"Existing":"PRESERVE"},"B":true}}}}}""",
+            """{"CShells":{"Shells":{"default":{"Features":{}}}},"Other":"UNCHANGED"}""");
+        var authored = PlannerFixture.Authored(catalog, add: ["A", "C"], accepted: ["A", "C"]);
+
+        var candidate = CompositionCandidateBuilder.Build(snapshot, catalog, authored, null);
+
+        Assert.Equal(snapshot.ReadText("shells.json"), System.Text.Encoding.UTF8.GetString(candidate.Files["shells.json"]));
+        Assert.Equal(snapshot.ReadText("shells.Staging.json"), System.Text.Encoding.UTF8.GetString(candidate.Files["shells.Staging.json"]));
+        using var overlay = JsonDocument.Parse(candidate.Files["shells.Production.json"]);
+        var features = overlay.RootElement.GetProperty("CShells").GetProperty("Shells").GetProperty("default").GetProperty("Features");
+        Assert.False(features.GetProperty("B").GetBoolean());
+        Assert.True(features.GetProperty("C").GetBoolean());
+        Assert.Equal("UNCHANGED", overlay.RootElement.GetProperty("Other").GetString());
+        var readback = CshellsSourceReader.Read(System.Text.Encoding.UTF8.GetString(candidate.Files["shells.json"]),
+            System.Text.Encoding.UTF8.GetString(candidate.Files["shells.Production.json"]), "default");
+        Assert.Equal(["A", "C"], readback.EnabledFeatureIds.ToArray());
+        Assert.Contains(candidate.Changes, x => x.FeatureId == "B" && x.ValueType == "feature-disabled" && x.SourceLayer == "overlay");
+        Assert.Contains(candidate.Changes, x => x.FeatureId == "C" && x.ValueType == "feature-enabled" && x.SourceLayer == "overlay");
+        Assert.DoesNotContain("PRESERVE", JsonSerializer.Serialize(candidate.Changes));
+    }
+
+    [Fact]
+    public void Known_required_removal_refuses_before_candidate_generation()
+    {
+        var (snapshot, _, _, _) = Fixture();
+        var profile = PlannerFixture.Definition("profile", "starter", ["A", "B"],
+            explanations: [new DependencyExplanation("A", "B", "required", "A needs B.")]);
+        var catalog = PlannerFixture.Catalog(profiles: [profile]);
+        var authored = PlannerFixture.Authored(catalog, profile: PlannerFixture.Ref(profile), remove: ["B"], accepted: ["A"]);
+
+        AssertCode("bridge-required-dependency-missing", () => CompositionCandidateBuilder.Build(snapshot, catalog, authored, null));
+    }
+
+    [Fact]
+    public void Unsupported_feature_mappings_refuse_without_candidate()
+    {
+        var (snapshot, catalog, _, _) = Fixture();
+        var addC = PlannerFixture.Authored(catalog, add: ["A", "C"], accepted: ["A", "C"]);
+        var keepA = PlannerFixture.Authored(catalog, add: ["A"], accepted: ["A"]);
+
+        var array = WithShells(snapshot,
+            """{"CShells":{"Shells":{"default":{"Features":["A"]}}}}""", "{}");
+        AssertCode("bridge-activation-shape-unsupported", () => CompositionCandidateBuilder.Build(array, catalog, addC, null));
+
+        var baseDisabled = WithShells(snapshot,
+            """{"CShells":{"Shells":{"default":{"Features":{"A":true,"C":false}}}}}""", "{}");
+        AssertCode("bridge-activation-base-disabled", () => CompositionCandidateBuilder.Build(baseDisabled, catalog, addC, null));
+
+        var overlaySettings = WithShells(snapshot,
+            """{"CShells":{"Shells":{"default":{"Features":{"A":true}}}}}""",
+            """{"CShells":{"Shells":{"default":{"Features":{"C":{"Private":"PRESERVE"}}}}}}""");
+        AssertCode("bridge-activation-mapping-unresolved", () => CompositionCandidateBuilder.Build(overlaySettings, catalog, keepA, null));
+    }
+
+    private static SourceSnapshot WithShells(SourceSnapshot snapshot, string baseShells, string overlayShells) =>
+        SourceSnapshot.Freeze(snapshot.Selection, snapshot.FileNames.Select(name =>
+            Pair(name, name == "shells.json" ? baseShells :
+                name == "shells.Production.json" ? overlayShells : snapshot.ReadText(name))));
 
     private static (SourceSnapshot Snapshot, SelectionCatalog Catalog, AuthoredComposition Authored, SettingReviewDocument Review) Fixture(
         bool mixedCaseOverlay = false,

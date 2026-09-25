@@ -1,3 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <ItemGroup>
+    <EmbeddedResource Include="Catalogs/foundation-selection-catalog-v1.json"
+                      LogicalName="Elsa.Modularity.Planning.Catalogs.foundation-selection-catalog-v1.json" />
+  </ItemGroup>
+
 </Project>

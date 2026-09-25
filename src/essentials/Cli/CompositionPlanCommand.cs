@@ -2,6 +2,7 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using Elsa.Cli.Worker;
+using Elsa.Modularity.Planning.Catalog;
 using Elsa.Modularity.Planning.Json;
 using Elsa.Modularity.Planning.Models;
 using Elsa.Modularity.Planning.Services;
@@ -19,7 +20,7 @@ internal static class CompositionPlanCommand
 
     public static Command Build()
     {
-        var catalog = new Option<string>("--catalog") { Description = "Pinned selection catalog JSON.", Required = true };
+        var catalog = new Option<string>("--catalog") { Description = "Optional pinned selection catalog JSON. Defaults to the bundled Foundation catalog." };
         var composition = new Option<string>("--composition") { Description = "Authored composition JSON.", Required = true };
         var inventory = new Option<string>("--inventory") { Description = "Optional supplied host-inventory snapshot JSON." };
         var persistenceEvidence = new Option<string>("--persistence-evidence") { Description = "Optional supplied safe resource-reference JSON." };
@@ -51,7 +52,9 @@ internal static class CompositionPlanCommand
         if (outputFormat is not ("text" or "json"))
             throw CliRefusal.Usage("composition-format-invalid", "The output format must be text or json.");
 
-        var catalog = SelectionJsonReader.ParseCatalog(ReadInput(result.GetRequiredValue(catalogOption)));
+        var catalog = result.GetValue(catalogOption) is { } catalogPath
+            ? SelectionJsonReader.ParseCatalog(ReadInput(catalogPath))
+            : FoundationSelectionCatalog.Load();
         var authored = SelectionJsonReader.ParseComposition(ReadInput(result.GetRequiredValue(compositionOption)));
         var profiles = (result.GetValue(workspaceProfileOption) ?? [])
             .Select(path => SelectionJsonReader.ParseWorkspaceProfile(ReadInput(path)))

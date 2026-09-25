@@ -48,6 +48,23 @@ public sealed class CompositionBridgeSourceTests
     }
 
     [Fact]
+    public void Overlay_false_disables_base_object_without_exposing_its_settings()
+    {
+        const string baseJson = """
+            {"CShells":{"Shells":{"default":{"Features":{"A":{"Private":"PRESERVE"},"B":true}}}}}
+            """;
+        const string overlayJson = """
+            {"CShells":{"Shells":{"default":{"Features":{"A":false}}}}}
+            """;
+
+        var source = CshellsSourceReader.Read(baseJson, overlayJson, "default");
+
+        Assert.Equal(["B"], source.EnabledFeatureIds.ToArray());
+        Assert.Equal(["A"], source.DisabledFeatureIds.ToArray());
+        Assert.DoesNotContain(source.SettingLeaves, x => x.FeatureId == "A");
+    }
+
+    [Fact]
     public void Array_overlay_replaces_numeric_indexes_and_does_not_treat_enabled_as_activation_state()
     {
         const string baseJson = """
@@ -73,7 +90,6 @@ public sealed class CompositionBridgeSourceTests
     [InlineData("{\"CShells\":{\"Shells\":{\"default\":{\"Features\":{\"unsafe;id\":true}}}}}", null, "default", "bridge-source-invalid")]
     [InlineData("{\"CShells\":{\"Shells\":{\"default\":{\"Features\":[\"A\",\"B\"]}}}}", "{\"CShells\":{\"Shells\":{\"default\":{\"Features\":[\"B\"]}}}}", "default", "bridge-source-duplicate")]
     [InlineData("{\"CShells\":{\"Shells\":{\"default\":{\"Features\":{\"A\":false}}}}}", "{\"CShells\":{\"Shells\":{\"default\":{\"Features\":{\"A\":{\"Flag\":true}}}}}}", "default", "bridge-source-invalid")]
-    [InlineData("{\"CShells\":{\"Shells\":{\"default\":{\"Features\":{\"A\":{\"Flag\":true}}}}}}", "{\"CShells\":{\"Shells\":{\"default\":{\"Features\":{\"A\":false}}}}}", "default", "bridge-source-invalid")]
     public void Refuses_duplicate_or_unsupported_source_layers_without_echoing_values(
         string baseJson, string? overlayJson, string shellId, string expectedCode)
     {
