@@ -18,6 +18,84 @@ public sealed class CompositionHostAttestationProbeTests
     private const string ProcessValue = "73190483";
     private const string Canary = "host-attestation-secret-canary-2039";
     private const string PackageId = "Elsa.AttestationProbe.Loadable";
+    private static readonly string[] BundleFiles =
+    [
+        "shells.json", "shells.Development.json", "shells.Staging.json",
+        "appsettings.json", "appsettings.Development.json", "appsettings.Staging.json"
+    ];
+
+    [Fact]
+    public async Task Fresh_process_uses_one_staged_bundle_for_root_and_shell_configuration()
+    {
+        const string firstOrigin = "https://first-studio.example.invalid";
+        const string secondOrigin = "https://second-studio.example.invalid";
+        var stagedBundle = Directory.CreateTempSubdirectory("elsa-workbench-bundle-").FullName;
+        try
+        {
+            foreach (var file in BundleFiles)
+            {
+                var source = WorkbenchBuild.SourceFile(file);
+                var destination = Path.Join(stagedBundle, file);
+                if (File.Exists(source))
+                    File.Copy(source, destination);
+                else
+                    File.WriteAllText(destination, "{}");
+            }
+
+            WriteBundle(firstOrigin, 774001);
+            await using (var first = await WorkbenchProcess.StartAsync(WorkbenchShell.Development, contentRoot =>
+                         {
+                             CopyStagedBundle(contentRoot);
+                             // Change the mutable handoff source after the private copy, before the child starts.
+                             WriteBundle(secondOrigin, 774002);
+                         }))
+            {
+                Assert.True(await CorsAllowsAsync(first, firstOrigin));
+                Assert.False(await CorsAllowsAsync(first, secondOrigin));
+                Assert.Contains("774001", await first.ManagementClient.GetStringAsync("/_admin/shells/default/blueprint"), StringComparison.Ordinal);
+            }
+
+            await using (var second = await WorkbenchProcess.StartAsync(WorkbenchShell.Development, CopyStagedBundle))
+            {
+                Assert.False(await CorsAllowsAsync(second, firstOrigin));
+                Assert.True(await CorsAllowsAsync(second, secondOrigin));
+                Assert.Contains("774002", await second.ManagementClient.GetStringAsync("/_admin/shells/default/blueprint"), StringComparison.Ordinal);
+                Assert.Equal(BundleFiles.Length, BundleFiles.Count(file => File.Exists(Path.Join(second.ContentRoot, file))));
+            }
+
+            // A file-at-a-time deployment has no complete-bundle boundary: source mutation between copies
+            // creates a third process with root and shell values from different source revisions.
+            WriteBundle(firstOrigin, 774001);
+            await using var mixed = await WorkbenchProcess.StartAsync(WorkbenchShell.Development, contentRoot =>
+            {
+                File.Copy(Path.Join(stagedBundle, "appsettings.Development.json"),
+                    Path.Join(contentRoot, "appsettings.Development.json"), overwrite: true);
+                WriteBundle(secondOrigin, 774003);
+                File.Copy(Path.Join(stagedBundle, "shells.Development.json"),
+                    Path.Join(contentRoot, "shells.Development.json"), overwrite: true);
+            });
+            Assert.True(await CorsAllowsAsync(mixed, firstOrigin));
+            Assert.Contains("774003", await mixed.ManagementClient.GetStringAsync("/_admin/shells/default/blueprint"), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(stagedBundle, recursive: true);
+        }
+
+        void WriteBundle(string origin, int setting)
+        {
+            WorkbenchConfigurationFile.WriteValue(
+                Path.Join(stagedBundle, "appsettings.Development.json"),
+                ["Cors", "AllowedOrigins", "0"], origin);
+            WriteSetting(Path.Join(stagedBundle, "shells.Development.json"), setting);
+        }
+
+        void CopyStagedBundle(string contentRoot)
+        {
+            foreach (var file in BundleFiles)
+                File.Copy(Path.Join(stagedBundle, file), Path.Join(contentRoot, file), overwrite: true);
+        }
+    }
 
     [Fact]
     public async Task Shell_reload_can_advance_while_startup_bound_host_configuration_stays_old()
@@ -78,11 +156,7 @@ public sealed class CompositionHostAttestationProbeTests
 
         var readiness = await ReadinessAsync(host);
         var safeResponses = new List<string>();
-        foreach (var file in new[]
-                 {
-                     "shells.json", "shells.Development.json", "shells.Staging.json",
-                     "appsettings.json", "appsettings.Development.json", "appsettings.Staging.json"
-                 })
+        foreach (var file in BundleFiles)
         {
             var path = Path.Combine(host.ContentRoot, file);
             WriteSetting(path, 200 + safeResponses.Count);
