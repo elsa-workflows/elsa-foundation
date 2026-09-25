@@ -1,9 +1,9 @@
 ---
 status: proposed
 date: 2026-08-07
-amended: 2026-09-24
+amended: 2026-09-25
 decision_context: FR-1 discussion on issue #1144, agreed by Joey Barten, Sipke Schoorstra and Frans van Ek
-amendment_context: 2026-09-22, patch derivation changed from commit height to last-published state after the rename hazard was measured; agreed on PR #1948 by Frans van Ek, Joey Barten and Sipke Schoorstra, the same three who agreed the original. 2026-09-24, Line A membership is defined by a rule rather than a heuristic, which settles the six undecided packages; proposed by Sipke Schoorstra and awaiting the agreement of Frans van Ek and Joey Barten. 2026-09-24, the last-published record moves out of the generated dependency map into its own committed file that only publishing, or its audited repair workflow, writes; proposed by Sipke Schoorstra and awaiting the agreement of Frans van Ek and Joey Barten.
+amendment_context: 2026-09-22, patch derivation changed from commit height to last-published state after the rename hazard was measured; agreed on PR #1948 by Frans van Ek, Joey Barten and Sipke Schoorstra, the same three who agreed the original. 2026-09-24, Line A membership is defined by a rule rather than a heuristic, which settles the six undecided packages; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten. 2026-09-24, the last-published record moves out of the generated dependency map into its own committed file that only publishing, or its audited repair workflow, writes; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten.
 ---
 
 # Package versioning uses two version lines with a computed patch digit
