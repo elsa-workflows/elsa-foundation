@@ -3,10 +3,11 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Elsa.Secrets.Tests.Support;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Elsa.Secrets.Tests;
 
-public sealed class SecretsApiLifecycleContractTests
+public sealed class SecretsApiLifecycleContractTests(ITestOutputHelper output)
 {
     private static readonly IReadOnlySet<string> LifecycleEndpoints = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -21,7 +22,7 @@ public sealed class SecretsApiLifecycleContractTests
     [Fact]
     public async Task Create_supports_encrypted_and_configuration_inputs_but_returns_metadata_only()
     {
-        await using var host = await SecretsCanaryHost.StartMigratedAsync();
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
         const string valueMarker = "lifecycle-value-marker";
         const string configurationMarker = "lifecycle:configuration:marker";
 
@@ -47,7 +48,7 @@ public sealed class SecretsApiLifecycleContractTests
     [Fact]
     public async Task Update_uses_route_name_as_authority_and_changes_metadata_only()
     {
-        await using var host = await SecretsCanaryHost.StartMigratedAsync();
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
         const string routeName = "lifecycle-route-authority";
 
         using (var create = await host.Client.SendAsync(JsonRequest(
@@ -76,7 +77,7 @@ public sealed class SecretsApiLifecycleContractTests
     [Fact]
     public async Task Duplicate_create_is_rejected_without_overwriting_existing_metadata()
     {
-        await using var host = await SecretsCanaryHost.StartMigratedAsync();
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
         const string name = "lifecycle-duplicate";
 
         using (var create = await host.Client.SendAsync(JsonRequest(
@@ -102,7 +103,7 @@ public sealed class SecretsApiLifecycleContractTests
     [Fact]
     public async Task Rotate_revoke_delete_and_test_preserve_lifecycle_semantics()
     {
-        await using var host = await SecretsCanaryHost.StartMigratedAsync();
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
         const string name = "lifecycle-transitions";
 
         using (var create = await host.Client.SendAsync(JsonRequest(
@@ -142,7 +143,7 @@ public sealed class SecretsApiLifecycleContractTests
     [Fact]
     public async Task Malformed_or_empty_lifecycle_bodies_fail_without_mutation()
     {
-        await using var host = await SecretsCanaryHost.StartMigratedAsync();
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
         const string name = "lifecycle-malformed";
 
         using var malformed = await host.Client.SendAsync(JsonRequest(HttpMethod.Post, "/secrets", "write", "{not-json"));
