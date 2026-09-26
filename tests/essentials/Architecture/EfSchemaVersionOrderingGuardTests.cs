@@ -1,5 +1,6 @@
 using System.Text;
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -18,8 +19,6 @@ namespace Elsa.Architecture.Tests;
 /// </summary>
 public sealed class EfSchemaVersionOrderingGuardTests
 {
-    private static readonly string RepoRoot = FindRepoRoot();
-
     [Fact]
     public void Schema_version_is_the_first_clause_of_its_condition_in_every_production_source()
     {
@@ -455,18 +454,5 @@ public sealed class EfSchemaVersionOrderingGuardTests
     {
         for (var i = start; i < end && i < source.Length; i++)
             masked[i] = source[i] == '\n' ? '\n' : ' ';
-    }
-
-    private static bool IsBuildOutput(string path) =>
-        path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
-        path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
-            directory = directory.Parent;
-
-        return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
     }
 }

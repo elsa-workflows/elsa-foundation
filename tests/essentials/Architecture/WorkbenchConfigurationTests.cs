@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 using YamlDotNet.RepresentationModel;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -263,16 +264,5 @@ public sealed class WorkbenchConfigurationTests
         return environment.Children.ToDictionary(
             x => Assert.IsType<YamlScalarNode>(x.Key).Value!,
             x => Assert.IsType<YamlScalarNode>(x.Value).Value!);
-    }
-
-    private static string RepoRoot { get; } = FindRepoRoot();
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
-            directory = directory.Parent;
-
-        return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
     }
 }

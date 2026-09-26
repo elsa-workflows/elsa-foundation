@@ -1,4 +1,5 @@
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -15,8 +16,6 @@ namespace Elsa.Architecture.Tests;
 /// </remarks>
 public sealed class LineAClosureGuardTests
 {
-    private static string RepoRoot { get; } = FindRepoRoot();
-
     /// <summary>Line A membership, in the order <c>VersionLines.props</c> lists it.</summary>
     private static IReadOnlyList<string> LineAMembers { get; } = VersionLines.LineAMembers(RepoRoot);
 
@@ -89,13 +88,4 @@ public sealed class LineAClosureGuardTests
         "Line A is not closed under ProjectReference (ADR 0067). Either add the referenced project to " +
         "VersionLines.props or remove the reference:" +
         string.Concat(violations.Select(violation => $"{Environment.NewLine}  {violation}"));
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
-            directory = directory.Parent;
-
-        return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
-    }
 }

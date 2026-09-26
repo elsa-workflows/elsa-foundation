@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Xml.Linq;
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -37,8 +38,6 @@ public sealed class EfCoreDependencyGuardTests
         "OpenIddict.EntityFrameworkCore.Models"
     ];
     private const string EfPackageToken = "EntityFrameworkCore";
-
-    private static readonly string RepoRoot = FindRepoRoot();
 
     [Fact]
     public void Only_admitted_consumers_and_pilot_projects_resolve_ef_core_packages()
@@ -774,8 +773,6 @@ public sealed class EfCoreDependencyGuardTests
                OpenIddictPersistenceArchitectureTests.IsWorkbenchVendorEfSource(relativePath);
     }
 
-    private static bool IsBuildOutput(string path) => path.Replace('\\', '/') is var p && (p.Contains("/bin/") || p.Contains("/obj/"));
-
     private static bool IsMsBuildFile(string path) =>
         path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ||
         path.EndsWith(".props", StringComparison.OrdinalIgnoreCase) ||
@@ -783,14 +780,6 @@ public sealed class EfCoreDependencyGuardTests
 
     private static string Report(string what, IEnumerable<string> offenders) =>
         $"These src entries {what}:{Environment.NewLine}{string.Join(Environment.NewLine, offenders)}";
-
-    private static string FindRepoRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-            if (File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
-                return directory.FullName;
-        throw new DirectoryNotFoundException("Could not find repository root.");
-    }
 
     private sealed record Project(string Name, IReadOnlyDictionary<string, string[]> EfPackagesByConfiguration, bool IsAdmittedRepository);
 

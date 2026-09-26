@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -13,7 +14,6 @@ public sealed partial class RuntimeCheckpointCommitValidationBoundaryTests
 {
     private const string Committer = "src/essentials/Workflows/Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs";
     private const string CoalescingStore = "src/essentials/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs";
-    private static readonly string RepoRoot = FindRepoRoot();
 
     /// <summary>
     /// Every production file allowed to name a checkpoint commit store type. Only <see cref="Committer"/> and
@@ -40,7 +40,7 @@ public sealed partial class RuntimeCheckpointCommitValidationBoundaryTests
     {
         var referencing = ModuleRoots.ProductionSourceFiles(RepoRoot)
             .Select(path => Path.GetRelativePath(RepoRoot, path).Replace('\\', '/'))
-            .Where(path => !path.Contains("/obj/", StringComparison.Ordinal) && !path.Contains("/bin/", StringComparison.Ordinal))
+            .Where(path => !IsBuildOutput(path))
             .Where(path => CheckpointCommitStoreType().IsMatch(File.ReadAllText(Path.Join(RepoRoot, path))))
             .Order(StringComparer.Ordinal);
 
@@ -55,12 +55,4 @@ public sealed partial class RuntimeCheckpointCommitValidationBoundaryTests
 
     [GeneratedRegex(@"\b(IRuntimeCheckpointCommitStore|InMemoryRuntimeCheckpointCommitStore|EfRuntimeCheckpointCommitStore)\b")]
     private static partial Regex CheckpointCommitStoreType();
-
-    private static string FindRepoRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-            if (File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
-                return directory.FullName;
-        throw new DirectoryNotFoundException("Could not find repository root.");
-    }
 }

@@ -1,5 +1,5 @@
-using System.Text.RegularExpressions;
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -26,7 +26,7 @@ namespace Elsa.Architecture.Tests;
 /// detector by feeding it a violating input.
 /// </para>
 /// </remarks>
-public sealed partial class RetiredPersistenceFamilyGuardTests
+public sealed class RetiredPersistenceFamilyGuardTests
 {
     /// <summary>The retired family names, assembled so this source file is not itself a violation.</summary>
     private static readonly string[] RetiredNames =
@@ -86,7 +86,7 @@ public sealed partial class RetiredPersistenceFamilyGuardTests
                 continue;
 
             foreach (var project in Directory.EnumerateFiles(rootPath, "*.csproj", SearchOption.AllDirectories)
-                         .Where(path => !IsBuildOutput(path)))
+                         .Where(path => !IsBuildOrPackageOutput(path)))
             {
                 scannedProjects++;
                 var relativePath = RelativePath(project);
@@ -95,7 +95,7 @@ public sealed partial class RetiredPersistenceFamilyGuardTests
             }
 
             foreach (var directory in Directory.EnumerateDirectories(rootPath, "*", SearchOption.AllDirectories)
-                         .Where(path => !IsBuildOutput(path)))
+                         .Where(path => !IsBuildOrPackageOutput(path)))
             {
                 var relativePath = RelativePath(directory);
                 if (RetiredNames.Any(name => Path.GetFileName(relativePath).Contains(name, StringComparison.OrdinalIgnoreCase)))
@@ -159,7 +159,7 @@ public sealed partial class RetiredPersistenceFamilyGuardTests
 
             foreach (var path in Directory.EnumerateFiles(rootPath, "*", SearchOption.AllDirectories))
             {
-                if (IsBuildOutput(path) || !ScannedExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
+                if (IsBuildOrPackageOutput(path) || !ScannedExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
                     continue;
                 yield return (path, RelativePath(path));
             }
@@ -173,25 +173,11 @@ public sealed partial class RetiredPersistenceFamilyGuardTests
         }
     }
 
-    private static bool IsBuildOutput(string path) =>
-        BuildOutputRegex().IsMatch(path.Replace(Path.DirectorySeparatorChar, '/'));
-
-    [GeneratedRegex(@"/(bin|obj|node_modules)/", RegexOptions.CultureInvariant)]
-    private static partial Regex BuildOutputRegex();
+    private static bool IsBuildOrPackageOutput(string path) =>
+        IsBuildOutput(path) || path.Replace(Path.DirectorySeparatorChar, '/').Contains("/node_modules/", StringComparison.Ordinal);
 
     private static string FullPath(string relativePath) => Path.Combine(RepoRoot, relativePath);
 
     private static string RelativePath(string path) =>
         Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/');
-
-    private static string RepoRoot { get; } = FindRepoRoot();
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
-            directory = directory.Parent;
-
-        return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
-    }
 }

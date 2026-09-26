@@ -1,4 +1,5 @@
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -17,8 +18,6 @@ namespace Elsa.Architecture.Tests;
 /// </remarks>
 public sealed class PublicApiFilesGuardTests
 {
-    private static string RepoRoot { get; } = FindRepoRoot();
-
     private static IReadOnlyList<string> LineAMembers { get; } = VersionLines.LineAMembers(RepoRoot);
 
     /// <summary>Every Elsa project under <c>src/</c>, by name, with the directory its <c>.csproj</c> lives in.</summary>
@@ -170,15 +169,6 @@ public sealed class PublicApiFilesGuardTests
                 path => Path.GetFileNameWithoutExtension(path)!,
                 path => Path.GetDirectoryName(Path.GetFullPath(path))!,
                 StringComparer.OrdinalIgnoreCase);
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
-            directory = directory.Parent;
-
-        return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
-    }
 
     /// <summary>A throwaway directory tree for the detector-proof tests, cleaned up on dispose.</summary>
     private sealed class TempSandbox : IDisposable
