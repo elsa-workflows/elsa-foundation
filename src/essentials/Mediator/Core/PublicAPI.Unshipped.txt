@@ -1,0 +1,65 @@
+#nullable enable
+abstract Elsa.Mediator.Core.Services.MessagePipeline.CreateDefaultPipeline() -> Elsa.Pipelines.Core.Contracts.PipelineDelegate<Elsa.Mediator.Core.Contracts.IMessageContext!>!
+Elsa.Mediator.Core.Contracts.ICommand
+Elsa.Mediator.Core.Contracts.ICommand<T>
+Elsa.Mediator.Core.Contracts.ICommandHandler
+Elsa.Mediator.Core.Contracts.ICommandHandler<TCommand, TResult>
+Elsa.Mediator.Core.Contracts.ICommandHandler<TCommand, TResult>.Handle(TCommand command, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResult>!
+Elsa.Mediator.Core.Contracts.ICommandHandler<TCommand>
+Elsa.Mediator.Core.Contracts.ICommandSender
+Elsa.Mediator.Core.Contracts.ICommandSender.Send(Elsa.Mediator.Core.Contracts.ICommand! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Elsa.Mediator.Core.Contracts.ICommandSender.Send<T>(Elsa.Mediator.Core.Contracts.ICommand<T>! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<T>!
+Elsa.Mediator.Core.Contracts.IMessageContext
+Elsa.Mediator.Core.Contracts.IMessageContext.CancellationToken.get -> System.Threading.CancellationToken
+Elsa.Mediator.Core.Contracts.IMessageContext.HandlerServiceTypeDefinition.get -> System.Type!
+Elsa.Mediator.Core.Contracts.IMessageContext.Message.get -> object!
+Elsa.Mediator.Core.Contracts.IMessageContext.MessageKind.get -> string!
+Elsa.Mediator.Core.Contracts.IMessageContext.Result.get -> object?
+Elsa.Mediator.Core.Contracts.IMessageContext.Result.set -> void
+Elsa.Mediator.Core.Contracts.IMessageContext.ResultType.get -> System.Type!
+Elsa.Mediator.Core.Contracts.IMessageContext.ServiceProvider.get -> System.IServiceProvider!
+Elsa.Mediator.Core.Contracts.IMessageMiddleware
+Elsa.Mediator.Core.Contracts.IMessageMiddleware.Invoke(Elsa.Mediator.Core.Contracts.IMessageContext! context) -> System.Threading.Tasks.ValueTask
+Elsa.Mediator.Core.Contracts.IMessagePipeline
+Elsa.Mediator.Core.Contracts.IMessagePipeline.Execute(Elsa.Mediator.Core.Contracts.IMessageContext! context) -> System.Threading.Tasks.Task!
+Elsa.Mediator.Core.Contracts.IMessagePipeline.Pipeline.get -> Elsa.Pipelines.Core.Contracts.PipelineDelegate<Elsa.Mediator.Core.Contracts.IMessageContext!>!
+Elsa.Mediator.Core.Contracts.IMessagePipeline.Setup(System.Action<Elsa.Pipelines.Core.Contracts.IPipelineBuilder<Elsa.Mediator.Core.Contracts.IMessageContext!>!>? setup = null) -> Elsa.Pipelines.Core.Contracts.PipelineDelegate<Elsa.Mediator.Core.Contracts.IMessageContext!>!
+Elsa.Mediator.Core.Contracts.IRequest
+Elsa.Mediator.Core.Contracts.IRequest<T>
+Elsa.Mediator.Core.Contracts.IRequestHandler
+Elsa.Mediator.Core.Contracts.IRequestHandler<TRequest, TResponse>
+Elsa.Mediator.Core.Contracts.IRequestHandler<TRequest, TResponse>.Handle(TRequest request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResponse>!
+Elsa.Mediator.Core.Contracts.IRequestSender
+Elsa.Mediator.Core.Contracts.IRequestSender.Send<T>(Elsa.Mediator.Core.Contracts.IRequest<T>! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<T>!
+Elsa.Mediator.Core.Extensions.ServiceCollectionExtensions
+Elsa.Mediator.Core.Models.MessageContext<TResult>
+Elsa.Mediator.Core.Models.MessageContext<TResult>.CancellationToken.get -> System.Threading.CancellationToken
+Elsa.Mediator.Core.Models.MessageContext<TResult>.HandlerServiceTypeDefinition.get -> System.Type!
+Elsa.Mediator.Core.Models.MessageContext<TResult>.Message.get -> object!
+Elsa.Mediator.Core.Models.MessageContext<TResult>.MessageContext(object! message, System.Type! handlerServiceTypeDefinition, string! messageKind, System.IServiceProvider! serviceProvider, System.Threading.CancellationToken cancellationToken) -> void
+Elsa.Mediator.Core.Models.MessageContext<TResult>.MessageKind.get -> string!
+Elsa.Mediator.Core.Models.MessageContext<TResult>.Result.get -> TResult?
+Elsa.Mediator.Core.Models.MessageContext<TResult>.Result.set -> void
+Elsa.Mediator.Core.Models.MessageContext<TResult>.ResultType.get -> System.Type!
+Elsa.Mediator.Core.Models.MessageContext<TResult>.ServiceProvider.get -> System.IServiceProvider!
+Elsa.Mediator.Core.Models.Unit
+Elsa.Mediator.Core.Models.Unit.Unit() -> void
+Elsa.Mediator.Core.Models.Unit.Unit(Elsa.Mediator.Core.Models.Unit! original) -> void
+Elsa.Mediator.Core.Services.MessagePipeline
+Elsa.Mediator.Core.Services.MessagePipeline.Execute(Elsa.Mediator.Core.Contracts.IMessageContext! context) -> System.Threading.Tasks.Task!
+Elsa.Mediator.Core.Services.MessagePipeline.MessagePipeline(System.IServiceProvider! serviceProvider) -> void
+Elsa.Mediator.Core.Services.MessagePipeline.Pipeline.get -> Elsa.Pipelines.Core.Contracts.PipelineDelegate<Elsa.Mediator.Core.Contracts.IMessageContext!>!
+Elsa.Mediator.Core.Services.MessagePipeline.Setup(System.Action<Elsa.Pipelines.Core.Contracts.IPipelineBuilder<Elsa.Mediator.Core.Contracts.IMessageContext!>!>? setup = null) -> Elsa.Pipelines.Core.Contracts.PipelineDelegate<Elsa.Mediator.Core.Contracts.IMessageContext!>!
+override Elsa.Mediator.Core.Models.Unit.Equals(object? obj) -> bool
+override Elsa.Mediator.Core.Models.Unit.GetHashCode() -> int
+override Elsa.Mediator.Core.Models.Unit.ToString() -> string!
+static Elsa.Mediator.Core.Extensions.ServiceCollectionExtensions.AddCommandHandlersFrom(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Reflection.Assembly! assembly) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Mediator.Core.Extensions.ServiceCollectionExtensions.AddRequestHandler<THandler, TRequest, TResponse>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Mediator.Core.Extensions.ServiceCollectionExtensions.AddRequestHandlersFrom(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Reflection.Assembly! assembly) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Mediator.Core.Models.Unit.operator !=(Elsa.Mediator.Core.Models.Unit? left, Elsa.Mediator.Core.Models.Unit? right) -> bool
+static Elsa.Mediator.Core.Models.Unit.operator ==(Elsa.Mediator.Core.Models.Unit? left, Elsa.Mediator.Core.Models.Unit? right) -> bool
+static readonly Elsa.Mediator.Core.Models.Unit.Instance -> Elsa.Mediator.Core.Models.Unit!
+virtual Elsa.Mediator.Core.Models.Unit.<Clone>$() -> Elsa.Mediator.Core.Models.Unit!
+virtual Elsa.Mediator.Core.Models.Unit.EqualityContract.get -> System.Type!
+virtual Elsa.Mediator.Core.Models.Unit.Equals(Elsa.Mediator.Core.Models.Unit? other) -> bool
+virtual Elsa.Mediator.Core.Models.Unit.PrintMembers(System.Text.StringBuilder! builder) -> bool

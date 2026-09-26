@@ -1,0 +1,268 @@
+#nullable enable
+const Elsa.Primitives.Diagnostics.ActivityErrorCodes.ActionForbidden = "activity.action.forbidden" -> string!
+const Elsa.Primitives.Diagnostics.ActivityErrorCodes.AuthorizationDenied = "activity.authorization.denied" -> string!
+const Elsa.Primitives.Diagnostics.ActivityErrorCodes.CursorExpired = "activity.cursor.expired" -> string!
+const Elsa.Primitives.Diagnostics.ActivityErrorCodes.DependencyCycle = "activity.dependency.cycle" -> string!
+const Elsa.Primitives.Diagnostics.ActivityErrorCodes.DependencyUnresolved = "activity.dependency.unresolved" -> string!
+const Elsa.Primitives.Diagnostics.ActivityErrorCodes.ForkCollision = "activity.fork.collision" -> string!
+const Elsa.Primitives.Diagnostics.ActivityErrorCodes.OperationFailed = "activity.operation.failed" -> string!
+const Elsa.Primitives.Diagnostics.ActivityErrorCodes.ProviderDiagnostic = "activity.provider.diagnostic" -> string!
+const Elsa.Primitives.Diagnostics.ActivityErrorCodes.ProviderFailure = "activity.provider.failure" -> string!
+const Elsa.Primitives.Diagnostics.ActivityErrorCodes.ProviderUnavailable = "activity.provider.unavailable" -> string!
+const Elsa.Primitives.Diagnostics.ActivityErrorCodes.PublicationConflict = "activity.publication.conflict" -> string!
+const Elsa.Primitives.Diagnostics.ActivityErrorCodes.PublicationInvalid = "activity.publication.invalid" -> string!
+const Elsa.Primitives.Diagnostics.ActivityErrorCodes.RequestInvalid = "activity.request.invalid" -> string!
+const Elsa.Primitives.Diagnostics.ActivityErrorCodes.VersionConflict = "activity.version.conflict" -> string!
+const Elsa.Primitives.Diagnostics.ActivityErrorCodes.VersionInvalid = "activity.version.invalid" -> string!
+Elsa.Primitives.Contracts.IIdentityGenerator
+Elsa.Primitives.Contracts.IIdentityGenerator.Generate() -> string!
+Elsa.Primitives.Contracts.ISystemClock
+Elsa.Primitives.Contracts.ISystemClock.UtcNow.get -> System.DateTimeOffset
+Elsa.Primitives.Diagnostics.ActivityErrorCodes
+Elsa.Primitives.Diagnostics.ObservationalTelemetryScope
+Elsa.Primitives.Diagnostics.ObservationalTelemetryScope.Dispose() -> void
+Elsa.Primitives.Diagnostics.ObservationalTelemetryScope.Observe(System.Action! observation) -> void
+Elsa.Primitives.Diagnostics.ObservationalTelemetryScope.Observe<T>(System.Func<T!>! resourceFactory, System.Action<T!>! observation) -> void
+Elsa.Primitives.Diagnostics.ObservationalTelemetryScope.SetStatus(System.Diagnostics.ActivityStatusCode status) -> void
+Elsa.Primitives.Diagnostics.ObservationalTelemetryScope.SetTag(string! key, object? value) -> void
+Elsa.Primitives.Entities.Entity
+Elsa.Primitives.Entities.Entity.CreatedAt.get -> System.DateTimeOffset
+Elsa.Primitives.Entities.Entity.CreatedAt.set -> void
+Elsa.Primitives.Entities.Entity.Entity() -> void
+Elsa.Primitives.Entities.Entity.Id.get -> string!
+Elsa.Primitives.Entities.Entity.Id.set -> void
+Elsa.Primitives.Entities.Entity.LastModifiedAt.get -> System.DateTimeOffset
+Elsa.Primitives.Entities.Entity.LastModifiedAt.set -> void
+Elsa.Primitives.Entities.Entity.RowNumber.get -> long
+Elsa.Primitives.Entities.Entity.RowNumber.set -> void
+Elsa.Primitives.Entities.TenantEntity
+Elsa.Primitives.Entities.TenantEntity.TenantEntity() -> void
+Elsa.Primitives.Entities.TenantEntity.TenantId.get -> string?
+Elsa.Primitives.Entities.TenantEntity.TenantId.set -> void
+Elsa.Primitives.Enums.DuplicateHandling
+Elsa.Primitives.Enums.DuplicateHandling.Skip = 1 -> Elsa.Primitives.Enums.DuplicateHandling
+Elsa.Primitives.Enums.DuplicateHandling.Throw = 0 -> Elsa.Primitives.Enums.DuplicateHandling
+Elsa.Primitives.Exceptions.EntityNotFoundException
+Elsa.Primitives.Exceptions.EntityNotFoundException.EntityNotFoundException() -> void
+Elsa.Primitives.Exceptions.EntityNotFoundException.EntityNotFoundException(string? message) -> void
+Elsa.Primitives.Exceptions.EntityNotFoundException.EntityNotFoundException(string? message, System.Exception? innerException) -> void
+Elsa.Primitives.Exceptions.FeatureConfigurationException
+Elsa.Primitives.Exceptions.FeatureConfigurationException.FeatureConfigurationException() -> void
+Elsa.Primitives.Exceptions.FeatureConfigurationException.FeatureConfigurationException(string? message) -> void
+Elsa.Primitives.Extensions.CollectionExtensions
+Elsa.Primitives.Extensions.ObjectExtensions
+Elsa.Primitives.Extensions.PropertyAccessorExtensions
+Elsa.Primitives.Extensions.QueryableExtensions
+Elsa.Primitives.Extensions.StringExtensions
+Elsa.Primitives.Extensions.TypeExtensions
+Elsa.Primitives.Identity.GuidIdentityGenerator
+Elsa.Primitives.Identity.GuidIdentityGenerator.Generate() -> string!
+Elsa.Primitives.Identity.GuidIdentityGenerator.GuidIdentityGenerator() -> void
+Elsa.Primitives.Identity.IdentityGeneratorKind
+Elsa.Primitives.Identity.IdentityGeneratorKind.Guid = 3 -> Elsa.Primitives.Identity.IdentityGeneratorKind
+Elsa.Primitives.Identity.IdentityGeneratorKind.Short = 1 -> Elsa.Primitives.Identity.IdentityGeneratorKind
+Elsa.Primitives.Identity.IdentityGeneratorKind.Snowflake = 2 -> Elsa.Primitives.Identity.IdentityGeneratorKind
+Elsa.Primitives.Identity.IdentityGeneratorKind.UuidV7 = 0 -> Elsa.Primitives.Identity.IdentityGeneratorKind
+Elsa.Primitives.Identity.ShortIdentityGenerator
+Elsa.Primitives.Identity.ShortIdentityGenerator.Generate() -> string!
+Elsa.Primitives.Identity.ShortIdentityGenerator.ShortIdentityGenerator(Elsa.Primitives.Contracts.ISystemClock! systemClock) -> void
+Elsa.Primitives.Identity.SnowflakeIdentityGenerator
+Elsa.Primitives.Identity.SnowflakeIdentityGenerator.Generate() -> string!
+Elsa.Primitives.Identity.SnowflakeIdentityGenerator.SnowflakeIdentityGenerator(Elsa.Primitives.Contracts.ISystemClock! systemClock, Elsa.Primitives.Identity.SnowflakeIdentitySequence! sequence) -> void
+Elsa.Primitives.Identity.SnowflakeIdentityGeneratorOptions
+Elsa.Primitives.Identity.SnowflakeIdentityGeneratorOptions.Epoch.get -> System.DateTimeOffset
+Elsa.Primitives.Identity.SnowflakeIdentityGeneratorOptions.Epoch.set -> void
+Elsa.Primitives.Identity.SnowflakeIdentityGeneratorOptions.SnowflakeIdentityGeneratorOptions() -> void
+Elsa.Primitives.Identity.SnowflakeIdentityGeneratorOptions.WorkerId.get -> long
+Elsa.Primitives.Identity.SnowflakeIdentityGeneratorOptions.WorkerId.set -> void
+Elsa.Primitives.Identity.SnowflakeIdentitySequence
+Elsa.Primitives.Identity.SnowflakeIdentitySequence.Next(Elsa.Primitives.Contracts.ISystemClock! systemClock) -> long
+Elsa.Primitives.Identity.SnowflakeIdentitySequence.SnowflakeIdentitySequence(Elsa.Primitives.Identity.SnowflakeIdentityGeneratorOptions! options) -> void
+Elsa.Primitives.Identity.UuidV7IdentityGenerator
+Elsa.Primitives.Identity.UuidV7IdentityGenerator.Generate() -> string!
+Elsa.Primitives.Identity.UuidV7IdentityGenerator.UuidV7IdentityGenerator(Elsa.Primitives.Contracts.ISystemClock! systemClock) -> void
+Elsa.Primitives.Models.ClrActivityDescriptor
+Elsa.Primitives.Models.ClrActivityDescriptor.<Clone>$() -> Elsa.Primitives.Models.ClrActivityDescriptor!
+Elsa.Primitives.Models.ClrActivityDescriptor.ClrActivityDescriptor(string! TypeAlias) -> void
+Elsa.Primitives.Models.ClrActivityDescriptor.Deconstruct(out string! TypeAlias) -> void
+Elsa.Primitives.Models.ClrActivityDescriptor.Equals(Elsa.Primitives.Models.ClrActivityDescriptor? other) -> bool
+Elsa.Primitives.Models.ClrActivityDescriptor.TypeAlias.get -> string!
+Elsa.Primitives.Models.ClrActivityDescriptor.TypeAlias.init -> void
+Elsa.Primitives.Models.CollectionKind
+Elsa.Primitives.Models.CollectionKind.Array = 1 -> Elsa.Primitives.Models.CollectionKind
+Elsa.Primitives.Models.CollectionKind.Dictionary = 4 -> Elsa.Primitives.Models.CollectionKind
+Elsa.Primitives.Models.CollectionKind.HashSet = 3 -> Elsa.Primitives.Models.CollectionKind
+Elsa.Primitives.Models.CollectionKind.List = 2 -> Elsa.Primitives.Models.CollectionKind
+Elsa.Primitives.Models.CollectionKind.Single = 0 -> Elsa.Primitives.Models.CollectionKind
+Elsa.Primitives.Models.IncidentStrategyReference
+Elsa.Primitives.Models.IncidentStrategyReference.Alias.get -> string!
+Elsa.Primitives.Models.IncidentStrategyReference.Equals(Elsa.Primitives.Models.IncidentStrategyReference? other) -> bool
+Elsa.Primitives.Models.IncidentStrategyReference.IncidentStrategyReference(string! alias, string! version) -> void
+Elsa.Primitives.Models.IncidentStrategyReference.Version.get -> string!
+Elsa.Primitives.Models.Result
+Elsa.Primitives.Models.Result.Result(bool success, object? value, System.Exception? exception) -> void
+Elsa.Primitives.Models.Result<T>
+Elsa.Primitives.Models.Result<T>.Exception.get -> System.Exception?
+Elsa.Primitives.Models.Result<T>.IsSuccess.get -> bool
+Elsa.Primitives.Models.Result<T>.OnFailure(System.Action<System.Exception!>! failureHandler) -> Elsa.Primitives.Models.Result<T>!
+Elsa.Primitives.Models.Result<T>.OnFailureAsync(System.Func<System.Exception!, System.Threading.Tasks.Task!>! failureHandler) -> System.Threading.Tasks.Task<Elsa.Primitives.Models.Result<T>!>!
+Elsa.Primitives.Models.Result<T>.OnSuccess(System.Action<T>! successHandler) -> Elsa.Primitives.Models.Result<T>!
+Elsa.Primitives.Models.Result<T>.OnSuccessAsync(System.Func<T, System.Threading.Tasks.Task!>! successHandler) -> System.Threading.Tasks.Task<Elsa.Primitives.Models.Result<T>!>!
+Elsa.Primitives.Models.Result<T>.Result(bool success, T? value, System.Exception? exception) -> void
+Elsa.Primitives.Models.Result<T>.ThrowIfFailure() -> Elsa.Primitives.Models.Result<T>!
+Elsa.Primitives.Models.Result<T>.Value.get -> T
+Elsa.Primitives.Models.Result<T>.ValueOrDefault.get -> T?
+Elsa.Primitives.Models.TypeAliasConvention
+Elsa.Primitives.Models.TypeReference
+Elsa.Primitives.Models.TypeReference.<Clone>$() -> Elsa.Primitives.Models.TypeReference!
+Elsa.Primitives.Models.TypeReference.Alias.get -> string!
+Elsa.Primitives.Models.TypeReference.Alias.init -> void
+Elsa.Primitives.Models.TypeReference.CollectionKind.get -> Elsa.Primitives.Models.CollectionKind
+Elsa.Primitives.Models.TypeReference.CollectionKind.init -> void
+Elsa.Primitives.Models.TypeReference.Deconstruct(out string! Alias, out Elsa.Primitives.Models.CollectionKind CollectionKind) -> void
+Elsa.Primitives.Models.TypeReference.Equals(Elsa.Primitives.Models.TypeReference? other) -> bool
+Elsa.Primitives.Models.TypeReference.TypeReference(string! Alias, Elsa.Primitives.Models.CollectionKind CollectionKind = Elsa.Primitives.Models.CollectionKind.Single) -> void
+Elsa.Primitives.Models.TypeReferenceFactory
+Elsa.Primitives.Models.ValueRepresentation
+Elsa.Primitives.Models.ValueRepresentation.BinaryContent = 4 -> Elsa.Primitives.Models.ValueRepresentation
+Elsa.Primitives.Models.ValueRepresentation.DurableReference = 5 -> Elsa.Primitives.Models.ValueRepresentation
+Elsa.Primitives.Models.ValueRepresentation.FormattedContent = 3 -> Elsa.Primitives.Models.ValueRepresentation
+Elsa.Primitives.Models.ValueRepresentation.StructuredValue = 1 -> Elsa.Primitives.Models.ValueRepresentation
+Elsa.Primitives.Models.ValueRepresentation.TextValue = 2 -> Elsa.Primitives.Models.ValueRepresentation
+Elsa.Primitives.Models.ValueRepresentation.TransientResource = 6 -> Elsa.Primitives.Models.ValueRepresentation
+Elsa.Primitives.Models.ValueRepresentation.TypedValue = 0 -> Elsa.Primitives.Models.ValueRepresentation
+Elsa.Primitives.Models.ValueRepresentationDefaults
+Elsa.Primitives.Models.ValueTypeDescriptor
+Elsa.Primitives.Models.ValueTypeDescriptor.<Clone>$() -> Elsa.Primitives.Models.ValueTypeDescriptor!
+Elsa.Primitives.Models.ValueTypeDescriptor.Alias.get -> string!
+Elsa.Primitives.Models.ValueTypeDescriptor.CollectionKind.get -> Elsa.Primitives.Models.CollectionKind
+Elsa.Primitives.Models.ValueTypeDescriptor.Equals(Elsa.Primitives.Models.ValueTypeDescriptor? other) -> bool
+Elsa.Primitives.Models.ValueTypeDescriptor.Schema.get -> System.Text.Json.JsonElement?
+Elsa.Primitives.Models.ValueTypeDescriptor.SchemaVersion.get -> int?
+Elsa.Primitives.Models.ValueTypeDescriptor.ToTypeReference() -> Elsa.Primitives.Models.TypeReference!
+Elsa.Primitives.Models.ValueTypeDescriptor.ValueTypeDescriptor(string! alias, Elsa.Primitives.Models.CollectionKind collectionKind = Elsa.Primitives.Models.CollectionKind.Single, System.Text.Json.JsonElement? schema = null, int? schemaVersion = null) -> void
+Elsa.Primitives.Persistence.OrderDefinition<T, TProp>
+Elsa.Primitives.Persistence.OrderDefinition<T, TProp>.Direction.get -> Elsa.Primitives.Persistence.OrderDirection
+Elsa.Primitives.Persistence.OrderDefinition<T, TProp>.Direction.set -> void
+Elsa.Primitives.Persistence.OrderDefinition<T, TProp>.KeySelector.get -> System.Linq.Expressions.Expression<System.Func<T, TProp>!>!
+Elsa.Primitives.Persistence.OrderDefinition<T, TProp>.KeySelector.set -> void
+Elsa.Primitives.Persistence.OrderDefinition<T, TProp>.OrderDefinition() -> void
+Elsa.Primitives.Persistence.OrderDefinition<T, TProp>.OrderDefinition(System.Linq.Expressions.Expression<System.Func<T, TProp>!>! keySelector, Elsa.Primitives.Persistence.OrderDirection direction) -> void
+Elsa.Primitives.Persistence.OrderDirection
+Elsa.Primitives.Persistence.OrderDirection.Ascending = 0 -> Elsa.Primitives.Persistence.OrderDirection
+Elsa.Primitives.Persistence.OrderDirection.Descending = 1 -> Elsa.Primitives.Persistence.OrderDirection
+Elsa.Primitives.Persistence.Page
+Elsa.Primitives.Persistence.Page<T>
+Elsa.Primitives.Persistence.Page<T>.<Clone>$() -> Elsa.Primitives.Persistence.Page<T>!
+Elsa.Primitives.Persistence.Page<T>.Deconstruct(out System.Collections.Generic.ICollection<T>! Items, out long TotalCount) -> void
+Elsa.Primitives.Persistence.Page<T>.Equals(Elsa.Primitives.Persistence.Page<T>? other) -> bool
+Elsa.Primitives.Persistence.Page<T>.Items.get -> System.Collections.Generic.ICollection<T>!
+Elsa.Primitives.Persistence.Page<T>.Items.init -> void
+Elsa.Primitives.Persistence.Page<T>.Page(System.Collections.Generic.ICollection<T>! Items, long TotalCount) -> void
+Elsa.Primitives.Persistence.Page<T>.TotalCount.get -> long
+Elsa.Primitives.Persistence.Page<T>.TotalCount.init -> void
+Elsa.Primitives.Persistence.PageArgs
+Elsa.Primitives.Persistence.PageArgs.<Clone>$() -> Elsa.Primitives.Persistence.PageArgs!
+Elsa.Primitives.Persistence.PageArgs.Equals(Elsa.Primitives.Persistence.PageArgs? other) -> bool
+Elsa.Primitives.Persistence.PageArgs.Limit.get -> int?
+Elsa.Primitives.Persistence.PageArgs.Limit.set -> void
+Elsa.Primitives.Persistence.PageArgs.Next() -> Elsa.Primitives.Persistence.PageArgs!
+Elsa.Primitives.Persistence.PageArgs.Offset.get -> int?
+Elsa.Primitives.Persistence.PageArgs.Offset.set -> void
+Elsa.Primitives.Persistence.PageArgs.Page.get -> int?
+Elsa.Primitives.Persistence.PageArgs.PageArgs() -> void
+Elsa.Primitives.Persistence.PageArgs.PageSize.get -> int?
+Elsa.Primitives.Versioning.SemVer
+Elsa.Primitives.Versioning.SemVer.BuildMetadata.get -> string?
+Elsa.Primitives.Versioning.SemVer.CompareTo(Elsa.Primitives.Versioning.SemVer other) -> int
+Elsa.Primitives.Versioning.SemVer.Equals(Elsa.Primitives.Versioning.SemVer other) -> bool
+Elsa.Primitives.Versioning.SemVer.Major.get -> int
+Elsa.Primitives.Versioning.SemVer.Minor.get -> int
+Elsa.Primitives.Versioning.SemVer.Patch.get -> int
+Elsa.Primitives.Versioning.SemVer.Prerelease.get -> string?
+Elsa.Primitives.Versioning.SemVer.SemVer() -> void
+Elsa.Primitives.Versioning.SemVer.ToSortKey() -> string!
+Elsa.Primitives.Versioning.SemVerComparer
+Elsa.Primitives.Versioning.SemVerComparer.Compare(Elsa.Primitives.Versioning.SemVer x, Elsa.Primitives.Versioning.SemVer y) -> int
+Elsa.Primitives.Versioning.SemVerComparer.SemVerComparer() -> void
+override Elsa.Primitives.Models.ClrActivityDescriptor.Equals(object? obj) -> bool
+override Elsa.Primitives.Models.ClrActivityDescriptor.GetHashCode() -> int
+override Elsa.Primitives.Models.ClrActivityDescriptor.ToString() -> string!
+override Elsa.Primitives.Models.IncidentStrategyReference.Equals(object? obj) -> bool
+override Elsa.Primitives.Models.IncidentStrategyReference.GetHashCode() -> int
+override Elsa.Primitives.Models.IncidentStrategyReference.ToString() -> string!
+override Elsa.Primitives.Models.TypeReference.Equals(object? obj) -> bool
+override Elsa.Primitives.Models.TypeReference.GetHashCode() -> int
+override Elsa.Primitives.Models.TypeReference.ToString() -> string!
+override Elsa.Primitives.Models.ValueTypeDescriptor.Equals(object? obj) -> bool
+override Elsa.Primitives.Models.ValueTypeDescriptor.GetHashCode() -> int
+override Elsa.Primitives.Models.ValueTypeDescriptor.ToString() -> string!
+override Elsa.Primitives.Persistence.Page<T>.Equals(object? obj) -> bool
+override Elsa.Primitives.Persistence.Page<T>.GetHashCode() -> int
+override Elsa.Primitives.Persistence.Page<T>.ToString() -> string!
+override Elsa.Primitives.Persistence.PageArgs.Equals(object? obj) -> bool
+override Elsa.Primitives.Persistence.PageArgs.GetHashCode() -> int
+override Elsa.Primitives.Persistence.PageArgs.ToString() -> string!
+override Elsa.Primitives.Versioning.SemVer.Equals(object? obj) -> bool
+override Elsa.Primitives.Versioning.SemVer.GetHashCode() -> int
+override Elsa.Primitives.Versioning.SemVer.ToString() -> string!
+static Elsa.Primitives.Diagnostics.ObservationalTelemetryScope.Start(System.Diagnostics.ActivitySource! source, string! name) -> Elsa.Primitives.Diagnostics.ObservationalTelemetryScope!
+static Elsa.Primitives.Diagnostics.ObservationalTelemetryScope.Start(System.Func<System.Diagnostics.ActivitySource!>! sourceFactory, string! name) -> Elsa.Primitives.Diagnostics.ObservationalTelemetryScope!
+static Elsa.Primitives.Exceptions.EntityNotFoundException.ForEntity(System.Type! entityType, string! id) -> Elsa.Primitives.Exceptions.EntityNotFoundException!
+static Elsa.Primitives.Extensions.CollectionExtensions.RemoveWhere<T>(this System.Collections.Generic.ICollection<T>! collection, System.Func<T, bool>! predicate) -> void
+static Elsa.Primitives.Extensions.ObjectExtensions.ConvertIEnumerableToArray(this object? obj) -> object!
+static Elsa.Primitives.Extensions.PropertyAccessorExtensions.GetProperty<T, TProperty>(this System.Linq.Expressions.Expression<System.Func<T, TProperty>!>! expression) -> System.Reflection.PropertyInfo?
+static Elsa.Primitives.Extensions.QueryableExtensions.OrderBy<T, TOrderBy>(this System.Linq.IQueryable<T>! queryable, Elsa.Primitives.Persistence.OrderDefinition<T, TOrderBy>! order) -> System.Linq.IQueryable<T>!
+static Elsa.Primitives.Extensions.QueryableExtensions.Paginate<T>(this System.Linq.IQueryable<T>! queryable, Elsa.Primitives.Persistence.PageArgs? pageArgs) -> System.Linq.IQueryable<T>!
+static Elsa.Primitives.Extensions.StringExtensions.Camelize(this string! value) -> string!
+static Elsa.Primitives.Extensions.StringExtensions.GetLoadedType(this string! typeName) -> System.Type!
+static Elsa.Primitives.Extensions.StringExtensions.Humanize(this string! value) -> string!
+static Elsa.Primitives.Extensions.StringExtensions.Pascalize(this string! value) -> string!
+static Elsa.Primitives.Extensions.TypeExtensions.GetCollectionElementType(this System.Type! type) -> System.Type!
+static Elsa.Primitives.Extensions.TypeExtensions.GetDefaultValue(this System.Type! type) -> object?
+static Elsa.Primitives.Extensions.TypeExtensions.GetMethods(this System.Type! source, string![]! names) -> System.Reflection.MethodInfo![]!
+static Elsa.Primitives.Extensions.TypeExtensions.GetSanitizedFullName(this System.Type! type) -> string!
+static Elsa.Primitives.Extensions.TypeExtensions.GetSimpleAssemblyQualifiedName(this System.Type! type) -> string!
+static Elsa.Primitives.Extensions.TypeExtensions.GetTypeOfNullable(this System.Type! type) -> System.Type!
+static Elsa.Primitives.Extensions.TypeExtensions.InvokeAndUnwrap<T>(this System.Reflection.MethodBase! method, object! target, object![]! args) -> T!
+static Elsa.Primitives.Extensions.TypeExtensions.InvokeAndUnwrapValueTask<T>(this System.Reflection.MethodBase! method, object! target, object![]! args) -> System.Threading.Tasks.ValueTask<T>
+static Elsa.Primitives.Extensions.TypeExtensions.IsCollectionType(this System.Type! type) -> bool
+static Elsa.Primitives.Extensions.TypeExtensions.IsGenericType(this System.Type! type, System.Type! genericType) -> bool
+static Elsa.Primitives.Extensions.TypeExtensions.IsNullableType(this System.Type! type) -> bool
+static Elsa.Primitives.Extensions.TypeExtensions.IsNumericType(this System.Type! type) -> bool
+static Elsa.Primitives.Extensions.TypeExtensions.MakeCollectionType(this System.Type! type) -> System.Type!
+static Elsa.Primitives.Identity.ShortIdentityGenerator.Generate(System.DateTimeOffset utcNow) -> string!
+static Elsa.Primitives.Models.ClrActivityDescriptor.operator !=(Elsa.Primitives.Models.ClrActivityDescriptor? left, Elsa.Primitives.Models.ClrActivityDescriptor? right) -> bool
+static Elsa.Primitives.Models.ClrActivityDescriptor.operator ==(Elsa.Primitives.Models.ClrActivityDescriptor? left, Elsa.Primitives.Models.ClrActivityDescriptor? right) -> bool
+static Elsa.Primitives.Models.Result.Failure<T>(System.Exception! exception) -> Elsa.Primitives.Models.Result<T>!
+static Elsa.Primitives.Models.Result.Success<T>(T value) -> Elsa.Primitives.Models.Result<T>!
+static Elsa.Primitives.Models.TypeAliasConvention.CanonicalAlias(System.Type! type) -> string!
+static Elsa.Primitives.Models.TypeReference.operator !=(Elsa.Primitives.Models.TypeReference? left, Elsa.Primitives.Models.TypeReference? right) -> bool
+static Elsa.Primitives.Models.TypeReference.operator ==(Elsa.Primitives.Models.TypeReference? left, Elsa.Primitives.Models.TypeReference? right) -> bool
+static Elsa.Primitives.Models.TypeReferenceFactory.Close(System.Type! elementType, Elsa.Primitives.Models.CollectionKind kind) -> System.Type!
+static Elsa.Primitives.Models.TypeReferenceFactory.Decompose(System.Type! type) -> (System.Type! ElementType, Elsa.Primitives.Models.CollectionKind Kind)
+static Elsa.Primitives.Models.TypeReferenceFactory.FromClrType(System.Type! type, System.Func<System.Type!, string!>! aliasResolver) -> Elsa.Primitives.Models.TypeReference!
+static Elsa.Primitives.Models.TypeReferenceFactory.Resolve(Elsa.Primitives.Models.TypeReference! reference, System.Func<string!, System.Type!>! aliasResolver) -> System.Type!
+static Elsa.Primitives.Models.ValueRepresentationDefaults.Infer(Elsa.Primitives.Models.ValueTypeDescriptor! type) -> Elsa.Primitives.Models.ValueRepresentation
+static Elsa.Primitives.Models.ValueTypeDescriptor.operator !=(Elsa.Primitives.Models.ValueTypeDescriptor? left, Elsa.Primitives.Models.ValueTypeDescriptor? right) -> bool
+static Elsa.Primitives.Models.ValueTypeDescriptor.operator ==(Elsa.Primitives.Models.ValueTypeDescriptor? left, Elsa.Primitives.Models.ValueTypeDescriptor? right) -> bool
+static Elsa.Primitives.Persistence.Page.Empty<T>() -> Elsa.Primitives.Persistence.Page<T>!
+static Elsa.Primitives.Persistence.Page.Of<T>(System.Collections.Generic.ICollection<T>! items, long totalCount) -> Elsa.Primitives.Persistence.Page<T>!
+static Elsa.Primitives.Persistence.Page<T>.operator !=(Elsa.Primitives.Persistence.Page<T>? left, Elsa.Primitives.Persistence.Page<T>? right) -> bool
+static Elsa.Primitives.Persistence.Page<T>.operator ==(Elsa.Primitives.Persistence.Page<T>? left, Elsa.Primitives.Persistence.Page<T>? right) -> bool
+static Elsa.Primitives.Persistence.PageArgs.All.get -> Elsa.Primitives.Persistence.PageArgs!
+static Elsa.Primitives.Persistence.PageArgs.From(int? page, int? pageSize, int? offset, int? limit) -> Elsa.Primitives.Persistence.PageArgs!
+static Elsa.Primitives.Persistence.PageArgs.FromPage(int? page, int? pageSize) -> Elsa.Primitives.Persistence.PageArgs!
+static Elsa.Primitives.Persistence.PageArgs.FromRange(int? offset, int? limit) -> Elsa.Primitives.Persistence.PageArgs!
+static Elsa.Primitives.Persistence.PageArgs.operator !=(Elsa.Primitives.Persistence.PageArgs? left, Elsa.Primitives.Persistence.PageArgs? right) -> bool
+static Elsa.Primitives.Persistence.PageArgs.operator ==(Elsa.Primitives.Persistence.PageArgs? left, Elsa.Primitives.Persistence.PageArgs? right) -> bool
+static Elsa.Primitives.Versioning.SemVer.operator !=(Elsa.Primitives.Versioning.SemVer left, Elsa.Primitives.Versioning.SemVer right) -> bool
+static Elsa.Primitives.Versioning.SemVer.operator <(Elsa.Primitives.Versioning.SemVer left, Elsa.Primitives.Versioning.SemVer right) -> bool
+static Elsa.Primitives.Versioning.SemVer.operator <=(Elsa.Primitives.Versioning.SemVer left, Elsa.Primitives.Versioning.SemVer right) -> bool
+static Elsa.Primitives.Versioning.SemVer.operator ==(Elsa.Primitives.Versioning.SemVer left, Elsa.Primitives.Versioning.SemVer right) -> bool
+static Elsa.Primitives.Versioning.SemVer.operator >(Elsa.Primitives.Versioning.SemVer left, Elsa.Primitives.Versioning.SemVer right) -> bool
+static Elsa.Primitives.Versioning.SemVer.operator >=(Elsa.Primitives.Versioning.SemVer left, Elsa.Primitives.Versioning.SemVer right) -> bool
+static Elsa.Primitives.Versioning.SemVer.ToSortKey(string! version) -> string!
+static Elsa.Primitives.Versioning.SemVer.TryParse(string? value, out Elsa.Primitives.Versioning.SemVer result) -> bool
+static Elsa.Primitives.Versioning.SemVerComparer.Instance.get -> Elsa.Primitives.Versioning.SemVerComparer!
+static readonly Elsa.Primitives.Models.TypeAliasConvention.ReservedBareAliases -> System.Collections.Generic.IReadOnlySet<string!>!

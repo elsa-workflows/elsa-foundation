@@ -21,14 +21,18 @@ internal static class ProjectGraph
     /// <summary>Whether a project name is an Elsa project, by the repository's one naming rule.</summary>
     internal static bool IsElsa(string name) => name == "Elsa" || name.StartsWith("Elsa.", StringComparison.Ordinal);
 
+    /// <summary>Every Elsa project's <c>.csproj</c> path under <see cref="ModuleRoots.Production"/>.</summary>
+    internal static IEnumerable<string> ElsaProjectPaths(string repoRoot) =>
+        ModuleRoots.Resolve(repoRoot, ModuleRoots.Production)
+            .SelectMany(root => Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories))
+            .Where(ModuleRoots.IsNotTestFile)
+            .Where(path => IsElsa(Path.GetFileNameWithoutExtension(path)!));
+
     /// <summary>Every Elsa project under <c>src/</c>, by name, with the Elsa projects it references directly.</summary>
     internal static IReadOnlyDictionary<string, IReadOnlyList<string>> LoadElsaReferences(string repoRoot)
     {
-        var namesByPath = ModuleRoots.Resolve(repoRoot, ModuleRoots.Production)
-            .SelectMany(root => Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories))
-            .Where(ModuleRoots.IsNotTestFile)
-            .Where(path => IsElsa(Path.GetFileNameWithoutExtension(path)))
-            .ToDictionary(Path.GetFullPath, Path.GetFileNameWithoutExtension, StringComparer.OrdinalIgnoreCase);
+        var namesByPath = ElsaProjectPaths(repoRoot)
+            .ToDictionary(Path.GetFullPath, path => Path.GetFileNameWithoutExtension(path)!, StringComparer.OrdinalIgnoreCase);
 
         return namesByPath.ToDictionary(
             project => project.Value,

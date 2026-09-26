@@ -1,0 +1,40 @@
+#nullable enable
+Elsa.Tasks.Core.Attributes.OrderAttribute
+Elsa.Tasks.Core.Attributes.OrderAttribute.Order.get -> float
+Elsa.Tasks.Core.Attributes.OrderAttribute.OrderAttribute(float order) -> void
+Elsa.Tasks.Core.Attributes.SingleNodeTaskAttribute
+Elsa.Tasks.Core.Attributes.SingleNodeTaskAttribute.SingleNodeTaskAttribute() -> void
+Elsa.Tasks.Core.Attributes.TaskDependencyAttribute
+Elsa.Tasks.Core.Attributes.TaskDependencyAttribute.DependencyTaskType.get -> System.Type!
+Elsa.Tasks.Core.Attributes.TaskDependencyAttribute.TaskDependencyAttribute(System.Type! dependencyTaskType) -> void
+Elsa.Tasks.Core.IBackgroundTask
+Elsa.Tasks.Core.IBackgroundTask.StartAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Elsa.Tasks.Core.IBackgroundTask.StopAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Elsa.Tasks.Core.IBackgroundTaskStarter
+Elsa.Tasks.Core.IBackgroundTaskStarter.StartAsync(Elsa.Tasks.Core.IBackgroundTask! task, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Elsa.Tasks.Core.IBackgroundTaskStarter.StopAsync(Elsa.Tasks.Core.IBackgroundTask! task, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Elsa.Tasks.Core.IRecurringTask
+Elsa.Tasks.Core.IRecurringTask.GetSchedule() -> Elsa.Tasks.Core.ITaskSchedule!
+Elsa.Tasks.Core.IRecurringTask.StartAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Elsa.Tasks.Core.IRecurringTask.StopAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Elsa.Tasks.Core.IScheduledTaskExecution
+Elsa.Tasks.Core.IStartupTask
+Elsa.Tasks.Core.IStoppableTaskManager
+Elsa.Tasks.Core.IStoppableTaskManager.StopExecutingRegisteredTasks(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Elsa.Tasks.Core.ITask
+Elsa.Tasks.Core.ITask.ExecuteAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Elsa.Tasks.Core.ITaskExecutor
+Elsa.Tasks.Core.ITaskExecutor.ExecuteTaskAsync(Elsa.Tasks.Core.ITask! task, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Elsa.Tasks.Core.ITaskManager
+Elsa.Tasks.Core.ITaskManager.StartExecutingRegisteredTasks(System.Threading.CancellationToken token) -> System.Threading.Tasks.Task!
+Elsa.Tasks.Core.ITaskSchedule
+Elsa.Tasks.Core.ITaskSchedule.ScheduleExecution(System.Func<System.Threading.Tasks.Task!>! action) -> Elsa.Tasks.Core.IScheduledTaskExecution!
+Elsa.Tasks.Core.ITaskStateManager
+Elsa.Tasks.Core.ITaskStateManager.CancellationTokenSource.get -> System.Threading.CancellationTokenSource?
+Elsa.Tasks.Core.ITaskStateManager.Gate.get -> System.Threading.SemaphoreSlim!
+Elsa.Tasks.Core.ITaskStateManager.RecurringTasks.get -> System.Collections.Generic.IEnumerable<Elsa.Tasks.Core.IRecurringTask!>!
+Elsa.Tasks.Core.ITaskStateManager.RunningBackgroundTasks.get -> System.Collections.Generic.IEnumerable<System.Threading.Tasks.Task!>!
+Elsa.Tasks.Core.ITaskStateManager.ScheduledTaskExecutions.get -> System.Collections.Generic.IEnumerable<Elsa.Tasks.Core.IScheduledTaskExecution!>!
+Elsa.Tasks.Core.ITaskStateManager.Stop() -> System.Threading.Tasks.ValueTask
+Elsa.Tasks.Core.ITopologicalTaskSorter
+Elsa.Tasks.Core.ITopologicalTaskSorter.Sort<T>(System.Collections.Generic.IEnumerable<T>! tasks) -> System.Collections.Generic.IReadOnlyList<T>!
