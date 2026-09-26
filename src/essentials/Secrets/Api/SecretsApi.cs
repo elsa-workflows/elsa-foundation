@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using NativeEndpoints;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
@@ -382,7 +383,8 @@ public static class SecretsApi
         // These options are shared by every request, so they are frozen up front. Left mutable,
         // Results.Json lazily assigns a resolver on first use, and that check-then-set races with
         // concurrent serialization and throws InvalidOperationException.
-        options.MakeReadOnly(populateMissingResolver: true);
+        options.TypeInfoResolver = new DefaultJsonTypeInfoResolver();
+        options.MakeReadOnly();
         return options;
     }
 
