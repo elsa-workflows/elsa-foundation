@@ -1,9 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-	  <Version>0.0.4-jint4</Version>
-  </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="Jint" />
     <PackageReference Include="Microsoft.Extensions.Options" />

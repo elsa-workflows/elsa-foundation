@@ -1,9 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-	<PropertyGroup>
-		<Version>0.0.1-local</Version>
-	</PropertyGroup>
-
 	<ItemGroup>
 		<PackageReference Include="CShells.Abstractions" />
 		<PackageReference Include="Microsoft.Extensions.Caching.Memory" />

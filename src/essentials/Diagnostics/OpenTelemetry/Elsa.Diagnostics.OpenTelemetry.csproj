@@ -1,9 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <Version>0.0.2-local</Version>
-  </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="CShells.AspNetCore" />
     <PackageReference Include="CShells.Abstractions" />
