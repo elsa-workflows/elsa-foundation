@@ -22,8 +22,9 @@ namespace Elsa.Architecture.Tests;
 /// <c>src/</c> and <c>tests/</c>, so they are never part of this scan; they are the two sanctioned setters,
 /// checked separately below. The root <c>Directory.Build.props</c> also checks the evaluated values at
 /// build time (its <c>ElsaVerifyVersionLine</c> target, proved by <see cref="VersionLineBuildCheckTests"/>),
-/// which covers a <c>/p:</c> override and a build file outside <c>src/</c> and <c>tests/</c> that this scan
-/// cannot see. Part of #1144.
+/// which covers a <c>/p:</c> override and an evaluation-time setter outside <c>src/</c> and <c>tests/</c> that
+/// this scan cannot see. Property-name matching is case-insensitive, like MSBuild's own property names, so a
+/// lowercase <c>&lt;elsaversionline&gt;</c> element sets the real property too. Part of #1144.
 /// </remarks>
 public sealed class VersionLineOwnershipGuardTests
 {
@@ -108,6 +109,22 @@ public sealed class VersionLineOwnershipGuardTests
         Assert.Contains(violations, violation => violation.EndsWith($"Directory.Build.props: {property}", StringComparison.Ordinal));
         Assert.Contains(violations, violation => violation.EndsWith($"Build.targets: {property}", StringComparison.Ordinal));
         Assert.DoesNotContain(violations, violation => violation.Contains("/obj/", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// MSBuild property names are case-insensitive, so a lowercase setter is caught too, and the violation
+    /// reports the canonical name from <see cref="OwnedProperties"/> rather than the as-written casing,
+    /// keeping messages stable regardless of how a file spells the property.
+    /// </summary>
+    [Fact]
+    public void Guard_catches_a_lowercase_setter_and_reports_the_canonical_name()
+    {
+        var (_, violations) = ScanTempTree(new Dictionary<string, string>
+        {
+            ["Some.Module.csproj"] = SettingProject("elsaversionline"),
+        });
+
+        Assert.Contains(violations, violation => violation.EndsWith("Some.Module.csproj: ElsaVersionLine", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -204,8 +221,9 @@ public sealed class VersionLineOwnershipGuardTests
     private static IEnumerable<string> OwnedPropertiesSet(string path) =>
         XDocument.Load(path).Descendants()
             .Where(element => element.Parent?.Name.LocalName == "PropertyGroup")
-            .Select(element => element.Name.LocalName)
-            .Where(OwnedProperties.Contains)
+            .Select(element => OwnedProperties.FirstOrDefault(
+                owned => string.Equals(owned, element.Name.LocalName, StringComparison.OrdinalIgnoreCase)))
+            .OfType<string>()
             .Distinct();
 
     private static bool IsBuildOutput(string path)

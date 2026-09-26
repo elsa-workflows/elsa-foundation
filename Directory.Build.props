@@ -47,20 +47,27 @@
     scan proving no file under src/ or tests/ sets ElsaVersionLine or ElsaVersionLineAMembers, but a static
     scan has two blind spots: a global property passed on the command line (/p:ElsaVersionLine=... or
     /p:ElsaVersionLineAMembers=...), which wins over any props-file assignment and never appears in a file
-    at all, and a build file outside src/ and tests/, which the scan is deliberately not rooted at. This
-    target closes both gaps by re-reading VersionLines.props directly with XmlPeek - independently of the
-    Import above - and comparing that peeked value against what this project actually evaluated
-    ElsaVersionLineAMembers and ElsaVersionLine to.
+    at all, and any setter that only takes effect at evaluation time from a build file the scan doesn't
+    cover - it catches such a setter wherever the file lives, whether inside src/tests or outside them; a
+    setter inside a target that runs after this check, or a CreateProperty task, is outside both this
+    check and the static scan. This target closes the two gaps it does cover by re-reading
+    VersionLines.props directly with XmlPeek - independently of the Import above - and comparing that
+    peeked value against what this project actually evaluated ElsaVersionLineAMembers and ElsaVersionLine
+    to.
 
-    It runs BeforeBuild, on every project, so a mismatch fails the build instead of silently acting on the
-    wrong line until someone happens to inspect the property. It lives here, in this .props file, rather
-    than in a Directory.Build.targets, because a target can be defined in a .props file - keeping the
-    check beside the computation it verifies is the point - and because a Directory.Build.targets would
-    be skipped by any nested Directory.Build.targets that forgets to import it, whereas every project
-    already imports this file. tests/essentials/Architecture/VersionLineBuildCheckTests.cs proves it,
-    including the /p: cases the static scan cannot see.
+    It runs on BeforeBuild and GenerateNuspec, on every project, so a mismatch fails the build - or the
+    pack - instead of silently acting on the wrong line until someone happens to inspect the property.
+    GenerateNuspec is there because packages.yml packs with dotnet pack's no-build flag, in a separate
+    invocation after building, which never runs BeforeBuild, and #2080 will read $(ElsaVersionLine) at
+    pack time, so a pack-only /p: override must be caught too; running the target twice in a normal build-
+    then-pack is harmless. It lives here, in this .props file, rather than in a Directory.Build.targets,
+    because a target can be defined in a .props file - keeping the check beside the computation it
+    verifies is the point - and because a Directory.Build.targets would be skipped by any nested
+    Directory.Build.targets that forgets to import it, whereas every project already imports this file.
+    tests/essentials/Architecture/VersionLineBuildCheckTests.cs proves it, including the /p: cases the
+    static scan cannot see.
   -->
-  <Target Name="ElsaVerifyVersionLine" BeforeTargets="BeforeBuild">
+  <Target Name="ElsaVerifyVersionLine" BeforeTargets="BeforeBuild;GenerateNuspec">
 
     <XmlPeek XmlInputPath="$(MSBuildThisFileDirectory)VersionLines.props"
              Query="/Project/PropertyGroup/ElsaVersionLineAMembers/text()">
