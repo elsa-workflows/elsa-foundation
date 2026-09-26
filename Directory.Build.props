@@ -22,6 +22,25 @@
   </PropertyGroup>
 
   <!--
+    Version line, ADR 0067. VersionLines.props holds the one reviewed Line A list; this turns it into
+    a per-project signal every project can read from its own $(ElsaVersionLine), without repeating the
+    list or re-parsing it per project. #2078 will read it to enable analyzers on Line A; #2080 will
+    read it to choose the version property.
+
+    The membership check is a property function ($(...Contains(...))), not an item-list Condition,
+    because outside a Target MSBuild rejects an item-list reference in a PropertyGroup Condition
+    (MSB4099) and a property function cannot see item-list (@(...)) expansion regardless of where it
+    runs - only the plain $(...) substitution pass expands items. VersionLines.props keeps the list as
+    a delimited property for exactly this reason.
+  -->
+  <Import Project="$(MSBuildThisFileDirectory)VersionLines.props" />
+
+  <PropertyGroup>
+    <ElsaVersionLine>B</ElsaVersionLine>
+    <ElsaVersionLine Condition="$(ElsaVersionLineAMembers.Contains(';$(MSBuildProjectName);'))">A</ElsaVersionLine>
+  </PropertyGroup>
+
+  <!--
     Static analysis. The repository had no .editorconfig and no analyzer settings
     at all, so its (genuinely good) style consistency was held up by code review
     alone. The root .editorconfig codifies conventions the code already follows.
