@@ -48,7 +48,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "System.Collections.Generic.IReadOnlyList\u00601[[Elsa.Diagnostics.StructuredLogs.Core.Models.LogSource, Elsa.Diagnostics.StructuredLogs.Core, Version=0.0.1.0, Culture=neutral, PublicKeyToken=null]]",
+          "bodyType": "System.Collections.Generic.IReadOnlyList\u00601[[Elsa.Diagnostics.StructuredLogs.Core.Models.LogSource, Elsa.Diagnostics.StructuredLogs.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
           "contentTypes": [
             "application/json"
           ],
