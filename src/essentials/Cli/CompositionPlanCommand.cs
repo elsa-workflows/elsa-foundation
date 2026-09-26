@@ -52,10 +52,10 @@ internal static class CompositionPlanCommand
         if (outputFormat is not ("text" or "json"))
             throw CliRefusal.Usage("composition-format-invalid", "The output format must be text or json.");
 
+        var authored = SelectionJsonReader.ParseComposition(ReadInput(result.GetRequiredValue(compositionOption)));
         var catalog = result.GetValue(catalogOption) is { } catalogPath
             ? SelectionJsonReader.ParseCatalog(ReadInput(catalogPath))
-            : FoundationSelectionCatalog.Load();
-        var authored = SelectionJsonReader.ParseComposition(ReadInput(result.GetRequiredValue(compositionOption)));
+            : FoundationSelectionCatalog.LoadFor(authored.Catalog);
         var profiles = (result.GetValue(workspaceProfileOption) ?? [])
             .Select(path => SelectionJsonReader.ParseWorkspaceProfile(ReadInput(path)))
             .ToArray();

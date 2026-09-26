@@ -61,10 +61,10 @@ internal static class CompositionGenerateCommand
     {
         cancellationToken.ThrowIfCancellationRequested();
         var source = CompositionFileSource.Open(hostDirectory, shellId, environment);
-        var catalog = catalogPath is null
-            ? FoundationSelectionCatalog.Load()
-            : SelectionJsonReader.ParseCatalog(ReadInput(catalogPath));
         var authored = SelectionJsonReader.ParseComposition(ReadInput(compositionPath));
+        var catalog = catalogPath is null
+            ? FoundationSelectionCatalog.LoadFor(authored.Catalog)
+            : SelectionJsonReader.ParseCatalog(ReadInput(catalogPath));
         var settingReview = reviewPath is null ? null : SettingReviewReader.Parse(ReadInput(reviewPath));
         var candidate = CompositionCandidateBuilder.Build(source.Snapshot, catalog, authored, settingReview);
 
