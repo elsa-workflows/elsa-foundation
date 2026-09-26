@@ -1,0 +1,82 @@
+#nullable enable
+Elsa.Serialization.Core.Exceptions.ArgumentDefinitionDeserializationException
+Elsa.Serialization.Core.Exceptions.ArgumentDefinitionDeserializationException.ArgumentDefinitionDeserializationException(string! message, System.Exception! innerException) -> void
+Elsa.Serialization.Core.Exceptions.DuplicateTypeAliasException
+Elsa.Serialization.Core.Exceptions.DuplicateTypeAliasException.Alias.get -> string!
+Elsa.Serialization.Core.Exceptions.DuplicateTypeAliasException.DuplicateTypeAliasException(string! alias) -> void
+Elsa.Serialization.Core.Exceptions.DuplicateTypeAliasException.DuplicateTypeAliasException(string! alias, string! message) -> void
+Elsa.Serialization.Core.Exceptions.ReservedAliasNamespaceException
+Elsa.Serialization.Core.Exceptions.ReservedAliasNamespaceException.Alias.get -> string!
+Elsa.Serialization.Core.Exceptions.ReservedAliasNamespaceException.ReservedAliasNamespaceException(string! alias) -> void
+Elsa.Serialization.Core.Exceptions.TypeConversionException
+Elsa.Serialization.Core.Exceptions.TypeConversionException.TargetType.get -> System.Type!
+Elsa.Serialization.Core.Exceptions.TypeConversionException.TypeConversionException(string! message, object! value, System.Type! targetType) -> void
+Elsa.Serialization.Core.Exceptions.TypeConversionException.TypeConversionException(string! message, object! value, System.Type! targetType, System.Exception! innerException) -> void
+Elsa.Serialization.Core.Exceptions.TypeConversionException.Value.get -> object!
+Elsa.Serialization.Core.ExcludingJsonTypeInfoResolver
+Elsa.Serialization.Core.ExcludingJsonTypeInfoResolver.ExcludingJsonTypeInfoResolver(System.Collections.Generic.IEnumerable<string!>! excludedMembers, System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver? inner = null) -> void
+Elsa.Serialization.Core.ExcludingJsonTypeInfoResolver.GetTypeInfo(System.Type! type, System.Text.Json.JsonSerializerOptions! options) -> System.Text.Json.Serialization.Metadata.JsonTypeInfo?
+Elsa.Serialization.Core.IJsonConverterSource
+Elsa.Serialization.Core.IJsonConverterSource.GetConverters() -> System.Collections.Generic.IEnumerable<System.Text.Json.Serialization.JsonConverter!>!
+Elsa.Serialization.Core.IJsonIslandTypeHandler
+Elsa.Serialization.Core.IJsonIslandTypeHandler.CanHandle(System.Type! type) -> bool
+Elsa.Serialization.Core.IJsonIslandTypeHandler.Read(string? json) -> object!
+Elsa.Serialization.Core.IJsonIslandTypeHandler.Write(object! value) -> string!
+Elsa.Serialization.Core.IObjectConverter
+Elsa.Serialization.Core.IObjectConverter.ConvertTo(object? value, System.Type! targetType, Elsa.Serialization.Core.Options.ObjectConverterOptions? converterOptions = null) -> object?
+Elsa.Serialization.Core.IObjectConverter.ConvertTo<T>(object? value, Elsa.Serialization.Core.Options.ObjectConverterOptions? converterOptions = null) -> T?
+Elsa.Serialization.Core.IObjectConverter.TryConvertTo(object? value, System.Type! targetType, Elsa.Serialization.Core.Options.ObjectConverterOptions? converterOptions = null) -> Elsa.Primitives.Models.Result!
+Elsa.Serialization.Core.IObjectConverter.TryConvertTo<T>(object? value, Elsa.Serialization.Core.Options.ObjectConverterOptions? converterOptions = null) -> Elsa.Primitives.Models.Result!
+Elsa.Serialization.Core.IPayloadSerializer
+Elsa.Serialization.Core.IPayloadSerializer.Deserialize(string! serializedData) -> object!
+Elsa.Serialization.Core.IPayloadSerializer.Deserialize(string! serializedData, System.Type! type) -> object!
+Elsa.Serialization.Core.IPayloadSerializer.Deserialize(System.Text.Json.JsonElement serializedData) -> object!
+Elsa.Serialization.Core.IPayloadSerializer.Deserialize<T>(string! serializedData) -> T
+Elsa.Serialization.Core.IPayloadSerializer.Deserialize<T>(System.Text.Json.JsonElement serializedData) -> T
+Elsa.Serialization.Core.IPayloadSerializer.GetOptions() -> System.Text.Json.JsonSerializerOptions!
+Elsa.Serialization.Core.IPayloadSerializer.Serialize(object! payload) -> string!
+Elsa.Serialization.Core.IPayloadSerializer.SerializeToElement(object! payload) -> System.Text.Json.JsonElement
+Elsa.Serialization.Core.ITypeConverter
+Elsa.Serialization.Core.ITypeConverter.Convert(object? value) -> object?
+Elsa.Serialization.Core.ITypeConverter.TargetType.get -> System.Type!
+Elsa.Serialization.Core.ITypeConverter.TargetType.set -> void
+Elsa.Serialization.Core.IWellKnownTypeRegistry
+Elsa.Serialization.Core.IWellKnownTypeRegistry.GetAliasOrDefault(System.Type! type) -> string!
+Elsa.Serialization.Core.IWellKnownTypeRegistry.GetTypeOrDefault(string! alias) -> System.Type!
+Elsa.Serialization.Core.IWellKnownTypeRegistry.ListTypes() -> System.Collections.Generic.IEnumerable<System.Type!>!
+Elsa.Serialization.Core.IWellKnownTypeRegistry.RegisterType(System.Type! type, string! alias) -> void
+Elsa.Serialization.Core.IWellKnownTypeRegistry.TryGetAlias(System.Type! type, out string! alias) -> bool
+Elsa.Serialization.Core.IWellKnownTypeRegistry.TryGetType(string! alias, out System.Type! type) -> bool
+Elsa.Serialization.Core.IWellKnownTypeRegistry.TryGetTypeOrDefault(string! alias, out System.Type! type) -> bool
+Elsa.Serialization.Core.JsonPayloadConverterRegistry
+Elsa.Serialization.Core.JsonPayloadConverterRegistry.Converters.get -> System.Collections.Generic.IReadOnlyList<System.Text.Json.Serialization.JsonConverter!>!
+Elsa.Serialization.Core.JsonPayloadConverterRegistry.JsonPayloadConverterRegistry() -> void
+Elsa.Serialization.Core.JsonPayloadConverterRegistry.Register(System.Text.Json.Serialization.JsonConverter! converter) -> void
+Elsa.Serialization.Core.JsonPayloadConverterRegistry.RegisterAll(System.Collections.Generic.IEnumerable<System.Text.Json.Serialization.JsonConverter!>! converters) -> void
+Elsa.Serialization.Core.JsonPayloadConverterRegistry.Revision.get -> int
+Elsa.Serialization.Core.JsonPayloadConvertersInitializing
+Elsa.Serialization.Core.JsonPayloadConvertersInitializing.Converters.get -> System.Collections.Generic.ICollection<System.Text.Json.Serialization.JsonConverter!>!
+Elsa.Serialization.Core.JsonPayloadConvertersInitializing.JsonPayloadConvertersInitializing() -> void
+Elsa.Serialization.Core.Options.ObjectConverterOptions
+Elsa.Serialization.Core.Options.ObjectConverterOptions.Deconstruct(out System.Text.Json.JsonSerializerOptions? SerializerOptions, out Elsa.Serialization.Core.IWellKnownTypeRegistry? WellKnownTypeRegistry, out bool DeserializeJsonObjectToObject, out bool? StrictMode) -> void
+Elsa.Serialization.Core.Options.ObjectConverterOptions.DeserializeJsonObjectToObject.get -> bool
+Elsa.Serialization.Core.Options.ObjectConverterOptions.DeserializeJsonObjectToObject.init -> void
+Elsa.Serialization.Core.Options.ObjectConverterOptions.ObjectConverterOptions(Elsa.Serialization.Core.Options.ObjectConverterOptions! original) -> void
+Elsa.Serialization.Core.Options.ObjectConverterOptions.ObjectConverterOptions(System.Text.Json.JsonSerializerOptions? SerializerOptions = null, Elsa.Serialization.Core.IWellKnownTypeRegistry? WellKnownTypeRegistry = null, bool DeserializeJsonObjectToObject = false, bool? StrictMode = null) -> void
+Elsa.Serialization.Core.Options.ObjectConverterOptions.SerializerOptions.get -> System.Text.Json.JsonSerializerOptions?
+Elsa.Serialization.Core.Options.ObjectConverterOptions.SerializerOptions.init -> void
+Elsa.Serialization.Core.Options.ObjectConverterOptions.StrictMode.get -> bool?
+Elsa.Serialization.Core.Options.ObjectConverterOptions.StrictMode.init -> void
+Elsa.Serialization.Core.Options.ObjectConverterOptions.WellKnownTypeRegistry.get -> Elsa.Serialization.Core.IWellKnownTypeRegistry?
+Elsa.Serialization.Core.Options.ObjectConverterOptions.WellKnownTypeRegistry.init -> void
+Elsa.Serialization.Core.PayloadCatalogFile
+override Elsa.Serialization.Core.Options.ObjectConverterOptions.Equals(object? obj) -> bool
+override Elsa.Serialization.Core.Options.ObjectConverterOptions.GetHashCode() -> int
+override Elsa.Serialization.Core.Options.ObjectConverterOptions.ToString() -> string!
+static Elsa.Serialization.Core.Options.ObjectConverterOptions.operator !=(Elsa.Serialization.Core.Options.ObjectConverterOptions? left, Elsa.Serialization.Core.Options.ObjectConverterOptions? right) -> bool
+static Elsa.Serialization.Core.Options.ObjectConverterOptions.operator ==(Elsa.Serialization.Core.Options.ObjectConverterOptions? left, Elsa.Serialization.Core.Options.ObjectConverterOptions? right) -> bool
+static Elsa.Serialization.Core.PayloadCatalogFile.ReadArray<TModel>(string! path, Elsa.Serialization.Core.IPayloadSerializer! serializer, System.Func<string!, string!, System.Exception?, System.Exception!>! exceptionFactory) -> TModel[]!
+virtual Elsa.Serialization.Core.Options.ObjectConverterOptions.<Clone>$() -> Elsa.Serialization.Core.Options.ObjectConverterOptions!
+virtual Elsa.Serialization.Core.Options.ObjectConverterOptions.EqualityContract.get -> System.Type!
+virtual Elsa.Serialization.Core.Options.ObjectConverterOptions.Equals(Elsa.Serialization.Core.Options.ObjectConverterOptions? other) -> bool
+virtual Elsa.Serialization.Core.Options.ObjectConverterOptions.PrintMembers(System.Text.StringBuilder! builder) -> bool

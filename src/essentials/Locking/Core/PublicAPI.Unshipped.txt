@@ -1,0 +1,9 @@
+#nullable enable
+Elsa.Locking.Core.DistributedLockRunner
+Elsa.Locking.Core.IDistributedLockProvider
+Elsa.Locking.Core.IDistributedLockProvider.AcquireLockAsync(string! name, System.TimeSpan? timeout = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Locking.Core.IDistributedSynchronizationHandle!>
+Elsa.Locking.Core.IDistributedLockProvider.TryAcquireLock(string! name, System.TimeSpan? timeout = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Elsa.Locking.Core.IDistributedSynchronizationHandle?
+Elsa.Locking.Core.IDistributedLockProvider.TryAcquireLockAsync(string! name, System.TimeSpan? timeout = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Locking.Core.IDistributedSynchronizationHandle?>
+Elsa.Locking.Core.IDistributedSynchronizationHandle
+Elsa.Locking.Core.IDistributedSynchronizationHandle.HandleLostToken.get -> System.Threading.CancellationToken
+static Elsa.Locking.Core.DistributedLockRunner.TryRunUnderDistributedLock(this Elsa.Locking.Core.IDistributedLockProvider! distributedLockProvider, string! lockKey, System.TimeSpan timeout, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task!>! action, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!

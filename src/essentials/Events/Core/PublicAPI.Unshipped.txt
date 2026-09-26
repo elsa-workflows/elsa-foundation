@@ -1,0 +1,41 @@
+#nullable enable
+Elsa.Events.Core.Contracts.IDeferredEventPublisher
+Elsa.Events.Core.Contracts.IDeferredEventPublisher.Publish(Elsa.Events.Core.Contracts.IEvent! event, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Elsa.Events.Core.Contracts.IEvent
+Elsa.Events.Core.Contracts.IEventChannel
+Elsa.Events.Core.Contracts.IEventChannel.Reader.get -> System.Threading.Channels.ChannelReader<Elsa.Events.Core.Contracts.IEventContext!>!
+Elsa.Events.Core.Contracts.IEventChannel.Writer.get -> System.Threading.Channels.ChannelWriter<Elsa.Events.Core.Contracts.IEventContext!>!
+Elsa.Events.Core.Contracts.IEventContext
+Elsa.Events.Core.Contracts.IEventContext.CancellationToken.get -> System.Threading.CancellationToken
+Elsa.Events.Core.Contracts.IEventContext.CancellationToken.init -> void
+Elsa.Events.Core.Contracts.IEventContext.Event.get -> Elsa.Events.Core.Contracts.IEvent!
+Elsa.Events.Core.Contracts.IEventContext.Event.init -> void
+Elsa.Events.Core.Contracts.IEventContext.ServiceProvider.get -> System.IServiceProvider!
+Elsa.Events.Core.Contracts.IEventContext.Strategy.get -> Elsa.Events.Core.Contracts.IEventPublishingStrategy!
+Elsa.Events.Core.Contracts.IEventContext.Strategy.init -> void
+Elsa.Events.Core.Contracts.IEventHandler
+Elsa.Events.Core.Contracts.IEventHandler<T>
+Elsa.Events.Core.Contracts.IEventHandler<T>.Handle(T event, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Elsa.Events.Core.Contracts.IEventMiddleware
+Elsa.Events.Core.Contracts.IEventMiddleware.Invoke(Elsa.Events.Core.Contracts.IEventContext! context) -> System.Threading.Tasks.ValueTask
+Elsa.Events.Core.Contracts.IEventPipeline
+Elsa.Events.Core.Contracts.IEventPipeline.ExecuteAsync(Elsa.Events.Core.Contracts.IEventContext! context) -> System.Threading.Tasks.Task!
+Elsa.Events.Core.Contracts.IEventPipeline.Pipeline.get -> Elsa.Pipelines.Core.Contracts.PipelineDelegate<Elsa.Events.Core.Contracts.IEventContext!>!
+Elsa.Events.Core.Contracts.IEventPipeline.Setup(System.Action<Elsa.Pipelines.Core.Contracts.IPipelineBuilder<Elsa.Events.Core.Contracts.IEventContext!>!>! setup) -> Elsa.Pipelines.Core.Contracts.PipelineDelegate<Elsa.Events.Core.Contracts.IEventContext!>!
+Elsa.Events.Core.Contracts.IEventPublisher
+Elsa.Events.Core.Contracts.IEventPublisher.Publish(Elsa.Events.Core.Contracts.IEvent! event, Elsa.Events.Core.Contracts.IEventPublishingStrategy? strategy = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Elsa.Events.Core.Contracts.IEventPublishingStrategy
+Elsa.Events.Core.Contracts.IEventPublishingStrategy.PublishAsync(Elsa.Events.Core.Contracts.IEventStrategyContext! context) -> System.Threading.Tasks.Task!
+Elsa.Events.Core.Contracts.IEventStrategyContext
+Elsa.Events.Core.Contracts.IEventStrategyContext.CancellationToken.get -> System.Threading.CancellationToken
+Elsa.Events.Core.Contracts.IEventStrategyContext.EventContext.get -> Elsa.Events.Core.Contracts.IEventContext!
+Elsa.Events.Core.Contracts.IEventStrategyContext.Handlers.get -> Elsa.Events.Core.Contracts.IEventHandler![]!
+Elsa.Events.Core.Contracts.IEventStrategyContext.ServiceProvider.get -> System.IServiceProvider!
+Elsa.Events.Core.Contracts.IInlineEventPublisher
+Elsa.Events.Core.Contracts.IInlineEventPublisher.Publish(Elsa.Events.Core.Contracts.IEvent! event, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Elsa.Events.Core.Extensions.MiddlewareExtensions
+Elsa.Events.Core.Extensions.ServiceCollectionExtensions
+static Elsa.Events.Core.Extensions.MiddlewareExtensions.UseMiddleware<TMiddleware>(this Elsa.Pipelines.Core.Contracts.IPipelineBuilder<Elsa.Events.Core.Contracts.IEventContext!>! builder, params object![]! args) -> Elsa.Pipelines.Core.Contracts.IPipelineBuilder<Elsa.Events.Core.Contracts.IEventContext!>!
+static Elsa.Events.Core.Extensions.ServiceCollectionExtensions.AddEventHandler<TEvent, THandler>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Events.Core.Extensions.ServiceCollectionExtensions.AddEventHandlersFrom(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Reflection.Assembly! assembly) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Events.Core.Extensions.ServiceCollectionExtensions.TryAddEventHandler<TEvent, THandler>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

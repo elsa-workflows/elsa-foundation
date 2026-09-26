@@ -1,0 +1,21 @@
+#nullable enable
+Elsa.Pipelines.Core.Contracts.IMiddleware
+Elsa.Pipelines.Core.Contracts.IPipelineBuilder<TContext>
+Elsa.Pipelines.Core.Contracts.IPipelineBuilder<TContext>.ApplicationServices.get -> System.IServiceProvider!
+Elsa.Pipelines.Core.Contracts.IPipelineBuilder<TContext>.Build() -> Elsa.Pipelines.Core.Contracts.PipelineDelegate<TContext>!
+Elsa.Pipelines.Core.Contracts.IPipelineBuilder<TContext>.Properties.get -> System.Collections.Generic.IDictionary<string!, object?>!
+Elsa.Pipelines.Core.Contracts.IPipelineBuilder<TContext>.Use(System.Func<Elsa.Pipelines.Core.Contracts.PipelineDelegate<TContext>!, Elsa.Pipelines.Core.Contracts.PipelineDelegate<TContext>!>! middleware) -> Elsa.Pipelines.Core.Contracts.IPipelineBuilder<TContext>!
+Elsa.Pipelines.Core.Contracts.PipelineDelegate<TContext>
+Elsa.Pipelines.Core.Extensions.HandlerRegistrationExtensions
+Elsa.Pipelines.Core.Extensions.MiddlewareExtensions
+Elsa.Pipelines.Core.PipelineBuilder<TContext>
+Elsa.Pipelines.Core.PipelineBuilder<TContext>.ApplicationServices.get -> System.IServiceProvider!
+Elsa.Pipelines.Core.PipelineBuilder<TContext>.Build() -> Elsa.Pipelines.Core.Contracts.PipelineDelegate<TContext>!
+Elsa.Pipelines.Core.PipelineBuilder<TContext>.PipelineBuilder(System.IServiceProvider! applicationServices) -> void
+Elsa.Pipelines.Core.PipelineBuilder<TContext>.Properties.get -> System.Collections.Generic.IDictionary<string!, object?>!
+Elsa.Pipelines.Core.PipelineBuilder<TContext>.Use(System.Func<Elsa.Pipelines.Core.Contracts.PipelineDelegate<TContext>!, Elsa.Pipelines.Core.Contracts.PipelineDelegate<TContext>!>! middleware) -> Elsa.Pipelines.Core.Contracts.IPipelineBuilder<TContext>!
+static Elsa.Pipelines.Core.Extensions.HandlerRegistrationExtensions.AddHandlersFromAssembly(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Reflection.Assembly! assembly, System.Type! handlerGenericTypeDefinition, System.Type? serviceType) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Pipelines.Core.Extensions.MiddlewareExtensions.BuildMiddlewareDelegate<TMiddleware, TDelegate>(System.IServiceProvider! services, TDelegate! next, object![]! args) -> TDelegate!
+static Elsa.Pipelines.Core.Extensions.MiddlewareExtensions.GetInvokeMethod<TMiddleware>() -> System.Reflection.MethodInfo!
+static Elsa.Pipelines.Core.Extensions.MiddlewareExtensions.UseMiddleware<TContext, TMiddleware>(this Elsa.Pipelines.Core.Contracts.IPipelineBuilder<TContext>! builder, params object![]! args) -> Elsa.Pipelines.Core.Contracts.IPipelineBuilder<TContext>!
+virtual Elsa.Pipelines.Core.Contracts.PipelineDelegate<TContext>.Invoke(TContext context) -> System.Threading.Tasks.ValueTask

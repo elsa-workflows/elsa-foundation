@@ -1,0 +1,13 @@
+#nullable enable
+Elsa.Caching.Core.ICacheManager
+Elsa.Caching.Core.ICacheManager.CacheDuration.get -> System.TimeSpan
+Elsa.Caching.Core.ICacheManager.FindOrCreateAsync<TItem>(object! key, System.Func<Microsoft.Extensions.Caching.Memory.ICacheEntry!, System.Threading.Tasks.Task<TItem>!>! factory) -> System.Threading.Tasks.Task<TItem?>!
+Elsa.Caching.Core.ICacheManager.GetOrCreateAsync<TItem>(object! key, System.Func<Microsoft.Extensions.Caching.Memory.ICacheEntry!, System.Threading.Tasks.Task<TItem>!>! factory) -> System.Threading.Tasks.Task<TItem>!
+Elsa.Caching.Core.ICacheManager.GetToken(string! key) -> Microsoft.Extensions.Primitives.IChangeToken!
+Elsa.Caching.Core.ICacheManager.TriggerTokenAsync(string! key, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Caching.Core.IChangeTokenSignaler
+Elsa.Caching.Core.IChangeTokenSignaler.GetToken(string! key) -> Microsoft.Extensions.Primitives.IChangeToken!
+Elsa.Caching.Core.IChangeTokenSignaler.TriggerTokenAsync(string! key, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Caching.Core.IChangeTokenSignalInvoker
+Elsa.Caching.Core.IChangeTokenSignalInvoker.GetToken(string! key) -> Microsoft.Extensions.Primitives.IChangeToken!
+Elsa.Caching.Core.IChangeTokenSignalInvoker.TriggerTokenAsync(string! key, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask

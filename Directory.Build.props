@@ -24,8 +24,8 @@
   <!--
     Version line, ADR 0067. VersionLines.props holds the one reviewed Line A list; this turns it into
     a per-project signal every project can read from its own $(ElsaVersionLine), without repeating the
-    list or re-parsing it per project. #2078 will read it to enable analyzers on Line A; #2080 will
-    read it to choose the version property.
+    list or re-parsing it per project. #2078 reads it below to enable PublicApiAnalyzers on Line A;
+    #2080 will read it to choose the version property.
 
     The membership check is a property function ($(...Contains(...))), not an item-list Condition,
     because outside a Target MSBuild rejects an item-list reference in a PropertyGroup Condition
@@ -38,6 +38,28 @@
   <PropertyGroup>
     <ElsaVersionLine>B</ElsaVersionLine>
     <ElsaVersionLine Condition="$(ElsaVersionLineAMembers.Contains(';$(MSBuildProjectName);'))">A</ElsaVersionLine>
+  </PropertyGroup>
+
+  <!--
+    #2078: Line A's version is meant to move only when its contract changes, and PublicApiAnalyzers is
+    what makes such a change visible - it fails the build when a public member is added or removed
+    without a matching PublicAPI.Shipped.txt/PublicAPI.Unshipped.txt entry. Scoped to
+    $(ElsaVersionLine) == 'A' so the other ~120 packages are untouched; they wait for the 4.0 cut and
+    ApiCompat (a separate issue). PrivateAssets="all" keeps the analyzer a build-time-only reference:
+    it must not appear as a dependency of the packed Line A nupkg.
+
+    RS0016 (public API not declared) and RS0017 (declared API removed) are promoted to errors for Line
+    A only, via WarningsAsErrors rather than the repo-wide TreatWarningsAsErrors, so this stays additive
+    to the warnings-only analysis policy above. Every other PublicApiAnalyzers rule stays a warning.
+  -->
+  <ItemGroup Condition="'$(ElsaVersionLine)' == 'A'">
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
+    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(ElsaVersionLine)' == 'A'">
+    <WarningsAsErrors>$(WarningsAsErrors);RS0016;RS0017</WarningsAsErrors>
   </PropertyGroup>
 
   <!--

@@ -1,0 +1,271 @@
+#nullable enable
+Elsa.Attention.Core.AttentionAggregationResult
+Elsa.Attention.Core.AttentionAggregationResult.<Clone>$() -> Elsa.Attention.Core.AttentionAggregationResult!
+Elsa.Attention.Core.AttentionAggregationResult.AttentionAggregationResult(System.DateTimeOffset GeneratedAt, System.Collections.Generic.IReadOnlyCollection<Elsa.Attention.Core.AttentionContributorResult!>! Contributors) -> void
+Elsa.Attention.Core.AttentionAggregationResult.Contributors.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Attention.Core.AttentionContributorResult!>!
+Elsa.Attention.Core.AttentionAggregationResult.Contributors.init -> void
+Elsa.Attention.Core.AttentionAggregationResult.Deconstruct(out System.DateTimeOffset GeneratedAt, out System.Collections.Generic.IReadOnlyCollection<Elsa.Attention.Core.AttentionContributorResult!>! Contributors) -> void
+Elsa.Attention.Core.AttentionAggregationResult.Equals(Elsa.Attention.Core.AttentionAggregationResult? other) -> bool
+Elsa.Attention.Core.AttentionAggregationResult.GeneratedAt.get -> System.DateTimeOffset
+Elsa.Attention.Core.AttentionAggregationResult.GeneratedAt.init -> void
+Elsa.Attention.Core.AttentionAggregationService
+Elsa.Attention.Core.AttentionAggregationService.AggregateAsync(Elsa.Attention.Core.AttentionQuery! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Attention.Core.AttentionAggregationResult!>!
+Elsa.Attention.Core.AttentionAggregationService.AttentionAggregationService(Elsa.Attention.Core.IAttentionContributorRegistry! registry, Elsa.Attention.Core.IAttentionPermissionEvaluator! permissionEvaluator, Elsa.Attention.Core.AttentionOptions! options, System.TimeProvider? timeProvider = null) -> void
+Elsa.Attention.Core.AttentionBudgetExceededException
+Elsa.Attention.Core.AttentionBudgetExceededException.AttentionBudgetExceededException() -> void
+Elsa.Attention.Core.AttentionCamelCaseEnumConverter
+Elsa.Attention.Core.AttentionCamelCaseEnumConverter.AttentionCamelCaseEnumConverter() -> void
+Elsa.Attention.Core.AttentionContribution
+Elsa.Attention.Core.AttentionContribution.<Clone>$() -> Elsa.Attention.Core.AttentionContribution!
+Elsa.Attention.Core.AttentionContribution.AttentionContribution(Elsa.Attention.Core.AttentionContributionStatus Status, System.Collections.Generic.IReadOnlyCollection<Elsa.Attention.Core.AttentionItem!>! Items, int TotalCount, bool IsTruncated, string? ErrorCode = null, string? Detail = null, Elsa.Attention.Core.AttentionDestination? DiagnosticDestination = null) -> void
+Elsa.Attention.Core.AttentionContribution.Deconstruct(out Elsa.Attention.Core.AttentionContributionStatus Status, out System.Collections.Generic.IReadOnlyCollection<Elsa.Attention.Core.AttentionItem!>! Items, out int TotalCount, out bool IsTruncated, out string? ErrorCode, out string? Detail, out Elsa.Attention.Core.AttentionDestination? DiagnosticDestination) -> void
+Elsa.Attention.Core.AttentionContribution.Detail.get -> string?
+Elsa.Attention.Core.AttentionContribution.Detail.init -> void
+Elsa.Attention.Core.AttentionContribution.DiagnosticDestination.get -> Elsa.Attention.Core.AttentionDestination?
+Elsa.Attention.Core.AttentionContribution.DiagnosticDestination.init -> void
+Elsa.Attention.Core.AttentionContribution.Equals(Elsa.Attention.Core.AttentionContribution? other) -> bool
+Elsa.Attention.Core.AttentionContribution.ErrorCode.get -> string?
+Elsa.Attention.Core.AttentionContribution.ErrorCode.init -> void
+Elsa.Attention.Core.AttentionContribution.IsTruncated.get -> bool
+Elsa.Attention.Core.AttentionContribution.IsTruncated.init -> void
+Elsa.Attention.Core.AttentionContribution.Items.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Attention.Core.AttentionItem!>!
+Elsa.Attention.Core.AttentionContribution.Items.init -> void
+Elsa.Attention.Core.AttentionContribution.Status.get -> Elsa.Attention.Core.AttentionContributionStatus
+Elsa.Attention.Core.AttentionContribution.Status.init -> void
+Elsa.Attention.Core.AttentionContribution.TotalCount.get -> int
+Elsa.Attention.Core.AttentionContribution.TotalCount.init -> void
+Elsa.Attention.Core.AttentionContributionStatus
+Elsa.Attention.Core.AttentionContributionStatus.Ready = 0 -> Elsa.Attention.Core.AttentionContributionStatus
+Elsa.Attention.Core.AttentionContributionStatus.Unavailable = 1 -> Elsa.Attention.Core.AttentionContributionStatus
+Elsa.Attention.Core.AttentionContributorContext
+Elsa.Attention.Core.AttentionContributorContext.<Clone>$() -> Elsa.Attention.Core.AttentionContributorContext!
+Elsa.Attention.Core.AttentionContributorContext.AttentionContributorContext(Elsa.Attention.Core.AttentionQueryContext! Query, Elsa.Attention.Core.AttentionExecutionBudget! Budget, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Thresholds) -> void
+Elsa.Attention.Core.AttentionContributorContext.Budget.get -> Elsa.Attention.Core.AttentionExecutionBudget!
+Elsa.Attention.Core.AttentionContributorContext.Budget.init -> void
+Elsa.Attention.Core.AttentionContributorContext.Deconstruct(out Elsa.Attention.Core.AttentionQueryContext! Query, out Elsa.Attention.Core.AttentionExecutionBudget! Budget, out System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Thresholds) -> void
+Elsa.Attention.Core.AttentionContributorContext.Equals(Elsa.Attention.Core.AttentionContributorContext? other) -> bool
+Elsa.Attention.Core.AttentionContributorContext.Query.get -> Elsa.Attention.Core.AttentionQueryContext!
+Elsa.Attention.Core.AttentionContributorContext.Query.init -> void
+Elsa.Attention.Core.AttentionContributorContext.Thresholds.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Attention.Core.AttentionContributorContext.Thresholds.init -> void
+Elsa.Attention.Core.AttentionContributorDescriptor
+Elsa.Attention.Core.AttentionContributorDescriptor.<Clone>$() -> Elsa.Attention.Core.AttentionContributorDescriptor!
+Elsa.Attention.Core.AttentionContributorDescriptor.AttentionContributorDescriptor(string! Id, string! DisplayName, string? RequiredPermission, System.Collections.Generic.IReadOnlyCollection<Elsa.Attention.Core.AttentionThresholdDescriptor!>? Thresholds = null) -> void
+Elsa.Attention.Core.AttentionContributorDescriptor.Deconstruct(out string! Id, out string! DisplayName, out string? RequiredPermission, out System.Collections.Generic.IReadOnlyCollection<Elsa.Attention.Core.AttentionThresholdDescriptor!>? Thresholds) -> void
+Elsa.Attention.Core.AttentionContributorDescriptor.DisplayName.get -> string!
+Elsa.Attention.Core.AttentionContributorDescriptor.DisplayName.init -> void
+Elsa.Attention.Core.AttentionContributorDescriptor.Equals(Elsa.Attention.Core.AttentionContributorDescriptor? other) -> bool
+Elsa.Attention.Core.AttentionContributorDescriptor.Id.get -> string!
+Elsa.Attention.Core.AttentionContributorDescriptor.Id.init -> void
+Elsa.Attention.Core.AttentionContributorDescriptor.RequiredPermission.get -> string?
+Elsa.Attention.Core.AttentionContributorDescriptor.RequiredPermission.init -> void
+Elsa.Attention.Core.AttentionContributorDescriptor.Thresholds.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Attention.Core.AttentionThresholdDescriptor!>?
+Elsa.Attention.Core.AttentionContributorDescriptor.Thresholds.init -> void
+Elsa.Attention.Core.AttentionContributorRegistration
+Elsa.Attention.Core.AttentionContributorRegistration.Contributor.get -> Elsa.Attention.Core.IAttentionContributor!
+Elsa.Attention.Core.AttentionContributorRegistration.Descriptor.get -> Elsa.Attention.Core.AttentionContributorDescriptor!
+Elsa.Attention.Core.AttentionContributorRegistration.Dispose() -> void
+Elsa.Attention.Core.AttentionContributorRegistration.Lifetime.get -> System.Threading.CancellationToken
+Elsa.Attention.Core.AttentionContributorRegistry
+Elsa.Attention.Core.AttentionContributorRegistry.AttentionContributorRegistry(System.Collections.Generic.IEnumerable<Elsa.Attention.Core.IAttentionContributor!>! contributors) -> void
+Elsa.Attention.Core.AttentionContributorRegistry.List() -> System.Collections.Generic.IReadOnlyCollection<Elsa.Attention.Core.AttentionContributorRegistration!>!
+Elsa.Attention.Core.AttentionContributorRegistry.Register(Elsa.Attention.Core.IAttentionContributor! contributor) -> System.IDisposable!
+Elsa.Attention.Core.AttentionContributorResult
+Elsa.Attention.Core.AttentionContributorResult.<Clone>$() -> Elsa.Attention.Core.AttentionContributorResult!
+Elsa.Attention.Core.AttentionContributorResult.AttentionContributorResult(string! ContributorId, string! DisplayName, Elsa.Attention.Core.AttentionContributorStatus Status, System.DateTimeOffset EvaluatedAt, int TotalCount, bool IsTruncated, System.Collections.Generic.IReadOnlyCollection<Elsa.Attention.Core.AttentionItem!>! Items, string? ErrorCode = null, string? Detail = null, Elsa.Attention.Core.AttentionDestination? DiagnosticDestination = null) -> void
+Elsa.Attention.Core.AttentionContributorResult.ContributorId.get -> string!
+Elsa.Attention.Core.AttentionContributorResult.ContributorId.init -> void
+Elsa.Attention.Core.AttentionContributorResult.Deconstruct(out string! ContributorId, out string! DisplayName, out Elsa.Attention.Core.AttentionContributorStatus Status, out System.DateTimeOffset EvaluatedAt, out int TotalCount, out bool IsTruncated, out System.Collections.Generic.IReadOnlyCollection<Elsa.Attention.Core.AttentionItem!>! Items, out string? ErrorCode, out string? Detail, out Elsa.Attention.Core.AttentionDestination? DiagnosticDestination) -> void
+Elsa.Attention.Core.AttentionContributorResult.Detail.get -> string?
+Elsa.Attention.Core.AttentionContributorResult.Detail.init -> void
+Elsa.Attention.Core.AttentionContributorResult.DiagnosticDestination.get -> Elsa.Attention.Core.AttentionDestination?
+Elsa.Attention.Core.AttentionContributorResult.DiagnosticDestination.init -> void
+Elsa.Attention.Core.AttentionContributorResult.DisplayName.get -> string!
+Elsa.Attention.Core.AttentionContributorResult.DisplayName.init -> void
+Elsa.Attention.Core.AttentionContributorResult.Equals(Elsa.Attention.Core.AttentionContributorResult? other) -> bool
+Elsa.Attention.Core.AttentionContributorResult.ErrorCode.get -> string?
+Elsa.Attention.Core.AttentionContributorResult.ErrorCode.init -> void
+Elsa.Attention.Core.AttentionContributorResult.EvaluatedAt.get -> System.DateTimeOffset
+Elsa.Attention.Core.AttentionContributorResult.EvaluatedAt.init -> void
+Elsa.Attention.Core.AttentionContributorResult.IsTruncated.get -> bool
+Elsa.Attention.Core.AttentionContributorResult.IsTruncated.init -> void
+Elsa.Attention.Core.AttentionContributorResult.Items.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Attention.Core.AttentionItem!>!
+Elsa.Attention.Core.AttentionContributorResult.Items.init -> void
+Elsa.Attention.Core.AttentionContributorResult.Status.get -> Elsa.Attention.Core.AttentionContributorStatus
+Elsa.Attention.Core.AttentionContributorResult.Status.init -> void
+Elsa.Attention.Core.AttentionContributorResult.TotalCount.get -> int
+Elsa.Attention.Core.AttentionContributorResult.TotalCount.init -> void
+Elsa.Attention.Core.AttentionContributorStatus
+Elsa.Attention.Core.AttentionContributorStatus.Failed = 4 -> Elsa.Attention.Core.AttentionContributorStatus
+Elsa.Attention.Core.AttentionContributorStatus.Forbidden = 1 -> Elsa.Attention.Core.AttentionContributorStatus
+Elsa.Attention.Core.AttentionContributorStatus.Ready = 0 -> Elsa.Attention.Core.AttentionContributorStatus
+Elsa.Attention.Core.AttentionContributorStatus.TimedOut = 3 -> Elsa.Attention.Core.AttentionContributorStatus
+Elsa.Attention.Core.AttentionContributorStatus.Unavailable = 2 -> Elsa.Attention.Core.AttentionContributorStatus
+Elsa.Attention.Core.AttentionCorrelation
+Elsa.Attention.Core.AttentionCorrelation.<Clone>$() -> Elsa.Attention.Core.AttentionCorrelation!
+Elsa.Attention.Core.AttentionCorrelation.AttentionCorrelation(string! Kind, string! Value) -> void
+Elsa.Attention.Core.AttentionCorrelation.Deconstruct(out string! Kind, out string! Value) -> void
+Elsa.Attention.Core.AttentionCorrelation.Equals(Elsa.Attention.Core.AttentionCorrelation? other) -> bool
+Elsa.Attention.Core.AttentionCorrelation.Kind.get -> string!
+Elsa.Attention.Core.AttentionCorrelation.Kind.init -> void
+Elsa.Attention.Core.AttentionCorrelation.Value.get -> string!
+Elsa.Attention.Core.AttentionCorrelation.Value.init -> void
+Elsa.Attention.Core.AttentionDestination
+Elsa.Attention.Core.AttentionDestination.<Clone>$() -> Elsa.Attention.Core.AttentionDestination!
+Elsa.Attention.Core.AttentionDestination.AttentionDestination(string! Path, string! Label) -> void
+Elsa.Attention.Core.AttentionDestination.Deconstruct(out string! Path, out string! Label) -> void
+Elsa.Attention.Core.AttentionDestination.Equals(Elsa.Attention.Core.AttentionDestination? other) -> bool
+Elsa.Attention.Core.AttentionDestination.Label.get -> string!
+Elsa.Attention.Core.AttentionDestination.Label.init -> void
+Elsa.Attention.Core.AttentionDestination.Path.get -> string!
+Elsa.Attention.Core.AttentionDestination.Path.init -> void
+Elsa.Attention.Core.AttentionExecutionBudget
+Elsa.Attention.Core.AttentionExecutionBudget.AttentionExecutionBudget(int maxDownstreamCalls) -> void
+Elsa.Attention.Core.AttentionExecutionBudget.ConsumeDownstreamCall() -> void
+Elsa.Attention.Core.AttentionExecutionBudget.RemainingDownstreamCalls.get -> int
+Elsa.Attention.Core.AttentionItem
+Elsa.Attention.Core.AttentionItem.<Clone>$() -> Elsa.Attention.Core.AttentionItem!
+Elsa.Attention.Core.AttentionItem.AttentionItem(string! Id, string! Generation, Elsa.Attention.Core.AttentionSeverity Severity, string! Title, string? Summary, System.DateTimeOffset OccurredAt, System.DateTimeOffset LastObservedAt, int Count, Elsa.Attention.Core.AttentionDestination! Destination, System.Collections.Generic.IReadOnlyCollection<Elsa.Attention.Core.AttentionCorrelation!>! Correlations, Elsa.Attention.Core.AttentionSensitivity Sensitivity) -> void
+Elsa.Attention.Core.AttentionItem.Correlations.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Attention.Core.AttentionCorrelation!>!
+Elsa.Attention.Core.AttentionItem.Correlations.init -> void
+Elsa.Attention.Core.AttentionItem.Count.get -> int
+Elsa.Attention.Core.AttentionItem.Count.init -> void
+Elsa.Attention.Core.AttentionItem.Deconstruct(out string! Id, out string! Generation, out Elsa.Attention.Core.AttentionSeverity Severity, out string! Title, out string? Summary, out System.DateTimeOffset OccurredAt, out System.DateTimeOffset LastObservedAt, out int Count, out Elsa.Attention.Core.AttentionDestination! Destination, out System.Collections.Generic.IReadOnlyCollection<Elsa.Attention.Core.AttentionCorrelation!>! Correlations, out Elsa.Attention.Core.AttentionSensitivity Sensitivity) -> void
+Elsa.Attention.Core.AttentionItem.Destination.get -> Elsa.Attention.Core.AttentionDestination!
+Elsa.Attention.Core.AttentionItem.Destination.init -> void
+Elsa.Attention.Core.AttentionItem.Equals(Elsa.Attention.Core.AttentionItem? other) -> bool
+Elsa.Attention.Core.AttentionItem.Generation.get -> string!
+Elsa.Attention.Core.AttentionItem.Generation.init -> void
+Elsa.Attention.Core.AttentionItem.Id.get -> string!
+Elsa.Attention.Core.AttentionItem.Id.init -> void
+Elsa.Attention.Core.AttentionItem.LastObservedAt.get -> System.DateTimeOffset
+Elsa.Attention.Core.AttentionItem.LastObservedAt.init -> void
+Elsa.Attention.Core.AttentionItem.OccurredAt.get -> System.DateTimeOffset
+Elsa.Attention.Core.AttentionItem.OccurredAt.init -> void
+Elsa.Attention.Core.AttentionItem.Sensitivity.get -> Elsa.Attention.Core.AttentionSensitivity
+Elsa.Attention.Core.AttentionItem.Sensitivity.init -> void
+Elsa.Attention.Core.AttentionItem.Severity.get -> Elsa.Attention.Core.AttentionSeverity
+Elsa.Attention.Core.AttentionItem.Severity.init -> void
+Elsa.Attention.Core.AttentionItem.Summary.get -> string?
+Elsa.Attention.Core.AttentionItem.Summary.init -> void
+Elsa.Attention.Core.AttentionItem.Title.get -> string!
+Elsa.Attention.Core.AttentionItem.Title.init -> void
+Elsa.Attention.Core.AttentionOptions
+Elsa.Attention.Core.AttentionOptions.AttentionOptions() -> void
+Elsa.Attention.Core.AttentionOptions.ContributorThresholdOverrides.get -> System.Collections.Generic.Dictionary<string!, System.Collections.Generic.Dictionary<string!, string!>!>!
+Elsa.Attention.Core.AttentionOptions.ContributorThresholdOverrides.set -> void
+Elsa.Attention.Core.AttentionOptions.ContributorTimeout.get -> System.TimeSpan
+Elsa.Attention.Core.AttentionOptions.ContributorTimeout.set -> void
+Elsa.Attention.Core.AttentionOptions.ExposeRestrictedSummaries.get -> bool
+Elsa.Attention.Core.AttentionOptions.ExposeRestrictedSummaries.set -> void
+Elsa.Attention.Core.AttentionOptions.MaxDownstreamCallsPerContributor.get -> int
+Elsa.Attention.Core.AttentionOptions.MaxDownstreamCallsPerContributor.set -> void
+Elsa.Attention.Core.AttentionOptions.MaxItemsPerContributor.get -> int
+Elsa.Attention.Core.AttentionOptions.MaxItemsPerContributor.set -> void
+Elsa.Attention.Core.AttentionQuery
+Elsa.Attention.Core.AttentionQuery.<Clone>$() -> Elsa.Attention.Core.AttentionQuery!
+Elsa.Attention.Core.AttentionQuery.AttentionQuery(Elsa.Attention.Core.AttentionQueryContext! Context, System.Collections.Generic.IReadOnlyCollection<string!>? ContributorIds = null) -> void
+Elsa.Attention.Core.AttentionQuery.Context.get -> Elsa.Attention.Core.AttentionQueryContext!
+Elsa.Attention.Core.AttentionQuery.Context.init -> void
+Elsa.Attention.Core.AttentionQuery.ContributorIds.get -> System.Collections.Generic.IReadOnlyCollection<string!>?
+Elsa.Attention.Core.AttentionQuery.ContributorIds.init -> void
+Elsa.Attention.Core.AttentionQuery.Deconstruct(out Elsa.Attention.Core.AttentionQueryContext! Context, out System.Collections.Generic.IReadOnlyCollection<string!>? ContributorIds) -> void
+Elsa.Attention.Core.AttentionQuery.Equals(Elsa.Attention.Core.AttentionQuery? other) -> bool
+Elsa.Attention.Core.AttentionQueryContext
+Elsa.Attention.Core.AttentionQueryContext.<Clone>$() -> Elsa.Attention.Core.AttentionQueryContext!
+Elsa.Attention.Core.AttentionQueryContext.AttentionQueryContext(System.Security.Claims.ClaimsPrincipal! Principal, string? TenantId) -> void
+Elsa.Attention.Core.AttentionQueryContext.Deconstruct(out System.Security.Claims.ClaimsPrincipal! Principal, out string? TenantId) -> void
+Elsa.Attention.Core.AttentionQueryContext.Equals(Elsa.Attention.Core.AttentionQueryContext? other) -> bool
+Elsa.Attention.Core.AttentionQueryContext.Principal.get -> System.Security.Claims.ClaimsPrincipal!
+Elsa.Attention.Core.AttentionQueryContext.Principal.init -> void
+Elsa.Attention.Core.AttentionQueryContext.TenantId.get -> string?
+Elsa.Attention.Core.AttentionQueryContext.TenantId.init -> void
+Elsa.Attention.Core.AttentionQueryException
+Elsa.Attention.Core.AttentionQueryException.AttentionQueryException(string! message) -> void
+Elsa.Attention.Core.AttentionSensitivity
+Elsa.Attention.Core.AttentionSensitivity.Metadata = 0 -> Elsa.Attention.Core.AttentionSensitivity
+Elsa.Attention.Core.AttentionSensitivity.Restricted = 1 -> Elsa.Attention.Core.AttentionSensitivity
+Elsa.Attention.Core.AttentionSeverity
+Elsa.Attention.Core.AttentionSeverity.Critical = 0 -> Elsa.Attention.Core.AttentionSeverity
+Elsa.Attention.Core.AttentionSeverity.Info = 2 -> Elsa.Attention.Core.AttentionSeverity
+Elsa.Attention.Core.AttentionSeverity.Warning = 1 -> Elsa.Attention.Core.AttentionSeverity
+Elsa.Attention.Core.AttentionThresholdDescriptor
+Elsa.Attention.Core.AttentionThresholdDescriptor.<Clone>$() -> Elsa.Attention.Core.AttentionThresholdDescriptor!
+Elsa.Attention.Core.AttentionThresholdDescriptor.AttentionThresholdDescriptor(string! Key, string! DisplayName, string! Description, string! DefaultValue) -> void
+Elsa.Attention.Core.AttentionThresholdDescriptor.Deconstruct(out string! Key, out string! DisplayName, out string! Description, out string! DefaultValue) -> void
+Elsa.Attention.Core.AttentionThresholdDescriptor.DefaultValue.get -> string!
+Elsa.Attention.Core.AttentionThresholdDescriptor.DefaultValue.init -> void
+Elsa.Attention.Core.AttentionThresholdDescriptor.Description.get -> string!
+Elsa.Attention.Core.AttentionThresholdDescriptor.Description.init -> void
+Elsa.Attention.Core.AttentionThresholdDescriptor.DisplayName.get -> string!
+Elsa.Attention.Core.AttentionThresholdDescriptor.DisplayName.init -> void
+Elsa.Attention.Core.AttentionThresholdDescriptor.Equals(Elsa.Attention.Core.AttentionThresholdDescriptor? other) -> bool
+Elsa.Attention.Core.AttentionThresholdDescriptor.Key.get -> string!
+Elsa.Attention.Core.AttentionThresholdDescriptor.Key.init -> void
+Elsa.Attention.Core.IAttentionAggregationService
+Elsa.Attention.Core.IAttentionAggregationService.AggregateAsync(Elsa.Attention.Core.AttentionQuery! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Attention.Core.AttentionAggregationResult!>!
+Elsa.Attention.Core.IAttentionContributor
+Elsa.Attention.Core.IAttentionContributor.Descriptor.get -> Elsa.Attention.Core.AttentionContributorDescriptor!
+Elsa.Attention.Core.IAttentionContributor.EvaluateAsync(Elsa.Attention.Core.AttentionContributorContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Attention.Core.AttentionContribution!>
+Elsa.Attention.Core.IAttentionContributorRegistry
+Elsa.Attention.Core.IAttentionContributorRegistry.List() -> System.Collections.Generic.IReadOnlyCollection<Elsa.Attention.Core.AttentionContributorRegistration!>!
+Elsa.Attention.Core.IAttentionContributorRegistry.Register(Elsa.Attention.Core.IAttentionContributor! contributor) -> System.IDisposable!
+Elsa.Attention.Core.IAttentionPermissionEvaluator
+Elsa.Attention.Core.IAttentionPermissionEvaluator.IsAllowedAsync(System.Security.Claims.ClaimsPrincipal! principal, string! permission, string? tenantId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+override Elsa.Attention.Core.AttentionAggregationResult.Equals(object? obj) -> bool
+override Elsa.Attention.Core.AttentionAggregationResult.GetHashCode() -> int
+override Elsa.Attention.Core.AttentionAggregationResult.ToString() -> string!
+override Elsa.Attention.Core.AttentionContribution.Equals(object? obj) -> bool
+override Elsa.Attention.Core.AttentionContribution.GetHashCode() -> int
+override Elsa.Attention.Core.AttentionContribution.ToString() -> string!
+override Elsa.Attention.Core.AttentionContributorContext.Equals(object? obj) -> bool
+override Elsa.Attention.Core.AttentionContributorContext.GetHashCode() -> int
+override Elsa.Attention.Core.AttentionContributorContext.ToString() -> string!
+override Elsa.Attention.Core.AttentionContributorDescriptor.Equals(object? obj) -> bool
+override Elsa.Attention.Core.AttentionContributorDescriptor.GetHashCode() -> int
+override Elsa.Attention.Core.AttentionContributorDescriptor.ToString() -> string!
+override Elsa.Attention.Core.AttentionContributorResult.Equals(object? obj) -> bool
+override Elsa.Attention.Core.AttentionContributorResult.GetHashCode() -> int
+override Elsa.Attention.Core.AttentionContributorResult.ToString() -> string!
+override Elsa.Attention.Core.AttentionCorrelation.Equals(object? obj) -> bool
+override Elsa.Attention.Core.AttentionCorrelation.GetHashCode() -> int
+override Elsa.Attention.Core.AttentionCorrelation.ToString() -> string!
+override Elsa.Attention.Core.AttentionDestination.Equals(object? obj) -> bool
+override Elsa.Attention.Core.AttentionDestination.GetHashCode() -> int
+override Elsa.Attention.Core.AttentionDestination.ToString() -> string!
+override Elsa.Attention.Core.AttentionItem.Equals(object? obj) -> bool
+override Elsa.Attention.Core.AttentionItem.GetHashCode() -> int
+override Elsa.Attention.Core.AttentionItem.ToString() -> string!
+override Elsa.Attention.Core.AttentionQuery.Equals(object? obj) -> bool
+override Elsa.Attention.Core.AttentionQuery.GetHashCode() -> int
+override Elsa.Attention.Core.AttentionQuery.ToString() -> string!
+override Elsa.Attention.Core.AttentionQueryContext.Equals(object? obj) -> bool
+override Elsa.Attention.Core.AttentionQueryContext.GetHashCode() -> int
+override Elsa.Attention.Core.AttentionQueryContext.ToString() -> string!
+override Elsa.Attention.Core.AttentionThresholdDescriptor.Equals(object? obj) -> bool
+override Elsa.Attention.Core.AttentionThresholdDescriptor.GetHashCode() -> int
+override Elsa.Attention.Core.AttentionThresholdDescriptor.ToString() -> string!
+static Elsa.Attention.Core.AttentionAggregationResult.operator !=(Elsa.Attention.Core.AttentionAggregationResult? left, Elsa.Attention.Core.AttentionAggregationResult? right) -> bool
+static Elsa.Attention.Core.AttentionAggregationResult.operator ==(Elsa.Attention.Core.AttentionAggregationResult? left, Elsa.Attention.Core.AttentionAggregationResult? right) -> bool
+static Elsa.Attention.Core.AttentionContribution.operator !=(Elsa.Attention.Core.AttentionContribution? left, Elsa.Attention.Core.AttentionContribution? right) -> bool
+static Elsa.Attention.Core.AttentionContribution.operator ==(Elsa.Attention.Core.AttentionContribution? left, Elsa.Attention.Core.AttentionContribution? right) -> bool
+static Elsa.Attention.Core.AttentionContribution.Ready(System.Collections.Generic.IReadOnlyCollection<Elsa.Attention.Core.AttentionItem!>! items, int? totalCount = null, bool isTruncated = false) -> Elsa.Attention.Core.AttentionContribution!
+static Elsa.Attention.Core.AttentionContribution.Unavailable(string! errorCode, string? detail = null, Elsa.Attention.Core.AttentionDestination? diagnosticDestination = null) -> Elsa.Attention.Core.AttentionContribution!
+static Elsa.Attention.Core.AttentionContributorContext.operator !=(Elsa.Attention.Core.AttentionContributorContext? left, Elsa.Attention.Core.AttentionContributorContext? right) -> bool
+static Elsa.Attention.Core.AttentionContributorContext.operator ==(Elsa.Attention.Core.AttentionContributorContext? left, Elsa.Attention.Core.AttentionContributorContext? right) -> bool
+static Elsa.Attention.Core.AttentionContributorDescriptor.operator !=(Elsa.Attention.Core.AttentionContributorDescriptor? left, Elsa.Attention.Core.AttentionContributorDescriptor? right) -> bool
+static Elsa.Attention.Core.AttentionContributorDescriptor.operator ==(Elsa.Attention.Core.AttentionContributorDescriptor? left, Elsa.Attention.Core.AttentionContributorDescriptor? right) -> bool
+static Elsa.Attention.Core.AttentionContributorResult.operator !=(Elsa.Attention.Core.AttentionContributorResult? left, Elsa.Attention.Core.AttentionContributorResult? right) -> bool
+static Elsa.Attention.Core.AttentionContributorResult.operator ==(Elsa.Attention.Core.AttentionContributorResult? left, Elsa.Attention.Core.AttentionContributorResult? right) -> bool
+static Elsa.Attention.Core.AttentionCorrelation.operator !=(Elsa.Attention.Core.AttentionCorrelation? left, Elsa.Attention.Core.AttentionCorrelation? right) -> bool
+static Elsa.Attention.Core.AttentionCorrelation.operator ==(Elsa.Attention.Core.AttentionCorrelation? left, Elsa.Attention.Core.AttentionCorrelation? right) -> bool
+static Elsa.Attention.Core.AttentionDestination.operator !=(Elsa.Attention.Core.AttentionDestination? left, Elsa.Attention.Core.AttentionDestination? right) -> bool
+static Elsa.Attention.Core.AttentionDestination.operator ==(Elsa.Attention.Core.AttentionDestination? left, Elsa.Attention.Core.AttentionDestination? right) -> bool
+static Elsa.Attention.Core.AttentionItem.operator !=(Elsa.Attention.Core.AttentionItem? left, Elsa.Attention.Core.AttentionItem? right) -> bool
+static Elsa.Attention.Core.AttentionItem.operator ==(Elsa.Attention.Core.AttentionItem? left, Elsa.Attention.Core.AttentionItem? right) -> bool
+static Elsa.Attention.Core.AttentionQuery.operator !=(Elsa.Attention.Core.AttentionQuery? left, Elsa.Attention.Core.AttentionQuery? right) -> bool
+static Elsa.Attention.Core.AttentionQuery.operator ==(Elsa.Attention.Core.AttentionQuery? left, Elsa.Attention.Core.AttentionQuery? right) -> bool
+static Elsa.Attention.Core.AttentionQueryContext.operator !=(Elsa.Attention.Core.AttentionQueryContext? left, Elsa.Attention.Core.AttentionQueryContext? right) -> bool
+static Elsa.Attention.Core.AttentionQueryContext.operator ==(Elsa.Attention.Core.AttentionQueryContext? left, Elsa.Attention.Core.AttentionQueryContext? right) -> bool
+static Elsa.Attention.Core.AttentionThresholdDescriptor.operator !=(Elsa.Attention.Core.AttentionThresholdDescriptor? left, Elsa.Attention.Core.AttentionThresholdDescriptor? right) -> bool
+static Elsa.Attention.Core.AttentionThresholdDescriptor.operator ==(Elsa.Attention.Core.AttentionThresholdDescriptor? left, Elsa.Attention.Core.AttentionThresholdDescriptor? right) -> bool

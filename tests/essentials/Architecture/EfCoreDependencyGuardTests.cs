@@ -518,6 +518,7 @@ public sealed class EfCoreDependencyGuardTests
         var offenders = Directory.EnumerateFiles(RepoRoot, "*.*", SearchOption.AllDirectories)
             .Where(path => !IsBuildOutput(path) && IsMsBuildFile(path))
             .SelectMany(path => FindConditionalDependencyElements(XDocument.Load(path))
+                .Where(element => !IsAdmittedConditionalDependency(Path.GetRelativePath(RepoRoot, path), element))
                 .Select(element => $"{Path.GetRelativePath(RepoRoot, path)}: {element.Name.LocalName}"))
             .Order(StringComparer.Ordinal)
             .ToArray();
@@ -527,6 +528,22 @@ public sealed class EfCoreDependencyGuardTests
             Report("conditionally declare dependency/import edges that are not covered by the Release and Debug restore graphs", offenders));
     }
 
+    /// <summary>
+    /// Directory.Build.props's Line A PublicApiAnalyzers wiring (#2078) is the one declared exception. Its
+    /// Condition reads $(ElsaVersionLine), a property that same file computes from $(MSBuildProjectName)
+    /// alone (VersionLines.props) - never from $(Configuration) - so the Release and Debug restore graphs
+    /// this guard reads already resolve it identically. It cannot hide a package from either one.
+    /// </summary>
+    private static readonly (string RelativePath, string ElementName, string Condition) AdmittedConditionalDependency =
+        ("Directory.Build.props", "PackageReference", "'$(ElsaVersionLine)' == 'A'");
+
+    private static bool IsAdmittedConditionalDependency(string relativePath, XElement element) =>
+        relativePath.Replace('\\', '/') == AdmittedConditionalDependency.RelativePath &&
+        element.Name.LocalName == AdmittedConditionalDependency.ElementName &&
+        element.AncestorsAndSelf()
+            .SelectMany(ancestor => ancestor.Attributes())
+            .Any(attribute => attribute.Name.LocalName == "Condition" && attribute.Value == AdmittedConditionalDependency.Condition);
+
     [Theory]
     [InlineData("<Project><ItemGroup Condition=\"'$(Configuration)' == 'Debug'\"><PackageReference Include=\"Contoso.Persistence\" /></ItemGroup></Project>")]
     [InlineData("<Project><Choose><When Condition=\"'$(UseContoso)' == 'true'\"><ItemGroup><ProjectReference Include=\"Contoso.csproj\" /></ItemGroup></When></Choose></Project>")]
@@ -534,6 +551,37 @@ public sealed class EfCoreDependencyGuardTests
     public void Conditional_dependency_declarations_are_detected(string xml)
     {
         Assert.NotEmpty(FindConditionalDependencyElements(XDocument.Parse(xml)));
+    }
+
+    /// <summary>
+    /// The allowlist admits exactly the Line A PublicApiAnalyzers reference - same path, element, and
+    /// condition text - and nothing else: a different path, a different element, or a different condition
+    /// on the same element all still count as an offender.
+    /// </summary>
+    [Fact]
+    public void Only_the_declared_line_a_analyzer_reference_is_admitted_as_a_conditional_dependency()
+    {
+        var admitted = XDocument.Parse(
+            "<Project><ItemGroup Condition=\"'$(ElsaVersionLine)' == 'A'\">" +
+            "<PackageReference Include=\"Microsoft.CodeAnalysis.PublicApiAnalyzers\" /></ItemGroup></Project>")
+            .Descendants("PackageReference").Single();
+
+        Assert.True(IsAdmittedConditionalDependency("Directory.Build.props", admitted));
+        Assert.False(IsAdmittedConditionalDependency("VersionLines.props", admitted));
+
+        var otherElement = XDocument.Parse(
+            "<Project><ItemGroup Condition=\"'$(ElsaVersionLine)' == 'A'\">" +
+            "<ProjectReference Include=\"Contoso.csproj\" /></ItemGroup></Project>")
+            .Descendants("ProjectReference").Single();
+
+        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", otherElement));
+
+        var otherCondition = XDocument.Parse(
+            "<Project><ItemGroup Condition=\"'$(Configuration)' == 'Debug'\">" +
+            "<PackageReference Include=\"Microsoft.CodeAnalysis.PublicApiAnalyzers\" /></ItemGroup></Project>")
+            .Descendants("PackageReference").Single();
+
+        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", otherCondition));
     }
 
     [Fact]

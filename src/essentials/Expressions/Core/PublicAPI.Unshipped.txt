@@ -1,0 +1,718 @@
+#nullable enable
+abstract Elsa.Expressions.Core.Models.ExpressionParameterBinding.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionParameterBinding!
+const Elsa.Expressions.Core.Constants.WellKnownExpressionDescriptorTypes.Object = "Object" -> string!
+const Elsa.Expressions.Core.Constants.WellKnownExpressionDescriptorTypes.Variable = "Variable" -> string!
+const Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.BindingPureV1 = "binding-pure-v1" -> string!
+const Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId = "workflow" -> string!
+Elsa.Expressions.Core.Constants.WellKnownExpressionDescriptorTypes
+Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities
+Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.<Clone>$() -> Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities!
+Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.AllowsAmbientWorkflowState.get -> bool
+Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.AllowsDeterministicTransforms.get -> bool
+Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.AllowsMutation.get -> bool
+Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.AllowsNondeterminism.get -> bool
+Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.AllowsServiceLocation.get -> bool
+Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.Equals(Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities? other) -> bool
+Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.IsBindingPure.get -> bool
+Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.Profile.get -> string!
+Elsa.Expressions.Core.Contracts.IExpression
+Elsa.Expressions.Core.Contracts.IExpression.GetValue<TValue>() -> TValue
+Elsa.Expressions.Core.Contracts.IExpression.Type.get -> string!
+Elsa.Expressions.Core.Contracts.IExpression.Type.set -> void
+Elsa.Expressions.Core.Contracts.IExpression.Value.get -> object?
+Elsa.Expressions.Core.Contracts.IExpression.Value.set -> void
+Elsa.Expressions.Core.Contracts.IExpressionDescriptor
+Elsa.Expressions.Core.Contracts.IExpressionDescriptor.DisplayName.get -> string!
+Elsa.Expressions.Core.Contracts.IExpressionDescriptor.EditingMode.get -> Elsa.Expressions.Core.Models.ExpressionEditingMode
+Elsa.Expressions.Core.Contracts.IExpressionDescriptor.Properties.get -> System.Collections.Generic.IDictionary<string!, object!>!
+Elsa.Expressions.Core.Contracts.IExpressionDescriptor.TypeName.get -> string!
+Elsa.Expressions.Core.Contracts.IExpressionDescriptorProvider
+Elsa.Expressions.Core.Contracts.IExpressionDescriptorProvider.GetDescriptors() -> System.Collections.Generic.IEnumerable<Elsa.Expressions.Core.Contracts.IExpressionDescriptor!>!
+Elsa.Expressions.Core.Contracts.IExpressionDescriptorRegistry
+Elsa.Expressions.Core.Contracts.IExpressionDescriptorRegistry.Add(Elsa.Expressions.Core.Contracts.IExpressionDescriptor! descriptor) -> void
+Elsa.Expressions.Core.Contracts.IExpressionDescriptorRegistry.AddRange(System.Collections.Generic.IEnumerable<Elsa.Expressions.Core.Contracts.IExpressionDescriptor!>! descriptors) -> void
+Elsa.Expressions.Core.Contracts.IExpressionDescriptorRegistry.Find(string! type) -> Elsa.Expressions.Core.Contracts.IExpressionDescriptor?
+Elsa.Expressions.Core.Contracts.IExpressionDescriptorRegistry.Find(System.Func<Elsa.Expressions.Core.Contracts.IExpressionDescriptor!, bool>! predicate) -> Elsa.Expressions.Core.Contracts.IExpressionDescriptor?
+Elsa.Expressions.Core.Contracts.IExpressionDescriptorRegistry.ListAll() -> System.Collections.Generic.IEnumerable<Elsa.Expressions.Core.Contracts.IExpressionDescriptor!>!
+Elsa.Expressions.Core.Contracts.IExpressionEvaluatorOptions
+Elsa.Expressions.Core.Contracts.IExpressionEvaluatorOptions.Arguments.get -> System.Collections.Generic.IDictionary<string!, object!>!
+Elsa.Expressions.Core.Contracts.IExpressionToolingProvider
+Elsa.Expressions.Core.Contracts.IExpressionToolingProvider.DeclaredCapabilities.get -> Elsa.Expressions.Core.Models.ExpressionToolingCapabilities!
+Elsa.Expressions.Core.Contracts.IExpressionToolingProvider.ExpressionType.get -> string!
+Elsa.Expressions.Core.Contracts.IExpressionToolingProvider.GetCapabilitiesAsync(Elsa.Expressions.Core.Models.ExpressionToolingRequestScope! scope, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Expressions.Core.Models.ExpressionToolingOutcome<Elsa.Expressions.Core.Models.ExpressionToolingCapabilities!>!>
+Elsa.Expressions.Core.Contracts.IExpressionToolingProvider.GetCompletionsAsync(Elsa.Expressions.Core.Models.ExpressionCompletionRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Expressions.Core.Models.ExpressionToolingOutcome<Elsa.Expressions.Core.Models.ExpressionToolingItems!>!>
+Elsa.Expressions.Core.Contracts.IExpressionToolingProvider.GetHoverAsync(Elsa.Expressions.Core.Models.ExpressionHoverRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Expressions.Core.Models.ExpressionToolingOutcome<Elsa.Expressions.Core.Models.ExpressionHover!>!>
+Elsa.Expressions.Core.Contracts.IExpressionToolingProvider.SupportedVersion.get -> Elsa.Expressions.Core.Models.ExpressionToolingContractVersion
+Elsa.Expressions.Core.Contracts.IExpressionToolingProvider.ValidateAsync(Elsa.Expressions.Core.Models.ExpressionValidationRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Expressions.Core.Models.ExpressionToolingOutcome<Elsa.Expressions.Core.Models.ExpressionDiagnosticSet!>!>
+Elsa.Expressions.Core.Contracts.IExpressionToolingProviderResolver
+Elsa.Expressions.Core.Contracts.IExpressionToolingProviderResolver.Find(string! expressionType) -> Elsa.Expressions.Core.Contracts.IExpressionToolingProvider?
+Elsa.Expressions.Core.Contracts.IPortableExpressionEvaluator
+Elsa.Expressions.Core.Contracts.IPortableExpressionEvaluator.EvaluateAsync(Elsa.Expressions.Core.Models.ExpressionEvaluationRequest! request) -> System.Threading.Tasks.ValueTask<System.Text.Json.JsonElement>
+Elsa.Expressions.Core.Contracts.IPortableExpressionHandler
+Elsa.Expressions.Core.Contracts.IPortableExpressionHandler.EvaluateAsync(Elsa.Expressions.Core.Models.ExpressionEvaluationRequest! request) -> System.Threading.Tasks.ValueTask<System.Text.Json.JsonElement>
+Elsa.Expressions.Core.Contracts.IPortableExpressionHandler.Language.get -> string!
+Elsa.Expressions.Core.Contracts.IVariable
+Elsa.Expressions.Core.Contracts.IVariable.DefaultValue.get -> object?
+Elsa.Expressions.Core.Contracts.IVariable.DefaultValue.set -> void
+Elsa.Expressions.Core.Contracts.IVariable.GetVariableType() -> System.Type!
+Elsa.Expressions.Core.Contracts.IVariable.Id.get -> string!
+Elsa.Expressions.Core.Contracts.IVariable.Id.set -> void
+Elsa.Expressions.Core.Contracts.IVariable.Name.get -> string!
+Elsa.Expressions.Core.Contracts.IVariable.Name.set -> void
+Elsa.Expressions.Core.Contracts.IVariable.StorageDriverType.get -> System.Type?
+Elsa.Expressions.Core.Contracts.IVariable.StorageDriverType.set -> void
+Elsa.Expressions.Core.Contracts.IVariable<TValue>
+Elsa.Expressions.Core.Contracts.IVariable<TValue>.WithId(string! id) -> Elsa.Expressions.Core.Contracts.IVariable<TValue>!
+Elsa.Expressions.Core.Contracts.IVariable<TValue>.WithName(string! name) -> Elsa.Expressions.Core.Contracts.IVariable<TValue>!
+Elsa.Expressions.Core.Contracts.IVariable<TValue>.WithValue(TValue value) -> Elsa.Expressions.Core.Contracts.IVariable<TValue>!
+Elsa.Expressions.Core.Contracts.IVariableFactory
+Elsa.Expressions.Core.Contracts.IVariableFactory.Create(string! name, object? value = null, string? id = null) -> Elsa.Expressions.Core.Contracts.IVariable!
+Elsa.Expressions.Core.Contracts.IVariableFactory.Create<T>(string! name, T value, string? id = null) -> Elsa.Expressions.Core.Contracts.IVariable<T>!
+Elsa.Expressions.Core.Contracts.IVariableMapper
+Elsa.Expressions.Core.Contracts.IVariableMapper.Map(Elsa.Expressions.Core.Contracts.IVariable! source) -> Elsa.Expressions.Core.Models.VariableDefinition!
+Elsa.Expressions.Core.Contracts.IVariableMapper.Map(Elsa.Expressions.Core.Models.VariableDefinition! source) -> Elsa.Expressions.Core.Contracts.IVariable!
+Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorCatalog
+Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorCatalog.GetDescriptors() -> System.Collections.Generic.IEnumerable<Elsa.Expressions.Core.Models.TypeDescriptor!>!
+Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorCatalog.GetDescriptorsByCategory() -> System.Collections.Generic.IEnumerable<System.Linq.IGrouping<string!, Elsa.Expressions.Core.Models.TypeDescriptor!>!>!
+Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorProvider
+Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorProvider.GetDescriptors() -> System.Collections.Generic.IEnumerable<Elsa.Expressions.Core.Models.TypeDescriptor!>!
+Elsa.Expressions.Core.Extensions.VariableNameValidator
+Elsa.Expressions.Core.Helpers.DynamicValueMaterializer
+Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding
+Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.ActivityResultExpressionParameterBinding(string! producerNodeId, string! projectionKey, bool isOptional = false) -> void
+Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? other) -> bool
+Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.IsOptional.get -> bool
+Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.ProducerNodeId.get -> string!
+Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.ProjectionKey.get -> string!
+Elsa.Expressions.Core.Models.ArgumentValue
+Elsa.Expressions.Core.Models.ArgumentValue.<Clone>$() -> Elsa.Expressions.Core.Models.ArgumentValue!
+Elsa.Expressions.Core.Models.ArgumentValue.ArgumentValue(object? Value, string? ExpressionType = null) -> void
+Elsa.Expressions.Core.Models.ArgumentValue.Deconstruct(out object? Value, out string? ExpressionType) -> void
+Elsa.Expressions.Core.Models.ArgumentValue.Equals(Elsa.Expressions.Core.Models.ArgumentValue? other) -> bool
+Elsa.Expressions.Core.Models.ArgumentValue.ExpressionType.get -> string?
+Elsa.Expressions.Core.Models.ArgumentValue.ExpressionType.init -> void
+Elsa.Expressions.Core.Models.ArgumentValue.Value.get -> object?
+Elsa.Expressions.Core.Models.ArgumentValue.Value.init -> void
+Elsa.Expressions.Core.Models.Expression
+Elsa.Expressions.Core.Models.Expression.Expression() -> void
+Elsa.Expressions.Core.Models.Expression.Expression(string! type, object? value) -> void
+Elsa.Expressions.Core.Models.Expression.Type.get -> string!
+Elsa.Expressions.Core.Models.Expression.Type.set -> void
+Elsa.Expressions.Core.Models.Expression.Value.get -> object?
+Elsa.Expressions.Core.Models.Expression.Value.set -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionAuthoringContext!
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.Capabilities.get -> Elsa.Expressions.Core.Models.ExpressionToolingCapabilities!
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.Capabilities.init -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.ContextRevision.get -> string!
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.ContextRevision.init -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.ContractVersion.get -> Elsa.Expressions.Core.Models.ExpressionToolingContractVersion
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.ContractVersion.init -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.Deconstruct(out Elsa.Expressions.Core.Models.ExpressionToolingContractVersion ContractVersion, out Elsa.Expressions.Core.Models.ExpressionAuthoringDocument! Document, out string! ContextRevision, out string! SymbolCatalogRevision, out System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionSymbol!>! RootSymbols, out Elsa.Expressions.Core.Models.ExpressionToolingCapabilities! Capabilities, out string? ExpectedResultType, out Elsa.Expressions.Core.Models.ExpressionValueShape? ExpectedResultShape, out string? PolicyFingerprint, out string? PermissionRevision) -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.Document.get -> Elsa.Expressions.Core.Models.ExpressionAuthoringDocument!
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.Document.init -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.Equals(Elsa.Expressions.Core.Models.ExpressionAuthoringContext? other) -> bool
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.ExpectedResultShape.get -> Elsa.Expressions.Core.Models.ExpressionValueShape?
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.ExpectedResultShape.init -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.ExpectedResultType.get -> string?
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.ExpectedResultType.init -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.ExpressionAuthoringContext(Elsa.Expressions.Core.Models.ExpressionToolingContractVersion ContractVersion, Elsa.Expressions.Core.Models.ExpressionAuthoringDocument! Document, string! ContextRevision, string! SymbolCatalogRevision, System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionSymbol!>! RootSymbols, Elsa.Expressions.Core.Models.ExpressionToolingCapabilities! Capabilities, string? ExpectedResultType = null, Elsa.Expressions.Core.Models.ExpressionValueShape? ExpectedResultShape = null, string? PolicyFingerprint = null, string? PermissionRevision = null) -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.PermissionRevision.get -> string?
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.PermissionRevision.init -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.PolicyFingerprint.get -> string?
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.PolicyFingerprint.init -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.RootSymbols.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionSymbol!>!
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.RootSymbols.init -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.SymbolCatalogRevision.get -> string!
+Elsa.Expressions.Core.Models.ExpressionAuthoringContext.SymbolCatalogRevision.init -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionAuthoringDocument!
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.Deconstruct(out string! DocumentId, out string! WorkflowDraftId, out string! NodeId, out string! PropertyKey, out string! ExpressionType, out string! DocumentRevision, out string? ExpectedResultType, out string? Source) -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.DocumentId.get -> string!
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.DocumentId.init -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.DocumentRevision.get -> string!
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.DocumentRevision.init -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.Equals(Elsa.Expressions.Core.Models.ExpressionAuthoringDocument? other) -> bool
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.ExpectedResultType.get -> string?
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.ExpectedResultType.init -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.ExpressionAuthoringDocument(string! DocumentId, string! WorkflowDraftId, string! NodeId, string! PropertyKey, string! ExpressionType, string! DocumentRevision, string? ExpectedResultType = null, string? Source = null) -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.ExpressionType.get -> string!
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.ExpressionType.init -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.NodeId.get -> string!
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.NodeId.init -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.PropertyKey.get -> string!
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.PropertyKey.init -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.Source.get -> string?
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.Source.init -> void
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.WorkflowDraftId.get -> string!
+Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.WorkflowDraftId.init -> void
+Elsa.Expressions.Core.Models.ExpressionCallableSignature
+Elsa.Expressions.Core.Models.ExpressionCallableSignature.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionCallableSignature!
+Elsa.Expressions.Core.Models.ExpressionCallableSignature.Deconstruct(out string! Display, out System.Collections.Generic.IReadOnlyList<string!>? Parameters, out Elsa.Expressions.Core.Models.ExpressionValueShape? ReturnShape) -> void
+Elsa.Expressions.Core.Models.ExpressionCallableSignature.Display.get -> string!
+Elsa.Expressions.Core.Models.ExpressionCallableSignature.Display.init -> void
+Elsa.Expressions.Core.Models.ExpressionCallableSignature.Equals(Elsa.Expressions.Core.Models.ExpressionCallableSignature? other) -> bool
+Elsa.Expressions.Core.Models.ExpressionCallableSignature.ExpressionCallableSignature(string! Display, System.Collections.Generic.IReadOnlyList<string!>? Parameters = null, Elsa.Expressions.Core.Models.ExpressionValueShape? ReturnShape = null) -> void
+Elsa.Expressions.Core.Models.ExpressionCallableSignature.Parameters.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Elsa.Expressions.Core.Models.ExpressionCallableSignature.Parameters.init -> void
+Elsa.Expressions.Core.Models.ExpressionCallableSignature.ReturnShape.get -> Elsa.Expressions.Core.Models.ExpressionValueShape?
+Elsa.Expressions.Core.Models.ExpressionCallableSignature.ReturnShape.init -> void
+Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles
+Elsa.Expressions.Core.Models.ExpressionCompletionRequest
+Elsa.Expressions.Core.Models.ExpressionCompletionRequest.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionCompletionRequest!
+Elsa.Expressions.Core.Models.ExpressionCompletionRequest.Cursor.get -> Elsa.Expressions.Core.Models.ExpressionToolingPosition
+Elsa.Expressions.Core.Models.ExpressionCompletionRequest.Cursor.init -> void
+Elsa.Expressions.Core.Models.ExpressionCompletionRequest.Deconstruct(out Elsa.Expressions.Core.Models.ExpressionToolingRequestScope! Scope, out string! Source, out Elsa.Expressions.Core.Models.ExpressionToolingPosition Cursor) -> void
+Elsa.Expressions.Core.Models.ExpressionCompletionRequest.Equals(Elsa.Expressions.Core.Models.ExpressionCompletionRequest? other) -> bool
+Elsa.Expressions.Core.Models.ExpressionCompletionRequest.ExpressionCompletionRequest(Elsa.Expressions.Core.Models.ExpressionToolingRequestScope! Scope, string! Source, Elsa.Expressions.Core.Models.ExpressionToolingPosition Cursor) -> void
+Elsa.Expressions.Core.Models.ExpressionCompletionRequest.Scope.get -> Elsa.Expressions.Core.Models.ExpressionToolingRequestScope!
+Elsa.Expressions.Core.Models.ExpressionCompletionRequest.Scope.init -> void
+Elsa.Expressions.Core.Models.ExpressionCompletionRequest.Source.get -> string!
+Elsa.Expressions.Core.Models.ExpressionCompletionRequest.Source.init -> void
+Elsa.Expressions.Core.Models.ExpressionDefinition
+Elsa.Expressions.Core.Models.ExpressionDefinition.CapabilityProfile.get -> string!
+Elsa.Expressions.Core.Models.ExpressionDefinition.Equals(Elsa.Expressions.Core.Models.ExpressionDefinition? other) -> bool
+Elsa.Expressions.Core.Models.ExpressionDefinition.ExpressionDefinition(string! language, string! source, Elsa.Primitives.Models.TypeReference! resultType, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Expressions.Core.Models.ExpressionParameterBinding!>! parameters, System.Text.Json.JsonElement options, string! capabilityProfile, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? metadata = null) -> void
+Elsa.Expressions.Core.Models.ExpressionDefinition.Fingerprint.get -> string!
+Elsa.Expressions.Core.Models.ExpressionDefinition.Language.get -> string!
+Elsa.Expressions.Core.Models.ExpressionDefinition.Metadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Expressions.Core.Models.ExpressionDefinition.Options.get -> System.Text.Json.JsonElement
+Elsa.Expressions.Core.Models.ExpressionDefinition.Parameters.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Expressions.Core.Models.ExpressionParameterBinding!>!
+Elsa.Expressions.Core.Models.ExpressionDefinition.ResultType.get -> Elsa.Primitives.Models.TypeReference!
+Elsa.Expressions.Core.Models.ExpressionDefinition.Source.get -> string!
+Elsa.Expressions.Core.Models.ExpressionDescriptor
+Elsa.Expressions.Core.Models.ExpressionDescriptor.DisplayName.get -> string!
+Elsa.Expressions.Core.Models.ExpressionDescriptor.DisplayName.set -> void
+Elsa.Expressions.Core.Models.ExpressionDescriptor.EditingMode.get -> Elsa.Expressions.Core.Models.ExpressionEditingMode
+Elsa.Expressions.Core.Models.ExpressionDescriptor.ExpressionDescriptor(string! typeName, Elsa.Expressions.Core.Models.ExpressionEditingMode editingMode) -> void
+Elsa.Expressions.Core.Models.ExpressionDescriptor.Properties.get -> System.Collections.Generic.IDictionary<string!, object!>!
+Elsa.Expressions.Core.Models.ExpressionDescriptor.Properties.set -> void
+Elsa.Expressions.Core.Models.ExpressionDescriptor.TypeName.get -> string!
+Elsa.Expressions.Core.Models.ExpressionDiagnostic
+Elsa.Expressions.Core.Models.ExpressionDiagnostic.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionDiagnostic!
+Elsa.Expressions.Core.Models.ExpressionDiagnostic.AuthoredPath.get -> string?
+Elsa.Expressions.Core.Models.ExpressionDiagnostic.AuthoredPath.init -> void
+Elsa.Expressions.Core.Models.ExpressionDiagnostic.Code.get -> string!
+Elsa.Expressions.Core.Models.ExpressionDiagnostic.Code.init -> void
+Elsa.Expressions.Core.Models.ExpressionDiagnostic.Deconstruct(out string! Code, out Elsa.Expressions.Core.Models.ExpressionDiagnosticSeverity Severity, out string! Message, out string! DocumentRevision, out Elsa.Expressions.Core.Models.ExpressionToolingRange? Range, out string? AuthoredPath, out System.Collections.Generic.IReadOnlyList<string!>? RelatedSymbols) -> void
+Elsa.Expressions.Core.Models.ExpressionDiagnostic.DocumentRevision.get -> string!
+Elsa.Expressions.Core.Models.ExpressionDiagnostic.DocumentRevision.init -> void
+Elsa.Expressions.Core.Models.ExpressionDiagnostic.Equals(Elsa.Expressions.Core.Models.ExpressionDiagnostic? other) -> bool
+Elsa.Expressions.Core.Models.ExpressionDiagnostic.ExpressionDiagnostic(string! Code, Elsa.Expressions.Core.Models.ExpressionDiagnosticSeverity Severity, string! Message, string! DocumentRevision, Elsa.Expressions.Core.Models.ExpressionToolingRange? Range = null, string? AuthoredPath = null, System.Collections.Generic.IReadOnlyList<string!>? RelatedSymbols = null) -> void
+Elsa.Expressions.Core.Models.ExpressionDiagnostic.Message.get -> string!
+Elsa.Expressions.Core.Models.ExpressionDiagnostic.Message.init -> void
+Elsa.Expressions.Core.Models.ExpressionDiagnostic.Range.get -> Elsa.Expressions.Core.Models.ExpressionToolingRange?
+Elsa.Expressions.Core.Models.ExpressionDiagnostic.Range.init -> void
+Elsa.Expressions.Core.Models.ExpressionDiagnostic.RelatedSymbols.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Elsa.Expressions.Core.Models.ExpressionDiagnostic.RelatedSymbols.init -> void
+Elsa.Expressions.Core.Models.ExpressionDiagnostic.Severity.get -> Elsa.Expressions.Core.Models.ExpressionDiagnosticSeverity
+Elsa.Expressions.Core.Models.ExpressionDiagnostic.Severity.init -> void
+Elsa.Expressions.Core.Models.ExpressionDiagnosticSet
+Elsa.Expressions.Core.Models.ExpressionDiagnosticSet.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionDiagnosticSet!
+Elsa.Expressions.Core.Models.ExpressionDiagnosticSet.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionDiagnostic!>! Diagnostics) -> void
+Elsa.Expressions.Core.Models.ExpressionDiagnosticSet.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionDiagnostic!>!
+Elsa.Expressions.Core.Models.ExpressionDiagnosticSet.Diagnostics.init -> void
+Elsa.Expressions.Core.Models.ExpressionDiagnosticSet.Equals(Elsa.Expressions.Core.Models.ExpressionDiagnosticSet? other) -> bool
+Elsa.Expressions.Core.Models.ExpressionDiagnosticSet.ExpressionDiagnosticSet(System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionDiagnostic!>! Diagnostics) -> void
+Elsa.Expressions.Core.Models.ExpressionDiagnosticSeverity
+Elsa.Expressions.Core.Models.ExpressionDiagnosticSeverity.Error = 0 -> Elsa.Expressions.Core.Models.ExpressionDiagnosticSeverity
+Elsa.Expressions.Core.Models.ExpressionDiagnosticSeverity.Hint = 3 -> Elsa.Expressions.Core.Models.ExpressionDiagnosticSeverity
+Elsa.Expressions.Core.Models.ExpressionDiagnosticSeverity.Information = 2 -> Elsa.Expressions.Core.Models.ExpressionDiagnosticSeverity
+Elsa.Expressions.Core.Models.ExpressionDiagnosticSeverity.Warning = 1 -> Elsa.Expressions.Core.Models.ExpressionDiagnosticSeverity
+Elsa.Expressions.Core.Models.ExpressionEditingMode
+Elsa.Expressions.Core.Models.ExpressionEditingMode.Literal = 0 -> Elsa.Expressions.Core.Models.ExpressionEditingMode
+Elsa.Expressions.Core.Models.ExpressionEditingMode.Reference = 3 -> Elsa.Expressions.Core.Models.ExpressionEditingMode
+Elsa.Expressions.Core.Models.ExpressionEditingMode.Structured = 2 -> Elsa.Expressions.Core.Models.ExpressionEditingMode
+Elsa.Expressions.Core.Models.ExpressionEditingMode.Text = 1 -> Elsa.Expressions.Core.Models.ExpressionEditingMode
+Elsa.Expressions.Core.Models.ExpressionEvaluationRequest
+Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.AmbientVariables.get -> System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>!
+Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.CancellationToken.get -> System.Threading.CancellationToken
+Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.Capabilities.get -> Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities!
+Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.Definition.get -> Elsa.Expressions.Core.Models.ExpressionDefinition!
+Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.ExpressionEvaluationRequest(Elsa.Expressions.Core.Models.ExpressionDefinition! definition, System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>! parameterValues, System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>? ambientVariables, System.Threading.CancellationToken cancellationToken) -> void
+Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.ExpressionEvaluationRequest(Elsa.Expressions.Core.Models.ExpressionDefinition! definition, System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>! parameterValues, System.Threading.CancellationToken cancellationToken) -> void
+Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.ParameterValues.get -> System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>!
+Elsa.Expressions.Core.Models.ExpressionHover
+Elsa.Expressions.Core.Models.ExpressionHover.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionHover!
+Elsa.Expressions.Core.Models.ExpressionHover.Contents.get -> string!
+Elsa.Expressions.Core.Models.ExpressionHover.Contents.init -> void
+Elsa.Expressions.Core.Models.ExpressionHover.Deconstruct(out string! Contents, out Elsa.Expressions.Core.Models.ExpressionToolingRange? Range) -> void
+Elsa.Expressions.Core.Models.ExpressionHover.Equals(Elsa.Expressions.Core.Models.ExpressionHover? other) -> bool
+Elsa.Expressions.Core.Models.ExpressionHover.ExpressionHover(string! Contents, Elsa.Expressions.Core.Models.ExpressionToolingRange? Range = null) -> void
+Elsa.Expressions.Core.Models.ExpressionHover.Range.get -> Elsa.Expressions.Core.Models.ExpressionToolingRange?
+Elsa.Expressions.Core.Models.ExpressionHover.Range.init -> void
+Elsa.Expressions.Core.Models.ExpressionHoverRequest
+Elsa.Expressions.Core.Models.ExpressionHoverRequest.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionHoverRequest!
+Elsa.Expressions.Core.Models.ExpressionHoverRequest.Deconstruct(out Elsa.Expressions.Core.Models.ExpressionToolingRequestScope! Scope, out string! Source, out Elsa.Expressions.Core.Models.ExpressionToolingPosition Position) -> void
+Elsa.Expressions.Core.Models.ExpressionHoverRequest.Equals(Elsa.Expressions.Core.Models.ExpressionHoverRequest? other) -> bool
+Elsa.Expressions.Core.Models.ExpressionHoverRequest.ExpressionHoverRequest(Elsa.Expressions.Core.Models.ExpressionToolingRequestScope! Scope, string! Source, Elsa.Expressions.Core.Models.ExpressionToolingPosition Position) -> void
+Elsa.Expressions.Core.Models.ExpressionHoverRequest.Position.get -> Elsa.Expressions.Core.Models.ExpressionToolingPosition
+Elsa.Expressions.Core.Models.ExpressionHoverRequest.Position.init -> void
+Elsa.Expressions.Core.Models.ExpressionHoverRequest.Scope.get -> Elsa.Expressions.Core.Models.ExpressionToolingRequestScope!
+Elsa.Expressions.Core.Models.ExpressionHoverRequest.Scope.init -> void
+Elsa.Expressions.Core.Models.ExpressionHoverRequest.Source.get -> string!
+Elsa.Expressions.Core.Models.ExpressionHoverRequest.Source.init -> void
+Elsa.Expressions.Core.Models.ExpressionParameterBinding
+Elsa.Expressions.Core.Models.ExpressionParameterBinding.ExpressionParameterBinding() -> void
+Elsa.Expressions.Core.Models.ExpressionParameterBinding.ExpressionParameterBinding(Elsa.Expressions.Core.Models.ExpressionParameterBinding! original) -> void
+Elsa.Expressions.Core.Models.ExpressionSymbol
+Elsa.Expressions.Core.Models.ExpressionSymbol.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionSymbol!
+Elsa.Expressions.Core.Models.ExpressionSymbol.ChildrenLink.get -> string?
+Elsa.Expressions.Core.Models.ExpressionSymbol.ChildrenLink.init -> void
+Elsa.Expressions.Core.Models.ExpressionSymbol.Deconstruct(out string! SymbolId, out string! Name, out Elsa.Expressions.Core.Models.ExpressionSymbolKind Kind, out Elsa.Expressions.Core.Models.ExpressionValueShape? ValueShape, out string? Documentation, out System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionCallableSignature!>? Signatures, out string? ChildrenLink) -> void
+Elsa.Expressions.Core.Models.ExpressionSymbol.Documentation.get -> string?
+Elsa.Expressions.Core.Models.ExpressionSymbol.Documentation.init -> void
+Elsa.Expressions.Core.Models.ExpressionSymbol.Equals(Elsa.Expressions.Core.Models.ExpressionSymbol? other) -> bool
+Elsa.Expressions.Core.Models.ExpressionSymbol.ExpressionSymbol(string! SymbolId, string! Name, Elsa.Expressions.Core.Models.ExpressionSymbolKind Kind, Elsa.Expressions.Core.Models.ExpressionValueShape? ValueShape = null, string? Documentation = null, System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionCallableSignature!>? Signatures = null, string? ChildrenLink = null) -> void
+Elsa.Expressions.Core.Models.ExpressionSymbol.Kind.get -> Elsa.Expressions.Core.Models.ExpressionSymbolKind
+Elsa.Expressions.Core.Models.ExpressionSymbol.Kind.init -> void
+Elsa.Expressions.Core.Models.ExpressionSymbol.Name.get -> string!
+Elsa.Expressions.Core.Models.ExpressionSymbol.Name.init -> void
+Elsa.Expressions.Core.Models.ExpressionSymbol.Signatures.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionCallableSignature!>?
+Elsa.Expressions.Core.Models.ExpressionSymbol.Signatures.init -> void
+Elsa.Expressions.Core.Models.ExpressionSymbol.SymbolId.get -> string!
+Elsa.Expressions.Core.Models.ExpressionSymbol.SymbolId.init -> void
+Elsa.Expressions.Core.Models.ExpressionSymbol.ValueShape.get -> Elsa.Expressions.Core.Models.ExpressionValueShape?
+Elsa.Expressions.Core.Models.ExpressionSymbol.ValueShape.init -> void
+Elsa.Expressions.Core.Models.ExpressionSymbolKind
+Elsa.Expressions.Core.Models.ExpressionSymbolKind.ActivityResult = 2 -> Elsa.Expressions.Core.Models.ExpressionSymbolKind
+Elsa.Expressions.Core.Models.ExpressionSymbolKind.Extension = 8 -> Elsa.Expressions.Core.Models.ExpressionSymbolKind
+Elsa.Expressions.Core.Models.ExpressionSymbolKind.Filter = 4 -> Elsa.Expressions.Core.Models.ExpressionSymbolKind
+Elsa.Expressions.Core.Models.ExpressionSymbolKind.Function = 3 -> Elsa.Expressions.Core.Models.ExpressionSymbolKind
+Elsa.Expressions.Core.Models.ExpressionSymbolKind.Member = 7 -> Elsa.Expressions.Core.Models.ExpressionSymbolKind
+Elsa.Expressions.Core.Models.ExpressionSymbolKind.Namespace = 6 -> Elsa.Expressions.Core.Models.ExpressionSymbolKind
+Elsa.Expressions.Core.Models.ExpressionSymbolKind.Tag = 5 -> Elsa.Expressions.Core.Models.ExpressionSymbolKind
+Elsa.Expressions.Core.Models.ExpressionSymbolKind.Variable = 0 -> Elsa.Expressions.Core.Models.ExpressionSymbolKind
+Elsa.Expressions.Core.Models.ExpressionSymbolKind.WorkflowInput = 1 -> Elsa.Expressions.Core.Models.ExpressionSymbolKind
+Elsa.Expressions.Core.Models.ExpressionToolingCapabilities
+Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionToolingCapabilities!
+Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.Deconstruct(out bool SupportsCompletions, out bool SupportsHover, out bool SupportsValidation, out bool SupportsSymbolPaging, out bool SupportsLazyMembers, out int MaximumSymbols) -> void
+Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.Equals(Elsa.Expressions.Core.Models.ExpressionToolingCapabilities? other) -> bool
+Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.ExpressionToolingCapabilities(bool SupportsCompletions = true, bool SupportsHover = true, bool SupportsValidation = true, bool SupportsSymbolPaging = true, bool SupportsLazyMembers = false, int MaximumSymbols = 500) -> void
+Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.MaximumSymbols.get -> int
+Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.MaximumSymbols.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.SupportsCompletions.get -> bool
+Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.SupportsCompletions.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.SupportsHover.get -> bool
+Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.SupportsHover.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.SupportsLazyMembers.get -> bool
+Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.SupportsLazyMembers.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.SupportsSymbolPaging.get -> bool
+Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.SupportsSymbolPaging.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.SupportsValidation.get -> bool
+Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.SupportsValidation.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingContractVersion
+Elsa.Expressions.Core.Models.ExpressionToolingContractVersion.Deconstruct(out int Major, out int Minor) -> void
+Elsa.Expressions.Core.Models.ExpressionToolingContractVersion.Equals(Elsa.Expressions.Core.Models.ExpressionToolingContractVersion other) -> bool
+Elsa.Expressions.Core.Models.ExpressionToolingContractVersion.ExpressionToolingContractVersion() -> void
+Elsa.Expressions.Core.Models.ExpressionToolingContractVersion.ExpressionToolingContractVersion(int Major, int Minor) -> void
+Elsa.Expressions.Core.Models.ExpressionToolingContractVersion.IsCompatibleWith(Elsa.Expressions.Core.Models.ExpressionToolingContractVersion supported) -> bool
+Elsa.Expressions.Core.Models.ExpressionToolingContractVersion.Major.get -> int
+Elsa.Expressions.Core.Models.ExpressionToolingContractVersion.Major.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingContractVersion.Minor.get -> int
+Elsa.Expressions.Core.Models.ExpressionToolingContractVersion.Minor.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingItem
+Elsa.Expressions.Core.Models.ExpressionToolingItem.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionToolingItem!
+Elsa.Expressions.Core.Models.ExpressionToolingItem.Deconstruct(out string! Label, out string? Detail, out string? Documentation, out string? InsertText, out Elsa.Expressions.Core.Models.ExpressionSymbolKind? Kind) -> void
+Elsa.Expressions.Core.Models.ExpressionToolingItem.Detail.get -> string?
+Elsa.Expressions.Core.Models.ExpressionToolingItem.Detail.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingItem.Documentation.get -> string?
+Elsa.Expressions.Core.Models.ExpressionToolingItem.Documentation.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingItem.Equals(Elsa.Expressions.Core.Models.ExpressionToolingItem? other) -> bool
+Elsa.Expressions.Core.Models.ExpressionToolingItem.ExpressionToolingItem(string! Label, string? Detail = null, string? Documentation = null, string? InsertText = null, Elsa.Expressions.Core.Models.ExpressionSymbolKind? Kind = null) -> void
+Elsa.Expressions.Core.Models.ExpressionToolingItem.InsertText.get -> string?
+Elsa.Expressions.Core.Models.ExpressionToolingItem.InsertText.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingItem.Kind.get -> Elsa.Expressions.Core.Models.ExpressionSymbolKind?
+Elsa.Expressions.Core.Models.ExpressionToolingItem.Kind.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingItem.Label.get -> string!
+Elsa.Expressions.Core.Models.ExpressionToolingItem.Label.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingItems
+Elsa.Expressions.Core.Models.ExpressionToolingItems.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionToolingItems!
+Elsa.Expressions.Core.Models.ExpressionToolingItems.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionToolingItem!>! Items) -> void
+Elsa.Expressions.Core.Models.ExpressionToolingItems.Equals(Elsa.Expressions.Core.Models.ExpressionToolingItems? other) -> bool
+Elsa.Expressions.Core.Models.ExpressionToolingItems.ExpressionToolingItems(System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionToolingItem!>! Items) -> void
+Elsa.Expressions.Core.Models.ExpressionToolingItems.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionToolingItem!>!
+Elsa.Expressions.Core.Models.ExpressionToolingItems.Items.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>
+Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>!
+Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.Code.get -> string?
+Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.Code.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.ContextRevision.get -> string?
+Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.ContextRevision.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.ContractVersion.get -> Elsa.Expressions.Core.Models.ExpressionToolingContractVersion
+Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.ContractVersion.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.Deconstruct(out Elsa.Expressions.Core.Models.ExpressionToolingOutcomeState State, out Elsa.Expressions.Core.Models.ExpressionToolingContractVersion ContractVersion, out string? DocumentRevision, out string? ContextRevision, out T? Payload, out string? Code, out string? Message) -> void
+Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.DocumentRevision.get -> string?
+Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.DocumentRevision.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.Equals(Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>? other) -> bool
+Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.ExpressionToolingOutcome(Elsa.Expressions.Core.Models.ExpressionToolingOutcomeState State, Elsa.Expressions.Core.Models.ExpressionToolingContractVersion ContractVersion, string? DocumentRevision = null, string? ContextRevision = null, T? Payload = default(T?), string? Code = null, string? Message = null) -> void
+Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.IsSuccess.get -> bool
+Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.Message.get -> string?
+Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.Message.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.Payload.get -> T?
+Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.Payload.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.State.get -> Elsa.Expressions.Core.Models.ExpressionToolingOutcomeState
+Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.State.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingOutcomeState
+Elsa.Expressions.Core.Models.ExpressionToolingOutcomeState.Canceled = 6 -> Elsa.Expressions.Core.Models.ExpressionToolingOutcomeState
+Elsa.Expressions.Core.Models.ExpressionToolingOutcomeState.Incompatible = 4 -> Elsa.Expressions.Core.Models.ExpressionToolingOutcomeState
+Elsa.Expressions.Core.Models.ExpressionToolingOutcomeState.Stale = 5 -> Elsa.Expressions.Core.Models.ExpressionToolingOutcomeState
+Elsa.Expressions.Core.Models.ExpressionToolingOutcomeState.Success = 0 -> Elsa.Expressions.Core.Models.ExpressionToolingOutcomeState
+Elsa.Expressions.Core.Models.ExpressionToolingOutcomeState.SupportedEmpty = 1 -> Elsa.Expressions.Core.Models.ExpressionToolingOutcomeState
+Elsa.Expressions.Core.Models.ExpressionToolingOutcomeState.Unauthorized = 3 -> Elsa.Expressions.Core.Models.ExpressionToolingOutcomeState
+Elsa.Expressions.Core.Models.ExpressionToolingOutcomeState.Unavailable = 2 -> Elsa.Expressions.Core.Models.ExpressionToolingOutcomeState
+Elsa.Expressions.Core.Models.ExpressionToolingPosition
+Elsa.Expressions.Core.Models.ExpressionToolingPosition.Character.get -> int
+Elsa.Expressions.Core.Models.ExpressionToolingPosition.Character.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingPosition.Deconstruct(out int Line, out int Character) -> void
+Elsa.Expressions.Core.Models.ExpressionToolingPosition.Equals(Elsa.Expressions.Core.Models.ExpressionToolingPosition other) -> bool
+Elsa.Expressions.Core.Models.ExpressionToolingPosition.ExpressionToolingPosition() -> void
+Elsa.Expressions.Core.Models.ExpressionToolingPosition.ExpressionToolingPosition(int Line, int Character) -> void
+Elsa.Expressions.Core.Models.ExpressionToolingPosition.IsValid.get -> bool
+Elsa.Expressions.Core.Models.ExpressionToolingPosition.Line.get -> int
+Elsa.Expressions.Core.Models.ExpressionToolingPosition.Line.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingRange
+Elsa.Expressions.Core.Models.ExpressionToolingRange.Deconstruct(out Elsa.Expressions.Core.Models.ExpressionToolingPosition Start, out Elsa.Expressions.Core.Models.ExpressionToolingPosition End) -> void
+Elsa.Expressions.Core.Models.ExpressionToolingRange.End.get -> Elsa.Expressions.Core.Models.ExpressionToolingPosition
+Elsa.Expressions.Core.Models.ExpressionToolingRange.End.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingRange.Equals(Elsa.Expressions.Core.Models.ExpressionToolingRange other) -> bool
+Elsa.Expressions.Core.Models.ExpressionToolingRange.ExpressionToolingRange() -> void
+Elsa.Expressions.Core.Models.ExpressionToolingRange.ExpressionToolingRange(Elsa.Expressions.Core.Models.ExpressionToolingPosition Start, Elsa.Expressions.Core.Models.ExpressionToolingPosition End) -> void
+Elsa.Expressions.Core.Models.ExpressionToolingRange.Start.get -> Elsa.Expressions.Core.Models.ExpressionToolingPosition
+Elsa.Expressions.Core.Models.ExpressionToolingRange.Start.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingRequestScope
+Elsa.Expressions.Core.Models.ExpressionToolingRequestScope.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionToolingRequestScope!
+Elsa.Expressions.Core.Models.ExpressionToolingRequestScope.Context.get -> Elsa.Expressions.Core.Models.ExpressionAuthoringContext!
+Elsa.Expressions.Core.Models.ExpressionToolingRequestScope.Context.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingRequestScope.ContractVersion.get -> Elsa.Expressions.Core.Models.ExpressionToolingContractVersion
+Elsa.Expressions.Core.Models.ExpressionToolingRequestScope.ContractVersion.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingRequestScope.Deconstruct(out Elsa.Expressions.Core.Models.ExpressionToolingContractVersion ContractVersion, out Elsa.Expressions.Core.Models.ExpressionAuthoringDocument! Document, out Elsa.Expressions.Core.Models.ExpressionAuthoringContext! Context) -> void
+Elsa.Expressions.Core.Models.ExpressionToolingRequestScope.Document.get -> Elsa.Expressions.Core.Models.ExpressionAuthoringDocument!
+Elsa.Expressions.Core.Models.ExpressionToolingRequestScope.Document.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingRequestScope.Equals(Elsa.Expressions.Core.Models.ExpressionToolingRequestScope? other) -> bool
+Elsa.Expressions.Core.Models.ExpressionToolingRequestScope.ExpressionToolingRequestScope(Elsa.Expressions.Core.Models.ExpressionToolingContractVersion ContractVersion, Elsa.Expressions.Core.Models.ExpressionAuthoringDocument! Document, Elsa.Expressions.Core.Models.ExpressionAuthoringContext! Context) -> void
+Elsa.Expressions.Core.Models.ExpressionValidationRequest
+Elsa.Expressions.Core.Models.ExpressionValidationRequest.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionValidationRequest!
+Elsa.Expressions.Core.Models.ExpressionValidationRequest.Deconstruct(out Elsa.Expressions.Core.Models.ExpressionToolingRequestScope! Scope, out string! Source) -> void
+Elsa.Expressions.Core.Models.ExpressionValidationRequest.Equals(Elsa.Expressions.Core.Models.ExpressionValidationRequest? other) -> bool
+Elsa.Expressions.Core.Models.ExpressionValidationRequest.ExpressionValidationRequest(Elsa.Expressions.Core.Models.ExpressionToolingRequestScope! Scope, string! Source) -> void
+Elsa.Expressions.Core.Models.ExpressionValidationRequest.Scope.get -> Elsa.Expressions.Core.Models.ExpressionToolingRequestScope!
+Elsa.Expressions.Core.Models.ExpressionValidationRequest.Scope.init -> void
+Elsa.Expressions.Core.Models.ExpressionValidationRequest.Source.get -> string!
+Elsa.Expressions.Core.Models.ExpressionValidationRequest.Source.init -> void
+Elsa.Expressions.Core.Models.ExpressionValueKind
+Elsa.Expressions.Core.Models.ExpressionValueKind.Array = 3 -> Elsa.Expressions.Core.Models.ExpressionValueKind
+Elsa.Expressions.Core.Models.ExpressionValueKind.Function = 5 -> Elsa.Expressions.Core.Models.ExpressionValueKind
+Elsa.Expressions.Core.Models.ExpressionValueKind.Map = 4 -> Elsa.Expressions.Core.Models.ExpressionValueKind
+Elsa.Expressions.Core.Models.ExpressionValueKind.Object = 2 -> Elsa.Expressions.Core.Models.ExpressionValueKind
+Elsa.Expressions.Core.Models.ExpressionValueKind.Reference = 6 -> Elsa.Expressions.Core.Models.ExpressionValueKind
+Elsa.Expressions.Core.Models.ExpressionValueKind.Scalar = 1 -> Elsa.Expressions.Core.Models.ExpressionValueKind
+Elsa.Expressions.Core.Models.ExpressionValueKind.Unknown = 0 -> Elsa.Expressions.Core.Models.ExpressionValueKind
+Elsa.Expressions.Core.Models.ExpressionValueMember
+Elsa.Expressions.Core.Models.ExpressionValueMember.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionValueMember!
+Elsa.Expressions.Core.Models.ExpressionValueMember.Deconstruct(out string! Name, out Elsa.Expressions.Core.Models.ExpressionValueShape! Shape, out string? Documentation) -> void
+Elsa.Expressions.Core.Models.ExpressionValueMember.Documentation.get -> string?
+Elsa.Expressions.Core.Models.ExpressionValueMember.Documentation.init -> void
+Elsa.Expressions.Core.Models.ExpressionValueMember.Equals(Elsa.Expressions.Core.Models.ExpressionValueMember? other) -> bool
+Elsa.Expressions.Core.Models.ExpressionValueMember.ExpressionValueMember(string! Name, Elsa.Expressions.Core.Models.ExpressionValueShape! Shape, string? Documentation = null) -> void
+Elsa.Expressions.Core.Models.ExpressionValueMember.Name.get -> string!
+Elsa.Expressions.Core.Models.ExpressionValueMember.Name.init -> void
+Elsa.Expressions.Core.Models.ExpressionValueMember.Shape.get -> Elsa.Expressions.Core.Models.ExpressionValueShape!
+Elsa.Expressions.Core.Models.ExpressionValueMember.Shape.init -> void
+Elsa.Expressions.Core.Models.ExpressionValueShape
+Elsa.Expressions.Core.Models.ExpressionValueShape.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionValueShape!
+Elsa.Expressions.Core.Models.ExpressionValueShape.Deconstruct(out string? DisplayName, out Elsa.Expressions.Core.Models.ExpressionValueKind Kind, out bool IsNullable, out bool HasLazyChildren, out Elsa.Expressions.Core.Models.ExpressionValueShape? Item, out Elsa.Expressions.Core.Models.ExpressionValueShape? Key, out Elsa.Expressions.Core.Models.ExpressionValueShape? Value, out System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionValueMember!>? Members) -> void
+Elsa.Expressions.Core.Models.ExpressionValueShape.DisplayName.get -> string?
+Elsa.Expressions.Core.Models.ExpressionValueShape.DisplayName.init -> void
+Elsa.Expressions.Core.Models.ExpressionValueShape.Equals(Elsa.Expressions.Core.Models.ExpressionValueShape? other) -> bool
+Elsa.Expressions.Core.Models.ExpressionValueShape.ExpressionValueShape(string? DisplayName = null, Elsa.Expressions.Core.Models.ExpressionValueKind Kind = Elsa.Expressions.Core.Models.ExpressionValueKind.Unknown, bool IsNullable = true, bool HasLazyChildren = false, Elsa.Expressions.Core.Models.ExpressionValueShape? Item = null, Elsa.Expressions.Core.Models.ExpressionValueShape? Key = null, Elsa.Expressions.Core.Models.ExpressionValueShape? Value = null, System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionValueMember!>? Members = null) -> void
+Elsa.Expressions.Core.Models.ExpressionValueShape.HasLazyChildren.get -> bool
+Elsa.Expressions.Core.Models.ExpressionValueShape.HasLazyChildren.init -> void
+Elsa.Expressions.Core.Models.ExpressionValueShape.IsNullable.get -> bool
+Elsa.Expressions.Core.Models.ExpressionValueShape.IsNullable.init -> void
+Elsa.Expressions.Core.Models.ExpressionValueShape.Item.get -> Elsa.Expressions.Core.Models.ExpressionValueShape?
+Elsa.Expressions.Core.Models.ExpressionValueShape.Item.init -> void
+Elsa.Expressions.Core.Models.ExpressionValueShape.Key.get -> Elsa.Expressions.Core.Models.ExpressionValueShape?
+Elsa.Expressions.Core.Models.ExpressionValueShape.Key.init -> void
+Elsa.Expressions.Core.Models.ExpressionValueShape.Kind.get -> Elsa.Expressions.Core.Models.ExpressionValueKind
+Elsa.Expressions.Core.Models.ExpressionValueShape.Kind.init -> void
+Elsa.Expressions.Core.Models.ExpressionValueShape.Members.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionValueMember!>?
+Elsa.Expressions.Core.Models.ExpressionValueShape.Members.init -> void
+Elsa.Expressions.Core.Models.ExpressionValueShape.Value.get -> Elsa.Expressions.Core.Models.ExpressionValueShape?
+Elsa.Expressions.Core.Models.ExpressionValueShape.Value.init -> void
+Elsa.Expressions.Core.Models.LiteralExpressionParameterBinding
+Elsa.Expressions.Core.Models.LiteralExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.LiteralExpressionParameterBinding? other) -> bool
+Elsa.Expressions.Core.Models.LiteralExpressionParameterBinding.LiteralExpressionParameterBinding(System.Text.Json.JsonElement value) -> void
+Elsa.Expressions.Core.Models.LiteralExpressionParameterBinding.Value.get -> System.Text.Json.JsonElement
+Elsa.Expressions.Core.Models.TypeDescriptor
+Elsa.Expressions.Core.Models.TypeDescriptor.<Clone>$() -> Elsa.Expressions.Core.Models.TypeDescriptor!
+Elsa.Expressions.Core.Models.TypeDescriptor.Alias.get -> string!
+Elsa.Expressions.Core.Models.TypeDescriptor.Alias.init -> void
+Elsa.Expressions.Core.Models.TypeDescriptor.Category.get -> string!
+Elsa.Expressions.Core.Models.TypeDescriptor.Category.init -> void
+Elsa.Expressions.Core.Models.TypeDescriptor.ClrType.get -> System.Type!
+Elsa.Expressions.Core.Models.TypeDescriptor.ClrType.init -> void
+Elsa.Expressions.Core.Models.TypeDescriptor.CompatibleStorageDriverKeys.get -> System.Collections.Generic.IReadOnlySet<string!>!
+Elsa.Expressions.Core.Models.TypeDescriptor.CompatibleStorageDriverKeys.init -> void
+Elsa.Expressions.Core.Models.TypeDescriptor.Deconstruct(out string! Alias, out System.Type! ClrType, out string! DisplayName, out string! Category, out string! DefaultEditor, out System.Collections.Generic.IReadOnlySet<Elsa.Primitives.Models.CollectionKind>! SupportedCollectionKinds, out bool SupportsNull, out bool SupportsDurability, out System.Collections.Generic.IReadOnlySet<string!>! CompatibleStorageDriverKeys) -> void
+Elsa.Expressions.Core.Models.TypeDescriptor.DefaultEditor.get -> string!
+Elsa.Expressions.Core.Models.TypeDescriptor.DefaultEditor.init -> void
+Elsa.Expressions.Core.Models.TypeDescriptor.DisplayName.get -> string!
+Elsa.Expressions.Core.Models.TypeDescriptor.DisplayName.init -> void
+Elsa.Expressions.Core.Models.TypeDescriptor.Equals(Elsa.Expressions.Core.Models.TypeDescriptor? other) -> bool
+Elsa.Expressions.Core.Models.TypeDescriptor.SupportedCollectionKinds.get -> System.Collections.Generic.IReadOnlySet<Elsa.Primitives.Models.CollectionKind>!
+Elsa.Expressions.Core.Models.TypeDescriptor.SupportedCollectionKinds.init -> void
+Elsa.Expressions.Core.Models.TypeDescriptor.SupportsDurability.get -> bool
+Elsa.Expressions.Core.Models.TypeDescriptor.SupportsDurability.init -> void
+Elsa.Expressions.Core.Models.TypeDescriptor.SupportsNull.get -> bool
+Elsa.Expressions.Core.Models.TypeDescriptor.SupportsNull.init -> void
+Elsa.Expressions.Core.Models.TypeDescriptor.TypeDescriptor(string! Alias, System.Type! ClrType, string! DisplayName, string! Category, string! DefaultEditor, System.Collections.Generic.IReadOnlySet<Elsa.Primitives.Models.CollectionKind>! SupportedCollectionKinds, bool SupportsNull, bool SupportsDurability, System.Collections.Generic.IReadOnlySet<string!>! CompatibleStorageDriverKeys) -> void
+Elsa.Expressions.Core.Models.VariableDefinition
+Elsa.Expressions.Core.Models.VariableDefinition.<Clone>$() -> Elsa.Expressions.Core.Models.VariableDefinition!
+Elsa.Expressions.Core.Models.VariableDefinition.Deconstruct(out string! ReferenceKey, out string! Name, out Elsa.Primitives.Models.TypeReference! Type, out string? StorageDriverType, out Elsa.Expressions.Core.Models.ArgumentValue? Default) -> void
+Elsa.Expressions.Core.Models.VariableDefinition.Default.get -> Elsa.Expressions.Core.Models.ArgumentValue?
+Elsa.Expressions.Core.Models.VariableDefinition.Default.init -> void
+Elsa.Expressions.Core.Models.VariableDefinition.Equals(Elsa.Expressions.Core.Models.VariableDefinition? other) -> bool
+Elsa.Expressions.Core.Models.VariableDefinition.Name.get -> string!
+Elsa.Expressions.Core.Models.VariableDefinition.Name.init -> void
+Elsa.Expressions.Core.Models.VariableDefinition.ReferenceKey.get -> string!
+Elsa.Expressions.Core.Models.VariableDefinition.ReferenceKey.init -> void
+Elsa.Expressions.Core.Models.VariableDefinition.StorageDriverType.get -> string?
+Elsa.Expressions.Core.Models.VariableDefinition.StorageDriverType.init -> void
+Elsa.Expressions.Core.Models.VariableDefinition.Type.get -> Elsa.Primitives.Models.TypeReference!
+Elsa.Expressions.Core.Models.VariableDefinition.Type.init -> void
+Elsa.Expressions.Core.Models.VariableDefinition.VariableDefinition(string! ReferenceKey, string! Name, Elsa.Primitives.Models.TypeReference! Type, string? StorageDriverType, Elsa.Expressions.Core.Models.ArgumentValue? Default) -> void
+Elsa.Expressions.Core.Models.VariableDescriptor
+Elsa.Expressions.Core.Models.VariableDescriptor.Category.get -> string!
+Elsa.Expressions.Core.Models.VariableDescriptor.Category.init -> void
+Elsa.Expressions.Core.Models.VariableDescriptor.Deconstruct(out System.Type! Type, out string! Category, out string? Description) -> void
+Elsa.Expressions.Core.Models.VariableDescriptor.Description.get -> string?
+Elsa.Expressions.Core.Models.VariableDescriptor.Description.init -> void
+Elsa.Expressions.Core.Models.VariableDescriptor.Type.get -> System.Type!
+Elsa.Expressions.Core.Models.VariableDescriptor.Type.init -> void
+Elsa.Expressions.Core.Models.VariableDescriptor.VariableDescriptor(Elsa.Expressions.Core.Models.VariableDescriptor! original) -> void
+Elsa.Expressions.Core.Models.VariableDescriptor.VariableDescriptor(System.Type! Type, string! Category, string? Description) -> void
+Elsa.Expressions.Core.Models.VariableDescriptor.VariableDescriptorComparer
+Elsa.Expressions.Core.Models.VariableDescriptor.VariableDescriptorComparer.Equals(Elsa.Expressions.Core.Models.VariableDescriptor? x, Elsa.Expressions.Core.Models.VariableDescriptor? y) -> bool
+Elsa.Expressions.Core.Models.VariableDescriptor.VariableDescriptorComparer.GetHashCode(Elsa.Expressions.Core.Models.VariableDescriptor! obj) -> int
+Elsa.Expressions.Core.Models.VariableDescriptor.VariableDescriptorComparer.VariableDescriptorComparer() -> void
+Elsa.Expressions.Core.Models.VariableExpressionParameterBinding
+Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.DeclaringScopeNodeId.get -> string!
+Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.VariableExpressionParameterBinding? other) -> bool
+Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.VariableExpressionParameterBinding(string! declaringScopeNodeId, string! variableKey) -> void
+Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.VariableKey.get -> string!
+Elsa.Expressions.Core.Models.VariableReference
+Elsa.Expressions.Core.Models.VariableReference.<Clone>$() -> Elsa.Expressions.Core.Models.VariableReference!
+Elsa.Expressions.Core.Models.VariableReference.DeclaringScopeId.get -> string?
+Elsa.Expressions.Core.Models.VariableReference.DeclaringScopeId.init -> void
+Elsa.Expressions.Core.Models.VariableReference.Deconstruct(out string! ReferenceKey, out string? DeclaringScopeId) -> void
+Elsa.Expressions.Core.Models.VariableReference.Equals(Elsa.Expressions.Core.Models.VariableReference? other) -> bool
+Elsa.Expressions.Core.Models.VariableReference.IsWorkflowScope.get -> bool
+Elsa.Expressions.Core.Models.VariableReference.ReferenceKey.get -> string!
+Elsa.Expressions.Core.Models.VariableReference.ReferenceKey.init -> void
+Elsa.Expressions.Core.Models.VariableReference.VariableReference(string! ReferenceKey, string? DeclaringScopeId = null) -> void
+Elsa.Expressions.Core.Models.VariableScope
+Elsa.Expressions.Core.Models.VariableScope.Complete() -> void
+Elsa.Expressions.Core.Models.VariableScope.EnumerateVisibleVariables() -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Contracts.IVariable!>!
+Elsa.Expressions.Core.Models.VariableScope.ExecutionId.get -> string?
+Elsa.Expressions.Core.Models.VariableScope.IsCompleted.get -> bool
+Elsa.Expressions.Core.Models.VariableScope.Parent.get -> Elsa.Expressions.Core.Models.VariableScope?
+Elsa.Expressions.Core.Models.VariableScope.ResolveByName(string! name) -> Elsa.Expressions.Core.Contracts.IVariable?
+Elsa.Expressions.Core.Models.VariableScope.ScopeId.get -> string!
+Elsa.Expressions.Core.Models.VariableScope.SnapshotValues() -> System.Collections.Generic.IReadOnlyDictionary<string!, object?>!
+Elsa.Expressions.Core.Models.VariableScope.TryGetValue(Elsa.Expressions.Core.Models.VariableReference! reference, out object? value) -> bool
+Elsa.Expressions.Core.Models.VariableScope.TryGetValueByName(string! name, out object? value) -> bool
+Elsa.Expressions.Core.Models.VariableScope.TryResolve(Elsa.Expressions.Core.Models.VariableReference! reference, out Elsa.Expressions.Core.Contracts.IVariable? variable) -> bool
+Elsa.Expressions.Core.Models.VariableScope.TrySetValue(Elsa.Expressions.Core.Models.VariableReference! reference, object? value) -> bool
+Elsa.Expressions.Core.Models.VariableScope.TrySetValueByName(string! name, object? value) -> bool
+Elsa.Expressions.Core.Models.VariableScope.VariableScope(string! scopeId, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Expressions.Core.Contracts.IVariable!>! variablesByReferenceKey, Elsa.Expressions.Core.Models.VariableScope? parent = null, string? executionId = null, System.Collections.Generic.IReadOnlyDictionary<string!, object?>? initialValues = null) -> void
+Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding
+Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding? other) -> bool
+Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding.MemberKey.get -> string!
+Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding.Path.get -> string?
+Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding.WorkflowRequestExpressionParameterBinding(string! memberKey, string? path = null) -> void
+Elsa.Expressions.Core.Services.ExpressionToolingSymbolResolver
+override Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.GetHashCode() -> int
+override Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.ToString() -> string!
+override Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.<Clone>$() -> Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding!
+override Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.ToString() -> string!
+override Elsa.Expressions.Core.Models.ArgumentValue.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ArgumentValue.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ArgumentValue.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionAuthoringContext.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionAuthoringContext.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionAuthoringContext.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionCallableSignature.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionCallableSignature.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionCallableSignature.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionCompletionRequest.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionCompletionRequest.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionCompletionRequest.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionDefinition.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionDefinition.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionDiagnostic.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionDiagnostic.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionDiagnostic.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionDiagnosticSet.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionDiagnosticSet.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionDiagnosticSet.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionHover.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionHover.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionHover.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionHoverRequest.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionHoverRequest.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionHoverRequest.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionParameterBinding.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionParameterBinding.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionParameterBinding.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionSymbol.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionSymbol.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionSymbol.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionToolingContractVersion.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionToolingContractVersion.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionToolingItem.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionToolingItem.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionToolingItem.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionToolingItems.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionToolingItems.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionToolingItems.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionToolingPosition.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionToolingRange.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionToolingRequestScope.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionToolingRequestScope.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionToolingRequestScope.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionValidationRequest.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionValidationRequest.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionValidationRequest.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionValueMember.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionValueMember.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionValueMember.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionValueShape.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionValueShape.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionValueShape.ToString() -> string!
+override Elsa.Expressions.Core.Models.LiteralExpressionParameterBinding.<Clone>$() -> Elsa.Expressions.Core.Models.LiteralExpressionParameterBinding!
+override Elsa.Expressions.Core.Models.LiteralExpressionParameterBinding.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.LiteralExpressionParameterBinding.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.LiteralExpressionParameterBinding.ToString() -> string!
+override Elsa.Expressions.Core.Models.TypeDescriptor.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.TypeDescriptor.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.TypeDescriptor.ToString() -> string!
+override Elsa.Expressions.Core.Models.VariableDefinition.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.VariableDefinition.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.VariableDefinition.ToString() -> string!
+override Elsa.Expressions.Core.Models.VariableDescriptor.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.VariableDescriptor.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.VariableDescriptor.ToString() -> string!
+override Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.<Clone>$() -> Elsa.Expressions.Core.Models.VariableExpressionParameterBinding!
+override Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.ToString() -> string!
+override Elsa.Expressions.Core.Models.VariableReference.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.VariableReference.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.VariableReference.ToString() -> string!
+override Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding.<Clone>$() -> Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding!
+override Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding.ToString() -> string!
+override sealed Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.ExpressionParameterBinding? other) -> bool
+override sealed Elsa.Expressions.Core.Models.LiteralExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.ExpressionParameterBinding? other) -> bool
+override sealed Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.ExpressionParameterBinding? other) -> bool
+override sealed Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.ExpressionParameterBinding? other) -> bool
+static Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.operator !=(Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities? left, Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities? right) -> bool
+static Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.operator ==(Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities? left, Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities? right) -> bool
+static Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.Resolve(string! profile) -> Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities!
+static Elsa.Expressions.Core.Extensions.VariableNameValidator.FilterInvalidVariableNames(this System.Collections.Generic.IEnumerable<string!>! names) -> System.Collections.Generic.IEnumerable<string!>!
+static Elsa.Expressions.Core.Extensions.VariableNameValidator.IsValidVariableName(this string? name) -> bool
+static Elsa.Expressions.Core.Helpers.DynamicValueMaterializer.Materialize(object? value) -> object?
+static Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.operator !=(Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? left, Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? right) -> bool
+static Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.operator ==(Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? left, Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? right) -> bool
+static Elsa.Expressions.Core.Models.ArgumentValue.operator !=(Elsa.Expressions.Core.Models.ArgumentValue? left, Elsa.Expressions.Core.Models.ArgumentValue? right) -> bool
+static Elsa.Expressions.Core.Models.ArgumentValue.operator ==(Elsa.Expressions.Core.Models.ArgumentValue? left, Elsa.Expressions.Core.Models.ArgumentValue? right) -> bool
+static Elsa.Expressions.Core.Models.Expression.LiteralExpression(object? value) -> Elsa.Expressions.Core.Models.Expression!
+static Elsa.Expressions.Core.Models.ExpressionAuthoringContext.operator !=(Elsa.Expressions.Core.Models.ExpressionAuthoringContext? left, Elsa.Expressions.Core.Models.ExpressionAuthoringContext? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionAuthoringContext.operator ==(Elsa.Expressions.Core.Models.ExpressionAuthoringContext? left, Elsa.Expressions.Core.Models.ExpressionAuthoringContext? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.operator !=(Elsa.Expressions.Core.Models.ExpressionAuthoringDocument? left, Elsa.Expressions.Core.Models.ExpressionAuthoringDocument? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.operator ==(Elsa.Expressions.Core.Models.ExpressionAuthoringDocument? left, Elsa.Expressions.Core.Models.ExpressionAuthoringDocument? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionCallableSignature.operator !=(Elsa.Expressions.Core.Models.ExpressionCallableSignature? left, Elsa.Expressions.Core.Models.ExpressionCallableSignature? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionCallableSignature.operator ==(Elsa.Expressions.Core.Models.ExpressionCallableSignature? left, Elsa.Expressions.Core.Models.ExpressionCallableSignature? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionCompletionRequest.operator !=(Elsa.Expressions.Core.Models.ExpressionCompletionRequest? left, Elsa.Expressions.Core.Models.ExpressionCompletionRequest? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionCompletionRequest.operator ==(Elsa.Expressions.Core.Models.ExpressionCompletionRequest? left, Elsa.Expressions.Core.Models.ExpressionCompletionRequest? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionDiagnostic.operator !=(Elsa.Expressions.Core.Models.ExpressionDiagnostic? left, Elsa.Expressions.Core.Models.ExpressionDiagnostic? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionDiagnostic.operator ==(Elsa.Expressions.Core.Models.ExpressionDiagnostic? left, Elsa.Expressions.Core.Models.ExpressionDiagnostic? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionDiagnosticSet.operator !=(Elsa.Expressions.Core.Models.ExpressionDiagnosticSet? left, Elsa.Expressions.Core.Models.ExpressionDiagnosticSet? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionDiagnosticSet.operator ==(Elsa.Expressions.Core.Models.ExpressionDiagnosticSet? left, Elsa.Expressions.Core.Models.ExpressionDiagnosticSet? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionHover.operator !=(Elsa.Expressions.Core.Models.ExpressionHover? left, Elsa.Expressions.Core.Models.ExpressionHover? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionHover.operator ==(Elsa.Expressions.Core.Models.ExpressionHover? left, Elsa.Expressions.Core.Models.ExpressionHover? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionHoverRequest.operator !=(Elsa.Expressions.Core.Models.ExpressionHoverRequest? left, Elsa.Expressions.Core.Models.ExpressionHoverRequest? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionHoverRequest.operator ==(Elsa.Expressions.Core.Models.ExpressionHoverRequest? left, Elsa.Expressions.Core.Models.ExpressionHoverRequest? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionParameterBinding.operator !=(Elsa.Expressions.Core.Models.ExpressionParameterBinding? left, Elsa.Expressions.Core.Models.ExpressionParameterBinding? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionParameterBinding.operator ==(Elsa.Expressions.Core.Models.ExpressionParameterBinding? left, Elsa.Expressions.Core.Models.ExpressionParameterBinding? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionSymbol.operator !=(Elsa.Expressions.Core.Models.ExpressionSymbol? left, Elsa.Expressions.Core.Models.ExpressionSymbol? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionSymbol.operator ==(Elsa.Expressions.Core.Models.ExpressionSymbol? left, Elsa.Expressions.Core.Models.ExpressionSymbol? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.operator !=(Elsa.Expressions.Core.Models.ExpressionToolingCapabilities? left, Elsa.Expressions.Core.Models.ExpressionToolingCapabilities? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.operator ==(Elsa.Expressions.Core.Models.ExpressionToolingCapabilities? left, Elsa.Expressions.Core.Models.ExpressionToolingCapabilities? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionToolingContractVersion.operator !=(Elsa.Expressions.Core.Models.ExpressionToolingContractVersion left, Elsa.Expressions.Core.Models.ExpressionToolingContractVersion right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionToolingContractVersion.operator ==(Elsa.Expressions.Core.Models.ExpressionToolingContractVersion left, Elsa.Expressions.Core.Models.ExpressionToolingContractVersion right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionToolingItem.operator !=(Elsa.Expressions.Core.Models.ExpressionToolingItem? left, Elsa.Expressions.Core.Models.ExpressionToolingItem? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionToolingItem.operator ==(Elsa.Expressions.Core.Models.ExpressionToolingItem? left, Elsa.Expressions.Core.Models.ExpressionToolingItem? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionToolingItems.operator !=(Elsa.Expressions.Core.Models.ExpressionToolingItems? left, Elsa.Expressions.Core.Models.ExpressionToolingItems? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionToolingItems.operator ==(Elsa.Expressions.Core.Models.ExpressionToolingItems? left, Elsa.Expressions.Core.Models.ExpressionToolingItems? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.Failure(Elsa.Expressions.Core.Models.ExpressionToolingOutcomeState state, Elsa.Expressions.Core.Models.ExpressionToolingContractVersion version, string? code = null, string? message = null, string? documentRevision = null, string? contextRevision = null) -> Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>!
+static Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.operator !=(Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>? left, Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.operator ==(Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>? left, Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.Success(T payload, Elsa.Expressions.Core.Models.ExpressionToolingContractVersion version, string! documentRevision, string! contextRevision) -> Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>!
+static Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>.SupportedEmpty(T payload, Elsa.Expressions.Core.Models.ExpressionToolingContractVersion version, string! documentRevision, string! contextRevision) -> Elsa.Expressions.Core.Models.ExpressionToolingOutcome<T>!
+static Elsa.Expressions.Core.Models.ExpressionToolingPosition.operator !=(Elsa.Expressions.Core.Models.ExpressionToolingPosition left, Elsa.Expressions.Core.Models.ExpressionToolingPosition right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionToolingPosition.operator ==(Elsa.Expressions.Core.Models.ExpressionToolingPosition left, Elsa.Expressions.Core.Models.ExpressionToolingPosition right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionToolingRange.operator !=(Elsa.Expressions.Core.Models.ExpressionToolingRange left, Elsa.Expressions.Core.Models.ExpressionToolingRange right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionToolingRange.operator ==(Elsa.Expressions.Core.Models.ExpressionToolingRange left, Elsa.Expressions.Core.Models.ExpressionToolingRange right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionToolingRequestScope.operator !=(Elsa.Expressions.Core.Models.ExpressionToolingRequestScope? left, Elsa.Expressions.Core.Models.ExpressionToolingRequestScope? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionToolingRequestScope.operator ==(Elsa.Expressions.Core.Models.ExpressionToolingRequestScope? left, Elsa.Expressions.Core.Models.ExpressionToolingRequestScope? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionValidationRequest.operator !=(Elsa.Expressions.Core.Models.ExpressionValidationRequest? left, Elsa.Expressions.Core.Models.ExpressionValidationRequest? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionValidationRequest.operator ==(Elsa.Expressions.Core.Models.ExpressionValidationRequest? left, Elsa.Expressions.Core.Models.ExpressionValidationRequest? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionValueMember.operator !=(Elsa.Expressions.Core.Models.ExpressionValueMember? left, Elsa.Expressions.Core.Models.ExpressionValueMember? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionValueMember.operator ==(Elsa.Expressions.Core.Models.ExpressionValueMember? left, Elsa.Expressions.Core.Models.ExpressionValueMember? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionValueShape.operator !=(Elsa.Expressions.Core.Models.ExpressionValueShape? left, Elsa.Expressions.Core.Models.ExpressionValueShape? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionValueShape.operator ==(Elsa.Expressions.Core.Models.ExpressionValueShape? left, Elsa.Expressions.Core.Models.ExpressionValueShape? right) -> bool
+static Elsa.Expressions.Core.Models.LiteralExpressionParameterBinding.operator !=(Elsa.Expressions.Core.Models.LiteralExpressionParameterBinding? left, Elsa.Expressions.Core.Models.LiteralExpressionParameterBinding? right) -> bool
+static Elsa.Expressions.Core.Models.LiteralExpressionParameterBinding.operator ==(Elsa.Expressions.Core.Models.LiteralExpressionParameterBinding? left, Elsa.Expressions.Core.Models.LiteralExpressionParameterBinding? right) -> bool
+static Elsa.Expressions.Core.Models.TypeDescriptor.operator !=(Elsa.Expressions.Core.Models.TypeDescriptor? left, Elsa.Expressions.Core.Models.TypeDescriptor? right) -> bool
+static Elsa.Expressions.Core.Models.TypeDescriptor.operator ==(Elsa.Expressions.Core.Models.TypeDescriptor? left, Elsa.Expressions.Core.Models.TypeDescriptor? right) -> bool
+static Elsa.Expressions.Core.Models.VariableDefinition.operator !=(Elsa.Expressions.Core.Models.VariableDefinition? left, Elsa.Expressions.Core.Models.VariableDefinition? right) -> bool
+static Elsa.Expressions.Core.Models.VariableDefinition.operator ==(Elsa.Expressions.Core.Models.VariableDefinition? left, Elsa.Expressions.Core.Models.VariableDefinition? right) -> bool
+static Elsa.Expressions.Core.Models.VariableDescriptor.operator !=(Elsa.Expressions.Core.Models.VariableDescriptor? left, Elsa.Expressions.Core.Models.VariableDescriptor? right) -> bool
+static Elsa.Expressions.Core.Models.VariableDescriptor.operator ==(Elsa.Expressions.Core.Models.VariableDescriptor? left, Elsa.Expressions.Core.Models.VariableDescriptor? right) -> bool
+static Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.operator !=(Elsa.Expressions.Core.Models.VariableExpressionParameterBinding? left, Elsa.Expressions.Core.Models.VariableExpressionParameterBinding? right) -> bool
+static Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.operator ==(Elsa.Expressions.Core.Models.VariableExpressionParameterBinding? left, Elsa.Expressions.Core.Models.VariableExpressionParameterBinding? right) -> bool
+static Elsa.Expressions.Core.Models.VariableReference.operator !=(Elsa.Expressions.Core.Models.VariableReference? left, Elsa.Expressions.Core.Models.VariableReference? right) -> bool
+static Elsa.Expressions.Core.Models.VariableReference.operator ==(Elsa.Expressions.Core.Models.VariableReference? left, Elsa.Expressions.Core.Models.VariableReference? right) -> bool
+static Elsa.Expressions.Core.Models.VariableReference.TryParse(object? value, out Elsa.Expressions.Core.Models.VariableReference? reference) -> bool
+static Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding.operator !=(Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding? left, Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding? right) -> bool
+static Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding.operator ==(Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding? left, Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding? right) -> bool
+static Elsa.Expressions.Core.Services.ExpressionToolingSymbolResolver.Complete(Elsa.Expressions.Core.Models.ExpressionAuthoringContext! context, string! source, Elsa.Expressions.Core.Models.ExpressionToolingPosition position) -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionToolingItem!>!
+static Elsa.Expressions.Core.Services.ExpressionToolingSymbolResolver.Resolve(Elsa.Expressions.Core.Models.ExpressionAuthoringContext! context, string! source, Elsa.Expressions.Core.Models.ExpressionToolingPosition position) -> Elsa.Expressions.Core.Models.ExpressionToolingItem?
+static readonly Elsa.Expressions.Core.Models.ExpressionToolingContractVersion.V1 -> Elsa.Expressions.Core.Models.ExpressionToolingContractVersion
+virtual Elsa.Expressions.Core.Models.ExpressionParameterBinding.EqualityContract.get -> System.Type!
+virtual Elsa.Expressions.Core.Models.ExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.ExpressionParameterBinding? other) -> bool
+virtual Elsa.Expressions.Core.Models.ExpressionParameterBinding.PrintMembers(System.Text.StringBuilder! builder) -> bool
+virtual Elsa.Expressions.Core.Models.VariableDescriptor.<Clone>$() -> Elsa.Expressions.Core.Models.VariableDescriptor!
+virtual Elsa.Expressions.Core.Models.VariableDescriptor.EqualityContract.get -> System.Type!
+virtual Elsa.Expressions.Core.Models.VariableDescriptor.Equals(Elsa.Expressions.Core.Models.VariableDescriptor? other) -> bool
+virtual Elsa.Expressions.Core.Models.VariableDescriptor.PrintMembers(System.Text.StringBuilder! builder) -> bool
+~override Elsa.Expressions.Core.Models.ExpressionToolingContractVersion.Equals(object obj) -> bool
+~override Elsa.Expressions.Core.Models.ExpressionToolingPosition.Equals(object obj) -> bool
+~override Elsa.Expressions.Core.Models.ExpressionToolingPosition.ToString() -> string
+~override Elsa.Expressions.Core.Models.ExpressionToolingRange.Equals(object obj) -> bool
+~override Elsa.Expressions.Core.Models.ExpressionToolingRange.ToString() -> string
