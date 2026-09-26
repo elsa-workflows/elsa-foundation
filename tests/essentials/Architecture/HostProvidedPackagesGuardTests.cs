@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Xunit;
+using static Elsa.Architecture.Tests.NuplaneHostSettings;
 
 namespace Elsa.Architecture.Tests;
 
@@ -48,18 +49,22 @@ public sealed class HostProvidedPackagesGuardTests
             {
                 ["Elsa.Activities.Design.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Activities.Runtime.Core"] = WorkbenchSourceBuildVersion,
+                ["Elsa.Attention.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Caching.Core"] = WorkbenchSourceBuildVersion,
+                ["Elsa.Events.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Expressions.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Expressions.JavaScript.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Http.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Locking.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Mediator.Core"] = WorkbenchSourceBuildVersion,
+                ["Elsa.Pipelines.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Primitives"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Serialization.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Tasks.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Tasks.Schedules"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Workflows.Design.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Workflows.Design.Persistence.Core"] = WorkbenchSourceBuildVersion,
+                ["Elsa.Workflows.Design.Validations.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Workflows.Runtime.Core"] = WorkbenchSourceBuildVersion
             }
         };
@@ -87,14 +92,7 @@ public sealed class HostProvidedPackagesGuardTests
     [Fact]
     public void Every_host_that_shares_assemblies_is_guarded()
     {
-        var sharing = Directory.EnumerateDirectories(Path.Join(RepoRoot, "src", "apps"))
-            .Select(Path.GetFileName)
-            .OfType<string>()
-            .Where(host => File.Exists(Path.Join(RepoRoot, "src", "apps", host, "appsettings.json")))
-            .Where(host => SharedAssemblies(ReadNuplane(host)).Count > 0)
-            .Order(StringComparer.Ordinal);
-
-        Assert.Equal(SharingHosts.Order(StringComparer.Ordinal), sharing);
+        Assert.Equal(SharingHosts.Order(StringComparer.Ordinal), HostsThatShareAssemblies());
         Assert.All(Exemptions.Keys, host => Assert.Contains(host, SharingHosts));
     }
 
@@ -189,30 +187,6 @@ public sealed class HostProvidedPackagesGuardTests
                     .Concat(declared.Select((entry, index) => KeyValuePair.Create($"HostProvidedPackages:{index}", (string?)entry))))
             .Build();
 
-    private static IReadOnlyList<string> SharedAssemblies(IConfiguration nuplane) =>
-    [
-        .. nuplane.GetSection("Loading:SharedAssemblies").GetChildren()
-            .Select(entry => entry["Name"])
-            .OfType<string>()
-    ];
-
     private static IReadOnlyList<string> HostProvidedPackages(IConfiguration nuplane) =>
         [.. nuplane.GetSection("HostProvidedPackages").GetChildren().Select(entry => entry.Value).OfType<string>()];
-
-    private static IConfigurationSection ReadNuplane(string host) =>
-        new ConfigurationBuilder()
-            .AddJsonFile(Path.Join(RepoRoot, "src", "apps", host, "appsettings.json"))
-            .Build()
-            .GetSection("Nuplane");
-
-    private static string RepoRoot { get; } = FindRepoRoot();
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
-            directory = directory.Parent;
-
-        return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
-    }
 }

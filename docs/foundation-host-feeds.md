@@ -170,6 +170,16 @@ if an exempted assembly stops being shared, and it lifts once source builds carr
 ([ADR 0067](adr/0067-package-versioning-uses-two-lines-with-computed-patch.md),
 [#1144](https://github.com/elsa-workflows/elsa-foundation/issues/1144)).
 
+Sharing is also closed under Elsa project dependencies. A shared assembly's dependencies are not shared
+with it. A feed-loaded feature gets its own private copy of any Elsa dependency the host does not also
+share, so the types it exchanges with the shared assembly do not match the host's, and it fails at runtime.
+`SharedAssemblyClosureGuardTests` (`tests/essentials/Architecture`) fails the build when a host shares an
+assembly built from a project under `src/` without sharing every Elsa project it references, directly or
+transitively. That is why `Elsa.Workbench` shares `Elsa.Events.Core`, `Elsa.Pipelines.Core` and
+`Elsa.Workflows.Design.Validations.Core`, and it shares `Elsa.Attention.Core` because that assembly is a
+Line A contract features exchange with one another. All four sit under the same exemption as its other
+Elsa shares.
+
 Neither case is caught by the version range or the lock file, because nothing was resolved to check.
 
 The checks above apply only to **dependencies**, never to roots — which is why naming a package

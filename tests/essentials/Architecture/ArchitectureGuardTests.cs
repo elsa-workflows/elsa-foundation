@@ -172,17 +172,8 @@ public sealed partial class ArchitectureGuardTests
         // performance measurement was retired (#1668).
         foreach (var project in ProjectFiles())
         {
-            var document = XDocument.Load(project.FullPath);
-            foreach (var include in document.Descendants("ProjectReference")
-                         .Select(reference => reference.Attribute("Include")?.Value)
-                         .OfType<string>())
-            {
-                var path = Path.GetFullPath(Path.Combine(
-                    Path.GetDirectoryName(project.FullPath)!,
-                    include.Replace('\\', Path.DirectorySeparatorChar)));
-                if (!File.Exists(path))
-                    missing.Add($"{project.RelativePath} -> {Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/')}");
-            }
+            foreach (var path in ProjectGraph.ReferencedProjectPaths(project.FullPath).Where(path => !File.Exists(path)))
+                missing.Add($"{project.RelativePath} -> {Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/')}");
         }
 
         foreach (var solutionProject in SolutionProjects())
@@ -781,16 +772,8 @@ public sealed partial class ArchitectureGuardTests
         }
     }
 
-    private static IEnumerable<ProjectInfo> ProjectReferences(ProjectInfo project)
-    {
-        var document = XDocument.Load(project.FullPath);
-        foreach (var include in document.Descendants("ProjectReference").Select(x => x.Attribute("Include")?.Value).OfType<string>())
-        {
-            var normalizedInclude = include.Replace('\\', Path.DirectorySeparatorChar);
-            var path = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(project.FullPath)!, normalizedInclude));
-            yield return ProjectInfo.From(RepoRoot, path);
-        }
-    }
+    private static IEnumerable<ProjectInfo> ProjectReferences(ProjectInfo project) =>
+        ProjectGraph.ReferencedProjectPaths(project.FullPath).Select(path => ProjectInfo.From(RepoRoot, path));
 
     private static IEnumerable<ProjectInfo> ReachableProjects(ProjectInfo root)
     {
