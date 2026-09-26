@@ -20,7 +20,10 @@ namespace Elsa.Architecture.Tests;
 /// is exactly where a stray setter would land, and a <c>PropertyGroup</c> nested inside a <c>&lt;Target&gt;</c>
 /// counts too. The root <c>Directory.Build.props</c> and <c>VersionLines.props</c> live outside both
 /// <c>src/</c> and <c>tests/</c>, so they are never part of this scan; they are the two sanctioned setters,
-/// checked separately below. Part of #1144.
+/// checked separately below. The root <c>Directory.Build.props</c> also checks the evaluated values at
+/// build time (its <c>ElsaVerifyVersionLine</c> target, proved by <see cref="VersionLineBuildCheckTests"/>),
+/// which covers a <c>/p:</c> override and a build file outside <c>src/</c> and <c>tests/</c> that this scan
+/// cannot see. Part of #1144.
 /// </remarks>
 public sealed class VersionLineOwnershipGuardTests
 {

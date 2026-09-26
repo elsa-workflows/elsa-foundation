@@ -4,8 +4,10 @@
     Shared build settings for every project in the repository.
 
     Properties set here are imported before each project's own body, so any
-    project can still override them locally. Two projects deliberately keep
-    their own copies rather than inheriting:
+    project can still override them locally, with one exception: ElsaVersionLine
+    and ElsaVersionLineAMembers are derived from VersionLines.props, not meant to
+    be set anywhere else, and the ElsaVerifyVersionLine target below enforces that.
+    Two projects deliberately keep their own copies rather than inheriting:
 
       - src/essentials/Workflows/Design/CodeGeneration targets netstandard2.0 as a
         Roslyn source generator and pins its own TargetFramework/ImplicitUsings.
@@ -39,6 +41,50 @@
     <ElsaVersionLine>B</ElsaVersionLine>
     <ElsaVersionLine Condition="$(ElsaVersionLineAMembers.Contains(';$(MSBuildProjectName);'))">A</ElsaVersionLine>
   </PropertyGroup>
+
+  <!--
+    ADR 0067 build-time check. VersionLineOwnershipGuardTests (tests/essentials/Architecture) is a static
+    scan proving no file under src/ or tests/ sets ElsaVersionLine or ElsaVersionLineAMembers, but a static
+    scan has two blind spots: a global property passed on the command line (/p:ElsaVersionLine=... or
+    /p:ElsaVersionLineAMembers=...), which wins over any props-file assignment and never appears in a file
+    at all, and a build file outside src/ and tests/, which the scan is deliberately not rooted at. This
+    target closes both gaps by re-reading VersionLines.props directly with XmlPeek - independently of the
+    Import above - and comparing that peeked value against what this project actually evaluated
+    ElsaVersionLineAMembers and ElsaVersionLine to.
+
+    It runs BeforeBuild, on every project, so a mismatch fails the build instead of silently acting on the
+    wrong line until someone happens to inspect the property. It lives here, in this .props file, rather
+    than in a Directory.Build.targets, because a target can be defined in a .props file - keeping the
+    check beside the computation it verifies is the point - and because a Directory.Build.targets would
+    be skipped by any nested Directory.Build.targets that forgets to import it, whereas every project
+    already imports this file. tests/essentials/Architecture/VersionLineBuildCheckTests.cs proves it,
+    including the /p: cases the static scan cannot see.
+  -->
+  <Target Name="ElsaVerifyVersionLine" BeforeTargets="BeforeBuild">
+
+    <XmlPeek XmlInputPath="$(MSBuildThisFileDirectory)VersionLines.props"
+             Query="/Project/PropertyGroup/ElsaVersionLineAMembers/text()">
+      <Output TaskParameter="Result" PropertyName="_ElsaReviewedLineAMembers" />
+    </XmlPeek>
+
+    <Error Code="ELSAVL003"
+           Condition="'$(_ElsaReviewedLineAMembers)' == ''"
+           Text="Could not read ElsaVersionLineAMembers from $(MSBuildThisFileDirectory)VersionLines.props via XmlPeek. The file may have moved or its shape changed; update the XmlPeek query in the ElsaVerifyVersionLine target (Directory.Build.props) to match." />
+
+    <PropertyGroup>
+      <_ElsaReviewedVersionLine>B</_ElsaReviewedVersionLine>
+      <_ElsaReviewedVersionLine Condition="$(_ElsaReviewedLineAMembers.Contains(';$(MSBuildProjectName);'))">A</_ElsaReviewedVersionLine>
+    </PropertyGroup>
+
+    <Error Code="ELSAVL002"
+           Condition="'$(_ElsaReviewedLineAMembers)' != '' and '$(ElsaVersionLineAMembers.Trim())' != '$(_ElsaReviewedLineAMembers.Trim())'"
+           Text="$(MSBuildProjectName) sees ElsaVersionLineAMembers as '$(ElsaVersionLineAMembers)', but VersionLines.props itself defines '$(_ElsaReviewedLineAMembers)'. Something - this project file, a nested Directory.Build.props/.targets, or an /p:ElsaVersionLineAMembers override - replaced the reviewed list. VersionLines.props is the only place to change Line A membership." />
+
+    <Error Code="ELSAVL001"
+           Condition="'$(_ElsaReviewedLineAMembers)' != '' and '$(ElsaVersionLine)' != '$(_ElsaReviewedVersionLine)'"
+           Text="$(MSBuildProjectName) evaluates ElsaVersionLine as '$(ElsaVersionLine)', but VersionLines.props puts it on line '$(_ElsaReviewedVersionLine)'. ElsaVersionLine is derived from VersionLines.props and must not be set anywhere else - not in this project file, not in a nested Directory.Build.props/.targets, and not via /p:ElsaVersionLine." />
+
+  </Target>
 
   <!--
     #2078: Line A's version is meant to move only when its contract changes, and PublicApiAnalyzers is
