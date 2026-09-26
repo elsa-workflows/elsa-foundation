@@ -16,7 +16,6 @@ public static class FeatureDependencyMapGenerator
     public static IReadOnlyList<string> Generate(RepoContext repo, IReadOnlyList<ProjectFacts> projects)
     {
         var sourceProjects = projects.Where(project => project.Kind == "source").ToArray();
-        var packages = PackageVersions.Load(repo);
         var features = FeatureScanner.Scan(repo, projects);
 
         var featureProjects = features.Select(feature => feature.Project).ToHashSet(StringComparer.Ordinal);
@@ -139,7 +138,7 @@ public static class FeatureDependencyMapGenerator
                 feature.Project,
                 MarkdownTable.Cell(MarkdownTable.Lines(featureRefs)),
                 MarkdownTable.Cell(MarkdownTable.Lines(coreRefs)),
-                MarkdownTable.Cell(MarkdownTable.Lines(packages.ReferencesFor(repo.Absolute(project.RelativePath)))));
+                MarkdownTable.Cell(MarkdownTable.Lines(project.Packages.Select(package => $"{package.Id} {package.DisplayVersion}"))));
         }
 
         map.Line()

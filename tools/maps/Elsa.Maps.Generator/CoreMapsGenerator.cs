@@ -6,29 +6,25 @@ namespace Elsa.Maps.Generator;
 /// Writes the v1 map layer: project-reference, package, feature, test and spec-status maps, the
 /// maps-v1-findings report, and <c>docs/maps/manifest.json</c>.
 /// </summary>
+/// <remarks>
+/// Every project and package fact here is a projection of the dependency map (spec 149, FR-002); this layer
+/// reads no <c>.csproj</c> itself. Feature classes, test source files and specs come from their own files.
+/// </remarks>
 public static partial class CoreMapsGenerator
 {
-    [GeneratedRegex("<TargetFramework>([^<]*)</TargetFramework>", RegexOptions.Compiled)]
-    private static partial Regex TargetFrameworkPattern { get; }
-
-    [GeneratedRegex("<IsPackable>([^<]*)</IsPackable>", RegexOptions.Compiled)]
-    private static partial Regex IsPackablePattern { get; }
-
     [GeneratedRegex(@"^\s*public\s.*class\s+(?<name>[A-Za-z0-9_]+)\s*:(?<bases>[^{]*)", RegexOptions.Compiled)]
     private static partial Regex FeatureClassPattern { get; }
 
-    private sealed record ProjectRow(string Name, string RelativePath, string Kind, string Domain, IReadOnlyList<string> References);
     private sealed record PackageRow(string Id, string Version, string Project, string RelativePath, string Kind);
     private sealed record FeatureRow(string ClassName, string Kind, string Project, string BaseText, string RelativePath);
 
     /// <summary>Generates the v1 layer and returns the repo-relative paths written.</summary>
-    public static IReadOnlyList<string> Generate(RepoContext repo)
+    public static IReadOnlyList<string> Generate(RepoContext repo, IReadOnlyList<ProjectFacts> projects)
     {
-        var projectPaths = repo.ListFiles(RepoLayout.ProjectPathspecs);
-        var packages = PackageVersions.Load(repo);
-
-        var projects = projectPaths.Select(path => ReadProject(repo, path)).ToArray();
-        var packageRows = projects.SelectMany(project => ReadPackages(repo, packages, project)).ToArray();
+        var packageRows = projects
+            .SelectMany(project => project.Packages.Select(package =>
+                new PackageRow(package.Id, package.DisplayVersion, project.Name, project.RelativePath, project.Kind)))
+            .ToArray();
         var features = ReadFeatures(repo, projects);
         var specs = SpecScanner.Read(repo);
 
@@ -63,42 +59,7 @@ public static partial class CoreMapsGenerator
         ];
     }
 
-    private static ProjectRow ReadProject(RepoContext repo, string relativePath)
-    {
-        var name = Path.GetFileNameWithoutExtension(relativePath);
-
-        // Not deduplicated: this layer reports the raw reference count, unlike the domain map.
-        var references = ProjectGraph.ReadReferencedProjectNames(repo.Absolute(relativePath));
-
-        return new ProjectRow(
-            name,
-            relativePath,
-            RepoLayout.Kind(relativePath),
-            DomainGroup(name),
-            references);
-    }
-
-    /// <summary>
-    /// This layer's grouping, which differs from the domain map's: a bare <c>Server</c> project stays
-    /// <c>Server</c> rather than being folded into <c>Elsa.Workbench</c>.
-    /// </summary>
-    private static string DomainGroup(string project)
-    {
-        if (project == "Server") return "Server";
-        if (project.StartsWith("Test.", StringComparison.Ordinal)) return "Test";
-        if (project.StartsWith("Elsa3.", StringComparison.Ordinal)) return "Elsa3";
-        if (!project.StartsWith("Elsa.", StringComparison.Ordinal)) return "Other";
-
-        var segments = project.Split('.');
-        return segments.Length >= 2 ? $"{segments[0]}.{segments[1]}" : segments[0];
-    }
-
-    private static IEnumerable<PackageRow> ReadPackages(RepoContext repo, PackageVersions packages, ProjectRow project) =>
-        packages.ReferencesFor(repo.Absolute(project.RelativePath))
-            .Select(entry => entry.Split(' ', 2))
-            .Select(parts => new PackageRow(parts[0], parts[1], project.Name, project.RelativePath, project.Kind));
-
-    private static IReadOnlyList<FeatureRow> ReadFeatures(RepoContext repo, IReadOnlyList<ProjectRow> projects)
+    private static IReadOnlyList<FeatureRow> ReadFeatures(RepoContext repo, IReadOnlyList<ProjectFacts> projects)
     {
         var rows = new List<FeatureRow>();
 
@@ -144,19 +105,7 @@ public static partial class CoreMapsGenerator
         return kind;
     }
 
-    private static string TargetFramework(RepoContext repo, ProjectRow project)
-    {
-        var match = TargetFrameworkPattern.Match(File.ReadAllText(repo.Absolute(project.RelativePath)));
-        return match.Success && match.Groups[1].Value.Length > 0 ? match.Groups[1].Value : "-";
-    }
-
-    private static string IsPackable(RepoContext repo, ProjectRow project)
-    {
-        var match = IsPackablePattern.Match(File.ReadAllText(repo.Absolute(project.RelativePath)));
-        return match.Success && match.Groups[1].Value.Length > 0 ? match.Groups[1].Value : "default";
-    }
-
-    private static void WriteProjectReferenceMap(RepoContext repo, IReadOnlyList<ProjectRow> projects)
+    private static void WriteProjectReferenceMap(RepoContext repo, IReadOnlyList<ProjectFacts> projects)
     {
         var map = new MapBuilder()
             .Line("# Project Reference Map")
@@ -181,8 +130,8 @@ public static partial class CoreMapsGenerator
                 $"[{project.Name}](../../{project.RelativePath})",
                 project.Kind,
                 project.Domain,
-                TargetFramework(repo, project),
-                IsPackable(repo, project),
+                project.DeclaredTargetFramework ?? "-",
+                project.Packable ? "true" : "false",
                 MarkdownTable.Cell(MarkdownTable.Lines(project.References)));
 
         map.Line()
@@ -266,9 +215,9 @@ public static partial class CoreMapsGenerator
 
     private static void WriteTestMap(
         RepoContext repo,
-        IReadOnlyList<ProjectRow> projects,
+        IReadOnlyList<ProjectFacts> projects,
         IReadOnlySet<string> testReferences,
-        IReadOnlyList<ProjectRow> untestedSources)
+        IReadOnlyList<ProjectFacts> untestedSources)
     {
         var testProjects = projects.Where(project => project.Kind == "test").ToArray();
 
@@ -349,7 +298,7 @@ public static partial class CoreMapsGenerator
 
     private static void WriteFindings(
         RepoContext repo,
-        IReadOnlyList<ProjectRow> projects,
+        IReadOnlyList<ProjectFacts> projects,
         IReadOnlyList<PackageRow> packages,
         IReadOnlyList<FeatureRow> features,
         IReadOnlyList<SpecFacts> specs,
@@ -456,7 +405,7 @@ public static partial class CoreMapsGenerator
     /// </remarks>
     private static void WriteManifest(
         RepoContext repo,
-        IReadOnlyList<ProjectRow> projects,
+        IReadOnlyList<ProjectFacts> projects,
         IReadOnlyList<PackageRow> packages,
         IReadOnlyList<FeatureRow> features,
         IReadOnlyList<SpecFacts> specs)

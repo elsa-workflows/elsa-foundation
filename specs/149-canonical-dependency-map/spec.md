@@ -130,8 +130,8 @@ check fails naming the dataset.
   A packable node also records its package id.
 - **Dependency edge**: a directed relation from a node to a package identity, typed by whether the
   target resolves inside this repository.
-- **Dataset**: the set of nodes and edges plus the freshness fingerprint, versioned by a schema
-  version so consumers can detect an incompatible shape.
+- **Dataset**: the set of nodes and edges, versioned by a schema version so consumers can detect an
+  incompatible shape. It carries no freshness fingerprint (see Decisions).
 
 ## Success Criteria *(mandatory)*
 
@@ -167,11 +167,23 @@ check fails naming the dataset.
 - Merging `feature-dependency-map.md` into the dataset, per FR-010.
 - The last-published record: its file, what writes it, and its pull-request guard are spec 150.
 
-## Open Questions
+## Decisions
 
-- Should the dataset carry external package versions, so `package-map.md` becomes a projection too,
-  or should external dependencies stay out and that map keep its own pass? Carrying them makes the
-  dataset the single answer to "what do we depend on", at the cost of it changing whenever a
-  third-party version bumps.
-- Should the schema version be enforced by consumers at read time, or is a mismatch a build-time
-  concern only?
+Recorded when #2075 implemented this spec. The first two answer the open questions it was drafted with.
+
+- **The dataset carries external package versions.** FR-005 already requires the declared version on
+  every external edge, so `package-map.md` is a projection like the other maps, and the dataset is the
+  single answer to "what do we depend on". The cost is a dataset change whenever a third-party version
+  moves, and that change is real: a moved version changes what its dependents ship, which is what
+  spec 150's FR-003 acts on.
+- **Enforcing the schema version is each consumer's concern, at read time.** The dataset carries
+  `schema_version`. A consumer checks it when it reads the file, starting with spec 150's calculator.
+  Generation and the freshness check do not gate on it: they compare bytes, and a version check there
+  would add nothing.
+- **No freshness fingerprint.** The Key Entities once named one. Freshness is the maps check's byte
+  comparison, and #1278 removed input fingerprints from the maps manifest because they changed on
+  every commit without describing the tree.
+- **`project-reference-map.md`'s Packable column now shows the effective value (true/false), not the
+  raw project-file declaration or "default".** This is a deliberate exception to SC-003's "no content
+  lost": "default" hid that 73 test projects do not pack, and the raw declaration isn't a graph fact
+  the dataset should carry.

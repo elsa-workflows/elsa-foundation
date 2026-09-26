@@ -4,13 +4,15 @@ using Elsa.Maps.Generator;
 // every documented invocation in AGENTS.md, docs/maps/README.md and the spec tasks.md files keeps working.
 //
 // Usage: dotnet run --project tools/maps/Elsa.Maps.Generator -- <layer> [<layer> ...]
-//   domain | extension-points | architecture-reference | feature-dependency | maps | all | check
+//   dependency-map | maps | domain | extension-points | architecture-reference | feature-dependency | all | check
 //   solution-filters | solution-filters-check | solution-filters-self-test
 //   solution-filter-roots <filter-path>
 //   ef-suites-select <event> [<base-sha> <head-sha>] | ef-suites-self-test
+//   project-facts-self-test
 
-// "maps" first: the v2 findings report reads summary lines out of the v1 maps, so they must exist first.
-string[] knownLayers = ["maps", "domain", "extension-points", "architecture-reference", "feature-dependency"];
+// "dependency-map" first: it is the dataset every project-graph map is a projection of (spec 149). Then "maps":
+// the v2 findings report reads summary lines out of the v1 maps, so they must exist first.
+string[] knownLayers = ["dependency-map", "maps", "domain", "extension-points", "architecture-reference", "feature-dependency"];
 var layers = args.Length > 0 ? args : ["all"];
 
 try
@@ -48,6 +50,12 @@ try
         return 0;
     }
 
+    if (layers.SequenceEqual(["project-facts-self-test"], StringComparer.Ordinal))
+    {
+        ProjectFactsContractTests.Run();
+        return 0;
+    }
+
     if ((layers.Length is 2 or 4) && string.Equals(layers[0], "ef-suites-select", StringComparison.Ordinal))
     {
         Console.WriteLine(EfSuiteSelector.Select(repo, layers[1],
@@ -71,7 +79,7 @@ try
     // writing part of the maps and then throwing.
     var requested = layers.Contains("all", StringComparer.Ordinal) ? knownLayers : layers;
     if (requested.FirstOrDefault(layer => !knownLayers.Contains(layer, StringComparer.Ordinal)) is { } unknown)
-        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>, ef-suites-select <event> [<base-sha> <head-sha>], ef-suites-self-test.");
+        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>, ef-suites-select <event> [<base-sha> <head-sha>], ef-suites-self-test, project-facts-self-test.");
 
     var projects = ProjectGraph.Read(repo);
     var written = new List<string>();
@@ -80,11 +88,12 @@ try
     {
         written.AddRange(layer switch
         {
+            "dependency-map" => DependencyMap.Generate(repo, projects),
             "domain" => DomainMapGenerator.Generate(repo, projects),
             "extension-points" => ExtensionPointMapGenerator.Generate(repo, projects),
             "architecture-reference" => ArchitectureReferenceMapGenerator.Generate(repo, projects),
             "feature-dependency" => FeatureDependencyMapGenerator.Generate(repo, projects),
-            "maps" => CoreMapsGenerator.Generate(repo),
+            "maps" => CoreMapsGenerator.Generate(repo, projects),
             _ => throw new ArgumentException($"Unknown map layer '{layer}'.")
         });
     }

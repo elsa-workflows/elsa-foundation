@@ -1,4 +1,3 @@
-using System.Xml.Linq;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -19,7 +18,7 @@ public sealed class LineAClosureGuardTests
     private static string RepoRoot { get; } = FindRepoRoot();
 
     /// <summary>Line A membership, in the order <c>VersionLines.props</c> lists it.</summary>
-    private static IReadOnlyList<string> LineAMembers { get; } = ReadLineAMembers(RepoRoot);
+    private static IReadOnlyList<string> LineAMembers { get; } = VersionLines.LineAMembers(RepoRoot);
 
     /// <summary>Every Elsa project under <c>src/</c>, by name, with the Elsa projects it directly references.</summary>
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> ElsaReferences { get; } = ProjectGraph.LoadElsaReferences(RepoRoot);
@@ -90,18 +89,6 @@ public sealed class LineAClosureGuardTests
         "Line A is not closed under ProjectReference (ADR 0067). Either add the referenced project to " +
         "VersionLines.props or remove the reference:" +
         string.Concat(violations.Select(violation => $"{Environment.NewLine}  {violation}"));
-
-    /// <summary>
-    /// The members of the repository's one reviewed list: <c>ElsaVersionLineAMembers</c>'s
-    /// semicolon-delimited text, the same property Directory.Build.props reads to compute
-    /// <c>$(ElsaVersionLine)</c>.
-    /// </summary>
-    private static IReadOnlyList<string> ReadLineAMembers(string repoRoot) =>
-        [
-            .. XDocument.Load(Path.Join(repoRoot, "VersionLines.props"))
-                .Descendants("ElsaVersionLineAMembers")
-                .SelectMany(element => element.Value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        ];
 
     private static string FindRepoRoot()
     {

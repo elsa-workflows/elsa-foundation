@@ -7,7 +7,7 @@ namespace Elsa.Maps.Generator;
 /// <para>
 /// The check regenerates every map into a scratch directory and compares the bytes with what is
 /// committed. It deliberately does <b>not</b> gate on any fingerprint over the inputs: that would change
-/// on every source edit, obliging every code PR to regenerate and commit twelve map files even though
+/// on every source edit, obliging every code PR to regenerate and commit thirteen map files even though
 /// most source edits change no map at all. Comparing outputs asks the question that actually matters —
 /// are the committed maps still true? — and stays quiet otherwise. That is also why the manifest carries
 /// no input fingerprint any more.
@@ -31,7 +31,8 @@ public static class MapFreshness
 
             var projects = ProjectGraph.Read(repo);
             var generated = new List<string>();
-            generated.AddRange(CoreMapsGenerator.Generate(repo));
+            generated.AddRange(DependencyMap.Generate(repo, projects));
+            generated.AddRange(CoreMapsGenerator.Generate(repo, projects));
             generated.AddRange(DomainMapGenerator.Generate(repo, projects));
             generated.AddRange(ExtensionPointMapGenerator.Generate(repo, projects));
             generated.AddRange(ArchitectureReferenceMapGenerator.Generate(repo, projects));

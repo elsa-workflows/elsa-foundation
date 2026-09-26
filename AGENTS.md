@@ -147,7 +147,7 @@ regenerate them; it only runs `dotnet run --project tools/maps/Elsa.Maps.Generat
 That check regenerates every map into a scratch directory and compares the bytes with what is
 committed, `manifest.json` included. It deliberately does **not** gate on any fingerprint over the
 inputs: that would move on every source edit and would oblige every code PR to regenerate and commit
-twelve map files even though most source edits change no map at all. So a red check means a
+thirteen map files even though most source edits change no map at all. So a red check means a
 committed map genuinely stopped describing the tree, and is worth acting on rather than restamping
 past. Refreshing stays a deliberate, human-initiated act. The check runs on every pull request and
 on every push to `main` (`.github/workflows/maps.yml`), so main going stale is reported against main
