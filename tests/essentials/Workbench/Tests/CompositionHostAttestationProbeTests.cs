@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -24,6 +25,148 @@ public sealed class CompositionHostAttestationProbeTests
         "shells.json", "shells.Development.json", "shells.Staging.json",
         "appsettings.json", "appsettings.Development.json", "appsettings.Staging.json"
     ];
+
+    [Fact]
+    public async Task Command_line_shell_setting_overrides_environment_setting()
+    {
+        const string environmentValue = "842101";
+        const string commandLineValue = "842102";
+        var shell = WorkbenchShell.Development with
+        {
+            Settings = new Dictionary<string, string> { [ReceiptOverrideKey] = environmentValue }
+        };
+        await using var host = await WorkbenchProcess.StartAsync(
+            shell,
+            additionalArguments: [$"--{ReceiptOverrideKey}={commandLineValue}"]);
+
+        var blueprint = await host.ManagementClient.GetStringAsync("/_admin/shells/default/blueprint");
+        Assert.Contains(commandLineValue, blueprint, StringComparison.Ordinal);
+        Assert.DoesNotContain(environmentValue, blueprint, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Startup_artifact_probe_keeps_root_and_default_shell_on_one_retained_snapshot()
+    {
+        const string capturedOrigin = "https://captured-studio.example.invalid";
+        const string changedOrigin = "https://changed-studio.example.invalid";
+        const string capturedFileValue = "843101";
+        const string environmentValue = "843102";
+        const string commandLineValue = "843103";
+        const string changedFileValue = "843104";
+        const string changedUnselectedValue = "843105";
+        var stagedBundle = CreateBundle();
+        try
+        {
+            WorkbenchConfigurationFile.WriteValue(Path.Join(stagedBundle, "appsettings.Development.json"),
+                ["Cors", "AllowedOrigins", "0"], capturedOrigin);
+            WriteSetting(Path.Join(stagedBundle, "shells.Development.json"), int.Parse(capturedFileValue));
+            var shell = WorkbenchShell.Development with
+            {
+                Settings = new Dictionary<string, string>
+                {
+                    [ReceiptOverrideKey] = environmentValue,
+                    ["ELSA_WORKBENCH_STARTUP_ARTIFACT_PROBE"] = "1"
+                }
+            };
+            var additionalArguments = new[] { $"--{ReceiptOverrideKey}={commandLineValue}" };
+            var receipt = TestOwnedArtifactReceipt.Capture(stagedBundle, shell, additionalArguments);
+            await using var host = await receipt.LaunchAsync(receipt.Id, stagedBundle, shell,
+                contentRoot => WriteStartupArtifactManifest(contentRoot),
+                additionalArguments);
+
+            Assert.True(await CorsAllowsAsync(host, capturedOrigin));
+            Assert.False(await CorsAllowsAsync(host, changedOrigin));
+            var initialBlueprint = await host.ManagementClient.GetStringAsync("/_admin/shells/default/blueprint");
+            Assert.Contains(commandLineValue, initialBlueprint, StringComparison.Ordinal);
+            Assert.DoesNotContain(environmentValue, initialBlueprint, StringComparison.Ordinal);
+            Assert.DoesNotContain(capturedFileValue, initialBlueprint, StringComparison.Ordinal);
+
+            WorkbenchConfigurationFile.WriteValue(Path.Join(host.ContentRoot, "appsettings.Development.json"),
+                ["Cors", "AllowedOrigins", "0"], changedOrigin);
+            WriteSetting(Path.Join(host.ContentRoot, "shells.Development.json"), int.Parse(changedFileValue));
+            WriteSetting(Path.Join(host.ContentRoot, "shells.Staging.json"), int.Parse(changedUnselectedValue));
+            await Task.Delay(TimeSpan.FromMilliseconds(1200));
+
+            using var response = await host.ManagementClient.PostAsync("/_admin/shells/reload/default", null);
+            response.EnsureSuccessStatusCode();
+            var reload = (await response.Content.ReadFromJsonAsync<JsonNode>())!;
+            Assert.True((bool?)reload["success"] is true);
+
+            Assert.True(await CorsAllowsAsync(host, capturedOrigin));
+            Assert.False(await CorsAllowsAsync(host, changedOrigin));
+            var blueprint = await host.ManagementClient.GetStringAsync("/_admin/shells/default/blueprint");
+            Assert.Contains(commandLineValue, blueprint, StringComparison.Ordinal);
+            Assert.DoesNotContain(environmentValue, blueprint, StringComparison.Ordinal);
+            Assert.DoesNotContain(capturedFileValue, blueprint, StringComparison.Ordinal);
+            Assert.DoesNotContain(changedFileValue, blueprint, StringComparison.Ordinal);
+            Assert.DoesNotContain(changedUnselectedValue, blueprint, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(stagedBundle, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Startup_artifact_probe_refuses_a_file_that_differs_from_its_manifest()
+    {
+        const string mismatchValue = "843201";
+        var stagedBundle = CreateBundle();
+        try
+        {
+            var shell = WorkbenchShell.Development with
+            {
+                Settings = new Dictionary<string, string>
+                {
+                    ["ELSA_WORKBENCH_STARTUP_ARTIFACT_PROBE"] = "1"
+                }
+            };
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                WorkbenchProcess.StartAsync(shell, contentRoot =>
+                {
+                    CopyBundle(stagedBundle, contentRoot);
+                    WriteStartupArtifactManifest(contentRoot);
+                    WriteSetting(Path.Join(contentRoot, "shells.Development.json"), int.Parse(mismatchValue));
+                }));
+
+            Assert.Contains("WB-STARTUP-ARTIFACT-MISMATCH", exception.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain(mismatchValue, exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(stagedBundle, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Startup_artifact_probe_refuses_manifest_that_omits_unselected_sibling()
+    {
+        var stagedBundle = CreateBundle();
+        try
+        {
+            var shell = WorkbenchShell.Development with
+            {
+                Settings = new Dictionary<string, string>
+                {
+                    ["ELSA_WORKBENCH_STARTUP_ARTIFACT_PROBE"] = "1"
+                }
+            };
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                WorkbenchProcess.StartAsync(shell, contentRoot =>
+                {
+                    CopyBundle(stagedBundle, contentRoot);
+                    WriteStartupArtifactManifest(contentRoot,
+                        BundleFiles.Where(file => file != "shells.Staging.json").ToArray());
+                }));
+
+            Assert.Contains("WB-STARTUP-ARTIFACT-INVALID", exception.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain("shells.Staging.json", exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(stagedBundle, recursive: true);
+        }
+    }
 
     [Fact]
     public async Task Fresh_process_uses_one_staged_bundle_for_root_and_shell_configuration()
@@ -133,11 +276,16 @@ public sealed class CompositionHostAttestationProbeTests
             {
                 Settings = new Dictionary<string, string> { [ReceiptOverrideKey] = "842001" }
             };
-            var receipt = TestOwnedArtifactReceipt.Capture(stagedBundle, shell);
+            var capturedArguments = new[] { $"--{ReceiptOverrideKey}=842101" };
+            var changedArguments = new[] { $"--{ReceiptOverrideKey}=842102" };
+            var receipt = TestOwnedArtifactReceipt.Capture(stagedBundle, shell, capturedArguments);
             CopyBundle(stagedBundle, copiedBundle);
-            Assert.True(receipt.Matches(receipt.Id, copiedBundle, shell));
+            Assert.True(receipt.Matches(receipt.Id, copiedBundle, shell, capturedArguments));
+            Assert.False(receipt.Matches(receipt.Id, copiedBundle, shell, changedArguments));
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 receipt.LaunchAsync(Guid.NewGuid().ToString("N"), copiedBundle, shell));
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                receipt.LaunchAsync(receipt.Id, copiedBundle, shell, additionalArguments: changedArguments));
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 receipt.LaunchAsync(receipt.Id, copiedBundle,
                     shell with { Settings = new Dictionary<string, string> { [ReceiptOverrideKey] = "842002" } }));
@@ -346,50 +494,82 @@ public sealed class CompositionHostAttestationProbeTests
             File.Copy(Path.Join(source, file), Path.Join(destination, file), overwrite: true);
     }
 
+    private static void WriteStartupArtifactManifest(string contentRoot, IReadOnlyList<string>? fileNames = null)
+    {
+        var files = (fileNames ?? BundleFiles).Select(name =>
+        {
+            var bytes = File.ReadAllBytes(Path.Join(contentRoot, name));
+            return new { name, sha256 = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant() };
+        });
+        var manifest = new { schemaVersion = 1, environment = "Development", files };
+        File.WriteAllText(Path.Join(contentRoot, "workbench.startup-artifact.json"), JsonSerializer.Serialize(manifest));
+    }
+
     /// <summary>
-    /// Test-owned receipt. A private byte snapshot is useful for refusing changed fixtures, but Workbench
-    /// neither consumes it nor attests that its root/shell configuration was bound to it.
+    /// Test-owned receipt over all fixture files, process overrides and arguments. The child separately validates
+    /// its declared startup artifact when the strict probe is enabled.
     /// </summary>
     private sealed class TestOwnedArtifactReceipt
     {
         private readonly Dictionary<string, byte[]> _files;
         private readonly Dictionary<string, string> _overrides;
+        private readonly string[] _arguments;
         private readonly string _environment;
 
         private TestOwnedArtifactReceipt(string environment, IReadOnlyDictionary<string, string> overrides,
+            IReadOnlyList<string> arguments,
             Dictionary<string, byte[]> files)
         {
             Id = Guid.NewGuid().ToString("N");
             _environment = environment;
             _overrides = new Dictionary<string, string>(overrides, StringComparer.Ordinal);
+            _arguments = arguments.ToArray();
             _files = files;
         }
 
         public string Id { get; }
 
-        public static TestOwnedArtifactReceipt Capture(string directory, WorkbenchShell shell) =>
-            new(shell.Environment, shell.Settings, BundleFiles.ToDictionary(
+        public static TestOwnedArtifactReceipt Capture(
+            string directory,
+            WorkbenchShell shell,
+            IReadOnlyList<string>? arguments = null) =>
+            new(shell.Environment, shell.Settings, arguments ?? [], BundleFiles.ToDictionary(
                 file => file, file => File.ReadAllBytes(Path.Join(directory, file)), StringComparer.Ordinal));
 
-        public Task<WorkbenchProcess> LaunchAsync(string label, string directory, WorkbenchShell shell)
+        public Task<WorkbenchProcess> LaunchAsync(
+            string label,
+            string directory,
+            WorkbenchShell shell,
+            Action<string>? prepareContentRoot = null,
+            IReadOnlyList<string>? additionalArguments = null)
         {
-            RequireMatch(label, directory, shell);
+            RequireMatch(label, directory, shell, additionalArguments);
             return WorkbenchProcess.StartAsync(shell, contentRoot =>
             {
-                RequireMatch(label, directory, shell);
+                RequireMatch(label, directory, shell, additionalArguments);
                 CopyBundle(directory, contentRoot);
-                RequireMatch(label, contentRoot, shell);
-            });
+                RequireMatch(label, contentRoot, shell, additionalArguments);
+                prepareContentRoot?.Invoke(contentRoot);
+            }, additionalArguments: additionalArguments);
         }
 
-        private void RequireMatch(string label, string directory, WorkbenchShell shell)
+        private void RequireMatch(
+            string label,
+            string directory,
+            WorkbenchShell shell,
+            IReadOnlyList<string>? arguments = null)
         {
-            if (!Matches(label, directory, shell))
+            if (!Matches(label, directory, shell, arguments))
                 throw new InvalidOperationException("The test deployer refused a mismatched artifact receipt.");
         }
 
-        public bool Matches(string label, string directory, WorkbenchShell shell) =>
+        public bool Matches(
+            string label,
+            string directory,
+            WorkbenchShell shell,
+            IReadOnlyList<string>? arguments = null) =>
             label == Id && Directory.Exists(directory) && shell.Environment == _environment &&
+            (arguments ?? []).SequenceEqual(_arguments, StringComparer.Ordinal) &&
             BundleFiles.ToHashSet(StringComparer.Ordinal).SetEquals(
                 Directory.GetFiles(directory, "*.json").Select(path => Path.GetFileName(path)!)) &&
             shell.Settings.Count == _overrides.Count &&
