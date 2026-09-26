@@ -4,13 +4,18 @@ using Xunit;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// No <c>.csproj</c> under <c>src/</c> may hand-edit a version-defining property (ADR 0067, "No
-/// <c>&lt;Version&gt;</c> element is hand-edited anywhere"; spec 150 FR-005, FR-010: "the version is
-/// defined in one place"). This covers the whole class MSBuild recognizes for that purpose:
-/// <c>Version</c>, <c>VersionPrefix</c>, <c>VersionSuffix</c>, <c>PackageVersion</c>,
-/// <c>AssemblyVersion</c>, <c>FileVersion</c> and <c>InformationalVersion</c>, as properties. A
-/// <c>&lt;PackageVersion Include="…"&gt;</c> item is central package management (it belongs in
-/// <c>Directory.Packages.props</c>, not a csproj) and is never flagged.
+/// No <c>.csproj</c> under <c>src/</c> may hand-edit a property that determines the package version.
+/// ADR 0067 says no <c>&lt;Version&gt;</c> element is hand-edited. In the .NET SDK, <c>Version</c>
+/// defaults to <c>VersionPrefix[-VersionSuffix]</c>, and the <c>PackageVersion</c> property defaults
+/// to <c>Version</c>; a literal in any of those three is a hand-edited package version by another
+/// name, which is why they're covered too. A <c>&lt;PackageVersion Include="…"&gt;</c> item is central
+/// package management (it belongs in <c>Directory.Packages.props</c>, not a csproj) and is never
+/// flagged.
+/// <para>
+/// This guard scans project files under <c>src/</c>. Spec 150 FR-010 names shared MSBuild properties
+/// as the one place for major and minor, which #2080 will introduce, so shared build files such as
+/// <c>Directory.Build.props</c> are deliberately not scanned here.
+/// </para>
 /// <para>
 /// These literals never reached a published package: <c>packages.yml</c> passes a global
 /// <c>/p:Version</c> when it packs, which overrides any project-local value at that step. Every other
@@ -30,9 +35,6 @@ public sealed class NoLiteralProjectVersionGuardTests
         "VersionPrefix",
         "VersionSuffix",
         "PackageVersion",
-        "AssemblyVersion",
-        "FileVersion",
-        "InformationalVersion",
     ];
 
     [Fact]
@@ -68,54 +70,33 @@ public sealed class NoLiteralProjectVersionGuardTests
     [InlineData("VersionPrefix")]
     [InlineData("VersionSuffix")]
     [InlineData("PackageVersion")]
-    [InlineData("AssemblyVersion")]
-    [InlineData("FileVersion")]
-    [InlineData("InformationalVersion")]
     public void Guard_detects_a_synthetic_literal_version_property(string property)
     {
-        var directory = Directory.CreateTempSubdirectory(nameof(NoLiteralProjectVersionGuardTests));
-        try
-        {
-            var violatingProject = Path.Combine(directory.FullName, "Violating.csproj");
-            File.WriteAllText(violatingProject,
-                $"""
-                <Project Sdk="Microsoft.NET.Sdk">
-                  <PropertyGroup>
-                    <{property}>0.0.1-local</{property}>
-                  </PropertyGroup>
-                </Project>
-                """);
+        var declared = DeclaredVersionPropertiesOfTempProject(
+            $"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <{property}>0.0.1-local</{property}>
+              </PropertyGroup>
+            </Project>
+            """);
 
-            Assert.Contains(property, DeclaredVersionProperties(violatingProject));
-        }
-        finally
-        {
-            directory.Delete(recursive: true);
-        }
+        Assert.Contains(property, declared);
     }
 
     [Fact]
     public void Guard_does_not_flag_a_clean_project()
     {
-        var directory = Directory.CreateTempSubdirectory(nameof(NoLiteralProjectVersionGuardTests));
-        try
-        {
-            var cleanProject = Path.Combine(directory.FullName, "Clean.csproj");
-            File.WriteAllText(cleanProject,
-                """
-                <Project Sdk="Microsoft.NET.Sdk">
-                  <PropertyGroup>
-                    <TargetFramework>net10.0</TargetFramework>
-                  </PropertyGroup>
-                </Project>
-                """);
+        var declared = DeclaredVersionPropertiesOfTempProject(
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
 
-            Assert.Empty(DeclaredVersionProperties(cleanProject));
-        }
-        finally
-        {
-            directory.Delete(recursive: true);
-        }
+        Assert.Empty(declared);
     }
 
     /// <summary>
@@ -125,20 +106,30 @@ public sealed class NoLiteralProjectVersionGuardTests
     [Fact]
     public void Guard_does_not_flag_a_central_package_management_item()
     {
+        var declared = DeclaredVersionPropertiesOfTempProject(
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup>
+                <PackageVersion Include="Some.Package" Version="1.2.3" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        Assert.Empty(declared);
+    }
+
+    /// <summary>
+    /// Writes <paramref name="projectXml"/> to a temporary project file, evaluates the guard's
+    /// detection against it, and cleans up the temp directory before returning.
+    /// </summary>
+    private static string[] DeclaredVersionPropertiesOfTempProject(string projectXml)
+    {
         var directory = Directory.CreateTempSubdirectory(nameof(NoLiteralProjectVersionGuardTests));
         try
         {
-            var itemProject = Path.Combine(directory.FullName, "CentralPackageManagement.csproj");
-            File.WriteAllText(itemProject,
-                """
-                <Project Sdk="Microsoft.NET.Sdk">
-                  <ItemGroup>
-                    <PackageVersion Include="Some.Package" Version="1.2.3" />
-                  </ItemGroup>
-                </Project>
-                """);
-
-            Assert.Empty(DeclaredVersionProperties(itemProject));
+            var projectPath = Path.Combine(directory.FullName, "Project.csproj");
+            File.WriteAllText(projectPath, projectXml);
+            return DeclaredVersionProperties(projectPath).ToArray();
         }
         finally
         {
