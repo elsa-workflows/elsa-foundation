@@ -1,5 +1,4 @@
 using Elsa.Api.AspNetCore;
-using System.Xml.Linq;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -111,11 +110,8 @@ public sealed class HostEndpointMetadataTests
 
         while (pending.TryDequeue(out var projectPath))
         {
-            var projectDirectory = Path.GetDirectoryName(projectPath)!;
-            var document = XDocument.Load(projectPath);
-            foreach (var include in document.Descendants("ProjectReference").Select(element => element.Attribute("Include")?.Value).OfType<string>())
+            foreach (var referencedProjectPath in ProjectGraph.ReferencedProjectPaths(projectPath))
             {
-                var referencedProjectPath = Path.GetFullPath(Path.Combine(projectDirectory, include.Replace('\\', Path.DirectorySeparatorChar)));
                 if (discovered.Add(referencedProjectPath))
                     pending.Enqueue(referencedProjectPath);
             }
