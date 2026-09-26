@@ -24,8 +24,8 @@
   <!--
     Version line, ADR 0067. VersionLines.props holds the one reviewed Line A list; this turns it into
     a per-project signal every project can read from its own $(ElsaVersionLine), without repeating the
-    list or re-parsing it per project. #2078 reads it to enable analyzers on Line A; #2080 reads it to
-    choose the version property.
+    list or re-parsing it per project. #2078 will read it to enable analyzers on Line A; #2080 will
+    read it to choose the version property.
 
     The membership check is a property function ($(...Contains(...))), not an item-list Condition,
     because outside a Target MSBuild rejects an item-list reference in a PropertyGroup Condition

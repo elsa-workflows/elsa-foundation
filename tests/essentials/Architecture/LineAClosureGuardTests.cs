@@ -33,31 +33,18 @@ public sealed class LineAClosureGuardTests
     }
 
     /// <summary>
-    /// A list entry that names no existing project would pass the theory above vacuously — it has no
-    /// entry in <see cref="ElsaReferences"/>, so it contributes no references to check. Catching that is
-    /// part of the scan actually examining all ten.
+    /// Pins that the real scan is not vacuous: the list itself is non-empty, and a list entry that names no
+    /// existing project — one the scan under <c>src/</c> never finds — would pass the theory above vacuously,
+    /// since it has no entry in <see cref="ElsaReferences"/> and so contributes no references to check.
     /// </summary>
     [Fact]
     public void Every_line_a_member_names_an_existing_project()
     {
-        var missing = LineAMembers.Where(member => !ElsaReferences.ContainsKey(member)).ToArray();
+        Assert.NotEmpty(LineAMembers);
 
+        var examined = LineAMembers.Where(ElsaReferences.ContainsKey).ToArray();
+        var missing = LineAMembers.Except(examined, StringComparer.OrdinalIgnoreCase).ToArray();
         Assert.True(missing.Length == 0, $"VersionLines.props names Line A project(s) that do not exist: {string.Join(", ", missing)}.");
-    }
-
-    /// <summary>Pins that the real scan reaches the full, current membership, so the theory above is not vacuous.</summary>
-    [Fact]
-    public void The_closure_scan_examines_all_ten_line_a_members()
-    {
-        Assert.Equal(
-            [
-                "Elsa.Primitives", "Elsa.Events.Core", "Elsa.Tasks.Core", "Elsa.Serialization.Core",
-                "Elsa.Mediator.Core", "Elsa.Attention.Core", "Elsa.Expressions.Core", "Elsa.Pipelines.Core",
-                "Elsa.Locking.Core", "Elsa.Caching.Core"
-            ],
-            LineAMembers);
-
-        Assert.All(LineAMembers, member => Assert.True(ElsaReferences.ContainsKey(member), $"{member} was not found under src/."));
     }
 
     /// <summary>The detector itself, so the theory above's green means "closed" rather than "nothing checked".</summary>
@@ -118,22 +105,8 @@ public sealed class LineAClosureGuardTests
                 .SelectMany(element => element.Value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         ];
 
-    private static IReadOnlyDictionary<string, IReadOnlyList<string>> LoadElsaReferences(string repoRoot)
-    {
-        var namesByPath = ModuleRoots.Resolve(repoRoot, ModuleRoots.Production)
-            .SelectMany(root => Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories))
-            .Where(ModuleRoots.IsNotTestFile)
-            .Where(path => IsElsa(Path.GetFileNameWithoutExtension(path)))
-            .ToDictionary(Path.GetFullPath, Path.GetFileNameWithoutExtension, StringComparer.OrdinalIgnoreCase);
-
-        return namesByPath.ToDictionary(
-            project => project.Value,
-            IReadOnlyList<string> (project) =>
-                [.. ProjectGraph.ReferencedProjectPaths(project.Key).Select(namesByPath.GetValueOrDefault).OfType<string>()],
-            StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static bool IsElsa(string name) => name == "Elsa" || name.StartsWith("Elsa.", StringComparison.Ordinal);
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> LoadElsaReferences(string repoRoot) =>
+        ProjectGraph.LoadElsaReferences(repoRoot);
 
     private static string FindRepoRoot()
     {

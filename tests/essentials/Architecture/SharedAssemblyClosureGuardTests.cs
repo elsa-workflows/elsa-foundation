@@ -48,7 +48,7 @@ public sealed class SharedAssemblyClosureGuardTests
     {
         var workbench = SharedAssemblies(ReadNuplane("Elsa.Workbench"));
         Assert.NotEmpty(Examined(workbench));
-        Assert.Equal(workbench.Where(IsElsa), Examined(workbench));
+        Assert.Equal(workbench.Where(ProjectGraph.IsElsa), Examined(workbench));
 
         // Elsa.Foundation.Host shares only its three CShells.*.Abstractions contracts today, so its closure holds
         // with nothing to examine. That is stated here rather than skipped: once it shares an Elsa assembly this
@@ -122,22 +122,7 @@ public sealed class SharedAssemblyClosureGuardTests
 
     private static IReadOnlyList<string> Examined(IReadOnlyList<string> shared) => [.. shared.Where(ElsaReferences.ContainsKey)];
 
-    private static bool IsElsa(string name) => name == "Elsa" || name.StartsWith("Elsa.", StringComparison.Ordinal);
-
-    private static IReadOnlyDictionary<string, IReadOnlyList<string>> LoadElsaReferences()
-    {
-        var namesByPath = ModuleRoots.Resolve(RepoRoot, ModuleRoots.Production)
-            .SelectMany(root => Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories))
-            .Where(ModuleRoots.IsNotTestFile)
-            .Where(path => IsElsa(Path.GetFileNameWithoutExtension(path)))
-            .ToDictionary(Path.GetFullPath, Path.GetFileNameWithoutExtension, StringComparer.OrdinalIgnoreCase);
-
-        return namesByPath.ToDictionary(
-            project => project.Value,
-            IReadOnlyList<string> (project) =>
-                [.. ProjectGraph.ReferencedProjectPaths(project.Key).Select(namesByPath.GetValueOrDefault).OfType<string>()],
-            StringComparer.OrdinalIgnoreCase);
-    }
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> LoadElsaReferences() => ProjectGraph.LoadElsaReferences(RepoRoot);
 
     private static string Report(string host, IReadOnlyDictionary<string, IReadOnlyList<string>> gaps) =>
         $"{host} shares Elsa assemblies whose Elsa project dependencies it does not share. A feed-loaded feature " +
