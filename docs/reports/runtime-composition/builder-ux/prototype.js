@@ -80,7 +80,7 @@ function featureRows(view, state, selected) {
   }
   if (state.source === "sample shells.json" && (!search || unknown.toLowerCase().includes(search) || "imported unchecked".includes(search))) {
     const row = document.createElement("div"); row.className = "feature-row";
-    row.innerHTML = `<div class="name">${unknown}<small>Preserved from sample · unknown to this fixture · unchecked</small></div><span class="badge warn">Read only</span>`;
+    row.innerHTML = `<div class="name">${unknown}<small>Synthetic sample marker · unknown value is not round-tripped by this mock</small></div><span class="badge warn">Unchecked</span>`;
     list.append(row);
   }
   target.append(list);
@@ -93,7 +93,7 @@ function render(view) {
   view.querySelectorAll("[data-count]").forEach(el => { el.textContent = `${selected.size} selected`; });
   view.querySelectorAll("[data-setting]").forEach(el => { el.value = String(state.capacity); });
   view.querySelectorAll("[data-setting-origin]").forEach(el => { el.textContent = state.source === "sample shells.json" ? `Sample source value 128 · candidate ${state.capacity === 128 ? "unchanged" : `override ${state.capacity}`} · proposed reviewed mapping` : `Fixture default 256 · candidate value ${state.capacity} · proposed reviewed mapping`; });
-  view.querySelectorAll("[data-unknown]").forEach(el => { el.textContent = state.source === "sample shells.json" ? "External AcmeAuditSink.FuturePolicy: opaque source value preserved in a real file bridge; unchecked and not editable here." : "No external setting in this new-draft fixture."; });
+  view.querySelectorAll("[data-unknown]").forEach(el => { el.textContent = state.source === "sample shells.json" ? "External AcmeAuditSink.FuturePolicy: the real file bridge should preserve its opaque value. This mock does not export or verify that value." : "No external setting in this new-draft fixture."; });
   view.querySelectorAll("[data-act]").forEach(button => {
     if (["profile", "diagnostics", "primary", "isolate"].includes(button.dataset.act)) {
       const selectedAction = { profile: state.profile, diagnostics: state.group, primary: state.primary, isolate: state.isolated }[button.dataset.act];
@@ -109,7 +109,7 @@ function render(view) {
   diagnostic.textContent = bindings.length ? `Explicit diagnostics bindings (${bindings.length}): PostgreSQL / ConnectionStrings:Diagnostics` : "Diagnostics: inherits the default unless explicitly bound";
   resource.append(diagnostic);
   const summary = view.querySelector("[data-summary]");
-  summary.innerHTML = `<span class="badge">${state.source}</span><span class="badge">${state.profile ? "Worker starter" : "Custom"}</span>${state.group ? '<span class="badge good">Diagnostics group</span>' : ''}${state.source === "sample shells.json" ? '<span class="badge warn">1 unknown preserved</span>' : ''}<ul class="summary-list"><li>${selected.size} exact features in the proposed set</li><li>${state.primary ? "Primary PostgreSQL reference set" : "No central resource chosen"}</li><li>${bindings.length} explicit diagnostics bindings</li><li>Cache capacity: ${state.capacity}${state.source === "sample shells.json" ? " (source: 128)" : ""}</li><li>Host and database evidence: unchecked</li></ul>`;
+  summary.innerHTML = `<span class="badge">${state.source}</span><span class="badge">${state.profile ? "Worker starter" : "Custom"}</span>${state.group ? '<span class="badge good">Diagnostics group</span>' : ''}${state.source === "sample shells.json" ? '<span class="badge warn">1 unknown unchecked</span>' : ''}<ul class="summary-list"><li>${selected.size} exact features in the proposed set</li><li>${state.primary ? "Primary PostgreSQL reference set" : "No central resource chosen"}</li><li>${bindings.length} explicit diagnostics bindings</li><li>Cache capacity: ${state.capacity}${state.source === "sample shells.json" ? " (source: 128)" : ""}</li><li>Host and database evidence: unchecked</li></ul>`;
   featureRows(view, state, selected);
   const feedback = view.querySelector("[data-feedback]");
   feedback.classList.toggle("blocked", Boolean(state.refusal));
@@ -134,7 +134,7 @@ function exportMock(view, state) {
     source: { kind: state.source, evidence: "synthetic fixture; no file or host was read" },
     intent: { startingProfile: state.profile ? "provisional-worker@1" : null, groups: state.group ? ["provisional-diagnostics-ef@1"] : [], explicitFeatureEdits: state.explicit },
     effective: { featureIds: selected, resources: state.primary ? { primary: { provider: "PostgreSql", connectionReference: "ConnectionStrings:Elsa" }, ...(state.isolated ? { diagnostics: { provider: "PostgreSql", connectionReference: "ConnectionStrings:Diagnostics" } } : {}) } : {}, featureBindings: effectiveBindings, reviewedSettingCandidate: { featureId: "WorkflowsRuntimeEntityFrameworkCore", path: "WorkflowExecutableCacheCapacity", value: state.capacity } },
-    preservedUnknownFixtureFeature: state.source === "sample shells.json" ? { id: unknown, settingPath: "FuturePolicy", value: "not exported by this research mock", preservation: "real file bridge would retain unchanged source content" } : null,
+    unknownSourceFixtureFeature: state.source === "sample shells.json" ? { id: unknown, settingPath: "FuturePolicy", valuePresentInMockExport: false, expectedRealBridgeBehavior: "retain unchanged source content" } : null,
     unchecked: ["running host", "package availability", "process overrides", "connection values", "provider connectivity", "database topology"]
   };
   state.lastExport = JSON.parse(JSON.stringify(state));
@@ -159,7 +159,7 @@ function act(view, action) {
   }
   state.refusal = action === "restore" || action === "remove-dependent" ? state.refusal : null;
   if (action === "reset") { const keep = state.lastExport; states[view.dataset.view] = fresh(); states[view.dataset.view].lastExport = keep; feedback.textContent = "New empty draft. This is a mock reset."; }
-  else if (action === "import") { Object.assign(state, { source: "sample shells.json", profile: false, group: false, primary: false, isolated: false, capacity: 128, explicit: {} }); feedback.textContent = "Loaded a synthetic sample snapshot; unknown AcmeAuditSink is preserved and unchecked. No real file or host was read."; }
+  else if (action === "import") { Object.assign(state, { source: "sample shells.json", profile: false, group: false, primary: false, isolated: false, capacity: 128, explicit: {} }); feedback.textContent = "Loaded a synthetic sample snapshot with an unknown AcmeAuditSink marker. Its value is not exported by this mock; no real file or host was read."; }
   else if (action === "profile") { state.profile = !state.profile; feedback.textContent = state.profile ? "Provisional Worker starter expanded; inspect its exact IDs and required Tasks." : "Worker starter removed. Explicit edits and imported selections remain."; }
   else if (action === "diagnostics") { state.group = !state.group; if (!state.group) state.isolated = false; feedback.textContent = state.group ? "Four diagnostics IDs added from a provisional flat group." : "Diagnostics group removed; no group-level resource rule remains."; }
   else if (action === "primary") { state.primary = !state.primary; if (!state.primary) state.isolated = false; feedback.textContent = state.primary ? "Named PostgreSQL primary reference selected; its value is not present here." : "Primary resource removed from mock draft."; }
@@ -172,7 +172,7 @@ function act(view, action) {
   else if (action === "export") { state.refusal = null; exportMock(view, state); return; }
   else if (action === "reopen") {
     if (!state.lastExport) feedback.textContent = "Nothing exported in this concept yet.";
-    else { const saved = state.lastExport; states[view.dataset.view] = { ...saved, lastExport: saved, refusal: null }; feedback.textContent = "Reopened the last mock export into this draft. No host was queried or changed."; }
+    else { const saved = state.lastExport; states[view.dataset.view] = { ...saved, lastExport: saved, refusal: null }; feedback.textContent = "Reopened the last mock draft, including its synthetic source marker. The unknown value was not round-tripped; no host was queried or changed."; }
   }
   render(view);
   if ((action === "restore" || action === "remove-dependent") && refusedFeature)
