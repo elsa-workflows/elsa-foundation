@@ -99,14 +99,7 @@ public sealed class CompositionHostAttestationProbeTests
                 Settings = new Dictionary<string, string> { [ReceiptOverrideKey] = overrideValue }
             };
             var receipt = TestOwnedArtifactReceipt.Capture(stagedBundle, shell);
-            Assert.True(receipt.Matches(receipt.Id, stagedBundle, shell));
-
-            await using var host = await WorkbenchProcess.StartAsync(shell, contentRoot =>
-            {
-                Assert.True(receipt.Matches(receipt.Id, stagedBundle, shell));
-                CopyBundle(stagedBundle, contentRoot);
-                Assert.True(receipt.Matches(receipt.Id, contentRoot, shell));
-            });
+            await using var host = await receipt.LaunchAsync(receipt.Id, stagedBundle, shell);
             Assert.True(await CorsAllowsAsync(host, origin));
             var blueprint = await host.ManagementClient.GetStringAsync("/_admin/shells/default/blueprint");
             Assert.Contains(overrideValue, blueprint, StringComparison.Ordinal);
@@ -130,7 +123,7 @@ public sealed class CompositionHostAttestationProbeTests
     }
 
     [Fact]
-    public void Test_deployer_refuses_changed_artifact_override_and_arbitrary_receipt_label()
+    public async Task Test_deployer_refuses_changed_artifact_override_and_arbitrary_receipt_label()
     {
         var stagedBundle = CreateBundle();
         var copiedBundle = Directory.CreateTempSubdirectory("elsa-receipt-copy-").FullName;
@@ -143,23 +136,25 @@ public sealed class CompositionHostAttestationProbeTests
             var receipt = TestOwnedArtifactReceipt.Capture(stagedBundle, shell);
             CopyBundle(stagedBundle, copiedBundle);
             Assert.True(receipt.Matches(receipt.Id, copiedBundle, shell));
-            Assert.False(receipt.Matches(Guid.NewGuid().ToString("N"), copiedBundle, shell));
-            Assert.False(receipt.Matches(receipt.Id, copiedBundle,
-                shell with { Settings = new Dictionary<string, string> { [ReceiptOverrideKey] = "842002" } }));
-            Assert.False(receipt.Matches(receipt.Id, copiedBundle,
-                shell with { Environment = "Staging" }));
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                receipt.LaunchAsync(Guid.NewGuid().ToString("N"), copiedBundle, shell));
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                receipt.LaunchAsync(receipt.Id, copiedBundle,
+                    shell with { Settings = new Dictionary<string, string> { [ReceiptOverrideKey] = "842002" } }));
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                receipt.LaunchAsync(receipt.Id, copiedBundle, shell with { Environment = "Staging" }));
 
             // A file-at-a-time copy across releases can be complete yet have root and shell
             // bytes from different revisions. The receipt covers the full set, including siblings.
             WorkbenchConfigurationFile.WriteValue(Path.Join(copiedBundle, "appsettings.Development.json"),
                 ["Cors", "AllowedOrigins", "0"], "https://other-studio.example.invalid");
-            Assert.False(receipt.Matches(receipt.Id, copiedBundle, shell));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => receipt.LaunchAsync(receipt.Id, copiedBundle, shell));
             CopyBundle(stagedBundle, copiedBundle);
             WriteSetting(Path.Join(copiedBundle, "shells.Staging.json"), 842003);
-            Assert.False(receipt.Matches(receipt.Id, copiedBundle, shell));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => receipt.LaunchAsync(receipt.Id, copiedBundle, shell));
             CopyBundle(stagedBundle, copiedBundle);
             WriteSetting(Path.Join(stagedBundle, "shells.Development.json"), 842004);
-            Assert.False(receipt.Matches(receipt.Id, stagedBundle, shell));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => receipt.LaunchAsync(receipt.Id, stagedBundle, shell));
         }
         finally
         {
@@ -375,6 +370,23 @@ public sealed class CompositionHostAttestationProbeTests
         public static TestOwnedArtifactReceipt Capture(string directory, WorkbenchShell shell) =>
             new(shell.Environment, shell.Settings, BundleFiles.ToDictionary(
                 file => file, file => File.ReadAllBytes(Path.Join(directory, file)), StringComparer.Ordinal));
+
+        public Task<WorkbenchProcess> LaunchAsync(string label, string directory, WorkbenchShell shell)
+        {
+            RequireMatch(label, directory, shell);
+            return WorkbenchProcess.StartAsync(shell, contentRoot =>
+            {
+                RequireMatch(label, directory, shell);
+                CopyBundle(directory, contentRoot);
+                RequireMatch(label, contentRoot, shell);
+            });
+        }
+
+        private void RequireMatch(string label, string directory, WorkbenchShell shell)
+        {
+            if (!Matches(label, directory, shell))
+                throw new InvalidOperationException("The test deployer refused a mismatched artifact receipt.");
+        }
 
         public bool Matches(string label, string directory, WorkbenchShell shell) =>
             label == Id && Directory.Exists(directory) && shell.Environment == _environment &&
