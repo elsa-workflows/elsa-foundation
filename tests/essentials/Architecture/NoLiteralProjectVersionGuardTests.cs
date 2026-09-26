@@ -127,7 +127,7 @@ public sealed class NoLiteralProjectVersionGuardTests
         var directory = Directory.CreateTempSubdirectory(nameof(NoLiteralProjectVersionGuardTests));
         try
         {
-            var projectPath = Path.Combine(directory.FullName, "Project.csproj");
+            var projectPath = Path.Join(directory.FullName, "Project.csproj");
             File.WriteAllText(projectPath, projectXml);
             return DeclaredVersionProperties(projectPath).ToArray();
         }
@@ -158,7 +158,7 @@ public sealed class NoLiteralProjectVersionGuardTests
     private static string FindRepoRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
+        while (directory is not null && !File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
             directory = directory.Parent;
 
         return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
