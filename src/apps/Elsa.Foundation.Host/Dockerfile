@@ -24,8 +24,10 @@ WORKDIR /src
 # Repo-root build configuration first, so the restore layer caches well.
 # Directory.Packages.props carries central (and transitively pinned) versions;
 # NuGet.config carries the feed list + packageSourceMapping, so restore is fully
-# self-contained and needs no user-level NuGet config.
-COPY Directory.Build.props Directory.Packages.props NuGet.config ./
+# self-contained and needs no user-level NuGet config. *.props rather than names,
+# because Directory.Build.props imports sibling root props (VersionLines.props) and
+# restore ignores a missing import -- see the same step in the Workbench Dockerfile.
+COPY *.props NuGet.config ./
 
 # Restore inputs: the host plus its shared endpoint-metadata project.
 COPY src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj src/apps/Elsa.Foundation.Host/

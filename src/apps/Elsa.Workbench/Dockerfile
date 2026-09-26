@@ -49,13 +49,15 @@ ARG TARGETARCH
 # without it the project files below have no target framework. This repo has no
 # root Directory.Build.targets.
 #
+# *.props, not a list of names: Directory.Build.props imports sibling root props
+# (VersionLines.props, ADR 0067), and a missing one does not fail here -- restore
+# ignores missing imports, so it silently restores the wrong graph and only the
+# --no-restore publish below dies with MSB4019.
+#
 # NuGet.config is the repo-root config. Its packageSourceMapping maps every
 # package the solution uses to an explicit source, so restore is fully
 # self-contained here and needs no user-level NuGet config fallback.
-COPY Directory.Build.props ./
-COPY Directory.Packages.props ./
-COPY NuGet.config ./
-COPY Elsa.Server.slnx ./
+COPY *.props NuGet.config Elsa.Server.slnx ./
 
 # Copy only restore inputs while preserving their source-tree paths. Ordinary source
 # changes no longer invalidate the expensive RID-specific restore layer. The recursive
