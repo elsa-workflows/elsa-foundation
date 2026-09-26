@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -512,8 +513,7 @@ public sealed partial class ArchitectureGuardTests
 
         var attributeViolations = ProjectFiles()
             .SelectMany(project => Directory.EnumerateFiles(Path.GetDirectoryName(project.FullPath)!, "*.cs", SearchOption.AllDirectories)
-                .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") &&
-                               !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+                .Where(file => !IsBuildOutput(file))
                 .Where(file => AssemblyInternalsVisibleToPattern.IsMatch(StripCommentsAndStringLiterals(File.ReadAllText(file))))
                 .Select(file => $"{project.Name} -> [assembly: InternalsVisibleTo] in {Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}"));
 
@@ -543,7 +543,7 @@ public sealed partial class ArchitectureGuardTests
     public void Pruned_unused_public_contracts_do_not_reappear_in_production_source()
     {
         var violations = ModuleSourceFiles()
-            .Where(file => !IsGeneratedScratchFile(file) && !IsBuildArtifactFile(file))
+            .Where(file => !IsGeneratedScratchFile(file) && !IsBuildOutput(file))
             .SelectMany(file => FindPrunedPublicContractNames(File.ReadAllText(file))
                 .Select(name => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {name}"))
             .Distinct()
@@ -601,7 +601,7 @@ public sealed partial class ArchitectureGuardTests
         ];
 
         var violations = ModuleSourceFiles()
-            .Where(file => !IsBuildArtifactFile(file))
+            .Where(file => !IsBuildOutput(file))
             .SelectMany(file =>
             {
                 var code = StripCommentsAndStringLiterals(File.ReadAllText(file));
@@ -642,7 +642,7 @@ public sealed partial class ArchitectureGuardTests
         var onPrefixedDeclaration = new Regex(@"\b(?:class|record|struct)\s+(On[A-Z]\w*)", RegexOptions.Compiled);
 
         var violations = ModuleSourceFiles()
-            .Where(file => !IsBuildArtifactFile(file))
+            .Where(file => !IsBuildOutput(file))
             .SelectMany(file =>
             {
                 var code = File.ReadAllText(file);
@@ -667,14 +667,6 @@ public sealed partial class ArchitectureGuardTests
     // output cannot look like a reintroduced public contract.
     private static bool IsGeneratedScratchFile(string filePath) =>
         filePath.Replace(Path.DirectorySeparatorChar, '/').Contains("/extension-builder/projects/", StringComparison.Ordinal);
-
-    // Build output under src/**/obj and src/**/bin (AssemblyInfo, GlobalUsings.g.cs, EF/source-generator
-    // scaffolds) is not source; scanning it would make a token sweep depend on build state.
-    private static bool IsBuildArtifactFile(string filePath)
-    {
-        var normalized = filePath.Replace(Path.DirectorySeparatorChar, '/');
-        return normalized.Contains("/obj/", StringComparison.Ordinal) || normalized.Contains("/bin/", StringComparison.Ordinal);
-    }
 
     private static IReadOnlyList<string> FindPrunedPublicContractNames(string source) =>
         PrunedPublicContractDeclarationPattern.Matches(StripCommentsAndStringLiterals(source))
@@ -1150,23 +1142,6 @@ public sealed partial class ArchitectureGuardTests
             directory = Path.GetDirectoryName(directory)!.Replace('\\', '/');
 
         return $"/{directory}/";
-    }
-
-    private static string RepoRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory is not null)
-            {
-                if (File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
-                    return directory.FullName;
-
-                directory = directory.Parent;
-            }
-
-            throw new DirectoryNotFoundException("Could not find repository root.");
-        }
     }
 
     private sealed record ProjectInfo(string Name, string FullPath, string RelativePath)

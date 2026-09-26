@@ -1,12 +1,12 @@
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
 public sealed class DispatchWorkflowArchitectureTests
 {
-    private static readonly string RepoRoot = FindRepoRoot();
     private static readonly string DispatchRoot = Path.Combine(RepoRoot, "src", "essentials", "Activities", "DispatchWorkflow");
 
     [Fact]
@@ -56,18 +56,5 @@ public sealed class DispatchWorkflowArchitectureTests
             .ToArray();
 
         Assert.True(violations.Length == 0, string.Join(Environment.NewLine, violations));
-    }
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
-                return directory.FullName;
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate the repository root from the test output directory.");
     }
 }

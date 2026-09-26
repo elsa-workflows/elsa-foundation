@@ -1,5 +1,6 @@
 using Xunit;
 using static Elsa.Architecture.Tests.NuplaneHostSettings;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 

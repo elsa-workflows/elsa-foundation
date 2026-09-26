@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -229,7 +230,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
             .SelectMany(prefix => Directory.EnumerateFiles(
                 RepoPath(prefix.TrimEnd('/').Split('/')), "*.csproj", SearchOption.AllDirectories))
             .Select(path => Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/'))
-            .Where(path => !path.Contains("/obj/", StringComparison.Ordinal) && !path.Contains("/bin/", StringComparison.Ordinal))
+            .Where(path => !IsBuildOutput(path))
             .Order(StringComparer.Ordinal)
             .ToArray();
         Assert.Equal(EfCoreDependencyGuardTests.Adr0072SecretsEfPilot.ProjectPaths, projects);
@@ -321,7 +322,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         var actual = EfCoreDependencyGuardTests.Adr0072SecretsEfPilot.SurfacePathPrefixes
             .SelectMany(prefix => Directory.EnumerateFiles(RepoPath(prefix.TrimEnd('/').Split('/')), "*.cs", SearchOption.AllDirectories)
                 .Select(path => Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/')))
-            .Where(path => !path.Contains("/obj/", StringComparison.Ordinal) && !path.Contains("/bin/", StringComparison.Ordinal))
+            .Where(path => !IsBuildOutput(path))
             .Order(StringComparer.Ordinal)
             .ToArray();
         Assert.Equal(PilotSources, actual);
@@ -378,20 +379,4 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
             .ToArray();
 
     private static string RepoPath(params string[] segments) => Path.Join([RepoRoot, ..segments]);
-
-    private static string RepoRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory is not null)
-            {
-                if (File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
-                    return directory.FullName;
-                directory = directory.Parent;
-            }
-
-            throw new DirectoryNotFoundException("Could not find repository root.");
-        }
-    }
 }

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -9,8 +10,6 @@ namespace Elsa.Architecture.Tests;
 /// </summary>
 internal static class NuplaneHostSettings
 {
-    internal static string RepoRoot { get; } = FindRepoRoot();
-
     /// <summary>Every host under <c>src/apps</c> whose <c>appsettings.json</c> shares at least one assembly, in ordinal order.</summary>
     internal static IEnumerable<string> HostsThatShareAssemblies() =>
         Directory.EnumerateDirectories(Path.Join(RepoRoot, "src", "apps"))
@@ -33,13 +32,4 @@ internal static class NuplaneHostSettings
             .Select(entry => entry["Name"])
             .OfType<string>()
     ];
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
-            directory = directory.Parent;
-
-        return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
-    }
 }

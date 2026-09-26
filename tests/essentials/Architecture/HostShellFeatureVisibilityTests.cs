@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -40,7 +41,7 @@ public sealed class HostShellFeatureVisibilityTests
         // Both module roots (#1815): a feature declared by an optional module must be public too, and a
         // src-only sweep would stop checking it the moment that module moved out.
         var declarations = ModuleRoots.SourceFiles(RepoRoot, ModuleRoots.Production)
-            .Where(file => !IsGeneratedOutput(file))
+            .Where(file => !IsBuildOutput(file))
             .SelectMany(file => FeatureDeclaration.Matches(File.ReadAllText(file))
                 .Select(match => (
                     IsPublic: match.Groups["modifiers"].Value.Contains("public", StringComparison.Ordinal),
@@ -71,7 +72,7 @@ public sealed class HostShellFeatureVisibilityTests
     {
         var webFeatures = ModuleRoots
             .ProductionSourceFiles(RepoRoot)
-            .Where(file => !IsGeneratedOutput(file))
+            .Where(file => !IsBuildOutput(file))
             .SelectMany(file => DirectWebFeatureDeclaration.Matches(File.ReadAllText(file))
                 .Select(match => match.Groups["name"].Value))
             .Distinct(StringComparer.Ordinal)
@@ -85,20 +86,5 @@ public sealed class HostShellFeatureVisibilityTests
             Assert.Contains(feature, featureMap, StringComparison.Ordinal);
             Assert.Contains(feature, dependencyMap, StringComparison.Ordinal);
         });
-    }
-
-    private static bool IsGeneratedOutput(string file) =>
-        file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
-        file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
-
-    private static string RepoRoot { get; } = FindRepoRoot();
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
-            directory = directory.Parent;
-
-        return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
     }
 }

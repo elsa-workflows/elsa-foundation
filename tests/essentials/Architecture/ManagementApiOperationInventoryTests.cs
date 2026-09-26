@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Xunit;
 using YamlDotNet.RepresentationModel;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -99,17 +100,6 @@ public sealed partial class ManagementApiOperationInventoryTests
 
     private static FormerFacadeOperation Removed(string verb, string path, string rationale) =>
         new(verb, path, null, null, rationale);
-
-    private static string RepoRoot { get; } = FindRepoRoot();
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
-            directory = directory.Parent;
-
-        return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
-    }
 
     [GeneratedRegex("group\\.Map(Get|Post|Put|Patch|Delete)\\(\"([^\"]+)\"")]
     private static partial Regex FacadeRouteRegistration();

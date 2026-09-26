@@ -58,6 +58,7 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -409,22 +410,6 @@ public sealed class DomainManagementApiCompositionTests
 
     private static string StockServerConfigurationPath =>
         Path.Combine(RepoRoot, "src", "apps", "Elsa.Workbench", "shells.json");
-
-    private static string RepoRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory is not null)
-            {
-                if (File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
-                    return directory.FullName;
-                directory = directory.Parent;
-            }
-
-            throw new DirectoryNotFoundException("Could not find repository root.");
-        }
-    }
 
     [ShellFeature(name: "ApiCapabilities")]
     public sealed class ApiCapabilitiesDependencyFeature : IShellFeature

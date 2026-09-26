@@ -9,6 +9,7 @@ using Elsa3.Models;
 using System.Collections.ObjectModel;
 using System.Xml.Linq;
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -278,26 +279,6 @@ public sealed class Elsa3MigrationBoundaryTests
             mapper,
             new Elsa3MemoryReferenceGraph(lookup),
             new Elsa3ValueFlowLowerer(new Elsa3ExpressionRewriter()));
-    }
-
-    private static bool IsBuildOutput(string path) =>
-        path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
-        path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
-
-    private static string RepoRoot { get; } = FindRepoRoot();
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
-                return directory.FullName;
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not find repository root.");
     }
 
     private sealed class ThrowingWorkflowDefinitionVersionFactory : IWorkflowDefinitionVersionFactory
