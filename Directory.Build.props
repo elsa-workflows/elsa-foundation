@@ -59,11 +59,12 @@
     pack - instead of silently acting on the wrong line until someone happens to inspect the property.
     GenerateNuspec is there because packages.yml packs with dotnet pack's no-build flag, in a separate
     invocation after building, which never runs BeforeBuild, and #2080 will read $(ElsaVersionLine) at
-    pack time, so a pack-only /p: override must be caught too; running the target twice in a normal build-
-    then-pack is harmless. It lives here, in this .props file, rather than in a Directory.Build.targets,
-    because a target can be defined in a .props file - keeping the check beside the computation it
-    verifies is the point - and because a Directory.Build.targets would be skipped by any nested
-    Directory.Build.targets that forgets to import it, whereas every project already imports this file.
+    pack time, so a pack-only /p: override must be caught too; within one invocation MSBuild runs it once,
+    and a build followed by a separate no-build pack simply checks twice. It lives here, in this .props
+    file, rather than in a Directory.Build.targets, because a target can be defined in a .props file -
+    keeping the check beside the computation it verifies is the point - and because a Directory.Build.targets
+    would be skipped by any nested Directory.Build.targets that forgets to import it, whereas every project
+    already imports this file.
     tests/essentials/Architecture/VersionLineBuildCheckTests.cs proves it, including the /p: cases the
     static scan cannot see.
   -->

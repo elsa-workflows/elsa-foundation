@@ -13,9 +13,9 @@ namespace Elsa.Architecture.Tests;
 /// file outside <c>src/</c> and <c>tests/</c>; this suite spawns real <c>dotnet msbuild</c> processes against
 /// small fixture projects that import the real root <c>Directory.Build.props</c> (or, for one case, a copy
 /// of it paired with a deliberately broken <c>VersionLines.props</c>), so it exercises the actual
-/// <c>BeforeTargets</c> wiring, the actual <c>/p:</c> handling for both properties, and the actual
-/// <c>XmlPeek</c> comparison — including the case where <c>XmlPeek</c> itself reads nothing
-/// (<c>ELSAVL003</c>) — rather than a description of them.
+/// <c>BeforeTargets</c> wiring for both the <c>BeforeBuild</c> and <c>GenerateNuspec</c> hooks, the actual
+/// <c>/p:</c> handling for both properties, and the actual <c>XmlPeek</c> comparison — including the case
+/// where <c>XmlPeek</c> itself reads nothing (<c>ELSAVL003</c>) — rather than a description of them.
 /// </summary>
 public sealed class VersionLineBuildCheckTests
 {
@@ -34,6 +34,35 @@ public sealed class VersionLineBuildCheckTests
         var (exitCode, output) = RunBuild(VersionLines.LineAMembers(RepoRoot)[0]);
 
         Assert.True(exitCode == 0, $"build failed with exit {exitCode}:\n{output}");
+    }
+
+    /// <summary>
+    /// The <c>GenerateNuspec</c> hook does not reject a clean project, so packing a project that agrees with
+    /// <c>VersionLines.props</c> is unaffected. <see cref="A_pack_only_override_is_caught"/> is what proves the
+    /// hook is wired at all.
+    /// </summary>
+    [Fact]
+    public void A_clean_line_B_project_packs()
+    {
+        var (exitCode, output) = RunBuild("Fixture.LineB", target: "GenerateNuspec");
+
+        Assert.True(exitCode == 0, $"pack failed with exit {exitCode}:\n{output}");
+    }
+
+    /// <summary>
+    /// Same <c>/p:ElsaVersionLine=A</c> override as the matching <see cref="MismatchCases"/> case, but through
+    /// the <c>GenerateNuspec</c> hook instead of <c>BeforeBuild</c>. Mirrors packages.yml's separate <c>dotnet pack --no-build</c>
+    /// invocation, which never runs <c>BeforeBuild</c>, so a pack-only <c>/p:ElsaVersionLine</c> override
+    /// would otherwise sail through undetected. The fixture's own <c>GenerateNuspec</c> target stands in
+    /// for NuGet's real one; this proves the wiring, not the SDK's target of the same name.
+    /// </summary>
+    [Fact]
+    public void A_pack_only_override_is_caught()
+    {
+        var (exitCode, output) = RunBuild("Fixture.LineB", globalProperties: ["ElsaVersionLine=A"], target: "GenerateNuspec");
+
+        Assert.True(exitCode != 0, $"expected a build failure but it succeeded:\n{output}");
+        Assert.Contains("ELSAVL001", output);
     }
 
     [Theory]
@@ -107,7 +136,7 @@ public sealed class VersionLineBuildCheckTests
     }
 
     /// <summary>
-    /// Without a namespace-qualified <c>VersionLines.props</c>, MSBuild still imports the file just fine, but
+    /// With a namespace-qualified <c>VersionLines.props</c>, MSBuild still imports the file just fine, but
     /// the namespace-less <c>XmlPeek</c> query in <c>ElsaVerifyVersionLine</c> then matches nothing against a
     /// namespaced document, so <c>_ElsaReviewedLineAMembers</c> comes back empty and the target raises
     /// <c>ELSAVL003</c>. This is what keeps <c>ELSAVL003</c> honest: without it, deleting that <c>Error</c>
@@ -143,11 +172,13 @@ public sealed class VersionLineBuildCheckTests
     /// Writes a minimal, SDK-less fixture project (no restore needed, about a second per run) that imports
     /// <paramref name="directoryBuildPropsPath"/> — the real root <c>Directory.Build.props</c> by default, or
     /// a caller-supplied copy for <see cref="Xmlpeek_reading_nothing_fails_with_ELSAVL003"/> — and runs
-    /// <c>-t:BeforeBuild</c> against it, proving the <c>BeforeTargets</c> wiring itself, not just the target's
-    /// own body in isolation.
+    /// <c>-t:</c><paramref name="target"/> against it (<c>BeforeBuild</c> by default, or
+    /// <c>GenerateNuspec</c> to exercise the pack hook), proving the <c>BeforeTargets</c> wiring for that
+    /// hook itself, not just the target's own body in isolation.
     /// </summary>
     private static (int ExitCode, string Output) RunBuild(
-        string projectName, string body = "", string[]? globalProperties = null, string? directoryBuildPropsPath = null)
+        string projectName, string body = "", string[]? globalProperties = null, string? directoryBuildPropsPath = null,
+        string target = "BeforeBuild")
     {
         var directory = Directory.CreateTempSubdirectory(nameof(VersionLineBuildCheckTests));
         try
@@ -158,6 +189,7 @@ public sealed class VersionLineBuildCheckTests
                   <Import Project="{directoryBuildPropsPath ?? Path.Join(RepoRoot, "Directory.Build.props")}" />
                   {body}
                   <Target Name="BeforeBuild" />
+                  <Target Name="GenerateNuspec" />
                 </Project>
                 """);
 
@@ -169,7 +201,7 @@ public sealed class VersionLineBuildCheckTests
             };
             startInfo.ArgumentList.Add("msbuild");
             startInfo.ArgumentList.Add(projectPath);
-            startInfo.ArgumentList.Add("-t:BeforeBuild");
+            startInfo.ArgumentList.Add($"-t:{target}");
             startInfo.ArgumentList.Add("-nologo");
             startInfo.ArgumentList.Add("-nodeReuse:false");
             foreach (var property in globalProperties ?? [])
