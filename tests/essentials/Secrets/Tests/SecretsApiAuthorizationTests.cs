@@ -1,10 +1,11 @@
 using System.Net;
 using Elsa.Secrets.Tests.Support;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Elsa.Secrets.Tests;
 
-public sealed class SecretsApiAuthorizationTests
+public sealed class SecretsApiAuthorizationTests(ITestOutputHelper output)
 {
     public static IEnumerable<object[]> ReadAuthorizationCases() =>
     [
@@ -25,7 +26,7 @@ public sealed class SecretsApiAuthorizationTests
     public async Task Read_authorization_matrix_is_explicit_and_fail_closed(
         string _, string? identity, HttpStatusCode expected)
     {
-        await using var host = await SecretsCanaryHost.StartMigratedAsync();
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
 
         using var response = await host.Client.SendAsync(Request(HttpMethod.Get, "/secrets", identity));
 
@@ -45,7 +46,7 @@ public sealed class SecretsApiAuthorizationTests
     public async Task Lifecycle_actions_require_their_own_permission(
         string _, HttpMethod method, string path, string exactIdentity, string adjacentIdentity, string? body)
     {
-        await using var host = await SecretsCanaryHost.StartMigratedAsync();
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
 
         using var adjacent = await host.Client.SendAsync(Request(method, path, adjacentIdentity, body));
         using var exact = await host.Client.SendAsync(Request(method, path, exactIdentity, body));
@@ -57,7 +58,7 @@ public sealed class SecretsApiAuthorizationTests
     [Fact]
     public async Task Rejected_create_does_not_mutate_storage()
     {
-        await using var host = await SecretsCanaryHost.StartMigratedAsync();
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
         const string marker = "authorization-rejected-marker";
 
         using var response = await host.Client.SendAsync(JsonRequest(
@@ -74,7 +75,7 @@ public sealed class SecretsApiAuthorizationTests
     [Fact]
     public async Task Missing_tenant_is_forbidden_without_invoking_data_operations()
     {
-        await using var host = await SecretsCanaryHost.StartMigratedAsync();
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
 
         foreach (var (method, path, identity, body) in new[]
                  {
