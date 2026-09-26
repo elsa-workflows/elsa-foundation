@@ -2,15 +2,16 @@ using System.Net;
 using System.Text.Json;
 using Elsa.Secrets.Tests.Support;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Elsa.Secrets.Tests;
 
-public sealed class SecretsApiDisclosureTests
+public sealed class SecretsApiDisclosureTests(ITestOutputHelper output)
 {
     [Fact]
     public async Task Create_and_rotate_never_echo_sensitive_value_configuration_or_provider_markers()
     {
-        await using var host = await SecretsCanaryHost.StartMigratedAsync();
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
         const string valueMarker = "disclosure-value-marker";
         const string configurationMarker = "disclosure:configuration:marker";
         const string providerMarker = "disclosure-provider-marker";
@@ -42,7 +43,7 @@ public sealed class SecretsApiDisclosureTests
     [Fact]
     public async Task Problem_details_headers_and_openapi_projection_do_not_disclose_sensitive_markers()
     {
-        await using var host = await SecretsCanaryHost.StartMigratedAsync();
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
         const string valueMarker = "disclosure-error-value";
         const string configurationMarker = "disclosure:error:configuration";
         const string providerMarker = "disclosure-error-provider";
@@ -72,7 +73,7 @@ public sealed class SecretsApiDisclosureTests
     [Fact]
     public async Task Test_result_is_safe_and_never_contains_a_resolved_value()
     {
-        await using var host = await SecretsCanaryHost.StartMigratedAsync();
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
 
         using var test = await host.Client.SendAsync(Request(HttpMethod.Post, "/secrets/revoked.secret/test", "test|tenant-alpha"));
         Assert.Equal(HttpStatusCode.OK, test.StatusCode);

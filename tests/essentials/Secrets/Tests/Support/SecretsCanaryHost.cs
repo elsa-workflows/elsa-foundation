@@ -25,6 +25,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
+using Xunit.Abstractions;
 
 namespace Elsa.Secrets.Tests.Support;
 
@@ -65,9 +66,9 @@ public sealed class SecretsCanaryHost : IAsyncDisposable
     public static int PermissionEvaluatorCallsFor(string path) =>
         RecordingPermissionEvaluator.CallsFor(path);
 
-    public static Task<SecretsCanaryHost> StartMigratedAsync() => StartAsync();
+    public static Task<SecretsCanaryHost> StartMigratedAsync(ITestOutputHelper? output = null) => StartAsync(output);
 
-    private static async Task<SecretsCanaryHost> StartAsync()
+    private static async Task<SecretsCanaryHost> StartAsync(ITestOutputHelper? output)
     {
         IReadOnlyList<EndpointDataSource>? endpointDataSources = null;
         var host = new HostBuilder()
@@ -107,7 +108,9 @@ public sealed class SecretsCanaryHost : IAsyncDisposable
                     });
                     // The real host supplies the outer exception-to-HTTP boundary. Keep the plain
                     // TestServer deterministic as well so domain validation/conflict cases become
-                    // observable ProblemDetails instead of escaping through TestServer.
+                    // observable ProblemDetails instead of escaping through TestServer. The mapped
+                    // exception is written to the test output because the host has no logging, so a
+                    // 500 would otherwise hide its cause.
                     app.Use(async (context, next) =>
                     {
                         try
@@ -116,8 +119,10 @@ public sealed class SecretsCanaryHost : IAsyncDisposable
                         }
                         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
                         {
+                            var statusCode = exception is ArgumentException ? StatusCodes.Status400BadRequest : StatusCodes.Status500InternalServerError;
+                            output?.WriteLine($"SecretsCanaryHost mapped {context.Request.Method} {context.Request.Path} to {statusCode}: {exception}");
                             context.Response.Clear();
-                            context.Response.StatusCode = exception is ArgumentException ? StatusCodes.Status400BadRequest : StatusCodes.Status500InternalServerError;
+                            context.Response.StatusCode = statusCode;
                             context.Response.ContentType = "application/problem+json";
                             await context.Response.WriteAsJsonAsync(new
                             {

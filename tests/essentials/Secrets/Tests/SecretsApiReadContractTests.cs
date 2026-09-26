@@ -3,10 +3,11 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Elsa.Secrets.Tests.Support;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Elsa.Secrets.Tests;
 
-public sealed class SecretsApiReadContractTests
+public sealed class SecretsApiReadContractTests(ITestOutputHelper output)
 {
     private static readonly IReadOnlySet<string> ReadEndpoints = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -19,7 +20,7 @@ public sealed class SecretsApiReadContractTests
     [Fact]
     public async Task List_preserves_filters_paging_tenant_isolation_and_safe_metadata()
     {
-        await using var host = await SecretsCanaryHost.StartMigratedAsync();
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
         const string marker = "read-contract-sensitive-value";
 
         using (var create = await host.Client.SendAsync(JsonRequest(
@@ -49,7 +50,7 @@ public sealed class SecretsApiReadContractTests
     [Fact]
     public async Task Get_and_picker_are_tenant_scoped_and_deleted_records_are_not_discoverable()
     {
-        await using var host = await SecretsCanaryHost.StartMigratedAsync();
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
         const string name = "same-name-read-contract";
 
         using (var createA = await host.Client.SendAsync(JsonRequest(
@@ -100,7 +101,7 @@ public sealed class SecretsApiReadContractTests
     [Fact]
     public async Task Descriptors_are_read_authorized_but_do_not_require_a_tenant_claim()
     {
-        await using var host = await SecretsCanaryHost.StartMigratedAsync();
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
 
         using var response = await host.Client.SendAsync(Request(HttpMethod.Get, "/secrets/descriptors", "read|no-tenant"));
 
@@ -113,7 +114,7 @@ public sealed class SecretsApiReadContractTests
     [Fact]
     public async Task List_and_get_preserve_singular_filters_and_lifecycle_visibility()
     {
-        await using var host = await SecretsCanaryHost.StartMigratedAsync();
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
 
         using var revokedList = await host.Client.SendAsync(Request(
             HttpMethod.Get,

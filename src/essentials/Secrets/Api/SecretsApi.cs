@@ -378,6 +378,11 @@ public static class SecretsApi
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
         options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+
+        // These options are shared by every request, so they are frozen up front. Left mutable,
+        // Results.Json lazily assigns a resolver on first use, and that check-then-set races with
+        // concurrent serialization and throws InvalidOperationException.
+        options.MakeReadOnly(populateMissingResolver: true);
         return options;
     }
 
