@@ -174,7 +174,7 @@ public sealed class RetiredPersistenceFamilyGuardTests
     }
 
     private static bool IsBuildOrPackageOutput(string path) =>
-        IsBuildOutput(path) || path.Replace(Path.DirectorySeparatorChar, '/').Contains("/node_modules/", StringComparison.Ordinal);
+        IsBuildOutput(path) || HasSegment(RepoRoot, path, "node_modules");
 
     private static string FullPath(string relativePath) => Path.Combine(RepoRoot, relativePath);
 

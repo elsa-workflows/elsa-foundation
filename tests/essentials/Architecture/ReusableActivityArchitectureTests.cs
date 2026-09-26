@@ -115,8 +115,7 @@ public sealed class ReusableActivityArchitectureTests
         // catching the marker leaking back into core. Test code stays out of scope, as it was when src/ was
         // the only root and tests/ sat outside it: fixtures legitimately construct the legacy shape, and an
         // extension carries its own tests/ subtree inside the root being scanned.
-        var hits = ModuleRoots.SourceFiles(RepoRoot, ModuleRoots.Production)
-            .Where(file => !IsBuildOutput(file) && ModuleRoots.IsNotTestFile(file))
+        var hits = ModuleRoots.ProductionSourceFiles(RepoRoot)
             .Where(file => File.ReadAllText(file).Contains("UsableAsActivity", StringComparison.Ordinal))
             .Select(file => Path.GetRelativePath(RepoRoot, file).Replace('\\', '/'))
             .Order(StringComparer.Ordinal)

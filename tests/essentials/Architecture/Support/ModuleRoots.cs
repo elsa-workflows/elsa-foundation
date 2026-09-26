@@ -43,7 +43,9 @@ internal static class ModuleRoots
 
     /// <summary>Every <c>.cs</c> file under the given roots, excluding build output.</summary>
     internal static IEnumerable<string> SourceFiles(string repoRoot, params string[] roots) =>
-        Resolve(repoRoot, roots).SelectMany(directory => Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories));
+        Resolve(repoRoot, roots)
+            .SelectMany(directory => Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories))
+            .Where(file => !RepoPaths.IsBuildOutput(repoRoot, file));
 
     /// <summary>Shipping module source: <see cref="Production"/> with each extension's own tests left out.</summary>
     /// <remarks>
@@ -53,9 +55,14 @@ internal static class ModuleRoots
     /// reappearing — then fail on test code that was always allowed to do those things. Every such guard wants this.
     /// </remarks>
     internal static IEnumerable<string> ProductionSourceFiles(string repoRoot) =>
-        SourceFiles(repoRoot, Production).Where(IsNotTestFile);
+        SourceFiles(repoRoot, Production).Where(file => IsNotTestFile(repoRoot, file));
 
-    /// <summary>The same exclusion for a path that is not necessarily a <c>.cs</c> file.</summary>
-    internal static bool IsNotTestFile(string path) =>
-        !path.Contains($"{Path.DirectorySeparatorChar}tests{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
+    /// <summary>The same exclusion for a path that is not necessarily a <c>.cs</c> file, judged against <see cref="RepoPaths.RepoRoot"/>.</summary>
+    internal static bool IsNotTestFile(string path) => IsNotTestFile(RepoPaths.RepoRoot, path);
+
+    /// <summary>
+    /// The same exclusion for a path that is not necessarily a <c>.cs</c> file, judged by the path's location
+    /// relative to <paramref name="repoRoot"/> rather than the directories above the repository.
+    /// </summary>
+    internal static bool IsNotTestFile(string repoRoot, string path) => !RepoPaths.HasSegment(repoRoot, path, "tests");
 }
