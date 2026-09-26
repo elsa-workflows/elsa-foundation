@@ -97,7 +97,23 @@ builder.Configuration.AddJsonFile($"shells.{builder.Environment.EnvironmentName}
 builder.Configuration
     .AddEnvironmentVariables()
     .AddCommandLine(args);
-var configuration = builder.Configuration;
+// Experimental retained-artifact proof (#2072). The opt-in lane opens and verifies the declared
+// source bytes before any explicit Elsa root registration. The normal Workbench lane stays live.
+WorkbenchStartupArtifactContext? startupArtifact = null;
+if (Environment.GetEnvironmentVariable("ELSA_WORKBENCH_STARTUP_ARTIFACT_PROBE") == "1")
+{
+    if (!WorkbenchStartupArtifactContext.TryCapture(builder.Environment.ContentRootPath, builder.Environment.EnvironmentName,
+            args, out startupArtifact, out var refusalCode))
+    {
+        Console.Error.WriteLine(refusalCode);
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    builder.Services.AddSingleton(startupArtifact!);
+}
+
+var configuration = startupArtifact?.Configuration ?? builder.Configuration;
 
 // OpenIddict's protocol behavior is composed by the shell feature, but its vendor EF store is host-owned. Bind the
 // default shell's persistence settings at the root so the host-level initializer and every copied shell service

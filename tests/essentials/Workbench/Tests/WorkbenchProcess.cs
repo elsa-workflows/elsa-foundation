@@ -48,7 +48,8 @@ public sealed class WorkbenchProcess : IAsyncDisposable
     public static async Task<WorkbenchProcess> StartAsync(
         WorkbenchShell shell,
         Action<string>? prepareContentRoot = null,
-        bool waitForReady = true)
+        bool waitForReady = true,
+        IReadOnlyList<string>? additionalArguments = null)
     {
         var directory = Directory.CreateTempSubdirectory("elsa-workbench-smoke-").FullName;
         CopySourceFile(shell.ShellFile, directory, "shells.json");
@@ -79,9 +80,16 @@ public sealed class WorkbenchProcess : IAsyncDisposable
             ["Nuplane:Setup:StateFilePath"] = Path.Combine(directory, ".nuplane", "store-state.json")
         };
 
+        var arguments = new List<string>
+        {
+            WorkbenchBuild.AssemblyPath(), "--contentRoot", directory, "--urls", requestedAddress
+        };
+        if (additionalArguments is not null)
+            arguments.AddRange(additionalArguments);
+
         var startInfo = new ProcessStartInfo(
             Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet",
-            [WorkbenchBuild.AssemblyPath(), "--contentRoot", directory, "--urls", requestedAddress])
+            arguments)
         {
             WorkingDirectory = directory,
             RedirectStandardOutput = true,
