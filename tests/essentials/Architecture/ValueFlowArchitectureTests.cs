@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Xunit;
 using Xunit.Abstractions;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -199,30 +200,10 @@ public sealed partial class ValueFlowArchitectureTests(ITestOutputHelper output)
                     StringComparison.OrdinalIgnoreCase)));
     }
 
-    private static bool IsBuildOutput(string path) =>
-        path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
-        path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
-
     private static string RelativePath(string path) =>
         Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/');
 
     private static string NormalizePath(string path) => path.Replace('/', Path.DirectorySeparatorChar);
-
-    private static string RepoRoot { get; } = FindRepoRoot();
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
-                return directory.FullName;
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not find repository root.");
-    }
 
     [GeneratedRegex(
         "AssemblyQualifiedName|GetSimpleAssemblyQualifiedName|JsonPropertyName\\s*\\(\\s*\"typeName\"\\s*\\)|InputTypeMetadataKey\\s*=\\s*\"typeName\"|Assembly\\.GetName\\(\\)\\.Name",

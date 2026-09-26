@@ -1,12 +1,12 @@
 using System.Xml.Linq;
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
 /// <summary>Owns the distributed Runtime EF production-boundary and subtraction guard.</summary>
 public sealed class RuntimeExecutionPlacementPersistenceArchitectureTests
 {
-    private static readonly string RepoRoot = FindRepoRoot();
     private static readonly string ProductionRoot = Path.Join(
         RepoRoot, "src", "essentials", "Workflows", "Runtime", "Distributed", "Persistence", "EntityFrameworkCore");
 
@@ -75,13 +75,5 @@ public sealed class RuntimeExecutionPlacementPersistenceArchitectureTests
         Assert.DoesNotContain(source, text => text.Contains("Microsoft.EntityFrameworkCore.SqlServer", StringComparison.Ordinal));
         Assert.DoesNotContain(source, text => text.Contains("Npgsql.EntityFrameworkCore", StringComparison.Ordinal));
         Assert.DoesNotContain(source, text => text.Contains("MySql.EntityFrameworkCore", StringComparison.Ordinal));
-    }
-
-    private static string FindRepoRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-            if (File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
-                return directory.FullName;
-        throw new DirectoryNotFoundException("Could not find repository root.");
     }
 }

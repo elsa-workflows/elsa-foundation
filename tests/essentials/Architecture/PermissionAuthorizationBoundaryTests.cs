@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -283,19 +284,6 @@ public sealed class PermissionAuthorizationBoundaryTests
 
     private static string Format(PermissionAuthorizationDiagnostic diagnostic) =>
         $"{diagnostic.Code}: {diagnostic.Path}:{diagnostic.Line}: {diagnostic.Message}";
-
-    private static string RepoRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory is not null && !File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
-                directory = directory.Parent;
-
-            return directory?.FullName
-                   ?? throw new InvalidOperationException("Could not locate the Elsa Foundation repository root.");
-        }
-    }
 
     private sealed class TemporaryDirectory : IDisposable
     {

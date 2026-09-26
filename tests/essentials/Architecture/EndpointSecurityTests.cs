@@ -28,6 +28,7 @@ using NativeEndpoints;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -432,16 +433,6 @@ public sealed class EndpointSecurityTests
         MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText,
         _ => string.Empty
     };
-
-    private static string RepoRoot { get; } = FindRepoRoot();
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
-            directory = directory.Parent;
-        return directory?.FullName ?? throw new DirectoryNotFoundException("Could not locate the repository root.");
-    }
 
     private sealed class FixedEndpointDataSource(IReadOnlyList<Endpoint> endpoints) : EndpointDataSource
     {

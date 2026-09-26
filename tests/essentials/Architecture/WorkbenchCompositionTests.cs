@@ -1,4 +1,5 @@
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -35,16 +36,5 @@ public sealed class WorkbenchCompositionTests
             yield return $"{displayPath}: contains the host-owned workflow-management facade";
         if (source.Contains(MapFacadeMethodName, StringComparison.Ordinal))
             yield return $"{displayPath}: maps host-owned workflow-management endpoints";
-    }
-
-    private static string RepoRoot { get; } = FindRepoRoot();
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
-            directory = directory.Parent;
-
-        return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
     }
 }

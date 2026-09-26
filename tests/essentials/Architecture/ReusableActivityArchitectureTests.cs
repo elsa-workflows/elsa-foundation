@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -86,8 +87,7 @@ public sealed class ReusableActivityArchitectureTests
             .Select(FullPath)
             .SelectMany(root => Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
             .Where(file => Path.GetExtension(file) is ".cs" or ".csproj")
-            .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) &&
-                           !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Where(file => !IsBuildOutput(file))
             // Both module roots (#1815). src/ alone would quietly narrow this sweep as optional modules
             // move out; the Elsa3 exclusion below is what keeps the import boundary exempt, not the root.
             .Concat(ModuleRoots.Resolve(RepoRoot, ModuleRoots.Production)
@@ -116,9 +116,7 @@ public sealed class ReusableActivityArchitectureTests
         // the only root and tests/ sat outside it: fixtures legitimately construct the legacy shape, and an
         // extension carries its own tests/ subtree inside the root being scanned.
         var hits = ModuleRoots.SourceFiles(RepoRoot, ModuleRoots.Production)
-            .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) &&
-                           !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal) &&
-                           !file.Contains($"{Path.DirectorySeparatorChar}tests{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Where(file => !IsBuildOutput(file) && ModuleRoots.IsNotTestFile(file))
             .Where(file => File.ReadAllText(file).Contains("UsableAsActivity", StringComparison.Ordinal))
             .Select(file => Path.GetRelativePath(RepoRoot, file).Replace('\\', '/'))
             .Order(StringComparer.Ordinal)
@@ -194,21 +192,4 @@ public sealed class ReusableActivityArchitectureTests
 
     private static string FullPath(string relativePath) =>
         Path.Combine(RepoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
-
-    private static string RepoRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory is not null)
-            {
-                if (File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
-                    return directory.FullName;
-
-                directory = directory.Parent;
-            }
-
-            throw new DirectoryNotFoundException("Could not find repository root.");
-        }
-    }
 }

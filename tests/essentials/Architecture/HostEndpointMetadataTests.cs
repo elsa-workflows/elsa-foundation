@@ -1,5 +1,6 @@
 using Elsa.Api.AspNetCore;
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -118,17 +119,5 @@ public sealed class HostEndpointMetadataTests
         }
 
         return discovered;
-    }
-
-    private static string RepoRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
-                directory = directory.Parent;
-
-            return directory?.FullName ?? throw new InvalidOperationException("Could not locate repository root.");
-        }
     }
 }

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -16,8 +17,6 @@ namespace Elsa.Architecture.Tests;
 public sealed class DependencyMapTests
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
-
-    private static string RepoRoot { get; } = FindRepoRoot();
 
     private static IReadOnlyList<Node> Nodes { get; } = ReadNodes();
 
@@ -135,15 +134,6 @@ public sealed class DependencyMapTests
         return dataset.SchemaVersion == 1
             ? dataset.Nodes
             : throw new InvalidOperationException($"docs/maps/dependency-map.json has schema version {dataset.SchemaVersion}; these tests read version 1.");
-    }
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
-            directory = directory.Parent;
-
-        return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
     }
 
     private sealed record Dataset(int SchemaVersion, IReadOnlyList<Node> Nodes);

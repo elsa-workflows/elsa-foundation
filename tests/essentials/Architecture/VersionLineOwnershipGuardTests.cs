@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -226,23 +227,6 @@ public sealed class VersionLineOwnershipGuardTests
             .OfType<string>()
             .Distinct();
 
-    private static bool IsBuildOutput(string path)
-    {
-        var normalized = path.Replace(Path.DirectorySeparatorChar, '/');
-        return normalized.Contains("/bin/") || normalized.Contains("/obj/");
-    }
-
     private static string RelativePath(string path) =>
         Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/');
-
-    private static string RepoRoot { get; } = FindRepoRoot();
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
-            directory = directory.Parent;
-
-        return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
-    }
 }
