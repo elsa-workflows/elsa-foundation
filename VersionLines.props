@@ -10,8 +10,8 @@
 
     This is the one reviewed list. It is imported once, by Directory.Build.props, which turns
     membership into the per-project $(ElsaVersionLine) property every project sees. The maps generator
-    (#2075) will read this same file's XML directly, so there will be exactly one place to change the
-    decision.
+    (#2075) reads this same file's XML directly into docs/maps/dependency-map.json, so there is exactly
+    one place to change the decision.
 
     A semicolon-delimited property, not an ItemGroup: MSBuild property functions - the
     $(...Contains(...)) below, and the Directory.Build.props comment explains why it has to be a

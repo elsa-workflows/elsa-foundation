@@ -4,13 +4,14 @@ using Elsa.Maps.Generator;
 // every documented invocation in AGENTS.md, docs/maps/README.md and the spec tasks.md files keeps working.
 //
 // Usage: dotnet run --project tools/maps/Elsa.Maps.Generator -- <layer> [<layer> ...]
-//   domain | extension-points | architecture-reference | feature-dependency | maps | all | check
+//   dependency-map | maps | domain | extension-points | architecture-reference | feature-dependency | all | check
 //   solution-filters | solution-filters-check | solution-filters-self-test
 //   solution-filter-roots <filter-path>
 //   ef-suites-select <event> [<base-sha> <head-sha>] | ef-suites-self-test
 
-// "maps" first: the v2 findings report reads summary lines out of the v1 maps, so they must exist first.
-string[] knownLayers = ["maps", "domain", "extension-points", "architecture-reference", "feature-dependency"];
+// "dependency-map" first: it is the dataset every project-graph map is a projection of (spec 149). Then "maps":
+// the v2 findings report reads summary lines out of the v1 maps, so they must exist first.
+string[] knownLayers = ["dependency-map", "maps", "domain", "extension-points", "architecture-reference", "feature-dependency"];
 var layers = args.Length > 0 ? args : ["all"];
 
 try
@@ -80,11 +81,12 @@ try
     {
         written.AddRange(layer switch
         {
+            "dependency-map" => DependencyMap.Generate(repo, projects),
             "domain" => DomainMapGenerator.Generate(repo, projects),
             "extension-points" => ExtensionPointMapGenerator.Generate(repo, projects),
             "architecture-reference" => ArchitectureReferenceMapGenerator.Generate(repo, projects),
             "feature-dependency" => FeatureDependencyMapGenerator.Generate(repo, projects),
-            "maps" => CoreMapsGenerator.Generate(repo),
+            "maps" => CoreMapsGenerator.Generate(repo, projects),
             _ => throw new ArgumentException($"Unknown map layer '{layer}'.")
         });
     }

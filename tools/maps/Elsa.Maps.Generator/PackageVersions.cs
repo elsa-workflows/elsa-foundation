@@ -15,9 +15,6 @@ public sealed partial class PackageVersions
     [GeneratedRegex("""<PackageVersion\s[^>]*""", RegexOptions.Compiled)]
     private static partial Regex PackageVersionElementPattern { get; }
 
-    [GeneratedRegex("""<PackageReference\s[^>]*""", RegexOptions.Compiled)]
-    private static partial Regex PackageReferenceElementPattern { get; }
-
     private readonly IReadOnlyList<(string Id, string Version, string Condition)> _central;
 
     private PackageVersions(IReadOnlyList<(string, string, string)> central) => _central = central;
@@ -40,27 +37,10 @@ public sealed partial class PackageVersions
     }
 
     /// <summary>
-    /// The <c>id version</c> pairs a project references directly, ordinally sorted and deduplicated.
+    /// The version a <c>PackageReference</c> to <paramref name="id"/> gets in <paramref name="projectName"/>:
+    /// its inline version when it declares one, otherwise the matching central entry; null when neither exists.
     /// </summary>
-    public IReadOnlyList<string> ReferencesFor(string projectPath)
-    {
-        var projectName = Path.GetFileNameWithoutExtension(projectPath);
-
-        return PackageReferenceElementPattern.Matches(File.ReadAllText(projectPath))
-            .Select(match => (
-                Id: Attribute(match.Value, "Include"),
-                Version: Attribute(match.Value, "VersionOverride") is { Length: > 0 } versionOverride
-                    ? versionOverride
-                    : Attribute(match.Value, "Version")))
-            .Where(reference => reference.Id.Length > 0)
-            .Select(reference => (reference.Id, Version: Resolve(reference.Id, reference.Version, projectName)))
-            .Select(reference => $"{reference.Id} {reference.Version}")
-            .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-    }
-
-    private string Resolve(string id, string inlineVersion, string projectName)
+    public string? Resolve(string id, string inlineVersion, string projectName)
     {
         if (inlineVersion.Length > 0) return inlineVersion;
 
@@ -69,7 +49,7 @@ public sealed partial class PackageVersions
             if (entry.Id == id && ConditionMatches(entry.Condition, projectName))
                 selected = entry.Version;
 
-        return selected.Length > 0 ? selected : "(unspecified)";
+        return selected.Length > 0 ? selected : null;
     }
 
     /// <summary>
