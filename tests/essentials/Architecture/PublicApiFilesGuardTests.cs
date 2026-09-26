@@ -165,14 +165,11 @@ public sealed class PublicApiFilesGuardTests
 
     /// <summary>Every Elsa project under <see cref="ModuleRoots.Production"/>, by name, mapped to its directory.</summary>
     private static IReadOnlyDictionary<string, string> LoadElsaProjectDirectories(string repoRoot) =>
-        ModuleRoots.Resolve(repoRoot, ModuleRoots.Production)
-            .SelectMany(root => Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories))
-            .Where(ModuleRoots.IsNotTestFile)
-            .Where(path => ProjectGraph.IsElsa(Path.GetFileNameWithoutExtension(path)))
+        ProjectGraph.ElsaProjectPaths(repoRoot)
             .ToDictionary(
-                Path.GetFileNameWithoutExtension,
+                path => Path.GetFileNameWithoutExtension(path)!,
                 path => Path.GetDirectoryName(Path.GetFullPath(path))!,
-                StringComparer.OrdinalIgnoreCase)!;
+                StringComparer.OrdinalIgnoreCase);
 
     private static string FindRepoRoot()
     {
