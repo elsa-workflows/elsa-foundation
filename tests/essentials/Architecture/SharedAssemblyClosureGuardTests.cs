@@ -26,7 +26,7 @@ namespace Elsa.Architecture.Tests;
 public sealed class SharedAssemblyClosureGuardTests
 {
     /// <summary>Every Elsa project under <c>src/</c>, by assembly name, with the Elsa projects it references directly.</summary>
-    private static IReadOnlyDictionary<string, IReadOnlyList<string>> ElsaReferences { get; } = LoadElsaReferences();
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> ElsaReferences { get; } = ProjectGraph.LoadElsaReferences(RepoRoot);
 
     public static TheoryData<string> Hosts => [.. HostsThatShareAssemblies()];
 
@@ -121,8 +121,6 @@ public sealed class SharedAssemblyClosureGuardTests
     }
 
     private static IReadOnlyList<string> Examined(IReadOnlyList<string> shared) => [.. shared.Where(ElsaReferences.ContainsKey)];
-
-    private static IReadOnlyDictionary<string, IReadOnlyList<string>> LoadElsaReferences() => ProjectGraph.LoadElsaReferences(RepoRoot);
 
     private static string Report(string host, IReadOnlyDictionary<string, IReadOnlyList<string>> gaps) =>
         $"{host} shares Elsa assemblies whose Elsa project dependencies it does not share. A feed-loaded feature " +

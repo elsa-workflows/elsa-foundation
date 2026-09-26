@@ -22,7 +22,7 @@ public sealed class LineAClosureGuardTests
     private static IReadOnlyList<string> LineAMembers { get; } = ReadLineAMembers(RepoRoot);
 
     /// <summary>Every Elsa project under <c>src/</c>, by name, with the Elsa projects it directly references.</summary>
-    private static IReadOnlyDictionary<string, IReadOnlyList<string>> ElsaReferences { get; } = LoadElsaReferences(RepoRoot);
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> ElsaReferences { get; } = ProjectGraph.LoadElsaReferences(RepoRoot);
 
     [Fact]
     public void Line_a_members_reference_only_line_a_members()
@@ -33,17 +33,15 @@ public sealed class LineAClosureGuardTests
     }
 
     /// <summary>
-    /// Pins that the real scan is not vacuous: the list itself is non-empty, and a list entry that names no
-    /// existing project — one the scan under <c>src/</c> never finds — would pass the theory above vacuously,
-    /// since it has no entry in <see cref="ElsaReferences"/> and so contributes no references to check.
+    /// Pins that the scan is not vacuous: the list is non-empty, and a typo — a name with no matching
+    /// entry in <see cref="ElsaReferences"/> — is caught rather than silently contributing nothing to check.
     /// </summary>
     [Fact]
     public void Every_line_a_member_names_an_existing_project()
     {
         Assert.NotEmpty(LineAMembers);
 
-        var examined = LineAMembers.Where(ElsaReferences.ContainsKey).ToArray();
-        var missing = LineAMembers.Except(examined, StringComparer.OrdinalIgnoreCase).ToArray();
+        var missing = LineAMembers.Where(member => !ElsaReferences.ContainsKey(member)).ToArray();
         Assert.True(missing.Length == 0, $"VersionLines.props names Line A project(s) that do not exist: {string.Join(", ", missing)}.");
     }
 
@@ -104,9 +102,6 @@ public sealed class LineAClosureGuardTests
                 .Descendants("ElsaVersionLineAMembers")
                 .SelectMany(element => element.Value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         ];
-
-    private static IReadOnlyDictionary<string, IReadOnlyList<string>> LoadElsaReferences(string repoRoot) =>
-        ProjectGraph.LoadElsaReferences(repoRoot);
 
     private static string FindRepoRoot()
     {
