@@ -1,0 +1,93 @@
+{
+  "schemaVersion": "1",
+  "id": "elsa-foundation",
+  "version": "2",
+  "publisher": "elsa-foundation",
+  "digest": "42afc8ccd1f18c972d882f1e214c961d5aad0788a6f0974e8964bb6e012bda15",
+  "profiles": [
+    {
+      "kind": "profile",
+      "id": "embedded-runtime",
+      "version": "1",
+      "digest": "84765f93718964b00ee47f4dae07dbf2572f60d53741fd7ba68426bc696928ea",
+      "members": [
+        "ActivitiesControlFlow",
+        "ActivitiesPrimitives",
+        "ActivitiesRuntime",
+        "ActivitiesSequence",
+        "ApiCapabilities",
+        "Events",
+        "Expressions",
+        "FileSystemDistributedLocking",
+        "Mediator",
+        "Primitives",
+        "Serialization",
+        "Tasks",
+        "WorkflowsRuntimeApi",
+        "WorkflowsRuntimeEntityFrameworkCore",
+        "WorkflowsRuntimeResumption",
+        "WorkflowsRuntimeTriggers"
+      ],
+      "rationale": "The explicit 16-feature closure was exercised in a generic in-process host with durable runtime persistence, resumption, trigger scheduling and the deployable local filesystem lock provider. This is a starting selection: the persistence resource, connection, lock directory, signing and migration choices remain host-owned. Runtime API is included and can expose endpoints when a web host maps it.",
+      "title": "Embedded runtime",
+      "description": "Run and resume workflows inside your process using a durable runtime store and local filesystem locking. Review the Runtime API feature and supply host-specific prerequisites separately.",
+      "dependencyExplanations": [
+        {
+          "featureId": "WorkflowsRuntimeApi",
+          "dependencyId": "ApiCapabilities",
+          "mode": "required",
+          "reason": "The Runtime API feature registers its routes through API capabilities."
+        },
+        {
+          "featureId": "WorkflowsRuntimeEntityFrameworkCore",
+          "dependencyId": "WorkflowsRuntimeResumption",
+          "mode": "required",
+          "reason": "Durable runtime persistence requires the workflow resumption feature."
+        },
+        {
+          "featureId": "WorkflowsRuntimeResumption",
+          "dependencyId": "Tasks",
+          "mode": "required",
+          "reason": "Runtime resumption schedules its pump through the Tasks feature."
+        },
+        {
+          "featureId": "WorkflowsRuntimeTriggers",
+          "dependencyId": "WorkflowsRuntimeApi",
+          "mode": "required",
+          "reason": "Runtime trigger endpoints are supplied by the Runtime API feature."
+        }
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "kind": "group",
+      "id": "diagnostics-ef",
+      "version": "1",
+      "digest": "77c5f3cfed1ba29da2ec3d54bd1479b46799d9178c4ee5b93f2a3afda6d2cdae",
+      "members": [
+        "DiagnosticsOpenTelemetry",
+        "DiagnosticsOpenTelemetryEntityFrameworkCore",
+        "DiagnosticsStructuredLogs",
+        "DiagnosticsStructuredLogsEntityFrameworkCore"
+      ],
+      "rationale": "Select the two server diagnostics features and their EF persistence consumers together. The two consumers still need independently reviewed resource bindings, migration policy, and host prerequisites; this group does not configure or validate a database or enable in-process engine tracing.",
+      "title": "Diagnostics with EF persistence",
+      "description": "Add Structured Logs and OpenTelemetry diagnostic stores to a server composition. Configure each EF consumer and its database resource separately.",
+      "dependencyExplanations": [
+        {
+          "featureId": "DiagnosticsOpenTelemetryEntityFrameworkCore",
+          "dependencyId": "DiagnosticsOpenTelemetry",
+          "mode": "required",
+          "reason": "The OpenTelemetry EF persistence consumer depends on the OpenTelemetry diagnostics feature."
+        },
+        {
+          "featureId": "DiagnosticsStructuredLogsEntityFrameworkCore",
+          "dependencyId": "DiagnosticsStructuredLogs",
+          "mode": "required",
+          "reason": "The Structured Logs EF persistence consumer depends on the Structured Logs diagnostics feature."
+        }
+      ]
+    }
+  ]
+}

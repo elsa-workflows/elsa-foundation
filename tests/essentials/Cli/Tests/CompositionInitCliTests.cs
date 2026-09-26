@@ -76,6 +76,90 @@ public sealed class CompositionInitCliTests
     }
 
     [Fact]
+    public void Init_with_diagnostics_group_keeps_exact_selection_provenance_and_required_edges()
+    {
+        using var temp = new TempDirectory("elsa-composition-init-");
+        var outputPath = temp.File("composition.json");
+        var init = DotnetElsa.Run("composition", "init", "--profile", "embedded-runtime@1",
+            "--group", "diagnostics-ef@1", "--output", outputPath);
+        Assert.Equal(ToolExitCode.Success, init.ExitCode);
+
+        using var compositionDocument = JsonDocument.Parse(File.ReadAllText(outputPath));
+        var composition = compositionDocument.RootElement;
+        var catalog = FoundationSelectionCatalog.Load();
+        var group = Assert.Single(catalog.Groups);
+        Assert.Equal("2", composition.GetProperty("catalog").GetProperty("version").GetString());
+        Assert.Equal(group.Digest, Assert.Single(composition.GetProperty("groups").EnumerateArray())
+            .GetProperty("digest").GetString());
+        var expected = s_expectedMembers.Concat(group.Members).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+        Assert.Equal(expected, Strings(composition.GetProperty("accepted").GetProperty("featureIds")));
+
+        var plan = DotnetElsa.Run("composition", "plan", "--composition", outputPath, "--format", "json");
+        Assert.Equal(ToolExitCode.Success, plan.ExitCode);
+        using var planDocument = JsonDocument.Parse(plan.Output);
+        var root = planDocument.RootElement;
+        Assert.Equal(expected, Strings(root.GetProperty("candidate").GetProperty("featureIds")));
+        Assert.Equal(4, root.GetProperty("reasons").EnumerateArray().Count(reason =>
+            reason.GetProperty("sourceKind").GetString() == "group" &&
+            reason.GetProperty("sourceId").GetString() == "diagnostics-ef"));
+        Assert.Equal(2, root.GetProperty("dependencyEvidence").EnumerateArray().Count(edge =>
+            edge.GetProperty("evidenceKind").GetString() == "reviewed-definition" &&
+            edge.GetProperty("evidenceSource").GetString() == "diagnostics-ef"));
+        Assert.Contains(root.GetProperty("findings").EnumerateArray(), finding =>
+            finding.GetProperty("code").GetString() == "persistence-unverified");
+    }
+
+    [Fact]
+    public async Task Original_catalog_pin_still_plans_and_generates_without_a_catalog_file()
+    {
+        using var fixture = new CompositionBridgeFixture();
+        Assert.Equal(ToolExitCode.Success, DotnetElsa.Run("composition", "init", "--profile", "embedded-runtime@1",
+            "--output", fixture.OutputPath).ExitCode);
+        var authored = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(fixture.OutputPath))!;
+        const string originalDigest = "0a62934830eccd0e27e829ac7e17e6c2e44e85babd959a2aace53b15569f0149";
+        authored["catalog"]!["version"] = "1";
+        authored["catalog"]!["digest"] = originalDigest;
+        authored["accepted"]!["catalogDigest"] = originalDigest;
+        File.WriteAllText(fixture.OutputPath, authored.ToJsonString());
+
+        var plan = DotnetElsa.Run("composition", "plan", "--composition", fixture.OutputPath, "--format", "json");
+        Assert.Equal(ToolExitCode.Success, plan.ExitCode);
+        using var planDocument = JsonDocument.Parse(plan.Output);
+        Assert.Equal("1", planDocument.RootElement.GetProperty("catalog").GetProperty("version").GetString());
+        Assert.Equal(s_expectedMembers, Strings(planDocument.RootElement.GetProperty("candidate").GetProperty("featureIds")));
+        Assert.DoesNotContain(planDocument.RootElement.GetProperty("findings").EnumerateArray(), finding =>
+            finding.GetProperty("code").GetString() == "catalog-pin-unresolved");
+
+        File.WriteAllText(Path.Join(fixture.HostDirectory, "shells.Production.json"),
+            """{"CShells":{"Shells":{"default":{"Features":{}}}}}""");
+        var generated = await PseudoTerminalCli.RunElsaAsync(
+            "Type generate to write the candidate: ", "generate",
+            ["composition", "generate", "--host-dir", fixture.HostDirectory, "--shell", "default",
+                "--environment", "Production", "--composition", fixture.OutputPath, "--output-dir", fixture.CandidateDirectory]);
+        Assert.Equal(ToolExitCode.Success, generated.ExitCode);
+        var readback = CshellsSourceReader.Read(
+            File.ReadAllText(Path.Join(fixture.CandidateDirectory, "shells.json")),
+            File.ReadAllText(Path.Join(fixture.CandidateDirectory, "shells.Production.json")), "default");
+        Assert.Equal(s_expectedMembers, readback.EnabledFeatureIds.ToArray());
+
+        authored["catalog"]!["version"] = "unpublished";
+        File.WriteAllText(fixture.OutputPath, authored.ToJsonString());
+        var unknownPlan = DotnetElsa.Run("composition", "plan", "--composition", fixture.OutputPath, "--format", "json");
+        Assert.Equal(ToolExitCode.Success, unknownPlan.ExitCode);
+        using var unknownPlanDocument = JsonDocument.Parse(unknownPlan.Output);
+        Assert.Empty(unknownPlanDocument.RootElement.GetProperty("candidate").GetProperty("featureIds").EnumerateArray());
+        Assert.Contains(unknownPlanDocument.RootElement.GetProperty("findings").EnumerateArray(), finding =>
+            finding.GetProperty("code").GetString() == "catalog-pin-unresolved");
+        var unknownCandidate = Path.Join(fixture.HostDirectory, "unknown-candidate");
+        var refused = DotnetElsa.Run("composition", "generate", "--host-dir", fixture.HostDirectory,
+            "--shell", "default", "--environment", "Production", "--composition", fixture.OutputPath,
+            "--output-dir", unknownCandidate);
+        Assert.Equal(ToolExitCode.Refusal, refused.ExitCode);
+        Assert.Contains("bridge-catalog-mismatch", refused.Error, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(unknownCandidate));
+    }
+
+    [Fact]
     public void Init_refuses_unknown_profile_and_never_overwrites_an_existing_file()
     {
         using var temp = new TempDirectory("elsa-composition-init-");
@@ -84,6 +168,18 @@ public sealed class CompositionInitCliTests
         var unknown = DotnetElsa.Run("composition", "init", "--profile", "worker@1", "--output", outputPath);
         Assert.Equal(ToolExitCode.Refusal, unknown.ExitCode);
         Assert.Contains("composition-profile-unknown", unknown.Error, StringComparison.Ordinal);
+        Assert.False(File.Exists(outputPath));
+
+        var unknownGroup = DotnetElsa.Run("composition", "init", "--profile", "embedded-runtime@1",
+            "--group", "unreviewed@1", "--output", outputPath);
+        Assert.Equal(ToolExitCode.Refusal, unknownGroup.ExitCode);
+        Assert.Contains("composition-group-unknown", unknownGroup.Error, StringComparison.Ordinal);
+        Assert.False(File.Exists(outputPath));
+
+        var duplicateGroup = DotnetElsa.Run("composition", "init", "--profile", "embedded-runtime@1",
+            "--group", "diagnostics-ef@1", "--group", "diagnostics-ef@1", "--output", outputPath);
+        Assert.Equal(ToolExitCode.Refusal, duplicateGroup.ExitCode);
+        Assert.Contains("composition-group-duplicate", duplicateGroup.Error, StringComparison.Ordinal);
         Assert.False(File.Exists(outputPath));
 
         File.WriteAllText(outputPath, "keep");

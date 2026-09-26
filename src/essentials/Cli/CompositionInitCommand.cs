@@ -22,40 +22,37 @@ internal static class CompositionInitCommand
     public static Command Build()
     {
         var profile = Required("--profile", "Foundation profile ID and version, such as embedded-runtime@1.");
+        var groups = new Option<string[]>("--group") { Description = "Foundation feature-group ID and version. Repeatable." };
         var output = Required("--output", "Fresh authored composition file.");
-        var command = new Command("init", "Create a pinned composition from a bundled Foundation profile.")
+        var command = new Command("init", "Create a pinned composition from a bundled Foundation profile and optional groups.")
         {
-            profile, output
+            profile, groups, output
         };
 
         command.SetAction((result, cancellationToken) => Task.FromResult(Guarded(() => Run(
-            result.GetRequiredValue(profile), result.GetRequiredValue(output), cancellationToken), "initialized")));
+            result.GetRequiredValue(profile), result.GetValue(groups) ?? [], result.GetRequiredValue(output), cancellationToken), "initialized")));
         return command;
     }
 
-    private static int Run(string profilePin, string outputPath, CancellationToken cancellationToken)
+    private static int Run(string profilePin, IReadOnlyList<string> groupPins, string outputPath, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var separator = profilePin.IndexOf('@');
-        if (separator <= 0 || separator == profilePin.Length - 1 || profilePin.IndexOf('@', separator + 1) >= 0)
-            throw CliRefusal.Usage("composition-profile-invalid", "Use a Foundation profile ID and version in the form <id>@<version>.");
-
-        var profileId = profilePin[..separator];
-        var profileVersion = profilePin[(separator + 1)..];
         var catalog = FoundationSelectionCatalog.Load();
-        var definition = catalog.Profiles.FirstOrDefault(item =>
-            item.Id == profileId && item.Version == profileVersion);
-        if (definition is null)
-            throw CliRefusal.Usage("composition-profile-unknown", "The requested profile is not present in the bundled Foundation catalog.");
+        var definition = FindDefinition(profilePin, "profile", catalog.Profiles);
+        var groupDefinitions = groupPins.Select(pin => FindDefinition(pin, "group", catalog.Groups)).ToArray();
+        if (groupDefinitions.Select(item => (item.Id, item.Version)).Distinct().Count() != groupDefinitions.Length)
+            throw CliRefusal.Usage("composition-group-duplicate", "Each Foundation group may be selected only once.");
 
         var authored = new AuthoredComposition(
             "1",
             new CatalogPin(catalog.Id, catalog.Version, catalog.Digest),
             new DefinitionReference("foundation", "profile", definition.Id, definition.Version, definition.Digest),
+            [.. groupDefinitions.OrderBy(item => item.Id, StringComparer.Ordinal)
+                .ThenBy(item => item.Version, StringComparer.Ordinal)
+                .Select(item => new DefinitionReference("foundation", "group", item.Id, item.Version, item.Digest))],
             [],
             [],
-            [],
-            new AcceptedSelection(catalog.Digest, definition.Members, []),
+            new AcceptedSelection(catalog.Digest, [], []),
             null,
             null);
         var plan = SelectionPlanner.Plan(catalog, authored);
@@ -74,6 +71,17 @@ internal static class CompositionInitCommand
         WriteNewFile(outputPath, json);
         Console.Out.WriteLine($"Initialized {definition.Id}@{definition.Version} with {plan.SelectedFeatureIds.Length} exact feature IDs.");
         return ToolExitCode.Success;
+    }
+
+    private static SelectionDefinition FindDefinition(
+        string pin, string kind, IEnumerable<SelectionDefinition> definitions)
+    {
+        var separator = pin.IndexOf('@');
+        if (separator <= 0 || separator == pin.Length - 1 || pin.IndexOf('@', separator + 1) >= 0)
+            throw CliRefusal.Usage($"composition-{kind}-invalid", $"Use a Foundation {kind} ID and version in the form <id>@<version>.");
+
+        return definitions.FirstOrDefault(item => item.Id == pin[..separator] && item.Version == pin[(separator + 1)..])
+            ?? throw CliRefusal.Usage($"composition-{kind}-unknown", $"The requested {kind} is not present in the bundled Foundation catalog.");
     }
 
     private static void WriteNewFile(string outputPath, string contents)
