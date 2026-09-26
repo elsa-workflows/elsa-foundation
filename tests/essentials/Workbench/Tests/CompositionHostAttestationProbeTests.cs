@@ -14,6 +14,7 @@ namespace Elsa.Workbench.Tests;
 public sealed class CompositionHostAttestationProbeTests
 {
     private const string FeatureSetting = "WorkflowsRuntimeCheckpointPersistence";
+    private const string ReceiptOverrideKey = "CShells:Shells:default:Features:WorkflowsRuntimeCheckpointPersistence:MaxSegmentCheckpoints";
     // A distinctive valid integer avoids matching unrelated numbers in lifecycle JSON during redaction checks.
     private const string ProcessValue = "73190483";
     private const string Canary = "host-attestation-secret-canary-2039";
@@ -29,23 +30,13 @@ public sealed class CompositionHostAttestationProbeTests
     {
         const string firstOrigin = "https://first-studio.example.invalid";
         const string secondOrigin = "https://second-studio.example.invalid";
-        var stagedBundle = Directory.CreateTempSubdirectory("elsa-workbench-bundle-").FullName;
+        var stagedBundle = CreateBundle();
         try
         {
-            foreach (var file in BundleFiles)
-            {
-                var source = WorkbenchBuild.SourceFile(file);
-                var destination = Path.Join(stagedBundle, file);
-                if (File.Exists(source))
-                    File.Copy(source, destination);
-                else
-                    File.WriteAllText(destination, "{}");
-            }
-
             WriteBundle(firstOrigin, 774001);
             await using (var first = await WorkbenchProcess.StartAsync(WorkbenchShell.Development, contentRoot =>
                          {
-                             CopyStagedBundle(contentRoot);
+                             CopyBundle(stagedBundle, contentRoot);
                              // Change the mutable handoff source after the private copy, before the child starts.
                              WriteBundle(secondOrigin, 774002);
                          }))
@@ -55,7 +46,8 @@ public sealed class CompositionHostAttestationProbeTests
                 Assert.Contains("774001", await first.ManagementClient.GetStringAsync("/_admin/shells/default/blueprint"), StringComparison.Ordinal);
             }
 
-            await using (var second = await WorkbenchProcess.StartAsync(WorkbenchShell.Development, CopyStagedBundle))
+            await using (var second = await WorkbenchProcess.StartAsync(WorkbenchShell.Development,
+                             contentRoot => CopyBundle(stagedBundle, contentRoot)))
             {
                 Assert.False(await CorsAllowsAsync(second, firstOrigin));
                 Assert.True(await CorsAllowsAsync(second, secondOrigin));
@@ -89,11 +81,90 @@ public sealed class CompositionHostAttestationProbeTests
                 ["Cors", "AllowedOrigins", "0"], origin);
             WriteSetting(Path.Join(stagedBundle, "shells.Development.json"), setting);
         }
+    }
 
-        void CopyStagedBundle(string contentRoot)
+    [Fact]
+    public async Task Test_deployer_can_bind_a_complete_retained_copy_to_one_child_without_claiming_candidate_match()
+    {
+        const string origin = "https://receipt-studio.example.invalid";
+        const string overrideValue = "842001";
+        var stagedBundle = CreateBundle();
+        try
         {
-            foreach (var file in BundleFiles)
-                File.Copy(Path.Join(stagedBundle, file), Path.Join(contentRoot, file), overwrite: true);
+            WorkbenchConfigurationFile.WriteValue(Path.Join(stagedBundle, "appsettings.Development.json"),
+                ["Cors", "AllowedOrigins", "0"], origin);
+            WriteSetting(Path.Join(stagedBundle, "shells.Development.json"), 841001);
+            var shell = WorkbenchShell.Development with
+            {
+                Settings = new Dictionary<string, string> { [ReceiptOverrideKey] = overrideValue }
+            };
+            var receipt = TestOwnedArtifactReceipt.Capture(stagedBundle, shell);
+            Assert.True(receipt.Matches(receipt.Id, stagedBundle, shell));
+
+            await using var host = await WorkbenchProcess.StartAsync(shell, contentRoot =>
+            {
+                Assert.True(receipt.Matches(receipt.Id, stagedBundle, shell));
+                CopyBundle(stagedBundle, contentRoot);
+                Assert.True(receipt.Matches(receipt.Id, contentRoot, shell));
+            });
+            Assert.True(await CorsAllowsAsync(host, origin));
+            var blueprint = await host.ManagementClient.GetStringAsync("/_admin/shells/default/blueprint");
+            Assert.Contains(overrideValue, blueprint, StringComparison.Ordinal);
+            Assert.DoesNotContain("841001", blueprint, StringComparison.Ordinal);
+
+            var observation = await host.ManagementClient.GetFromJsonAsync<JsonNode>(
+                "/_admin/composition/default-shell/observation");
+            Assert.NotNull(observation);
+            Assert.True((bool?)observation["ready"]);
+            Assert.Equal("unverified", (string?)observation["candidateMatch"]);
+            var processInstanceId = (string?)observation["processInstanceId"];
+            Assert.True(Guid.TryParseExact(processInstanceId, "N", out _));
+            // The test launcher knows which receipt it copied before starting this child; the
+            // Workbench observer knows the process, but cannot attest the launcher's receipt.
+            Assert.DoesNotContain(receipt.Id, observation.ToJsonString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(stagedBundle, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Test_deployer_refuses_changed_artifact_override_and_arbitrary_receipt_label()
+    {
+        var stagedBundle = CreateBundle();
+        var copiedBundle = Directory.CreateTempSubdirectory("elsa-receipt-copy-").FullName;
+        try
+        {
+            var shell = WorkbenchShell.Development with
+            {
+                Settings = new Dictionary<string, string> { [ReceiptOverrideKey] = "842001" }
+            };
+            var receipt = TestOwnedArtifactReceipt.Capture(stagedBundle, shell);
+            CopyBundle(stagedBundle, copiedBundle);
+            Assert.True(receipt.Matches(receipt.Id, copiedBundle, shell));
+            Assert.False(receipt.Matches(Guid.NewGuid().ToString("N"), copiedBundle, shell));
+            Assert.False(receipt.Matches(receipt.Id, copiedBundle,
+                shell with { Settings = new Dictionary<string, string> { [ReceiptOverrideKey] = "842002" } }));
+            Assert.False(receipt.Matches(receipt.Id, copiedBundle,
+                shell with { Environment = "Staging" }));
+
+            // A file-at-a-time copy across releases can be complete yet have root and shell
+            // bytes from different revisions. The receipt covers the full set, including siblings.
+            WorkbenchConfigurationFile.WriteValue(Path.Join(copiedBundle, "appsettings.Development.json"),
+                ["Cors", "AllowedOrigins", "0"], "https://other-studio.example.invalid");
+            Assert.False(receipt.Matches(receipt.Id, copiedBundle, shell));
+            CopyBundle(stagedBundle, copiedBundle);
+            WriteSetting(Path.Join(copiedBundle, "shells.Staging.json"), 842003);
+            Assert.False(receipt.Matches(receipt.Id, copiedBundle, shell));
+            CopyBundle(stagedBundle, copiedBundle);
+            WriteSetting(Path.Join(stagedBundle, "shells.Development.json"), 842004);
+            Assert.False(receipt.Matches(receipt.Id, stagedBundle, shell));
+        }
+        finally
+        {
+            Directory.Delete(stagedBundle, recursive: true);
+            Directory.Delete(copiedBundle, recursive: true);
         }
     }
 
@@ -259,4 +330,59 @@ public sealed class CompositionHostAttestationProbeTests
     private static void WriteSetting(string path, int value) =>
         WorkbenchConfigurationFile.WriteValue(
             path, ["CShells", "Shells", "default", "Features", FeatureSetting, "MaxSegmentCheckpoints"], value);
+
+    private static string CreateBundle()
+    {
+        var directory = Directory.CreateTempSubdirectory("elsa-receipt-release-").FullName;
+        foreach (var file in BundleFiles)
+        {
+            var source = WorkbenchBuild.SourceFile(file);
+            if (File.Exists(source))
+                File.Copy(source, Path.Join(directory, file));
+            else
+                File.WriteAllText(Path.Join(directory, file), "{}");
+        }
+        return directory;
+    }
+
+    private static void CopyBundle(string source, string destination)
+    {
+        foreach (var file in BundleFiles)
+            File.Copy(Path.Join(source, file), Path.Join(destination, file), overwrite: true);
+    }
+
+    /// <summary>
+    /// Test-owned receipt. A private byte snapshot is useful for refusing changed fixtures, but Workbench
+    /// neither consumes it nor attests that its root/shell configuration was bound to it.
+    /// </summary>
+    private sealed class TestOwnedArtifactReceipt
+    {
+        private readonly Dictionary<string, byte[]> _files;
+        private readonly Dictionary<string, string> _overrides;
+        private readonly string _environment;
+
+        private TestOwnedArtifactReceipt(string environment, IReadOnlyDictionary<string, string> overrides,
+            Dictionary<string, byte[]> files)
+        {
+            Id = Guid.NewGuid().ToString("N");
+            _environment = environment;
+            _overrides = new Dictionary<string, string>(overrides, StringComparer.Ordinal);
+            _files = files;
+        }
+
+        public string Id { get; }
+
+        public static TestOwnedArtifactReceipt Capture(string directory, WorkbenchShell shell) =>
+            new(shell.Environment, shell.Settings, BundleFiles.ToDictionary(
+                file => file, file => File.ReadAllBytes(Path.Join(directory, file)), StringComparer.Ordinal));
+
+        public bool Matches(string label, string directory, WorkbenchShell shell) =>
+            label == Id && Directory.Exists(directory) && shell.Environment == _environment &&
+            BundleFiles.ToHashSet(StringComparer.Ordinal).SetEquals(
+                Directory.GetFiles(directory, "*.json").Select(path => Path.GetFileName(path)!)) &&
+            shell.Settings.Count == _overrides.Count &&
+            shell.Settings.All(setting => _overrides.TryGetValue(setting.Key, out var value) && value == setting.Value) &&
+            _files.All(file => File.Exists(Path.Join(directory, file.Key)) &&
+                File.ReadAllBytes(Path.Join(directory, file.Key)).AsSpan().SequenceEqual(file.Value));
+    }
 }
