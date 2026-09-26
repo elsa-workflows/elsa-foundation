@@ -69,6 +69,9 @@ jobs:
       - name: Check generated maps against the tree
         run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -- check
 
+      - name: Exercise project facts contract
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -- project-facts-self-test
+
       - name: Explain how to refresh
         if: failure()
         run: |

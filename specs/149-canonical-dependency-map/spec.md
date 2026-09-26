@@ -183,3 +183,7 @@ Recorded when #2075 implemented this spec. The first two answer the open questio
 - **No freshness fingerprint.** The Key Entities once named one. Freshness is the maps check's byte
   comparison, and #1278 removed input fingerprints from the maps manifest because they changed on
   every commit without describing the tree.
+- **`project-reference-map.md`'s Packable column now shows the effective value (true/false), not the
+  raw project-file declaration or "default".** This is a deliberate exception to SC-003's "no content
+  lost": "default" hid that 73 test projects do not pack, and the raw declaration isn't a graph fact
+  the dataset should carry.
