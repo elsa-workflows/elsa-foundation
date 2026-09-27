@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The in-process membership default (spec 183, FR-017 and FR-018): a Layer 2 helper library, not a feature. A
+    consumer registers it with TryAddInProcessClusterMembership, so a host composes nothing to be a cluster of one. It
+    takes no provider and no hosting dependency, which ArchitectureGuardTests.ClusterMembership keeps true: nothing here
+    can register a hosted service, a recurring task or a store.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Core\Elsa.Cluster.Core.csproj" />
+  </ItemGroup>
+
+</Project>
