@@ -54,7 +54,8 @@ boundary or the use needs options the payload serializer can't provide:
   — it writes and reads its own runtime state rows entirely within the persistence layer; no other
   component parses their payload JSON. It owns a frozen `JsonSerializerOptions` deliberately
   independent of `IPayloadSerializer`: this is the *durability* format of suspended workflow state,
-  frozen by a golden-fixture suite and evolved only through EF Core migrations. Adopting the mutable,
+  evolved only through EF Core migrations (plus a golden-fixture suite for the Distributed leaf's
+  placement/transport payloads specifically). Adopting the mutable,
   startup-contributed converter registry of `IPayloadSerializer` would itself be an unstamped format
   change — the exact class of drift the module exists to eliminate.
 - **The reconciliation content hasher**
@@ -74,9 +75,15 @@ bindings) must be able to evolve without silently breaking already-suspended wor
   for the shared policy.
 - **Loud enforcement on read.** A pending model change, a missing migration, or a provider mismatch fails
   shell activation rather than serving a partially readable store.
-- **A CI fixture gate freezes the payload format.** The Runtime EF suites re-serialize a canonical instance
-  of each persisted payload and compare it semantically against the committed expectation, so a state-record
-  field add/rename/remove/retype cannot land without an explicit decision.
+- **A golden-fixture gate freezes the wire format for the Distributed leaf only.** The
+  `Elsa.Workflows.Runtime.Distributed.Tests` suite re-serializes a canonical instance of the placement and
+  transport payloads and compares each semantically against a committed `Fixtures/v1/*.json` expectation,
+  so a field add/rename/remove/retype on those two payloads cannot land without an explicit, versioned
+  decision (see [`GoldenFixtureTestSupport`](../tests/essentials/Workflows/Runtime/Distributed/Tests/GoldenFixtureTestSupport.cs)).
+  The rest of the Runtime EF Core module (bookmarks, executables, execution/scheduler/operational/
+  control-plane/incident/durable-value state, checkpoint commits, the post-commit outbox, the durable
+  scheduler work queue, workflow trigger bindings) has no such fixture today; its state-record shapes are
+  covered by the migration and read-enforcement rules above, not by a round-trip payload comparison.
 
 ### How to change a persisted runtime state record
 
@@ -89,7 +96,7 @@ documents the required persistence reset.
 
 The trigger + stimulus-routing feature (`WorkflowsRuntimeTriggersFeature`) adds one new persisted document
 kind and two cross-cutting (across-execution / across-artifact) indexes. Both route through the same bridge
-serializer, versioning, and fixture gate as every other runtime kind.
+serializer and versioning as every other runtime kind.
 
 - **Document kind `workflowTriggerBinding` (current/minimum version 2).** A durable index entry written at **publish
   time** mapping an external stimulus identity `(stimulusType, stimulusHash)` to a start-trigger activity
@@ -109,7 +116,7 @@ serializer, versioning, and fixture gate as every other runtime kind.
   activity-execution state in the workflow and filtering in memory — the join fires once per branch completion,
   so the whole-workflow read made it O(branches × workflow states). The index is a keyword over the **already
   persisted** parent identity. No payload change is needed: the state record shape is unchanged; only a new
-  index was declared, so the existing payload drift tests stay green, which is the wire-safety proof.
+  index was declared, so there is no payload to re-freeze — an unchanged shape is the wire-safety proof.
   The store queries the parent index and then applies a defensive
   in-memory `workflowExecutionId` filter, so the full `(workflowExecutionId, parentActivityExecutionId)` semantics
   hold identically across providers without relying on parent activity-execution ids being globally unique.

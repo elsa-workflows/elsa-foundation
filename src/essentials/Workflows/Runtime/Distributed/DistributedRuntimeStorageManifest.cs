@@ -8,8 +8,7 @@ namespace Elsa.Workflows.Runtime.Distributed;
 /// </summary>
 /// <remarks>
 /// The names follow the constitution S=E6 rules: camelCase, no protected-term collisions, stable across
-/// type renames. Do not change a literal value without a schema version bump and an upcaster, exactly as
-/// <c>ElsaRuntimeStorageManifest</c> treats its runtime document kinds.
+/// type renames. Do not change a literal value without a schema version bump and an upcaster.
 /// </remarks>
 public static class DistributedRuntimeStorageManifest
 {
