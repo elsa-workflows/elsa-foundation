@@ -13100,6 +13100,45 @@
       ]
     },
     {
+      "path": "tests/essentials/Versioning/Calculator/Tests/Elsa.Versioning.Calculator.Tests.csproj",
+      "name": "Elsa.Versioning.Calculator.Tests",
+      "kind": "test",
+      "domain": "Elsa.Versioning",
+      "sub_domain": "Calculator.Tests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Versioning.Calculator",
+          "path": "tools/versioning/Elsa.Versioning.Calculator/Elsa.Versioning.Calculator.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
       "path": "tests/essentials/Workbench/Tests/Elsa.Workbench.Tests.csproj",
       "name": "Elsa.Workbench.Tests",
       "kind": "test",

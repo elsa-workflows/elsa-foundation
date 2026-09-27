@@ -1,0 +1,85 @@
+<Project>
+
+  <!--
+    FR-007: every dependency range this repository controls stops below the next major, [x.y.z, (x+1).0.0), so a
+    package never accepts a new major it was not built against. Imported from Directory.Build.props right after
+    PackageVersioning.props, which selects and checks the version this file bounds ranges from.
+
+    Every effect below is gated on computed input alone (ElsaVersionComputationCommit set), not on
+    $(_ElsaPackageVersion): a dev build (no computed input, no /p:Version) and a plain /p:Version pack - exactly
+    what packages.yml runs today - carry no bounded range and no nuspec check, so the next merge to main does not
+    change what packages.yml already publishes. #2082 is what will make computed input packages.yml's own path.
+
+    Bounding reaches only the packages this repository produces, not a third party's: a dependency this repo's own
+    packages.yml pack has never bounded before, and bounding it would trade a silent NuGet resolution for a loud
+    restore failure (NU1608/NU1107) for a consumer who moves past it - a trade-off the owner has not made yet (spec
+    150 Decisions, FR-007). Only two kinds of dependency are this repository's own, and only the first occurs today:
+
+      - Project references. Pack asks each referenced project for its version and parses the answer as a range, in
+        which a bare version means [x.y.z, ); this rewrites each answer into the bounded range before pack reads it.
+        Every dependency this rewrites is this repository's own by construction: the referenced project is a project
+        in this repository's build.
+      - Packages this repository's dependency map lists as packable, referenced as a package rather than a project
+        reference. No project in this repository does this today - every reference between its own packages is a
+        ProjectReference - so this file leaves such a package to central package management like any third party;
+        ElsaVerifyNuspecRanges below still only requires a project reference's range to be bounded.
+
+    A version already written as a range is left as it is. ElsaVerifyNuspecRanges then reads the nuspec pack wrote
+    and fails the pack, deleting what it wrote, when a range on one of this repository's own packages is not bounded
+    at its floor's next major: a range written by hand, a restore this target did not run in (a static-graph restore,
+    or assets restored before this file existed), or a change to the NuGet internals the project-reference rewrite
+    hooks all end there rather than on the feed. A third party's range is never checked here, bounded or not.
+  -->
+  <Target Name="ElsaBoundProjectReferenceRanges" AfterTargets="_GetProjectReferenceVersions" Condition="'$(ElsaVersionComputationCommit)' != ''">
+
+    <ItemGroup>
+      <_ProjectReferencesWithVersions Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(ProjectVersion)', '^[0-9]'))">
+        <ProjectVersion>[%(ProjectVersion), $([MSBuild]::Add($([System.String]::Copy('%(ProjectVersion)').Split('.')[0]), 1)).0.0)</ProjectVersion>
+      </_ProjectReferencesWithVersions>
+    </ItemGroup>
+
+  </Target>
+
+  <Target Name="ElsaVerifyNuspecRanges" AfterTargets="GenerateNuspec" DependsOnTargets="_GetOutputItemsFromPack"
+          Condition="'$(ElsaVersionComputationCommit)' != '' and '$(IsPackable)' == 'true'">
+
+    <PropertyGroup>
+      <_ElsaNuspecFile>@(_OutputPackItems->WithMetadataValue('Extension', '.nuspec'))</_ElsaNuspecFile>
+      <!-- Every id this project's own ProjectReference items pack a dependency for: the ranges this file bounds. -->
+      <_ElsaOwnPackageIds>;@(ProjectReference->'%(Filename)', ';');</_ElsaOwnPackageIds>
+    </PropertyGroup>
+
+    <XmlPeek XmlInputPath="$(_ElsaNuspecFile)" Query="//*[local-name()='dependency']">
+      <Output TaskParameter="Result" ItemName="_ElsaNuspecDependency" />
+    </XmlPeek>
+
+    <!-- XmlPeek returns each dependency element's XML; its id and range, then the range's floor and ceiling majors. -->
+    <ItemGroup>
+      <_ElsaNuspecDependency>
+        <PackageId>$([System.Text.RegularExpressions.Regex]::Match('%(Identity)', ' id="([^"]*)"').Groups[1].Value)</PackageId>
+        <Range>$([System.Text.RegularExpressions.Regex]::Match('%(Identity)', ' version="([^"]*)"').Groups[1].Value)</Range>
+        <Bounded>false</Bounded>
+      </_ElsaNuspecDependency>
+      <_ElsaNuspecDependency>
+        <IsElsaOwn>$(_ElsaOwnPackageIds.Contains(';%(PackageId);'))</IsElsaOwn>
+        <FloorMajor>$([System.Text.RegularExpressions.Regex]::Match('%(Range)', '^\[([0-9]+)\.[^,]*, [0-9]+\.0\.0\)$').Groups[1].Value)</FloorMajor>
+        <CeilingMajor>$([System.Text.RegularExpressions.Regex]::Match('%(Range)', '^\[[0-9]+\.[^,]*, ([0-9]+)\.0\.0\)$').Groups[1].Value)</CeilingMajor>
+      </_ElsaNuspecDependency>
+      <_ElsaNuspecDependency Condition="'%(FloorMajor)' != '' and '%(CeilingMajor)' == '$([MSBuild]::Add($([MSBuild]::ValueOrDefault(`%(FloorMajor)`, `0`)), 1))'">
+        <Bounded>true</Bounded>
+      </_ElsaNuspecDependency>
+    </ItemGroup>
+
+    <PropertyGroup>
+      <_ElsaUnboundedRanges>@(_ElsaNuspecDependency->WithMetadataValue('Bounded', 'false')->WithMetadataValue('IsElsaOwn', 'true')->'%(PackageId) %(Range)', ', ')</_ElsaUnboundedRanges>
+    </PropertyGroup>
+
+    <Delete Files="@(_OutputPackItems)" Condition="'$(_ElsaUnboundedRanges)' != ''" />
+
+    <Error Code="ELSAPV008"
+           Condition="'$(_ElsaUnboundedRanges)' != ''"
+           Text="$(MSBuildProjectName)'s nuspec declares dependency ranges, on packages this repository produces, that are not bounded below their floor's next major (spec 150 FR-007): $(_ElsaUnboundedRanges). The package was deleted. Restore again, so that PackageRanges.targets bounds each project reference's range, and write no range by hand for one of this repository's own packages that stops anywhere else." />
+
+  </Target>
+
+</Project>
