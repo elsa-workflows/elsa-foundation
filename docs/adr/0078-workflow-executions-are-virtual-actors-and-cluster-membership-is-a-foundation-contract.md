@@ -1,10 +1,18 @@
 ---
-status: proposed
+status: accepted
 date: 2026-09-24
+amended: 2026-09-27
 decision_context: Discussion on 2026-09-23 and 2026-09-24 of the cluster gap ADR 0077 leaves open; decided by Sipke Schoorstra — membership first, a foundation contract with swappable providers, actor frameworks admitted only as providers bound by the four invariants below, and on 2026-09-24 that features needing new data wait for finalization and that migrations keep being regenerated until 4.0 ships as a stable release.
+amendment_context: 2026-09-27, decided by Sipke Schoorstra on #2093 alongside accepting this ADR (#2096): the schema-version unit this ADR shares with ADR 0077 is the schema family, not the EF module; dormancy for a feature that queries new-version data gains a completeness condition, proved by a post-finalization backfill (workstream B9, #2116); membership is selected once per host, in host configuration, following ADR 0076 D9's precedent, not as a per-shell opt-in feature — a clustered deployment declares itself by composing the durable provider, with no startup detection, and an explicit host id is required whenever it is composed; draining and failover are built as part of placement (workstream B7, #2103); and non-additive content changes are split across two versions with no reverse transforms, while an executable format never changes in place.
 ---
 
 # Workflow executions are virtual actors, and cluster membership is a foundation contract
+
+Status: accepted (2026-09-27). Sipke Schoorstra accepted this ADR after it was amended to match the
+rollout decisions recorded on [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093)
+(2026-09-27): the schema-version unit, a completeness condition for dormancy, membership selected once
+per host rather than per shell, and where draining/failover and content-versioning rules are built. See
+[#2096](https://github.com/elsa-workflows/elsa-foundation/issues/2096).
 
 ## Context
 
@@ -57,21 +65,39 @@ The contract is a **replacement contract** under
 application, the contract declares that it is one, and registering a second provider is detected at startup
 with a clear diagnostic rather than resolved by last-write-wins.
 
-**It ships with two providers.**
+**It ships with two providers, selected once per host, in host configuration.**
 
 - **In-process, the default** — a cluster of one, the host itself. No tables, no heartbeats written.
-  Non-clustered hosting pays nothing for this decision.
-- **Durable, opt-in** — EF-backed members, heartbeats and incarnations, for clustered hosting. This is the
-  same shape the runtime already uses: an in-process default that an opt-in feature replaces.
+  Non-clustered hosting pays nothing for this decision. Composing it *is* the declaration that a host is
+  alone, and it uses the host's machine name as its host id.
+- **Durable** — EF-backed members, heartbeats and incarnations, for clustered hosting. **A clustered
+  deployment declares itself by composing this provider**, instead of by any detection at startup: an
+  explicit host id is required whenever it is composed, and two live processes that claim one id are
+  refused loudly rather than displacing each other, per invariant 1 below.
+
+*Amended 2026-09-27.* This ADR first described the durable provider as **opt-in** — "the same shape the
+runtime already uses: an in-process default that an opt-in feature replaces", a per-shell `CShells`
+feature the way `WorkflowsRuntimeDistributed` is. That shape lets two shells in one host disagree about
+which provider is active, which membership cannot allow.
+[ADR 0076](0076-persistence-tooling-runs-inside-the-host-closure.md) D9 already avoids exactly this for
+the EF activation guard, by composing it once on the host container, ahead of any shell. Membership
+follows the same precedent: the provider is selected once per host, in host configuration, not per
+shell — so the EF provider lives in the host's own closure rather than arriving through a shell's
+feature list. There is deliberately **no startup detection**: two hosts that share one database but
+each compose only the in-process default will each believe they are alone, and nothing warns either of
+them. Declaring a clustered deployment by composing the durable provider is the whole of the protection
+this decision provides. Decided by Sipke Schoorstra on
+[#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093) (2026-09-27).
 
 **It lives at the foundation level, not inside the workflow runtime.** Its first consumer is the persistence
 schema gate, which serves every EF module; placing membership in the workflow runtime would make persistence
 depend on the workflow engine.
 
-**The finalized schema version per module is always durable**, whichever membership provider is active. It is
-a fact about the database, not about the fleet — in the same way the per-module migrations-history tables are.
-This gives even a single host a guarantee it lacks today: rolled back to an older binary, it refuses the module
-cleanly rather than reading rows it cannot understand.
+**The finalized schema version per schema family is always durable**, whichever membership provider is
+active. It is a fact about the database, not about the fleet — in the same way the per-module
+migrations-history tables are. This gives even a single host a guarantee it lacks today: rolled back to
+an older binary, its readers refuse a family's rows cleanly rather than reading rows they cannot
+understand.
 
 ## Invariants every membership or actor provider must preserve
 
@@ -110,31 +136,56 @@ with a diagnostic (1). A provider that is not run against the suite is not suppo
 
 ## The first consumers
 
-**The schema version gate.** A module version declares the schema version it writes and the versions it can
-read. Writers write the module's *finalized* version; a new version is finalized **automatically once every
+**The schema version gate.** A schema family declares the schema version it writes and the versions it can
+read. Writers write the family's *finalized* version; a new version is finalized **automatically once every
 live member reports it can read it**, and an operator can place a hold — during a canary, say — and release
-it. Once a version is finalized, a host whose readable range excludes it refuses to activate the module. Rows
-outlive versions — a workflow started under one version may be resumed years and several versions later — so
-readers apply a **chain of upcasters** from each version to its successor, rows upgrade lazily when next
-written, and a version may leave the readable range only once a scan proves no rows at that version remain.
-While a version awaits finalization, migrations are **expand-only**: nothing is dropped, renamed or retyped
-until no finalized version still reads it.
+it. Once a version is finalized, a host whose readable range excludes it refuses to activate the EF module
+the family lives in. Rows outlive versions — a workflow started under one version may be resumed years and
+several versions later — so readers apply a **chain of upcasters** from each version to its successor, rows
+upgrade lazily when next written, and a version may leave the readable range only once a scan proves no rows
+at that version remain. While a version awaits finalization, migrations are **expand-only**: nothing is
+dropped, renamed or retyped until no finalized version still reads it.
+
+*Amended 2026-09-27.* Two further rules on content, decided alongside acceptance on
+[#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093):
+
+- **A non-additive content change — a rename, a retype, or restructuring a JSON member — is never applied
+  in place.** It is split across two versions instead, with no reverse transform: one version adds the new
+  member beside the old, a later version removes the old member once no finalized version still reads it,
+  and a round-trip fixture test enforces the split.
+- **An executable format never changes in place.** A format change that would move a shipped executable's
+  identity hash ([ADR 0038](0038-artifact-hash-is-purely-behavioral-and-executables-are-content-addressed.md))
+  is a new format version that sits alongside the old one, never a rewrite of it, and every executable
+  reader that ever shipped is kept.
 
 **Features that need the new data wait for finalization.** Until then writers use the old format, so new
 fields have nowhere to go. Finalization is also the **rollback boundary**: before it, no rows in the new format
 exist and rolling back to the previous binary is safe; after it, it is not. Gating new-data features on
 finalization is what keeps that rollback real. The cost is small: with automatic finalization the window lasts
 only as long as the rollout, and on a single host it closes immediately. It stretches only under an operator's
-hold — during a canary, which is exactly when rollback must stay clean. Two rules go with it:
+hold — during a canary, which is exactly when rollback must stay clean.
 
-- **A dormant feature says why.** It reports that it becomes available once every host can read the new
-  version, rather than simply being absent.
+*Amended 2026-09-27.* **Finalization alone is not enough for a feature that queries the new version's
+data — only for one that writes it.** The upcaster chain upgrades a row lazily, on its next write, and a
+row that is written once and never written again — an executable, a receipt — never reaches the new
+version through that path. Such a feature stays dormant until a second, separate condition also holds:
+**completeness**, proved by a backfill that runs *after* finalization, batched and idempotent, and that
+records when it finishes for the family it covers
+([workstream B9](https://github.com/elsa-workflows/elsa-foundation/issues/2116)). A feature that only
+writes the new data needs finalization alone; a feature that reads it waits for both. Decided by Sipke
+Schoorstra on [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093) (2026-09-27).
+
+Two rules go with dormancy:
+
+- **A dormant feature says why.** It reports what it is waiting for — finalization, or finalization and
+  the backfill — rather than simply being absent.
 - **A write that needs dormant data is refused, never dropped.** A request setting a field the old format
   cannot hold fails with a diagnostic. Quietly discarding the field would be exactly the silent data loss
   this design exists to prevent.
 
-Modules check dormancy through one shared helper over the finalized version, so the rule is applied the same
-way everywhere rather than reinvented per module.
+Modules check dormancy through one shared helper over the finalized version — and, where completeness
+applies, the backfill record — so the rule is applied the same way everywhere rather than reinvented per
+module.
 
 **Version-aware placement.** Mid-rollout, or when a module has been installed on only part of the fleet, an
 execution needing that module is placed only on members that advertise it. Finalization stops a new version
@@ -144,6 +195,12 @@ without the other.
 **Draining and failover.** A draining member takes no new placements and hands executions off at their next
 checkpoint. A member whose heartbeat lapses — or that rejoins as a new incarnation — has its leases reclaimed
 at once, instead of each lease waiting out its own timeout.
+
+*Amended 2026-09-27.* This mechanism is built as part of placement
+([workstream B7](https://github.com/elsa-workflows/elsa-foundation/issues/2103)), which already consumes
+the membership query for version-aware routing; membership itself publishes status and incarnation and
+takes over none of this on its own. Decided by Sipke Schoorstra on
+[#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093) (2026-09-27).
 
 ## Actor frameworks
 
@@ -183,10 +240,14 @@ approximates virtual actors with the most ceremony.
 
 ## Consequences
 
-- A new foundation module carries the membership contract and the in-process provider; an opt-in module
-  carries the EF provider. Neither exists yet.
+- A new foundation module carries the membership contract and the in-process provider; the durable EF
+  provider is a module composed once on the host, in host configuration, following
+  [ADR 0076](0076-persistence-tooling-runs-inside-the-host-closure.md) D9's precedent — not an opt-in
+  shell feature. Neither exists yet.
 - `WorkflowsRuntimeDistributed` should consume membership: its `NodeId` becomes the member's host id, and
-  failover reclaims a lapsed member's leases rather than re-driving each lease on its own timeout.
+  failover reclaims a lapsed member's leases rather than re-driving each lease on its own timeout — built
+  as part of placement ([B7](https://github.com/elsa-workflows/elsa-foundation/issues/2103)), not
+  membership itself.
 - The conformance suite is part of the contract, built alongside the first provider rather than after it.
 - Every schema-changing release ships an upcaster from its predecessor. For an additive change the upcaster
   is trivial; the cost grows only with the size of the change.
@@ -208,6 +269,11 @@ approximates virtual actors with the most ceremony.
 - [ADR 0076](0076-persistence-tooling-runs-inside-the-host-closure.md) — the activation guards the gate builds
   on
 - [ADR 0077](0077-a-module-upgrades-in-place-only-when-its-persisted-schema-is-unchanged.md) — the gap this
-  closes; amended on 2026-09-24 to name this gate as its destination
+  closes; amended on 2026-09-24 to name this gate as its destination; shares this ADR's schema-family unit
+  as of 2026-09-27
+- [ADR 0038](0038-artifact-hash-is-purely-behavioral-and-executables-are-content-addressed.md) — the
+  content-addressed executable identity that the never-change-a-format-in-place rule protects
 - [Framework constitution §2.6.2](../../.specify/memory/constitution-framework.md) — replacement contracts
-- Issue #1144 (FR-1, independent release)
+- Issue #1144 (FR-1, independent release); #2093 (cluster rollout program); #2096 (this acceptance and the
+  family/completeness/host-membership/draining/content corrections); #2103 (B7, draining and failover);
+  #2116 (B9, the post-finalization backfill)
