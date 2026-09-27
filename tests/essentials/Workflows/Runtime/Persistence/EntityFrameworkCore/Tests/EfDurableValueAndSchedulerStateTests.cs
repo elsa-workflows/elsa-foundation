@@ -61,6 +61,28 @@ public sealed class EfDurableValueAndSchedulerStateTests
     }
 
     [Fact]
+    public async Task Durable_value_row_with_a_newer_incompatible_schema_reports_skew_not_corruption()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Values.SaveAsync(Value("value", "workflow-a"));
+        var row = await fixture.Context.DurableValueStates.SingleAsync();
+
+        // #2108: a newer module version almost certainly changed this row's JSON shape along with its
+        // schema version, so the malformed content below must never reach the deserializer - the version
+        // check has to run first and report skew, not the deserializer reporting corruption.
+        row.SchemaVersion = "2.0.0";
+        row.ContentJson = "not-json";
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.Values.FindAsync("workflow-a", "value").AsTask());
+        Assert.Equal("RuntimeOperationalState", skew.Module);
+        Assert.Equal("2.0.0", skew.Found);
+        Assert.Equal(RuntimeOperationalStateEfModule.SchemaVersion, skew.Expected);
+    }
+
+    [Fact]
     public async Task Durable_value_order_and_revision_projections_fail_closed()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -228,6 +250,27 @@ public sealed class EfDurableValueAndSchedulerStateTests
     }
 
     [Fact]
+    public async Task Execution_liveness_row_with_a_newer_incompatible_schema_reports_skew_not_corruption()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Liveness.SaveAsync(Liveness("workflow-a", "state-a"));
+        var row = await fixture.Context.ExecutionLivenessStates.SingleAsync();
+
+        // #2108: the version check has to run before the deserializer ever sees this row's content, or a
+        // newer module's changed shape is reported as corruption instead of skew.
+        row.SchemaVersion = "2.0.0";
+        row.ContentJson = "not-json";
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.Liveness.FindAsync("workflow-a", "state-a").AsTask());
+        Assert.Equal("RuntimeOperationalState", skew.Module);
+        Assert.Equal("2.0.0", skew.Found);
+        Assert.Equal(RuntimeOperationalStateEfModule.SchemaVersion, skew.Expected);
+    }
+
+    [Fact]
     public async Task Execution_liveness_persists_lease_heartbeat_and_fencing_across_restart()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -320,6 +363,27 @@ public sealed class EfDurableValueAndSchedulerStateTests
         row.ContentJson = "not-json";
         await restarted.Context.SaveChangesAsync();
         await Assert.ThrowsAsync<InvalidDataException>(() => restarted.Holds.FindAsync("global-state").AsTask());
+    }
+
+    [Fact]
+    public async Task Workflow_hold_row_with_a_newer_incompatible_schema_reports_skew_not_corruption()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Holds.SaveAsync(new WorkflowHoldState("workflow-state", "workflow-a", [WorkflowHold.ForWorkflowExecution("direct", "workflow-a", DateTimeOffset.UtcNow, "test", "direct")]));
+        var row = await fixture.Context.WorkflowHoldStates.SingleAsync();
+
+        // #2108: the version check has to run before the deserializer ever sees this row's content, or a
+        // newer module's changed shape is reported as corruption instead of skew.
+        row.SchemaVersion = "2.0.0";
+        row.ContentJson = "not-json";
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.Holds.FindAsync("workflow-state").AsTask());
+        Assert.Equal("RuntimeOperationalState", skew.Module);
+        Assert.Equal("2.0.0", skew.Found);
+        Assert.Equal(RuntimeOperationalStateEfModule.SchemaVersion, skew.Expected);
     }
 
     [Fact]

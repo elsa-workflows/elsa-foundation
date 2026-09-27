@@ -269,6 +269,68 @@ public sealed class EfWorkflowAlterationAndScopeTests
     }
 
     [Fact]
+    public async Task Alteration_plan_row_with_a_newer_incompatible_schema_reports_skew_not_corruption()
+    {
+        await using var db = await Database.CreateAsync();
+        await using var fixture = db.Open("tenant-a");
+        var plan = Plan("skewed-plan");
+        await fixture.Store.AdmitAsync(plan);
+        var row = await fixture.Context.WorkflowAlterationPlans.SingleAsync();
+
+        // #2108: the version check has to run before the deserializer ever sees this row's content, or a
+        // newer module's changed shape is reported as corruption instead of skew.
+        row.SchemaVersion = "2.0.0";
+        row.ContentJson = "not-json";
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.Store.FindPlanAsync(plan.PlanId).AsTask());
+        Assert.Equal("RuntimeWorkflowAlteration", skew.Module);
+        Assert.Equal("2.0.0", skew.Found);
+        Assert.Equal(RuntimeWorkflowAlterationEfModule.SchemaVersion, skew.Expected);
+    }
+
+    [Fact]
+    public async Task Alteration_job_row_with_a_newer_incompatible_schema_reports_skew_not_corruption()
+    {
+        await using var db = await Database.CreateAsync();
+        await using var fixture = db.Open("tenant-a");
+        var plan = await SealedPlanAsync(fixture, "skewed-job-plan");
+        var row = await fixture.Context.WorkflowAlterationJobs.SingleAsync();
+
+        row.SchemaVersion = "2.0.0";
+        row.ContentJson = "not-json";
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var jobId = WorkflowAlterationIdentity.CreateJobId(plan.PlanId, "execution-1");
+        var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.Store.FindJobAsync(jobId).AsTask());
+        Assert.Equal("RuntimeWorkflowAlteration", skew.Module);
+        Assert.Equal("2.0.0", skew.Found);
+        Assert.Equal(RuntimeWorkflowAlterationEfModule.SchemaVersion, skew.Expected);
+    }
+
+    [Fact]
+    public async Task Test_scope_row_with_a_newer_incompatible_schema_reports_skew_not_corruption()
+    {
+        await using var db = await Database.CreateAsync();
+        await using var fixture = db.Open("tenant-a");
+        var scope = new WorkflowTestScope("skewed-scope", DateTimeOffset.UtcNow.AddHours(1), "tenant-a", new WorkflowExecutionPartition("partition"));
+        await fixture.ScopeStore.CreateAsync(scope, DateTimeOffset.UtcNow);
+        var row = await fixture.Context.WorkflowTestScopes.SingleAsync();
+
+        row.SchemaVersion = "2.0.0";
+        row.ContentJson = "not-json";
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.ScopeStore.FindAsync(scope.ScopeId).AsTask());
+        Assert.Equal("RuntimeWorkflowTestScope", skew.Module);
+        Assert.Equal("2.0.0", skew.Found);
+        Assert.Equal(RuntimeWorkflowTestScopeEfModule.SchemaVersion, skew.Expected);
+    }
+
+    [Fact]
     public async Task Alteration_pending_jobs_are_not_claimed_before_their_created_at()
     {
         await using var db = await Database.CreateAsync();

@@ -164,6 +164,30 @@ public sealed class EfWorkflowActivationAuthorityTests
     }
 
     [Fact]
+    public async Task A_slot_row_with_a_newer_incompatible_schema_reports_skew_not_corruption()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var context = NewContext(connection);
+        await context.Database.EnsureCreatedAsync();
+        var authority = new EfWorkflowActivationAuthority(context, new Accessor("tenant-a"));
+        Assert.True((await authority.TryActivateAsync(new("definition-a", "slot-a", "activation-a", Importer, 0, Now))).Succeeded);
+        var row = await context.WorkflowActivationSlots.SingleAsync();
+
+        // #2108: the version check has to run before the deserializer ever sees this row's content, or a
+        // newer module's changed shape is reported as corruption instead of skew.
+        row.SchemaVersion = "2.0.0";
+        row.ContentJson = "not-json";
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => authority.FindAsync("definition-a", "slot-a").AsTask());
+        Assert.Equal("RuntimeActivationSlot", skew.Module);
+        Assert.Equal("2.0.0", skew.Found);
+        Assert.Equal(RuntimeActivationSlotEfModule.SchemaVersion, skew.Expected);
+    }
+
+    [Fact]
     public async Task A_transient_conflict_the_provider_execution_strategy_wrapped_around_a_save_is_retried()
     {
         var saves = FailingSaveInterceptor.WrappedDeadlock(failures: 1);

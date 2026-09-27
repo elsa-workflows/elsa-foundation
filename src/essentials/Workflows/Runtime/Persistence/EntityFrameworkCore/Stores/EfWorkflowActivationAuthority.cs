@@ -251,6 +251,8 @@ public sealed class EfWorkflowActivationAuthority(
 
     private static WorkflowActivationSlot Read(WorkflowActivationSlotEntity row, string scope, string? expectedDefinitionId = null, string? expectedSlotName = null)
     {
+        if (EfSchemaVersion.NotReadable("RuntimeActivationSlot", row.SchemaVersion, RuntimeActivationSlotEfModule.SchemaVersion))
+            throw new InvalidDataException("The persisted EF activation-slot row does not match its identity envelope or authoritative content.");
         WorkflowActivationSlot slot;
         try
         {
@@ -262,8 +264,7 @@ public sealed class EfWorkflowActivationAuthority(
         }
         ValidateIdentity(slot.WorkflowDefinitionId, nameof(slot.WorkflowDefinitionId));
         ValidateIdentity(slot.SlotName, nameof(slot.SlotName));
-        if (EfSchemaVersion.NotReadable("RuntimeActivationSlot", row.SchemaVersion, RuntimeActivationSlotEfModule.SchemaVersion) ||
-            row.Id != RowId(scope, slot.WorkflowDefinitionId, slot.SlotName) ||
+        if (row.Id != RowId(scope, slot.WorkflowDefinitionId, slot.SlotName) ||
             row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
             expectedDefinitionId is not null && slot.WorkflowDefinitionId != expectedDefinitionId ||
             expectedSlotName is not null && slot.SlotName != expectedSlotName ||
