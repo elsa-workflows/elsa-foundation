@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 
 export * from "../auth";
+export * from "./themeLayout";
 
 export type StudioModuleStatus = "available" | "loaded" | "disabled" | "incompatible" | "failed";
 

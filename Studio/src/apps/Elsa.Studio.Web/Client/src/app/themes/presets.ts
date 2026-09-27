@@ -1,3 +1,4 @@
+import type { StudioThemeLayout } from "../../sdk";
 import { foundationThemeDefinitions } from "./foundationThemes";
 
 export type StudioThemeSource = "built-in" | "custom";
@@ -113,6 +114,8 @@ export interface StudioThemeDefinition {
   modes: StudioThemeModes;
   typography?: ThemeTypography;
   shape?: ThemeShape;
+  /** Structural arrangement of the shell and authoring surfaces; `classic` when absent. */
+  layout?: StudioThemeLayout;
   material?: {
     textureAssets?: Record<string, string>;
     cssVariables?: Record<string, string>;
@@ -295,6 +298,7 @@ export function cloneThemeDefinition(theme: StudioThemeDefinition): StudioThemeD
     modes: theme.modes,
     typography: theme.typography,
     shape: theme.shape,
+    layout: theme.layout,
     material: theme.material
   })) as StudioThemeDefinition;
 }

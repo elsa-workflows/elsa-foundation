@@ -11,6 +11,7 @@ import type { WorkflowEditorPanelTab } from "../workflow-editor/editorTypes";
 import { PanelTabList } from "../workflow-editor/PanelTabList";
 import type { useSidePanelLayout } from "../workflow-editor/useSidePanelLayout";
 import { GraphAuthoringWorkspace } from "./GraphAuthoringWorkspace";
+import "./graphAuthoringLayouts.css";
 
 type SidePanelLayout = ReturnType<typeof useSidePanelLayout>;
 
@@ -33,19 +34,20 @@ export function GraphAuthoringWorkbench({
   resourceKind: StudioGraphAuthoringResourceKind;
   className?: string;
   layout: SidePanelLayout;
-  palette: WorkbenchPanel;
+  /** Absent when the resource has no left panel to show (e.g. the editorial layout's inline authoring). */
+  palette?: WorkbenchPanel;
   canvas: React.ReactNode;
   inspector: WorkbenchPanel;
 }) {
-  const activePalette = palette.tabs.find(tab => tab.id === palette.activeTabId) ?? palette.tabs[0];
+  const activePalette = palette ? palette.tabs.find(tab => tab.id === palette.activeTabId) ?? palette.tabs[0] : undefined;
   const activeInspector = inspector.tabs.find(tab => tab.id === inspector.activeTabId) ?? inspector.tabs[0];
 
   return (
     <GraphAuthoringWorkspace
       resourceKind={resourceKind}
-      className={[layout.editorBodyClassName, className].filter(Boolean).join(" ")}
+      className={[layout.editorBodyClassName, palette ? "" : "palette-absent", className].filter(Boolean).join(" ")}
       style={layout.editorBodyStyle}
-      palette={(
+      palette={palette && activePalette ? (
         <aside className="wf-palette" aria-label={palette.ariaLabel}>
           <WorkbenchPanelHeader
             side="palette"
@@ -60,8 +62,8 @@ export function GraphAuthoringWorkbench({
           />
           {layout.paletteExpanded ? activePalette.render() : null}
         </aside>
-      )}
-      paletteResizeHandle={(
+      ) : null}
+      paletteResizeHandle={palette ? (
         <WorkbenchResizeHandle
           side="palette"
           visible={layout.paletteExpanded && !layout.maximizedSidePanel}
@@ -69,7 +71,7 @@ export function GraphAuthoringWorkbench({
           onPointerDown={event => layout.startSidePanelResize("palette", event)}
           onKeyDown={event => layout.handleSidePanelResizeKeyDown("palette", event)}
         />
-      )}
+      ) : null}
       canvas={canvas}
       inspectorResizeHandle={(
         <WorkbenchResizeHandle

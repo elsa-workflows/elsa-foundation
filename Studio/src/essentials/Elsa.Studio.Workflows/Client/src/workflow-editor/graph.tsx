@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { BaseEdge, EdgeLabelRenderer, Handle, Position, getSmoothStepPath, type EdgeProps, type NodeProps } from "@xyflow/react";
+import { BaseEdge, EdgeLabelRenderer, Handle, Position, getBezierPath, getSmoothStepPath, type EdgeProps, type NodeProps } from "@xyflow/react";
+import { useStudioThemeLayout, type StudioThemeLayout } from "@elsa-workflows/studio-sdk";
 import { AlertTriangle, Flag, Plus, Trash2 } from "lucide-react";
 import type { ActivityCatalogItem } from "../workflowTypes";
 import { getActivityDisplay, type WorkflowNodeData } from "../workflowAdapter";
@@ -94,6 +95,9 @@ function formatNodeSubtitle(nodeData: WorkflowNodeData): { text: string; title?:
   return { text: nodeData.executionType?.trim() ?? "", title: typeMeta || undefined };
 }
 
+/** Floating and editorial layouts draw soft curves; classic and workbench keep squared wiring. */
+const curvedEdgeLayouts: readonly StudioThemeLayout[] = ["floating", "editorial"];
+
 export function WorkflowFlowEdge(props: EdgeProps<WorkflowEdge>) {
   const {
     id,
@@ -110,7 +114,8 @@ export function WorkflowFlowEdge(props: EdgeProps<WorkflowEdge>) {
   } = props;
   const actions = React.useContext(WorkflowEdgeActionsContext);
   const [hovered, setHovered] = useState(false);
-  const [path, labelX, labelY] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+  const getPath = curvedEdgeLayouts.includes(useStudioThemeLayout()) ? getBezierPath : getSmoothStepPath;
+  const [path, labelX, labelY] = getPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
   const isHighlighted = actions?.highlightedEdgeId === id;
 
   return (
@@ -154,7 +159,7 @@ export function WorkflowFlowEdge(props: EdgeProps<WorkflowEdge>) {
             >
               <Plus size={12} />
             </button>
-            <button type="button" aria-label="Delete connection" title="Delete connection" onClick={() => actions.deleteEdge(id)}>
+            <button type="button" className="wf-edge-delete" aria-label="Delete connection" title="Delete connection" onClick={() => actions.deleteEdge(id)}>
               <Trash2 size={12} />
             </button>
           </div>

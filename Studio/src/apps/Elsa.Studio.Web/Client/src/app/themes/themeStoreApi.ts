@@ -1,4 +1,4 @@
-import type { StudioEndpointContext } from "../../sdk";
+import { isStudioThemeLayout, studioThemeLayouts, type StudioEndpointContext } from "../../sdk";
 import {
   allThemeModes,
   builtInThemeDefinitions,
@@ -155,6 +155,9 @@ export function validateThemeDefinition(theme: StudioThemeDefinition): ThemeVali
 
   validateTypography(theme.typography, issues);
   validateShape(theme.shape, issues);
+  if (theme.layout !== undefined && theme.layout !== null && !isStudioThemeLayout(theme.layout)) {
+    issues.push(error("layout", `Layout must be one of ${studioThemeLayouts.join(", ")}.`));
+  }
 
   return { valid: issues.every(issue => issue.severity !== "error"), issues };
 }
@@ -323,6 +326,7 @@ function normalizeThemeDefinition(theme: Partial<StudioThemeDefinition> | null |
     // The host serializes absent optional sections as null; keep them undefined client-side.
     typography: theme.typography ?? undefined,
     shape: theme.shape ?? undefined,
+    layout: isStudioThemeLayout(theme.layout) ? theme.layout : undefined,
     material: theme.material
   };
 }

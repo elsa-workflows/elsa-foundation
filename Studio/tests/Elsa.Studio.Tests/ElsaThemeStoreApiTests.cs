@@ -94,7 +94,8 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
             SupportedModes = ["light", "dark", "dim", "high-contrast"],
             Typography = new StudioThemeTypography("\"Geist Variable\", system-ui, sans-serif", null, "\"Instrument Serif\", serif"),
             // Incidental whitespace is accepted, matching the client-side validator.
-            Shape = new StudioThemeShape("4px", " 6px ", null, null, "0.75rem")
+            Shape = new StudioThemeShape("4px", " 6px ", null, null, "0.75rem"),
+            Layout = "editorial"
         };
 
         var response = await _client.PutAsJsonAsync($"/_elsa/theme-store/themes/{theme.Id}", theme);
@@ -106,19 +107,22 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
         Assert.Equal(["light", "dark", "dim", "high-contrast"], saved?.SupportedModes ?? []);
         Assert.Equal("\"Instrument Serif\", serif", saved?.Typography?.Display);
         Assert.Equal("0.75rem", saved?.Shape?.RadiusXl);
+        Assert.Equal("editorial", saved?.Layout);
     }
 
     [Theory]
     [InlineData("supported-mode-without-palette")]
     [InlineData("font-stack-breakout")]
     [InlineData("radius-with-expression")]
+    [InlineData("unknown-layout")]
     public async Task CustomThemeRejectsUnsafeOrInconsistentAppearance(string defect)
     {
         var theme = defect switch
         {
             "supported-mode-without-palette" => CustomTheme() with { SupportedModes = ["light", "dark", "high-contrast"] },
             "font-stack-breakout" => CustomTheme() with { Typography = new StudioThemeTypography("x; background: url(https://evil.test)", null, null) },
-            _ => CustomTheme() with { Shape = new StudioThemeShape(null, "calc(100vw)", null, null, null) }
+            "radius-with-expression" => CustomTheme() with { Shape = new StudioThemeShape(null, "calc(100vw)", null, null, null) },
+            _ => CustomTheme() with { Layout = "sidebar-on-the-right" }
         };
 
         var response = await _client.PutAsJsonAsync($"/_elsa/theme-store/themes/{theme.Id}", theme);

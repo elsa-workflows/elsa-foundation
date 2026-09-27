@@ -227,18 +227,22 @@ Beyond the required `light` and `dark` palettes, a theme may add:
   Faces must be installed on the viewer's machine or bundled with Studio; the bundled families are
   Geist, Geist Mono, Manrope, DM Mono, IBM Plex Sans/Mono, Instrument Sans/Serif and JetBrains Mono.
 - `shape` — `radiusSm`, `radius`, `radiusMd`, `radiusLg`, `radiusXl` as `px` or `rem` lengths.
+- `layout` — `classic` (default), `floating`, `workbench` or `editorial`: how the shell and the
+  workflow designer are arranged. The signature themes use Meridian `classic`, Drift `floating`,
+  Schematic `workbench` and Atelier `editorial`; any theme may choose any layout.
 
 ```json
 {
   "supportedModes": ["light", "dark", "dim", "high-contrast"],
   "typography": { "sans": "\"Manrope Variable\", system-ui, sans-serif", "mono": "\"DM Mono\", monospace" },
   "shape": { "radiusSm": "6px", "radius": "10px", "radiusMd": "12px", "radiusLg": "16px", "radiusXl": "20px" },
+  "layout": "floating",
   "modes": { "light": { }, "dark": { }, "dim": { }, "highContrast": { } }
 }
 ```
 
 The easiest start is to duplicate one of the signature themes in the Theme Builder, which copies
-all four modes, the typography and the shape.
+all four modes, the typography, the shape and the layout.
 
 For detailed color format specifications (hex, oklch, rgb, hsl), see the Theme Builder UI in the application, or refer to the theme validation in `ElsaThemeStoreApi.cs`.
 

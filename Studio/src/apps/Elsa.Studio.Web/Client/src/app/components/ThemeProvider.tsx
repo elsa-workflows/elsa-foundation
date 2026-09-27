@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import type { StudioEndpointContext } from "../../sdk";
+import { studioThemeLayoutAttribute, type StudioEndpointContext } from "../../sdk";
 import type { StudioThemeDefinition, Theme, ThemeMaterialMode, ThemeMode } from "../themes/presets";
 import {
   builtInThemeDefinitions,
@@ -110,6 +110,7 @@ export function ThemeProvider({
     root.setAttribute("data-theme", currentTheme.id);
     root.setAttribute("data-theme-mode", getThemeColorScheme(activeMode));
     root.setAttribute("data-theme-appearance", activeMode);
+    root.setAttribute(studioThemeLayoutAttribute, currentTheme.layout ?? "classic");
     if (isMaterialTheme(currentTheme.id)) {
       root.setAttribute("data-theme-material", currentTheme.id);
     } else {

@@ -1,5 +1,6 @@
 @import "./ui/tokens.css";
 @import "./themes/fonts.css";
+@import "./themes/layouts.css";
 
 :root {
   /* Typography */

@@ -29,7 +29,7 @@ import type {
   StudioNavigationContribution,
   StudioPanelContribution
 } from "../sdk";
-import { requestStudioNavigation } from "../sdk";
+import { requestStudioNavigation, useStudioThemeLayout } from "../sdk";
 import { createStudioRegistry, findFeatureAreaForPath } from "./registry";
 import type { AuthProviderManager } from "../sdk";
 import { getStudioRuntimeConfig, getStudioRuntimeSettings } from "./runtime";
@@ -401,6 +401,10 @@ export function ShellFrame({
 }) {
   const [navQuery, setNavQuery] = useState("");
   const [navCollapsed, setNavCollapsed] = useState(() => getInitialBoolean(sidebarCollapsedStorageKey, false));
+  // The workbench layout turns the sidebar into a top menubar and moves backend status into a
+  // status bar; the icon-rail collapse has no meaning there, so it is ignored (not forgotten).
+  const workbench = useStudioThemeLayout() === "workbench";
+  const backendHost = new URL(backendBaseUrl).host;
 
   useEffect(() => {
     window.localStorage.setItem(sidebarCollapsedStorageKey, String(navCollapsed));
@@ -443,7 +447,7 @@ export function ShellFrame({
   const hasNavResults = navigationSections.length > 0;
 
   return (
-    <div className={navCollapsed ? "studio-shell sidebar-collapsed" : "studio-shell"}>
+    <div className={navCollapsed && !workbench ? "studio-shell sidebar-collapsed" : "studio-shell"}>
       <aside className="sidebar">
         <div className="sidebar-top">
           <a className="brand" href="/" onClick={event => { event.preventDefault(); onNavigate("/"); }}>
@@ -548,7 +552,7 @@ export function ShellFrame({
           <span className="sidebar-status-dot" aria-hidden="true" />
           <span>
             <strong>Backend API</strong>
-            <small>{new URL(backendBaseUrl).host}</small>
+            <small>{backendHost}</small>
           </span>
         </div>
       </aside>
@@ -573,6 +577,12 @@ export function ShellFrame({
         <main className="content">{children}</main>
       </div>
       {panels.length > 0 ? <BottomPanel panels={panels} /> : null}
+      {workbench ? (
+        <footer className="studio-statusbar" aria-label="Status">
+          <span><span className="sidebar-status-dot" aria-hidden="true" />Backend API · {backendHost}</span>
+          <span>Studio / {title}</span>
+        </footer>
+      ) : null}
     </div>
   );
 }

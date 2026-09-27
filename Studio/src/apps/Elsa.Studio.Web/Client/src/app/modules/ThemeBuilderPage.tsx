@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy, Download, FileUp, ImagePlus, Paintbrush, RefreshCcw, Save, Trash2 } from "lucide-react";
-import type { ElsaStudioModuleApi } from "../../sdk";
+import { isStudioThemeLayout, studioThemeLayouts, type ElsaStudioModuleApi } from "../../sdk";
 import { SkeletonRows, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
   allThemeModes,
@@ -348,6 +348,19 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           {tab === "tokens" ? (
             <div className="theme-token-editor">
               <div className="theme-token-grid">
+                <label className="theme-token-field">
+                  <span>Layout</span>
+                  <select
+                    value={draft.layout ?? "classic"}
+                    disabled={isReadOnly}
+                    onChange={event => {
+                      const layout = event.target.value;
+                      patchDraft({ layout: isStudioThemeLayout(layout) && layout !== "classic" ? layout : undefined });
+                    }}
+                  >
+                    {studioThemeLayouts.map(layout => <option key={layout} value={layout}>{layout}</option>)}
+                  </select>
+                </label>
                 {typographyFields.map(field => (
                   <label key={field.key} className="theme-token-field">
                     <span>{field.label}</span>

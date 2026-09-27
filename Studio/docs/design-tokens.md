@@ -58,6 +58,23 @@ Drift, Schematic, Atelier — define all four). ThemeProvider sets two attribute
 | `data-theme-mode` | `light` \| `dark` | the **colour scheme**. Dim and High contrast are `dark`, so existing `[data-theme-mode="dark"]` rules keep applying |
 | `data-theme-appearance` | `light` \| `dark` \| `dim` \| `high-contrast` | the exact mode the user picked |
 
+A third attribute carries the theme's **layout** — `data-theme-layout`, one of `classic`
+(default), `floating` (Drift), `workbench` (Schematic) or `editorial` (Atelier). Layout is the one
+theme property that changes arrangement rather than paint:
+
+| Layout | Shell | Graph-authoring workbench |
+| --- | --- | --- |
+| `classic` | docked sidebar, topbar, bottom panel | docked palette / canvas / inspector |
+| `floating` | shell regions become rounded islands | palette and inspector float over a full-bleed canvas; curved connections |
+| `workbench` | top menubar navigation with dropdowns, status bar, mono dock tabs | dense palette, drafting-grid canvas, squared connections |
+| `editorial` | page as a raised sheet; serif italic section headings | no activity toolbox — an **Add step** button and an always-visible connection "+" add steps inline; curved connections |
+
+A module adapts to layout the same way it adapts to mode: CSS guarded on
+`html[data-theme-layout="…"]`, styled only through tokens, for arrangement; and, only where the layout
+changes markup or behaviour (an affordance that exists in one layout and not another),
+`useStudioThemeLayout()` from `@elsa-workflows/studio-sdk`. Keep layout CSS for a surface in a
+stylesheet that surface imports, so it does not grow shared landing-path CSS.
+
 Modules should need neither: the tokens already resolve per mode, and High contrast additionally
 zeroes shadows, makes `--studio-focus` the solid ring colour and brightens the tinted-chip `-fg`
 tokens. If a module genuinely needs a High-contrast-only adjustment (e.g. thickening a hairline it
@@ -198,10 +215,10 @@ vocabulary. A module that wants the glass idiom under `black-glass` guards on
    per-theme behaviour through the tokens, which the host redefines per theme. The **only**
    permitted exception is `html[data-theme="black-glass"]` for opting into the
    `--studio-glass-*` idiom, since glass is a parallel vocabulary rather than a token remap.
-   This rule is about `data-theme` (which theme). The mode attributes are not theme selectors
-   and stay allowed: `[data-theme-mode="dark"]` for the colour scheme, and
+   This rule is about `data-theme` (which theme). The mode and layout attributes are not theme
+   selectors and stay allowed: `[data-theme-mode="dark"]` for the colour scheme,
    `[data-theme-appearance="high-contrast"]` for a High-contrast-only adjustment the tokens
-   cannot express (see [Modes and the `<html>` attributes](#modes-and-the-html-attributes)).
+   cannot express, and `[data-theme-layout="…"]` for arrangement (see [Modes and the `<html>` attributes](#modes-and-the-html-attributes)).
 4. **Gate every material treatment on `[data-theme-material]`.** Flat themes (`meridian`,
    `drift`, `schematic`, `atelier`, `harbor`, `borealis`, `ember`, `orchid`, `hot-pink`, `coral`,
    `graphite`) must stay flat. Any rule

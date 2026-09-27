@@ -38,6 +38,7 @@ import type {
 } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import { listActivities, listRecommendedActivityDefinitions, useFullActivityDefinitionVersion } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/activityDesign";
 import { runExecutable } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/runtime";
+import { flowchartStructureKind } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/flowchartStartNode";
 import { getDraft, updateDraft } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/workflowDesign";
 import { createActivityNode, getActivityDisplay, type ChildSlot } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter";
 import { decorateReusableCatalog, projectRecommendedPalette } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useWorkflowEditorData";
@@ -274,7 +275,8 @@ function browserGraphAuthoringDraft(): ActivityDefinitionDraftView {
           inputs: [],
           outputs: [],
           structure: {
-            kind: "Flowchart",
+            // `graph=flowchart` opts into the canonical Flowchart kind, whose scope supports connections.
+            kind: searchParams.get("graph") === "flowchart" ? flowchartStructureKind : "Flowchart",
             schemaVersion: "1",
             payload: { activities: [], connections: [] }
           }

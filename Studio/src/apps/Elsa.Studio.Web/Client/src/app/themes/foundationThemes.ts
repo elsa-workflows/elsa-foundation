@@ -1,8 +1,9 @@
+import type { StudioThemeLayout } from "../../sdk";
 import type { StudioThemeDefinition, ThemeModeDefinition, ThemeTypography } from "./presets";
 
 /*
  * The signature Elsa Studio 4 themes. Each defines all four modes — Light, Dark, Dim and High
- * contrast — plus its own typography and corner radii. Elevation (shadow) recipes, which are not
+ * contrast — plus its own typography, corner radii and layout. Elevation (shadow) recipes, which are not
  * colour tokens, live beside them in ui/tokens.css under `html[data-theme="<id>"]`.
  *
  * This module only builds plain definitions (no calls into presets.ts) so the two can import each
@@ -137,6 +138,7 @@ function definition(
   description: string,
   typography: ThemeTypography,
   shape: StudioThemeDefinition["shape"],
+  layout: StudioThemeLayout,
   modes: Required<StudioThemeDefinition["modes"]>
 ): StudioThemeDefinition {
   return {
@@ -150,6 +152,7 @@ function definition(
     supportedModes: ["light", "dark", "dim", "high-contrast"],
     typography,
     shape,
+    layout,
     modes
   };
 }
@@ -163,6 +166,7 @@ const meridian = definition(
     mono: `"Geist Mono Variable", "Geist Mono", ${monoFallback}`
   },
   { radiusSm: "5px", radius: "7px", radiusMd: "9px", radiusLg: "12px", radiusXl: "14px" },
+  "classic",
   {
     light: mode({
       scheme: "light", hue: 265, chroma: 0.006,
@@ -195,6 +199,7 @@ const drift = definition(
     mono: `"DM Mono", ${monoFallback}`
   },
   { radiusSm: "8px", radius: "12px", radiusMd: "14px", radiusLg: "18px", radiusXl: "22px" },
+  "floating",
   {
     light: mode({
       scheme: "light", hue: 195, chroma: 0.008,
@@ -227,6 +232,7 @@ const schematic = definition(
     mono: `"IBM Plex Mono", ${monoFallback}`
   },
   { radiusSm: "2px", radius: "3px", radiusMd: "4px", radiusLg: "4px", radiusXl: "6px" },
+  "workbench",
   {
     light: mode({
       scheme: "light", hue: 245, chroma: 0.014,
@@ -263,6 +269,7 @@ const atelier = definition(
     mono: `"JetBrains Mono Variable", "JetBrains Mono", ${monoFallback}`
   },
   { radiusSm: "6px", radius: "9px", radiusMd: "10px", radiusLg: "14px", radiusXl: "16px" },
+  "editorial",
   {
     light: mode({
       scheme: "light", hue: 78, chroma: 0.012,

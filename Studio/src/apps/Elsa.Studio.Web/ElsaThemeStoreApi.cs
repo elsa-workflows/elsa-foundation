@@ -19,6 +19,8 @@ internal static class ElsaThemeStoreApi
     private static readonly Regex FontStackPattern = new("^[a-z0-9\\s,'\"._-]{1,512}$", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     private static readonly Regex RadiusPattern = new("^(?:0|\\d{1,3}(?:\\.\\d+)?(?:px|rem))$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly string[] ThemeModeNames = ["light", "dark", "dim", "high-contrast"];
+    // Mirrors studioThemeLayouts in the SDK's themeLayout.ts.
+    private static readonly string[] ThemeLayoutNames = ["classic", "floating", "workbench", "editorial"];
     private static readonly HashSet<string> BuiltInThemeIds = new(StringComparer.OrdinalIgnoreCase)
     {
         "meridian",
@@ -526,6 +528,9 @@ internal static class ElsaThemeStoreApi
                 return $"Typography.{name} may only contain font family names separated by commas.";
         }
 
+        if (theme.Layout is not null && !ThemeLayoutNames.Contains(theme.Layout))
+            return "Theme layout must be classic, floating, workbench or editorial.";
+
         foreach (var (name, value) in theme.Shape?.Values() ?? [])
         {
             if (value is not null && !RadiusPattern.IsMatch(value.Trim()))
@@ -610,7 +615,8 @@ internal sealed record StudioThemeDefinition(
     StudioThemeMaterial? Material,
     string[]? SupportedModes = null,
     StudioThemeTypography? Typography = null,
-    StudioThemeShape? Shape = null);
+    StudioThemeShape? Shape = null,
+    string? Layout = null);
 
 /// <summary>A theme's palettes. Light and dark are required; dim and high contrast are optional.</summary>
 internal sealed record StudioThemeModes(

@@ -262,6 +262,75 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
   });
 });
 
+describe("ActivityGraphImplementationEditor editorial layout", () => {
+  afterEach(() => document.documentElement.removeAttribute("data-theme-layout"));
+
+  function pick(container: HTMLElement, name: string) {
+    const option = [...container.querySelectorAll<HTMLButtonElement>(".wf-connect-menu [role='option']")]
+      .find(candidate => candidate.querySelector("strong")?.textContent === name);
+    click(option!);
+  }
+
+  it("adds steps inline, continuing from the selected node through the shared picker", () => {
+    document.documentElement.setAttribute("data-theme-layout", "editorial");
+    catalogItems = [flowchartCatalogItem(), leafCatalogItem()];
+    const onChange = vi.fn();
+    const value = flowchartImplementationValue(flowchartStructureKind, [writeLineActivity("write-line-1")]);
+    const rendered = renderDesigner({ value, onChange });
+
+    click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
+    click(buttonByText(rendered.container, "Add step"));
+    pick(rendered.container, "Write line");
+
+    const structure = onChange.mock.calls.at(-1)?.[0].payload.rootActivity.structure.payload;
+    expect(structure.activities).toHaveLength(2);
+    expect(structure.connections).toEqual([
+      expect.objectContaining({ source: expect.objectContaining({ nodeId: "write-line-1" }) })
+    ]);
+  });
+
+  it("replaces the activity list with Add step, keeping the Activities tab for the scope owner", () => {
+    document.documentElement.setAttribute("data-theme-layout", "editorial");
+    catalogItems = [flowchartCatalogItem(), leafCatalogItem()];
+    const onChange = vi.fn();
+    const rendered = renderDesigner({ value: flowchartImplementationValue(), onChange });
+
+    expect(rendered.container.querySelector("input[aria-label='Search activity palette']")).toBeNull();
+    expect(rendered.container.querySelector("[data-graph-root-location]")?.textContent).toContain("Flowchart");
+
+    // An empty scope that is not a flowchart canvas offers Add step instead of "choose from the palette".
+    click(buttonByText(rendered.container, "Add step"));
+    pick(rendered.container, "Write line");
+
+    expect(lastPayload(onChange).activities).toEqual([expect.objectContaining({ activityVersionId: "write-line-v1" })]);
+  });
+
+  it("starts an empty flowchart with Add step rather than the classic Add activity", () => {
+    document.documentElement.setAttribute("data-theme-layout", "editorial");
+    catalogItems = [flowchartCatalogItem(), leafCatalogItem()];
+    const onChange = vi.fn();
+    const rendered = renderDesigner({ value: flowchartImplementationValue(flowchartStructureKind), onChange });
+
+    expect(() => buttonByText(rendered.container, "Add activity")).toThrow();
+    click(buttonByText(rendered.container, "Add step"));
+    pick(rendered.container, "Write line");
+
+    expect(lastPayload(onChange).activities).toHaveLength(1);
+  });
+
+  it("offers no Add step outside the editorial layout", () => {
+    catalogItems = [flowchartCatalogItem(), leafCatalogItem()];
+    const value = flowchartImplementationValue(flowchartStructureKind, [writeLineActivity("write-line-1")]);
+    const rendered = renderDesigner({ value });
+
+    expect(() => buttonByText(rendered.container, "Add step")).toThrow();
+  });
+
+  function writeLineActivity(nodeId: string) {
+    return { nodeId, activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null };
+  }
+});
+
 describe("ActivityGraphImplementationEditor BPMN slots", () => {
   // A BPMN scope renders from its process ELEMENTS, so an activity placed without a bound element has
   // no representation on the canvas and is dropped by the next syncBpmnCanvasToScope.
@@ -763,7 +832,7 @@ function inputLeafCatalogItem() {
 
 // `kind` defaults to the plain label used by the older fixtures (which resolves to a generic slot);
 // pass `flowchartStructureKind` when the test needs the real flowchart editing model.
-function flowchartImplementationValue(kind = "Flowchart") {
+function flowchartImplementationValue(kind = "Flowchart", activities: unknown[] = []) {
   return {
     payload: {
       rootActivity: {
@@ -775,7 +844,7 @@ function flowchartImplementationValue(kind = "Flowchart") {
           kind,
           schemaVersion: "1.0.0",
           payload: {
-            activities: [],
+            activities,
             connections: [],
             startNodeId: null,
             nodeMetadata: {},

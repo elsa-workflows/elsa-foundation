@@ -9,6 +9,7 @@ import type {
   StudioExpressionDescriptor,
   StudioExpressionEditorContribution
 } from "@elsa-workflows/studio-sdk";
+import { useStudioThemeLayout } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, VariableDefinition, WorkflowDefinitionState, WorkflowInput } from "./workflowTypes";
 import {
   buildCanvas,
@@ -32,6 +33,7 @@ import { GraphAuthoringCanvas } from "./graph-authoring/GraphAuthoringCanvas";
 import { activityGraphDocumentAdapter, activityGraphLayoutToDesign } from "./activityGraphDocumentAdapter";
 import type { WorkflowEdge, WorkflowEditorPanelTab } from "./workflow-editor/editorTypes";
 import { GraphAuthoringWorkbench } from "./graph-authoring/GraphAuthoringWorkbench";
+import { AddStepButton, authorsInline } from "./graph-authoring/AddStepButton";
 import { useGraphAuthoringCanvas } from "./graph-authoring/useGraphAuthoringCanvas";
 import {
   useGraphCanvasInteractions,
@@ -264,6 +266,7 @@ export function ActivityGraphImplementationEditor({
   const [paletteSearch, setPaletteSearch] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(() => new Set());
   const [activeLeftPanelId, setActiveLeftPanelId] = useState("activities");
+  const themeLayout = useStudioThemeLayout();
   const [activeRightPanelId, setActiveRightPanelId] = useState("inspector");
   const [activeInspectorTabId, setActiveInspectorTabId] = useState<ActivityInspectorTabId>("inputs");
   const [diagnosticFocusVersion, setDiagnosticFocusVersion] = useState(0);
@@ -349,6 +352,9 @@ export function ActivityGraphImplementationEditor({
   const ownerSupported = supportsActivityNode(owner, ownerCatalogItem);
   const slot = ownerSupported ? getChildSlots(owner, catalogByVersion)[0] : undefined;
   const isBpmnSlot = slot?.mode === "bpmn";
+  // Authoring inline drops the activity list, not the Activities tab: it also holds the scope owner and
+  // the root-composition chooser.
+  const inlineSteps = authorsInline(themeLayout, isBpmnSlot);
   const activities = slot?.activities ?? emptyActivities;
   const scopeFrames = useMemo(() => toScopeFrames(root, scopePath, catalogByVersion), [catalogByVersion, root, scopePath]);
   // A BPMN canvas selects ELEMENTS, whose id is the elementId rather than an activity node id. An
@@ -703,7 +709,7 @@ export function ActivityGraphImplementationEditor({
           {/* Events and gateways are what make the scope a BPMN process rather than a list of bound
               tasks; the activity palette below contributes the activity-bearing elements. */}
           {isBpmnSlot ? <BpmnShapePalette onAddShape={addBpmnShape} disabled={readOnly} /> : null}
-          <ActivityPalettePanel
+          {inlineSteps ? null : <ActivityPalettePanel
             paletteSearch={paletteSearch}
             onSearchChange={setPaletteSearch}
             groups={filteredPaletteGroups}
@@ -719,7 +725,7 @@ export function ActivityGraphImplementationEditor({
             onActivityDragStart={interactions.onPaletteDragStart}
             onActivityDragEnd={interactions.onPaletteDragEnd}
             onActivityPointerDown={interactions.onPalettePointerDown}
-          />
+          />}
         </div>
       )
     },
@@ -861,24 +867,24 @@ export function ActivityGraphImplementationEditor({
             deleteKeyCode: readOnly ? null : ["Backspace", "Delete"]
           }}
           overlays={<>
-            {nodes.length === 0 ? (
-              scopePath.length > 0 ? (
-                <SlotEmptyState
-                  slotLabel={slot.label}
-                  catalog={availableActivities}
-                  onPickActivity={activity => placeActivity(activity)}
-                  onBrowseAll={interactions.openEmptyConnectMenu}
-                />
-              ) : slot.mode === "flowchart" ? (
-                <button type="button" className="wf-empty-canvas-add" onClick={() => interactions.openEmptyConnectMenu()} disabled={readOnly}>
-                  <Plus size={15} /> Add activity
-                </button>
-              ) : (
-                <div className="ad-graph-empty"><strong>{slot.label} is empty</strong><span>{isBpmnSlot
-                  ? "Add a BPMN shape, or an authorized activity from the palette, to compose this process."
-                  : "Choose an authorized activity from the palette to compose this graph."}</span></div>
-              )
-            ) : null}
+            {nodes.length === 0 && scopePath.length > 0 ? (
+              <SlotEmptyState
+                slotLabel={slot.label}
+                catalog={availableActivities}
+                onPickActivity={activity => placeActivity(activity)}
+                onBrowseAll={interactions.openEmptyConnectMenu}
+              />
+            ) : inlineSteps ? (
+              <AddStepButton disabled={readOnly} onOpen={interactions.openAddStepMenu} />
+            ) : nodes.length > 0 ? null : slot.mode === "flowchart" ? (
+              <button type="button" className="wf-empty-canvas-add" onClick={() => interactions.openEmptyConnectMenu()} disabled={readOnly}>
+                <Plus size={15} /> Add activity
+              </button>
+            ) : (
+              <div className="ad-graph-empty"><strong>{slot.label} is empty</strong><span>{isBpmnSlot
+                ? "Add a BPMN shape, or an authorized activity from the palette, to compose this process."
+                : "Choose an authorized activity from the palette to compose this graph."}</span></div>
+            )}
             {interactions.connectMenu ? (
               <ConnectMenu
                 clientX={interactions.connectMenu.clientX}

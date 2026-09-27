@@ -1,0 +1,296 @@
+/*
+ * Shell layouts — the structural half of a theme (see StudioThemeLayout in sdk/themeLayout.ts).
+ *
+ * ThemeProvider publishes the active theme's layout as `data-theme-layout` on <html>; `classic`
+ * (the default) needs no rules. Every layout is desktop-only: below 1025px the shell keeps its
+ * responsive horizontal strip, which already suits a narrow screen. Selectors are keyed on the
+ * layout attribute, so they outrank the base `.sidebar`/`.topbar` rules regardless of source order.
+ */
+
+@media (min-width: 1025px) {
+  /* ── Floating (Drift): shell regions become rounded islands over the workspace ─────────── */
+
+  html[data-theme-layout="floating"] .studio-shell {
+    gap: 12px;
+    padding: 12px;
+    background: var(--background);
+  }
+
+  html[data-theme-layout="floating"] .sidebar,
+  html[data-theme-layout="floating"] .main-frame,
+  html[data-theme-layout="floating"] .bottom-panel {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+  }
+
+  html[data-theme-layout="floating"] .main-frame {
+    background: var(--card);
+  }
+
+  html[data-theme-layout="floating"] .topbar {
+    border-bottom-color: color-mix(in srgb, var(--border) 60%, transparent);
+    background: transparent;
+    backdrop-filter: none;
+  }
+
+  html[data-theme-layout="floating"] .content {
+    background: var(--background);
+  }
+
+  html[data-theme-layout="floating"] .bottom-panel.maximized {
+    height: calc(100vh - 24px);
+  }
+
+  html[data-theme-layout="floating"] .bottom-panel-resize-handle,
+  html[data-theme-layout="floating"] .bottom-panel-tabs {
+    background: transparent;
+  }
+
+  /* ── Workbench (Schematic): top menubar navigation, status bar, squared regions ────────── */
+
+  html[data-theme-layout="workbench"] .studio-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+  }
+
+  html[data-theme-layout="workbench"] .sidebar {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 0 10px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    overflow: visible;
+  }
+
+  html[data-theme-layout="workbench"] .sidebar-top .brand {
+    flex: none;
+    margin: 0 8px 0 0;
+  }
+
+  html[data-theme-layout="workbench"] .brand small,
+  html[data-theme-layout="workbench"] .sidebar-collapse-toggle,
+  html[data-theme-layout="workbench"] .nav-heading,
+  html[data-theme-layout="workbench"] .nav-icon-tile,
+  html[data-theme-layout="workbench"] .sidebar-footer {
+    display: none;
+  }
+
+  html[data-theme-layout="workbench"] .nav-section {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  /* Settings items follow the workspace items after a hairline separator. */
+  html[data-theme-layout="workbench"] .nav-section + .nav-section {
+    margin-left: 6px;
+    padding-left: 6px;
+    border-left: 1px solid var(--border);
+  }
+
+  html[data-theme-layout="workbench"] .nav-item-group {
+    position: relative;
+    display: flex;
+  }
+
+  html[data-theme-layout="workbench"] .nav-section a {
+    min-height: 44px;
+    border-radius: 0;
+    padding: 0 10px;
+    white-space: nowrap;
+  }
+
+  html[data-theme-layout="workbench"] .nav-section a:hover,
+  html[data-theme-layout="workbench"] .nav-section a.active {
+    background: transparent;
+  }
+
+  /* The active marker moves from the left edge to an underline, as in a menubar. */
+  html[data-theme-layout="workbench"] .nav-section a::before {
+    top: auto;
+    right: 8px;
+    bottom: 0;
+    left: 8px;
+    width: auto;
+    height: 2px;
+  }
+
+  html[data-theme-layout="workbench"] .nav-section a.has-active-child::before {
+    opacity: 1;
+  }
+
+  /* Child navigation becomes a dropdown; :focus-within keeps it reachable from the keyboard. */
+  html[data-theme-layout="workbench"] .nav-children {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 40;
+    display: none;
+    min-width: 220px;
+    margin: 0;
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card);
+    box-shadow: var(--shadow-lg);
+  }
+
+  html[data-theme-layout="workbench"] .nav-item-group:hover > .nav-children,
+  html[data-theme-layout="workbench"] .nav-item-group:focus-within > .nav-children {
+    display: grid;
+  }
+
+  html[data-theme-layout="workbench"] .nav-section a.nav-child {
+    min-height: 30px;
+    border-radius: var(--radius-sm);
+  }
+
+  html[data-theme-layout="workbench"] .nav-section a.nav-child::before {
+    display: none;
+  }
+
+  html[data-theme-layout="workbench"] .sidebar-search {
+    order: 1;
+    width: 260px;
+    height: 30px;
+    margin-left: auto;
+    font-family: var(--font-mono);
+  }
+
+  html[data-theme-layout="workbench"] .sidebar-search-empty {
+    order: 2;
+    margin: 0;
+  }
+
+  html[data-theme-layout="workbench"] .topbar {
+    min-height: 40px;
+    padding: 4px 16px;
+    backdrop-filter: none;
+  }
+
+  html[data-theme-layout="workbench"] .topbar h1 {
+    font-size: 15px;
+  }
+
+  html[data-theme-layout="workbench"] .content {
+    padding: 16px 20px;
+  }
+
+  html[data-theme-layout="workbench"] .bottom-panel-tab-list button,
+  html[data-theme-layout="workbench"] .bottom-panel-action-button {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* ── Editorial (Atelier): the page is a sheet on a desk ────────────────────────────────── */
+
+  html[data-theme-layout="editorial"] .studio-shell {
+    background: var(--background);
+  }
+
+  html[data-theme-layout="editorial"] .sidebar {
+    border-right: 0;
+    background: var(--background);
+    padding: 18px 12px;
+  }
+
+  html[data-theme-layout="editorial"] .brand strong {
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  html[data-theme-layout="editorial"] .nav-heading {
+    font-family: var(--studio-font-display);
+    font-size: 16px;
+    font-style: italic;
+    font-weight: var(--studio-title-weight, 400);
+    letter-spacing: 0;
+    text-transform: none;
+    opacity: 1;
+  }
+
+  html[data-theme-layout="editorial"] .nav-section a {
+    border: 1px solid transparent;
+  }
+
+  html[data-theme-layout="editorial"] .nav-section a.active {
+    border-color: var(--border);
+    background: var(--card);
+    box-shadow: var(--shadow-sm);
+  }
+
+  html[data-theme-layout="editorial"] .nav-section a::before {
+    display: none;
+  }
+
+  html[data-theme-layout="editorial"] .sidebar-footer {
+    border-top: 0;
+  }
+
+  html[data-theme-layout="editorial"] .main-frame {
+    margin: 10px 10px 10px 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--card);
+    box-shadow: var(--shadow-md);
+  }
+
+  html[data-theme-layout="editorial"] .topbar {
+    min-height: 72px;
+    padding: 16px 28px 14px;
+    background: transparent;
+    backdrop-filter: none;
+  }
+
+  html[data-theme-layout="editorial"] .topbar h1 {
+    font-size: 30px;
+    line-height: 1.05;
+  }
+
+  html[data-theme-layout="editorial"] .content {
+    background: var(--card);
+    padding: 22px 28px;
+  }
+
+  html[data-theme-layout="editorial"] .bottom-panel {
+    margin: 0 10px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+  }
+}
+
+/* The workbench status bar is keyed on the layout like every rule above, but sits outside the
+   desktop media query: ShellFrame renders it in the workbench layout at every width. */
+html[data-theme-layout="workbench"] .studio-statusbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-height: 26px;
+  padding: 0 12px;
+  border-top: 1px solid var(--border);
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+html[data-theme-layout="workbench"] .studio-statusbar > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+html[data-theme-layout="workbench"] .studio-statusbar .sidebar-status-dot {
+  margin-top: 0;
+  box-shadow: none;
+}

@@ -24,6 +24,8 @@ import {
 } from "../app/themes/themeStoreApi";
 import { ThemeProvider, useTheme } from "../app/components/ThemeProvider";
 import { ThemeSwitcher } from "../app/components/ThemeSwitcher";
+import { ShellFrame } from "../app/App";
+import { getStudioThemeLayout } from "../sdk";
 
 /** WCAG 2 contrast ratio between two `oklch(L C H)` colours, via OKLab → linear sRGB. */
 function contrast(first: string, second: string) {
@@ -87,6 +89,11 @@ describe("signature themes", () => {
     for (const [text, surface] of pairs) {
       expect(contrast(colors[text] as string, colors[surface] as string), `${text} on ${surface}`).toBeGreaterThanOrEqual(floor);
     }
+  });
+
+  it("gives each signature theme its layout, and every other built-in the classic one", () => {
+    expect(foundationThemeIds.map(id => getTheme(id)!.layout)).toEqual(["classic", "floating", "workbench", "editorial"]);
+    expect(builtInThemeDefinitions.slice(4).every(theme => theme.layout === undefined)).toBe(true);
   });
 
   it.each(foundationThemeIds)("%s high contrast is black-grounded with a bright accent", id => {
@@ -178,7 +185,8 @@ describe("theme validation of appearance", () => {
   it.each([
     ["typography.sans", (theme: ReturnType<typeof base>) => { theme.typography = { sans: "x; background: red" }; }],
     ["typography.display", (theme: ReturnType<typeof base>) => { theme.typography = { display: "url(https://evil.test/font.woff2)" }; }],
-    ["shape.radius", (theme: ReturnType<typeof base>) => { theme.shape = { radius: "calc(100vw)" }; }]
+    ["shape.radius", (theme: ReturnType<typeof base>) => { theme.shape = { radius: "calc(100vw)" }; }],
+    ["layout", (theme: ReturnType<typeof base>) => { (theme as { layout?: string }).layout = "sidebar-on-the-right"; }]
   ])("rejects unsafe %s", (path, mutate) => {
     const theme = base();
     mutate(theme);
@@ -209,7 +217,15 @@ describe("ThemeProvider and ThemeSwitcher", () => {
   }
 
   async function render() {
-    await act(() => root.render(<ThemeProvider><Probe /><ThemeSwitcher /></ThemeProvider>));
+    await act(() => root.render(
+      <ThemeProvider>
+        <Probe />
+        <ThemeSwitcher />
+        <ShellFrame navigation={[]} panels={[]} path="/" title="Dashboard" backendBaseUrl="https://backend.example/" onNavigate={() => {}}>
+          <div />
+        </ShellFrame>
+      </ThemeProvider>
+    ));
   }
 
   /** Opens the theme menu from the keyboard, as Radix does for Enter on its trigger. */
@@ -231,7 +247,7 @@ describe("ThemeProvider and ThemeSwitcher", () => {
     await act(() => root.unmount());
     container.remove();
     document.body.removeAttribute("style");
-    for (const attribute of ["data-theme", "data-theme-mode", "data-theme-appearance", "style"]) {
+    for (const attribute of ["data-theme", "data-theme-mode", "data-theme-appearance", "data-theme-layout", "style"]) {
       document.documentElement.removeAttribute(attribute);
     }
     api = undefined;
@@ -298,5 +314,30 @@ describe("ThemeProvider and ThemeSwitcher", () => {
     await act(() => dim.click());
 
     expect(api!.preferredMode).not.toBe("dim");
+  });
+
+  it("publishes the theme's layout on <html>, falling back to classic", async () => {
+    await render();
+    expect(getStudioThemeLayout()).toBe("classic");
+
+    await act(() => api!.setTheme("atelier"));
+    expect(document.documentElement.getAttribute("data-theme-layout")).toBe("editorial");
+
+    await act(() => api!.setTheme("harbor"));
+    expect(getStudioThemeLayout()).toBe("classic");
+  });
+
+  it("gives the workbench layout a status bar and ignores the icon-rail collapse", async () => {
+    localStorage.setItem("elsa-studio-sidebar-collapsed", "true");
+    await render();
+    const shell = () => container.querySelector(".studio-shell")!;
+
+    expect(container.querySelector(".studio-statusbar")).toBeNull();
+
+    await act(() => api!.setTheme("schematic"));
+
+    expect(container.querySelector(".studio-statusbar")?.textContent).toContain("backend.example");
+    expect(container.querySelector(".studio-statusbar")?.textContent).toContain("Studio / Dashboard");
+    expect(shell().classList.contains("sidebar-collapsed")).toBe(false);
   });
 });

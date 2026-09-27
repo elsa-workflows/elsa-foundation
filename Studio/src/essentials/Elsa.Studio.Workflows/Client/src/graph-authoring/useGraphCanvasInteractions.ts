@@ -520,6 +520,17 @@ export function useGraphCanvasInteractions({
     });
   };
 
+  // The inline "Add step" affordance (editorial layout): continue from the selected node when there is
+  // one — the same commit as dragging a new activity off its default port — otherwise add to the scope.
+  const openAddStepMenu = (anchor: { clientX: number; clientY: number }) => {
+    if (selectedNodeId && canCreateActivityFromPort && nodes.some(node => node.id === selectedNodeId)) {
+      setConnectMenu({ kind: "fromPort", sourceNodeId: selectedNodeId, sourceHandleId: null, ...anchor });
+      return;
+    }
+
+    openEmptyConnectMenu(anchor);
+  };
+
   const onNodesChange = (changes: NodeChange<Node<WorkflowNodeData>>[]) => {
     const allowedChanges = isUnsupported ? changes.filter(change => change.type === "select") : changes;
     if (allowedChanges.length === 0) return;
@@ -757,6 +768,7 @@ export function useGraphCanvasInteractions({
     onCanvasDragLeave,
     onCanvasDrop,
     openEmptyConnectMenu,
+    openAddStepMenu,
     onConnectMenuPick,
     onPaletteClick,
     onPaletteDragStart,
