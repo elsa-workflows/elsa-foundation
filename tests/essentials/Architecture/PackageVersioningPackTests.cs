@@ -8,10 +8,13 @@ namespace Elsa.Architecture.Tests;
 /// <summary>
 /// Real <c>dotnet build</c> and <c>dotnet pack</c> runs, through the real SDK and NuGet, of a two-project fixture laid
 /// out like this repository, under <c>src/</c> beside a copy of the root build files: proof that a packed nupkg carries
-/// what spec 150 asks of it (#2080). Its ranges are bounded below the next major (FR-007), and with the calculator's
-/// pack-properties file, passed the way a pipeline passes it, it carries the computed version, the input fingerprint
-/// and the source commit (FR-018). Each way a pack could silently carry something else fails it instead, leaving no
-/// package behind.
+/// what spec 150 asks of it (#2080). With the calculator's pack-properties file, passed the way a pipeline passes it,
+/// its range on its own project reference is bounded below the next major (FR-007), a third party's range is left
+/// exactly as central package management restored it, and the package carries the computed version, the input
+/// fingerprint and the source commit (FR-018). Without that file - a dev pack, or a pack with only a global
+/// <c>/p:Version</c>, which is what <c>packages.yml</c> runs today - every range and the package's contents match
+/// what packing has always produced: no bounding, no fingerprint. Each way a pack could silently carry something else
+/// fails it instead, leaving no package behind.
 /// </summary>
 /// <remarks>
 /// <c>Fixture.App</c> references <c>Fixture.Lib</c> as a project and <c>Microsoft.Extensions.Primitives</c> as a package,
@@ -55,14 +58,34 @@ public sealed class PackageVersioningPackTests : IDisposable
 
     private string Output => Path.Join(root.FullName, "out");
 
+    /// <summary>
+    /// Without computed input, packing is unaffected by spec 150: no range is bounded, whatever it is a range on, and
+    /// no fingerprint travels in the package - the same shape a dev pack, and a pack with only a global
+    /// <c>/p:Version</c>, has always had.
+    /// </summary>
     [Fact]
-    public void A_dev_pack_bounds_every_range_and_carries_no_fingerprint()
+    public void A_dev_pack_leaves_every_range_unbounded_and_carries_no_fingerprint()
     {
         Dotnet("pack", "src/App/Fixture.App.csproj", "-c", "Release", "-o", Output);
 
         var package = Path.Join(Output, "Fixture.App.4.0.0-dev.nupkg");
+        Assert.Equal([("Fixture.Lib", "4.0.0-dev"), ("Microsoft.Extensions.Primitives", PrimitivesVersion)], Dependencies(package));
+        Assert.Null(Entry(package, "elsa-input-fingerprint.json"));
+    }
+
+    /// <summary>
+    /// #2080's own gate: <c>packages.yml</c> still packs with a global <c>/p:Version</c> and no calculator input
+    /// (until #2082 rewrites it), so that path must go on producing exactly what it always has - no bounded range, no
+    /// fingerprint - or the next merge to main would change what today's workflow publishes.
+    /// </summary>
+    [Fact]
+    public void A_pack_with_only_a_global_version_matches_todays_unbounded_ranges_and_carries_no_fingerprint()
+    {
+        Dotnet("pack", "src/App/Fixture.App.csproj", "-c", "Release", "-p:Version=4.0.0-preview.999", "-o", Output);
+
+        var package = Path.Join(Output, "Fixture.App.4.0.0-preview.999.nupkg");
         Assert.Equal(
-            [("Fixture.Lib", "[4.0.0-dev, 5.0.0)"), ("Microsoft.Extensions.Primitives", $"[{PrimitivesVersion}, {NextMajor(PrimitivesVersion)}.0.0)")],
+            [("Fixture.Lib", "4.0.0-preview.999"), ("Microsoft.Extensions.Primitives", PrimitivesVersion)],
             Dependencies(package));
         Assert.Null(Entry(package, "elsa-input-fingerprint.json"));
     }
@@ -70,6 +93,8 @@ public sealed class PackageVersioningPackTests : IDisposable
     /// <summary>
     /// The pipeline's shape: build, then pack without building, both with the same pack-properties file. The package
     /// takes its computed version; its range on an unpublished reference starts at that reference's recorded version.
+    /// A third party's range is left exactly as central package management restored it (spec 150 Decisions, FR-007) -
+    /// here, the plain version Directory.Packages.props names, with no upper bound.
     /// </summary>
     [Fact]
     public void A_computed_pack_carries_its_version_fingerprint_and_source_commit()
@@ -83,9 +108,7 @@ public sealed class PackageVersioningPackTests : IDisposable
         var metadata = Metadata(package);
         Assert.Equal("4.0.8-preview", metadata.Element(metadata.Name.Namespace + "version")!.Value);
         Assert.Equal(head, (string?)metadata.Element(metadata.Name.Namespace + "repository")!.Attribute("commit"));
-        Assert.Equal(
-            [("Fixture.Lib", "[4.0.3-preview, 5.0.0)"), ("Microsoft.Extensions.Primitives", $"[{PrimitivesVersion}, {NextMajor(PrimitivesVersion)}.0.0)")],
-            Dependencies(package));
+        Assert.Equal([("Fixture.Lib", "[4.0.3-preview, 5.0.0)"), ("Microsoft.Extensions.Primitives", PrimitivesVersion)], Dependencies(package));
         Assert.Equal($$"""{"schema_version":1,"fingerprint":"{{AppFingerprint}}"}""", Entry(package, "elsa-input-fingerprint.json")?.Trim());
     }
 
@@ -114,24 +137,26 @@ public sealed class PackageVersioningPackTests : IDisposable
     }
 
     /// <summary>
-    /// A range written by hand is left as written, so one that stops anywhere but its floor's next major reaches the
-    /// nuspec, where the last check finds it and deletes the package it was written into.
+    /// A third party's range is never checked here, however it is shaped: only this repository's own ranges are
+    /// (spec 150 Decisions, FR-007). <see cref="PackageRangesBuildCheckTests"/> proves ElsaVerifyNuspecRanges rejects
+    /// an unbounded range on one of this repository's own packages the same way; a real pack cannot manufacture that
+    /// case, because every other check here refuses a version that is not what the computation - or the dev fallback -
+    /// says it should be, project references included.
     /// </summary>
     [Fact]
-    public void A_range_not_bounded_at_the_next_major_fails_the_pack_and_leaves_no_package()
+    public void A_third_partys_range_left_unbounded_by_hand_still_passes_the_pack()
     {
-        WriteCentralPackages($"[{PrimitivesVersion}, {NextMajor(PrimitivesVersion) + 1}.0.0)");
+        WriteCentralPackages($"[{PrimitivesVersion}, )");
+        var properties = Computed(head);
 
-        var output = DotnetFailing("pack", "src/App/Fixture.App.csproj", "-c", "Release", "-o", Output);
+        Dotnet("build", "src/App/Fixture.App.csproj", "-c", "Release", $"-p:CustomBeforeDirectoryBuildProps={properties}");
+        Dotnet("pack", "src/App/Fixture.App.csproj", "-c", "Release", "--no-build", $"-p:CustomBeforeDirectoryBuildProps={properties}", "-o", Output);
 
-        Assert.Contains("ELSAPV008", output);
-        Assert.Contains("Microsoft.Extensions.Primitives", output);
-        Assert.False(File.Exists(Path.Join(Output, "Fixture.App.4.0.0-dev.nupkg")));
+        var package = Path.Join(Output, "Fixture.App.4.0.8-preview.nupkg");
+        Assert.Equal([("Fixture.Lib", "[4.0.3-preview, 5.0.0)"), ("Microsoft.Extensions.Primitives", PrimitivesVersion)], Dependencies(package));
     }
 
     public void Dispose() => root.Delete(recursive: true);
-
-    private static int NextMajor(string version) => int.Parse(version.Split('.')[0], System.Globalization.CultureInfo.InvariantCulture) + 1;
 
     /// <summary>The calculator's pack-properties file for <paramref name="commit"/>: App is being published, Lib is not.</summary>
     private string Computed(string commit)

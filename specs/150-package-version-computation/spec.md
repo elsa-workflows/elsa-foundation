@@ -412,12 +412,15 @@ Recorded when #2079 implemented the calculator, `tools/versioning/Elsa.Versionin
 Recorded when #2080 made packing read the calculator's output
 ([README, Packing](../../tools/versioning/README.md#packing)).
 
-- **FR-007 bounds every range, third-party packages included.** It says "every nuspec dependency range", and an
-  unbounded third-party range fails silently — NuGet may select a new major nobody built against — where a bounded
-  one fails loudly, as a restore warning for a consumer who moves past it. The cost is that a consumer taking the next
-  major of a dependency such as `Microsoft.Extensions.*` sees `NU1608` until the package is republished against it.
-  The bound is `(x+1).0.0` exclusive, as FR-007 and ADR 0067 write it; NuGet orders a prerelease of the next major,
-  such as `5.0.0-preview`, below `5.0.0`, so such a range still admits it. Bounding at `(x+1).0.0-0` would not.
+- **FR-007 is applied to this repository's own ranges — a project reference, and any package the dependency map
+  records as one this repository produces. Third-party bounding is pending the owner's decision.** It says "every
+  nuspec dependency range", and an unbounded third-party range fails silently — NuGet may select a new major nobody
+  built against — where a bounded one fails loudly, as `NU1608` or `NU1107` for a consumer who moves past it on the
+  next .NET major. The trade-off is between that guidance and expressing a band this repository has actually tested
+  against; #2080 packs FR-007 for this repository's own ranges only, and leaves every third-party range exactly as
+  central package management restores it until the owner chooses. The bound, where it applies, is `(x+1).0.0`
+  exclusive, as FR-007 and ADR 0067 write it; NuGet orders a prerelease of the next major, such as `5.0.0-preview`,
+  below `5.0.0`, so such a range still admits it. Bounding at `(x+1).0.0-0` would not.
 - **A package keeps the recorded version of each package it references that is not being published** — label
   included, so a branch build's range on an unchanged package starts at the version on the feed, not at one carrying
   the branch's label (SC-002).

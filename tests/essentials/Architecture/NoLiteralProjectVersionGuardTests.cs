@@ -28,8 +28,9 @@ namespace Elsa.Architecture.Tests;
 /// build used the literal — local builds, CI's build-and-test job, Docker images — so it set the
 /// assembly version of every artifact those produce. #2076 removed the eighteen <c>&lt;Version&gt;</c>
 /// elements that had accumulated; like every other project, those projects now take the package version
-/// <c>PackageVersioning.props</c> derives, and the SDK's default assembly version outside a computed build. This guard keeps the count at zero. FR-005's other clause — the
-/// packaging workflow's global <c>/p:Version</c> — is removed and guarded separately, in #2082.
+/// <c>PackageVersioning.props</c> derives, and the SDK's default assembly version outside a computed build.
+/// This guard keeps the count at zero. FR-005's other clause — the packaging workflow's global
+/// <c>/p:Version</c> — is removed and guarded separately, in #2082.
 /// </para>
 /// </summary>
 public sealed class NoLiteralProjectVersionGuardTests

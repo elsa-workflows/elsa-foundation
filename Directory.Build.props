@@ -113,9 +113,11 @@
 
   <!--
     Package versions (spec 150): after the version line, which it reads, and after the check above, so a wrong line
-    is reported before any version derived from it.
+    is reported before any version derived from it. PackageRanges.targets, imported right after, bounds dependency
+    ranges from the version PackageVersioning.props selects.
   -->
   <Import Project="$(MSBuildThisFileDirectory)PackageVersioning.props" />
+  <Import Project="$(MSBuildThisFileDirectory)PackageRanges.targets" />
 
   <!--
     #2078: Line A's version is meant to move only when its contract changes, and PublicApiAnalyzers is

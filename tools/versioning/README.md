@@ -125,11 +125,14 @@ because the calculator refuses an import whose path it cannot resolve statically
   `a-z` and `0-9` made one `-`, `-` trimmed from both ends, cut to 40 characters and trimmed again. `feat/Issue_2080`
   gives `4.0.9-branch-feat-issue-2080`. No `main` build carries that prefix, and it sorts below `preview`.
   [`PrereleaseLabel`](Elsa.Versioning.Calculator/PrereleaseLabel.cs) is the one implementation.
-- **Ranges (FR-007).** Every dependency range stops below its floor's next major, `[x.y.z, (x+1).0.0)`. A project
-  reference's floor is the referenced package's version above; a package's is its `Directory.Packages.props` version,
-  bounded when a packable project restores. Resolution does not change: NuGet still restores the lowest version a
-  range admits. After pack writes the nuspec, a last check fails the pack and deletes the package when any range is
-  bounded anywhere else.
+- **Ranges (FR-007), on this repository's own packages.** Every range on a project reference stops below its floor's
+  next major, `[x.y.z, (x+1).0.0)`; the floor is the referenced package's version above. A third party's range is left
+  exactly as central package management restores it - the plain version `Directory.Packages.props` names, with no
+  upper bound - pending the owner's decision (spec 150 Decisions). After pack writes the nuspec, a last check fails
+  the pack and deletes the package when a range on one of this repository's own packages is bounded anywhere else.
+  Every one of these effects is gated on this file's own `ElsaVersionComputationCommit`: a pack that does not import
+  it - a dev pack, or a pack with only a global `/p:Version`, which is what `packages.yml` still runs until #2082
+  rewrites it - bounds nothing and carries no fingerprint, the same shape packing has always had.
 - **Fingerprint and source commit (FR-018).** The fingerprint is `elsa-input-fingerprint.json` at the package root,
   `{"schema_version":1,"fingerprint":"sha256:<hex>"}`: NuGet has no custom nuspec metadata, and silently drops an
   element it does not know. The source commit is the nuspec's `<repository commit="…"/>`, and the pack fails unless

@@ -3,6 +3,8 @@
   <!--
     Package versions, and what every package carries about where it came from: spec 150 FR-007, FR-008 and FR-018.
     Directory.Build.props imports this after it derives and checks $(ElsaVersionLine), so every project sees it.
+    PackageRanges.targets, imported right after this file, holds the dependency-range bounding and the nuspec
+    range verification (spec 150 FR-007); this file holds version selection and the checks on it.
 
     It versions the projects under src/, where every package the pipeline publishes lives (FR-005), and leaves every
     other project - a test fixture pinning its assembly version, a sample package - exactly as its own properties and
@@ -27,7 +29,11 @@
     Nothing else may set PackageVersion, nor, with computed input, Version, and ElsaVerifyPackageVersion fails the
     build or the pack when something did. One exception stands until #2082 rewrites packages.yml: without computed
     input, a Version that arrived from outside every build file - a global /p:Version - becomes the package version,
-    because packages.yml still stamps one on every package.
+    because packages.yml still stamps one on every package. Every other pack-time effect this file and
+    PackageRanges.targets add - bounded ranges, the nuspec range check, the input fingerprint - is gated on computed
+    input alone (ElsaVersionComputationCommit set), so a pack with only a global /p:Version, exactly what packages.yml
+    runs today, still produces the ranges and package contents it always has: PackageVersioning.props changes what a
+    computed pack carries, and nothing about the /p:Version path packages.yml runs today until #2082 replaces it.
 
     The calculator also decides, from this file, which of a project's Markdown files count as package inputs
     (FR-002a): an item whose Include or Update it cannot resolve statically is taken to name every file. So every
@@ -151,83 +157,6 @@
     <Error Code="ELSAPV007"
            Condition="'$(_ElsaBuiltPackageVersion)' != '$(PackageVersion)'"
            Text="$(MSBuildProjectName) is being packed as $(PackageVersion) without building, but its $(Configuration) build was made as '$(_ElsaBuiltPackageVersion)'. Build and pack with the same version input: the same -p:CustomBeforeDirectoryBuildProps file, or none for both." />
-
-  </Target>
-
-  <!--
-    FR-007: every dependency range in the nuspec stops below the next major, [x.y.z, (x+1).0.0), whatever the
-    dependency is, so a package never accepts a new major it was not built against.
-
-      - Project references. Pack asks each referenced project for its version and parses the answer as a range, in
-        which a bare version means [x.y.z, ); this rewrites each answer into the bounded range before pack reads it.
-      - Packages. Pack copies each package's range from the restore graph, which central package management fills
-        from Directory.Packages.props, so the restore of a packable project bounds each PackageVersion the same way.
-        Resolution does not change: NuGet still restores the lowest version a range admits, which is the version
-        Directory.Packages.props names.
-
-    A version already written as a range is left as it is. ElsaVerifyNuspecRanges then reads the nuspec pack wrote and
-    fails the pack, deleting what it wrote, when any range is not bounded at its floor's next major: a range written
-    by hand, a restore these targets did not run in (a static-graph restore, or assets restored before this file
-    existed), and a change to the NuGet internals the project-reference rewrite hooks all end there rather than on
-    the feed.
-  -->
-  <Target Name="ElsaBoundProjectReferenceRanges" AfterTargets="_GetProjectReferenceVersions" Condition="'$(_ElsaPackageVersion)' != ''">
-
-    <ItemGroup>
-      <_ProjectReferencesWithVersions Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(ProjectVersion)', '^[0-9]'))">
-        <ProjectVersion>[%(ProjectVersion), $([MSBuild]::Add($([System.String]::Copy('%(ProjectVersion)').Split('.')[0]), 1)).0.0)</ProjectVersion>
-      </_ProjectReferencesWithVersions>
-    </ItemGroup>
-
-  </Target>
-
-  <Target Name="ElsaBoundCentralPackageVersions" AfterTargets="CollectCentralPackageVersions"
-          Condition="'$(_ElsaPackageVersion)' != '' and '$(IsPackable)' == 'true'">
-
-    <ItemGroup>
-      <PackageVersion Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Version)', '^[0-9]'))">
-        <Version>[%(Version), $([MSBuild]::Add($([System.String]::Copy('%(Version)').Split('.')[0]), 1)).0.0)</Version>
-      </PackageVersion>
-    </ItemGroup>
-
-  </Target>
-
-  <Target Name="ElsaVerifyNuspecRanges" AfterTargets="GenerateNuspec" DependsOnTargets="_GetOutputItemsFromPack"
-          Condition="'$(_ElsaPackageVersion)' != '' and '$(IsPackable)' == 'true'">
-
-    <PropertyGroup>
-      <_ElsaNuspecFile>@(_OutputPackItems->WithMetadataValue('Extension', '.nuspec'))</_ElsaNuspecFile>
-    </PropertyGroup>
-
-    <XmlPeek XmlInputPath="$(_ElsaNuspecFile)" Query="//*[local-name()='dependency']">
-      <Output TaskParameter="Result" ItemName="_ElsaNuspecDependency" />
-    </XmlPeek>
-
-    <!-- XmlPeek returns each dependency element's XML; its id and range, then the range's floor and ceiling majors. -->
-    <ItemGroup>
-      <_ElsaNuspecDependency>
-        <PackageId>$([System.Text.RegularExpressions.Regex]::Match('%(Identity)', ' id="([^"]*)"').Groups[1].Value)</PackageId>
-        <Range>$([System.Text.RegularExpressions.Regex]::Match('%(Identity)', ' version="([^"]*)"').Groups[1].Value)</Range>
-        <Bounded>false</Bounded>
-      </_ElsaNuspecDependency>
-      <_ElsaNuspecDependency>
-        <FloorMajor>$([System.Text.RegularExpressions.Regex]::Match('%(Range)', '^\[([0-9]+)\.[^,]*, [0-9]+\.0\.0\)$').Groups[1].Value)</FloorMajor>
-        <CeilingMajor>$([System.Text.RegularExpressions.Regex]::Match('%(Range)', '^\[[0-9]+\.[^,]*, ([0-9]+)\.0\.0\)$').Groups[1].Value)</CeilingMajor>
-      </_ElsaNuspecDependency>
-      <_ElsaNuspecDependency Condition="'%(FloorMajor)' != '' and '%(CeilingMajor)' == '$([MSBuild]::Add($([MSBuild]::ValueOrDefault(`%(FloorMajor)`, `0`)), 1))'">
-        <Bounded>true</Bounded>
-      </_ElsaNuspecDependency>
-    </ItemGroup>
-
-    <PropertyGroup>
-      <_ElsaUnboundedRanges>@(_ElsaNuspecDependency->WithMetadataValue('Bounded', 'false')->'%(PackageId) %(Range)', ', ')</_ElsaUnboundedRanges>
-    </PropertyGroup>
-
-    <Delete Files="@(_OutputPackItems)" Condition="'$(_ElsaUnboundedRanges)' != ''" />
-
-    <Error Code="ELSAPV008"
-           Condition="'$(_ElsaUnboundedRanges)' != ''"
-           Text="$(MSBuildProjectName)'s nuspec declares dependency ranges that are not bounded below their floor's next major (spec 150 FR-007): $(_ElsaUnboundedRanges). The package was deleted. Restore again, so that PackageVersioning.props bounds each package's range, and write no range by hand in Directory.Packages.props that stops anywhere else." />
 
   </Target>
 

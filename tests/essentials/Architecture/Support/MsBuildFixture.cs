@@ -9,7 +9,8 @@ namespace Elsa.Architecture.Tests;
 internal static class MsBuildFixture
 {
     /// <summary>The root build files: <c>Directory.Build.props</c> and the two files it imports from beside itself.</summary>
-    private static readonly string[] RootBuildFiles = ["Directory.Build.props", "PackageVersioning.props", "VersionLines.props"];
+    private static readonly string[] RootBuildFiles =
+        ["Directory.Build.props", "PackageVersioning.props", "PackageRanges.targets", "VersionLines.props"];
 
     /// <summary>
     /// Writes the fixture project <paramref name="projectName"/> and runs <c>-t:</c><paramref name="target"/> against

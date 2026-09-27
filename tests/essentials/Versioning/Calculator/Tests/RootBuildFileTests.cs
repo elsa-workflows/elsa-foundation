@@ -14,6 +14,7 @@ public sealed class RootBuildFileTests
     [Theory]
     [InlineData("Directory.Build.props")]
     [InlineData("PackageVersioning.props")]
+    [InlineData("PackageRanges.targets")]
     [InlineData("VersionLines.props")]
     public void A_root_build_file_leaves_documentation_out_of_every_package(string file)
     {
