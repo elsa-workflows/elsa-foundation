@@ -296,9 +296,8 @@ public sealed class DockerBuildContextGuardTests
         var current = new StringBuilder();
         var continuing = false;
 
-        foreach (var rawLine in dockerfileText.Replace("\r\n", "\n").Split('\n'))
+        foreach (var line in dockerfileText.Replace("\r\n", "\n").Split('\n').Select(line => line.Trim()))
         {
-            var line = rawLine.Trim();
             if (!continuing && (line.Length == 0 || line.StartsWith('#')))
                 continue;
 
@@ -372,23 +371,17 @@ public sealed class DockerBuildContextGuardTests
     private static bool IsDockerIgnored(IReadOnlyList<string> dockerignoreLines, string path)
     {
         var excluded = false;
-        foreach (var rawLine in dockerignoreLines)
+        foreach (var line in dockerignoreLines.Select(line => line.Trim()))
         {
-            var line = rawLine.Trim();
             if (line.Length == 0 || line.StartsWith('#'))
                 continue;
 
             var negate = line.StartsWith('!');
-            if (negate)
-                line = line[1..];
-            if (line.StartsWith('/'))
-                line = line[1..];
-            if (line.EndsWith('/'))
-                line = line[..^1];
-            if (line.Length == 0)
+            var pattern = (negate ? line[1..] : line).TrimStart('/').TrimEnd('/');
+            if (pattern.Length == 0)
                 continue;
 
-            if (MatchesPathOrAnAncestor(line, path))
+            if (MatchesPathOrAnAncestor(pattern, path))
                 excluded = !negate;
         }
 
