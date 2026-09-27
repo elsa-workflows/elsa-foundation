@@ -120,6 +120,21 @@ public sealed class DockerBuildContextGuardTests
     }
 
     [Fact]
+    public void A_comment_between_continuation_lines_does_not_end_the_copy()
+    {
+        const string dockerfile = """
+            FROM mcr.microsoft.com/dotnet/sdk:10.0
+            COPY Directory.Build.props \
+                # the version-line list
+                VersionLines.props ./
+            RUN dotnet restore Fixture.csproj
+            """;
+
+        var (copies, _) = CopyInstructionsBeforeRestore(dockerfile);
+        Assert.Empty(UncoveredRequiredFiles(copies, ["Directory.Build.props", "VersionLines.props"]));
+    }
+
+    [Fact]
     public void A_file_copied_only_after_the_restore_run_is_flagged()
     {
         const string dockerfile = """
@@ -289,19 +304,18 @@ public sealed class DockerBuildContextGuardTests
         return (copies, null);
     }
 
-    /// <summary>Joins `\`-continued lines into one instruction each, dropping blank lines and `#` comments.</summary>
+    /// <summary>
+    /// Joins `\`-continued lines into one instruction each. Blank lines and `#` comments are dropped even inside a
+    /// continued instruction, as Docker drops them, so a comment between continuation lines does not end it.
+    /// </summary>
     private static IReadOnlyList<string> LogicalInstructions(string dockerfileText)
     {
         var instructions = new List<string>();
         var current = new StringBuilder();
-        var continuing = false;
 
-        foreach (var line in dockerfileText.Replace("\r\n", "\n").Split('\n').Select(line => line.Trim()))
+        foreach (var line in SignificantLines(dockerfileText.Replace("\r\n", "\n").Split('\n')))
         {
-            if (!continuing && (line.Length == 0 || line.StartsWith('#')))
-                continue;
-
-            continuing = line.EndsWith('\\');
+            var continuing = line.EndsWith('\\');
             current.Append(current.Length > 0 ? " " : "").Append(continuing ? line[..^1].TrimEnd() : line);
 
             if (!continuing)
@@ -371,11 +385,8 @@ public sealed class DockerBuildContextGuardTests
     private static bool IsDockerIgnored(IReadOnlyList<string> dockerignoreLines, string path)
     {
         var excluded = false;
-        foreach (var line in dockerignoreLines.Select(line => line.Trim()))
+        foreach (var line in SignificantLines(dockerignoreLines))
         {
-            if (line.Length == 0 || line.StartsWith('#'))
-                continue;
-
             var negate = line.StartsWith('!');
             var pattern = (negate ? line[1..] : line).TrimStart('/').TrimEnd('/');
             if (pattern.Length == 0)
@@ -387,6 +398,10 @@ public sealed class DockerBuildContextGuardTests
 
         return excluded;
     }
+
+    /// <summary>Trimmed lines, without the blank lines and <c>#</c> comments both Dockerfiles and <c>.dockerignore</c> skip.</summary>
+    private static IEnumerable<string> SignificantLines(IEnumerable<string> lines) =>
+        lines.Select(line => line.Trim()).Where(line => line.Length != 0 && !line.StartsWith('#'));
 
     private static bool MatchesPathOrAnAncestor(string pattern, string path)
     {
