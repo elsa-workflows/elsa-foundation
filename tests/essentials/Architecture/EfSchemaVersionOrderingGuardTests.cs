@@ -40,7 +40,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
     [Fact]
     public void Schema_version_is_the_first_clause_of_its_condition_in_every_production_source()
     {
-        var sourceRoot = Path.Combine(RepoRoot, "src");
+        var sourceRoot = Path.Join(RepoRoot, "src");
         var violations = Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
             .Where(file => !IsBuildOutput(file))
             .SelectMany(file => FindLateSchemaChecks(File.ReadAllText(file))
@@ -58,7 +58,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
     [Fact]
     public void Guard_scans_the_call_sites_it_claims_to_scan()
     {
-        var sourceRoot = Path.Combine(RepoRoot, "src");
+        var sourceRoot = Path.Join(RepoRoot, "src");
         var callSites = Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
             .Where(file => !IsBuildOutput(file))
             .Sum(file => CountCalls(File.ReadAllText(file)));
@@ -92,7 +92,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
     [Fact]
     public void No_deserialization_of_row_content_precedes_the_version_check_anywhere_in_its_method()
     {
-        var sourceRoot = Path.Combine(RepoRoot, "src");
+        var sourceRoot = Path.Join(RepoRoot, "src");
         var violations = Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
             .Where(file => !IsBuildOutput(file))
             .SelectMany(file => FindDeserializeBeforeVersionCheck(File.ReadAllText(file))
@@ -111,7 +111,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
     [Fact]
     public void Widened_guard_examines_the_stores_number_2108_fixed()
     {
-        var sourceRoot = Path.Combine(RepoRoot, "src");
+        var sourceRoot = Path.Join(RepoRoot, "src");
         var deserializeCallSitesByFile = Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
             .Where(file => !IsBuildOutput(file))
             .GroupBy(Path.GetFileName)
