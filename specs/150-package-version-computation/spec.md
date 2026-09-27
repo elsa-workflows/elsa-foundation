@@ -375,15 +375,21 @@ Recorded when #2079 implemented the calculator, `tools/versioning/Elsa.Versionin
   files import — which is how `VersionLines.props` counts. Comments and layout in them take no part, as
   US3 scenario 3 has it for `Directory.Packages.props`. An import that cannot be resolved statically is
   refused rather than guessed at.
-- **FR-003 is applied as written, and a transitive pin advances nothing.** With
-  `CentralPackageTransitivePinningEnabled`, NuGet writes a pinned package into the nuspec of every project
-  whose graph reaches it, even when the pin does not raise its version (checked by packing a scratch
-  project). So a bump also changes the nuspec of projects that reference the package only transitively,
-  and a pure pin such as `Microsoft.OpenApi` changes no project's edges at all. The dependency map records
-  no transitive edges, so the only alternative is advancing every package, Line A included, on each such
-  bump, which is the floor inflation ADR 0067 exists to prevent. Those packages keep publishing the older
-  pin as a floor until they next change. Everything else in `Directory.Packages.props` advances every
-  package (FR-004).
+- **FR-003 is applied as written, and a transitive pin advances nothing — pending the owner's decision.**
+  With `CentralPackageTransitivePinningEnabled`, NuGet writes a pinned package into the nuspec of every
+  project whose graph reaches it, even when the pin does not raise its version (checked by packing a
+  scratch project). So a bump also changes the nuspec of projects that reference the package only
+  transitively, and a pure pin such as `Microsoft.OpenApi` changes no project's edges at all. The
+  dependency map records no transitive edges, so the calculator advances no package for such a bump; the
+  only alternative available to it today is advancing every package, Line A included, which is the floor
+  inflation ADR 0067 exists to prevent. The plain consequence: a transitive-pin bump alone — including a
+  security-motivated one, such as a CVE fix landing in `Microsoft.OpenApi` — advances no package, so no
+  published nuspec carries the patched floor until an unrelated change repacks the package. This is left
+  for the owner to choose among: (a) accept it; (b) disable `CentralPackageTransitivePinningEnabled`; (c)
+  record transitive edges in the dependency map, so the packages whose nuspec actually changes advance; or
+  (d) a manual "force-advance" of named packages at publish time. The calculator's behavior stays exactly
+  as described above until that choice is made. Everything else in `Directory.Packages.props` advances
+  every package (FR-004).
 - **A tool package's inputs include everything it carries.** `dotnet-elsa` packs as a tool, which carries
   the builds of the projects it references, `Elsa.Cli.Worker` among them, instead of declaring ranges on
   them, so FR-006a's reasoning does not reach it. Its inputs are the files of its whole reference closure,

@@ -137,6 +137,23 @@ public sealed class VersionLineTests : SyntheticHistory
         Assert.Contains("references Elsa.Primitives, which moves from major 4 to 5; every published range stops below the next major (FR-007)", computation["Elsa.Tasks"].Reasons);
     }
 
+    /// <summary>
+    /// FR-007 / ADR 0067 also reaches a Line B package's own major advance, not only Line A's: when a package's last
+    /// published record sits on a major behind the line it is now on, its direct dependent moves with it.
+    /// </summary>
+    [Fact]
+    public void A_stale_line_b_major_moves_every_package_that_references_it()
+    {
+        var stale = RecordWith("Elsa.Tasks", "3.0.7-preview");
+
+        var computation = Compute(record: stale);
+
+        Assert.Equal(["Elsa.Tasks", "Elsa.Tasks.Schedules"], computation.Affected);
+        Assert.Equal("4.0.0", VersionOf(computation, "Elsa.Tasks"));
+        Assert.Equal("4.0.2", VersionOf(computation, "Elsa.Tasks.Schedules"));
+        Assert.Contains("references Elsa.Tasks, which moves from major 3 to 4; every published range stops below the next major (FR-007)", computation["Elsa.Tasks.Schedules"].Reasons);
+    }
+
     /// <summary>A package moved between lines is marked changed and takes its new line's version.</summary>
     [Fact]
     public void A_package_moved_onto_line_a_takes_the_lines_version()
