@@ -10,7 +10,9 @@ name: Docker Images
 # Pull requests touching the same paths build both images for both platforms
 # but push nothing, so a Dockerfile that no longer builds fails on the PR, not
 # on main. Without this, #2087 added a root props file the Dockerfiles did not
-# copy and main stayed red for three merges before anyone saw it. With push off
+# copy and main stayed red for three merges before anyone saw it. A PR's run
+# checks its merge with main as of when it ran, not as of when it merges, so a
+# root file that lands on main in between still reaches main untested (#2114's PackageRanges.targets). With push off
 # the builder skips registry login and signing, so fork PRs need no secrets.
 # Docker's maintained builder fans the platforms out to native x64 and ARM64
 # GitHub-hosted runners, then assembles the multi-platform manifest.
@@ -38,6 +40,7 @@ on:
       - .dockerignore
       - .github/workflows/docker.yml
       - '*.props'
+      - '*.targets'
       - Elsa.Server.slnx
       - NuGet.config
       - src/**
