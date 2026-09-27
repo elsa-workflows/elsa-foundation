@@ -17,7 +17,10 @@ namespace Elsa.Maps.Generator;
 /// <param name="Packable">Whether packing the project produces a package, with MSBuild's defaults applied.</param>
 /// <param name="PackageId">The package identity; null unless <paramref name="Packable"/>.</param>
 /// <param name="Line">Version line, <c>A</c> or <c>B</c> (ADR 0067); null unless <paramref name="Packable"/>.</param>
-/// <param name="Edges">Direct dependencies: internal edges by target path, then external edges by id and version.</param>
+/// <param name="Edges">
+/// Direct dependencies — internal edges by target path, then external edges by id and version — followed, on a packable
+/// node of the dataset, by its pinned-transitive edges by id and version (<see cref="PinnedTransitiveDependencies"/>).
+/// </param>
 public sealed record ProjectFacts(
     [property: JsonPropertyName("path")] string RelativePath,
     string Name,
@@ -46,6 +49,7 @@ public sealed record ProjectFacts(
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(InternalEdge), "internal")]
 [JsonDerivedType(typeof(ExternalEdge), "external")]
+[JsonDerivedType(typeof(PinnedTransitiveEdge), "pinned-transitive")]
 public abstract record DependencyEdge([property: JsonPropertyOrder(-1)] string Id);
 
 /// <summary>A <c>ProjectReference</c>, resolved against the referencing project's directory as MSBuild resolves it.</summary>
@@ -65,6 +69,14 @@ public sealed record ExternalEdge(string Id, string? Version) : DependencyEdge(I
     [JsonIgnore]
     public string DisplayVersion => Version ?? "(unspecified)";
 }
+
+/// <summary>
+/// A package the project reaches only through its other dependencies, project references included, whose version
+/// <c>Directory.Packages.props</c> pins. With <c>CentralPackageTransitivePinningEnabled</c>, pack writes each one into the
+/// project's nuspec as a dependency at the pinned version.
+/// </summary>
+/// <param name="Version">The pinned version: the one the nuspec declares.</param>
+public sealed record PinnedTransitiveEdge(string Id, string Version) : DependencyEdge(Id);
 
 /// <summary>Reads the project graph out of the repository's <c>.csproj</c> files.</summary>
 /// <remarks>
