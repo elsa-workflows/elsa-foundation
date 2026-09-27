@@ -44,7 +44,17 @@ public static class PinnedTransitiveDependencies
         var frameworks = Properties(restored, "frameworks").Select(framework => framework.Value).ToArray();
 
         var restoredPins = frameworks.Select(framework => Properties(framework, "centralPackageVersions")
-            .ToDictionary(pin => pin.Name, pin => pin.Value.GetString(), StringComparer.OrdinalIgnoreCase));
+            .ToDictionary(pin => pin.Name, pin => pin.Value.GetString(), StringComparer.OrdinalIgnoreCase))
+            .ToArray();
+
+        // ASSUMPTION: the staleness check below holds one pin set per project, not one per target framework, because
+        // no project in this repository multi-targets today. A project that pinned differently across frameworks
+        // would be compared against a single dictionary and could be refused spuriously; rather than fail silently in
+        // that shape, detect it and say so explicitly instead of falling through to the generic pins-mismatch error.
+        var distinctPinSets = restoredPins.Select(versions => string.Join(';', versions.OrderBy(pin => pin.Key, StringComparer.OrdinalIgnoreCase).Select(pin => $"{pin.Key}={pin.Value}"))).Distinct().Count();
+        if (frameworks.Length > 1 && distinctPinSets > 1)
+            throw Unreadable(project, $"{assetsPath} restored {frameworks.Length} target frameworks with different central package pins per framework; this checker assumes one pin set per project and does not support per-framework pins");
+
         if (restoredPins.Any(versions => versions.Count != pins.Count || pins.Any(pin => versions.GetValueOrDefault(pin.Key) != pin.Value)))
             throw Unreadable(project, $"{assetsPath} was restored with other pins than Directory.Packages.props holds");
 
