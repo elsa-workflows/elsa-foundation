@@ -41,11 +41,12 @@ internal static class WorkflowTestScopeEfSupport
         string accessScope,
         string? expectedScopeId = null)
     {
+        if (EfSchemaVersion.NotReadable("RuntimeWorkflowTestScope", row.SchemaVersion, RuntimeWorkflowTestScopeEfModule.SchemaVersion))
+            throw new InvalidDataException("The workflow test-scope projections do not match its durable content.");
         var record = RuntimeArtifactJson.Deserialize<WorkflowTestScopeRecord>(row.ContentJson);
         var tenant = record.Scope.TenantId;
         var partition = record.Scope.Partition.Value;
         var valid =
-            EfSchemaVersion.Readable("RuntimeWorkflowTestScope", row.SchemaVersion, RuntimeWorkflowTestScopeEfModule.SchemaVersion) &&
             (expectedScopeId is null || StringComparer.Ordinal.Equals(record.Scope.ScopeId, expectedScopeId)) &&
             (tenant is null || StringComparer.Ordinal.Equals(tenant, accessScope)) &&
             row.Id == Id(accessScope, record.Scope.ScopeId) &&
