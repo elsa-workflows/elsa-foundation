@@ -1,12 +1,24 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import type { StudioEndpointContext } from "../../sdk";
 import type { StudioThemeDefinition, Theme, ThemeMaterialMode, ThemeMode } from "../themes/presets";
-import { builtInThemeDefinitions, getSupportedThemeModes, isMaterialTheme, resolveThemeMode, toTheme } from "../themes/presets";
+import {
+  builtInThemeDefinitions,
+  getSupportedThemeModes,
+  getThemeColorScheme,
+  getThemeModeDefinition,
+  isMaterialTheme,
+  isThemeMode,
+  resolveThemeMode,
+  toTheme
+} from "../themes/presets";
 import { findSelectableTheme, getSelectableThemes, getThemeStore, normalizeThemeStore, type ThemeStoreResponse } from "../themes/themeStoreApi";
 
 interface ThemeContextType {
   currentTheme: Theme;
+  /** The mode the current theme is rendered in. */
   mode: ThemeMode;
+  /** The mode the user asked for; differs from `mode` when the current theme lacks it. */
+  preferredMode: ThemeMode;
   setTheme: (themeId: string) => void;
   setMode: (mode: ThemeMode) => void;
   supportedModes: ThemeMode[];
@@ -28,21 +40,23 @@ export function ThemeProvider({
 }) {
   const [store, setStore] = useState<ThemeStoreResponse>(() => normalizeThemeStore());
   const [currentTheme, setCurrentTheme] = useState<Theme>(builtInThemeDefinitions[0]);
-  const [mode, setModeState] = useState<ThemeMode>("light");
+  // The preferred mode survives theme switches: picking High contrast, visiting a light/dark-only
+  // theme, and coming back restores High contrast rather than whatever that theme fell back to.
+  const [preferredMode, setPreferredMode] = useState<ThemeMode>("light");
   const [mounted, setMounted] = useState(false);
   const [persistThemeSelection, setPersistThemeSelection] = useState(true);
   const supportedModes = getSupportedThemeModes(currentTheme);
-  const activeMode = resolveThemeMode(currentTheme, mode);
+  const activeMode = resolveThemeMode(currentTheme, preferredMode);
   const canToggleMode = supportedModes.length > 1;
 
-  // Initialize from localStorage on mount, falling back to the OS `prefers-color-scheme` when the
-  // user has never chosen a mode. Once persisted, the stored preference always wins.
+  // Initialize from localStorage on mount, falling back to the OS contrast and colour-scheme
+  // preferences while the user has never chosen a mode. Once chosen, the stored mode always wins.
   useEffect(() => {
     const savedThemeId = getStoredPreference("elsa-studio-theme");
-    const savedMode = getStoredPreference("elsa-studio-theme-mode") as ThemeMode | null;
+    const savedMode = getStoredPreference("elsa-studio-theme-mode");
     const nextTheme = findSelectableTheme(store, savedThemeId);
 
-    setModeState(resolveThemeMode(nextTheme, savedMode ?? getPreferredColorScheme()));
+    setPreferredMode(isThemeMode(savedMode) ? savedMode : getSystemPreferredMode());
     setCurrentTheme(nextTheme);
     setPersistThemeSelection(true);
     setMounted(true);
@@ -55,11 +69,7 @@ export function ThemeProvider({
       const nextStore = storeContext ? await getThemeStore(storeContext) : normalizeThemeStore();
       if (!disposed) {
         setStore(nextStore);
-        setCurrentTheme(current => {
-          const nextTheme = findSelectableTheme(nextStore, current.id);
-          setModeState(currentMode => resolveThemeMode(nextTheme, currentMode));
-          return nextTheme;
-        });
+        setCurrentTheme(current => findSelectableTheme(nextStore, current.id));
       }
     }
 
@@ -75,11 +85,12 @@ export function ThemeProvider({
   useEffect(() => {
     if (!mounted) return;
 
-    const colors = activeMode === "light" ? currentTheme.light : currentTheme.dark;
+    const colors = getThemeModeDefinition(currentTheme, activeMode) ?? currentTheme.dark;
     const root = document.documentElement;
 
     clearMaterialVariables(root);
     applyMaterialVariables(root, currentTheme.material);
+    applyThemeStyleVariables(root, currentTheme);
     Object.entries(colors).forEach(([key, value]) => {
       if (key === "chartColors") {
         (value as string[]).forEach((color, index) => {
@@ -94,54 +105,41 @@ export function ThemeProvider({
       }
     });
 
-    // Also set the data attribute for CSS selectors
+    // `data-theme-mode` stays the light/dark colour scheme — the contract module CSS keys on — and
+    // `data-theme-appearance` carries the exact mode (light, dark, dim, high-contrast).
     root.setAttribute("data-theme", currentTheme.id);
-    root.setAttribute("data-theme-mode", activeMode);
+    root.setAttribute("data-theme-mode", getThemeColorScheme(activeMode));
+    root.setAttribute("data-theme-appearance", activeMode);
     if (isMaterialTheme(currentTheme.id)) {
       root.setAttribute("data-theme-material", currentTheme.id);
     } else {
       root.removeAttribute("data-theme-material");
     }
 
-    // Persist to localStorage
     if (persistThemeSelection) {
       setStoredPreference("elsa-studio-theme", currentTheme.id);
     }
-    setStoredPreference("elsa-studio-theme-mode", activeMode);
   }, [currentTheme, activeMode, mounted, persistThemeSelection]);
-
-  useEffect(() => {
-    if (mode !== activeMode) {
-      setModeState(activeMode);
-    }
-  }, [activeMode, mode]);
 
   const handleSetTheme = (themeId: string) => {
     setPersistThemeSelection(true);
-    const nextTheme = findSelectableTheme(store, themeId);
-    setCurrentTheme(nextTheme);
-    setModeState(currentMode => resolveThemeMode(nextTheme, currentMode));
+    setCurrentTheme(findSelectableTheme(store, themeId));
   };
 
   const handleSetMode = (nextMode: ThemeMode) => {
-    setModeState(resolveThemeMode(currentTheme, nextMode));
+    setPreferredMode(nextMode);
+    setStoredPreference("elsa-studio-theme-mode", nextMode);
   };
 
   const handlePreviewTheme = (theme: StudioThemeDefinition) => {
-    const nextTheme = toTheme(theme);
     setPersistThemeSelection(false);
-    setCurrentTheme(nextTheme);
-    setModeState(currentMode => resolveThemeMode(nextTheme, currentMode));
+    setCurrentTheme(toTheme(theme));
   };
 
   const refreshThemes = async () => {
     const nextStore = storeContext ? await getThemeStore(storeContext) : normalizeThemeStore();
     setStore(nextStore);
-    setCurrentTheme(current => {
-      const nextTheme = findSelectableTheme(nextStore, current.id);
-      setModeState(currentMode => resolveThemeMode(nextTheme, currentMode));
-      return nextTheme;
-    });
+    setCurrentTheme(current => findSelectableTheme(nextStore, current.id));
   };
 
   return (
@@ -149,6 +147,7 @@ export function ThemeProvider({
       value={{
         currentTheme,
         mode: activeMode,
+        preferredMode,
         setTheme: handleSetTheme,
         setMode: handleSetMode,
         supportedModes,
@@ -164,11 +163,12 @@ export function ThemeProvider({
   );
 }
 
-function getPreferredColorScheme(): ThemeMode {
+function getSystemPreferredMode(): ThemeMode {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
     return "light";
   }
 
+  if (window.matchMedia("(prefers-contrast: more)").matches) return "high-contrast";
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
@@ -222,6 +222,32 @@ export function applyMaterialVariables(root: HTMLElement, material: ThemeMateria
   if (typeof material.textureSize === "number" && Number.isFinite(material.textureSize)) {
     const size = `${material.textureSize}px`;
     root.style.setProperty("--studio-material-texture-size", `${size} ${size}`);
+  }
+}
+
+/**
+ * Typography and shape primitives a theme may override. Each is cleared before the next theme is
+ * applied, so a theme without them falls back to the stylesheet defaults (styles.css / tokens.css).
+ */
+const themeStyleVariables = {
+  "--font-sans": (theme: Theme) => theme.typography?.sans,
+  "--font-mono": (theme: Theme) => theme.typography?.mono,
+  "--font-display": (theme: Theme) => theme.typography?.display,
+  "--radius-sm": (theme: Theme) => theme.shape?.radiusSm,
+  "--radius": (theme: Theme) => theme.shape?.radius,
+  "--radius-md": (theme: Theme) => theme.shape?.radiusMd,
+  "--radius-lg": (theme: Theme) => theme.shape?.radiusLg,
+  "--radius-xl": (theme: Theme) => theme.shape?.radiusXl
+} satisfies Record<string, (theme: Theme) => string | undefined>;
+
+export function applyThemeStyleVariables(root: HTMLElement, theme: Theme) {
+  for (const [name, read] of Object.entries(themeStyleVariables)) {
+    const value = read(theme);
+    if (value) {
+      root.style.setProperty(name, value);
+    } else {
+      root.style.removeProperty(name);
+    }
   }
 }
 

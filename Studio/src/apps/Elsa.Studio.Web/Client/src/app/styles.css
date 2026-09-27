@@ -1,9 +1,11 @@
 @import "./ui/tokens.css";
+@import "./themes/fonts.css";
 
 :root {
   /* Typography */
   --font-sans: "Inter", "Aptos", "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+  --font-display: var(--font-sans);
   
   /* Border Radius */
   --radius: 6px;
@@ -431,8 +433,9 @@ textarea:focus {
 }
 
 .brand strong {
+  font-family: var(--studio-font-display);
   font-size: 14px;
-  font-weight: 720;
+  font-weight: var(--studio-title-weight, 720);
   line-height: 1.2;
 }
 
@@ -812,8 +815,9 @@ textarea:focus {
 
 .topbar h1 {
   margin: 0;
+  font-family: var(--studio-font-display);
   font-size: 18px;
-  font-weight: 720;
+  font-weight: var(--studio-title-weight, 720);
   line-height: 1.2;
   color: var(--foreground);
 }
@@ -1051,8 +1055,9 @@ textarea:focus {
 
 .section-header h2 {
   margin: 0;
-  font-size: 20px;
-  font-weight: 720;
+  font-family: var(--studio-font-display);
+  font-size: var(--studio-page-title-size, 20px);
+  font-weight: var(--studio-title-weight, 720);
   line-height: 1.2;
   color: var(--foreground);
 }
@@ -3603,8 +3608,9 @@ textarea:focus {
 
 .studio-dialog-title {
   margin: 0;
+  font-family: var(--studio-font-display);
   font-size: var(--studio-section-title-size);
-  font-weight: 700;
+  font-weight: var(--studio-title-weight, 700);
   line-height: 1.3;
 }
 

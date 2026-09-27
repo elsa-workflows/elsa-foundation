@@ -1,6 +1,40 @@
+import { foundationThemeDefinitions } from "./foundationThemes";
+
 export type StudioThemeSource = "built-in" | "custom";
-export type ThemeMode = "light" | "dark";
-export const allThemeModes: readonly ThemeMode[] = ["light", "dark"] as const;
+
+/**
+ * The appearance a user picks. `light` and `dark` are the two base modes every theme defines;
+ * `dim` (a softer mid-dark for long sessions) and `high-contrast` (black, white and one bright
+ * accent, for low vision and bright rooms) are optional per theme.
+ */
+export type ThemeMode = "light" | "dark" | "dim" | "high-contrast";
+
+/**
+ * The luminance family of a mode. This — not the mode — is what `data-theme-mode` carries on
+ * <html>, so module CSS keyed on `[data-theme-mode="dark"]` keeps working under Dim and High
+ * contrast. The exact mode is exposed separately as `data-theme-appearance`.
+ */
+export type ThemeColorScheme = "light" | "dark";
+
+export const allThemeModes: readonly ThemeMode[] = ["light", "dark", "dim", "high-contrast"] as const;
+export const baseThemeModes: readonly ThemeMode[] = ["light", "dark"] as const;
+
+export const themeModeLabels: Record<ThemeMode, string> = {
+  light: "Light",
+  dark: "Dark",
+  dim: "Dim",
+  "high-contrast": "High contrast"
+};
+
+/** The key a mode's palette lives under in `StudioThemeDefinition.modes` (JSON-friendly camelCase). */
+export type ThemeModeKey = keyof StudioThemeModes;
+
+export const themeModeKeys: Record<ThemeMode, ThemeModeKey> = {
+  light: "light",
+  dark: "dark",
+  dim: "dim",
+  "high-contrast": "highContrast"
+};
 
 export interface ThemeColors {
   primary: string;
@@ -41,6 +75,32 @@ export type ThemeModeDefinition = ThemeColors & {
   material?: ThemeMaterialMode;
 };
 
+export interface StudioThemeModes {
+  light: ThemeModeDefinition;
+  dark: ThemeModeDefinition;
+  dim?: ThemeModeDefinition;
+  highContrast?: ThemeModeDefinition;
+}
+
+/** Font stacks a theme renders in. Faces must be bundled (see fonts.css) or installed locally. */
+export interface ThemeTypography {
+  /** UI text. Drives `--font-sans`. */
+  sans?: string;
+  /** Code, identifiers and expressions. Drives `--font-mono`. */
+  mono?: string;
+  /** Page and section titles. Drives `--font-display`; falls back to `sans`. */
+  display?: string;
+}
+
+/** Corner radii, as CSS lengths. Each drives the matching `--radius*` primitive. */
+export interface ThemeShape {
+  radiusSm?: string;
+  radius?: string;
+  radiusMd?: string;
+  radiusLg?: string;
+  radiusXl?: string;
+}
+
 export interface StudioThemeDefinition {
   id: string;
   name: string;
@@ -50,10 +110,9 @@ export interface StudioThemeDefinition {
   enabled: boolean;
   published: boolean;
   supportedModes?: ThemeMode[];
-  modes: {
-    light: ThemeModeDefinition;
-    dark: ThemeModeDefinition;
-  };
+  modes: StudioThemeModes;
+  typography?: ThemeTypography;
+  shape?: ThemeShape;
   material?: {
     textureAssets?: Record<string, string>;
     cssVariables?: Record<string, string>;
@@ -153,7 +212,7 @@ function createThemeDefinition(
   description: string,
   light: ThemeModeDefinition,
   dark: ThemeModeDefinition,
-  supportedModes: readonly ThemeMode[] = allThemeModes
+  supportedModes: readonly ThemeMode[] = baseThemeModes
 ): Theme {
   const definition: StudioThemeDefinition = {
     id,
@@ -182,24 +241,45 @@ export function toTheme(definition: StudioThemeDefinition): Theme {
   };
 }
 
-export function getSupportedThemeModes(theme: Pick<StudioThemeDefinition, "supportedModes">): ThemeMode[] {
-  const supportedModes = Array.isArray(theme.supportedModes)
-    ? theme.supportedModes.filter(isThemeMode)
-    : [...allThemeModes];
-  const uniqueModes = Array.from(new Set(supportedModes));
-  return uniqueModes.length > 0 ? uniqueModes : [...allThemeModes];
+export function isThemeMode(value: unknown): value is ThemeMode {
+  return typeof value === "string" && (allThemeModes as readonly string[]).includes(value);
 }
 
-export function supportsThemeMode(theme: Pick<StudioThemeDefinition, "supportedModes">, mode: ThemeMode): boolean {
+export function getThemeColorScheme(mode: ThemeMode): ThemeColorScheme {
+  return mode === "light" ? "light" : "dark";
+}
+
+export function getThemeModeDefinition(
+  theme: Pick<StudioThemeDefinition, "modes">,
+  mode: ThemeMode
+): ThemeModeDefinition | undefined {
+  return theme.modes?.[themeModeKeys[mode]];
+}
+
+/**
+ * The modes a theme offers, in canonical order. A mode is offered only when the theme defines a
+ * palette for it; an explicit `supportedModes` list can narrow that further (Paper is light-only).
+ */
+export function getSupportedThemeModes(theme: Partial<Pick<StudioThemeDefinition, "supportedModes" | "modes">>): ThemeMode[] {
+  const defined = allThemeModes.filter(mode => !theme.modes || getThemeModeDefinition(theme as Pick<StudioThemeDefinition, "modes">, mode));
+  const declared = Array.isArray(theme.supportedModes) ? theme.supportedModes.filter(isThemeMode) : defined;
+  const supported = defined.filter(mode => declared.includes(mode));
+  return supported.length > 0 ? supported : defined.filter(mode => baseThemeModes.includes(mode));
+}
+
+export function supportsThemeMode(theme: Partial<Pick<StudioThemeDefinition, "supportedModes" | "modes">>, mode: ThemeMode): boolean {
   return getSupportedThemeModes(theme).includes(mode);
 }
 
-export function resolveThemeMode(theme: Pick<StudioThemeDefinition, "supportedModes">, preferredMode: ThemeMode): ThemeMode {
-  return supportsThemeMode(theme, preferredMode) ? preferredMode : getSupportedThemeModes(theme)[0] ?? "light";
-}
-
-function isThemeMode(value: string): value is ThemeMode {
-  return value === "light" || value === "dark";
+/**
+ * Picks the mode to render a theme in. When the theme lacks the preferred mode, stay in the same
+ * luminance family first — a user who prefers Dim or High contrast gets Dark, not a flash to Light.
+ */
+export function resolveThemeMode(theme: Partial<Pick<StudioThemeDefinition, "supportedModes" | "modes">>, preferredMode: ThemeMode): ThemeMode {
+  const supported = getSupportedThemeModes(theme);
+  if (supported.includes(preferredMode)) return preferredMode;
+  const scheme = getThemeColorScheme(preferredMode);
+  return supported.find(mode => getThemeColorScheme(mode) === scheme) ?? supported[0] ?? "light";
 }
 
 export function cloneThemeDefinition(theme: StudioThemeDefinition): StudioThemeDefinition {
@@ -213,6 +293,8 @@ export function cloneThemeDefinition(theme: StudioThemeDefinition): StudioThemeD
     published: theme.published,
     supportedModes: getSupportedThemeModes(theme),
     modes: theme.modes,
+    typography: theme.typography,
+    shape: theme.shape,
     material: theme.material
   })) as StudioThemeDefinition;
 }
@@ -769,7 +851,9 @@ const materialMode = (
   }
 });
 
+// The four signature themes lead the list: the first entry is the out-of-box default.
 export const builtInThemeDefinitions: Theme[] = [
+  ...foundationThemeDefinitions.map(toTheme),
   createThemeDefinition(
     "black-glass",
     "Black Glass",

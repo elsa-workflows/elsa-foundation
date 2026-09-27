@@ -14,7 +14,7 @@
 .ad-page button:focus-visible, .ad-page input:focus-visible, .ad-page select:focus-visible, .ad-page textarea:focus-visible { outline: 3px solid var(--studio-focus); outline-offset: 2px; }
 
 .ad-page-header, .ad-workbench-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
-.ad-page h1, .ad-workbench h1 { margin: .2rem 0 .35rem; font-size: var(--studio-page-title-size); }
+.ad-page h1, .ad-workbench h1 { margin: .2rem 0 .35rem; font-family: var(--studio-font-display); font-size: var(--studio-page-title-size); font-weight: var(--studio-title-weight, 700); }
 .ad-page p { margin: 0; color: var(--studio-text-muted); line-height: 1.55; }
 .ad-kicker { color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 

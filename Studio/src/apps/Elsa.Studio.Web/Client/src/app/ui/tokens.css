@@ -19,6 +19,9 @@
 :root {
   --studio-font-ui: var(--font-sans);
   --studio-font-mono: var(--font-mono);
+  /* Page, section and dialog titles. A theme sets `--font-display` via `typography.display`;
+     `--studio-title-weight` lets a single-weight display face (a serif) avoid faux bold. */
+  --studio-font-display: var(--font-display, var(--studio-font-ui));
 
   --studio-bg: var(--background);
   --studio-surface: var(--card);
@@ -124,6 +127,82 @@ html[data-theme="material-design"][data-theme-mode="dark"] {
     0 12px 18px -4px rgb(0 0 0 / 0.5),
     0 8px 28px rgb(0 0 0 / 0.4);
   --studio-surface-raised: #1e293b;
+}
+
+/*
+ * Signature themes — Meridian, Drift, Schematic, Atelier.
+ *
+ * Their colours, fonts and radii come from the theme definitions (foundationThemes.ts) through
+ * ThemeProvider. What lives here is what a definition cannot carry: elevation recipes and a few
+ * layer-2 refinements. Every one of these themes defines all four modes; the dark-scheme block
+ * below therefore covers both Dark and Dim.
+ */
+html[data-theme="meridian"] {
+  --shadow-sm: 0 1px 2px oklch(0.25 0.03 265 / 0.07);
+  --shadow-md: 0 1px 2px oklch(0.25 0.03 265 / 0.05), 0 6px 16px -4px oklch(0.25 0.03 265 / 0.12);
+  --shadow-lg: 0 2px 6px oklch(0.25 0.03 265 / 0.05), 0 18px 44px -10px oklch(0.25 0.03 265 / 0.2);
+  --shadow-xl: 0 4px 10px oklch(0.25 0.03 265 / 0.06), 0 28px 64px -12px oklch(0.25 0.03 265 / 0.26);
+  --studio-surface-raised: var(--card);
+  --studio-accent-soft: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+/* Drift floats: larger, softer, more diffuse shadows so panels read as islands over the canvas. */
+html[data-theme="drift"] {
+  --shadow-sm: 0 1px 3px oklch(0.3 0.03 200 / 0.08);
+  --shadow-md: 0 2px 4px oklch(0.3 0.03 200 / 0.05), 0 10px 24px -6px oklch(0.3 0.03 200 / 0.14);
+  --shadow-lg: 0 2px 6px oklch(0.3 0.03 200 / 0.05), 0 22px 50px -12px oklch(0.3 0.03 200 / 0.22);
+  --shadow-xl: 0 4px 12px oklch(0.3 0.03 200 / 0.06), 0 32px 72px -14px oklch(0.3 0.03 200 / 0.28);
+  --studio-surface-raised: var(--card);
+  --studio-accent-soft: color-mix(in srgb, var(--primary) 13%, transparent);
+}
+
+/* Schematic is drafted, not lit: near-flat elevation, crisp one-pixel shadows. */
+html[data-theme="schematic"] {
+  --shadow-sm: 0 1px 0 oklch(0.3 0.04 250 / 0.08);
+  --shadow-md: 0 1px 0 oklch(0.3 0.04 250 / 0.08), 0 4px 10px -4px oklch(0.3 0.04 250 / 0.14);
+  --shadow-lg: 0 1px 0 oklch(0.3 0.04 250 / 0.1), 0 10px 24px -8px oklch(0.3 0.04 250 / 0.2);
+  --shadow-xl: 0 1px 0 oklch(0.3 0.04 250 / 0.1), 0 18px 40px -12px oklch(0.3 0.04 250 / 0.26);
+  --studio-accent-soft: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+/* Atelier is warm paper: soft, warm-tinted shadows and serif titles at the face's only weight. */
+html[data-theme="atelier"] {
+  --shadow-sm: 0 1px 2px oklch(0.3 0.03 60 / 0.07);
+  --shadow-md: 0 1px 2px oklch(0.3 0.03 60 / 0.05), 0 8px 20px -6px oklch(0.3 0.03 60 / 0.12);
+  --shadow-lg: 0 2px 6px oklch(0.3 0.03 60 / 0.05), 0 20px 48px -12px oklch(0.3 0.03 60 / 0.2);
+  --shadow-xl: 0 4px 10px oklch(0.3 0.03 60 / 0.06), 0 30px 68px -14px oklch(0.3 0.03 60 / 0.26);
+  --studio-surface-raised: var(--card);
+  --studio-accent-soft: color-mix(in srgb, var(--primary) 10%, transparent);
+  --studio-title-weight: 400;
+  --studio-page-title-size: 26px;
+  --studio-section-title-size: 19px;
+}
+
+html:is([data-theme="meridian"], [data-theme="drift"], [data-theme="schematic"], [data-theme="atelier"])[data-theme-mode="dark"] {
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
+  --shadow-md: 0 1px 2px oklch(0 0 0 / 0.3), 0 8px 20px -6px oklch(0 0 0 / 0.45);
+  --shadow-lg: 0 2px 6px oklch(0 0 0 / 0.3), 0 22px 50px -12px oklch(0 0 0 / 0.6);
+  --shadow-xl: 0 4px 10px oklch(0 0 0 / 0.35), 0 30px 70px -14px oklch(0 0 0 / 0.66);
+  --studio-accent-soft: color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+/*
+ * High contrast — applies to every theme that defines the mode. Depth comes from borders, never
+ * from shadow; focus is the solid ring colour; tinted-chip text is brightened to stay >= 7:1 on
+ * the black ground. Shadows are zero-size rather than `none` so compositions that append a ring
+ * (`var(--shadow-sm), 0 0 0 1px …`) stay valid. The extra `[data-theme-mode]` lifts specificity
+ * above the per-theme dark-scheme blocks, which High contrast also matches.
+ */
+html[data-theme-mode][data-theme-appearance="high-contrast"] {
+  --shadow-sm: 0 0 0 0 transparent;
+  --shadow-md: 0 0 0 0 transparent;
+  --shadow-lg: 0 0 0 0 transparent;
+  --shadow-xl: 0 0 0 0 transparent;
+  --studio-accent-soft: color-mix(in srgb, var(--primary) 24%, transparent);
+  --studio-focus: var(--ring);
+  --studio-success-fg: oklch(0.9 0.16 150);
+  --studio-warning-fg: oklch(0.93 0.14 95);
+  --studio-danger-fg: oklch(0.84 0.14 25);
 }
 
 html[data-theme="black-glass"] {

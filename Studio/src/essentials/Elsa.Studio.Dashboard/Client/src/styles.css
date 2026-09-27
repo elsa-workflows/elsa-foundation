@@ -1,6 +1,7 @@
 .dashboard-page { display: grid; gap: 1.5rem; }
 .dashboard-page-header { display: flex; align-items: end; justify-content: space-between; gap: 1rem; }
 .dashboard-page-header h2, .dashboard-widget h3 { margin: 0; color: var(--studio-text); }
+.dashboard-page-header h2 { font-family: var(--studio-font-display); font-weight: var(--studio-title-weight, 700); }
 .dashboard-widget-pinned { margin-inline-start: .5rem; color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 500; }
 .dashboard-page-header p, .dashboard-widget-header p { margin: .25rem 0 0; color: var(--studio-text-muted); }
 .dashboard-page-header > div:last-child, .dashboard-widget-actions, .dashboard-hidden { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }

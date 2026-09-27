@@ -1,14 +1,20 @@
 import type { StudioEndpointContext } from "../../sdk";
 import {
+  allThemeModes,
   builtInThemeDefinitions,
   cloneThemeDefinition,
   getSupportedThemeModes,
+  getThemeModeDefinition,
+  isThemeMode,
+  themeModeKeys,
   themeTokenNames,
   toTheme,
   type StudioThemeDefinition,
   type Theme,
   type ThemeMode,
-  type ThemeModeDefinition
+  type ThemeModeDefinition,
+  type ThemeShape,
+  type ThemeTypography
 } from "./presets";
 
 export interface ThemeStoreResponse {
@@ -129,15 +135,26 @@ export function validateThemeDefinition(theme: StudioThemeDefinition): ThemeVali
       issues.push(error("supportedModes", "Theme supported modes must include at least one mode."));
     } else {
       for (const mode of theme.supportedModes) {
-        if (mode !== "light" && mode !== "dark") {
-          issues.push(error("supportedModes", "Theme supported modes must be light or dark."));
+        if (!isThemeMode(mode)) {
+          issues.push(error("supportedModes", "Theme supported modes must be light, dark, dim or high-contrast."));
+        } else if (theme.modes && !getThemeModeDefinition(theme, mode)) {
+          issues.push(error("supportedModes", `Theme supports ${mode} mode but does not define modes.${themeModeKeys[mode]}.`));
         }
       }
     }
   }
 
-  validateMode(theme.modes?.light, "modes.light", issues);
-  validateMode(theme.modes?.dark, "modes.dark", issues);
+  // Light and dark are required; dim and high contrast are validated only when the theme defines them.
+  for (const mode of allThemeModes) {
+    const key = themeModeKeys[mode];
+    const definition = theme.modes?.[key];
+    if (definition || mode === "light" || mode === "dark") {
+      validateMode(definition, `modes.${key}`, issues);
+    }
+  }
+
+  validateTypography(theme.typography, issues);
+  validateShape(theme.shape, issues);
 
   return { valid: issues.every(issue => issue.severity !== "error"), issues };
 }
@@ -230,6 +247,59 @@ export function createCustomThemeFrom(theme: StudioThemeDefinition, id: string, 
   };
 }
 
+/** Dim and High contrast are optional: a new one is seeded from the dark palette, which is closest. */
+export function withOptionalMode(theme: StudioThemeDefinition, mode: Extract<ThemeMode, "dim" | "high-contrast">): StudioThemeDefinition {
+  const supported = getSupportedThemeModes(theme);
+  return {
+    ...theme,
+    supportedModes: allThemeModes.filter(candidate => candidate === mode || supported.includes(candidate)),
+    modes: { ...theme.modes, [themeModeKeys[mode]]: structuredClone(theme.modes.dark) }
+  };
+}
+
+export function withoutOptionalMode(theme: StudioThemeDefinition, mode: Extract<ThemeMode, "dim" | "high-contrast">): StudioThemeDefinition {
+  const modes = { ...theme.modes };
+  delete modes[themeModeKeys[mode] as "dim" | "highContrast"];
+  return { ...theme, modes, supportedModes: getSupportedThemeModes(theme).filter(candidate => candidate !== mode) };
+}
+
+/** Sets one typography or shape field; a blank value removes it, and an emptied section is dropped. */
+export function withStyleField(theme: StudioThemeDefinition, section: "typography" | "shape", field: string, value: string): StudioThemeDefinition {
+  const next: Record<string, string> = { ...(theme[section] as Record<string, string> | undefined) };
+  if (value.trim()) next[field] = value;
+  else delete next[field];
+  return { ...theme, [section]: Object.keys(next).length > 0 ? next : undefined };
+}
+
+/**
+ * Font stacks are a comma-separated list of family names; quoting is allowed, anything that could
+ * break out of the declaration (`;`, braces, `url(`, escapes) is not.
+ */
+export function isAllowedFontStack(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0 && value.length <= 512 && /^[a-z0-9\s,'"._-]+$/i.test(value);
+}
+
+/** Radii are a plain non-negative length in px or rem. */
+export function isAllowedRadius(value: unknown): value is string {
+  return typeof value === "string" && /^(0|\d{1,3}(\.\d+)?(px|rem))$/.test(value.trim());
+}
+
+function validateTypography(typography: ThemeTypography | undefined, issues: ThemeValidationIssue[]) {
+  for (const [name, value] of Object.entries(typography ?? {})) {
+    if (value !== undefined && !isAllowedFontStack(value)) {
+      issues.push(error(`typography.${name}`, "Font stacks may only contain family names separated by commas."));
+    }
+  }
+}
+
+function validateShape(shape: ThemeShape | undefined, issues: ThemeValidationIssue[]) {
+  for (const [name, value] of Object.entries(shape ?? {})) {
+    if (value !== undefined && !isAllowedRadius(value)) {
+      issues.push(error(`shape.${name}`, "Radii must be a length in px or rem, such as 6px."));
+    }
+  }
+}
+
 function normalizeThemeDefinition(theme: Partial<StudioThemeDefinition> | null | undefined): StudioThemeDefinition | null {
   if (!theme?.id || !theme.modes?.light || !theme.modes?.dark) {
     return null;
@@ -246,8 +316,13 @@ function normalizeThemeDefinition(theme: Partial<StudioThemeDefinition> | null |
     supportedModes: getSupportedThemeModes(theme),
     modes: {
       light: theme.modes.light,
-      dark: theme.modes.dark
+      dark: theme.modes.dark,
+      ...(theme.modes.dim ? { dim: theme.modes.dim } : {}),
+      ...(theme.modes.highContrast ? { highContrast: theme.modes.highContrast } : {})
     },
+    // The host serializes absent optional sections as null; keep them undefined client-side.
+    typography: theme.typography ?? undefined,
+    shape: theme.shape ?? undefined,
     material: theme.material
   };
 }

@@ -50,19 +50,25 @@ Path to a directory or file containing custom themes. Supports:
 **Type:** `string`  
 **Default:** `"AddToBuiltIns"`  
 **Values:**
-- `"BuiltInsOnly"` - Use built-in themes (17 built-in themes)
+- `"BuiltInsOnly"` - Use built-in themes (20 built-in themes)
 - `"DirectoryOnly"` - Use only themes from the directory
 - `"AddToBuiltIns"` - Merge directory themes with built-ins (default)
 
 ### DefaultThemeId
 
 **Type:** `string` (nullable)  
-**Default:** `null` (first theme in list)
+**Default:** `null` (first theme in list — Meridian)
 
 The theme ID to select on first load. Must match an available theme ID (either built-in or custom).
 
-Common built-in theme IDs:
-- `"material-design"` - Material Design (default appearance)
+The four signature themes offer all four modes (Light, Dark, Dim and High contrast):
+- `"meridian"` - Crisp, neutral precision with an indigo accent (the default)
+- `"drift"` - Soft, rounded floating surfaces with a jade accent
+- `"schematic"` - Engineering workbench: squared corners, blueprint neutrals, signal orange
+- `"atelier"` - Warm editorial calm: paper neutrals, serif titles, plum accent
+
+Other built-in theme IDs (Light and Dark only, unless noted):
+- `"material-design"` - Material Design (the Elsa Studio 3 look)
 - `"black-glass"` - Dark HUD style
 - `"stone"` - Slate surfaces
 - `"paper"` - Layered paper
@@ -206,6 +212,33 @@ Custom themes must be JSON files containing a `themes` array with theme definiti
   ]
 }
 ```
+
+### Optional modes, typography and shape
+
+Beyond the required `light` and `dark` palettes, a theme may add:
+
+- `modes.dim` and `modes.highContrast` — the same token set as `light`/`dark`. Users pick a mode
+  from the theme picker; a theme only offers the modes it defines. When a user prefers a mode the
+  current theme lacks, Studio falls back within the same luminance family (Dim and High contrast
+  fall back to Dark).
+- `supportedModes` — optionally narrows the offered modes, e.g. `["light"]` for a light-only
+  theme. Allowed values: `light`, `dark`, `dim`, `high-contrast`; each must have a palette.
+- `typography` — `sans`, `mono` and `display` font stacks (comma-separated family names only).
+  Faces must be installed on the viewer's machine or bundled with Studio; the bundled families are
+  Geist, Geist Mono, Manrope, DM Mono, IBM Plex Sans/Mono, Instrument Sans/Serif and JetBrains Mono.
+- `shape` — `radiusSm`, `radius`, `radiusMd`, `radiusLg`, `radiusXl` as `px` or `rem` lengths.
+
+```json
+{
+  "supportedModes": ["light", "dark", "dim", "high-contrast"],
+  "typography": { "sans": "\"Manrope Variable\", system-ui, sans-serif", "mono": "\"DM Mono\", monospace" },
+  "shape": { "radiusSm": "6px", "radius": "10px", "radiusMd": "12px", "radiusLg": "16px", "radiusXl": "20px" },
+  "modes": { "light": { }, "dark": { }, "dim": { }, "highContrast": { } }
+}
+```
+
+The easiest start is to duplicate one of the signature themes in the Theme Builder, which copies
+all four modes, the typography and the shape.
 
 For detailed color format specifications (hex, oklch, rgb, hsl), see the Theme Builder UI in the application, or refer to the theme validation in `ElsaThemeStoreApi.cs`.
 

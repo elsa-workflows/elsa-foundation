@@ -244,6 +244,59 @@
   color: var(--primary);
 }
 
+/* Appearance: the four modes as a compact segmented radio group. Modes the current theme does
+   not define stay visible but disabled, so the set of options never shifts under the pointer. */
+.theme-mode-group {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 8px;
+}
+
+.theme-mode-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 52px;
+  padding: 6px 4px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.theme-mode-item:focus,
+.theme-mode-item:focus-visible {
+  outline: none;
+}
+
+.theme-mode-item[data-highlighted] {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.theme-mode-item[data-state="checked"] {
+  background: color-mix(in srgb, var(--primary) 12%, var(--card));
+  border-color: var(--primary);
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.theme-mode-item[data-disabled] {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.theme-mode-group + .theme-dropdown-header {
+  border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+
 /* Scrollbar styling */
 .theme-list::-webkit-scrollbar {
   width: 8px;

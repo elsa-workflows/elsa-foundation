@@ -14,8 +14,17 @@ internal static class ElsaThemeStoreApi
     private static readonly Regex TokenValuePattern = new("^(?:#[0-9a-f]{3,8}|oklch\\(\\s*(?:0?\\.\\d+|1(?:\\.0+)?|0)\\s+\\d*\\.?\\d+\\s+\\d*\\.?\\d+\\s*\\)|rgba?\\([\\d\\s.,%/]+\\)|hsla?\\([\\d\\s.,%/]+\\)|var\\(--[a-z0-9-]+\\))$", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     private static readonly Regex MaterialVariableNamePattern = new("^--studio-material-[a-z0-9-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex MaterialVariableValuePattern = new("^[a-z0-9 .,%#()/+-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    // Mirrors isAllowedFontStack / isAllowedRadius in the client's themeStoreApi.ts, which also
+    // match against the trimmed value — keep the two in step or a value valid in the Theme Builder 400s here.
+    private static readonly Regex FontStackPattern = new("^[a-z0-9\\s,'\"._-]{1,512}$", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    private static readonly Regex RadiusPattern = new("^(?:0|\\d{1,3}(?:\\.\\d+)?(?:px|rem))$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly string[] ThemeModeNames = ["light", "dark", "dim", "high-contrast"];
     private static readonly HashSet<string> BuiltInThemeIds = new(StringComparer.OrdinalIgnoreCase)
     {
+        "meridian",
+        "drift",
+        "schematic",
+        "atelier",
         "black-glass",
         "stone",
         "paper",
@@ -488,7 +497,15 @@ internal static class ElsaThemeStoreApi
         if (theme.Modes.Dark is null)
             return "Theme dark mode is required.";
 
-        foreach (var (modeName, mode) in new[] { ("light", theme.Modes.Light), ("dark", theme.Modes.Dark) })
+        foreach (var modeName in theme.SupportedModes ?? [])
+        {
+            if (!ThemeModeNames.Contains(modeName))
+                return "Theme supported modes must be light, dark, dim or high-contrast.";
+            if (theme.Modes.ForMode(modeName) is null)
+                return $"Theme supports {modeName} mode but does not define it.";
+        }
+
+        foreach (var (modeName, mode) in theme.Modes.Defined())
         {
             if (mode.ChartColors is null || mode.ChartColors.Length != 5)
                 return $"{modeName}.ChartColors must contain five validated token values.";
@@ -501,6 +518,18 @@ internal static class ElsaThemeStoreApi
 
             if (ValidateMaterial(modeName, mode.Material) is { } materialError)
                 return materialError;
+        }
+
+        foreach (var (name, value) in theme.Typography?.Values() ?? [])
+        {
+            if (value is not null && !FontStackPattern.IsMatch(value.Trim()))
+                return $"Typography.{name} may only contain font family names separated by commas.";
+        }
+
+        foreach (var (name, value) in theme.Shape?.Values() ?? [])
+        {
+            if (value is not null && !RadiusPattern.IsMatch(value.Trim()))
+                return $"Shape.{name} must be a length in px or rem.";
         }
 
         return null;
@@ -578,9 +607,48 @@ internal sealed record StudioThemeDefinition(
     bool Enabled,
     bool Published,
     StudioThemeModes Modes,
-    StudioThemeMaterial? Material);
+    StudioThemeMaterial? Material,
+    string[]? SupportedModes = null,
+    StudioThemeTypography? Typography = null,
+    StudioThemeShape? Shape = null);
 
-internal sealed record StudioThemeModes(StudioThemeModeDefinition Light, StudioThemeModeDefinition Dark);
+/// <summary>A theme's palettes. Light and dark are required; dim and high contrast are optional.</summary>
+internal sealed record StudioThemeModes(
+    StudioThemeModeDefinition Light,
+    StudioThemeModeDefinition Dark,
+    StudioThemeModeDefinition? Dim = null,
+    StudioThemeModeDefinition? HighContrast = null)
+{
+    public StudioThemeModeDefinition? ForMode(string mode) => mode switch
+    {
+        "light" => Light,
+        "dark" => Dark,
+        "dim" => Dim,
+        "high-contrast" => HighContrast,
+        _ => null
+    };
+
+    public IEnumerable<(string Name, StudioThemeModeDefinition Mode)> Defined()
+    {
+        yield return ("light", Light);
+        yield return ("dark", Dark);
+        if (Dim is not null)
+            yield return ("dim", Dim);
+        if (HighContrast is not null)
+            yield return ("highContrast", HighContrast);
+    }
+}
+
+internal sealed record StudioThemeTypography(string? Sans, string? Mono, string? Display)
+{
+    public IEnumerable<(string Name, string? Value)> Values() => [(nameof(Sans), Sans), (nameof(Mono), Mono), (nameof(Display), Display)];
+}
+
+internal sealed record StudioThemeShape(string? RadiusSm, string? Radius, string? RadiusMd, string? RadiusLg, string? RadiusXl)
+{
+    public IEnumerable<(string Name, string? Value)> Values() =>
+        [(nameof(RadiusSm), RadiusSm), (nameof(Radius), Radius), (nameof(RadiusMd), RadiusMd), (nameof(RadiusLg), RadiusLg), (nameof(RadiusXl), RadiusXl)];
+}
 internal sealed record StudioThemeMaterial(Dictionary<string, string>? TextureAssets, Dictionary<string, string>? CssVariables);
 
 internal sealed record StudioThemeModeDefinition(

@@ -238,7 +238,9 @@
 
 .wf-page-header h2 {
   margin: 2px 0 0;
-  font-size: 20px;
+  font-family: var(--studio-font-display);
+  font-size: var(--studio-page-title-size, 20px);
+  font-weight: var(--studio-title-weight, 700);
   line-height: 1.2;
 }
 
