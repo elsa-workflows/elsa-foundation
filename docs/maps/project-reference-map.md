@@ -7,8 +7,8 @@ Records direct project references only.
 ## Summary
 
 - Source projects: 132
-- Test projects: 118
-- Direct project references: 1169
+- Test projects: 119
+- Direct project references: 1170
 
 ## Projects
 
@@ -239,6 +239,7 @@ Records direct project references only.
 | [Elsa.Studio.Preferences.Tests](../../tests/essentials/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj) | test | Elsa.Studio | - | false | Elsa.Api.AspNetCore<br>Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Studio.Preferences.Api<br>Elsa.Studio.Preferences.Core<br>Elsa.Testing |
 | [Elsa.Tasks.Tests](../../tests/essentials/Tasks/Tests/Elsa.Tasks.Tests.csproj) | test | Elsa.Tasks | - | false | Elsa.Locking.Core<br>Elsa.Tasks<br>Elsa.Tasks.Schedules |
 | [Elsa.Testing](../../tests/essentials/Testing/Elsa.Testing.csproj) | test | Elsa.Testing | - | false | Elsa.Primitives |
+| [Elsa.Versioning.Calculator.Tests](../../tests/essentials/Versioning/Calculator/Tests/Elsa.Versioning.Calculator.Tests.csproj) | test | Elsa.Versioning | - | false | Elsa.Versioning.Calculator |
 | [Elsa.Workbench.Tests](../../tests/essentials/Workbench/Tests/Elsa.Workbench.Tests.csproj) | test | Elsa.Workbench | - | false | Elsa.Workbench |
 | [Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests](../../tests/essentials/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests |
 | [Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests](../../tests/essentials/Workflows/Dashboard/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Tasks<br>Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Resumption |
@@ -294,6 +295,7 @@ Records direct project references only.
 | Elsa.Studio | 3 | 3 |
 | Elsa.Tasks | 3 | 1 |
 | Elsa.Testing | 0 | 1 |
+| Elsa.Versioning | 0 | 1 |
 | Elsa.Workbench | 1 | 1 |
 | Elsa.Workflows | 31 | 24 |
 | Elsa3 | 4 | 3 |

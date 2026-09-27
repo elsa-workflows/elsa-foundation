@@ -52,6 +52,9 @@
   <Folder Name="/tools/maps/">
     <Project Path="tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj" />
   </Folder>
+  <Folder Name="/tools/versioning/">
+    <Project Path="tools/versioning/Elsa.Versioning.Calculator/Elsa.Versioning.Calculator.csproj" />
+  </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/apps/">
     <Project Path="src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj" />
@@ -596,5 +599,9 @@
   </Folder>
   <Folder Name="/tests/essentials/Http/">
     <Project Path="tests/essentials/Http/Tests/Elsa.Http.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/essentials/Versioning/" />
+  <Folder Name="/tests/essentials/Versioning/Calculator/">
+    <Project Path="tests/essentials/Versioning/Calculator/Tests/Elsa.Versioning.Calculator.Tests.csproj" />
   </Folder>
 </Solution>

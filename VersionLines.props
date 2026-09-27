@@ -26,4 +26,16 @@
     <ElsaVersionLineAMembers>;Elsa.Primitives;Elsa.Events.Core;Elsa.Tasks.Core;Elsa.Serialization.Core;Elsa.Mediator.Core;Elsa.Attention.Core;Elsa.Expressions.Core;Elsa.Pipelines.Core;Elsa.Locking.Core;Elsa.Caching.Core;</ElsaVersionLineAMembers>
   </PropertyGroup>
 
+  <!--
+    Each line's major.minor, spec 150 FR-001 and FR-010: ElsaContractsVersion for Line A, ElsaVersion for Line B.
+    This is the one place either is set. The patch is set nowhere in the tree:
+    tools/versioning/Elsa.Versioning.Calculator computes it per package from the last-published record, and
+    reads these two literals from this file at the commit being built, so each must stay a single unconditional
+    literal major.minor.
+  -->
+  <PropertyGroup>
+    <ElsaVersion>4.0</ElsaVersion>
+    <ElsaContractsVersion>4.0</ElsaContractsVersion>
+  </PropertyGroup>
+
 </Project>

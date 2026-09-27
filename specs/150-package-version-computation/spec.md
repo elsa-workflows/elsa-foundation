@@ -353,3 +353,58 @@ versions and their floors did not move.
 - `4.0.0` sorts below the `4.0.N-preview` versions already published. Should the 4.0 release instead
   ship each package at its current patch with the label dropped (`4.0.N`), which keeps every package
   monotonic?
+
+## Decisions
+
+Recorded when #2079 implemented the calculator, `tools/versioning/Elsa.Versioning.Calculator`
+([README](../../tools/versioning/README.md), which also gives the record's and the output's formats).
+
+- **The line properties live in `VersionLines.props`**, beside the Line A list: `ElsaVersion` and
+  `ElsaContractsVersion`, each a single unconditional literal `major.minor`, which the calculator reads
+  from the commit being built and refuses anywhere else (FR-001, FR-010). They reach a package through
+  FR-002's `major.minor` rule, not as file content, so opening a new Line B minor starts Line B at patch 0
+  and leaves Line A where it is.
+- **FR-002a excludes only Markdown that no build file names.** Without evaluating MSBuild the calculator
+  cannot show that any other kind ships nothing: build packages read files by convention alone (the
+  package-manifest generator reads a project's `elsa-package.overrides.json` whenever it exists). So every
+  other owned file counts, and a Markdown document counts once an item or property in the project's build
+  files names it — the `PackageReadmeFile` case.
+- **FR-004's repository-wide inputs are the files every build of a package reads**: each
+  `Directory.Build.props`, `Directory.Build.targets`, `Directory.Build.rsp`, `NuGet.config`, `global.json`
+  and non-root `Directory.Packages.props` at or above its project, and every file those or its own MSBuild
+  files import — which is how `VersionLines.props` counts. Comments and layout in them take no part, as
+  US3 scenario 3 has it for `Directory.Packages.props`. An import that cannot be resolved statically is
+  refused rather than guessed at.
+- **FR-003 is applied as written, and a transitive pin advances nothing — pending the owner's decision.**
+  With `CentralPackageTransitivePinningEnabled`, NuGet writes a pinned package into the nuspec of every
+  project whose graph reaches it, even when the pin does not raise its version (checked by packing a
+  scratch project). So a bump also changes the nuspec of projects that reference the package only
+  transitively, and a pure pin such as `Microsoft.OpenApi` changes no project's edges at all. The
+  dependency map records no transitive edges, so the calculator advances no package for such a bump; the
+  only alternative available to it today is advancing every package, Line A included, which is the floor
+  inflation ADR 0067 exists to prevent. The plain consequence: a transitive-pin bump alone — including a
+  security-motivated one, such as a CVE fix landing in `Microsoft.OpenApi` — advances no package, so no
+  published nuspec carries the patched floor until an unrelated change repacks the package. This is left
+  for the owner to choose among: (a) accept it; (b) disable `CentralPackageTransitivePinningEnabled`; (c)
+  record transitive edges in the dependency map, so the packages whose nuspec actually changes advance; or
+  (d) a manual "force-advance" of named packages at publish time. The calculator's behavior stays exactly
+  as described above until that choice is made. Everything else in `Directory.Packages.props` advances
+  every package (FR-004).
+- **A tool package's inputs include everything it carries.** `dotnet-elsa` packs as a tool, which carries
+  the builds of the projects it references, `Elsa.Cli.Worker` among them, instead of declaring ranges on
+  them, so FR-006a's reasoning does not reach it. Its inputs are the files of its whole reference closure,
+  and it advances whenever a package it carries advances.
+- **A major advance reaches the packages that reference it.** FR-007 bounds every range below the next
+  major, so a dependent's published artifact does not accept its dependency's new major; the dependents
+  advance with it, as ADR 0067 has it ("only a major change propagates through the reverse closure"). This
+  narrows FR-006a, which is written for compatible advances.
+- **A partly pushed Line A is completed, not moved.** When a publish pushed some Line A members and not
+  others, and nothing changed since, the members left behind are pushed at the version the rest were — the
+  partial-publish edge case applied to a line that moves as one.
+- **A rewritten `main` stops publishing until the record names a commit of the new history.** The record's
+  latest publish is no longer an ancestor of the rebuilt commits, so FR-021 refuses rather than renumbering
+  silently; the renumbering the edge case describes follows only once the record is settled, which FR-019
+  (written per package) does not yet say how to do for `last_publish_commit`.
+- **A dependency map that does not describe its commit is refused** — a project without a node, or a Line A
+  that disagrees with `VersionLines.props` — since a project the map misses would own nothing and never
+  publish.
