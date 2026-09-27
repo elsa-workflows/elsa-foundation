@@ -7,12 +7,14 @@ public sealed class CliTests : SyntheticHistory
 {
     private readonly string recordFile;
     private readonly string outputFile;
+    private readonly string packPropertiesFile;
 
     public CliTests()
     {
         // Inside .git: outside the working tree, so no commit picks them up, and removed with the repository.
         recordFile = Path.Join(Repo.Root, ".git", "published-versions.json");
         outputFile = Path.Join(Repo.Root, ".git", "computation.json");
+        packPropertiesFile = Path.Join(Repo.Root, ".git", "package-versions.props");
         File.WriteAllText(recordFile, Record.Serialize());
     }
 
@@ -33,6 +35,28 @@ public sealed class CliTests : SyntheticHistory
 
         Assert.Equal(0, Run("--repo", Repo.Root, "--record-ref", "publish-state", "--output", outputFile));
         Assert.Equal(Compute().ToJson(), File.ReadAllText(outputFile));
+    }
+
+    /// <summary>#2080: the pack-properties file is the one the library renders for the computation and the branch.</summary>
+    [Fact]
+    public void The_cli_writes_the_pack_properties_the_library_renders()
+    {
+        Repo.PrereleaseLabel = "preview";
+        var commit = Repo.Commit();
+
+        Assert.Equal(0, Run("--repo", Repo.Root, "--record", recordFile, "--commit", commit, "--output", outputFile,
+            "--pack-properties", packPropertiesFile, "--branch", "main"));
+        Assert.Equal(PackProperties.Render(Compute(commit), "main"), File.ReadAllText(packPropertiesFile));
+        Assert.Equal(Compute(commit).ToJson(), File.ReadAllText(outputFile));
+    }
+
+    /// <summary>A commit whose packages no label can be made for writes neither output.</summary>
+    [Fact]
+    public void The_cli_exits_2_and_writes_nothing_when_no_label_can_be_made()
+    {
+        Assert.Equal(2, Run("--repo", Repo.Root, "--record", recordFile, "--output", outputFile, "--pack-properties", packPropertiesFile, "--branch", "main"));
+        Assert.False(File.Exists(outputFile));
+        Assert.False(File.Exists(packPropertiesFile));
     }
 
     [Fact]
@@ -56,6 +80,8 @@ public sealed class CliTests : SyntheticHistory
     [InlineData("--record", "RECORD", "--unknown", "value")]
     [InlineData("--record", "RECORD", "--record", "RECORD")]
     [InlineData("--record")]
+    [InlineData("--record", "RECORD", "--pack-properties", "package-versions.props")]
+    [InlineData("--record", "RECORD", "--branch", "main")]
     public void The_cli_exits_2_on_invalid_input(params string[] arguments) =>
         Assert.Equal(2, Run(["--repo", Repo.Root, .. arguments.Select(argument => argument == "RECORD" ? recordFile : argument)]));
 

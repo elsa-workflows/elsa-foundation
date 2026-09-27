@@ -10,15 +10,21 @@ namespace Elsa.Versioning.Calculator;
 /// <param name="LineA">Line A's <c>major.minor</c>.</param>
 /// <param name="LineB">Line B's <c>major.minor</c>.</param>
 /// <param name="LineAMembers">The project names <c>ElsaVersionLineAMembers</c> lists.</param>
-public sealed record VersionLineSettings(LineVersion LineA, LineVersion LineB, IReadOnlySet<string> LineAMembers)
+/// <param name="PrereleaseLabel">
+/// <c>ElsaPrereleaseLabel</c>, the label packages packed from <c>main</c> carry (FR-008): empty once the lines are
+/// released, and null when the file does not assign it. Version computation does not read it; packing does
+/// (<see cref="PackProperties"/>).
+/// </param>
+public sealed record VersionLineSettings(LineVersion LineA, LineVersion LineB, IReadOnlySet<string> LineAMembers, string? PrereleaseLabel)
 {
     public const string RelativePath = "VersionLines.props";
 
     public LineVersion For(string line) => line == "A" ? LineA : LineB;
 
     /// <summary>
-    /// Reads the three properties, each of which must be assigned exactly once, unconditionally, to a literal: this is a
-    /// static read standing in for MSBuild's evaluation, so anything it could misread is refused.
+    /// Reads the properties, each of which must be assigned exactly once, unconditionally, to a literal: this is a
+    /// static read standing in for MSBuild's evaluation, so anything it could misread is refused. The prerelease label
+    /// may also be left out, which only packing refuses.
     /// </summary>
     internal static VersionLineSettings Parse(byte[]? content, string source)
     {
@@ -27,9 +33,12 @@ public sealed record VersionLineSettings(LineVersion LineA, LineVersion LineB, I
 
         var root = MsBuildFile.LoadRoot(content, source);
 
-        string Literal(string name)
+        string? Literal(string name, bool required = true)
         {
             var assignments = root.Descendants().Where(element => string.Equals(element.Name.LocalName, name, StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (assignments.Length == 0 && !required)
+                return null;
+
             if (assignments.Length != 1 || assignments[0].Parent?.Name.LocalName != "PropertyGroup" ||
                 assignments[0].Attribute("Condition") is not null || assignments[0].Parent!.Attribute("Condition") is not null ||
                 assignments[0].Value.Contains("$(", StringComparison.Ordinal))
@@ -39,8 +48,9 @@ public sealed record VersionLineSettings(LineVersion LineA, LineVersion LineB, I
         }
 
         return new VersionLineSettings(
-            LineVersion.Parse(Literal("ElsaContractsVersion"), $"{source} <ElsaContractsVersion>"),
-            LineVersion.Parse(Literal("ElsaVersion"), $"{source} <ElsaVersion>"),
-            Literal("ElsaVersionLineAMembers").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet(StringComparer.Ordinal));
+            LineVersion.Parse(Literal("ElsaContractsVersion")!, $"{source} <ElsaContractsVersion>"),
+            LineVersion.Parse(Literal("ElsaVersion")!, $"{source} <ElsaVersion>"),
+            Literal("ElsaVersionLineAMembers")!.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet(StringComparer.Ordinal),
+            Literal(Calculator.PrereleaseLabel.PropertyName, required: false));
     }
 }

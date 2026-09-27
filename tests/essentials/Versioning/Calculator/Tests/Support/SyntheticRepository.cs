@@ -90,6 +90,9 @@ internal sealed class SyntheticRepository : IDisposable
 
     public string ElsaContractsVersion { get; set; } = "4.0";
 
+    /// <summary><c>ElsaPrereleaseLabel</c>, which <c>VersionLines.props</c> assigns only when set.</summary>
+    public string? PrereleaseLabel { get; set; }
+
     public int MapSchemaVersion { get; set; } = 1;
 
     /// <summary>When false, <see cref="Commit"/> leaves the dependency map as it was, as a stale map would be.</summary>
@@ -251,7 +254,7 @@ internal sealed class SyntheticRepository : IDisposable
                     <ElsaVersion>{ElsaVersion}</ElsaVersion>
                     <ElsaContractsVersion>{ElsaContractsVersion}</ElsaContractsVersion>
                   </PropertyGroup>
-                </Project>
+                {(PrereleaseLabel is null ? string.Empty : $"  <PropertyGroup><ElsaPrereleaseLabel>{PrereleaseLabel}</ElsaPrereleaseLabel></PropertyGroup>\n")}</Project>
 
                 """;
     }

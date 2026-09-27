@@ -38,4 +38,15 @@
     <ElsaContractsVersion>4.0</ElsaContractsVersion>
   </PropertyGroup>
 
+  <!--
+    Spec 150 FR-008: the prerelease label every package packed from main carries, with no counter. It is non-empty
+    while the 4.0 lines are unreleased, and empty once they are released. A build from any other branch carries a
+    branch-scoped label instead. The calculator reads it from this file at the commit being built, like the two
+    properties above, so it too must stay a single unconditional literal: empty, or dot-separated [0-9A-Za-z-]
+    identifiers.
+  -->
+  <PropertyGroup>
+    <ElsaPrereleaseLabel>preview</ElsaPrereleaseLabel>
+  </PropertyGroup>
+
 </Project>

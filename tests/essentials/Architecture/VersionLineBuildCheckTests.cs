@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Xunit;
 using static Elsa.Architecture.Tests.RepoPaths;
 
@@ -6,23 +5,23 @@ namespace Elsa.Architecture.Tests;
 
 /// <summary>
 /// Proves the build-time half of ADR 0067's version-line guard: the <c>ElsaVerifyVersionLine</c> target in
-/// the root <c>Directory.Build.props</c>, which runs on both <c>BeforeBuild</c> and <c>GenerateNuspec</c> so
-/// a pack-only override is caught too. <see cref="VersionLineOwnershipGuardTests"/> is a static file scan
-/// that cannot see a global property passed on the command line (<c>/p:ElsaVersionLine=...</c> or
-/// <c>/p:ElsaVersionLineAMembers=...</c>) or a setter that only takes effect at evaluation time from a build
-/// file outside <c>src/</c> and <c>tests/</c>; this suite spawns real <c>dotnet msbuild</c> processes against
-/// small fixture projects that import the real root <c>Directory.Build.props</c> (or, for one case, a copy
-/// of it paired with a deliberately broken <c>VersionLines.props</c>), so it exercises the actual
-/// <c>BeforeTargets</c> wiring for both the <c>BeforeBuild</c> and <c>GenerateNuspec</c> hooks, the actual
-/// <c>/p:</c> handling for both properties, and the actual <c>XmlPeek</c> comparison — including the case
-/// where <c>XmlPeek</c> itself reads nothing (<c>ELSAVL003</c>) — rather than a description of them.
+/// the root <c>Directory.Build.props</c>, which runs on <c>BeforeBuild</c>, <c>GenerateNuspec</c> and
+/// <c>_GetProjectVersion</c> so a pack-only override is caught too. <see cref="VersionLineOwnershipGuardTests"/> and
+/// <see cref="NoLiteralProjectVersionGuardTests"/> are static file scans that cannot see a global property passed on
+/// the command line (<c>/p:ElsaVersionLine=...</c>, <c>/p:ElsaVersion=...</c> and the like) or a setter that only
+/// takes effect at evaluation time from a build file they do not scan; this suite spawns real
+/// <c>dotnet msbuild</c> processes against small fixture projects that import the real root
+/// <c>Directory.Build.props</c> (or, for one case, a copy of it paired with a deliberately broken
+/// <c>VersionLines.props</c>), so it exercises the actual <c>BeforeTargets</c> wiring for each hook, the actual
+/// <c>/p:</c> handling for each property, and the actual <c>XmlPeek</c> comparison — including the case where
+/// <c>XmlPeek</c> itself reads nothing (<c>ELSAVL003</c>) — rather than a description of them.
 /// </summary>
 public sealed class VersionLineBuildCheckTests
 {
     [Fact]
     public void A_clean_line_B_project_builds()
     {
-        var (exitCode, output) = RunBuild("Fixture.LineB");
+        var (exitCode, output) = MsBuildFixture.Run("Fixture.LineB");
 
         Assert.True(exitCode == 0, $"build failed with exit {exitCode}:\n{output}");
     }
@@ -31,7 +30,7 @@ public sealed class VersionLineBuildCheckTests
     [Fact]
     public void A_clean_line_A_project_builds()
     {
-        var (exitCode, output) = RunBuild(VersionLines.LineAMembers(RepoRoot)[0]);
+        var (exitCode, output) = MsBuildFixture.Run(VersionLines.LineAMembers(RepoRoot)[0]);
 
         Assert.True(exitCode == 0, $"build failed with exit {exitCode}:\n{output}");
     }
@@ -44,7 +43,7 @@ public sealed class VersionLineBuildCheckTests
     [Fact]
     public void A_clean_line_B_project_packs()
     {
-        var (exitCode, output) = RunBuild("Fixture.LineB", target: "GenerateNuspec");
+        var (exitCode, output) = MsBuildFixture.Run("Fixture.LineB", target: "GenerateNuspec");
 
         Assert.True(exitCode == 0, $"pack failed with exit {exitCode}:\n{output}");
     }
@@ -59,7 +58,7 @@ public sealed class VersionLineBuildCheckTests
     [Fact]
     public void A_pack_only_override_is_caught()
     {
-        var (exitCode, output) = RunBuild("Fixture.LineB", globalProperties: ["ElsaVersionLine=A"], target: "GenerateNuspec");
+        var (exitCode, output) = MsBuildFixture.Run("Fixture.LineB", globalProperties: ["ElsaVersionLine=A"], target: "GenerateNuspec");
 
         Assert.True(exitCode != 0, $"expected a build failure but it succeeded:\n{output}");
         Assert.Contains("ELSAVL001", output);
@@ -70,7 +69,7 @@ public sealed class VersionLineBuildCheckTests
     public void A_mismatch_fails_with_the_expected_code(
         string projectName, string body, string[] globalProperties, string expectedCode, string? expectedValue)
     {
-        var (exitCode, output) = RunBuild(projectName, body, globalProperties);
+        var (exitCode, output) = MsBuildFixture.Run(projectName, body, globalProperties);
 
         Assert.True(exitCode != 0, $"expected a build failure but it succeeded:\n{output}");
         Assert.Contains(expectedCode, output);
@@ -133,6 +132,40 @@ public sealed class VersionLineBuildCheckTests
             "ELSAVL002",
             ";Fixture.LineB;"
         };
+
+        // A project file sets a line's major.minor itself, which the calculator never sees -> ELSAVL004.
+        yield return new object?[]
+        {
+            "Fixture.LineB",
+            "<PropertyGroup><ElsaVersion>4.9</ElsaVersion></PropertyGroup>",
+            Array.Empty<string>(),
+            "ELSAVL004",
+            "'4.9'"
+        };
+
+        // /p:ElsaContractsVersion wins over VersionLines.props, for a real Line A member -> ELSAVL004.
+        yield return new object?[]
+        {
+            lineAMember,
+            "",
+            new[] { "ElsaContractsVersion=5.0" },
+            "ELSAVL004",
+            "'5.0'"
+        };
+    }
+
+    /// <summary>
+    /// The <c>_GetProjectVersion</c> hook: a pack asks each project it references for its version through that target,
+    /// which never runs <c>BeforeBuild</c> or <c>GenerateNuspec</c> in the referenced project, so an override there must
+    /// be caught too or the referencing package's range would start at a version nothing computed.
+    /// </summary>
+    [Fact]
+    public void An_override_seen_only_by_a_referencing_pack_is_caught()
+    {
+        var (exitCode, output) = MsBuildFixture.Run("Fixture.LineB", globalProperties: ["ElsaVersion=4.9"], target: "_GetProjectVersion");
+
+        Assert.True(exitCode != 0, $"expected a build failure but it succeeded:\n{output}");
+        Assert.Contains("ELSAVL004", output);
     }
 
     /// <summary>
@@ -149,15 +182,11 @@ public sealed class VersionLineBuildCheckTests
         var directory = Directory.CreateTempSubdirectory(nameof(VersionLineBuildCheckTests));
         try
         {
-            var directoryBuildPropsPath = Path.Join(directory.FullName, "Directory.Build.props");
-            File.Copy(Path.Join(RepoRoot, "Directory.Build.props"), directoryBuildPropsPath);
-
             // The real list, verbatim, with only the root <Project> element namespaced.
-            var versionLines = File.ReadAllText(Path.Join(RepoRoot, "VersionLines.props"))
-                .Replace("<Project>", "<Project xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">");
-            File.WriteAllText(Path.Join(directory.FullName, "VersionLines.props"), versionLines);
+            var root = MsBuildFixture.CopyRootBuildFiles(directory.FullName, versionLines =>
+                versionLines.Replace("<Project>", "<Project xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">"));
 
-            var (exitCode, output) = RunBuild("Fixture.LineB", directoryBuildPropsPath: directoryBuildPropsPath);
+            var (exitCode, output) = MsBuildFixture.Run("Fixture.LineB", repositoryRoot: root);
 
             Assert.True(exitCode != 0, $"expected a build failure but it succeeded:\n{output}");
             Assert.Contains("ELSAVL003", output);
@@ -167,84 +196,4 @@ public sealed class VersionLineBuildCheckTests
             directory.Delete(recursive: true);
         }
     }
-
-    /// <summary>
-    /// Writes a minimal, SDK-less fixture project (no restore needed, about a second per run) that imports
-    /// <paramref name="directoryBuildPropsPath"/> — the real root <c>Directory.Build.props</c> by default, or
-    /// a caller-supplied copy for <see cref="Xmlpeek_reading_nothing_fails_with_ELSAVL003"/> — and runs
-    /// <c>-t:</c><paramref name="target"/> against it (<c>BeforeBuild</c> by default, or
-    /// <c>GenerateNuspec</c> to exercise the pack hook), proving the <c>BeforeTargets</c> wiring for that
-    /// hook itself, not just the target's own body in isolation.
-    /// </summary>
-    private static (int ExitCode, string Output) RunBuild(
-        string projectName, string body = "", string[]? globalProperties = null, string? directoryBuildPropsPath = null,
-        string target = "BeforeBuild")
-    {
-        var directory = Directory.CreateTempSubdirectory(nameof(VersionLineBuildCheckTests));
-        try
-        {
-            var projectPath = Path.Join(directory.FullName, $"{projectName}.proj");
-            File.WriteAllText(projectPath, $"""
-                <Project>
-                  <Import Project="{directoryBuildPropsPath ?? Path.Join(RepoRoot, "Directory.Build.props")}" />
-                  {body}
-                  <Target Name="BeforeBuild" />
-                  <Target Name="GenerateNuspec" />
-                </Project>
-                """);
-
-            var startInfo = new ProcessStartInfo(DotnetMuxer())
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false
-            };
-            startInfo.ArgumentList.Add("msbuild");
-            startInfo.ArgumentList.Add(projectPath);
-            startInfo.ArgumentList.Add($"-t:{target}");
-            startInfo.ArgumentList.Add("-nologo");
-            startInfo.ArgumentList.Add("-nodeReuse:false");
-            foreach (var property in globalProperties ?? [])
-                startInfo.ArgumentList.Add($"-p:{property}");
-
-            // dotnet test's own build/vstest launch leaves MSBuild-specific variables (MSBUILD_EXE_PATH,
-            // MSBuildExtensionsPath, MSBuildSDKsPath) in this process's environment, pointing at the test
-            // host's build context. Inherited by the child process, they make the spawned `dotnet msbuild`
-            // resolve the wrong SDK/props set instead of its own, which breaks evaluating the fixture
-            // project outright rather than merely producing a different — still checkable — result.
-            startInfo.Environment.Remove("MSBUILD_EXE_PATH");
-            startInfo.Environment.Remove("MSBuildExtensionsPath");
-            startInfo.Environment.Remove("MSBuildSDKsPath");
-
-            using var process = Process.Start(startInfo)!;
-
-            // Start both reads before blocking on exit: stdout and stderr are separate pipes with bounded
-            // buffers, so reading them sequentially can deadlock if the child fills one while this process
-            // is still blocked reading the other.
-            var stdOutTask = process.StandardOutput.ReadToEndAsync();
-            var stdErrTask = process.StandardError.ReadToEndAsync();
-
-            var exited = process.WaitForExit(TimeSpan.FromMinutes(2));
-            if (!exited)
-            {
-                process.Kill(entireProcessTree: true);
-                process.WaitForExit();
-            }
-
-            var output = stdOutTask.GetAwaiter().GetResult() + stdErrTask.GetAwaiter().GetResult();
-
-            if (!exited)
-                throw new TimeoutException(
-                    $"dotnet msbuild for {projectName} did not exit within 2 minutes and was killed. Output so far:\n{output}");
-
-            return (process.ExitCode, output);
-        }
-        finally
-        {
-            directory.Delete(recursive: true);
-        }
-    }
-
-    private static string DotnetMuxer() =>
-        Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") is { Length: > 0 } path ? path : "dotnet";
 }

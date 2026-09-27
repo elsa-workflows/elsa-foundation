@@ -1,0 +1,234 @@
+<Project>
+
+  <!--
+    Package versions, and what every package carries about where it came from: spec 150 FR-007, FR-008 and FR-018.
+    Directory.Build.props imports this after it derives and checks $(ElsaVersionLine), so every project sees it.
+
+    It versions the projects under src/, where every package the pipeline publishes lives (FR-005), and leaves every
+    other project - a test fixture pinning its assembly version, a sample package - exactly as its own properties and
+    the SDK's defaults have it. A version comes from one of two places.
+
+      - Computed. tools/versioning/Elsa.Versioning.Calculator writes an MSBuild file for one commit, one revision of
+        the last-published record and one branch (its pack-properties output; see tools/versioning/README.md), and
+        dotnet build and dotnet pack both import it through MSBuild's CustomBeforeDirectoryBuildProps hook:
+
+          -p:CustomBeforeDirectoryBuildProps=<the file's full path>
+
+        It sets ElsaVersionComputationCommit and, for each packable project, ElsaComputedPackageVersion (the final
+        version, prerelease label included) and ElsaInputFingerprint. Version and PackageVersion both take the computed
+        version, so the assemblies a package carries claim the package's version, as packages.yml's /p:Version makes
+        them do today. The file comes in through that hook rather than an Import here because the calculator reads this
+        file as a build input of every package and refuses an import whose path it cannot resolve statically.
+      - Dev. Without that file PackageVersion is <the project's line's major.minor>.0-dev, from ElsaVersion or
+        ElsaContractsVersion in VersionLines.props, which sorts below every version the calculator computes on that
+        line. Version is left to the SDK's default, so a dev build's assemblies, and every activity version and
+        assembly-qualified name derived from them, stay what they were before package versions were computed.
+
+    Nothing else may set PackageVersion, nor, with computed input, Version, and ElsaVerifyPackageVersion fails the
+    build or the pack when something did. One exception stands until #2082 rewrites packages.yml: without computed
+    input, a Version that arrived from outside every build file - a global /p:Version - becomes the package version,
+    because packages.yml still stamps one on every package.
+
+    The calculator also decides, from this file, which of a project's Markdown files count as package inputs
+    (FR-002a): an item whose Include or Update it cannot resolve statically is taken to name every file. So every
+    item included below spells a path it can resolve - $(MSBuildProjectDirectory)/ and literals only, no other
+    $(...) and no @(...) - and the targets otherwise shape item lists through task outputs and metadata updates.
+    tests/essentials/Versioning/Calculator/Tests/RootBuildFileTests.cs holds that line.
+
+    tests/essentials/Architecture/PackageVersionBuildCheckTests.cs proves the version choice and its checks, and
+    PackageVersioningPackTests.cs beside it proves the packs: bounded ranges, the fingerprint and the source commit.
+  -->
+  <PropertyGroup>
+    <_ElsaSourceDirectory>$([MSBuild]::EnsureTrailingSlash('$(MSBuildThisFileDirectory)src'))</_ElsaSourceDirectory>
+    <_ElsaLineVersion>$(ElsaVersion)</_ElsaLineVersion>
+    <_ElsaLineVersion Condition="'$(ElsaVersionLine)' == 'A'">$(ElsaContractsVersion)</_ElsaLineVersion>
+  </PropertyGroup>
+
+  <!-- _ElsaPackageVersion is set exactly for the projects this file versions; every target below keys on it. -->
+  <PropertyGroup Condition="$(MSBuildProjectFullPath.StartsWith('$(_ElsaSourceDirectory)')) or '$(ElsaComputedPackageVersion)' != ''">
+    <_ElsaPackageVersion>$(_ElsaLineVersion).0-dev</_ElsaPackageVersion>
+    <_ElsaPackageVersion Condition="'$(Version)' != ''">$(Version)</_ElsaPackageVersion>
+    <_ElsaPackageVersion Condition="'$(ElsaComputedPackageVersion)' != ''">$(ElsaComputedPackageVersion)</_ElsaPackageVersion>
+    <Version Condition="'$(ElsaComputedPackageVersion)' != ''">$(ElsaComputedPackageVersion)</Version>
+    <PackageVersion>$(_ElsaPackageVersion)</PackageVersion>
+    <RepositoryCommit Condition="'$(ElsaVersionComputationCommit)' != ''">$(ElsaVersionComputationCommit)</RepositoryCommit>
+  </PropertyGroup>
+
+  <!--
+    The version checks every build and every pack runs, including the _GetProjectVersion a pack asks of each project
+    it references: that answer is where the dependency's range starts.
+  -->
+  <Target Name="ElsaVerifyPackageVersion" BeforeTargets="BeforeBuild;GenerateNuspec;_GetProjectVersion">
+
+    <Error Code="ELSAPV001"
+           Condition="'$(ElsaVersionComputationCommit)' == '' and ('$(ElsaComputedPackageVersion)' != '' or '$(ElsaInputFingerprint)' != '')"
+           Text="$(MSBuildProjectName) has a computed version or input fingerprint but no ElsaVersionComputationCommit, so nothing says which commit they were computed for. Import the calculator's pack-properties file whole, through -p:CustomBeforeDirectoryBuildProps, and set none of its properties anywhere else." />
+
+    <Error Code="ELSAPV002"
+           Condition="'$(ElsaComputedPackageVersion)' != '' and !$(ElsaComputedPackageVersion.StartsWith('$(_ElsaLineVersion).'))"
+           Text="$(MSBuildProjectName) is on line $(ElsaVersionLine), whose major.minor VersionLines.props sets to $(_ElsaLineVersion), but its computed version is $(ElsaComputedPackageVersion). The computation was made for a commit with different version lines; compute again for the commit being built." />
+
+    <Error Code="ELSAPV003"
+           Condition="'$(ElsaComputedPackageVersion)' != '' and '$(Version)' != '$(ElsaComputedPackageVersion)'"
+           Text="$(MSBuildProjectName) evaluates Version as '$(Version)', but its computed version is '$(ElsaComputedPackageVersion)'. With computed versions, Version comes from PackageVersioning.props alone (spec 150 FR-005): not from this project file, not from a nested Directory.Build.props/.targets, and not from /p:Version." />
+
+    <Error Code="ELSAPV004"
+           Condition="'$(_ElsaPackageVersion)' != '' and '$(PackageVersion)' != '$(_ElsaPackageVersion)'"
+           Text="$(MSBuildProjectName) evaluates PackageVersion as '$(PackageVersion)', but its package version is '$(_ElsaPackageVersion)'. PackageVersion comes from PackageVersioning.props alone (spec 150 FR-005): not from this project file, not from a nested Directory.Build.props/.targets, and not from /p:PackageVersion." />
+
+  </Target>
+
+  <!--
+    With computed versions, every package a pack writes or points a dependency at must have one: a packable project
+    the computation leaves out would otherwise fall back to the dev version, and a package referencing it would
+    publish a range starting at that dev version.
+  -->
+  <Target Name="ElsaVerifyComputedPackage" BeforeTargets="GenerateNuspec;_GetProjectVersion"
+          Condition="'$(ElsaVersionComputationCommit)' != '' and '$(IsPackable)' == 'true'">
+
+    <Error Code="ELSAPV005"
+           Condition="'$(ElsaComputedPackageVersion)' == '' or '$(ElsaInputFingerprint)' == ''"
+           Text="$(MSBuildProjectName) is packable, but the computed versions for $(ElsaVersionComputationCommit) give it no version and input fingerprint. The dependency map committed at that commit does not list it as packable under this project name; regenerate the map (dotnet run --project tools/maps/Elsa.Maps.Generator -- all) and compute again." />
+
+  </Target>
+
+  <!--
+    FR-018: the source commit is the nuspec's repository commit, set above from the computation. It must be the commit
+    this working tree holds, which SourceLink reports as SourceRevisionId; otherwise the versions and fingerprints
+    describe a different commit's inputs than the ones being packed. GenerateNuspec initializes SourceRevisionId among
+    its dependencies, so this runs after that. A tree with uncommitted changes is not detected here: the calculator
+    reads git objects only, and packing is expected to run on a clean checkout.
+  -->
+  <Target Name="ElsaVerifyRepositoryCommit" BeforeTargets="GenerateNuspec"
+          Condition="'$(ElsaVersionComputationCommit)' != '' and '$(IsPackable)' == 'true'">
+
+    <Error Code="ELSAPV006"
+           Condition="'$(SourceRevisionId)' != '$(ElsaVersionComputationCommit)'"
+           Text="$(MSBuildProjectName): the computed versions are for commit $(ElsaVersionComputationCommit), but this working tree is at '$(SourceRevisionId)'. Compute them for the commit being packed." />
+
+  </Target>
+
+  <!--
+    FR-018: the input fingerprint, embedded at the package root as elsa-input-fingerprint.json. NuGet has no custom
+    nuspec metadata - pack silently drops an element it does not know - so the fingerprint travels as a file in the
+    package. It is written only with computed input: a dev package carries none.
+  -->
+  <Target Name="ElsaPackInputFingerprint" BeforeTargets="_GetPackageFiles" Condition="'$(ElsaInputFingerprint)' != ''">
+
+    <WriteLinesToFile File="$(MSBuildProjectDirectory)/obj/elsa-input-fingerprint.json"
+                      Lines="{&quot;schema_version&quot;:1,&quot;fingerprint&quot;:&quot;$(ElsaInputFingerprint)&quot;}"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
+
+    <ItemGroup>
+      <None Include="$(MSBuildProjectDirectory)/obj/elsa-input-fingerprint.json" Pack="true" PackagePath="/" />
+    </ItemGroup>
+
+  </Target>
+
+  <!--
+    A no-build pack packs what an earlier build produced, and that build already stamped its version into the
+    assemblies and into elsa-package.json. So the build records the version it built, and a no-build pack refuses to
+    stamp a different one on the package, which would otherwise ship claiming two versions at once.
+  -->
+  <Target Name="ElsaRecordBuiltPackageVersion" AfterTargets="Build" Condition="'$(_ElsaPackageVersion)' != '' and '$(IsPackable)' == 'true'">
+
+    <WriteLinesToFile File="$(BaseIntermediateOutputPath)$(Configuration)/elsa-built-package-version.txt"
+                      Lines="$(PackageVersion)"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
+
+  </Target>
+
+  <Target Name="ElsaVerifyBuiltPackageVersion" BeforeTargets="GenerateNuspec"
+          Condition="'$(_ElsaPackageVersion)' != '' and '$(IsPackable)' == 'true' and '$(NoBuild)' == 'true'">
+
+    <ReadLinesFromFile File="$(BaseIntermediateOutputPath)$(Configuration)/elsa-built-package-version.txt"
+                       Condition="Exists('$(BaseIntermediateOutputPath)$(Configuration)/elsa-built-package-version.txt')">
+      <Output TaskParameter="Lines" PropertyName="_ElsaBuiltPackageVersion" />
+    </ReadLinesFromFile>
+
+    <Error Code="ELSAPV007"
+           Condition="'$(_ElsaBuiltPackageVersion)' != '$(PackageVersion)'"
+           Text="$(MSBuildProjectName) is being packed as $(PackageVersion) without building, but its $(Configuration) build was made as '$(_ElsaBuiltPackageVersion)'. Build and pack with the same version input: the same -p:CustomBeforeDirectoryBuildProps file, or none for both." />
+
+  </Target>
+
+  <!--
+    FR-007: every dependency range in the nuspec stops below the next major, [x.y.z, (x+1).0.0), whatever the
+    dependency is, so a package never accepts a new major it was not built against.
+
+      - Project references. Pack asks each referenced project for its version and parses the answer as a range, in
+        which a bare version means [x.y.z, ); this rewrites each answer into the bounded range before pack reads it.
+      - Packages. Pack copies each package's range from the restore graph, which central package management fills
+        from Directory.Packages.props, so the restore of a packable project bounds each PackageVersion the same way.
+        Resolution does not change: NuGet still restores the lowest version a range admits, which is the version
+        Directory.Packages.props names.
+
+    A version already written as a range is left as it is. ElsaVerifyNuspecRanges then reads the nuspec pack wrote and
+    fails the pack, deleting what it wrote, when any range is not bounded at its floor's next major: a range written
+    by hand, a restore these targets did not run in (a static-graph restore, or assets restored before this file
+    existed), and a change to the NuGet internals the project-reference rewrite hooks all end there rather than on
+    the feed.
+  -->
+  <Target Name="ElsaBoundProjectReferenceRanges" AfterTargets="_GetProjectReferenceVersions" Condition="'$(_ElsaPackageVersion)' != ''">
+
+    <ItemGroup>
+      <_ProjectReferencesWithVersions Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(ProjectVersion)', '^[0-9]'))">
+        <ProjectVersion>[%(ProjectVersion), $([MSBuild]::Add($([System.String]::Copy('%(ProjectVersion)').Split('.')[0]), 1)).0.0)</ProjectVersion>
+      </_ProjectReferencesWithVersions>
+    </ItemGroup>
+
+  </Target>
+
+  <Target Name="ElsaBoundCentralPackageVersions" AfterTargets="CollectCentralPackageVersions"
+          Condition="'$(_ElsaPackageVersion)' != '' and '$(IsPackable)' == 'true'">
+
+    <ItemGroup>
+      <PackageVersion Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Version)', '^[0-9]'))">
+        <Version>[%(Version), $([MSBuild]::Add($([System.String]::Copy('%(Version)').Split('.')[0]), 1)).0.0)</Version>
+      </PackageVersion>
+    </ItemGroup>
+
+  </Target>
+
+  <Target Name="ElsaVerifyNuspecRanges" AfterTargets="GenerateNuspec" DependsOnTargets="_GetOutputItemsFromPack"
+          Condition="'$(_ElsaPackageVersion)' != '' and '$(IsPackable)' == 'true'">
+
+    <PropertyGroup>
+      <_ElsaNuspecFile>@(_OutputPackItems->WithMetadataValue('Extension', '.nuspec'))</_ElsaNuspecFile>
+    </PropertyGroup>
+
+    <XmlPeek XmlInputPath="$(_ElsaNuspecFile)" Query="//*[local-name()='dependency']">
+      <Output TaskParameter="Result" ItemName="_ElsaNuspecDependency" />
+    </XmlPeek>
+
+    <!-- XmlPeek returns each dependency element's XML; its id and range, then the range's floor and ceiling majors. -->
+    <ItemGroup>
+      <_ElsaNuspecDependency>
+        <PackageId>$([System.Text.RegularExpressions.Regex]::Match('%(Identity)', ' id="([^"]*)"').Groups[1].Value)</PackageId>
+        <Range>$([System.Text.RegularExpressions.Regex]::Match('%(Identity)', ' version="([^"]*)"').Groups[1].Value)</Range>
+        <Bounded>false</Bounded>
+      </_ElsaNuspecDependency>
+      <_ElsaNuspecDependency>
+        <FloorMajor>$([System.Text.RegularExpressions.Regex]::Match('%(Range)', '^\[([0-9]+)\.[^,]*, [0-9]+\.0\.0\)$').Groups[1].Value)</FloorMajor>
+        <CeilingMajor>$([System.Text.RegularExpressions.Regex]::Match('%(Range)', '^\[[0-9]+\.[^,]*, ([0-9]+)\.0\.0\)$').Groups[1].Value)</CeilingMajor>
+      </_ElsaNuspecDependency>
+      <_ElsaNuspecDependency Condition="'%(FloorMajor)' != '' and '%(CeilingMajor)' == '$([MSBuild]::Add($([MSBuild]::ValueOrDefault(`%(FloorMajor)`, `0`)), 1))'">
+        <Bounded>true</Bounded>
+      </_ElsaNuspecDependency>
+    </ItemGroup>
+
+    <PropertyGroup>
+      <_ElsaUnboundedRanges>@(_ElsaNuspecDependency->WithMetadataValue('Bounded', 'false')->'%(PackageId) %(Range)', ', ')</_ElsaUnboundedRanges>
+    </PropertyGroup>
+
+    <Delete Files="@(_OutputPackItems)" Condition="'$(_ElsaUnboundedRanges)' != ''" />
+
+    <Error Code="ELSAPV008"
+           Condition="'$(_ElsaUnboundedRanges)' != ''"
+           Text="$(MSBuildProjectName)'s nuspec declares dependency ranges that are not bounded below their floor's next major (spec 150 FR-007): $(_ElsaUnboundedRanges). The package was deleted. Restore again, so that PackageVersioning.props bounds each package's range, and write no range by hand in Directory.Packages.props that stops anywhere else." />
+
+  </Target>
+
+</Project>

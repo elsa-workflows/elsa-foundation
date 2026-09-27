@@ -408,3 +408,27 @@ Recorded when #2079 implemented the calculator, `tools/versioning/Elsa.Versionin
 - **A dependency map that does not describe its commit is refused** — a project without a node, or a Line A
   that disagrees with `VersionLines.props` — since a project the map misses would own nothing and never
   publish.
+
+Recorded when #2080 made packing read the calculator's output
+([README, Packing](../../tools/versioning/README.md#packing)).
+
+- **FR-007 bounds every range, third-party packages included.** It says "every nuspec dependency range", and an
+  unbounded third-party range fails silently — NuGet may select a new major nobody built against — where a bounded
+  one fails loudly, as a restore warning for a consumer who moves past it. The cost is that a consumer taking the next
+  major of a dependency such as `Microsoft.Extensions.*` sees `NU1608` until the package is republished against it.
+  The bound is `(x+1).0.0` exclusive, as FR-007 and ADR 0067 write it; NuGet orders a prerelease of the next major,
+  such as `5.0.0-preview`, below `5.0.0`, so such a range still admits it. Bounding at `(x+1).0.0-0` would not.
+- **A package keeps the recorded version of each package it references that is not being published** — label
+  included, so a branch build's range on an unchanged package starts at the version on the feed, not at one carrying
+  the branch's label (SC-002).
+- **FR-008's label is data at the commit being built.** Main's label is `ElsaPrereleaseLabel` in `VersionLines.props`,
+  `preview` until the lines are released and empty after; a branch's is `branch-` and its sanitized name. Unlike the
+  two line properties, the label is ordinary content, so emptying it advances every package; the release itself is
+  #2085's to shape.
+- **A computed build stamps the package version on its assemblies too; a dev build does not.** With the calculator's
+  output, `Version` is the package version, as `packages.yml`'s `/p:Version` makes it today. Without it only the
+  package version is `<major.minor>.0-dev`: CLR activity versions and assembly-qualified names derive from the
+  assembly version, and committed baselines hold them, so a dev build keeps the SDK's default.
+- **FR-018's fingerprint is a file in the package**, `elsa-input-fingerprint.json` at its root, because NuGet has no
+  custom nuspec metadata and silently drops an element it does not know; "in its metadata" is met by the source
+  commit, which is the nuspec's `repository` `commit`, and by the fingerprint travelling in the package itself.
