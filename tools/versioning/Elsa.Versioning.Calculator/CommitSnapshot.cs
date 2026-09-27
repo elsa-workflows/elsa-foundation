@@ -21,8 +21,9 @@ namespace Elsa.Versioning.Calculator;
 /// <item>the build files every build of it reads: each <c>Directory.Build.props</c>, <c>Directory.Build.targets</c>,
 /// <c>Directory.Build.rsp</c>, <c>NuGet.config</c>, <c>global.json</c> and non-root <c>Directory.Packages.props</c> in
 /// its directory's ancestors, and every file those and its own MSBuild files import (FR-004);</item>
-/// <item>for each external package it references directly, that package's <c>Directory.Packages.props</c> entries
-/// (FR-003), and everything in that file other than <c>PackageVersion</c> entries as one input (FR-004,
+/// <item>for each external package its nuspec lists — each it references directly, and each central package management
+/// pins for it transitively (spec 149's pinned-transitive edges) — that package's <c>Directory.Packages.props</c>
+/// entries (FR-003), and everything in that file other than <c>PackageVersion</c> entries as one input (FR-004,
 /// <see cref="CentralPackages"/>).</item>
 /// </list>
 /// </remarks>
@@ -132,7 +133,7 @@ internal sealed class CommitSnapshot
 
             foreach (var edge in project.Edges.Where(edge => !edge.Internal))
             {
-                var key = PackageInputs.PackagePrefix + edge.Id;
+                var key = (edge.Kind == MapEdgeKind.PinnedTransitive ? PackageInputs.PinnedPrefix : PackageInputs.PackagePrefix) + edge.Id;
                 var value = $"{edge.Version} {central.Value.EntriesFor(edge.Id)}";
                 entries[key] = entries.TryGetValue(key, out var other) && other != value
                     ? string.Join(" | ", new[] { other, value }.Order(StringComparer.Ordinal))

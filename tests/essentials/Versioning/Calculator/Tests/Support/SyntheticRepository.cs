@@ -28,6 +28,12 @@ internal sealed class SyntheticProject
     /// <summary>Referenced external packages, by id.</summary>
     public List<string> Packages { get; } = [];
 
+    /// <summary>
+    /// Pinned packages the project reaches only transitively, by id: its pinned-transitive edges, as restore would
+    /// report them. The map records them on a packable project only, as the maps generator does.
+    /// </summary>
+    public List<string> PinnedTransitive { get; } = [];
+
     public string Directory => Path[..(Path.LastIndexOf('/') + 1)];
 
     public string Identity => PackageId ?? Name;
@@ -93,7 +99,7 @@ internal sealed class SyntheticRepository : IDisposable
     /// <summary><c>ElsaPrereleaseLabel</c>, which <c>VersionLines.props</c> assigns only when set.</summary>
     public string? PrereleaseLabel { get; set; }
 
-    public int MapSchemaVersion { get; set; } = 1;
+    public int MapSchemaVersion { get; set; } = 2;
 
     /// <summary>When false, <see cref="Commit"/> leaves the dependency map as it was, as a stale map would be.</summary>
     public bool RegenerateMap { get; set; } = true;
@@ -101,11 +107,14 @@ internal sealed class SyntheticRepository : IDisposable
     public SyntheticProject Project(string packageIdOrName) =>
         Projects.Single(project => project.Identity == packageIdOrName || project.Name == packageIdOrName);
 
-    public SyntheticProject AddProject(string path, string line = "B", string? packageId = null, bool packable = true, string[]? references = null, string[]? packages = null, string body = "")
+    public SyntheticProject AddProject(
+        string path, string line = "B", string? packageId = null, bool packable = true, string[]? references = null, string[]? packages = null,
+        string[]? pinnedTransitive = null, string body = "")
     {
         var project = new SyntheticProject { Path = path, Line = line, PackageId = packageId, Packable = packable, Body = body };
         project.References.AddRange(references ?? []);
         project.Packages.AddRange(packages ?? []);
+        project.PinnedTransitive.AddRange(pinnedTransitive ?? []);
         Projects.Add(project);
         return project;
     }
@@ -298,6 +307,12 @@ internal sealed class SyntheticRepository : IDisposable
                     ["type"] = "external",
                     ["id"] = package,
                     ["version"] = PackageVersions.GetValueOrDefault(package)
+                }))
+                .Concat((project.Packable ? project.PinnedTransitive : []).Select(package => new Dictionary<string, object?>
+                {
+                    ["type"] = "pinned-transitive",
+                    ["id"] = package,
+                    ["version"] = PackageVersions[package]
                 }))
                 .ToArray()
         });

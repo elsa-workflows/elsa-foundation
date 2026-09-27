@@ -3,9 +3,9 @@ using System.Diagnostics;
 namespace Elsa.Maps.Generator;
 
 /// <summary>
-/// Dependency-free contract tests for the project graph's packable precedence, package-id resolution
-/// and Line A/B whole-name matching. Keeps the precedence order and the whole-name semantics pinned
-/// against fixtures rather than only against whatever the live tree happens to contain.
+/// Dependency-free contract tests for the project graph's packable precedence, package-id resolution,
+/// Line A/B whole-name matching, and the reading of pinned-transitive edges from restore output. Keeps
+/// them pinned against fixtures rather than only against whatever the live tree happens to contain.
 /// </summary>
 public static class ProjectFactsContractTests
 {
@@ -58,6 +58,19 @@ public static class ProjectFactsContractTests
             AssertLine(facts, "Fixture.LineA.Core", "A");
             AssertLine(facts, "Fixture.LineA", "B");
 
+            // Pinned-transitive edges (spec 149 FR-012) come from restore output, restored here under another checkout
+            // path, and only once it is held to the tree: a restore older than a pin, a reference or the project itself
+            // is refused rather than read, since a stale list would leave a package's nuspec change undetected.
+            AssertPinnedTransitive(repo, "PinnedTransitive", "Transitive.A 1.0.0, Transitive.B 2.0.0");
+            AssertRefused(repo, "DefaultIsPackable", "has no restore output");
+            WriteCentralPackages(root, transitiveAVersion: "1.0.1");
+            AssertRefused(repo, "PinnedTransitive", "other pins");
+            WriteCentralPackages(root, transitiveAVersion: "1.0.0");
+            WriteProject(root, "src/PinnedTransitive", PinnedTransitiveProject.Replace("</ItemGroup>", "<PackageReference Include=\"Transitive.B\" /></ItemGroup>", StringComparison.Ordinal));
+            AssertRefused(repo, "PinnedTransitive", "before it referenced Transitive.B");
+            WriteProject(root, "src/PinnedTransitive", PinnedTransitiveProject.Replace("<ProjectReference Include=\"..\\DefaultIsPackable\\DefaultIsPackable.csproj\" />", string.Empty, StringComparison.Ordinal));
+            AssertRefused(repo, "PinnedTransitive", "other project references");
+
             Console.WriteLine("Project facts contract cases passed.");
         }
         finally
@@ -106,7 +119,58 @@ public static class ProjectFactsContractTests
 
         WriteProject(root, "src/Fixture.LineA.Core", "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
         WriteProject(root, "src/Fixture.LineA", "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+
+        WriteCentralPackages(root, transitiveAVersion: "1.0.0");
+        WriteProject(root, "src/PinnedTransitive", PinnedTransitiveProject);
+        Directory.CreateDirectory(Path.Join(root, "src/PinnedTransitive/obj"));
+        File.WriteAllText(Path.Join(root, "src/PinnedTransitive/obj/project.assets.json"), PinnedTransitiveAssets);
     }
+
+    /// <summary>References one package directly and one project, and reaches two pins only through them.</summary>
+    private const string PinnedTransitiveProject =
+        "<Project Sdk=\"Microsoft.NET.Sdk\"><ItemGroup><PackageReference Include=\"Direct.Package\" />" +
+        "<ProjectReference Include=\"..\\DefaultIsPackable\\DefaultIsPackable.csproj\" /></ItemGroup></Project>";
+
+    /// <summary>The restore output of <see cref="PinnedTransitiveProject"/>, in the shape NuGet writes, from another checkout path.</summary>
+    private const string PinnedTransitiveAssets =
+        """
+        {
+          "version": 3,
+          "centralTransitiveDependencyGroups": {
+            "net10.0": {
+              "Transitive.B": { "include": "Runtime, Compile, Native, BuildTransitive", "version": "[2.0.0, )" },
+              "Transitive.A": { "include": "Runtime, Compile, Native, BuildTransitive", "version": "[1.0.0, )" }
+            }
+          },
+          "project": {
+            "restore": {
+              "projectPath": "/elsewhere/checkout/src/PinnedTransitive/PinnedTransitive.csproj",
+              "frameworks": {
+                "net10.0": {
+                  "projectReferences": {
+                    "/elsewhere/checkout/src/DefaultIsPackable/DefaultIsPackable.csproj": { "projectPath": "/elsewhere/checkout/src/DefaultIsPackable/DefaultIsPackable.csproj" }
+                  }
+                }
+              }
+            },
+            "frameworks": {
+              "net10.0": {
+                "dependencies": { "Direct.Package": { "target": "Package", "version": "[3.0.0, )", "versionCentrallyManaged": true } },
+                "centralPackageVersions": { "Direct.Package": "3.0.0", "Transitive.A": "1.0.0", "Transitive.B": "2.0.0", "Unreached.Pin": "4.0.0" }
+              }
+            }
+          }
+        }
+        """;
+
+    private static void WriteCentralPackages(string root, string transitiveAVersion) =>
+        File.WriteAllText(Path.Join(root, "Directory.Packages.props"),
+            "<Project><ItemGroup>" +
+            "<PackageVersion Include=\"Direct.Package\" Version=\"3.0.0\" />" +
+            $"<PackageVersion Include=\"Transitive.A\" Version=\"{transitiveAVersion}\" />" +
+            "<PackageVersion Include=\"Transitive.B\" Version=\"2.0.0\" />" +
+            "<PackageVersion Include=\"Unreached.Pin\" Version=\"4.0.0\" />" +
+            "</ItemGroup></Project>");
 
     private static void WriteProject(string root, string relativeDirectory, string contents)
     {
@@ -151,5 +215,31 @@ public static class ProjectFactsContractTests
     {
         if (facts[project].Line != expected)
             throw new InvalidOperationException($"{project}: expected Line='{expected}', got '{facts[project].Line}'.");
+    }
+
+    /// <summary>The project's pinned-transitive edges, as the dependency map records them, read for it alone.</summary>
+    private static IReadOnlyList<PinnedTransitiveEdge> PinnedTransitive(RepoContext repo, string project) =>
+        PinnedTransitiveDependencies.Attach(repo, [.. ProjectGraph.Read(repo).Where(fact => fact.Name == project)])
+            .Single().Edges.OfType<PinnedTransitiveEdge>().ToArray();
+
+    private static void AssertPinnedTransitive(RepoContext repo, string project, string expected)
+    {
+        var actual = string.Join(", ", PinnedTransitive(repo, project).Select(edge => $"{edge.Id} {edge.Version}"));
+        if (actual != expected)
+            throw new InvalidOperationException($"{project}: expected pinned-transitive edges '{expected}', got '{actual}'.");
+    }
+
+    private static void AssertRefused(RepoContext repo, string project, string reason)
+    {
+        try
+        {
+            PinnedTransitive(repo, project);
+        }
+        catch (InvalidOperationException exception) when (exception.Message.Contains(reason, StringComparison.Ordinal) && exception.Message.Contains("dotnet restore", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException($"{project}: expected its restore output to be refused ({reason}), but it was read.");
     }
 }

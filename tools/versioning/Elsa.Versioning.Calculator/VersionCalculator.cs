@@ -17,7 +17,8 @@ public sealed class VersionGateException(string message) : Exception(message);
 /// <para>
 /// A package is changed when its package-affecting inputs at the commit being built differ from those at the commit
 /// its record entry names (<see cref="PackageInputs"/>); when it has no entry; when its line's <c>major.minor</c> is
-/// not the one it was last published on; or when it changed version line. On top of that:
+/// not the one it was last published on; when it changed version line; or when a <see cref="ForcedAdvance"/> names it
+/// (FR-003). On top of that:
 /// </para>
 /// <list type="bullet">
 /// <item>Line A moves as one: any changed member moves every member to one past the line's last published patch (FR-002),
@@ -39,9 +40,13 @@ public static class VersionCalculator
     /// <param name="git">The repository.</param>
     /// <param name="revision">The commit being built.</param>
     /// <param name="record">The revision of the last-published record to compute against.</param>
+    /// <param name="forced">Packages to advance although their inputs did not change (FR-003), or null.</param>
     /// <exception cref="VersionGateException">The forward-only (FR-021) or monotonicity (FR-012) gate refused.</exception>
-    /// <exception cref="InvalidOperationException">An input could not be read, or does not describe the repository.</exception>
-    public static VersionComputation Compute(GitRepository git, string revision, PublishedVersions record)
+    /// <exception cref="InvalidOperationException">
+    /// An input could not be read, or does not describe the repository, or <paramref name="forced"/> names a package
+    /// the commit does not have.
+    /// </exception>
+    public static VersionComputation Compute(GitRepository git, string revision, PublishedVersions record, ForcedAdvance? forced = null)
     {
         var commit = git.ResolveCommit(revision);
         RequireForwardOnly(git, commit, record);
@@ -71,8 +76,12 @@ public static class VersionCalculator
             .ToArray();
         RequireVersionLinesSetInOnePlace(built, packages);
 
+        var forcedIds = RequireForcedPackagesExist(built, forced);
         foreach (var package in packages)
             package.Reasons.AddRange(OwnChanges(package, lines, Snapshot));
+
+        foreach (var package in packages.Where(package => forcedIds.Contains(package.Node.PackageId!)))
+            package.Reasons.Add(ForcedAdvance.ReasonPrefix + forced!.Reason);
 
         Assign(packages, lines, Snapshot);
         while (Propagate(built, packages))
@@ -161,6 +170,21 @@ public static class VersionCalculator
         if (elsewhere.Length > 0)
             throw new InvalidOperationException(
                 $"{Listed(string.Empty, elsewhere)} at {built.Commit} assign(s) a version-line property; only {VersionLineSettings.RelativePath} may (spec 150 FR-010).");
+    }
+
+    /// <summary>
+    /// The package ids a force-advance names. One the commit does not have is refused rather than skipped: a misspelt
+    /// id would otherwise advance nothing, and the publish would look as if it had done what was asked.
+    /// </summary>
+    private static IReadOnlySet<string> RequireForcedPackagesExist(CommitSnapshot built, ForcedAdvance? forced)
+    {
+        var ids = new HashSet<string>(forced?.PackageIds ?? [], StringComparer.OrdinalIgnoreCase);
+        var unknown = ids.Where(id => !built.Map.Packable.ContainsKey(id)).Order(StringComparer.Ordinal).ToArray();
+        if (unknown.Length > 0)
+            throw new InvalidOperationException(
+                $"The force-advance names {Listed(string.Empty, unknown)}, which no packable project at {built.Commit} has as its package id.");
+
+        return ids;
     }
 
     /// <summary>Why a package counts as changed on its own account, before the line and propagation rules.</summary>
