@@ -90,7 +90,8 @@ read, is exactly the failure that looks like success. It holds through five mech
 4. **A report never claims more than every loaded reader can read** (FR-021, FR-022). The readable set is the
    intersection over every loaded declaration of the family, and a family leaves the report only when no declaration
    of it remains loaded.
-5. **A lapsed member knows it** (FR-007), so spec 181's FR-018 can stop its gated writes.
+5. **A lapsed member knows it** (FR-007), so spec 181's FR-018 can hold its gated writes to the version it last
+   observed as finalized (spec 181, Decisions, Q22).
 
 Routing is held to a different standard on purpose. For placement, a displaced or doubtful member is dropped at once,
 because a wrong routing decision is harmless: the fence at the commit rejects a stale writer (ADR 0078, invariant 2).
@@ -182,8 +183,9 @@ development machine, the second's join MUST be refused rather than displacing th
 
 **Why this priority**: ADR 0078 makes "a restarted host is a new member" part of the contract, and that a crashed
 host's leases must not wait out their own timeouts. The same mechanism must never let a second live process seize a
-host id already in use, which is a distinct hazard the default host id (the machine name) makes possible whenever more
-than one process runs per machine.
+host id already in use. FR-003 now requires an explicit host id whenever a durable provider is composed, which
+removes the case where the machine-name default alone caused this collision; FR-004's refusal is the backstop for
+the remaining case, an operator explicitly configuring two live processes with the same id.
 
 **Independent Test**: With the EF provider and a controllable clock, start a host, kill it, start it again with the
 same host id, and read the fleet view for both purposes. Separately, start two hosts configured with the same host id
@@ -253,9 +255,9 @@ for identical fleets.
 
 ### Edge Cases
 
-- **A host with several shells.** Membership is per host process. Every shell of one process sees the same member and
-  the same fleet view. A process whose shells select different providers, or different stores, is refused when the
-  second one activates (FR-017).
+- **A host with several shells.** Membership is per host process, selected once in host configuration, so every shell
+  of one process sees the same member and the same fleet view by construction: no shell has its own provider or store
+  to disagree with another's (FR-017; Decisions, Q20).
 - **A package installed through Nuplane on a running host.** Its family declarations are loaded before its shell
   generation prepares, so a publish then reports them (FR-020). A declaration still loaded in an older generation
   narrows the readable set until that generation's load context is gone (FR-021).
@@ -270,9 +272,11 @@ for identical fleets.
 - **SQLite as the membership store.** Several processes can share one SQLite file only on one machine. It suits
   development and tests, not a multi-machine cluster (FR-033).
 - **A host id that is too long, blank or malformed.** Configuration is refused at startup with a diagnostic.
-- **Two live processes on one machine, both under the default host id.** The second's join is refused at startup with
-  a diagnostic naming the host id and instructing the operator to configure a distinct one (FR-004). The first is
-  undisturbed. This is the case the machine-name default does not resolve by itself; see Open Question 7.
+- **A durable provider composed with no explicit host id.** Refused at startup with a diagnostic (FR-003;
+  Decisions, Q24), before any join is attempted.
+- **Two live durable-provider processes explicitly configured with the same host id.** The second's join is refused
+  at startup with a diagnostic naming the host id and instructing the operator to configure a distinct one (FR-004).
+  The first is undisturbed.
 - **An ephemeral pod restarts under a new host id.** The old entry is never displaced, because no incarnation joins
   under its host id again. It is counted until its own entry expires, which only delays counting, and never lets two
   live incarnations be mistaken for one host (FR-003, FR-007).
@@ -280,13 +284,15 @@ for identical fleets.
 ### Failure modes
 
 - **A member cut off from the store.** It cannot heartbeat. It concludes that it lapsed once its expiry period has
-  passed since the start of its last successful heartbeat, and spec 181's FR-018 stops its gated writes. The others
+  passed since the start of its last successful heartbeat. Spec 181's FR-018 (narrowed; Decisions, Q22) lets it keep
+  writing at the version it last observed as finalized, rather than stopping its gated writes outright. The others
   count it as expired only later, after the skew allowance too. It rejoins as a new incarnation when the store is
   reachable again.
 - **The store unreachable for everyone.** Every member lapses after its expiry period, and no fresh read succeeds, so
-  nothing finalizes. Under spec 181's FR-018, gated writes stop on every host until the store returns. This is the
-  conservative direction and it is loud, but it couples the availability of gated writes to the membership store
-  (Open Question 5).
+  nothing finalizes. Under spec 181's narrowed FR-018, gated writes stay available on every host at each host's last
+  observed finalized version; only writes that would need a newer, unobserved finalization are unavailable. No
+  version that any counted member cannot read is ever written, because spec 180's FR-015 still refuses a write that
+  cannot confirm the version it targets is finalized.
 - **A stalled host** (a long GC pause, CPU starvation, a suspended VM). It stops heartbeating, so it lapses and then
   expires. When it resumes it measures elapsed time by the larger of the wall clock and a monotonic clock (FR-007),
   because a monotonic clock may not advance while a VM is suspended. A stall between that check and a write cannot be
@@ -304,9 +310,10 @@ for identical fleets.
 - **A clock that jumps.** A forward jump can make a member conclude early that it lapsed, which is safe. A backward
   jump is caught by the monotonic measure of FR-007.
 - **A misconfigured cluster.** Several hosts share a database while each uses the in-process default, so each sees a
-  cluster of one. See Open Question 1.
+  cluster of one. A cluster declares itself only by composing a durable provider (FR-018a); there is no startup
+  warning and no detection of this case (Decisions, Q18).
 - **Split fleets.** Hosts that share a module database but point membership at different stores form two fleets that
-  cannot see each other. It is the same failure as a misconfigured cluster, and Open Question 1 covers both.
+  cannot see each other. It is the same failure as a misconfigured cluster, and Decisions, Q18 covers both.
 
 ## Requirements *(mandatory)*
 
@@ -337,8 +344,12 @@ for identical fleets.
   - On a machine that runs more than one Elsa process (a developer machine, or multi-process hosting), the
     machine-name default gives every process on it the same host id. This is the one case the default does not
     resolve safely by itself: two live processes must never share a host id. FR-004 refuses the second process's join
-    rather than letting it displace the first. Operators in this environment SHOULD still set a distinct host id per
-    process by configuration; see Open Question 7 for the default identity source.
+    rather than letting it displace the first.
+
+  The machine-name default applies only to the in-process provider. A host MUST configure an explicit host id
+  whenever a durable membership provider (B2, or any other provider under FR-061) is composed; starting a durable
+  provider without one MUST be refused at startup with a diagnostic. A clustered deployment therefore states its own
+  identity instead of relying solely on FR-004's collision refusal to catch a mistake (Decisions, Q24).
 - **FR-004**: A member's incarnation MUST be new each time the host process starts and each time it rejoins after a
   lapse. It is an opaque, unique value that consumers compare only for equality. When an incarnation joins under a
   host id whose most recently joined incarnation is not live (it has expired or left), that earlier incarnation MUST
@@ -352,11 +363,12 @@ for identical fleets.
 - **FR-005**: A member's status MUST move only forward within an incarnation: joining, then active, then draining, then
   left. A member is joining from when it joins until the host has started, draining from when the host begins to stop,
   and left once it has stopped. A crashed member never writes left; it expires.
-- **FR-006**: Liveness MUST be by heartbeat and expiry. Each member renews its entry every heartbeat interval. Each entry
-  carries its own expiry period, which MUST be at least three heartbeat intervals, so one lost heartbeat does not make
-  a member lapse. A reader MUST judge a member live until its last heartbeat time plus its expiry period plus the skew
-  allowance has passed on the reader's clock. Intervals, expiry and allowance are validated at startup, and an invalid
-  combination is refused.
+- **FR-006**: Liveness MUST be by heartbeat and expiry. Each member renews its entry every heartbeat interval,
+  defaulting to 10 seconds. Each entry carries its own expiry period, defaulting to 30 seconds, which MUST be at
+  least three heartbeat intervals, so one lost heartbeat does not make a member lapse. A reader MUST judge a member
+  live until its last heartbeat time plus its expiry period plus the skew allowance — defaulting to 5 seconds — has
+  passed on the reader's clock. Intervals, expiry and allowance are validated at startup, and an invalid combination
+  is refused.
 - **FR-007**: A member MUST conclude that it lapsed, and MUST tell its consumers so, when any of these holds: its
   expiry period has passed since the start of its last successful heartbeat, measured as the larger of wall-clock and
   monotonic elapsed time; its entry is missing from the store; or its incarnation has been displaced (MR-005). A lapsed
@@ -408,19 +420,28 @@ for identical fleets.
 
 - **FR-017**: Without any membership configuration, a host MUST get the in-process provider. Its fleet view is the host
   alone. Fresh and cached reads are the same, a publish is visible at once, and the member never lapses. Membership is
-  per host process: every shell of one process MUST see the same member and fleet view, and a shell that selects a
-  different provider or store than an already activated shell of the same process MUST be refused at activation.
+  selected once, in host configuration, on the host container (ADR 0076, D9), not per shell: every shell of one
+  process MUST see the same member and fleet view, and no shell can select a different provider or store, so
+  disagreement between shells is impossible by construction and FR-017 needs no run-time agreement check
+  (Decisions, Q20).
 - **FR-018**: The in-process provider MUST cost nothing. It creates no table and no file, opens no connection, writes
   nothing durable, and registers no hosted service, recurring task or timer. It needs no configuration, and no feature
   has to be composed to get it: it is a Layer 2 default implementation under §2.1, which any consumer registers without
   replacing an existing registration. Non-clustered hosting therefore takes no hard dependency (#2097).
+- **FR-018a**: A cluster declares itself solely by composing a durable membership provider (B2). Composing the
+  in-process default, or configuring nothing, is itself the declaration that a host is alone. No mechanism in this
+  spec detects, or warns at startup about, several hosts that share a database while each uses the in-process
+  default: each sees a cluster of one, and nothing here says otherwise. A missed declaration is not silent forever:
+  the invariant's other mechanisms make it loud once it bites, through spec 180's read and write refusals and spec
+  181's finalization and write refusals (Decisions, Q18).
 
 **The readability report (B3)**
 
 - **FR-019**: The readability report MUST hold one entry per schema family the host has loaded: the family, its owning
-  EF module, and its readable set as an ordered list of opaque version labels (spec 180, FR-004). Whether an entry also
-  carries a database identity is Open Question 2. If the owner chooses the EF module as the unit of versioning (spec
-  180, Open Question 1), entries are keyed by EF module instead and nothing else here changes.
+  EF module, its readable set as an ordered list of opaque version labels (spec 180, FR-004), and the opaque
+  per-database identity of the finalization record it read most recently, when it has read one. An entry with no
+  identity yet counts for every database, which keeps the conservative direction until the host has read the record
+  (spec 181, FR-001; Decisions, Q19).
 - **FR-020**: The report MUST be derived only from the family declarations of spec 180's FR-001, read from every
   assembly loaded in the process, across every load context. No configuration can change it (MR-002). A publish
   recomputes it, so a package loaded through Nuplane is reported by the first publish after its assembly loads.
@@ -429,16 +450,18 @@ for identical fleets.
 - **FR-022**: A family MUST stay in the report while any declaration of it remains loaded, even after its modules are
   disabled.
 - **FR-023**: The contract MUST answer "can every counted member read family F at version V?" as a counting query with
-  one requirement. The answer is yes only when every counted member's readable set for F contains V. Otherwise it
-  lists each counted member that cannot, with its readable set or "unknown" (MR-007). A counted member is one whose
-  report declares F, or whose report is unknown.
+  one requirement, taking an optional database identity (spec 181, FR-001). The answer is yes only when every counted
+  member's readable set for F contains V. Otherwise it lists each counted member that cannot, with its readable set
+  or "unknown" (MR-007). A counted member is one whose report declares F, and, when a database identity is given,
+  whose entry for F names that identity or names none, or whose report is unknown (Decisions, Q19).
 
 **The EF Core provider (B2)**
 
 - **FR-024**: The EF provider MUST be enabled only by configuration, as an opt-in feature that replaces the in-process
-  default (ADR 0078, Decision; #2098). Whether that feature is composed per shell or once per host is Open Question 3;
-  FR-017 holds either way. Its settings follow the other EF modules': provider, connection string or connection name,
-  schema and pooling, plus the heartbeat interval, expiry period, skew allowance and cleanup period.
+  default (ADR 0078, Decision; #2098), composed once on the host container rather than per shell (FR-017; Decisions,
+  Q20), so its migrations run through the plain-host migrator rather than a shell's. Its settings follow the other EF
+  modules': provider, connection string or connection name, schema and pooling, plus the heartbeat interval, expiry
+  period, skew allowance and cleanup period.
 - **FR-025**: It MUST be an `[EfModule]` with its own migrations-history table under `EfMigrationsHistory`, provider
   contexts and migrations for SQLite, SQL Server, PostgreSQL and MySQL, and the `Validate` and `AutoMigrate` policies
   every EF module has. The `dotnet elsa persistence` tool discovers it like any other module. Its rows carry a schema
@@ -460,8 +483,9 @@ for identical fleets.
 - **FR-030**: A member MUST write draining when its host begins to stop and left when it has stopped, so that a
   graceful stop is distinguishable from a crash.
 - **FR-031**: Any member MUST be able to delete entries that have been left or expired for longer than the cleanup
-  period, which MUST exceed the expiry period plus the skew allowance. Deletion is a compare-and-set, so it never
-  removes an entry that was renewed in the meantime. It runs in bounded batches and is idempotent.
+  period, defaulting to 10 minutes, which MUST exceed the expiry period plus the skew allowance. Deletion is a
+  compare-and-set, so it never removes an entry that was renewed in the meantime. It runs in bounded batches and is
+  idempotent.
 - **FR-032**: Membership entries MUST NOT be partitioned by persistence scope. Membership is per host, not per tenant.
   The provider MUST read and write the primary. A read replica cannot give read-after-write and is not supported for
   the membership store.
@@ -492,7 +516,9 @@ single requirement:
 - **FR-040**: A member MUST report clock skew, naming both hosts (FR-029).
 - **FR-041**: A member MUST report an entry it cannot interpret (FR-012).
 - **FR-042**: A member MUST report a failed fresh read.
-- **FR-043**: A member MUST report shells of one process that disagree about membership (FR-017).
+- **FR-043**: A member MUST report shells of one process that disagree about membership, as a defensive backstop:
+  FR-017's host-level selection makes this impossible by construction, so the diagnostic exists only to catch a
+  future regression of that guarantee, not a case this spec expects to occur.
 
 **Conformance suite**
 
@@ -548,15 +574,15 @@ The invariant tier is one FR per invariant of ADR 0078:
 | Requirement | Met by | Limits |
 |---|---|---|
 | MR-001 fleet view: host id, incarnation, status, liveness | FR-003 to FR-006, FR-009 | "Left" is written only by a graceful stop; a crashed member expires instead. |
-| MR-002 readability report derived from declarations only | FR-019 to FR-022 | Needs spec 180's FR-001 declarations, which do not exist yet. FR-021 narrows MR-002: the set reported is the intersection over loaded declarations. |
+| MR-002 readability report derived from declarations only | FR-019 to FR-022 | Needs spec 180's FR-001 declarations, which do not exist yet. FR-021 narrows MR-002: the set reported is the intersection over loaded declarations. FR-019 also carries the database identity (Decisions, Q19). |
 | MR-003 read-after-write | FR-010, FR-011, FR-032 | Holds for fresh reads only, and not with a read replica. Spec 181 must use fresh reads for evaluation and confirmation. |
 | MR-004 publish before activate, including through Nuplane | FR-011, FR-020 | Membership provides the primitive and recomputes on demand. The ordering, publish and then read the record before activating, can only be enforced by the caller: spec 181's FR-013 and FR-015. |
 | MR-005 lapse awareness | FR-007, FR-027, FR-061 | The in-process provider never lapses. |
 | MR-006 provider kind visible | FR-009 | None. |
-| MR-007 "can every live member read F at V?", with blockers | FR-023 | Counts displaced-but-live members and unknown reports, matching spec 181's Terms definition of a counted member. |
+| MR-007 "can every live member read F at V?", with blockers | FR-023 | Counts displaced-but-live members and unknown reports, matching spec 181's Terms definition of a counted member; takes an optional database identity (Decisions, Q19). |
 
-Spec 181's Open Questions 2 (a misconfigured cluster) and 5 (fleets that span databases) are this spec's Open
-Questions 1 and 2.
+Spec 181's Q8 (a misconfigured cluster) and Q11 (fleets that span databases) are this spec's Q18 and Q19
+(Decisions).
 
 ### Key Entities
 
@@ -564,7 +590,8 @@ Questions 1 and 2.
   revision.
 - **Fleet view**: provider kind, the instant it was judged at, and its members. It is read fresh or cached.
 - **Member report**: named sections, one source each. The readability report is the first.
-- **Readability entry**: family, owning EF module, readable set, and possibly a database identity (Open Question 2).
+- **Readability entry**: family, owning EF module, readable set, and the database identity of the finalization
+  record most recently read, when one has been read (Decisions, Q19).
 - **Member query**: a purpose (counting or placement) and requirements from a closed vocabulary. Its answer lists
   matching members, and the failed requirement of every other member it considered.
 - **Membership provider**: the single active implementation per process. In-process by default; EF Core opt-in; an
@@ -594,6 +621,11 @@ Questions 1 and 2.
   and each deliberately broken provider of FR-060 fails at least one named test.
 - **SC-008**: The contract package references no provider package, and one consumer test suite runs unchanged against
   the in-process and EF providers (#2097, Acceptance).
+- **SC-009**: A durable provider composed with no explicit host id refuses at startup with a diagnostic, before any
+  join is attempted. Two durable-provider processes explicitly configured with the same host id still resolve to at
+  most one live incarnation (FR-004), as SC-006 exercises for two opt-in providers.
+- **SC-010**: A readability query given a database identity counts only members whose entry for the family names it
+  or names none; a member serving a different database never contributes to that answer.
 
 ## Assumptions
 
@@ -617,8 +649,10 @@ Questions 1 and 2.
 ## Out of Scope
 
 - Finalization, holds and the refusal of hosts that cannot read (spec 181); upcasters (spec 180); dormancy (spec 182).
-- Placement itself (B7): its requirement kinds, its report section, adopting the host id as `NodeId`, and reclaiming a
-  lapsed or displaced member's leases.
+- Placement itself (B7, [#2103](https://github.com/elsa-workflows/elsa-foundation/issues/2103)): its requirement
+  kinds, its report section, and adopting the host id as `NodeId`.
+- Failover: draining, and reclaiming a lapsed or displaced member's leases immediately rather than waiting for a
+  lease's own timeout (ADR 0078, "Draining and failover"). This belongs to B7 (#2103) (Decisions).
 - Any actor-framework provider. This spec sets only the rules for admitting one (FR-061).
 - The expand-only migration guard (B8, [#2104](https://github.com/elsa-workflows/elsa-foundation/issues/2104)).
 - Operator surfaces for the fleet view, such as a CLI command, an HTTP endpoint or Attention items. FR-037 to FR-043
@@ -626,70 +660,29 @@ Questions 1 and 2.
   contributor.
 - Fleets whose members cannot all reach one membership store.
 
-## Open Questions
+## Decisions
 
-1. **Must a cluster declare itself in configuration?** (Spec 181, Open Question 2; asked on #2093.) Several hosts that
-   share a database while each uses the in-process default each see a cluster of one, and would finalize at once.
-   - *Option A, declaration.* A clustered deployment must compose a durable provider, and the in-process default is
-     the declaration that a host is alone. A startup diagnostic warns when durable facts that already exist show other
-     hosts: spec 181's record naming a member outside this fleet view in a recent intent or finalization, or execution
-     leases held by an owner other than this host. Nothing new is written.
-   - *Option B, detection.* The in-process default writes a durable marker per host so that others can see it. That
-     is the "Durable membership on every host" option ADR 0078 rejects, and it breaks FR-018.
+Recorded 2026-09-27, when the owner answered this spec's open questions on #2093.
 
-   **Recommendation: A.** The failure it leaves is loud rather than silent. A host that was missed refuses to read or
-   rewrite rows it cannot read (spec 180, FR-007 and FR-018), and refuses the family's writes at its next refresh
-   (spec 181, FR-012). No row is misread, but the rollback boundary is crossed early. B costs every single host a
-   durable write to prevent a configuration mistake.
-2. **Do readability entries carry a database identity?** (Spec 181, Open Question 5; asked on #2093.) Today every
-   counted member counts for a family, whichever database it serves. That can never finalize early, but a host that
-   serves a different database can hold finalization back indefinitely.
-   - *Option A.* Each readability entry carries the identity of the database its family's EF module is bound to. The
-     identity is an opaque value created once in spec 181's finalization record, not derived from a connection string,
-     which can alias one database under several names and would leak into the report. The gate counts only entries
-     with its own database's identity. An entry without one counts for every database, which is the case for a host
-     that has not yet read the record, so the conservative direction is kept. Because the identity never changes once
-     created, a host can read it before publishing without weakening spec 181's mechanism 2.
-   - *Option B.* No identity. Keep counting every member.
-
-   **Recommendation: A.** It removes the trap of B and keeps its safety, at the cost of one column in spec 181's
-   record.
-3. **Is membership selected per shell or per host?** The decision of record says "an opt-in feature replaces the
-   default", which in CShells is a per-shell choice. Membership is per process, so a per-shell selection needs FR-017's
-   agreement check between shells. Selecting it once in host configuration, on the host container as ADR 0076's D9
-   does for the activation guard, makes disagreement impossible by construction, lets the heartbeat run before any
-   shell activates, and keeps the provider from being switched through the Modularity API at run time. The cost is
-   that the EF provider has to be in the host closure rather than installed through Nuplane, and that its migrations
-   run through the plain-host migrator. **Recommendation: per host**, if CShells shells can resolve a host-container
-   service; otherwise per shell with FR-017.
-4. **Default timings.** Proposed: heartbeat every 10 seconds, expiry after 30 seconds, a skew allowance of 5 seconds,
-   and cleanup after 10 minutes. They match the placement lease (30 seconds) and pump (10 seconds) the runtime uses
-   today, and fit inside spec 181's proposed 15-second refresh and 30-second evaluation.
-5. **Should spec 181 narrow FR-018?** It stops every gated write on a lapsed member until it rejoins. Combined with
-   FR-007, an outage of the membership store longer than the expiry period stops gated writes on every host. A lapsed
-   member that keeps writing its observed finalized version writes rows every counted member can read, and spec 180's
-   FR-018 already refuses its overwriting a row it cannot read. The narrower rule would keep writes available through
-   a membership outage without losing safety.
-6. **Glossary entries.** "Member", "incarnation", "fleet view", "member report" and "displaced incarnation" should join
-   the entries proposed for specs 180 to 182 in `docs/glossary/elsa.md` when these specs are approved.
-7. **What should the default host id source be?** FR-003's machine-name default is safe on its own for a single
-   process per machine, whether the machine name is stable (a VM, a `StatefulSet` pod) or not (a `Deployment` pod).
-   It is not safe by itself for several processes on one machine, though FR-004's collision refusal keeps that case
-   loud rather than silent.
-   - *Option A, keep the machine name.* Simplest, and correct for the common case of one Elsa process per machine or
-     pod. Multi-process hosting and local development need an explicit host id per process.
-   - *Option B, machine name plus a persisted per-install id.* On first run, write a small opaque id under the content
-     root (or a configured directory) and read it back on every restart, defaulting the host id to
-     `{machine name}:{persisted id}`. Distinguishes several processes on one machine without configuration, and
-     survives restarts wherever the content root does, but adds a file the host must manage and a new failure mode if
-     it is deleted, copied between hosts, or the content root is not persistent (which reintroduces the ephemeral-pod
-     case, safely, as FR-003 already covers).
-   - *Option C, require explicit configuration whenever clustered.* Refuse to start a durable membership provider (B2)
-     without a configured host id. Removes the ambiguity at the cost of one more setting for every clustered
-     deployment; non-clustered and single-process hosting keep the default.
-
-   **Recommendation: A, with C for the durable provider.** Keep the machine-name default for the in-process provider,
-   where FR-018 means nothing is written anyway, and require an explicit host id whenever the EF provider (or any
-   other durable provider) is composed, so a clustered deployment states its identity instead of relying on FR-004's
-   refusal to catch a collision at startup. Option B is left open for a later spec if operators find explicit
-   configuration onerous.
+- **Q18 — Must a cluster declare itself in configuration?** Yes, and there is no startup warning (differs from the
+  draft's recommended Option A, which paired declaration with a startup diagnostic). A clustered deployment must
+  compose a durable provider; the in-process default is the declaration that a host is alone (FR-018a). No mechanism
+  reads durable facts to detect a mismatch. A missed declaration fails loudly, not silently, once it bites: through
+  spec 180's read and write refusals and spec 181's finalization and write refusals.
+- **Q19 — Do readability entries carry a database identity?** Yes: an opaque identity, created once in spec 181's
+  finalization record, not derived from a connection string (FR-019). The readability query counts only entries
+  that name it or name none (FR-023).
+- **Q20 — Is membership selected per shell or per host?** Per host, chosen once in host configuration on the host
+  container, as ADR 0076's D9 does for the activation guard (amends ADR 0078). FR-017's shell-agreement check
+  becomes unnecessary and is simplified: disagreement between shells is impossible by construction. The EF provider
+  is composed once on the host container rather than per shell (FR-024).
+- **Q21 — Default timings.** Heartbeat every 10 seconds, expiry after 30 seconds, a skew allowance of 5 seconds, and
+  cleanup after 10 minutes (FR-006, FR-031).
+- **Q22 — Narrowing spec 181's FR-018.** Narrowed: a member that has dropped out of membership keeps writing the
+  version it last observed as finalized, rather than stopping every gated write. Spec 180's FR-015 already refuses
+  it overwriting a row it cannot read, so the narrower rule keeps writes available through a membership outage
+  without losing safety.
+- **Q23 — Glossary entries.** Added when the specs are approved, alongside the entries proposed for specs 180 to 182.
+- **Q24 — The default host id source.** The machine name for the in-process provider. An explicit host id is
+  REQUIRED whenever a durable provider is composed (FR-003); starting one without an explicit id is refused at
+  startup. Two live processes that claim the same id are refused rather than displacing each other (FR-004).

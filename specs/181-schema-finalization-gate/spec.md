@@ -23,7 +23,8 @@ Companion specs: [spec 180](../180-schema-upcaster-chain/spec.md) (B4,
 [#2100](https://github.com/elsa-workflows/elsa-foundation/issues/2100)) defines schema families, stamps, readable
 sets and the write path that stamps only what this spec finalizes. [Spec 182](../182-dormant-features-until-finalization/spec.md)
 (B6, [#2102](https://github.com/elsa-workflows/elsa-foundation/issues/2102)) keeps features that need new-version
-data dormant until this gate finalizes, and carries the gate's status to operators.
+data dormant until this gate finalizes, and carries the gate's status to operators. [Spec 183](../183-cluster-membership/spec.md)
+(B1 to B3) supplies the fleet view and readability report this spec's "Requirements on membership" depends on.
 
 ## Terms
 
@@ -31,20 +32,22 @@ Spec 180's Terms apply: EF module, schema family, stamp, readable set, write ver
 
 - **Finalized version**: per database and schema family, the newest version every host may write. It is durable
   and only moves forward.
-- **Counted member**: a live member of the fleet whose readability report declares the family, or whose report is
-  unknown. A member counts whether it is joining, active or draining, and whether or not it is displaced, as long as
-  it has not left or expired. Counting a displaced-but-live incarnation and one with an unknown report is
-  conservative: neither can ever make finalization happen too early, only delay it (spec 183, FR-023).
+- **Counted member**: a live member of the fleet whose readability report declares the family and names this
+  database's identity or names none, or whose report is unknown. A member counts whether it is joining, active or
+  draining, and whether or not it is displaced, as long as it has not left or expired. Counting a displaced-but-live
+  incarnation, one with an unknown report, and one that has not yet read the record's database identity is
+  conservative: none of them can ever make finalization happen too early, only delay it (spec 183, FR-023; Decisions,
+  Q11).
 - **Hold**: an operator's durable instruction that a family must not finalize, optionally limited to one version.
 - **Observed finalized version**: the finalized version as a host last read it. A host's write version for a family
   is its observed finalized version.
 
 The fleet view, members, incarnations and liveness are defined by B1
 ([#2097](https://github.com/elsa-workflows/elsa-foundation/issues/2097)), and the readability report by B3
-([#2099](https://github.com/elsa-workflows/elsa-foundation/issues/2099)). Neither has a spec yet. This spec states
-what it needs from them under "Requirements on membership" and does not design them. It says "readability report"
-where ADR 0078 and #2097 say "capabilities", because the [root glossary](../../docs/glossary/root.md) retires
-"Capability" in favour of "feature".
+([#2099](https://github.com/elsa-workflows/elsa-foundation/issues/2099)), both specified in
+[spec 183](../183-cluster-membership/spec.md). This spec states what it needs from them under "Requirements on
+membership" and does not design them. It says "readability report" where ADR 0078 and #2097 say "capabilities",
+because the [root glossary](../../docs/glossary/root.md) retires "Capability" in favour of "feature".
 
 ## Current state
 
@@ -88,9 +91,10 @@ It holds through five mechanisms, each tested separately (Success Criteria):
    separate stores, so it does not need the membership provider and the module database to share a transaction.
 3. **Finalization is monotonic and durable** (FR-003). No surface moves it back.
 4. **Activation refuses an unreadable finalized version** through the paths above (FR-015 to FR-017).
-5. **Active hosts keep checking** (FR-012 and FR-018). A host that missed a finalization, for instance because it was
+5. **Active hosts keep checking** (FR-012). A host that missed a finalization, for instance because it was
    partitioned and counted as expired, finds out at its next refresh, or when it meets a newer row. It then refuses
-   every write to that family instead of rewriting rows it cannot read.
+   every write to that family instead of rewriting rows it cannot read. A member that has merely lapsed, without
+   missing a finalization it cannot read, keeps writing at the version it last observed (FR-018).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -229,7 +233,8 @@ after each one.
   refreshes, finds a finalized version outside its readable set, and refuses writes to that family. Its reads of
   newer rows already raise skew (spec 180, FR-007).
 - **A misconfigured cluster.** Several hosts share a database and each uses the in-process provider, so each thinks
-  it is alone and would finalize at once. See FR-021 and Open Questions.
+  it is alone and would finalize at once. Nothing detects or warns about this; a cluster declares itself only by
+  composing a durable membership provider (FR-021; Decisions, Q8).
 - **One host, two shells, two databases.** The record lives in each database, so each database finalizes on its own.
   The host's readability report is the same for both.
 - **An EF module whose families reach different versions.** Each family finalizes independently. Refusal is per EF
@@ -241,13 +246,16 @@ after each one.
 
 **State and storage**
 
-- **FR-001**: For each schema family, the gate MUST keep a durable finalization record: the finalized version, at most
-  one in-flight intent (a version, the member that wrote it, and when), the active holds, and an append-only history
-  of transitions. Each history entry names the member (host id and incarnation) or the operator responsible.
+- **FR-001**: For each schema family, the gate MUST keep a durable finalization record: an opaque per-database
+  identity, created once when the record is first written and never derived from a connection string; the finalized
+  version; at most one in-flight intent (a version, the member that wrote it, and when); the active holds; and an
+  append-only history of transitions. Each history entry names the member (host id and incarnation) or the operator
+  responsible.
 - **FR-002**: The record MUST live in the database that holds the family's tables, beside its EF module's
   migrations-history table, whichever membership provider is active (ADR 0078, "The first consumers"). It is created
   through the same migration mechanism as the module's own tables, so `Validate` refuses a module whose database
-  lacks it.
+  lacks it. It MUST land in every EF module's 4.0 baseline (`Initial`) migration, before #1976 freezes it, so no
+  module needs a post-4.0 migration just to take part in the gate.
 - **FR-003**: The finalized version MUST only move forward along the family's chain. Every change is a
   compare-and-set against the previous value. No surface, operator command included, may lower it or remove it.
   Rolling back past it requires restoring a database backup taken before finalization, which this spec does not
@@ -260,10 +268,12 @@ after each one.
 
 - **FR-005**: Any counted member with the family's EF module active MAY evaluate. Evaluation runs when the module
   activates, when the fleet view changes if the provider signals changes, and on a bounded, configurable interval as
-  a backstop. Outcomes are idempotent, so concurrent evaluators cannot contradict each other.
+  a backstop, defaulting to 30 seconds. Outcomes are idempotent, so concurrent evaluators cannot contradict each
+  other.
 - **FR-006**: An evaluation MUST move a version from Pending to Readable everywhere only when no hold applies and
-  every counted member in its fleet view reports the version in its readable set. It MUST write the intent durably
-  before its confirming read of the fleet view.
+  every counted member in its fleet view — restricted to members whose readability report names this database's
+  identity or names none — reports the version in its readable set. It MUST write the intent durably before its
+  confirming read of the fleet view.
 - **FR-007**: The confirming read MUST happen after the intent is durable. If every counted member in that read can
   still read the version and no hold has appeared, the evaluator commits Finalized. Otherwise it abandons the intent
   and the version returns to Pending.
@@ -274,8 +284,8 @@ after each one.
 - **FR-009**: A host's write version for a family MUST be its observed finalized version (spec 180, FR-013). A host
   whose current version is newer keeps writing the observed version's format.
 - **FR-010**: A host MUST refresh its observed finalized version when the module activates, after every evaluation it
-  runs, on a bounded, configurable interval, and before writing a row stamped later than its write version (spec
-  180, FR-015).
+  runs, on a bounded, configurable interval defaulting to 15 seconds, and before writing a row stamped later than its
+  write version (spec 180, FR-015).
 - **FR-011**: Switching writers MUST need no restart and no shell reload, so it behaves the same on
   `Elsa.Foundation.Host` and on `Elsa.Workbench`, whose reloader does nothing.
 - **FR-012**: When a refresh finds a finalized version outside the host's readable set, the host MUST refuse every
@@ -287,24 +297,28 @@ after each one.
 - **FR-013**: Before a member activates an EF module, its readability report for that module's families MUST be
   published to the fleet view. Only then does it read the finalization record (mechanism 2).
 - **FR-014**: If the record shows an intent for a version outside the member's readable set, the member MUST wait for
-  the intent to resolve, up to a bounded time. It proceeds only if the intent was abandoned, and refuses if the
-  intent was committed or is still unresolved.
+  the intent to resolve, up to a bounded time defaulting to 2 minutes. It proceeds only if the intent was abandoned,
+  and refuses if the intent was committed or is still unresolved.
 - **FR-015**: At activation, if any family of an EF module has a finalized version outside the host's readable set,
   the host MUST refuse the module. The check runs in the Prepare-phase initializer that `EfModuleMigrator` occupies,
   and in its hosted-service form on plain hosts, after migrations are applied or validated and after the
   post-migration audit, and before any shell task, seeder or store touches the module's tables. It throws a typed
   refusal, so the shell does not activate, as a pending migration under `Validate` does today.
-- **FR-016**: At enable time under `Validate`, an `IFeatureActivationGuard` MUST apply the same check to every feature
-  that `[UsesEfModule]` maps to the module, returning a `FeatureActivationRefusal` that the Modularity API renders as
-  409, with nothing saved. Under `AutoMigrate` it opens no database, following spec 171's FR-068 and FR-069, so
-  FR-015 is the refusal point instead; whether this should instead read the record under both policies is Open
-  Question 4.
+- **FR-016**: At enable time, under both `Validate` and `AutoMigrate`, an `IFeatureActivationGuard` MUST read the
+  finalization record and apply the same check to every feature that `[UsesEfModule]` maps to the module, returning a
+  `FeatureActivationRefusal` that the Modularity API renders as 409, with nothing saved. This narrows spec 171's
+  FR-069 (Dependencies), which today has the guard open no database and pass under `AutoMigrate`, following spec
+  171's FR-068. Saving an enable request that will fail at Prepare is exactly the half-applied state this design
+  exists to avoid. Until spec 171's FR-069 is amended, FR-015 remains the refusal point under `AutoMigrate`.
 - **FR-017**: A refusal MUST name the feature where there is one, the EF module, the family, the finalized version
   and the host's readable set, and give the remedy: run a version that can read the finalized version, or restore a
   pre-finalization backup. Like every activation refusal, it MUST NOT contain a connection string or any other
   restored secret (spec 171, FR-061).
-- **FR-018**: A member that learns its membership has lapsed MUST stop writing through every gated EF module until it
-  has rejoined as a new incarnation and passed FR-013 to FR-015 again.
+- **FR-018**: A member that learns its membership has lapsed MAY keep writing through a gated EF module at the write
+  version it last observed as finalized (FR-009): that version is still readable by every counted member, and spec
+  180's FR-015 already refuses it overwriting a row it cannot read. It MUST NOT write any version newer than that
+  observed version until it has rejoined as a new incarnation and passed FR-013 to FR-015 again (spec 183, Decisions,
+  Q22). This narrows the rule so that a membership-store outage no longer stops gated writes fleet-wide by itself.
 
 **Holds**
 
@@ -315,17 +329,24 @@ after each one.
   subcommands that follow the existing ones: `--host`, one of `--modules`, `--all` or `--from-host`, `--provider`,
   `--connection-env` or `--connection-stdin`, and the existing exit-code table. The CLI writes the record directly,
   so a hold can be placed before any gate-aware host runs, which a canary requires. No command finalizes, forces
-  finalization or lowers a finalized version. Whether an additional surface, such as an HTTP API, also carries these
-  is decided by Open Question 3.
+  finalization or lowers a finalized version. The CLI remains the only surface available before any gate-aware host
+  runs (FR-020a).
+- **FR-020a**: As a second step, the Modularity API MUST also offer hold, release and status, under the existing
+  `module-management.manage` host-control permission, mapping the same typed refusals (for instance, placing a hold
+  on a finalized version) to the same HTTP responses the CLI's exit codes report. This does not replace the CLI: a
+  hold must still be placeable before any host is running.
 
 **Single host and provider kind**
 
 - **FR-021**: Under the in-process membership provider, the fleet view is the host alone, so the module's families
-  finalize during the Prepare-phase check unless a hold applies. It MUST write no membership table and no heartbeat.
-  The finalization record is still written, because it is a fact about the database (ADR 0078). When the host
-  composes a feature that only makes sense on a cluster (today `WorkflowsRuntimeDistributed`) while membership is
-  in-process, the gate MUST NOT auto-finalize. It MUST report that clustered hosting needs a durable membership
-  provider, rather than finalize as if the host were alone.
+  finalize during the Prepare-phase check unless a hold applies, whatever features the host composes. It MUST write
+  no membership table and no heartbeat. The finalization record is still written, because it is a fact about the
+  database (ADR 0078). A cluster declares itself solely by composing a durable membership provider (spec 183); using
+  the in-process provider is itself the declaration that a host is alone. This spec adds no check for, and no
+  startup warning about, a host that composes a feature needing a cluster while membership stays in-process: that
+  mismatch is not diagnosed here. A host that was missed this way is caught loudly, not silently, once the
+  mismatch bites: it refuses the family's writes at its next refresh (FR-012) or refuses the module outright once
+  it observes a finalized version outside its readable set (FR-015) (Decisions, Q8).
 
 **Reporting**
 
@@ -354,8 +375,8 @@ design of membership.
 
 ### Key Entities
 
-- **Finalization record**: per database and family. It holds the finalized version, at most one intent, holds, and
-  history.
+- **Finalization record**: per database and family. It holds an opaque per-database identity, the finalized version,
+  at most one intent, holds, and history.
 - **Intent**: a durable "about to finalize V", written before the confirming membership read.
 - **Hold**: family, optional version, reason, placed by, placed at.
 - **Counted member**: a live member whose report declares the family, or whose report is unknown; includes a
@@ -395,12 +416,15 @@ design of membership.
 
 ## Dependencies
 
-- **B1** (#2097), the membership contract, and **B3** (#2099), the readability report. Membership has **no spec
-  yet**. This spec cannot be implemented until MR-001 to MR-007 are met, and it needs the in-process provider at
-  minimum.
+- **B1** (#2097), the membership contract, and **B3** (#2099), the readability report, both specified in
+  [spec 183](../183-cluster-membership/spec.md). This spec cannot be implemented until MR-001 to MR-007 are met, and
+  it needs the in-process provider at minimum.
 - **B2** ([#2098](https://github.com/elsa-workflows/elsa-foundation/issues/2098)), the durable membership provider,
   for any clustered test or deployment.
 - **Spec 180** (B4, #2100), for the family declaration, readable sets and the write path.
+- [**Spec 171**](../171-persistence-script-cli/spec.md) (persistence CLI), whose FR-069 needs narrowing so
+  `EfPendingMigrationActivationGuard` reads the finalization record under both `AutoMigrate` and `Validate`
+  (FR-016; Decisions, Q10). This spec states the requirement; it does not edit spec 171.
 
 ## Out of Scope
 
@@ -414,26 +438,24 @@ design of membership.
 - An Elsa `IPackageActivationGate` implementation. If one is built under ADR 0076's D13, it SHOULD apply FR-015's
   check from package metadata, but nothing here depends on it.
 
-## Open Questions
+## Decisions
 
-1. **Unit of finalization.** This follows spec 180's Open Question 1. If the owner chooses the EF module over the
-   schema family, the record is keyed per EF module and each family's stamp is derived from it.
-2. **Detecting a misconfigured cluster.** FR-021 only catches the case where `WorkflowsRuntimeDistributed` is composed.
-   Two ordinary hosts sharing a database with in-process membership would each finalize at once, and ADR 0078 has
-   the in-process provider write nothing durable, so nothing can see the second host. Should B1 make this
-   detectable, for instance with a durable marker per host, which ADR 0078's "Durable membership on every host"
-   rejection argues against? Or should a clustered deployment be required to declare itself?
-3. **An HTTP surface for hold and release.** FR-020 provides the CLI only, because persistence-state commands are
-   CLI-only today and a hold has to be placeable before a gate-aware host runs. Should the Modularity API, under the
-   `module-management.manage` host-control permission, offer hold and release too?
-4. **Enable-time refusal under `AutoMigrate`.** FR-016 keeps spec 171's rule that the guard opens no database under
-   `AutoMigrate`, so an enable request for a module that will be refused is saved and then fails at Prepare. Is that
-   acceptable, or should the finalization check be allowed to read the record under both policies?
-5. **Fleets that span databases.** Counted members are every live member whose report declares the family, whatever
-   database each one uses. That is conservative: a host serving a different database can delay finalization, but
-   never cause an early one. Should the report carry a database identity so that only members sharing the database
-   count?
-6. **Intervals and bounds.** Defaults are needed for the evaluation interval, the refresh interval and FR-014's wait
-   bound. The refresh interval bounds how long a partitioned host keeps writing after it reconnects.
-7. **Landing the record table.** Should the finalization table land in every EF module's 4.0 baseline before #1976
-   freezes the `Initial` migrations, so that no module needs a post-4.0 migration just to take part in the gate?
+Recorded 2026-09-27, when the owner answered this spec's open questions on #2093.
+
+- **Q7 — Unit of finalization: the schema family.** Follows spec 180's Q1: a row stamps a family and the skew check
+  compares families, so the record is keyed per family.
+- **Q8 — Detecting a misconfigured cluster.** A cluster must declare itself: composing a durable membership provider
+  is the declaration. There is no startup warning and no detection of hosts sharing a database while each uses the
+  in-process provider (FR-021). A missed declaration fails loudly, not silently, once it bites: through FR-012's
+  write refusal or FR-015's activation refusal.
+- **Q9 — An HTTP surface for hold and release.** Yes, as a second step, under the existing `module-management.manage`
+  host-control permission (FR-020a). The CLI stays the pre-host path (FR-020).
+- **Q10 — Enable-time refusal under `AutoMigrate`.** The check reads the finalization record under both policies
+  (FR-016), narrowing spec 171's FR-069. That amendment belongs to spec 171 (Dependencies); this spec does not edit
+  it.
+- **Q11 — Database identity in reports.** Yes: an opaque identity, created once in the finalization record (FR-001).
+  Evaluation counts only members whose readability report names it or names none (FR-006; Terms, Counted member).
+- **Q12 — Default intervals.** Evaluation every 30 seconds, refresh every 15 seconds, and a joining host's wait bound
+  of 2 minutes (FR-005, FR-010, FR-014).
+- **Q13 — Landing the record table.** In every EF module's 4.0 baseline, before #1976 freezes the `Initial`
+  migrations (FR-002).

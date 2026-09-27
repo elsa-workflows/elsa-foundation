@@ -85,7 +85,7 @@ Proposed packages, for the plan to confirm; the names are not part of the spec:
 
 | Package | Layer | Holds |
 |---|---|---|
-| `Elsa.Cluster.Core` | 1 | the contract, models, the query vocabulary, events; spec 182's Open Question 3 would add the shared finalization check here |
+| `Elsa.Cluster.Core` | 1 | the contract, models, the query vocabulary, events; spec 182's shared finalization check lives here too (spec 182, Decisions, Q16) |
 | `Elsa.Cluster.InProcess` | 2 | the in-process default and its `TryAdd` registration |
 | `Elsa.Cluster.EntityFrameworkCore` | 3 | the EF provider, its feature, `[EfModule]`, contexts and migrations |
 | `Elsa.Cluster.Conformance` (test support) | tests | the provider-neutral kit of FR-038 to FR-041 |
@@ -182,5 +182,5 @@ the expiry period. The EF provider can still run as an `IRecurringTask`, as `Wor
 - `src/essentials/Workflows/Runtime/Distributed/README.md`, "In-memory defaults and durable persistence stores": its
   first sentence says `WorkflowsRuntimeDistributedEntityFrameworkCorePersistence` replaces both placement and
   transport; the next sentence, and the feature's own description, say it replaces placement only.
-- Failover that reclaims a lapsed member's leases at once (ADR 0078, "Draining and failover"; Consequences) is not
-  named by any #2093 workstream. B7 is the nearest.
+- Failover that reclaims a lapsed member's leases at once (ADR 0078, "Draining and failover"; Consequences) belongs
+  to B7 (#2103); the owner confirmed this on #2093 (2026-09-27, spec.md Decisions and Out of Scope).

@@ -90,7 +90,8 @@ The two conditions:
    to rows stamped V or later (FR-008).
 
 It does not hold for the ten EF modules, and the two Publishing tables, whose rows carry no stamp. Nothing records
-which version wrote such a row, so neither the chain nor finalization can reason about it. See Open Questions.
+which version wrote such a row, so neither the chain nor finalization can reason about it. Each gains a stamp column
+in its 4.0 baseline, before #1976 freezes it (FR-026; Decisions, Q2).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -198,7 +199,7 @@ the build fails each time with a message naming the family and versions.
   stamped with the write version fixed for that unit of work (FR-017). Either stamp is readable by every live host.
 - **A content-addressed row** (a workflow executable, whose `ArtifactHash` identity must match its content). An
   upcaster must not change the identity (FR-019). Such rows are written once and never "next written", so they keep
-  their stamp indefinitely (Open Questions).
+  their stamp until B9's post-finalization backfill (#2116) rewrites them (Decisions, Q4).
 - **A payload column that is not JSON.** `WorkflowTriggerBindingProjectionStateEntity.ContentJson` holds a hex
   fingerprint. An upcaster transforms whatever the family stores; the chain does not assume JSON.
 - **A compressed payload.** It is decoded before upcasting and re-encoded on write (FR-012).
@@ -308,7 +309,9 @@ the build fails each time with a message naming the family and versions.
 - **FR-024**: A version MAY leave a family's readable set, by dropping the oldest upcaster, only when a scan of the
   family's tables proves no row at that version remains (ADR 0078, "The schema version gate"). A build cannot see a
   production database, so this is a release obligation rather than a build check. The removed upcaster's fixture
-  pair stays committed. The scan, and how a release records its proof, are outside this spec (Open Question 4).
+  pair stays committed. The scan, and how a release records its proof, are B9's (#2116): a post-finalization backfill
+  that runs idempotently in batches after finalization and records when it finishes. That finish record is also the
+  completeness proof spec 182's FR-005 needs (Decisions, Q4).
 
 **Performance**
 
@@ -317,6 +320,22 @@ the build fails each time with a message naming the family and versions.
   place of today's equality check. The chain is resolved once per process, never per read. An older row costs one
   in-memory transform per step, paid on each read until the row is rewritten, and no extra database round trip.
   Upgrade-on-write adds no write that was not already happening.
+
+**4.0 baseline and format stability**
+
+- **FR-026**: Each of the ten EF modules and the two Publishing tables that carry no stamp today (Current state) MUST
+  gain a `SchemaVersion` stamp column in its 4.0 baseline (`Initial`) migration, landing before #1976 freezes it.
+  From that baseline forward, a missing stamp on those tables is skew (FR-007), exactly as it already is for the
+  fifteen stamped families.
+- **FR-027**: A content change to a family's stored shape that is not additive — a rename, retype or restructure of a
+  JSON member — MUST NOT be expressed as a single version with a reverse transform. It MUST be split across two
+  versions: the new member is added beside the old one at one version, and the old member is removed only once no
+  version the family can still finalize reads it. FR-022's round-trip fixture is the enforcing test for the split.
+- **FR-028**: A format change that would alter a content-addressed row's identity hash (for example, a change to
+  `WorkflowExecutableHasher`'s output) MUST NOT be expressed as an upcaster (FR-020). Such a change ships as a new,
+  separate format version that sits alongside every format version that has ever shipped, and the build MUST keep
+  the reader for each of them, so an executable in any format the constitution has ever produced still runs
+  (§E2.6.1).
 
 ### Key Entities
 
@@ -331,6 +350,8 @@ the build fails each time with a message naming the family and versions.
 - **Write version**: the version a host stamps, which spec 181 decides.
 - **Write refusal**: the typed error a write raises when it needs a version later than the write version. Spec 182
   reuses it for dormant-feature writes.
+- **Backfill (B9, #2116)**: the post-finalization process, out of scope here, that rewrites rows written once and
+  proves a family's completeness. FR-024 and spec 182's FR-005 depend on its finish record.
 
 ## Success Criteria *(mandatory)*
 
@@ -349,6 +370,10 @@ the build fails each time with a message naming the family and versions.
 - **SC-006**: The extended ordering guard fails on a fixture that deserializes before checking the version, and
   passes on the restructured read paths named in [research.md](./research.md), "Ordering".
 - **SC-007**: Upcasting the same fixture in two separate processes produces byte-identical output.
+- **SC-008**: Every EF module's 4.0 baseline migration stamps the tables named in FR-026, so no table this program
+  governs ships without a stamp column.
+- **SC-009**: A change that would alter a content-addressed row's identity ships as a new format version beside the
+  old one, and the build keeps a reader for every format version that has ever shipped.
 
 ## Assumptions
 
@@ -373,36 +398,31 @@ the build fails each time with a message naming the family and versions.
   [#2099](https://github.com/elsa-workflows/elsa-foundation/issues/2099)), which consumes FR-001's declaration.
 - Version-aware placement (B7, [#2103](https://github.com/elsa-workflows/elsa-foundation/issues/2103)) and the
   expand-only migration guard (B8, #2104).
-- The scan that proves a version can be retired, and any eager rewrite of rows.
+- The post-finalization backfill for rows written once, and the scan that proves a version can be retired: B9
+  (#2116).
 - Rewriting `docs/serialization.md` "Schema evolution (Runtime EF Core module)". Its "clean-break pre-GA change"
   procedure gives way to this chain after 4.0. The implementation updates that section, not this spec.
 
-## Open Questions
+## Decisions
 
-1. **Which unit is versioned and finalized: the schema family or the EF module?** ADR 0077, ADR 0078 and #2099 say
-   "per module". The code stamps per family (15), while migrations, the activation guard and `[UsesEfModule]` work
-   per EF module (13). This spec recommends the family, because it is what a row stamps and what the skew check
-   compares, so the chain and finalization key on the same identity. Refusal is still surfaced per EF module (spec
-   181). The alternative is one version per EF module, with each family's stamp derived from it.
-2. **How do the ten unstamped EF modules and the two unstamped Publishing tables join?** Their first schema change
-   needs a stamp. Adding a nullable stamp column is expand-only, but a missing stamp would then have to read as a
-   declared baseline, which reverses today's rule that a missing stamp is skew (`EfSchemaVersionTests`,
-   `A_row_carrying_no_version_is_skew_rather_than_a_null_reference`). The recommendation is to give every such table
-   a stamp in its 4.0 baseline, before #1976 freezes the `Initial` migrations. While migrations are still being
-   regenerated, that costs one column and no upgrade path.
-3. **Should a content change that is not additive ever be allowed?** A rename, retype or restructure of a JSON
-   member cannot be written in the old format by leaving fields unset. The recommendation is that no down-transforms
-   exist: such a change is split across two versions (add the new member beside the old one, then remove the old one
-   once no finalized version reads it), and FR-022's round trip enforces the split. Should B8 own a guard over
-   content shape as well, or is the fixture round trip enough?
-4. **Rows that are never rewritten.** Content-addressed executables, receipts and similar rows are written once, so
-   upgrade-on-next-write never reaches them. Their family can never retire a version without an eager rewrite. The
-   existing `IEfPostMigrationAction` cannot carry that rewrite: `EfModuleMigrator` refuses the module at Prepare
-   while an action's audit reports it required, and the rewrite can only run after finalization, which needs the
-   module active. Using it would deadlock. What mechanism rewrites such rows, and does it belong to B4 or a new
-   workstream?
-5. **Identity-changing format changes.** If a future executable format would change `WorkflowExecutableHasher`'s
-   output, the artifact's identity changes, and FR-020 forbids expressing that as an upcaster. How should such a
-   change keep the Elsa constitution's §E2.6.1 (executable-always-runs) promise?
-6. **Glossary entries.** "Schema family", "stamp", "readable set", "upcaster" and the terms of specs 181 and 182 have
-   no entry in `docs/glossary/elsa.md`. Should they be added when these specs are approved?
+Recorded 2026-09-27, when the owner answered this spec's open questions on #2093.
+
+- **Q1 — Unit of versioning and finalization: the schema family.** ADR 0077, ADR 0078 and #2099 say "per module", but
+  a row stamps a family and the skew check compares families, so the chain and finalization key on that identity.
+  Refusals stay reported per EF module.
+- **Q2 — The ten unstamped EF modules and two unstamped Publishing tables.** Each gains a `SchemaVersion` stamp
+  column in its 4.0 baseline, before #1976 freezes the `Initial` migrations (FR-026). A missing stamp on those
+  tables becomes skew from that baseline forward, exactly as it already is for the fifteen stamped families.
+- **Q3 — Non-additive content changes.** No reverse transforms. A rename, retype or restructure of a JSON member is
+  split across two versions: add the new member, then remove the old one once no finalized version reads it (FR-027).
+  FR-022's round-trip fixture enforces the split; B8 stays a migration guard and owns no separate content-shape
+  check.
+- **Q4 — Rows written once and never rewritten.** A new workstream, B9 (#2116), runs a post-finalization backfill,
+  idempotent and in batches, whose finish record is the completeness proof spec 182's FR-005 needs. It is not part
+  of B4 (FR-024). The existing `IEfPostMigrationAction` could not have carried this rewrite: `EfModuleMigrator`
+  refuses the module at Prepare while an action's audit reports it required, and the rewrite can only run after
+  finalization, which needs the module active — using it would deadlock.
+- **Q5 — Identity-changing format changes.** A format change that would alter an executable's identity hash is never
+  made in place. It ships as a new format version alongside every format version that has ever shipped, and the
+  build keeps a reader for each of them (FR-028), preserving the Elsa constitution's §E2.6.1 promise.
+- **Q6 — Glossary entries.** Added when the specs are approved, not here.

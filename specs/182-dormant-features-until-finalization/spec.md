@@ -212,23 +212,28 @@ the rows that happen to carry the column.
 - **FR-002**: An operation or request field that needs new-version data inside an otherwise available feature MUST
   ask the shared dormancy check where it accepts that data, before any write or other side effect.
 - **FR-003**: There MUST be exactly one shared dormancy check (ADR 0078). It is a replacement contract under
-  framework constitution §2.6.2, in a package free of EF Core and of any provider, so API and runtime code can call
-  it. It answers from the host's observed finalized version (spec 181, FR-009 and FR-010), with no database round
-  trip on the success path. Modules MUST NOT read the finalization record or compare versions themselves.
+  framework constitution §2.6.2, living in the foundation package that holds the finalization and membership
+  contracts (spec 181, spec 183), not in a package of its own, in a package free of EF Core and of any provider so
+  API and runtime code can call it. It answers from the host's observed finalized version (spec 181, FR-009 and
+  FR-010), with no database round trip on the success path. Modules MUST NOT read the finalization record or compare
+  versions themselves.
 - **FR-004**: A feature is dormant while the observed finalized version of any family it declares is below the
   declared minimum. A hold keeps it dormant.
 - **FR-005**: A feature whose operations need every row of a family to carry new-version data, such as a query or
   lookup over a projection introduced at version V, MUST declare that as well. Such a feature stays dormant after
-  finalization until the family's completeness is established: no row below version V remains. How completeness is
-  established — the scan or rewrite that proves it — is deferred to spec 180's Open Question 4. Until that question
-  is answered, a feature that declares this requirement cannot leave dormancy for it.
+  finalization until the family's completeness is established: no row below version V remains. Completeness is
+  established by B9's post-finalization backfill (#2116; spec 180, FR-024): its finish record for the family is the
+  completeness proof this requirement reads. A feature that declares this requirement cannot leave dormancy for it
+  until B9 records that the family is complete.
 
 **Composition**
 
 - **FR-006**: Dormancy MUST NOT change composition. A dormant feature is composed as an available one is: its services
   are registered and its endpoints mapped. Only its behaviour is gated, at call time.
-- **FR-007**: An API capability that exists only while the feature is available MUST be contributed through
-  `IApiCapabilitySource` and omitted while dormant, not declared statically.
+- **FR-007**: An API capability that exists only while the feature is available MUST still be contributed through
+  `IApiCapabilitySource` while the feature is dormant. `GET /capabilities` MUST advertise it with a dormant status and
+  a caller-neutral reason, rather than omitting it, so a client can explain a disabled control instead of hiding it.
+  The reason MUST NOT reveal the fleet's topology (FR-011).
 
 **Reporting**
 
@@ -285,8 +290,8 @@ the rows that happen to carry the column.
 ### Key Entities
 
 - **Dormancy requirement**: a feature, a family and a minimum version, plus whether completeness is needed.
-- **Availability**: available or dormant, with a reason per unmet requirement. It is shown in the catalog and in
-  Attention.
+- **Availability**: available or dormant, with a reason per unmet requirement. It is shown in the catalog, in
+  Attention and, for a feature contributing a capability, in `/capabilities` with a caller-neutral reason.
 - **Dormancy refusal**: spec 180's write refusal, extended for the feature-level case with the feature id and
   reason: code, family, required version, observed finalized version, feature, and reason.
 - **Shared dormancy check**: the single replacement contract that answers from the observed finalized version.
@@ -307,9 +312,10 @@ the rows that happen to carry the column.
   refusal, and no row is written with that member dropped.
 - **SC-006**: The refusal type is unassignable to each of the six exception types FR-013 names, and every API that
   maps it answers 409.
-- **SC-007**: A query that depends on completeness is refused before finalization, and after finalization until
-  completeness is established. Until spec 180's Open Question 4 defines how completeness is established, such a
-  query stays refused after finalization. It is never answered from part of the rows.
+- **SC-007**: A query that depends on completeness is refused before finalization, and after finalization until B9
+  (#2116) records that the family is complete. It is never answered from part of the rows.
+- **SC-008**: While dormant, a feature that contributes a capability is still listed at `GET /capabilities`, marked
+  dormant, with a caller-neutral reason. It is never simply absent from the document.
 
 ## Assumptions
 
@@ -325,33 +331,31 @@ the rows that happen to carry the column.
 
 - **Spec 181** (B5, #2101): the finalized version, holds, the refresh, and the gate's status.
 - **Spec 180** (B4, #2100): schema families, write versions, the write refusal this spec reuses (FR-016a), and the
-  store-level backstop (FR-016). FR-005 also depends on spec 180's Open Question 4 (the completeness scan), which is
-  not answered yet.
+  store-level backstop (FR-016). FR-005 depends on B9's (#2116) completeness proof (spec 180, FR-024).
 - **B1** ([#2097](https://github.com/elsa-workflows/elsa-foundation/issues/2097)) and **B3**
-  ([#2099](https://github.com/elsa-workflows/elsa-foundation/issues/2099)), through spec 181. Membership has no spec
-  yet.
+  ([#2099](https://github.com/elsa-workflows/elsa-foundation/issues/2099)), specified in
+  [spec 183](../183-cluster-membership/spec.md), through spec 181.
 
 ## Out of Scope
 
 - The finalization gate, holds and the refusal of hosts (spec 181), and the upcaster chain (spec 180).
 - Membership (B1 to B3), version-aware placement (B7, [#2103](https://github.com/elsa-workflows/elsa-foundation/issues/2103))
   and the expand-only migration guard (B8, [#2104](https://github.com/elsa-workflows/elsa-foundation/issues/2104)).
-- The scan and rewrite that establish completeness for FR-005 (spec 180, Open Question 4).
-- Studio's presentation of availability. This spec fixes what the catalog and Attention carry, not how Studio shows
-  it.
+- The scan and rewrite that establish completeness for FR-005: B9 (#2116; spec 180, FR-024).
+- Studio's presentation of availability. This spec fixes what the catalog, Attention and `/capabilities` carry, not
+  how Studio shows it.
 
-## Open Questions
+## Decisions
 
-1. **`/capabilities` for a dormant feature.** FR-007 omits its capability, because the document is meant to carry no
-   "arbitrary module state" (API Capabilities README, "Composition"), and the reason reaches operators through the catalog and
-   Attention. Should the document instead advertise the capability with a dormant status and a caller-neutral reason,
-   so a client can explain a disabled control?
-2. **Completeness.** ADR 0078 has new-data features wait for finalization only. FR-005 adds a second condition for
-   features that query new data, because lazy upgrade leaves old rows without it. Should ADR 0078 be amended to say
-   so, and which workstream builds the scan or rewrite that proves completeness (spec 180, Open Question 4)? Until
-   spec 180's Open Question 4 is answered, a feature that declares FR-005's requirement cannot leave dormancy for it.
-3. **Where the shared check lives.** ADR 0078 places membership at the foundation level, outside the workflow runtime.
-   Should the shared check share that package, or live in an EF-free contract package of its own? Either satisfies
-   FR-003.
-4. **The code value.** This spec proposes `schema-version-not-finalized` as the stable code for the refusal. Is a
-   repository-wide code vocabulary expected, or does each API own its codes, as Publishing's do?
+Recorded 2026-09-27, when the owner answered this spec's open questions on #2093.
+
+- **Q14 — `/capabilities` for a dormant feature.** Against the draft's recommendation: the document advertises a
+  dormant feature's capability, marked dormant, with a caller-neutral reason (FR-007), so a client can explain a
+  disabled control instead of the control simply being absent.
+- **Q15 — Completeness.** Proven by B9 (#2116), the post-finalization backfill spec 180's FR-024 defines. Spec 182's
+  completeness requirement (FR-005) now points at B9's finish record. ADR 0078 gains the completeness condition when
+  it is amended for B0. The deadlock note about `IEfPostMigrationAction` (spec 180, Decisions, Q4) is why B9 exists
+  as its own workstream rather than as B4's or B6's.
+- **Q16 — Where the shared check lives.** In the foundation package that holds the finalization and membership
+  contracts (spec 181, spec 183), not in a package of its own (FR-003).
+- **Q17 — The refusal code.** Each API owns its codes, as Publishing's do. `schema-version-not-finalized` stays.
