@@ -31,8 +31,10 @@ Spec 180's Terms apply: EF module, schema family, stamp, readable set, write ver
 
 - **Finalized version**: per database and schema family, the newest version every host may write. It is durable
   and only moves forward.
-- **Counted member**: a live member of the fleet whose readability report declares the family. A member counts
-  whether it is joining, active or draining. It stops counting when it has left or its liveness has expired.
+- **Counted member**: a live member of the fleet whose readability report declares the family, or whose report is
+  unknown. A member counts whether it is joining, active or draining, and whether or not it is displaced, as long as
+  it has not left or expired. Counting a displaced-but-live incarnation and one with an unknown report is
+  conservative: neither can ever make finalization happen too early, only delay it (spec 183, FR-023).
 - **Hold**: an operator's durable instruction that a family must not finalize, optionally limited to one version.
 - **Observed finalized version**: the finalized version as a host last read it. A host's write version for a family
   is its observed finalized version.
@@ -356,7 +358,8 @@ design of membership.
   history.
 - **Intent**: a durable "about to finalize V", written before the confirming membership read.
 - **Hold**: family, optional version, reason, placed by, placed at.
-- **Counted member**: a live member whose report declares the family.
+- **Counted member**: a live member whose report declares the family, or whose report is unknown; includes a
+  displaced-but-live incarnation (Terms).
 - **Observed finalized version**: a host's cached copy of the record, and its write version.
 
 ## Success Criteria *(mandatory)*

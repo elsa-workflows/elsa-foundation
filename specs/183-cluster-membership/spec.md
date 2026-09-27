@@ -36,7 +36,8 @@ Spec 180's and spec 181's Terms apply, notably schema family, readable set and c
 provider and shell mean what the [root glossary](../../docs/glossary/root.md) says. In addition:
 
 - **Member**: one incarnation of a host in the fleet. A restarted host is a new member (ADR 0078, Decision).
-- **Host id**: the stable identity of a host. It survives restarts.
+- **Host id**: the identity a member joins under. It is meant to survive restarts of the same host, but whether the
+  default achieves that depends on the environment (FR-003).
 - **Incarnation**: the identity of one run of a host. A host gets a new one each time its process starts, and each
   time it rejoins after a lapse.
 - **Status**: joining, active, draining or left. A member writes its own status.
@@ -58,27 +59,17 @@ provider and shell mean what the [root glossary](../../docs/glossary/root.md) sa
 
 ## Current state
 
-Nothing records which hosts exist. The runtime has four per-execution or per-item liveness mechanisms, and each is
-keyed by an execution or a work item, never by a host:
+Nothing records which hosts exist. The runtime has several per-execution or per-item liveness mechanisms, but every
+one is keyed by an execution or a work item, never by a host, and the two that mint a per-process id derive it from
+the machine name and process id, so neither survives a restart (see [research.md](./research.md), "Existing liveness
+and identity mechanisms").
 
-- the **execution lease and heartbeat** that carry the fencing token checked at checkpoint commit
-  (`IRuntimeExecutionOwnershipService`, `ExecutionLivenessState`), which the recovery scanner reads;
-- the **placement lease** of `WorkflowsRuntimeDistributed` (`IExecutionPlacementStore`: `OwnerId`, `PlacementToken`,
-  expiry), renewed by the placement pump;
-- the command transport's **visibility lease**, held by the node id;
-- the scheduler work queue's **claim visibility timeout**.
-
-A host appears in them only as an owner id, and there are two unreconciled ones: the placement `NodeId`
-(`node:{machine}:{pid}`) and the execution owner id (`inproc:{machine}:{pid}`). Both change on every restart, so no
-record can say that a host restarted, is draining, or which modules it can read. Every lease is stamped and judged
-with the acting host's `TimeProvider`; no database clock is used anywhere. The `[SingleNodeTask]` lock and the host
-health probes are not host registries either. The inventory, with files, is in [research.md](./research.md).
-
-**Membership builds on these and replaces none of them.** The execution lease is the fence (ADR 0078, invariant 2) and
-stays exactly as it is. The placement lease stays the routing record; B7
+**Membership builds on these and replaces none of them.** The execution lease stays the commit-time fence (ADR 0078,
+invariant 2). The placement lease stays the routing record until B7
 ([#2103](https://github.com/elsa-workflows/elsa-foundation/issues/2103)) makes placement ask membership which hosts
-may take work, and takes `NodeId` from the member's host id (ADR 0078, Consequences). What membership adds is the one
-thing none of them has: a per-host record with an incarnation, a status and a report.
+may take work, and takes `NodeId` from the member's host id (ADR 0078, Consequences; see
+[research.md](./research.md), "Existing liveness and identity mechanisms", "How the spec builds on each"). What
+membership adds is the one thing none of them has: a per-host record with an incarnation, a status and a report.
 
 ## The invariant and how it holds
 
@@ -178,27 +169,39 @@ compare the answer and its list of blockers with the expected set.
 
 ---
 
-### User Story 4 - A restarted host is a new member (Priority: P2)
+### User Story 4 - A restarted host is a new member, and a live host id is never taken from under it (Priority: P2)
 
-A host crashes and restarts within its expiry period. Its new incarnation joins under the same host id, and the
-earlier incarnation is displaced at that moment. Placement stops treating the earlier incarnation as a candidate at
-once. The gate keeps counting it until its own entry expires.
+A host crashes and restarts within its expiry period, under a host id whose source is stable across restarts (a VM, a
+bare-metal machine, a Kubernetes `StatefulSet` pod). Its new incarnation joins under the same host id, and the earlier
+incarnation is displaced at that moment because it is no longer live. Placement stops treating the earlier incarnation
+as a candidate at once. The gate keeps counting it until its own entry expires. On a host whose id source is not
+stable (a Kubernetes `Deployment` pod, whose hostname changes every restart), a restart instead joins under a new host
+id; the old entry is never displaced, and drops out of counting only when it expires on its own (FR-003, FR-007).
+Separately, if two live processes are ever configured with the same host id, for instance two Elsa processes on one
+development machine, the second's join MUST be refused rather than displacing the first.
 
-**Why this priority**: ADR 0078 makes "a restarted host is a new member" part of the contract. Without it, a crashed
-host's leases wait out their own timeouts.
+**Why this priority**: ADR 0078 makes "a restarted host is a new member" part of the contract, and that a crashed
+host's leases must not wait out their own timeouts. The same mechanism must never let a second live process seize a
+host id already in use, which is a distinct hazard the default host id (the machine name) makes possible whenever more
+than one process runs per machine.
 
 **Independent Test**: With the EF provider and a controllable clock, start a host, kill it, start it again with the
-same host id, and read the fleet view for both purposes.
+same host id, and read the fleet view for both purposes. Separately, start two hosts configured with the same host id
+while both are live, and assert the second is refused rather than displacing the first.
 
 **Acceptance Scenarios**:
 
-1. **Given** an earlier incarnation of host H, **When** a new incarnation of H joins, **Then** the fleet view shows
-   the earlier one as displaced and the new one as H's current incarnation.
+1. **Given** an earlier incarnation of host H that is no longer live, **When** a new incarnation of H joins, **Then**
+   the fleet view shows the earlier one as displaced and the new one as H's current incarnation.
 2. **Given** that fleet view, **When** a placement query runs, **Then** only the current incarnation can match.
 3. **Given** that fleet view, **When** the readability query runs before the displaced entry expires, **Then** the
    displaced incarnation is still counted.
-4. **Given** two live processes configured with the same host id, **When** the second joins, **Then** the first learns
-   at its next heartbeat that it was displaced while healthy, lapses, reports a duplicate host id, and does not rejoin.
+4. **Given** two live processes, **When** the second is configured with the host id the first is still live under,
+   **Then** the second's join is refused with a diagnostic naming the host id, the first keeps its incarnation
+   undisturbed, and nothing is displaced.
+5. **Given** a host whose id source changes on every restart, **When** the process restarts, **Then** it joins under a
+   new host id, and the old entry is neither displaced nor treated as the same host; it only stops being counted once
+   it expires.
 
 ---
 
@@ -267,6 +270,12 @@ for identical fleets.
 - **SQLite as the membership store.** Several processes can share one SQLite file only on one machine. It suits
   development and tests, not a multi-machine cluster (FR-033).
 - **A host id that is too long, blank or malformed.** Configuration is refused at startup with a diagnostic.
+- **Two live processes on one machine, both under the default host id.** The second's join is refused at startup with
+  a diagnostic naming the host id and instructing the operator to configure a distinct one (FR-004). The first is
+  undisturbed. This is the case the machine-name default does not resolve by itself; see Open Question 7.
+- **An ephemeral pod restarts under a new host id.** The old entry is never displaced, because no incarnation joins
+  under its host id again. It is counted until its own entry expires, which only delays counting, and never lets two
+  live incarnations be mistaken for one host (FR-003, FR-007).
 
 ### Failure modes
 
@@ -313,13 +322,33 @@ for identical fleets.
   It references nothing beyond the `Microsoft.Extensions.*` abstractions and other `.Core` packages. An architecture
   test MUST fail the build if it references EF Core, a database engine, an actor framework or any provider package
   (#2097, Acceptance).
-- **FR-003**: A member's host id MUST be stable across restarts of the same host. It defaults to the machine name and
-  MAY be set by configuration. It MUST be at most 128 UTF-16 code units, non-blank and well-formed Unicode, compared
-  ordinally, the same limits `DistributedRuntimeIdentityConstraints` sets today, so that B7 can take `NodeId` from it
-  unchanged. The contract MUST expose the local member's host id and incarnation to consumers.
+- **FR-003**: A member's host id MUST default to the machine name, and MAY be set by configuration. It MUST be at most
+  128 UTF-16 code units, non-blank and well-formed Unicode, compared ordinally, the same limits
+  `DistributedRuntimeIdentityConstraints` sets today, so that B7 can take `NodeId` from it unchanged. The contract MUST
+  expose the local member's host id and incarnation to consumers. The default is safe, but it is not stable across
+  restarts in every environment, and this spec MUST NOT imply that it is:
+  - On a host whose machine name is stable across restarts (a VM, a bare-metal machine, a Kubernetes `StatefulSet`
+    pod), the default host id survives a restart, so a restart is a new incarnation of the same host id (FR-004), and
+    the invariant's mechanisms apply to it.
+  - On a host whose machine name changes on every restart (a Kubernetes `Deployment` pod), the default host id does
+    not survive a restart. A restarted pod joins under a new host id; its old entry is a member that never rejoins,
+    and it drops out of counting only when its own entry expires (FR-007). Finalization is delayed by, at most, that
+    expiry; it is never made unsafe by it, because the old entry is not displaced or reused.
+  - On a machine that runs more than one Elsa process (a developer machine, or multi-process hosting), the
+    machine-name default gives every process on it the same host id. This is the one case the default does not
+    resolve safely by itself: two live processes must never share a host id. FR-004 refuses the second process's join
+    rather than letting it displace the first. Operators in this environment SHOULD still set a distinct host id per
+    process by configuration; see Open Question 7 for the default identity source.
 - **FR-004**: A member's incarnation MUST be new each time the host process starts and each time it rejoins after a
-  lapse. It is an opaque, unique value that consumers compare only for equality. When an incarnation joins, every
-  earlier incarnation of the same host id MUST be marked displaced.
+  lapse. It is an opaque, unique value that consumers compare only for equality. When an incarnation joins under a
+  host id whose most recently joined incarnation is not live (it has expired or left), that earlier incarnation MUST
+  be marked displaced. When an incarnation joins under a host id whose most recently joined incarnation is still live
+  (heartbeating and not expired), the join MUST instead be refused at startup with a diagnostic naming the host id and
+  instructing the operator to configure a distinct one; the existing live incarnation MUST NOT be displaced or
+  otherwise disturbed. Only a restart of the same host — one where the earlier incarnation has stopped heartbeating,
+  left, or expired — may displace it. A race where two joins are concurrently in flight for one host id MUST resolve
+  to at most one live incarnation surviving; if both observe the other as live and both are refused, that is
+  acceptable, but a live incarnation MUST NOT ever be silently displaced by another live one.
 - **FR-005**: A member's status MUST move only forward within an incarnation: joining, then active, then draining, then
   left. A member is joining from when it joins until the host has started, draining from when the host begins to stop,
   and left once it has stopped. A crashed member never writes left; it expires.
@@ -332,7 +361,7 @@ for identical fleets.
   expiry period has passed since the start of its last successful heartbeat, measured as the larger of wall-clock and
   monotonic elapsed time; its entry is missing from the store; or its incarnation has been displaced (MR-005). A lapsed
   member rejoins as a new incarnation. A displaced one never rejoins, because another process now holds its host id: it
-  stays lapsed and reports the displacement (FR-037), as a duplicate host id if its own heartbeats were still
+  stays lapsed and reports the displacement (FR-038), as a duplicate host id (FR-039) if its own heartbeats were still
   succeeding when it learned of it.
 - **FR-008**: The skew allowance MUST make mechanism 2 hold: for any skew between two clocks within the allowance, a
   member concludes that it lapsed no later than any other member judges it expired. It holds by construction, because
@@ -452,36 +481,61 @@ for identical fleets.
 
 **Diagnostics**
 
-- **FR-037**: A member MUST report each of the following as a warning or error naming the hosts involved, and MUST make
-  it visible in its own entry in the fleet view: a lapse, a displacement, a duplicate host id (displaced while its own
-  heartbeats were succeeding, FR-007), clock skew (FR-029), an entry it cannot interpret, a failed fresh read, and
-  shells of one process that disagree about membership (FR-017).
+Each of the following is its own failure mode a member MUST report as a warning or error naming the hosts involved,
+and MUST make visible in its own entry in the fleet view, so that a failure in any one of them is traceable to a
+single requirement:
+
+- **FR-037**: A member MUST report a lapse (FR-007).
+- **FR-038**: A member MUST report a displacement (FR-004).
+- **FR-039**: A member MUST report a duplicate host id: a displacement while its own heartbeats were still succeeding
+  (FR-007).
+- **FR-040**: A member MUST report clock skew, naming both hosts (FR-029).
+- **FR-041**: A member MUST report an entry it cannot interpret (FR-012).
+- **FR-042**: A member MUST report a failed fresh read.
+- **FR-043**: A member MUST report shells of one process that disagree about membership (FR-017).
 
 **Conformance suite**
 
-- **FR-038**: A provider-neutral conformance suite MUST ship with the contract, as a test kit any provider runs by
+- **FR-044**: A provider-neutral conformance suite MUST ship with the contract, as a test kit any provider runs by
   supplying a fixture that starts, stops, kills, isolates and restarts members, and controls their clocks. It has two
-  tiers: the membership tier (FR-039) and the invariant tier (FR-040). A provider that is not run against it is not
-  supported (ADR 0078).
-- **FR-039**: The membership tier MUST prove at least: a single member sees itself; members sharing a store see each
-  other; a publish is visible to the next fresh read on another member; no member is judged expired before its expiry
-  period plus the allowance, and every member is judged expired after it; a member concludes that it lapsed no later
-  than others judge it expired, for skews on both sides within the allowance; a displaced incarnation is counted until
-  it expires and excluded from placement at once; status only moves forward; a fleet view is never partial; an
-  uninterpretable entry is returned as unknown; the readability query's answers and blockers; and cleanup never
-  deletes a live entry.
-- **FR-040**: The suite MUST prove each of ADR 0078's invariants for the provider: (1) two opt-in providers in one host
-  fail at startup with a diagnostic; (2) two hosts that both believe they own one execution, because their fleet views
-  disagree, produce exactly one successful commit; (3) a member query returns only members whose report satisfies it,
-  and handles members whose report is missing or unknown, and displaced incarnations, as FR-016 says; (4) work routed
-  to a member that then dies is still delivered from the durable queue. Invariants 2 and 4 run over the distributed
-  runtime composed on the provider.
-- **FR-041**: Each test in FR-039 and FR-040 MUST be shown to bite: a deliberately broken provider (early expiry,
-  truncation, a publish that returns before it is visible, a second registration) fails a named test.
+  tiers: the membership tier (FR-045 to FR-055) and the invariant tier (FR-056 to FR-059). A provider that is not run
+  against it is not supported (ADR 0078).
+
+The membership tier is one FR per clause it must prove, so a failing test names exactly which one it is:
+
+- **FR-045**: The membership tier MUST prove that a single member sees itself.
+- **FR-046**: The membership tier MUST prove that members sharing a store see each other.
+- **FR-047**: The membership tier MUST prove that a publish is visible to the next fresh read on another member.
+- **FR-048**: The membership tier MUST prove that no member is judged expired before its expiry period plus the skew
+  allowance has passed, and that every member is judged expired after it has passed.
+- **FR-049**: The membership tier MUST prove that a member concludes that it lapsed no later than another member
+  judges it expired, for skews on both sides within the allowance.
+- **FR-050**: The membership tier MUST prove that a displaced incarnation is counted until it expires, and excluded
+  from placement at once.
+- **FR-051**: The membership tier MUST prove that a member's status only moves forward.
+- **FR-052**: The membership tier MUST prove that a fleet view is never partial.
+- **FR-053**: The membership tier MUST prove that an entry the reader cannot interpret is returned as unknown.
+- **FR-054**: The membership tier MUST prove the readability query's answers and blockers, across a scripted rolling
+  upgrade.
+- **FR-055**: The membership tier MUST prove that cleanup never deletes a live entry.
+
+The invariant tier is one FR per invariant of ADR 0078:
+
+- **FR-056**: The invariant tier MUST prove invariant 1: two opt-in providers in one host fail at startup with a
+  diagnostic.
+- **FR-057**: The invariant tier MUST prove invariant 2: two hosts that both believe they own one execution, because
+  their fleet views disagree, produce exactly one successful commit. This runs over the distributed runtime composed
+  on the provider.
+- **FR-058**: The invariant tier MUST prove invariant 3: a member query returns only members whose report satisfies
+  it, and handles members whose report is missing or unknown, and displaced incarnations, as FR-016 says.
+- **FR-059**: The invariant tier MUST prove invariant 4: work routed to a member that then dies is still delivered
+  from the durable queue. This runs over the distributed runtime composed on the provider.
+- **FR-060**: Each test in FR-045 to FR-055 and FR-056 to FR-059 MUST be shown to bite: a deliberately broken provider
+  (early expiry, truncation, a publish that returns before it is visible, a second registration) fails a named test.
 
 **Admitting an actor framework as a provider**
 
-- **FR-042**: An Orleans, Proto.Actor or Akka.NET integration MUST be a provider of this contract under
+- **FR-061**: An Orleans, Proto.Actor or Akka.NET integration MUST be a provider of this contract under
   `src/extensions`, and nothing else. It supplies membership backed by the framework's own cluster membership, and
   never runs beside the EF provider (invariant 1). It MUST give fresh reads with read-after-write (MR-003), even where
   the framework's own membership view is only eventually consistent, and MUST let a member learn that the framework has
@@ -497,9 +551,9 @@ for identical fleets.
 | MR-002 readability report derived from declarations only | FR-019 to FR-022 | Needs spec 180's FR-001 declarations, which do not exist yet. FR-021 narrows MR-002: the set reported is the intersection over loaded declarations. |
 | MR-003 read-after-write | FR-010, FR-011, FR-032 | Holds for fresh reads only, and not with a read replica. Spec 181 must use fresh reads for evaluation and confirmation. |
 | MR-004 publish before activate, including through Nuplane | FR-011, FR-020 | Membership provides the primitive and recomputes on demand. The ordering, publish and then read the record before activating, can only be enforced by the caller: spec 181's FR-013 and FR-015. |
-| MR-005 lapse awareness | FR-007, FR-027, FR-042 | The in-process provider never lapses. |
+| MR-005 lapse awareness | FR-007, FR-027, FR-061 | The in-process provider never lapses. |
 | MR-006 provider kind visible | FR-009 | None. |
-| MR-007 "can every live member read F at V?", with blockers | FR-023 | Counts displaced-but-live members and unknown reports, which extends spec 181's definition of a counted member (see Open Questions). |
+| MR-007 "can every live member read F at V?", with blockers | FR-023 | Counts displaced-but-live members and unknown reports, matching spec 181's Terms definition of a counted member. |
 
 Spec 181's Open Questions 2 (a misconfigured cluster) and 5 (fleets that span databases) are this spec's Open
 Questions 1 and 2.
@@ -514,7 +568,7 @@ Questions 1 and 2.
 - **Member query**: a purpose (counting or placement) and requirements from a closed vocabulary. Its answer lists
   matching members, and the failed requirement of every other member it considered.
 - **Membership provider**: the single active implementation per process. In-process by default; EF Core opt-in; an
-  actor framework only under FR-042.
+  actor framework only under FR-061.
 - **Conformance kit**: the provider-neutral suite and the fixture a provider implements.
 
 ## Success Criteria *(mandatory)*
@@ -537,7 +591,7 @@ Questions 1 and 2.
 - **SC-006**: Composing two opt-in providers fails at startup with a diagnostic naming both. Composing none, or one,
   starts.
 - **SC-007**: The conformance suite passes for the in-process provider and for the EF provider on all four engines,
-  and each deliberately broken provider of FR-041 fails at least one named test.
+  and each deliberately broken provider of FR-060 fails at least one named test.
 - **SC-008**: The contract package references no provider package, and one consumer test suite runs unchanged against
   the in-process and EF providers (#2097, Acceptance).
 
@@ -565,10 +619,11 @@ Questions 1 and 2.
 - Finalization, holds and the refusal of hosts that cannot read (spec 181); upcasters (spec 180); dormancy (spec 182).
 - Placement itself (B7): its requirement kinds, its report section, adopting the host id as `NodeId`, and reclaiming a
   lapsed or displaced member's leases.
-- Any actor-framework provider. This spec sets only the rules for admitting one (FR-042).
+- Any actor-framework provider. This spec sets only the rules for admitting one (FR-061).
 - The expand-only migration guard (B8, [#2104](https://github.com/elsa-workflows/elsa-foundation/issues/2104)).
-- Operator surfaces for the fleet view, such as a CLI command, an HTTP endpoint or Attention items. FR-037 makes the
-  conditions visible; carrying them to operators is left to spec 181's status and spec 182's Attention contributor.
+- Operator surfaces for the fleet view, such as a CLI command, an HTTP endpoint or Attention items. FR-037 to FR-043
+  make the conditions visible; carrying them to operators is left to spec 181's status and spec 182's Attention
+  contributor.
 - Fleets whose members cannot all reach one membership store.
 
 ## Open Questions
@@ -617,3 +672,24 @@ Questions 1 and 2.
    a membership outage without losing safety.
 6. **Glossary entries.** "Member", "incarnation", "fleet view", "member report" and "displaced incarnation" should join
    the entries proposed for specs 180 to 182 in `docs/glossary/elsa.md` when these specs are approved.
+7. **What should the default host id source be?** FR-003's machine-name default is safe on its own for a single
+   process per machine, whether the machine name is stable (a VM, a `StatefulSet` pod) or not (a `Deployment` pod).
+   It is not safe by itself for several processes on one machine, though FR-004's collision refusal keeps that case
+   loud rather than silent.
+   - *Option A, keep the machine name.* Simplest, and correct for the common case of one Elsa process per machine or
+     pod. Multi-process hosting and local development need an explicit host id per process.
+   - *Option B, machine name plus a persisted per-install id.* On first run, write a small opaque id under the content
+     root (or a configured directory) and read it back on every restart, defaulting the host id to
+     `{machine name}:{persisted id}`. Distinguishes several processes on one machine without configuration, and
+     survives restarts wherever the content root does, but adds a file the host must manage and a new failure mode if
+     it is deleted, copied between hosts, or the content root is not persistent (which reintroduces the ephemeral-pod
+     case, safely, as FR-003 already covers).
+   - *Option C, require explicit configuration whenever clustered.* Refuse to start a durable membership provider (B2)
+     without a configured host id. Removes the ambiguity at the cost of one more setting for every clustered
+     deployment; non-clustered and single-process hosting keep the default.
+
+   **Recommendation: A, with C for the durable provider.** Keep the machine-name default for the in-process provider,
+   where FR-018 means nothing is written anyway, and require an explicit host id whenever the EF provider (or any
+   other durable provider) is composed, so a clustered deployment states its identity instead of relying on FR-004's
+   refusal to catch a collision at startup. Option B is left open for a later spec if operators find explicit
+   configuration onerous.
