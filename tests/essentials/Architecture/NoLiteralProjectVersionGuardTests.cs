@@ -14,8 +14,8 @@ namespace Elsa.Architecture.Tests;
 /// flagged.
 /// <para>
 /// This guard scans project files under <c>src/</c>. Spec 150 FR-010 names shared MSBuild properties
-/// as the one place for major and minor, which #2080 will introduce, so shared build files such as
-/// <c>Directory.Build.props</c> are deliberately not scanned here.
+/// as the one place for major and minor — <c>ElsaVersion</c> and <c>ElsaContractsVersion</c> in
+/// <c>VersionLines.props</c> — so shared build files are deliberately not scanned here.
 /// </para>
 /// <para>
 /// These literals never reached a published package: <c>packages.yml</c> passes a global
