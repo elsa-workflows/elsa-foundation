@@ -405,15 +405,16 @@ public sealed class EfWorkflowAlterationStore(
     private static WorkflowAlterationPlanEntity ToPlan(WorkflowAlterationPlanState p, string scope, string id) => new() { Id = id, ScopeKey = EfRelationalIdentity.Encode(scope), ScopeKeyHash = EfRelationalIdentity.Hash(scope), PlanId = EfRelationalIdentity.Encode(p.PlanId), PlanIdHash = EfRelationalIdentity.Hash(p.PlanId), PlanIdOrderKey = Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(p.PlanId, RuntimeWorkflowAlterationEfModule.IdentityMaximumLength)), TenantIdempotencyKey = EfRelationalIdentity.Encode(p.AuthorityScope.TenantPartition + "\u001f" + p.IdempotencyKeyHash), TenantIdempotencyKeyHash = EfRelationalIdentity.Hash(p.AuthorityScope.TenantPartition + "\u001f" + p.IdempotencyKeyHash), Status = (int)p.Status, ActiveOrderKey = ActiveKey(p.CreatedAt, p.PlanId), CreatedAtUtcTicks = p.CreatedAt.UtcTicks, Revision = p.Revision, CleanupDeletedCount = 0, ContentJson = RuntimeArtifactJson.Serialize(p), SchemaVersion = RuntimeWorkflowAlterationEfModule.SchemaVersion };
     private static WorkflowAlterationPlanState ReadPlan(WorkflowAlterationPlanEntity row, string scope, string? expectedPlanId = null)
     {
+        if (EfSchemaVersion.NotReadable("RuntimeWorkflowAlteration", row.SchemaVersion, RuntimeWorkflowAlterationEfModule.SchemaVersion) ||
+            row.ScopeKey != EfRelationalIdentity.Encode(scope) ||
+            row.ScopeKeyHash != EfRelationalIdentity.Hash(scope))
+            throw new InvalidDataException("The alteration plan projections do not match its durable content.");
         var plan = RuntimeArtifactJson.Deserialize<WorkflowAlterationPlanState>(row.ContentJson);
         var idempotency = plan.AuthorityScope.TenantPartition + "\u001f" + plan.IdempotencyKeyHash;
         var valid =
-            EfSchemaVersion.Readable("RuntimeWorkflowAlteration", row.SchemaVersion, RuntimeWorkflowAlterationEfModule.SchemaVersion) &&
             (expectedPlanId is null || StringComparer.Ordinal.Equals(plan.PlanId, expectedPlanId)) &&
             StringComparer.Ordinal.Equals(plan.AuthorityScope.TenantPartition, scope) &&
             row.Id == Id(scope, plan.PlanId) &&
-            row.ScopeKey == EfRelationalIdentity.Encode(scope) &&
-            row.ScopeKeyHash == EfRelationalIdentity.Hash(scope) &&
             row.PlanId == EfRelationalIdentity.Encode(plan.PlanId) &&
             row.PlanIdHash == EfRelationalIdentity.Hash(plan.PlanId) &&
             row.PlanIdOrderKey == Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(plan.PlanId, RuntimeWorkflowAlterationEfModule.IdentityMaximumLength)) &&
@@ -451,16 +452,17 @@ public sealed class EfWorkflowAlterationStore(
     private static WorkflowAlterationJobEntity ToJob(WorkflowAlterationJobState j, string scope) => new() { Id = Id(scope, j.JobId), ScopeKey = EfRelationalIdentity.Encode(scope), ScopeKeyHash = EfRelationalIdentity.Hash(scope), JobId = EfRelationalIdentity.Encode(j.JobId), JobIdHash = EfRelationalIdentity.Hash(j.JobId), JobIdOrderKey = Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(j.JobId, RuntimeWorkflowAlterationEfModule.IdentityMaximumLength)), PlanId = EfRelationalIdentity.Encode(j.PlanId), PlanIdHash = EfRelationalIdentity.Hash(j.PlanId), WorkflowExecutionId = EfRelationalIdentity.Encode(j.WorkflowExecutionId), WorkflowExecutionIdOrderKey = Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(j.WorkflowExecutionId, RuntimeWorkflowAlterationEfModule.IdentityMaximumLength)), WorkflowExecutionIdHash = EfRelationalIdentity.Hash(j.WorkflowExecutionId), TenantPartition = EfRelationalIdentity.Encode(j.TenantPartition), TenantPartitionHash = EfRelationalIdentity.Hash(j.TenantPartition), CaptureOrdinal = j.CaptureOrdinal, ClaimableAtUtcTicks = j.Status == WorkflowAlterationJobStatus.Pending ? j.CreatedAt.UtcTicks : j.Claim?.ExpiresAt.UtcTicks, Status = (int)j.Status, CheckpointCommitId = j.CheckpointCommitId is null ? null : EfRelationalIdentity.Encode(j.CheckpointCommitId), CheckpointCommitIdHash = j.CheckpointCommitId is null ? null : EfRelationalIdentity.Hash(j.CheckpointCommitId), Revision = j.Revision, ContentJson = RuntimeArtifactJson.Serialize(j), SchemaVersion = RuntimeWorkflowAlterationEfModule.SchemaVersion };
     internal static WorkflowAlterationJobState ReadJob(WorkflowAlterationJobEntity row, string scope, string? expectedJobId = null)
     {
+        if (EfSchemaVersion.NotReadable("RuntimeWorkflowAlteration", row.SchemaVersion, RuntimeWorkflowAlterationEfModule.SchemaVersion) ||
+            row.ScopeKey != EfRelationalIdentity.Encode(scope) ||
+            row.ScopeKeyHash != EfRelationalIdentity.Hash(scope))
+            throw new InvalidDataException("The alteration job projections do not match its durable content.");
         var job = RuntimeArtifactJson.Deserialize<WorkflowAlterationJobState>(row.ContentJson);
         var checkpoint = job.CheckpointCommitId;
         var claimableAt = job.Status == WorkflowAlterationJobStatus.Pending ? job.CreatedAt.UtcTicks : job.Claim?.ExpiresAt.UtcTicks;
         var valid =
-            EfSchemaVersion.Readable("RuntimeWorkflowAlteration", row.SchemaVersion, RuntimeWorkflowAlterationEfModule.SchemaVersion) &&
             (expectedJobId is null || StringComparer.Ordinal.Equals(job.JobId, expectedJobId)) &&
             StringComparer.Ordinal.Equals(job.TenantPartition, scope) &&
             row.Id == Id(scope, job.JobId) &&
-            row.ScopeKey == EfRelationalIdentity.Encode(scope) &&
-            row.ScopeKeyHash == EfRelationalIdentity.Hash(scope) &&
             row.JobId == EfRelationalIdentity.Encode(job.JobId) &&
             row.JobIdHash == EfRelationalIdentity.Hash(job.JobId) &&
             row.JobIdOrderKey == Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(job.JobId, RuntimeWorkflowAlterationEfModule.IdentityMaximumLength)) &&

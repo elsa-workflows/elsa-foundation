@@ -2,7 +2,7 @@
 # root as context (e.g. src/apps/Elsa.Workbench/Dockerfile).
 #
 # Goal: send only what `dotnet restore`/`publish` needs. Keep repo-root build
-# config (Directory.Packages.props, NuGet.config, *.slnx) and the src/ tree with
+# config (*.props, *.targets, NuGet.config, *.slnx) and the src/ tree with
 # its committed wwwroot assets; drop build output, tests, docs and local dev state.
 
 # --- Build output -----------------------------------------------------------

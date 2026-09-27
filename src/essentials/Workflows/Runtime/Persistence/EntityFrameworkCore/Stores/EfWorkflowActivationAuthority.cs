@@ -249,8 +249,17 @@ public sealed class EfWorkflowActivationAuthority(
         row.Revision = slot.Revision;
     }
 
+    // #1955's idiom - moving the version term to the front of the single identity condition - cannot
+    // apply here: that condition only runs after Deserialize below, so a version term inside it would
+    // still let a skewed row reach the deserializer first (#2108). This early guard keeps the version
+    // check ahead of Deserialize instead, sharing the identity-mismatch message with the later check
+    // rather than duplicating its text.
+    private const string IdentityMismatchMessage = "The persisted EF activation-slot row does not match its identity envelope or authoritative content.";
+
     private static WorkflowActivationSlot Read(WorkflowActivationSlotEntity row, string scope, string? expectedDefinitionId = null, string? expectedSlotName = null)
     {
+        if (EfSchemaVersion.NotReadable("RuntimeActivationSlot", row.SchemaVersion, RuntimeActivationSlotEfModule.SchemaVersion))
+            throw new InvalidDataException(IdentityMismatchMessage);
         WorkflowActivationSlot slot;
         try
         {
@@ -262,8 +271,7 @@ public sealed class EfWorkflowActivationAuthority(
         }
         ValidateIdentity(slot.WorkflowDefinitionId, nameof(slot.WorkflowDefinitionId));
         ValidateIdentity(slot.SlotName, nameof(slot.SlotName));
-        if (EfSchemaVersion.NotReadable("RuntimeActivationSlot", row.SchemaVersion, RuntimeActivationSlotEfModule.SchemaVersion) ||
-            row.Id != RowId(scope, slot.WorkflowDefinitionId, slot.SlotName) ||
+        if (row.Id != RowId(scope, slot.WorkflowDefinitionId, slot.SlotName) ||
             row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
             expectedDefinitionId is not null && slot.WorkflowDefinitionId != expectedDefinitionId ||
             expectedSlotName is not null && slot.SlotName != expectedSlotName ||
@@ -285,7 +293,7 @@ public sealed class EfWorkflowActivationAuthority(
             row.UpdatedAtUtcTicks != slot.UpdatedAt.UtcTicks ||
             row.UpdatedAtOffsetMinutes != (int)slot.UpdatedAt.Offset.TotalMinutes ||
             row.Revision <= 0 || slot.Revision != row.Revision)
-            throw new InvalidDataException("The persisted EF activation-slot row does not match its identity envelope or authoritative content.");
+            throw new InvalidDataException(IdentityMismatchMessage);
         ValidateSource(slot.Source);
         if (slot.ActiveActivationId is null && slot.Source is not null)
             throw new InvalidDataException("An inactive activation slot cannot retain an owner.");

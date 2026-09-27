@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using Xunit;
 using static Elsa.Architecture.Tests.RepoPaths;
 
@@ -16,13 +17,30 @@ namespace Elsa.Architecture.Tests;
 /// over several. The detector itself is pinned by fixtures below, so a scanner that silently stops
 /// finding anything fails too.
 /// </para>
+/// <para>
+/// #2108: within-condition ordering is not enough. Four stores called <c>RuntimeArtifactJson.Deserialize</c>
+/// on a row's content in a statement <em>earlier than</em> the condition that checked its version, so the
+/// version term being first within its own condition never ran before the deserializer had already thrown
+/// on the changed shape a newer schema version wrote. The second guard below widens the rule to: no call
+/// to a method named <c>Deserialize</c> may precede the version check anywhere in its enclosing method,
+/// not just within the condition that holds the check. A fifth instance - <c>EfSchedulerStateStore</c>'s
+/// own custom <c>EfSchedulerStateJson.Deserialize</c> wrapper - surfaced only once the rule stopped
+/// naming specific wrapper classes and started matching the method name itself, which is why the rule
+/// matches any <c>X.Deserialize(...)</c> call rather than a fixed list of receivers.
+/// </para>
+/// <para>
+/// Blind spot: detection here is lexical and scoped to a single method body. It cannot follow a
+/// deserialize call reached through a helper method the version-checking method calls, nor one written
+/// inside a lambda body - either indirection puts the call outside the enclosing-method text this scan
+/// walks, so an out-of-order deserializer hidden behind either one will not be flagged.
+/// </para>
 /// </summary>
 public sealed class EfSchemaVersionOrderingGuardTests
 {
     [Fact]
     public void Schema_version_is_the_first_clause_of_its_condition_in_every_production_source()
     {
-        var sourceRoot = Path.Combine(RepoRoot, "src");
+        var sourceRoot = Path.Join(RepoRoot, "src");
         var violations = Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
             .Where(file => !IsBuildOutput(file))
             .SelectMany(file => FindLateSchemaChecks(File.ReadAllText(file))
@@ -40,7 +58,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
     [Fact]
     public void Guard_scans_the_call_sites_it_claims_to_scan()
     {
-        var sourceRoot = Path.Combine(RepoRoot, "src");
+        var sourceRoot = Path.Join(RepoRoot, "src");
         var callSites = Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
             .Where(file => !IsBuildOutput(file))
             .Sum(file => CountCalls(File.ReadAllText(file)));
@@ -63,6 +81,210 @@ public sealed class EfSchemaVersionOrderingGuardTests
     {
         Assert.True(FindLateSchemaChecks(source).Length == 0, $"The detector wrongly flagged the in-order fixture '{name}'.");
     }
+
+    /// <summary>
+    /// #2108: <c>EfExecutionLivenessStateStore.Read</c>, <c>EfWorkflowHoldStateStore.Read</c>,
+    /// <c>EfWorkflowAlterationStore.ReadPlan</c>, and <c>WorkflowTestScopeEfSupport.Read</c> each had the
+    /// version term first in its own condition (the first guard above accepted all four), but deserialized
+    /// the row's content in an earlier statement that ran unconditionally. This widened scan catches that:
+    /// no deserialize call may precede the version check anywhere in the method that holds it.
+    /// </summary>
+    [Fact]
+    public void No_deserialization_of_row_content_precedes_the_version_check_anywhere_in_its_method()
+    {
+        var sourceRoot = Path.Join(RepoRoot, "src");
+        var violations = Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(file => !IsBuildOutput(file))
+            .SelectMany(file => FindDeserializeBeforeVersionCheck(File.ReadAllText(file))
+                .Select(line => $"{Path.GetRelativePath(RepoRoot, file)}({line})"))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            violations.Length == 0,
+            "No call to a method named Deserialize may run before EfSchemaVersion.Readable/NotReadable " +
+            "anywhere in the same method, or a skewed row's changed shape is reported as corruption before " +
+            "the version check ever gets to run (#2108). Offending call sites:" +
+            Environment.NewLine + string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
+    public void Widened_guard_examines_the_stores_number_2108_fixed()
+    {
+        var sourceRoot = Path.Join(RepoRoot, "src");
+        var deserializeCallSitesByFile = Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(file => !IsBuildOutput(file))
+            .GroupBy(Path.GetFileName)
+            .ToDictionary(group => group.Key!, group => group.Sum(file => CountDeserializeCalls(File.ReadAllText(file))));
+
+        // If any of these were renamed or merged elsewhere, this floor keeps the widened scan honest about
+        // still reaching the exact call sites #2108 fixed, rather than passing because it stopped looking.
+        // EfSchedulerStateStore.cs joined this list in round 2, once the rule stopped naming specific
+        // wrapper classes and started matching any Deserialize call - which is how its own custom
+        // EfSchedulerStateJson.Deserialize wrapper surfaced.
+        string[] storesFixedByIssue2108 =
+        [
+            "EfExecutionLivenessStateStore.cs",
+            "EfWorkflowHoldStateStore.cs",
+            "EfWorkflowAlterationStore.cs",
+            "WorkflowTestScopeEfSupport.cs",
+            "EfSchedulerStateStore.cs"
+        ];
+
+        foreach (var store in storesFixedByIssue2108)
+        {
+            Assert.True(
+                deserializeCallSitesByFile.TryGetValue(store, out var count) && count > 0,
+                $"Expected the widened scan to examine '{store}' - one of the stores #2108 fixed - and find at least one Deserialize call site in it.");
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(DeserializeBeforeCheckFixtures))]
+    public void Widened_detector_flags_a_deserialize_call_earlier_in_the_method_than_the_version_check(string name, string source)
+    {
+        Assert.True(FindDeserializeBeforeVersionCheck(source).Length > 0, $"The widened detector missed the fixture '{name}'.");
+    }
+
+    [Theory]
+    [MemberData(nameof(DeserializeAfterCheckFixtures))]
+    public void Widened_detector_accepts_a_deserialize_call_that_follows_the_version_check(string name, string source)
+    {
+        Assert.True(FindDeserializeBeforeVersionCheck(source).Length == 0, $"The widened detector wrongly flagged the fixture '{name}'.");
+    }
+
+    [Theory]
+    [MemberData(nameof(InOrderFixtures))]
+    public void Widened_detector_still_accepts_every_original_in_order_fixture(string name, string source)
+    {
+        Assert.True(FindDeserializeBeforeVersionCheck(source).Length == 0, $"The widened detector wrongly flagged the original in-order fixture '{name}'.");
+    }
+
+    public static TheoryData<string, string> DeserializeBeforeCheckFixtures() => new()
+    {
+        {
+            "deserialize as an earlier statement, version term still first within its own condition",
+            """
+            var state = RuntimeArtifactJson.Deserialize<State>(row.ContentJson);
+            var valid =
+                EfSchemaVersion.Readable("M", row.SchemaVersion, Module.SchemaVersion) &&
+                row.Id == state.Id;
+            if (!valid)
+                throw new InvalidDataException("corrupt");
+            """
+        },
+        {
+            "deserialize inside an earlier try block, guard clause runs afterwards",
+            """
+            Row state;
+            try { state = RuntimeArtifactJson.Deserialize<Row>(row.ContentJson); }
+            catch (JsonException exception) { throw new InvalidDataException("bad json", exception); }
+            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Id != state.Id)
+                throw new InvalidDataException("corrupt");
+            """
+        },
+        {
+            "PublishingEfJson.Deserialize as an earlier statement",
+            """
+            var receipt = PublishingEfJson.Deserialize<Receipt>(row.Content, "receipt");
+            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Id != receipt.Id)
+                throw new InvalidDataException("corrupt");
+            """
+        },
+        {
+            "bare JsonSerializer.Deserialize as an earlier statement",
+            """
+            var content = JsonSerializer.Deserialize<Content>(row.ContentJson, JsonOptions) ?? throw new JsonException("empty");
+            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Id != content.Id)
+                throw new InvalidDataException("corrupt");
+            """
+        },
+        {
+            "a custom wrapper class's Deserialize as an earlier statement",
+            """
+            var state = FooJson.Deserialize(row.ContentJson);
+            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Id != state.Id)
+                throw new InvalidDataException("corrupt");
+            """
+        }
+    };
+
+    public static TheoryData<string, string> DeserializeAfterCheckFixtures() => new()
+    {
+        {
+            "version check first, deserialize follows as the next statement",
+            """
+            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Revision <= 0)
+                throw new InvalidDataException("corrupt");
+            var state = RuntimeArtifactJson.Deserialize<Row>(row.ContentJson);
+            return state;
+            """
+        },
+        {
+            "version check and deserialize both inside the same wrapping try, check first",
+            """
+            try
+            {
+                if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Revision <= 0)
+                    throw new InvalidDataException("corrupt");
+                var state = RuntimeArtifactJson.Deserialize<Row>(row.ContentJson);
+                return state;
+            }
+            catch (JsonException exception) { throw new InvalidDataException("bad json", exception); }
+            """
+        },
+        {
+            "an unrelated deserialize call in a different, earlier method",
+            """
+            private static Cursor DecodeCursor(string token) => RuntimeArtifactJson.Deserialize<Cursor>(token);
+
+            private static Row Read(Entity row, string scope)
+            {
+                if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Revision <= 0)
+                    throw new InvalidDataException("corrupt");
+                return Project(row);
+            }
+            """
+        },
+        {
+            "version check first, PublishingEfJson.Deserialize follows as the next statement",
+            """
+            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Revision <= 0)
+                throw new InvalidDataException("corrupt");
+            var receipt = PublishingEfJson.Deserialize<Receipt>(row.Content, "receipt");
+            return receipt;
+            """
+        },
+        {
+            "version check first, bare JsonSerializer.Deserialize follows as the next statement",
+            """
+            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Revision <= 0)
+                throw new InvalidDataException("corrupt");
+            var content = JsonSerializer.Deserialize<Content>(row.ContentJson, JsonOptions) ?? throw new JsonException("empty");
+            return content;
+            """
+        },
+        {
+            "version check first, a custom wrapper class's Deserialize follows as the next statement",
+            """
+            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Revision <= 0)
+                throw new InvalidDataException("corrupt");
+            var state = FooJson.Deserialize(row.ContentJson);
+            return state;
+            """
+        },
+        {
+            "the wrapper method's own declaration is not mistaken for a call",
+            """
+            public static SchedulerState Deserialize(string content)
+            {
+                if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Revision <= 0)
+                    throw new InvalidDataException("corrupt");
+                return Project(content);
+            }
+            """
+        }
+    };
 
     public static TheoryData<string, string> OutOfOrderFixtures() => new()
     {
@@ -193,6 +415,159 @@ public sealed class EfSchemaVersionOrderingGuardTests
     };
 
     private static readonly string[] CallTokens = ["EfSchemaVersion.Readable(", "EfSchemaVersion.NotReadable("];
+
+    /// <summary>
+    /// Matches any member-access call to a method named <c>Deserialize</c> - <c>X.Deserialize(</c>,
+    /// <c>X.Deserialize&lt;T&gt;(</c>, or a nested-generic argument list such as
+    /// <c>X.Deserialize&lt;Dictionary&lt;string, string&gt;&gt;(</c> - regardless of the receiver. A fixed
+    /// token list (<c>RuntimeArtifactJson.Deserialize</c>, <c>PublishingEfJson.Deserialize</c>, ...) missed
+    /// custom wrappers like <c>EfSchedulerStateJson.Deserialize</c> (#2108); matching the method name
+    /// itself instead of naming every wrapper class closes that gap. The lookbehind for a preceding
+    /// <c>.</c> is deliberate: it matches call sites (always member-access in this codebase) and skips
+    /// the wrapper methods' own declarations, e.g. <c>public static T Deserialize&lt;T&gt;(string value)</c>,
+    /// which never has a <c>.</c> immediately before <c>Deserialize</c>.
+    /// </summary>
+    private static readonly Regex DeserializeCallPattern = new(@"(?<=\.)\s*Deserialize\s*(?:<[^()]*>)?\s*\(", RegexOptions.Compiled);
+
+    private static int CountDeserializeCalls(string source)
+    {
+        var masked = MaskLiteralsAndComments(source);
+        return DeserializeCallPattern.Matches(masked).Count;
+    }
+
+    /// <summary>
+    /// Returns the one-based line number of every <c>EfSchemaVersion.Readable</c> /
+    /// <c>NotReadable</c> call that has a <see cref="DeserializeCallPattern"/> match earlier in its
+    /// enclosing method - whether that deserialize call sits in an earlier statement, an earlier
+    /// nested <c>try</c>/<c>if</c>/<c>using</c> block, or the same condition <see cref="HasEarlierClause"/>
+    /// already covers.
+    /// </summary>
+    private static int[] FindDeserializeBeforeVersionCheck(string source)
+    {
+        var masked = MaskLiteralsAndComments(source);
+        var deserializeCallIndices = DeserializeCallPattern.Matches(masked).Select(match => match.Index).Order().ToArray();
+        var violations = new List<int>();
+        foreach (var token in CallTokens)
+        {
+            var index = masked.IndexOf(token, StringComparison.Ordinal);
+            while (index >= 0)
+            {
+                var methodStart = FindEnclosingMethodStart(masked, index);
+                if (deserializeCallIndices.Any(deserializeIndex => deserializeIndex >= methodStart && deserializeIndex < index))
+                    violations.Add(LineOf(source, index));
+
+                index = masked.IndexOf(token, index + token.Length, StringComparison.Ordinal);
+            }
+        }
+
+        return violations.Order().ToArray();
+    }
+
+    /// <summary>
+    /// Walks outward from <paramref name="position"/> through nested control-flow blocks (<c>try</c>,
+    /// <c>catch</c>, <c>finally</c>, <c>if</c>, <c>while</c>, <c>for</c>, <c>foreach</c>, <c>using</c>,
+    /// <c>lock</c>, <c>switch</c>, <c>else</c>, <c>do</c>, <c>checked</c>, <c>unchecked</c>, <c>fixed</c>,
+    /// <c>unsafe</c>) until it reaches the block that is <paramref name="position"/>'s enclosing method,
+    /// local function, lambda, or accessor body, and returns the index just past that block's opening
+    /// brace. Returns <c>0</c> when no enclosing brace exists at all, so a bare statement fixture with no
+    /// wrapping method is treated as the whole method body.
+    /// </summary>
+    private static int FindEnclosingMethodStart(string masked, int position)
+    {
+        while (true)
+        {
+            var brace = FindNearestEnclosingBrace(masked, position);
+            if (brace < 0)
+                return 0;
+
+            if (!IsControlBlockBrace(masked, brace))
+                return brace + 1;
+
+            position = brace;
+        }
+    }
+
+    /// <summary>Finds the index of the nearest unmatched '{' walking backward from <paramref name="position"/>.</summary>
+    private static int FindNearestEnclosingBrace(string masked, int position)
+    {
+        var depth = 0;
+        for (var index = position - 1; index >= 0; index--)
+        {
+            var current = masked[index];
+            if (current == '}')
+            {
+                depth++;
+            }
+            else if (current == '{')
+            {
+                if (depth > 0)
+                    depth--;
+                else
+                    return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static readonly string[] ControlBlockKeywords =
+        ["try", "finally", "else", "do", "unsafe", "checked", "unchecked", "fixed"];
+
+    private static readonly string[] ControlConditionKeywords =
+        ["if", "while", "for", "foreach", "using", "lock", "catch", "switch"];
+
+    /// <summary>
+    /// True when the '{' at <paramref name="brace"/> opens a control-flow block rather than a member,
+    /// local-function, lambda, or accessor body - i.e. <see cref="FindEnclosingMethodStart"/> should keep
+    /// stepping outward past it.
+    /// </summary>
+    private static bool IsControlBlockBrace(string masked, int brace)
+    {
+        var start = brace;
+        while (start > 0 && char.IsWhiteSpace(masked[start - 1]))
+            start--;
+
+        if (start > 0 && masked[start - 1] == ')')
+        {
+            var openParen = FindMatchingOpenParen(masked, start - 1);
+            return openParen >= 0 && PrecedingWordIsOneOf(masked, openParen, ControlConditionKeywords);
+        }
+
+        return PrecedingWordIsOneOf(masked, start, ControlBlockKeywords);
+    }
+
+    private static int FindMatchingOpenParen(string masked, int closeParenIndex)
+    {
+        var depth = 0;
+        for (var index = closeParenIndex; index >= 0; index--)
+        {
+            var current = masked[index];
+            if (current == ')')
+                depth++;
+            else if (current == '(')
+            {
+                depth--;
+                if (depth == 0)
+                    return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static bool PrecedingWordIsOneOf(string masked, int end, string[] keywords)
+    {
+        var index = end;
+        while (index > 0 && char.IsWhiteSpace(masked[index - 1]))
+            index--;
+
+        var wordEnd = index;
+        var wordStart = index;
+        while (wordStart > 0 && (char.IsLetterOrDigit(masked[wordStart - 1]) || masked[wordStart - 1] == '_'))
+            wordStart--;
+
+        return wordStart != wordEnd && keywords.Contains(masked[wordStart..wordEnd], StringComparer.Ordinal);
+    }
 
     private static int CountCalls(string source)
     {

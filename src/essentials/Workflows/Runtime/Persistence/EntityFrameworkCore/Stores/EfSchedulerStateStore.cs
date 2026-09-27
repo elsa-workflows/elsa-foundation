@@ -106,15 +106,18 @@ public sealed class EfSchedulerStateStore(
         row.ScopeKey = replacement.ScopeKey; row.ScopeKeyHash = replacement.ScopeKeyHash; row.WorkflowExecutionId = replacement.WorkflowExecutionId; row.WorkflowExecutionIdHash = replacement.WorkflowExecutionIdHash; row.WorkflowExecutionIdOrderKey = replacement.WorkflowExecutionIdOrderKey; row.Collection = replacement.Collection; row.ContentJson = replacement.ContentJson; row.SchemaVersion = replacement.SchemaVersion; row.Revision = revision;
     }
 
+    // #2108: the version check must run before EfSchedulerStateJson.Deserialize ever sees this row's
+    // content, or a newer module's changed shape is reported as corruption instead of skew. It cannot
+    // live in the identity condition below because that condition needs the deserialized state.
     internal static SchedulerState Read(SchedulerStateEntity row, string scope, string? expectedWorkflow = null)
     {
-        if (row.Revision <= 0 ||
+        if (EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) ||
+            row.Revision <= 0 ||
             row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope) ||
             row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope))
-            throw new InvalidDataException("The scheduler-state row scope or revision projection is corrupt.");
+            throw new InvalidDataException("The scheduler-state row scope, schema, or revision projection is corrupt.");
         var state = EfSchedulerStateJson.Deserialize(row.ContentJson);
-        if (EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) ||
-            (expectedWorkflow is not null && !StringComparer.Ordinal.Equals(expectedWorkflow, state.WorkflowExecutionId)) ||
+        if ((expectedWorkflow is not null && !StringComparer.Ordinal.Equals(expectedWorkflow, state.WorkflowExecutionId)) ||
             row.WorkflowExecutionId != EfRuntimeOperationalStoreSupport.Encode(state.WorkflowExecutionId) ||
             row.WorkflowExecutionIdHash != EfRuntimeOperationalStoreSupport.Hash(state.WorkflowExecutionId) ||
             row.WorkflowExecutionIdOrderKey != EfRuntimeOperationalStoreSupport.Order(state.WorkflowExecutionId) ||

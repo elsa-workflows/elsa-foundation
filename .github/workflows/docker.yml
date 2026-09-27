@@ -7,6 +7,13 @@ name: Docker Images
 # elsaworkflows/elsa-server name is reserved for the clean host once it exists.
 # The Elsa major version (4) is encoded in the image tags:
 #   - pushes to main produce latest + 4.0.0-preview.<run_number>
+# Pull requests touching the same paths build both images for both platforms
+# but push nothing, so a Dockerfile that no longer builds fails on the PR, not
+# on main. Without this, #2087 added a root props file the Dockerfiles did not
+# copy and main stayed red for three merges before anyone saw it. A PR's run
+# checks its merge with main as of when it ran, not as of when it merges, so a
+# root file that lands on main in between still reaches main untested (#2114's PackageRanges.targets). With push off
+# the builder skips registry login and signing, so fork PRs need no secrets.
 # Docker's maintained builder fans the platforms out to native x64 and ARM64
 # GitHub-hosted runners, then assembles the multi-platform manifest.
 #
@@ -29,14 +36,17 @@ name: Docker Images
 on:
   push:
     branches: [main]
-    paths:
+    paths: &image-inputs
       - .dockerignore
       - .github/workflows/docker.yml
-      - Directory.Build.props
-      - Directory.Packages.props
+      - '*.props'
+      - '*.targets'
       - Elsa.Server.slnx
       - NuGet.config
       - src/**
+  pull_request:
+    branches: [main]
+    paths: *image-inputs
 
 permissions:
   contents: read
@@ -60,7 +70,7 @@ jobs:
       id-token: write
     with:
       output: image
-      push: true
+      push: ${{ github.event_name != 'pull_request' }}
       context: .
       file: src/apps/Elsa.Workbench/Dockerfile
       platforms: linux/amd64,linux/arm64
@@ -92,7 +102,7 @@ jobs:
       id-token: write
     with:
       output: image
-      push: true
+      push: ${{ github.event_name != 'pull_request' }}
       context: .
       file: src/apps/Elsa.Foundation.Host/Dockerfile
       platforms: linux/amd64,linux/arm64
