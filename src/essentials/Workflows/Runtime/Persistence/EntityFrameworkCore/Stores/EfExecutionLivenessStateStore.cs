@@ -469,16 +469,16 @@ public sealed class EfExecutionLivenessStateStore(
     // Internal checkpoint staging uses the same envelope/projection validation before touching the ownership fence.
     internal static ExecutionLivenessState Read(ExecutionLivenessStateEntity row, string scope, string? expectedWorkflow = null, string? expectedOperational = null)
     {
-        if (row.Revision <= 0 || row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) || row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))
-            throw new InvalidDataException("The execution-liveness row scope or revision projection is corrupt.");
+        if (EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) ||
+            row.Revision <= 0 || row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) || row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))
+            throw new InvalidDataException("The execution-liveness row scope, schema, or revision projection is corrupt.");
         ExecutionLivenessState state;
         try { state = RuntimeArtifactJson.Deserialize<ExecutionLivenessState>(row.ContentJson); }
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
         { throw new InvalidDataException("The persisted execution-liveness state is not valid current data.", exception); }
         var lease = state.ExecutionLease;
         var heartbeat = state.Heartbeat;
-        var valid = EfSchemaVersion.Readable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) &&
-                    (expectedWorkflow is null || state.WorkflowExecutionId == expectedWorkflow) &&
+        var valid = (expectedWorkflow is null || state.WorkflowExecutionId == expectedWorkflow) &&
                     (expectedOperational is null || state.ExecutionLivenessStateId == expectedOperational) &&
                     row.Id == EfRuntimeOperationalStoreSupport.CompositeId(scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId) &&
                     row.WorkflowExecutionId == EfRuntimeOperationalStoreSupport.Encode(state.WorkflowExecutionId) && row.WorkflowExecutionIdHash == EfRuntimeOperationalStoreSupport.Hash(state.WorkflowExecutionId) && row.WorkflowExecutionIdOrderKey == EfRuntimeOperationalStoreSupport.Order(state.WorkflowExecutionId) &&
