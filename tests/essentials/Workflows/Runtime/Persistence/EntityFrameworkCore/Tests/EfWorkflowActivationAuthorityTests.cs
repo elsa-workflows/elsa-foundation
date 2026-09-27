@@ -176,15 +176,10 @@ public sealed class EfWorkflowActivationAuthorityTests
 
         // #2108: the version check has to run before the deserializer ever sees this row's content, or a
         // newer module's changed shape is reported as corruption instead of skew.
-        row.SchemaVersion = "2.0.0";
-        row.ContentJson = "not-json";
-        await context.SaveChangesAsync();
-        context.ChangeTracker.Clear();
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(context, v => row.SchemaVersion = v, v => row.ContentJson = v);
 
         var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => authority.FindAsync("definition-a", "slot-a").AsTask());
-        Assert.Equal("RuntimeActivationSlot", skew.Module);
-        Assert.Equal("2.0.0", skew.Found);
-        Assert.Equal(RuntimeActivationSlotEfModule.SchemaVersion, skew.Expected);
+        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "RuntimeActivationSlot", RuntimeActivationSlotEfModule.SchemaVersion);
     }
 
     [Fact]

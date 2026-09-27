@@ -21,8 +21,15 @@ namespace Elsa.Architecture.Tests;
 /// on a row's content in a statement <em>earlier than</em> the condition that checked its version, so the
 /// version term being first within its own condition never ran before the deserializer had already thrown
 /// on the changed shape a newer schema version wrote. The second guard below widens the rule to: no
-/// <c>RuntimeArtifactJson.Deserialize</c> call may precede the version check anywhere in its enclosing
-/// method, not just within the condition that holds the check.
+/// <c>RuntimeArtifactJson.Deserialize</c>, <c>PublishingEfJson.Deserialize</c>, or <c>JsonSerializer.Deserialize</c>
+/// call may precede the version check anywhere in its enclosing method, not just within the condition
+/// that holds the check.
+/// </para>
+/// <para>
+/// Blind spot: detection here is lexical and scoped to a single method body. It cannot follow a
+/// deserialize call reached through a helper method the version-checking method calls, nor one written
+/// inside a lambda body - either indirection puts the call outside the enclosing-method text this scan
+/// walks, so an out-of-order deserializer hidden behind either one will not be flagged.
 /// </para>
 /// </summary>
 public sealed class EfSchemaVersionOrderingGuardTests
@@ -168,6 +175,22 @@ public sealed class EfSchemaVersionOrderingGuardTests
             if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Id != state.Id)
                 throw new InvalidDataException("corrupt");
             """
+        },
+        {
+            "PublishingEfJson.Deserialize as an earlier statement",
+            """
+            var receipt = PublishingEfJson.Deserialize<Receipt>(row.Content, "receipt");
+            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Id != receipt.Id)
+                throw new InvalidDataException("corrupt");
+            """
+        },
+        {
+            "bare JsonSerializer.Deserialize as an earlier statement",
+            """
+            var content = JsonSerializer.Deserialize<Content>(row.ContentJson, JsonOptions) ?? throw new JsonException("empty");
+            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Id != content.Id)
+                throw new InvalidDataException("corrupt");
+            """
         }
     };
 
@@ -206,6 +229,24 @@ public sealed class EfSchemaVersionOrderingGuardTests
                     throw new InvalidDataException("corrupt");
                 return Project(row);
             }
+            """
+        },
+        {
+            "version check first, PublishingEfJson.Deserialize follows as the next statement",
+            """
+            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Revision <= 0)
+                throw new InvalidDataException("corrupt");
+            var receipt = PublishingEfJson.Deserialize<Receipt>(row.Content, "receipt");
+            return receipt;
+            """
+        },
+        {
+            "version check first, bare JsonSerializer.Deserialize follows as the next statement",
+            """
+            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Revision <= 0)
+                throw new InvalidDataException("corrupt");
+            var content = JsonSerializer.Deserialize<Content>(row.ContentJson, JsonOptions) ?? throw new JsonException("empty");
+            return content;
             """
         }
     };
@@ -339,17 +380,26 @@ public sealed class EfSchemaVersionOrderingGuardTests
     };
 
     private static readonly string[] CallTokens = ["EfSchemaVersion.Readable(", "EfSchemaVersion.NotReadable("];
-    private const string DeserializeToken = "RuntimeArtifactJson.Deserialize";
+
+    /// <summary>
+    /// The row-content deserializers used by EF stores. <c>RuntimeArtifactJson.Deserialize</c> and
+    /// <c>PublishingEfJson.Deserialize</c> are the named wrappers; bare <c>JsonSerializer.Deserialize</c>
+    /// covers the stores that call it directly on row content instead of through one of those wrappers.
+    /// </summary>
+    private static readonly string[] DeserializeTokens = ["RuntimeArtifactJson.Deserialize", "PublishingEfJson.Deserialize", "JsonSerializer.Deserialize"];
 
     private static int CountDeserializeCalls(string source)
     {
         var masked = MaskLiteralsAndComments(source);
         var count = 0;
-        var index = masked.IndexOf(DeserializeToken, StringComparison.Ordinal);
-        while (index >= 0)
+        foreach (var token in DeserializeTokens)
         {
-            count++;
-            index = masked.IndexOf(DeserializeToken, index + DeserializeToken.Length, StringComparison.Ordinal);
+            var index = masked.IndexOf(token, StringComparison.Ordinal);
+            while (index >= 0)
+            {
+                count++;
+                index = masked.IndexOf(token, index + token.Length, StringComparison.Ordinal);
+            }
         }
 
         return count;
@@ -372,7 +422,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             while (index >= 0)
             {
                 var methodStart = FindEnclosingMethodStart(masked, index);
-                if (masked.IndexOf(DeserializeToken, methodStart, index - methodStart, StringComparison.Ordinal) >= 0)
+                if (DeserializeTokens.Any(deserializeToken => masked.IndexOf(deserializeToken, methodStart, index - methodStart, StringComparison.Ordinal) >= 0))
                     violations.Add(LineOf(source, index));
 
                 index = masked.IndexOf(token, index + token.Length, StringComparison.Ordinal);

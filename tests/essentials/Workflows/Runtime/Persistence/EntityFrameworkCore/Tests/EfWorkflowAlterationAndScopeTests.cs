@@ -279,15 +279,10 @@ public sealed class EfWorkflowAlterationAndScopeTests
 
         // #2108: the version check has to run before the deserializer ever sees this row's content, or a
         // newer module's changed shape is reported as corruption instead of skew.
-        row.SchemaVersion = "2.0.0";
-        row.ContentJson = "not-json";
-        await fixture.Context.SaveChangesAsync();
-        fixture.Context.ChangeTracker.Clear();
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = v, v => row.ContentJson = v);
 
         var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.Store.FindPlanAsync(plan.PlanId).AsTask());
-        Assert.Equal("RuntimeWorkflowAlteration", skew.Module);
-        Assert.Equal("2.0.0", skew.Found);
-        Assert.Equal(RuntimeWorkflowAlterationEfModule.SchemaVersion, skew.Expected);
+        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "RuntimeWorkflowAlteration", RuntimeWorkflowAlterationEfModule.SchemaVersion);
     }
 
     [Fact]
@@ -298,16 +293,11 @@ public sealed class EfWorkflowAlterationAndScopeTests
         var plan = await SealedPlanAsync(fixture, "skewed-job-plan");
         var row = await fixture.Context.WorkflowAlterationJobs.SingleAsync();
 
-        row.SchemaVersion = "2.0.0";
-        row.ContentJson = "not-json";
-        await fixture.Context.SaveChangesAsync();
-        fixture.Context.ChangeTracker.Clear();
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = v, v => row.ContentJson = v);
 
         var jobId = WorkflowAlterationIdentity.CreateJobId(plan.PlanId, "execution-1");
         var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.Store.FindJobAsync(jobId).AsTask());
-        Assert.Equal("RuntimeWorkflowAlteration", skew.Module);
-        Assert.Equal("2.0.0", skew.Found);
-        Assert.Equal(RuntimeWorkflowAlterationEfModule.SchemaVersion, skew.Expected);
+        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "RuntimeWorkflowAlteration", RuntimeWorkflowAlterationEfModule.SchemaVersion);
     }
 
     [Fact]
@@ -319,15 +309,10 @@ public sealed class EfWorkflowAlterationAndScopeTests
         await fixture.ScopeStore.CreateAsync(scope, DateTimeOffset.UtcNow);
         var row = await fixture.Context.WorkflowTestScopes.SingleAsync();
 
-        row.SchemaVersion = "2.0.0";
-        row.ContentJson = "not-json";
-        await fixture.Context.SaveChangesAsync();
-        fixture.Context.ChangeTracker.Clear();
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = v, v => row.ContentJson = v);
 
         var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.ScopeStore.FindAsync(scope.ScopeId).AsTask());
-        Assert.Equal("RuntimeWorkflowTestScope", skew.Module);
-        Assert.Equal("2.0.0", skew.Found);
-        Assert.Equal(RuntimeWorkflowTestScopeEfModule.SchemaVersion, skew.Expected);
+        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "RuntimeWorkflowTestScope", RuntimeWorkflowTestScopeEfModule.SchemaVersion);
     }
 
     [Fact]
