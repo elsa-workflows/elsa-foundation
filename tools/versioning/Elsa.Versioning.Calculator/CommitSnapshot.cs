@@ -154,20 +154,15 @@ internal sealed class CommitSnapshot
         var files = new Dictionary<string, string>(StringComparer.Ordinal);
         var pending = new Queue<string>();
 
-        foreach (var file in owned.GetValueOrDefault(project.Path) ?? [])
-        {
-            if (RepositoryPath.IsMsBuildFile(file.Path))
-                pending.Enqueue(file.Path);
-        }
+        foreach (var file in (owned.GetValueOrDefault(project.Path) ?? []).Where(file => RepositoryPath.IsMsBuildFile(file.Path)))
+            pending.Enqueue(file.Path);
 
         foreach (var directory in RepositoryPath.SelfAndAncestors(project.Directory).Where(directory => directory != project.Directory))
         {
-            foreach (var entry in byDirectory.GetValueOrDefault(directory) ?? [])
-            {
-                var name = entry.Path[directory.Length..].ToLowerInvariant();
-                if (AmbientNames.Contains(name) && entry.Path != CentralPackages.RelativePath)
-                    pending.Enqueue(entry.Path);
-            }
+            var ambientEntries = (byDirectory.GetValueOrDefault(directory) ?? []).Where(entry =>
+                AmbientNames.Contains(entry.Path[directory.Length..].ToLowerInvariant()) && entry.Path != CentralPackages.RelativePath);
+            foreach (var entry in ambientEntries)
+                pending.Enqueue(entry.Path);
         }
 
         while (pending.TryDequeue(out var path))
