@@ -49,11 +49,9 @@ internal static class RepositoryPath
             return null;
 
         var segments = new List<string>();
-        foreach (var segment in (path.StartsWith('/') ? path : "/" + relativeTo + path).Split('/', StringSplitOptions.RemoveEmptyEntries))
+        var components = (path.StartsWith('/') ? path : "/" + relativeTo + path).Split('/', StringSplitOptions.RemoveEmptyEntries).Where(segment => segment != ".");
+        foreach (var segment in components)
         {
-            if (segment == ".")
-                continue;
-
             if (segment == "..")
             {
                 if (segments.Count == 0 || segments[^1].Contains('*', StringComparison.Ordinal))

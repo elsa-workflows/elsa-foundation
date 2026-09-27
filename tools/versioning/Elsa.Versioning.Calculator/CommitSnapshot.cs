@@ -58,11 +58,9 @@ internal sealed class CommitSnapshot
             Collect(byDirectory, directory, entry);
 
             // Longest matching project directory. Two projects sharing one directory both own it: never fewer inputs.
-            foreach (var candidate in RepositoryPath.SelfAndAncestors(directory).Reverse())
+            foreach (var candidate in RepositoryPath.SelfAndAncestors(directory).Reverse().Where(projectDirectories.ContainsKey))
             {
-                if (!projectDirectories.TryGetValue(candidate, out var owners))
-                    continue;
-                foreach (var owner in owners)
+                foreach (var owner in projectDirectories[candidate])
                     Collect(owned, owner.Path, entry);
                 break;
             }
@@ -127,12 +125,10 @@ internal sealed class CommitSnapshot
                 entries.TryAdd(PackageInputs.FilePrefix + path, value);
 
             var readers = buildFiles.Keys.Where(RepositoryPath.IsMsBuildFile).Select(path => (Path: path, File: BuildFile(path))).Where(file => file.File is not null).ToArray();
-            foreach (var file in owned.GetValueOrDefault(project.Path) ?? [])
-            {
-                if (IsDocumentation(file.Path) && !readers.Any(reader => reader.File!.Names(file.Path, project.Directory, reader.Path)))
-                    continue;
+            var includedFiles = (owned.GetValueOrDefault(project.Path) ?? []).Where(file =>
+                !IsDocumentation(file.Path) || readers.Any(reader => reader.File!.Names(file.Path, project.Directory, reader.Path)));
+            foreach (var file in includedFiles)
                 entries[PackageInputs.FilePrefix + file.Path] = $"{file.Mode} {file.ObjectId}";
-            }
 
             foreach (var edge in project.Edges.Where(edge => !edge.Internal))
             {
@@ -190,12 +186,10 @@ internal sealed class CommitSnapshot
                 ? $"{entry.Mode} {entry.ObjectId}"
                 : build.ContentDigest;
 
-            foreach (var import in RepositoryPath.IsMsBuildFile(path) ? build!.Imports : [])
+            // The usual chaining of a nested Directory.Build.props to the one above it: already an input.
+            var imports = (RepositoryPath.IsMsBuildFile(path) ? build!.Imports : []).Where(import => !ImportsAmbientFileAbove(import));
+            foreach (var import in imports)
             {
-                // The usual chaining of a nested Directory.Build.props to the one above it: already an input.
-                if (ImportsAmbientFileAbove(import))
-                    continue;
-
                 var resolved = RepositoryPath.Expand(import, RepositoryPath.DirectoryOf(path), RepositoryPath.DirectoryOf(path), project.Directory);
                 if (resolved is null || resolved.Contains('*', StringComparison.Ordinal) || resolved.Contains('?', StringComparison.Ordinal))
                     throw new InvalidOperationException(
