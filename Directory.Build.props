@@ -4,9 +4,11 @@
     Shared build settings for every project in the repository.
 
     Properties set here are imported before each project's own body, so any
-    project can still override them locally, with one exception: ElsaVersionLine
-    and ElsaVersionLineAMembers are derived from VersionLines.props, not meant to
-    be set anywhere else, and the ElsaVerifyVersionLine target below enforces that.
+    project can still override them locally, with two exceptions: ElsaVersionLine,
+    ElsaVersionLineAMembers, ElsaVersion and ElsaContractsVersion come from
+    VersionLines.props, not meant to be set anywhere else, and the
+    ElsaVerifyVersionLine target below enforces that; and a src/ project's
+    package version comes from PackageVersioning.props, which enforces that itself.
     Two projects deliberately keep their own copies rather than inheriting:
 
       - src/essentials/Workflows/Design/CodeGeneration targets netstandard2.0 as a
@@ -14,8 +16,6 @@
 
       - The former src/essentials/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore
         tree was retired with issue #1482 together with its frozen oracle and ratchet.
-
-    Still deliberately absent: Version. CI injects /p:Version.
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -27,7 +27,7 @@
     Version line, ADR 0067. VersionLines.props holds the one reviewed Line A list; this turns it into
     a per-project signal every project can read from its own $(ElsaVersionLine), without repeating the
     list or re-parsing it per project. #2078 reads it below to enable PublicApiAnalyzers on Line A;
-    #2080 will read it to choose the version property.
+    PackageVersioning.props reads it to choose between ElsaVersion and ElsaContractsVersion.
 
     The membership check is a property function ($(...Contains(...))), not an item-list Condition,
     because outside a Target MSBuild rejects an item-list reference in a PropertyGroup Condition
@@ -44,40 +44,57 @@
 
   <!--
     ADR 0067 build-time check. VersionLineOwnershipGuardTests (tests/essentials/Architecture) is a static
-    scan proving no file under src/ or tests/ sets ElsaVersionLine or ElsaVersionLineAMembers, but a static
-    scan has two blind spots: a global property passed on the command line (/p:ElsaVersionLine=... or
-    /p:ElsaVersionLineAMembers=...), which wins over any props-file assignment and never appears in a file
-    at all, and any setter that only takes effect at evaluation time from a build file the scan doesn't
-    cover - it catches such a setter wherever the file lives, whether inside src/tests or outside them; a
-    setter inside a target that runs after this check, or a CreateProperty task, is outside both this
-    check and the static scan. This target closes the two gaps it does cover by re-reading
-    VersionLines.props directly with XmlPeek - independently of the Import above - and comparing that
-    peeked value against what this project actually evaluated ElsaVersionLineAMembers and ElsaVersionLine
-    to.
+    scan proving no file under src/ or tests/ sets ElsaVersionLine or ElsaVersionLineAMembers, and
+    NoLiteralProjectVersionGuardTests proves no project under src/ sets ElsaVersion or ElsaContractsVersion,
+    but a static scan has two blind spots: a global property passed on the command line
+    (/p:ElsaVersionLine=..., /p:ElsaVersion=... and the like), which wins over any props-file assignment and
+    never appears in a file at all, and any setter that only takes effect at evaluation time from a build
+    file the scan doesn't cover - it catches such a setter wherever the file lives, whether inside src/tests
+    or outside them; a setter inside a target that runs after this check, or a CreateProperty task, is
+    outside both this check and the static scans. This target closes the two gaps it does cover by
+    re-reading VersionLines.props directly with XmlPeek - independently of the Import above - and comparing
+    the peeked values against what this project actually evaluated ElsaVersionLineAMembers, ElsaVersionLine,
+    ElsaVersion and ElsaContractsVersion to.
 
-    It runs on BeforeBuild and GenerateNuspec, on every project, so a mismatch fails the build - or the
-    pack - instead of silently acting on the wrong line until someone happens to inspect the property.
-    GenerateNuspec is there because packages.yml packs with dotnet pack's no-build flag, in a separate
-    invocation after building, which never runs BeforeBuild, and #2080 will read $(ElsaVersionLine) at
-    pack time, so a pack-only /p: override must be caught too; within one invocation MSBuild runs it once,
-    and a build followed by a separate no-build pack simply checks twice. It lives here, in this .props
-    file, rather than in a Directory.Build.targets, because a target can be defined in a .props file -
-    keeping the check beside the computation it verifies is the point - and because a Directory.Build.targets
-    would be skipped by any nested Directory.Build.targets that forgets to import it, whereas every project
-    already imports this file.
+    It runs on BeforeBuild, GenerateNuspec and _GetProjectVersion, on every project, so a mismatch fails the
+    build - or the pack - instead of silently acting on the wrong line until someone happens to inspect the
+    property. GenerateNuspec is there because packages.yml packs with dotnet pack's no-build flag, in a
+    separate invocation after building, which never runs BeforeBuild, and PackageVersioning.props reads
+    these properties at pack time, so a pack-only /p: override must be caught too. _GetProjectVersion is
+    how a pack asks each project it references for the version its dependency range starts at, which a
+    referenced project answers without building or packing itself. Within one invocation MSBuild runs the
+    target once per project instance, and a build followed by a separate no-build pack simply checks twice.
+    It lives here, in this .props file, rather than in a Directory.Build.targets, because a target can be
+    defined in a .props file - keeping the check beside the computation it verifies is the point - and
+    because a Directory.Build.targets would be skipped by any nested Directory.Build.targets that forgets to
+    import it, whereas every project already imports this file.
     tests/essentials/Architecture/VersionLineBuildCheckTests.cs proves it, including the /p: cases the
-    static scan cannot see.
+    static scans cannot see.
   -->
-  <Target Name="ElsaVerifyVersionLine" BeforeTargets="BeforeBuild;GenerateNuspec">
+  <Target Name="ElsaVerifyVersionLine" BeforeTargets="BeforeBuild;GenerateNuspec;_GetProjectVersion">
 
     <XmlPeek XmlInputPath="$(MSBuildThisFileDirectory)VersionLines.props"
              Query="/Project/PropertyGroup/ElsaVersionLineAMembers/text()">
       <Output TaskParameter="Result" PropertyName="_ElsaReviewedLineAMembers" />
     </XmlPeek>
 
+    <XmlPeek XmlInputPath="$(MSBuildThisFileDirectory)VersionLines.props"
+             Query="/Project/PropertyGroup/ElsaVersion/text()">
+      <Output TaskParameter="Result" PropertyName="_ElsaReviewedVersion" />
+    </XmlPeek>
+
+    <XmlPeek XmlInputPath="$(MSBuildThisFileDirectory)VersionLines.props"
+             Query="/Project/PropertyGroup/ElsaContractsVersion/text()">
+      <Output TaskParameter="Result" PropertyName="_ElsaReviewedContractsVersion" />
+    </XmlPeek>
+
     <Error Code="ELSAVL003"
-           Condition="'$(_ElsaReviewedLineAMembers)' == ''"
-           Text="Could not read ElsaVersionLineAMembers from $(MSBuildThisFileDirectory)VersionLines.props via XmlPeek. The file may have moved or its shape changed; update the XmlPeek query in the ElsaVerifyVersionLine target (Directory.Build.props) to match." />
+           Condition="'$(_ElsaReviewedLineAMembers)' == '' or '$(_ElsaReviewedVersion)' == '' or '$(_ElsaReviewedContractsVersion)' == ''"
+           Text="Could not read ElsaVersionLineAMembers, ElsaVersion and ElsaContractsVersion from $(MSBuildThisFileDirectory)VersionLines.props via XmlPeek. The file may have moved or its shape changed; update the XmlPeek queries in the ElsaVerifyVersionLine target (Directory.Build.props) to match." />
+
+    <Error Code="ELSAVL004"
+           Condition="'$(ElsaVersion)' != '$(_ElsaReviewedVersion.Trim())' or '$(ElsaContractsVersion)' != '$(_ElsaReviewedContractsVersion.Trim())'"
+           Text="$(MSBuildProjectName) evaluates ElsaVersion as '$(ElsaVersion)' and ElsaContractsVersion as '$(ElsaContractsVersion)', but VersionLines.props defines '$(_ElsaReviewedVersion.Trim())' and '$(_ElsaReviewedContractsVersion.Trim())'. Each line's major.minor is set in VersionLines.props alone (spec 150 FR-010) - not in this project file, not in a nested Directory.Build.props/.targets, and not via /p:ElsaVersion or /p:ElsaContractsVersion - because the version calculator reads it from that file, and a build that saw another value would disagree with the version it computed." />
 
     <PropertyGroup>
       <_ElsaReviewedVersionLine>B</_ElsaReviewedVersionLine>
@@ -93,6 +110,14 @@
            Text="$(MSBuildProjectName) evaluates ElsaVersionLine as '$(ElsaVersionLine)', but VersionLines.props puts it on line '$(_ElsaReviewedVersionLine)'. ElsaVersionLine is derived from VersionLines.props and must not be set anywhere else - not in this project file, not in a nested Directory.Build.props/.targets, and not via /p:ElsaVersionLine." />
 
   </Target>
+
+  <!--
+    Package versions (spec 150): after the version line, which it reads, and after the check above, so a wrong line
+    is reported before any version derived from it. PackageRanges.targets, imported right after, bounds dependency
+    ranges from the version PackageVersioning.props selects.
+  -->
+  <Import Project="$(MSBuildThisFileDirectory)PackageVersioning.props" />
+  <Import Project="$(MSBuildThisFileDirectory)PackageRanges.targets" />
 
   <!--
     #2078: Line A's version is meant to move only when its contract changes, and PublicApiAnalyzers is

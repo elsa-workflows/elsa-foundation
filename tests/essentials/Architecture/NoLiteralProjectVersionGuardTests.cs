@@ -15,17 +15,22 @@ namespace Elsa.Architecture.Tests;
 /// <para>
 /// This guard scans project files under <c>src/</c>. Spec 150 FR-010 names shared MSBuild properties
 /// as the one place for major and minor — <c>ElsaVersion</c> and <c>ElsaContractsVersion</c> in
-/// <c>VersionLines.props</c> — so shared build files are deliberately not scanned here.
+/// <c>VersionLines.props</c> — so shared build files are deliberately not scanned here, and a project that
+/// set either of those would be hand-editing its package version's major and minor, so they are forbidden
+/// here too. <c>PackageVersioning.props</c> derives each package's version from them, or from the version
+/// calculator's output (#2080). The build-time checks, <see cref="VersionLineBuildCheckTests"/> and
+/// <see cref="PackageVersionBuildCheckTests"/>, catch what a file scan cannot: a <c>/p:</c> override, and a
+/// setter in a build file outside this scan.
 /// </para>
 /// <para>
 /// These literals never reached a published package: <c>packages.yml</c> passes a global
 /// <c>/p:Version</c> when it packs, which overrides any project-local value at that step. Every other
 /// build used the literal — local builds, CI's build-and-test job, Docker images — so it set the
 /// assembly version of every artifact those produce. #2076 removed the eighteen <c>&lt;Version&gt;</c>
-/// elements that had accumulated; those projects now take the SDK default like every other project,
-/// which is why removing one moved <c>Elsa.Diagnostics.StructuredLogs.Core</c>'s assembly version from
-/// 0.0.1.0 to 1.0.0.0. This guard keeps the count at zero. FR-005's other clause — the packaging
-/// workflow's global <c>/p:Version</c> — is removed and guarded separately, in #2082.
+/// elements that had accumulated; like every other project, those projects now take the package version
+/// <c>PackageVersioning.props</c> derives, and the SDK's default assembly version outside a computed build.
+/// This guard keeps the count at zero. FR-005's other clause — the packaging workflow's global
+/// <c>/p:Version</c> — is removed and guarded separately, in #2082.
 /// </para>
 /// </summary>
 public sealed class NoLiteralProjectVersionGuardTests
@@ -36,6 +41,8 @@ public sealed class NoLiteralProjectVersionGuardTests
         "VersionPrefix",
         "VersionSuffix",
         "PackageVersion",
+        "ElsaVersion",
+        "ElsaContractsVersion",
     ];
 
     [Fact]
@@ -71,6 +78,8 @@ public sealed class NoLiteralProjectVersionGuardTests
     [InlineData("VersionPrefix")]
     [InlineData("VersionSuffix")]
     [InlineData("PackageVersion")]
+    [InlineData("ElsaVersion")]
+    [InlineData("ElsaContractsVersion")]
     public void Guard_detects_a_synthetic_literal_version_property(string property)
     {
         var declared = DeclaredVersionPropertiesOfTempProject(
