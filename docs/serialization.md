@@ -83,8 +83,7 @@ bindings) must be able to evolve without silently breaking already-suspended wor
   The rest of the Runtime EF Core module (bookmarks, executables, execution/scheduler/operational/
   control-plane/incident/durable-value state, checkpoint commits, the post-commit outbox, the durable
   scheduler work queue, workflow trigger bindings) has no such fixture today; its state-record shapes are
-  covered by the migration and read-enforcement rules above, not by a round-trip payload comparison. Spec
-  180 (draft, PR #2109) proposes extending the round-trip fixture requirement to the rest of the module.
+  covered by the migration and read-enforcement rules above, not by a round-trip payload comparison.
 
 ### How to change a persisted runtime state record
 
