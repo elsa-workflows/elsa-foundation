@@ -74,9 +74,16 @@ bindings) must be able to evolve without silently breaking already-suspended wor
   for the shared policy.
 - **Loud enforcement on read.** A pending model change, a missing migration, or a provider mismatch fails
   shell activation rather than serving a partially readable store.
-- **A CI fixture gate freezes the payload format.** The Runtime EF suites re-serialize a canonical instance
-  of each persisted payload and compare it semantically against the committed expectation, so a state-record
-  field add/rename/remove/retype cannot land without an explicit decision.
+- **A golden-fixture gate freezes the wire format for the Distributed leaf only.** The
+  `Elsa.Workflows.Runtime.Distributed.Tests` suite re-serializes a canonical instance of the placement and
+  transport payloads and compares each semantically against a committed `Fixtures/v1/*.json` expectation,
+  so a field add/rename/remove/retype on those two payloads cannot land without an explicit, versioned
+  decision (see [`GoldenFixtureTestSupport`](../tests/essentials/Workflows/Runtime/Distributed/Tests/GoldenFixtureTestSupport.cs)).
+  The rest of the Runtime EF Core module (bookmarks, executables, execution/scheduler/operational/
+  control-plane/incident/durable-value state, checkpoint commits, the post-commit outbox, the durable
+  scheduler work queue, workflow trigger bindings) has no such fixture today; its state-record shapes are
+  covered by the migration and read-enforcement rules above, not by a round-trip payload comparison. Spec
+  180 (draft, PR #2109) proposes extending the round-trip fixture requirement to the rest of the module.
 
 ### How to change a persisted runtime state record
 
@@ -89,7 +96,7 @@ documents the required persistence reset.
 
 The trigger + stimulus-routing feature (`WorkflowsRuntimeTriggersFeature`) adds one new persisted document
 kind and two cross-cutting (across-execution / across-artifact) indexes. Both route through the same bridge
-serializer, versioning, and fixture gate as every other runtime kind.
+serializer and versioning as every other runtime kind.
 
 - **Document kind `workflowTriggerBinding` (current/minimum version 2).** A durable index entry written at **publish
   time** mapping an external stimulus identity `(stimulusType, stimulusHash)` to a start-trigger activity
