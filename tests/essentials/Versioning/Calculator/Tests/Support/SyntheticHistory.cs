@@ -16,8 +16,12 @@ namespace Elsa.Versioning.Calculator.Tests.Support;
 /// <item>and the unpackable test project <c>Elsa.Tasks.Tests</c>.</item>
 /// </list>
 /// <para>
-/// <c>Cronos</c> is referenced by <c>Elsa.Tasks</c> alone, <c>Jint</c> by <c>Elsa.Http</c>, <c>xunit</c> by the test
-/// project, and <c>Microsoft.OpenApi</c> by nothing: it is a transitive pin.
+/// <c>Cronos</c> is referenced by <c>Elsa.Tasks</c> alone, <c>Jint</c> by <c>Elsa.Http</c>, and <c>xunit</c> by the test
+/// project. Each project's pinned-transitive edges are what restore would report for it: <c>Elsa.Tasks.Schedules</c>
+/// reaches <c>Cronos</c> through <c>Elsa.Tasks</c>, and the tool reaches <c>Jint</c> through <c>Elsa.Http</c>; three pins
+/// are referenced by no project at all: <c>Microsoft.OpenApi</c>, reached by <c>Elsa.Http</c> and the tool;
+/// <c>Microsoft.Extensions.Primitives</c>, reached by <c>Elsa.Events.Core</c> and, through it, <c>Elsa.Events</c>; and
+/// <c>SQLitePCLRaw.bundle_e_sqlite3</c>, reached by the test project alone, which packs nothing.
 /// </para>
 /// </remarks>
 public abstract class SyntheticHistory : IDisposable
@@ -26,22 +30,26 @@ public abstract class SyntheticHistory : IDisposable
     {
         Repo.PackageVersions["Cronos"] = "0.13.0";
         Repo.PackageVersions["Jint"] = "4.9.1";
+        Repo.PackageVersions["Microsoft.Extensions.Primitives"] = "10.0.10";
         Repo.PackageVersions["Microsoft.OpenApi"] = "2.1.0";
+        Repo.PackageVersions["SQLitePCLRaw.bundle_e_sqlite3"] = "3.0.3";
         Repo.PackageVersions["System.CommandLine"] = "2.0.0";
         Repo.PackageVersions["xunit"] = "2.9.3";
 
         Repo.AddProject("src/Primitives/Elsa.Primitives.csproj", line: "A");
-        Repo.AddProject("src/Events/Core/Elsa.Events.Core.csproj", line: "A", references: ["src/Primitives/Elsa.Primitives.csproj"]);
-        Repo.AddProject("src/Events/Elsa.Events.csproj", references: ["src/Events/Core/Elsa.Events.Core.csproj"],
+        Repo.AddProject("src/Events/Core/Elsa.Events.Core.csproj", line: "A", references: ["src/Primitives/Elsa.Primitives.csproj"],
+            pinnedTransitive: ["Microsoft.Extensions.Primitives"]);
+        Repo.AddProject("src/Events/Elsa.Events.csproj", references: ["src/Events/Core/Elsa.Events.Core.csproj"], pinnedTransitive: ["Microsoft.Extensions.Primitives"],
             body: """  <ItemGroup><Compile Remove="Core/**/*" /></ItemGroup>""");
         Repo.AddProject("src/Tasks/Elsa.Tasks.csproj", references: ["src/Primitives/Elsa.Primitives.csproj"], packages: ["Cronos"],
             body: """  <ItemGroup><Compile Remove="Schedules/**/*" /></ItemGroup>""");
-        Repo.AddProject("src/Tasks/Schedules/Elsa.Tasks.Schedules.csproj", references: ["src/Tasks/Elsa.Tasks.csproj"]);
-        Repo.AddProject("src/Http/Elsa.Http.csproj", packages: ["Jint"]);
+        Repo.AddProject("src/Tasks/Schedules/Elsa.Tasks.Schedules.csproj", references: ["src/Tasks/Elsa.Tasks.csproj"], pinnedTransitive: ["Cronos"]);
+        Repo.AddProject("src/Http/Elsa.Http.csproj", packages: ["Jint"], pinnedTransitive: ["Microsoft.OpenApi"]);
         Repo.AddProject("src/Cli/Elsa.Cli.csproj", packageId: "dotnet-elsa", references: ["src/Cli/Worker/Elsa.Cli.Worker.csproj", "src/Http/Elsa.Http.csproj"],
-            packages: ["System.CommandLine"], body: """  <PropertyGroup><PackAsTool>true</PackAsTool></PropertyGroup>""");
+            packages: ["System.CommandLine"], pinnedTransitive: ["Jint", "Microsoft.OpenApi"], body: """  <PropertyGroup><PackAsTool>true</PackAsTool></PropertyGroup>""");
         Repo.AddProject("src/Cli/Worker/Elsa.Cli.Worker.csproj", packable: false);
-        Repo.AddProject("tests/Tasks/Elsa.Tasks.Tests.csproj", packable: false, references: ["src/Tasks/Elsa.Tasks.csproj"], packages: ["xunit"]);
+        Repo.AddProject("tests/Tasks/Elsa.Tasks.Tests.csproj", packable: false, references: ["src/Tasks/Elsa.Tasks.csproj"], packages: ["xunit"],
+            pinnedTransitive: ["Cronos", "SQLitePCLRaw.bundle_e_sqlite3"]);
 
         Repo.Write("src/Primitives/Primitive.cs", "public sealed class Primitive;");
         Repo.Write("src/Events/Core/Event.cs", "public sealed class Event;");
@@ -90,8 +98,8 @@ public abstract class SyntheticHistory : IDisposable
     protected void Edit(string path) => Repo.Write(path, Repo.Read(path) + "\n// edited");
 
     /// <summary>Computes at a commit (the head by default) against a record (the current one by default).</summary>
-    protected VersionComputation Compute(string? commit = null, PublishedVersions? record = null) =>
-        VersionCalculator.Compute(Repo.Calculator, commit ?? Repo.Head, record ?? Record);
+    protected VersionComputation Compute(string? commit = null, PublishedVersions? record = null, ForcedAdvance? forced = null) =>
+        VersionCalculator.Compute(Repo.Calculator, commit ?? Repo.Head, record ?? Record, forced);
 
     /// <summary>Commits the working tree and computes at the new commit.</summary>
     protected VersionComputation CommitAndCompute(string message = "change") => Compute(Repo.Commit(message));

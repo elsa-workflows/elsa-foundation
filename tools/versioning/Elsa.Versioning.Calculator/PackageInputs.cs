@@ -16,16 +16,19 @@ namespace Elsa.Versioning.Calculator;
 /// <para>
 /// Keys: <c>file:&lt;path&gt;</c> for an owned file or a build file the package's build reads;
 /// <c>package:&lt;id&gt;</c> for an external dependency and its <c>Directory.Packages.props</c> entries;
-/// <c>central-packages</c> for the rest of <c>Directory.Packages.props</c>.
+/// <c>pinned:&lt;id&gt;</c> for a package central package management pins for it transitively, which its nuspec lists
+/// (spec 149's pinned-transitive edges), and that package's entries; <c>central-packages</c> for the rest of
+/// <c>Directory.Packages.props</c>.
 /// </para>
 /// </remarks>
 public sealed class PackageInputs
 {
     /// <summary>Leads the fingerprint's preimage, so a change to what counts as an input can never collide with the old form.</summary>
-    public const string Scheme = "elsa-package-inputs/1";
+    public const string Scheme = "elsa-package-inputs/2";
 
     internal const string FilePrefix = "file:";
     internal const string PackagePrefix = "package:";
+    internal const string PinnedPrefix = "pinned:";
     internal const string CentralPackagesKey = "central-packages";
 
     internal PackageInputs(SortedDictionary<string, string> entries)
@@ -56,5 +59,6 @@ public sealed class PackageInputs
     private static string Describe(string key) =>
         key.StartsWith(FilePrefix, StringComparison.Ordinal) ? key[FilePrefix.Length..]
         : key.StartsWith(PackagePrefix, StringComparison.Ordinal) ? $"{CentralPackages.RelativePath}: {key[PackagePrefix.Length..]}"
+        : key.StartsWith(PinnedPrefix, StringComparison.Ordinal) ? $"{CentralPackages.RelativePath}: {key[PinnedPrefix.Length..]}, pinned transitively"
         : $"{CentralPackages.RelativePath}, outside any directly referenced package's entry";
 }

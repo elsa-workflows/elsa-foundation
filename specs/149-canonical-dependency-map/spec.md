@@ -41,7 +41,8 @@ compiles into.
 
 A maintainer opens `docs/maps/project-reference-map.md` and trusts it, because it is generated from
 the same dataset as every other map rather than from its own independent scan. The dataset holds no
-publish state, which is what keeps it a function of the tree alone.
+publish state, which is what keeps it a function of the tree and of the dependencies the exact
+package versions it pins declare, which no feed lets a published version change (FR-012).
 
 **Why this priority**: The maps are already the repository's shared mental model, and today each is
 produced by its own generator pass. One dataset with projections removes the class of bug where two
@@ -107,9 +108,9 @@ check fails naming the dataset.
   additionally record its package id, the key spec 150 joins its last-published record on.
 - **FR-004**: Each node MUST record which version line it belongs to, per ADR 0067. Line A membership
   is the set of packages named there (ADR 0067, Decision); every other packable project is Line B.
-- **FR-005**: Each edge MUST be typed `internal` or `external`, and MUST record the target package
-  identity. Internal edges MUST record the target project path; external edges MUST record the
-  declared version.
+- **FR-005**: Each edge MUST be typed `internal`, `external` or `pinned-transitive`, and MUST record
+  the target package identity. Internal edges MUST record the target project path; external edges
+  MUST record the declared version; pinned-transitive edges MUST record the pinned version (FR-012).
 - **FR-006**: Ownership of a repository-relative path MUST be resolvable from the dataset alone, by
   longest matching project path, with no filesystem access.
 - **FR-007**: Generation MUST be deterministic: the same tree MUST produce a byte-identical dataset,
@@ -123,13 +124,21 @@ check fails naming the dataset.
 - **FR-011**: The dataset MUST NOT carry publish state. The last-published record lives in its own
   file (spec 150); generation MUST NOT read or write that file, and the freshness check MUST NOT
   cover it.
+- **FR-012**: Each packable node MUST record a `pinned-transitive` edge, with the pinned version, for
+  every package it reaches only through its other dependencies, through a package or a project
+  reference, whose version `Directory.Packages.props` pins: exactly the dependencies that
+  `CentralPackageTransitivePinningEnabled` makes pack write into its nuspec beyond its direct ones, so
+  that spec 150 advances every package whose nuspec a pin reaches. Generation MUST read them from the
+  list pack itself reads, the project's restore output, and MUST refuse restore output older than the
+  project's pins or references rather than record it.
 
 ### Key Entities
 
 - **Project node**: one per project in `src/` and `tests/`; identity is its repository-relative path.
   A packable node also records its package id.
 - **Dependency edge**: a directed relation from a node to a package identity, typed by whether the
-  target resolves inside this repository.
+  target resolves inside this repository and, for a package, whether the node references it or has
+  it pinned transitively (FR-012).
 - **Dataset**: the set of nodes and edges, versioned by a schema version so consumers can detect an
   incompatible shape. It carries no freshness fingerprint (see Decisions).
 
@@ -155,6 +164,8 @@ check fails naming the dataset.
   FR-006 codifies.
 - External package versions are available from `Directory.Packages.props` through central package
   management.
+- The tree has been restored before generation and before the freshness check, so each packable
+  project's `obj/project.assets.json` exists (FR-012). The `Maps` workflow restores first.
 
 ## Out of Scope
 
@@ -187,3 +198,27 @@ Recorded when #2075 implemented this spec. The first two answer the open questio
   raw project-file declaration or "default".** This is a deliberate exception to SC-003's "no content
   lost": "default" hid that 73 test projects do not pack, and the raw declaration isn't a graph fact
   the dataset should carry.
+
+Recorded when #2117 added the pinned-transitive edges (FR-012) and `schema_version` 2, for spec 150's
+FR-003 as the owner decided it on 2026-09-27 (#2092).
+
+- **Pinned-transitive edges are read from `centralTransitiveDependencyGroups` in each packable
+  project's `obj/project.assets.json`.** That is the list NuGet's pack task writes into the nuspec
+  beyond the project's direct dependencies, so the edges equal the nuspec's by construction. Packing all
+  129 packages on 2026-09-27 matched it exactly for 128, by id and version; the one other,
+  the `dotnet-elsa` tool, declares no dependencies, because it carries its dependencies' assemblies,
+  and those it carries at the pinned versions are the ones recorded. The alternatives
+  were weaker: the restore-graph file restore writes beside it (`obj/<project>.nuget.dgspec.json`, as
+  the restore in `tools/architecture/restore-ci-project-graph.sh` leaves it) holds restore's inputs,
+  not the packages it resolved; computing the closure from package metadata
+  would be a second NuGet resolver that could disagree with the first; and committed NuGet lock files,
+  which would keep generation a pure scan of the tree, are a repository-wide restore change of their own.
+- **Only packable nodes carry them**, since only a packable project has a nuspec.
+- **Generation needs a restore, and holds the restore output to the tree before reading it.** A
+  missing assets file, one restored with other pins than `Directory.Packages.props` holds, or one that
+  lacks a package or project reference the project file has is refused, naming the project and the
+  restore to run, rather than recorded stale. The `Maps` workflow restores before its check, so the
+  committed dataset is compared with restore output as new as the commit.
+- **`schema_version` is 2.** A consumer written for version 1 would read "no pinned-transitive edges" as
+  "no package reaches any pin", which is exactly the silent case the edges exist to end, so spec 150's
+  calculator refuses version 1.
