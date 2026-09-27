@@ -543,7 +543,7 @@ public sealed partial class ArchitectureGuardTests
     public void Pruned_unused_public_contracts_do_not_reappear_in_production_source()
     {
         var violations = ModuleSourceFiles()
-            .Where(file => !IsGeneratedScratchFile(file) && !IsBuildOutput(file))
+            .Where(file => !IsGeneratedScratchFile(file))
             .SelectMany(file => FindPrunedPublicContractNames(File.ReadAllText(file))
                 .Select(name => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {name}"))
             .Distinct()
@@ -601,7 +601,6 @@ public sealed partial class ArchitectureGuardTests
         ];
 
         var violations = ModuleSourceFiles()
-            .Where(file => !IsBuildOutput(file))
             .SelectMany(file =>
             {
                 var code = StripCommentsAndStringLiterals(File.ReadAllText(file));
@@ -642,7 +641,6 @@ public sealed partial class ArchitectureGuardTests
         var onPrefixedDeclaration = new Regex(@"\b(?:class|record|struct)\s+(On[A-Z]\w*)", RegexOptions.Compiled);
 
         var violations = ModuleSourceFiles()
-            .Where(file => !IsBuildOutput(file))
             .SelectMany(file =>
             {
                 var code = File.ReadAllText(file);

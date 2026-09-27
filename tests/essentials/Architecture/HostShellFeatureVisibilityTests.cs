@@ -41,7 +41,6 @@ public sealed class HostShellFeatureVisibilityTests
         // Both module roots (#1815): a feature declared by an optional module must be public too, and a
         // src-only sweep would stop checking it the moment that module moved out.
         var declarations = ModuleRoots.SourceFiles(RepoRoot, ModuleRoots.Production)
-            .Where(file => !IsBuildOutput(file))
             .SelectMany(file => FeatureDeclaration.Matches(File.ReadAllText(file))
                 .Select(match => (
                     IsPublic: match.Groups["modifiers"].Value.Contains("public", StringComparison.Ordinal),
@@ -72,7 +71,6 @@ public sealed class HostShellFeatureVisibilityTests
     {
         var webFeatures = ModuleRoots
             .ProductionSourceFiles(RepoRoot)
-            .Where(file => !IsBuildOutput(file))
             .SelectMany(file => DirectWebFeatureDeclaration.Matches(File.ReadAllText(file))
                 .Select(match => match.Groups["name"].Value))
             .Distinct(StringComparer.Ordinal)

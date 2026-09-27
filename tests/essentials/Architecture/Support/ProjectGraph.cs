@@ -25,7 +25,7 @@ internal static class ProjectGraph
     internal static IEnumerable<string> ElsaProjectPaths(string repoRoot) =>
         ModuleRoots.Resolve(repoRoot, ModuleRoots.Production)
             .SelectMany(root => Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories))
-            .Where(ModuleRoots.IsNotTestFile)
+            .Where(path => ModuleRoots.IsNotTestFile(repoRoot, path))
             .Where(path => IsElsa(Path.GetFileNameWithoutExtension(path)!));
 
     /// <summary>Every Elsa project under <c>src/</c>, by name, with the Elsa projects it references directly.</summary>
