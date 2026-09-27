@@ -220,4 +220,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [179-diagnostics-feature-group](../../specs/179-diagnostics-feature-group/spec.md) | First reviewed diagnostics feature group | Implemented — #2066 published the first reviewed diagnostics group; host readiness remains separate | - | 10 | 0 | - |
 | [180-schema-upcaster-chain](../../specs/180-schema-upcaster-chain/spec.md) | Schema Upcaster Chain | Draft | - | 0 | 0 | out of scope |
 | [181-schema-finalization-gate](../../specs/181-schema-finalization-gate/spec.md) | Schema Finalization Gate | Draft | - | 0 | 0 | out of scope |
-| [182-dormant-features-until-finalization](../../specs/182-dormant-features-until-finalization/spec.md) | Dormant Features Until Finalization | Draft | - | 0 | 0 | out of scope |
+| [182-dormant-features-until-finalization](../../specs/182-dormant-features-until-finalization/spec.md) | Dormant Features Until Finalization | Draft | - | 0 | 0 | deferred, out of scope |

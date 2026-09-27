@@ -29,7 +29,8 @@ Spec 180's and spec 181's Terms apply. In addition:
 - **Dormant feature**: an enabled feature that is composed and running, but whose operations needing new-version data
   are unavailable until a finalization, or a completeness condition (FR-005), is met.
 - **Dormancy requirement**: a feature's declaration that it needs schema family F at version V or later.
-- **Dormancy refusal**: the typed error a refused operation raises.
+- **Dormancy refusal**: spec 180's write refusal (Terms), reused for a dormant feature's refused operation and, when
+  raised by a feature-level check rather than by a store, extended with the feature id and FR-008's reason.
 - **Shared dormancy check**: the one component every module asks "is F at V yet?".
 
 ## Current state
@@ -217,9 +218,10 @@ the rows that happen to carry the column.
 - **FR-004**: A feature is dormant while the observed finalized version of any family it declares is below the
   declared minimum. A hold keeps it dormant.
 - **FR-005**: A feature whose operations need every row of a family to carry new-version data, such as a query or
-  lookup over a projection introduced at version V, MUST declare that as well. It stays dormant after finalization
-  until the family's completeness is established: no row below version V remains, proven by the scan of spec 180,
-  FR-024.
+  lookup over a projection introduced at version V, MUST declare that as well. Such a feature stays dormant after
+  finalization until the family's completeness is established: no row below version V remains. How completeness is
+  established — the scan or rewrite that proves it — is deferred to spec 180's Open Question 4. Until that question
+  is answered, a feature that declares this requirement cannot leave dormancy for it.
 
 **Composition**
 
@@ -249,11 +251,12 @@ the rows that happen to carry the column.
 - **FR-012**: A write that needs data a dormant feature or field would hold MUST be refused before any row changes.
   When the unit of work writes several rows, none of them is written. The data is never dropped, and the request
   never succeeds without it.
-- **FR-013**: The dormancy refusal MUST be its own exception type. It carries a stable code, the family, the required
-  version, the observed finalized version, the feature id when known, and FR-008's reason. It MUST NOT be assignable
-  to `InvalidOperationException`, `ArgumentException`, `FormatException`, `NotSupportedException`, `JsonException` or
-  `InvalidDataException`, the types that store catch filters and API fault ladders turn into corruption or a 400. A
-  test pins this, as `EfSchemaVersionTests` does for the skew exception.
+- **FR-013**: The dormancy refusal MUST reuse spec 180's write refusal (Terms, FR-016a): the same exception type,
+  unassignable to the same six types (`InvalidOperationException`, `ArgumentException`, `FormatException`,
+  `NotSupportedException`, `JsonException` and `InvalidDataException`), carrying the same stable code. A
+  feature-level dormancy refusal additionally carries the feature id when known and FR-008's reason; the store-level
+  backstop (FR-017) carries the family and the two versions alone, as spec 180 defines it. A test pins the
+  unassignability, as `EfSchemaVersionTests` does for the skew exception.
 - **FR-014**: Before raising a dormancy refusal, the host MUST refresh its observed finalized version if its last
   refresh is older than a short, rate-limited bound. A request that finalization already allows is then not refused
   on a stale view.
@@ -264,7 +267,7 @@ the rows that happen to carry the column.
 - **FR-016**: While dormant, a read or query whose answer depends on data only the new version holds MUST be refused
   the same way, and not answered from rows that cannot contain that data.
 - **FR-017**: Spec 180's FR-016 is the backstop. A store asked to write data in a member newer than its write version
-  raises this same refusal, which catches any path that skipped FR-002.
+  raises spec 180's write refusal (FR-016a), which catches any path that skipped FR-002.
 - **FR-018**: Background work that would derive new-version data MUST ask the shared check each time it runs, skip
   that work while dormant, and report dormancy through FR-009 and FR-010. Work that carries externally supplied
   new-version data MUST be refused to its sender, never discarded.
@@ -284,7 +287,8 @@ the rows that happen to carry the column.
 - **Dormancy requirement**: a feature, a family and a minimum version, plus whether completeness is needed.
 - **Availability**: available or dormant, with a reason per unmet requirement. It is shown in the catalog and in
   Attention.
-- **Dormancy refusal**: code, family, required version, observed finalized version, feature, and reason.
+- **Dormancy refusal**: spec 180's write refusal, extended for the feature-level case with the feature id and
+  reason: code, family, required version, observed finalized version, feature, and reason.
 - **Shared dormancy check**: the single replacement contract that answers from the observed finalized version.
 
 ## Success Criteria *(mandatory)*
@@ -304,7 +308,8 @@ the rows that happen to carry the column.
 - **SC-006**: The refusal type is unassignable to each of the six exception types FR-013 names, and every API that
   maps it answers 409.
 - **SC-007**: A query that depends on completeness is refused before finalization, and after finalization until
-  completeness is established. It is never answered from part of the rows.
+  completeness is established. Until spec 180's Open Question 4 defines how completeness is established, such a
+  query stays refused after finalization. It is never answered from part of the rows.
 
 ## Assumptions
 
@@ -312,15 +317,16 @@ the rows that happen to carry the column.
 - Domain APIs keep their own problem envelopes. This spec adds one typed exception for them to map, and no shared
   envelope.
 - The feature catalog and Attention are evaluated per request, as they are today.
-- Migrations are regenerated until 4.0 ships as a stable release
-  ([#1976](https://github.com/elsa-workflows/elsa-foundation/issues/1976)), so no feature is dormant before the first
-  schema-changing release after 4.0.
+- Migrations are regenerated until 4.0 ships as a stable release, per
+  [spec 180's Assumptions](../180-schema-upcaster-chain/spec.md#assumptions), so no feature is dormant before the
+  first schema-changing release after 4.0.
 
 ## Dependencies
 
 - **Spec 181** (B5, #2101): the finalized version, holds, the refresh, and the gate's status.
-- **Spec 180** (B4, #2100): schema families, write versions, and the store-level backstop (FR-016). FR-005 also
-  depends on spec 180's FR-024 scan, which is not specified yet.
+- **Spec 180** (B4, #2100): schema families, write versions, the write refusal this spec reuses (FR-016a), and the
+  store-level backstop (FR-016). FR-005 also depends on spec 180's Open Question 4 (the completeness scan), which is
+  not answered yet.
 - **B1** ([#2097](https://github.com/elsa-workflows/elsa-foundation/issues/2097)) and **B3**
   ([#2099](https://github.com/elsa-workflows/elsa-foundation/issues/2099)), through spec 181. Membership has no spec
   yet.
@@ -342,7 +348,8 @@ the rows that happen to carry the column.
    so a client can explain a disabled control?
 2. **Completeness.** ADR 0078 has new-data features wait for finalization only. FR-005 adds a second condition for
    features that query new data, because lazy upgrade leaves old rows without it. Should ADR 0078 be amended to say
-   so, and which workstream builds the scan or rewrite that proves completeness (spec 180, Open Question 4)?
+   so, and which workstream builds the scan or rewrite that proves completeness (spec 180, Open Question 4)? Until
+   spec 180's Open Question 4 is answered, a feature that declares FR-005's requirement cannot leave dormancy for it.
 3. **Where the shared check lives.** ADR 0078 places membership at the foundation level, outside the workflow runtime.
    Should the shared check share that package, or live in an EF-free contract package of its own? Either satisfies
    FR-003.

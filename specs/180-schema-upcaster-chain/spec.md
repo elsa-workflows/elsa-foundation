@@ -19,8 +19,8 @@ Companion specs: [spec 181](../181-schema-finalization-gate/spec.md) (B5,
 [#2101](https://github.com/elsa-workflows/elsa-foundation/issues/2101)) decides which version a host may write, and
 [spec 182](../182-dormant-features-until-finalization/spec.md) (B6,
 [#2102](https://github.com/elsa-workflows/elsa-foundation/issues/2102)) keeps features that need new-version data
-dormant until then. This spec owns the read path, the chain, and the rule that a write never stamps more than spec
-181 allows.
+dormant until then. This spec owns the read path, the chain, the rule that a write never stamps more than spec
+181 allows, and the write refusal (see Terms) that spec 182 reuses for dormant-feature writes.
 
 ## Terms
 
@@ -38,52 +38,26 @@ The code uses "module" for two different units, and this program has to keep the
 - **Upcaster**: a transform of one family's stored content from one version to its immediate successor.
 - **Write version**: the version a host stamps on the rows it writes. Spec 181 defines it as the family's finalized
   version, as the host last observed it.
+- **Write refusal**: the typed error a write raises when the value being saved needs a version later than the write
+  version. Its type is unassignable to `InvalidOperationException`, `ArgumentException`, `FormatException`,
+  `NotSupportedException`, `JsonException` and `InvalidDataException` — the types store catch filters and API fault
+  ladders turn into corruption or a 400 — the same convention `EfSchemaVersionSkewException` follows for reads
+  (FR-007). It carries a stable code, the family, the write version and the version the data needs. Every domain API
+  that can raise it maps it to HTTP 409 in its own problem envelope, carrying the code. Spec 182 reuses this refusal
+  for dormant-feature writes, adding a feature id and an operator-facing reason on top of it (FR-016a).
 
 "Envelope" is retired vocabulary in the [root glossary](../../docs/glossary/root.md). This spec says "integrity
 clauses" for the checks the code's messages call the row envelope.
 
 ## Current state
 
-Grounded in the tree at the time of writing.
-
-| EF module | Schema families (declaring class and current version) |
-|---|---|
-| `Workflows.Runtime` | `BookmarkStateEfModule`, `RuntimeActivationSlotEfModule`, `RuntimeActivityExecutionEfModule`, `RuntimeArtifactEfModule`, `RuntimeOperationalStateEfModule`, `RuntimePostCommitOutboxEfModule`, `RuntimeSchedulerPoisonEfModule`, `RuntimeTriggerBindingEfModule`, `RuntimeWorkflowAlterationEfModule`, `RuntimeWorkflowDispatchEfModule`, `RuntimeWorkflowExecutionEfModule`, `RuntimeWorkflowTestScopeEfModule`, all `SchemaVersion = "1.0.0"` |
-| `Workflows.Publishing` | `PublishingLedgerEfModule.ContentSchemaVersion = "1"` (activity-publication receipts, draft test runs) and `PublishingPolicyProjectionEfModule.SchemaVersion = "1.0.0"` (policies, projection intents). Publication records and snapshot reviews carry no stamp. |
-| `Elsa3.Activities.Design.Import` | `Elsa3ImportEfModule.SchemaVersion = "1.0.0"` |
-| `Activities.Design`, `Diagnostics.OpenTelemetry`, `Diagnostics.StructuredLogs`, `Identity.Iam`, `Identity.ProviderConfiguration`, `Secrets`, `Studio.Preferences`, `Workflows.Design`, `Workflows.Runtime.Distributed.Placement`, `Workflows.Runtime.Distributed.CommandTransport` | None. Their rows carry no persisted-schema stamp. `StudioPreferenceRecord.SchemaVersion` holds a client-supplied preference schema, and `Activities.Design`'s `MaterialSchemaVersion` versions idempotency material, so neither is a row stamp. |
-
-- **Stamping.** Every write assigns the family's compile-time constant to the row's `SchemaVersion` column. There are
-  38 such assignments across 30 store files under `src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore`,
-  `src/essentials/Workflows/Publishing/Persistence/EntityFrameworkCore` and
-  `src/extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore`. The stamp is a column beside
-  the content. No hash covers it: the identity hashes cover scope and id, `Elsa3ImportRecordCodec`'s `ContentHash`
-  covers the stored JSON, and its binding hash covers domain fields only.
-- **Checking.** `EfSchemaVersion` in `src/essentials/Persistence/EntityFramework` is the one comparison. It is an
-  ordinal equality check, so an older row is refused exactly like a newer one, and a missing stamp is refused as
-  skew. It raises `EfSchemaVersionSkewException`, which a test in `EfSchemaVersionTests` keeps unassignable to every
-  exception type the stores' catch filters name. There are 36 call sites in 30 files, including two readers outside
-  the owning module: `EfWorkflowPortfolioDataSource` and `EfWorkflowRunHealthDataSource` in `Workflows.Dashboard`
-  read `RuntimeArtifact` and `RuntimeOperationalState` rows directly. Each call site passes the family name as a
-  string literal.
-- **Ordering.** #1955 moved the version term to the front of its condition, and `EfSchemaVersionOrderingGuardTests`
-  fails the build when another clause precedes a `Readable` or `NotReadable` term *inside one condition*. It does not
-  see separate statements. `EfExecutionLivenessStateStore`, `EfWorkflowHoldStateStore`,
-  `EfWorkflowAlterationStore` (`ReadPlan`) and `WorkflowTestScopeEfSupport` deserialize the content into the current
-  type before the version term runs. `EfActivityPublicationReceiptStore` and `EfActivityDraftTestRunStore` check
-  identity projections in an earlier statement.
-- **Content.** Most families store their content as a JSON document. `RuntimeArtifactJson` and `PublishingEfJson`
-  ignore unknown members on read, since no store sets `JsonUnmappedMemberHandling.Disallow`, and
-  `RuntimeArtifactJson` writes null members. A predecessor's reader therefore tolerates members it does not know,
-  and a predecessor that rewrites a newer row drops them without an error. ADR 0077's amendment names that
-  data-loss mechanism.
-- **Fixtures.** No Runtime or Publishing EF family has a committed payload fixture. The only golden fixtures over
-  persisted runtime shapes are the Distributed leaf's `Fixtures/v1/executionPlacement.json` and
-  `executionCommandTransport.json`, driven by `GoldenFixtureTestSupport`, whose failure message already states the
-  rule this spec adopts: "bump the schema version, add an upcaster, add a new versioned fixture, and keep the old
-  one".
-- **Compression.** Spec 170's `EfPayloadCodec` marks a compressed payload in band (`elsaz1.`), below the schema
-  version, so it is independent of this chain.
+Fifteen schema families across three EF modules (`Workflows.Runtime`, `Workflows.Publishing`,
+`Elsa3.Activities.Design.Import`) stamp their rows; ten other EF modules and two Publishing tables carry no stamp.
+Stamping and checking are each done through one mechanism (`EfSchemaVersion`, `EfSchemaVersionSkewException`), but
+call sites are scattered across 30 store files, an ordering guard already polices part of the read path, and no
+Runtime or Publishing family has a committed payload fixture yet. The full inventory — the family table, call-site
+and file counts, the ordering guard's current reach, JSON-tolerance behaviour and the fixture and compression facts
+this spec's reasoning depends on — is in [research.md](./research.md).
 
 ## Writing the predecessor format
 
@@ -98,7 +72,7 @@ stamp.**
 It holds because:
 
 - the stamp is a separate column assigned at write time, so a host can stamp the old version without touching any
-  hash or identity (see Current state);
+  hash or identity (see [research.md](./research.md), "Stamping");
 - a predecessor's reader ignores members it does not know, so a document the new build writes with its new members
   null or absent reads correctly under the predecessor;
 - under B8 ([#2104](https://github.com/elsa-workflows/elsa-foundation/issues/2104)) a new column is nullable, and
@@ -185,7 +159,7 @@ that every row in the family is stamped `1`. Finalize, run it again, and assert 
    members are unset, **Then** the row is stamped `1` and the stored content equals what a version-1 host would have
    written.
 2. **Given** write version `1`, **When** the value being saved carries data in a member introduced at version 2,
-   **Then** the save is refused with spec 182's dormancy refusal and nothing is written.
+   **Then** the save is refused with the write refusal (see Terms) and nothing is written.
 3. **Given** write version `2`, **When** a row read at `1` is saved, **Then** it is stamped `2`.
 4. **Given** a host whose observed write version is `1`, **When** it reads a row stamped `2`, **Then** it re-reads
    the finalized version before writing that row, and refuses the write if the record does not confirm `2` is
@@ -294,8 +268,14 @@ the build fails each time with a message naming the family and versions.
   finalized. If the record does not confirm V, the write is refused.
 - **FR-016**: When the write version is older than the build's current version, the host MUST write that version's
   format, leaving every member and column introduced after it unset. If the value being written carries data in any
-  such member, the write MUST be refused with spec 182's dormancy refusal before anything is saved, and never
+  such member, the write MUST be refused with the write refusal (FR-016a) before anything is saved, and never
   written with the data dropped.
+- **FR-016a**: The write refusal MUST be its own exception type, unassignable to the six types Terms names for it. It
+  MUST carry a stable code, the family, the write version and the version the data needs. A test MUST pin the
+  unassignability, as `EfSchemaVersionTests` does for the skew exception. Every domain API that can raise it MUST
+  map it to HTTP 409 in its own problem envelope, including the code. Raised directly by a store under FR-016, it
+  carries the family and the two versions alone; spec 182 extends it with a feature id and a reason when a
+  feature-level check raises it instead.
 - **FR-017**: Every row of one family written in one unit of work, such as one checkpoint commit, MUST carry the same
   stamp.
 - **FR-018**: A write that replaces an existing row MUST run the version check of FR-006 on the stored row first. A
@@ -349,6 +329,8 @@ the build fails each time with a message naming the family and versions.
 - **Upcaster**: a pure transform from one version to its successor within one family.
 - **Fixture pair**: a frozen source-version document and the expected target-version document for one upcaster.
 - **Write version**: the version a host stamps, which spec 181 decides.
+- **Write refusal**: the typed error a write raises when it needs a version later than the write version. Spec 182
+  reuses it for dormant-feature writes.
 
 ## Success Criteria *(mandatory)*
 
@@ -365,7 +347,7 @@ the build fails each time with a message naming the family and versions.
 - **SC-005**: Removing an upcaster from inside a chain, which leaves a gap, fails the build, and so does editing a
   shipped fixture.
 - **SC-006**: The extended ordering guard fails on a fixture that deserializes before checking the version, and
-  passes on the restructured read paths named in Current state.
+  passes on the restructured read paths named in [research.md](./research.md), "Ordering".
 - **SC-007**: Upcasting the same fixture in two separate processes produces byte-identical output.
 
 ## Assumptions
@@ -384,7 +366,8 @@ the build fails each time with a message naming the family and versions.
 ## Out of Scope
 
 - Which version a host writes, finalization, holds and the refusal of hosts that cannot read: spec 181 (B5).
-- Dormant features and refusal of writes that need new-version data: spec 182 (B6).
+- Feature dormancy declarations, the dormant state, and reporting why a feature is dormant: spec 182 (B6), which
+  reuses this spec's write refusal (FR-016a).
 - Cluster membership (B1 [#2097](https://github.com/elsa-workflows/elsa-foundation/issues/2097), B2
   [#2098](https://github.com/elsa-workflows/elsa-foundation/issues/2098)) and the readability report (B3,
   [#2099](https://github.com/elsa-workflows/elsa-foundation/issues/2099)), which consumes FR-001's declaration.

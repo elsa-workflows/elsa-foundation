@@ -278,7 +278,7 @@ after each one.
   `Elsa.Foundation.Host` and on `Elsa.Workbench`, whose reloader does nothing.
 - **FR-012**: When a refresh finds a finalized version outside the host's readable set, the host MUST refuse every
   write to that family with a typed error naming the family and both versions. It MUST report the condition through
-  spec 182's surfaces. It MUST NOT keep writing at its old version.
+  the gate's status (FR-022). It MUST NOT keep writing at its old version.
 
 **Refusing a host that cannot read**
 
@@ -294,8 +294,9 @@ after each one.
   refusal, so the shell does not activate, as a pending migration under `Validate` does today.
 - **FR-016**: At enable time under `Validate`, an `IFeatureActivationGuard` MUST apply the same check to every feature
   that `[UsesEfModule]` maps to the module, returning a `FeatureActivationRefusal` that the Modularity API renders as
-  409, with nothing saved. Under `AutoMigrate` it opens no database, following spec 171's FR-068 and FR-069, and
-  FR-015 is the refusal point.
+  409, with nothing saved. Under `AutoMigrate` it opens no database, following spec 171's FR-068 and FR-069, so
+  FR-015 is the refusal point instead; whether this should instead read the record under both policies is Open
+  Question 4.
 - **FR-017**: A refusal MUST name the feature where there is one, the EF module, the family, the finalized version
   and the host's readable set, and give the remedy: run a version that can read the finalized version, or restore a
   pre-finalization backup. Like every activation refusal, it MUST NOT contain a connection string or any other
@@ -308,11 +309,12 @@ after each one.
 - **FR-019**: An operator MUST be able to place a hold on a family, optionally limited to one version, with a
   required reason, and to release it. Placing a hold on a finalized version MUST be refused. Hold and release are
   recorded in the history with the operator identity given and a timestamp.
-- **FR-020**: Hold, release and status MUST be available through the `dotnet elsa persistence` CLI, as new
+- **FR-020**: Hold, release and status MUST be available at least through the `dotnet elsa persistence` CLI, as new
   subcommands that follow the existing ones: `--host`, one of `--modules`, `--all` or `--from-host`, `--provider`,
   `--connection-env` or `--connection-stdin`, and the existing exit-code table. The CLI writes the record directly,
   so a hold can be placed before any gate-aware host runs, which a canary requires. No command finalizes, forces
-  finalization or lowers a finalized version.
+  finalization or lowers a finalized version. Whether an additional surface, such as an HTTP API, also carries these
+  is decided by Open Question 3.
 
 **Single host and provider kind**
 
@@ -382,8 +384,8 @@ design of membership.
 - The gate lands in a release that changes no persisted schema, and every host in a cluster runs a gate-aware release
   before the first schema-changing release after 4.0 (#2093, "Deadline"). A pre-gate binary knows nothing of the
   record, so the gate cannot protect against it. The binary an operator rolls back to must be gate-aware too.
-- Migrations are regenerated until 4.0 ships as a stable release
-  ([#1976](https://github.com/elsa-workflows/elsa-foundation/issues/1976)).
+- Migrations are regenerated until 4.0 ships as a stable release, per
+  [spec 180's Assumptions](../180-schema-upcaster-chain/spec.md#assumptions).
 - Migrations for a cluster rollout are expand-only (B8, [#2104](https://github.com/elsa-workflows/elsa-foundation/issues/2104)),
   so hosts on the older version keep working against the migrated schema until finalization.
 - The finalization record's database supports compare-and-set updates. All four supported EF engines do.
