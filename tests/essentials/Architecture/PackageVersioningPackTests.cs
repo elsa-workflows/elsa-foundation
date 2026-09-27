@@ -11,9 +11,9 @@ namespace Elsa.Architecture.Tests;
 /// what spec 150 asks of it (#2080). With the calculator's pack-properties file, passed the way a pipeline passes it,
 /// its range on its own project reference is bounded below the next major (FR-007), a third party's range is left
 /// exactly as central package management restored it, and the package carries the computed version, the input
-/// fingerprint and the source commit (FR-018). Without that file - a dev pack, or a pack with only a global
-/// <c>/p:Version</c>, which is what <c>packages.yml</c> runs today - every range and the package's contents match
-/// what packing has always produced: no bounding, no fingerprint. Each way a pack could silently carry something else
+/// fingerprint and the source commit (FR-018). Without that file - a dev pack, or a local pack with only a global
+/// <c>/p:Version</c> - every range and the package's contents match what packing has always produced: no bounding,
+/// no fingerprint. Each way a pack could silently carry something else
 /// fails it instead, leaving no package behind.
 /// </summary>
 /// <remarks>
@@ -74,9 +74,8 @@ public sealed class PackageVersioningPackTests : IDisposable
     }
 
     /// <summary>
-    /// #2080's own gate: <c>packages.yml</c> still packs with a global <c>/p:Version</c> and no calculator input
-    /// (until #2082 rewrites it), so that path must go on producing exactly what it always has - no bounded range, no
-    /// fingerprint - or the next merge to main would change what today's workflow publishes.
+    /// A local pack with a global <c>/p:Version</c> and no calculator input goes on producing exactly what such a pack
+    /// always has - no bounded range, no fingerprint. <c>packages.yml</c> no longer packs this way (#2082).
     /// </summary>
     [Fact]
     public void A_pack_with_only_a_global_version_matches_todays_unbounded_ranges_and_carries_no_fingerprint()

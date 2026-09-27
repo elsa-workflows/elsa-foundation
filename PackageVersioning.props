@@ -18,8 +18,8 @@
 
         It sets ElsaVersionComputationCommit and, for each packable project, ElsaComputedPackageVersion (the final
         version, prerelease label included) and ElsaInputFingerprint. Version and PackageVersion both take the computed
-        version, so the assemblies a package carries claim the package's version, as packages.yml's /p:Version makes
-        them do today. The file comes in through that hook rather than an Import here because the calculator reads this
+        version, so the assemblies a package carries claim the package's version. packages.yml packs this way, and
+        only this way. The file comes in through that hook rather than an Import here because the calculator reads this
         file as a build input of every package and refuses an import whose path it cannot resolve statically.
       - Dev. Without that file PackageVersion is <the project's line's major.minor>.0-dev, from ElsaVersion or
         ElsaContractsVersion in VersionLines.props, which sorts below every version the calculator computes on that
@@ -27,13 +27,12 @@
         assembly-qualified name derived from them, stay what they were before package versions were computed.
 
     Nothing else may set PackageVersion, nor, with computed input, Version, and ElsaVerifyPackageVersion fails the
-    build or the pack when something did. One exception stands until #2082 rewrites packages.yml: without computed
-    input, a Version that arrived from outside every build file - a global /p:Version - becomes the package version,
-    because packages.yml still stamps one on every package. Every other pack-time effect this file and
-    PackageRanges.targets add - bounded ranges, the nuspec range check, the input fingerprint - is gated on computed
-    input alone (ElsaVersionComputationCommit set), so a pack with only a global /p:Version, exactly what packages.yml
-    runs today, still produces the ranges and package contents it always has: PackageVersioning.props changes what a
-    computed pack carries, and nothing about the /p:Version path packages.yml runs today until #2082 replaces it.
+    build or the pack when something did. One exception stands: without computed input, a Version that arrived from
+    outside every build file - a global /p:Version - becomes the package version, so a local pack can still name one.
+    packages.yml passes none (spec 150 FR-005), and tests/essentials/Versioning/Publisher/Tests/PackagesWorkflowTests.cs
+    holds it to that. Every other pack-time effect this file and PackageRanges.targets add - bounded ranges, the nuspec
+    range check, the input fingerprint - is gated on computed input alone (ElsaVersionComputationCommit set), so a pack
+    with only a global /p:Version produces the ranges and package contents packing always has.
 
     The calculator also decides, from this file, which of a project's Markdown files count as package inputs
     (FR-002a): an item whose Include or Update it cannot resolve statically is taken to name every file. So every

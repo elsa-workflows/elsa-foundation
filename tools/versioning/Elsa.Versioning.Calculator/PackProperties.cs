@@ -44,10 +44,7 @@ public static partial class PackProperties
     /// </exception>
     public static string Render(VersionComputation computation, string branch)
     {
-        var mainLabel = computation.Lines.PrereleaseLabel ?? throw new InvalidOperationException(
-            $"{VersionLineSettings.RelativePath} at {computation.Commit} does not assign <{PrereleaseLabel.PropertyName}>, so nothing says which " +
-            "label its packages carry (spec 150 FR-008). Assign it: preview while the lines are unreleased, empty once they are.");
-        var label = PrereleaseLabel.For(branch, mainLabel);
+        var label = LabelFor(computation, branch);
 
         var projects = computation.Packages.Select(package => (Name: Path.GetFileNameWithoutExtension(package.Path), Package: package)).ToArray();
         var invalid = projects.Where(project => !ProjectName().IsMatch(project.Name)).Select(project => project.Package.Path).ToArray();
@@ -76,8 +73,15 @@ public static partial class PackProperties
         return text.Append('\n').ToString();
     }
 
+    /// <summary>The prerelease label packages of the computation packed from <paramref name="branch"/> carry, or null for none.</summary>
+    /// <exception cref="InvalidOperationException">The commit's <c>VersionLines.props</c> does not assign <c>ElsaPrereleaseLabel</c>, or the branch makes no label.</exception>
+    public static string? LabelFor(VersionComputation computation, string branch) =>
+        PrereleaseLabel.For(branch, computation.Lines.PrereleaseLabel ?? throw new InvalidOperationException(
+            $"{VersionLineSettings.RelativePath} at {computation.Commit} does not assign <{PrereleaseLabel.PropertyName}>, so nothing says which " +
+            "label its packages carry (spec 150 FR-008). Assign it: preview while the lines are unreleased, empty once they are."));
+
     /// <summary>The version a package is packed at: its computed one with the label when it is published, its recorded one when not.</summary>
-    private static string VersionOf(ComputedPackage package, string? label) =>
+    public static string VersionOf(ComputedPackage package, string? label) =>
         package.Affected
             ? (package.Version with { Label = label }).ToString()
             : package.LastPublished?.Version.ToString() ?? throw new InvalidOperationException(
