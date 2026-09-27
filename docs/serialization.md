@@ -54,7 +54,8 @@ boundary or the use needs options the payload serializer can't provide:
   — it writes and reads its own runtime state rows entirely within the persistence layer; no other
   component parses their payload JSON. It owns a frozen `JsonSerializerOptions` deliberately
   independent of `IPayloadSerializer`: this is the *durability* format of suspended workflow state,
-  frozen by a golden-fixture suite and evolved only through EF Core migrations. Adopting the mutable,
+  evolved only through EF Core migrations (plus a golden-fixture suite for the Distributed leaf's
+  placement/transport payloads specifically). Adopting the mutable,
   startup-contributed converter registry of `IPayloadSerializer` would itself be an unstamped format
   change — the exact class of drift the module exists to eliminate.
 - **The reconciliation content hasher**
@@ -116,7 +117,7 @@ serializer and versioning as every other runtime kind.
   activity-execution state in the workflow and filtering in memory — the join fires once per branch completion,
   so the whole-workflow read made it O(branches × workflow states). The index is a keyword over the **already
   persisted** parent identity. No payload change is needed: the state record shape is unchanged; only a new
-  index was declared, so the existing payload drift tests stay green, which is the wire-safety proof.
+  index was declared, so there is no payload to re-freeze — an unchanged shape is the wire-safety proof.
   The store queries the parent index and then applies a defensive
   in-memory `workflowExecutionId` filter, so the full `(workflowExecutionId, parentActivityExecutionId)` semantics
   hold identically across providers without relying on parent activity-execution ids being globally unique.
