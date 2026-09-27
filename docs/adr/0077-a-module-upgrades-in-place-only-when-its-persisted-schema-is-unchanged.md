@@ -1,12 +1,19 @@
 ---
-status: proposed
+status: accepted
 date: 2026-09-22
-amended: 2026-09-24
+amended: 2026-09-27
 decision_context: Questions raised at the 2026-09-21 demo and relayed in the Teams thread on this programme; decided by Sipke Schoorstra on issues #1945, #1946 and #1947, which record the options and the evidence behind each.
-amendment_context: 2026-09-23, the fifteenth module's declared schema version was wired up — stamped on write and checked first on read in the publication-policy and projection-intent stores — so every count of checking read paths in this ADR now reads fifteen rather than fourteen. 2026-09-24, the destination changed from additive-only to the cluster version gate of ADR 0078, decided by Sipke Schoorstra, after additive-only was found to burden versions that have already shipped and to lose data when an older writer rewrites a newer row.
+amendment_context: 2026-09-23, the fifteenth module's declared schema version was wired up — stamped on write and checked first on read in the publication-policy and projection-intent stores — so every count of checking read paths in this ADR now reads fifteen rather than fourteen. 2026-09-24, the destination changed from additive-only to the cluster version gate of ADR 0078, decided by Sipke Schoorstra, after additive-only was found to burden versions that have already shipped and to lose data when an older writer rewrites a newer row. 2026-09-27, the unit this ADR checks was corrected from "EF module" to schema family, and the description of a pre-load `IPackageActivationGate` gate that was never built was corrected to the enable-time guard that exists, both per the drift noted on #2096; accepted by Sipke Schoorstra on 2026-09-27 on issue #2096, matching the rollout decisions recorded on #2093.
 ---
 
 # A module upgrades in place only when its persisted schema is unchanged
+
+Status: accepted (2026-09-27). Sipke Schoorstra accepted this ADR after it was amended to match the
+rollout decisions recorded on [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093)
+(2026-09-27): the schema-version unit is the schema family, not the EF module, and the drift the
+acceptance review on [#2096](https://github.com/elsa-workflows/elsa-foundation/issues/2096) found
+between this text and the code — a pre-load Nuplane activation gate that was designed but never built
+— is corrected to describe what exists.
 
 ## Context
 
@@ -20,15 +27,18 @@ over time.
 **There is no compatibility rule today. There is an unstated assumption of a single writer version**,
 and two mechanisms that enforce it by accident rather than by design.
 
-**A version a reader does not recognise is reported as corruption.** Fifteen EF modules declare a
-schema-version constant, and all fifteen now check it on a read path: twelve runtime modules
-(`BookmarkStateEfModule`, `RuntimeActivationSlotEfModule`, `RuntimeActivityExecutionEfModule`,
-`RuntimeArtifactEfModule`, `RuntimeOperationalStateEfModule`, `RuntimePostCommitOutboxEfModule`,
-`RuntimeSchedulerPoisonEfModule`, `RuntimeTriggerBindingEfModule`, `RuntimeWorkflowAlterationEfModule`,
-`RuntimeWorkflowDispatchEfModule`, `RuntimeWorkflowExecutionEfModule`, `RuntimeWorkflowTestScopeEfModule`),
-plus `PublishingLedgerEfModule.ContentSchemaVersion`, `Elsa3ImportEfModule` and
-`PublishingPolicyProjectionEfModule.SchemaVersion`. All are `1.0.0` except `ContentSchemaVersion`,
-which is `1`. Only fourteen checked it when this ADR was written: the fifteenth,
+**A version a reader does not recognise is reported as corruption.** Fifteen schema families declare a
+schema-version constant, and all fifteen now check it on a read path: twelve runtime families, inside
+the `Workflows.Runtime` EF module (`BookmarkStateEfModule`, `RuntimeActivationSlotEfModule`,
+`RuntimeActivityExecutionEfModule`, `RuntimeArtifactEfModule`, `RuntimeOperationalStateEfModule`,
+`RuntimePostCommitOutboxEfModule`, `RuntimeSchedulerPoisonEfModule`, `RuntimeTriggerBindingEfModule`,
+`RuntimeWorkflowAlterationEfModule`, `RuntimeWorkflowDispatchEfModule`, `RuntimeWorkflowExecutionEfModule`,
+`RuntimeWorkflowTestScopeEfModule`); two publishing families, inside `Workflows.Publishing`
+(`PublishingLedgerEfModule.ContentSchemaVersion` and `PublishingPolicyProjectionEfModule.SchemaVersion`);
+and one import family, inside `Elsa3.Activities.Design.Import` (`Elsa3ImportEfModule`) — module names
+from [ADR 0076](0076-persistence-tooling-runs-inside-the-host-closure.md) D3's thirteen-name vocabulary.
+All are `1.0.0` except `ContentSchemaVersion`, which is `1`. Only fourteen checked it when this ADR was
+written: the fifteenth,
 `PublishingPolicyProjectionEfModule.SchemaVersion`, was declared but neither written nor read, so
 `elsa_publication_policies` and `elsa_publication_projection_intents` carried no version column at all
 and a newer version's rows were read as if this build had written them. That gap was closed by wiring
@@ -44,6 +54,15 @@ if (row.Revision <= 0 || row.SchemaVersion != RuntimeOperationalStateEfModule.Sc
 It is an envelope-integrity field, so a version it does not know is corruption by construction. An
 operator meeting this during a deploy sees a data-incident message for what is a sequencing mistake.
 
+*Amended 2026-09-27.* This ADR first called these fifteen constants "EF modules". They are schema
+families instead: what a row's `SchemaVersion` carries, and what the mismatch check above compares.
+Fifteen families live inside three of the thirteen EF modules ADR 0076 D3 names, not one family per
+module. Decided by Sipke Schoorstra on [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093)
+(2026-09-27), settling drift the acceptance review on
+[#2096](https://github.com/elsa-workflows/elsa-foundation/issues/2096) found between this text and the
+code. Enable-time refusals stay per EF module ([ADR 0076](0076-persistence-tooling-runs-inside-the-host-closure.md)
+D9): a guard maps a feature to the module it depends on, not to one family inside it.
+
 **The default migrate policy opens the skew window automatically.** `EfMigrateOptions.DefaultPolicy`
 is `EfMigratePolicy.AutoMigrate`, and `EfDatabaseMigrator.ApplyAsync` migrates in-process. The
 alternative, `Validate`, fails closed and points at the out-of-process tool.
@@ -55,13 +74,14 @@ not recognise, naming the version. The mechanism exists; the rule does not.
 
 ## Decision
 
-**Within a major, a module may be upgraded in place while running, provided its persisted schema is
-unchanged. A schema change requires coordination. Version skew is detected and refused with a version
-diagnostic, never reported as corruption.**
+**Within a major, a module may be upgraded in place while running, provided the schema families it
+persists are unchanged. A schema-family change requires coordination. Version skew is detected and
+refused with a version diagnostic, never reported as corruption.**
 
 **Skew is not corruption.** Envelope integrity and readable version become separate concerns. A row
-whose `SchemaVersion` a reader does not recognise raises a diagnostic naming the module, the row's
-version, the reader's version and the remedy — not `InvalidDataException: … envelope is corrupt`.
+whose `SchemaVersion` a reader does not recognise raises a diagnostic naming the schema family, the EF
+module it lives in, the row's version, the reader's version and the remedy — not
+`InvalidDataException: … envelope is corrupt`.
 These are different operator actions: one is a data incident, the other a deploy-sequencing mistake.
 This part is required regardless of anything else here and is the first thing to build.
 
@@ -81,8 +101,8 @@ independent release.
 
 **The destination is the cluster version gate of
 [ADR 0078](0078-workflow-executions-are-virtual-actors-and-cluster-membership-is-a-foundation-contract.md),
-not this decision.** A new module version reads its predecessor's rows but keeps writing the old format until
-every live host can read the new one; only then is the new version finalized and written.
+not this decision.** A new schema-family version reads its predecessor's rows but keeps writing the old
+format until every live host can read the new one; only then is the new version finalized and written.
 
 *Amended 2026-09-24.* This ADR first named **additive-only within a major** as the destination: readers
 tolerating unknown columns and refusing only an unrecognised major. It was replaced for two reasons. It put
@@ -94,12 +114,21 @@ being written now and can carry it.
 
 ## How this composes with runtime module installation
 
-A schema-changing module arriving through the Nuplane feed is **gated, not half-applied**. ADR 0076 D9
-already provides two independent gates: `IFeatureActivationGuard`, which under `Validate` refuses a
-feature whose module has pending migrations with an HTTP 409 naming the exact `script` command and
-saves nothing; and Nuplane's `IPackageActivationGate`, evaluated in
-`PackageLoader.EnsureGraphLoadedAsync` **before the load context is constructed**, reading `[EfModule]`
-metadata without loading the package.
+A schema-changing module arriving through the Nuplane feed is **gated at enable time, not
+half-applied**. [ADR 0076](0076-persistence-tooling-runs-inside-the-host-closure.md) D9 provides
+`IFeatureActivationGuard`, implemented as `EfPendingMigrationActivationGuard` and registered in
+`Elsa.Workbench`; under `Validate` it refuses a feature whose module has pending migrations with an
+HTTP 409 naming the exact `script` command, and saves nothing.
+
+*Amended 2026-09-27.* D13's second, pre-load gate — an Elsa implementation of Nuplane's
+`IPackageActivationGate`, reading `[EfModule]` metadata before a package's load context is constructed
+— was never built: no type implements that interface anywhere in `src/` (checked by `git grep`). The
+restart-and-reconcile case it was designed for has no Elsa-owned activation gate today; the nearest
+mechanism is a different one, not a later-built version of the same one —
+[#1951](https://github.com/elsa-workflows/elsa-foundation/issues/1951), delivered by
+[PR #1979](https://github.com/elsa-workflows/elsa-foundation/pull/1979), refuses a package whose host
+is too old for it, at Nuplane's own resolution stage, not at activation and not through
+`IPackageActivationGate`.
 
 **On a single host this composes fully, and needs no drain and no roll.** The package arrives, the
 gate refuses it, the operator applies the migration out of process, and the next reconciliation
@@ -151,4 +180,4 @@ activate stops mattering and runtime installation works on a cluster.
 - [ADR 0067](0067-package-versioning-uses-two-lines-with-computed-patch.md) — the versioning this rule constrains
 - [ADR 0076](0076-persistence-tooling-runs-inside-the-host-closure.md) — D9's activation guards, which this relies on
 - [ADR 0073](0073-ef-core-is-the-only-first-party-persistence-family.md) — the persistence family this applies to
-- Issues: #1945 (this rule), #1946 (hot reload), #1947 (multi-pod), #1144 (FR-1)
+- Issues: #1945 (this rule), #1946 (hot reload), #1947 (multi-pod), #1144 (FR-1), #2093 (cluster rollout program), #2096 (this acceptance and the family/module and gate corrections)
