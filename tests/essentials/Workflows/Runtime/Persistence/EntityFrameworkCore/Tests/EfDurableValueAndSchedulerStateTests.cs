@@ -178,6 +178,22 @@ public sealed class EfDurableValueAndSchedulerStateTests
     }
 
     [Fact]
+    public async Task Scheduler_state_row_with_a_newer_incompatible_schema_reports_skew_not_corruption()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Scheduler.SaveAsync(new SchedulerState("workflow-a", 1));
+        var row = await fixture.Context.SchedulerStates.SingleAsync();
+
+        // #2108: the version check has to run before EfSchedulerStateJson.Deserialize ever sees this
+        // row's content, or a newer module's changed shape is reported as corruption instead of skew.
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = v, v => row.ContentJson = v);
+
+        var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.Scheduler.FindAsync("workflow-a").AsTask());
+        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "RuntimeOperationalState", RuntimeOperationalStateEfModule.SchemaVersion);
+    }
+
+    [Fact]
     public async Task Execution_liveness_supports_create_only_cas_versioned_reads_and_bounded_pages_after_restart()
     {
         await using var database = await TestDatabase.CreateAsync();

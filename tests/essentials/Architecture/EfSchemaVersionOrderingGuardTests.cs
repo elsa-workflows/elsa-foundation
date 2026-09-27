@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using Xunit;
 using static Elsa.Architecture.Tests.RepoPaths;
 
@@ -20,10 +21,12 @@ namespace Elsa.Architecture.Tests;
 /// #2108: within-condition ordering is not enough. Four stores called <c>RuntimeArtifactJson.Deserialize</c>
 /// on a row's content in a statement <em>earlier than</em> the condition that checked its version, so the
 /// version term being first within its own condition never ran before the deserializer had already thrown
-/// on the changed shape a newer schema version wrote. The second guard below widens the rule to: no
-/// <c>RuntimeArtifactJson.Deserialize</c>, <c>PublishingEfJson.Deserialize</c>, or <c>JsonSerializer.Deserialize</c>
-/// call may precede the version check anywhere in its enclosing method, not just within the condition
-/// that holds the check.
+/// on the changed shape a newer schema version wrote. The second guard below widens the rule to: no call
+/// to a method named <c>Deserialize</c> may precede the version check anywhere in its enclosing method,
+/// not just within the condition that holds the check. A fifth instance - <c>EfSchedulerStateStore</c>'s
+/// own custom <c>EfSchedulerStateJson.Deserialize</c> wrapper - surfaced only once the rule stopped
+/// naming specific wrapper classes and started matching the method name itself, which is why the rule
+/// matches any <c>X.Deserialize(...)</c> call rather than a fixed list of receivers.
 /// </para>
 /// <para>
 /// Blind spot: detection here is lexical and scoped to a single method body. It cannot follow a
@@ -99,7 +102,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
 
         Assert.True(
             violations.Length == 0,
-            "RuntimeArtifactJson.Deserialize must not run before EfSchemaVersion.Readable/NotReadable " +
+            "No call to a method named Deserialize may run before EfSchemaVersion.Readable/NotReadable " +
             "anywhere in the same method, or a skewed row's changed shape is reported as corruption before " +
             "the version check ever gets to run (#2108). Offending call sites:" +
             Environment.NewLine + string.Join(Environment.NewLine, violations));
@@ -116,19 +119,23 @@ public sealed class EfSchemaVersionOrderingGuardTests
 
         // If any of these were renamed or merged elsewhere, this floor keeps the widened scan honest about
         // still reaching the exact call sites #2108 fixed, rather than passing because it stopped looking.
+        // EfSchedulerStateStore.cs joined this list in round 2, once the rule stopped naming specific
+        // wrapper classes and started matching any Deserialize call - which is how its own custom
+        // EfSchedulerStateJson.Deserialize wrapper surfaced.
         string[] storesFixedByIssue2108 =
         [
             "EfExecutionLivenessStateStore.cs",
             "EfWorkflowHoldStateStore.cs",
             "EfWorkflowAlterationStore.cs",
-            "WorkflowTestScopeEfSupport.cs"
+            "WorkflowTestScopeEfSupport.cs",
+            "EfSchedulerStateStore.cs"
         ];
 
         foreach (var store in storesFixedByIssue2108)
         {
             Assert.True(
                 deserializeCallSitesByFile.TryGetValue(store, out var count) && count > 0,
-                $"Expected the widened scan to examine '{store}' - one of the four stores #2108 fixed - and find at least one RuntimeArtifactJson.Deserialize call site in it.");
+                $"Expected the widened scan to examine '{store}' - one of the stores #2108 fixed - and find at least one Deserialize call site in it.");
         }
     }
 
@@ -191,6 +198,14 @@ public sealed class EfSchemaVersionOrderingGuardTests
             if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Id != content.Id)
                 throw new InvalidDataException("corrupt");
             """
+        },
+        {
+            "a custom wrapper class's Deserialize as an earlier statement",
+            """
+            var state = FooJson.Deserialize(row.ContentJson);
+            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Id != state.Id)
+                throw new InvalidDataException("corrupt");
+            """
         }
     };
 
@@ -247,6 +262,26 @@ public sealed class EfSchemaVersionOrderingGuardTests
                 throw new InvalidDataException("corrupt");
             var content = JsonSerializer.Deserialize<Content>(row.ContentJson, JsonOptions) ?? throw new JsonException("empty");
             return content;
+            """
+        },
+        {
+            "version check first, a custom wrapper class's Deserialize follows as the next statement",
+            """
+            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Revision <= 0)
+                throw new InvalidDataException("corrupt");
+            var state = FooJson.Deserialize(row.ContentJson);
+            return state;
+            """
+        },
+        {
+            "the wrapper method's own declaration is not mistaken for a call",
+            """
+            public static SchedulerState Deserialize(string content)
+            {
+                if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Revision <= 0)
+                    throw new InvalidDataException("corrupt");
+                return Project(content);
+            }
             """
         }
     };
@@ -382,32 +417,27 @@ public sealed class EfSchemaVersionOrderingGuardTests
     private static readonly string[] CallTokens = ["EfSchemaVersion.Readable(", "EfSchemaVersion.NotReadable("];
 
     /// <summary>
-    /// The row-content deserializers used by EF stores. <c>RuntimeArtifactJson.Deserialize</c> and
-    /// <c>PublishingEfJson.Deserialize</c> are the named wrappers; bare <c>JsonSerializer.Deserialize</c>
-    /// covers the stores that call it directly on row content instead of through one of those wrappers.
+    /// Matches any member-access call to a method named <c>Deserialize</c> - <c>X.Deserialize(</c>,
+    /// <c>X.Deserialize&lt;T&gt;(</c>, or a nested-generic argument list such as
+    /// <c>X.Deserialize&lt;Dictionary&lt;string, string&gt;&gt;(</c> - regardless of the receiver. A fixed
+    /// token list (<c>RuntimeArtifactJson.Deserialize</c>, <c>PublishingEfJson.Deserialize</c>, ...) missed
+    /// custom wrappers like <c>EfSchedulerStateJson.Deserialize</c> (#2108); matching the method name
+    /// itself instead of naming every wrapper class closes that gap. The lookbehind for a preceding
+    /// <c>.</c> is deliberate: it matches call sites (always member-access in this codebase) and skips
+    /// the wrapper methods' own declarations, e.g. <c>public static T Deserialize&lt;T&gt;(string value)</c>,
+    /// which never has a <c>.</c> immediately before <c>Deserialize</c>.
     /// </summary>
-    private static readonly string[] DeserializeTokens = ["RuntimeArtifactJson.Deserialize", "PublishingEfJson.Deserialize", "JsonSerializer.Deserialize"];
+    private static readonly Regex DeserializeCallPattern = new(@"(?<=\.)\s*Deserialize\s*(?:<[^()]*>)?\s*\(", RegexOptions.Compiled);
 
     private static int CountDeserializeCalls(string source)
     {
         var masked = MaskLiteralsAndComments(source);
-        var count = 0;
-        foreach (var token in DeserializeTokens)
-        {
-            var index = masked.IndexOf(token, StringComparison.Ordinal);
-            while (index >= 0)
-            {
-                count++;
-                index = masked.IndexOf(token, index + token.Length, StringComparison.Ordinal);
-            }
-        }
-
-        return count;
+        return DeserializeCallPattern.Matches(masked).Count;
     }
 
     /// <summary>
     /// Returns the one-based line number of every <c>EfSchemaVersion.Readable</c> /
-    /// <c>NotReadable</c> call that has a <c>RuntimeArtifactJson.Deserialize</c> call earlier in its
+    /// <c>NotReadable</c> call that has a <see cref="DeserializeCallPattern"/> match earlier in its
     /// enclosing method - whether that deserialize call sits in an earlier statement, an earlier
     /// nested <c>try</c>/<c>if</c>/<c>using</c> block, or the same condition <see cref="HasEarlierClause"/>
     /// already covers.
@@ -415,6 +445,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
     private static int[] FindDeserializeBeforeVersionCheck(string source)
     {
         var masked = MaskLiteralsAndComments(source);
+        var deserializeCallIndices = DeserializeCallPattern.Matches(masked).Select(match => match.Index).Order().ToArray();
         var violations = new List<int>();
         foreach (var token in CallTokens)
         {
@@ -422,7 +453,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             while (index >= 0)
             {
                 var methodStart = FindEnclosingMethodStart(masked, index);
-                if (DeserializeTokens.Any(deserializeToken => masked.IndexOf(deserializeToken, methodStart, index - methodStart, StringComparison.Ordinal) >= 0))
+                if (deserializeCallIndices.Any(deserializeIndex => deserializeIndex >= methodStart && deserializeIndex < index))
                     violations.Add(LineOf(source, index));
 
                 index = masked.IndexOf(token, index + token.Length, StringComparison.Ordinal);
