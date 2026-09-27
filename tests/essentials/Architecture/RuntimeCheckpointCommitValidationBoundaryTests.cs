@@ -40,7 +40,6 @@ public sealed partial class RuntimeCheckpointCommitValidationBoundaryTests
     {
         var referencing = ModuleRoots.ProductionSourceFiles(RepoRoot)
             .Select(path => Path.GetRelativePath(RepoRoot, path).Replace('\\', '/'))
-            .Where(path => !IsBuildOutput(path))
             .Where(path => CheckpointCommitStoreType().IsMatch(File.ReadAllText(Path.Join(RepoRoot, path))))
             .Order(StringComparer.Ordinal);
 

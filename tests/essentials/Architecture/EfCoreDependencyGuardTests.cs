@@ -587,7 +587,7 @@ public sealed class EfCoreDependencyGuardTests
     public void No_source_file_outside_the_admitted_surfaces_mentions_ef_core()
     {
         var offenders = ModuleRoots.ProductionSourceFiles(RepoRoot)
-            .Where(file => !IsBuildOutput(file) && !IsAdmittedEfSource(file))
+            .Where(file => !IsAdmittedEfSource(file))
             .Where(file => File.ReadAllText(file).Contains(EfPackageToken, StringComparison.Ordinal))
             .Select(file => Path.GetRelativePath(RepoRoot, file))
             .Order()
