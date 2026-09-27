@@ -2,7 +2,7 @@
 
 **Feature Branch**: `claude/2093-rollout-specs`
 **Created**: 2026-09-27
-**Status**: Draft
+**Status**: Approved
 **Input**: Workstream B6, [issue #2102](https://github.com/elsa-workflows/elsa-foundation/issues/2102), of the
 cluster-safe schema rollout program [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093). A feature
 that needs data only a new persisted-schema version can hold stays dormant until that version is finalized. A dormant
@@ -13,8 +13,8 @@ Decision of record: [ADR 0078](../../docs/adr/0078-workflow-executions-are-virtu
 "Features that need the new data wait for finalization": a dormant feature says why, a write that needs dormant data
 is refused rather than dropped, and "modules check dormancy through one shared helper over the finalized version". It
 also records the rejection of two alternatives: "Early use of new-data features where the data lives only in new
-columns" and "Leave dormancy to each module". ADR 0078 is Proposed, and B0
-([#2096](https://github.com/elsa-workflows/elsa-foundation/issues/2096)) accepts it.
+columns" and "Leave dormancy to each module". ADR 0078 is accepted with these decisions through B0
+([#2096](https://github.com/elsa-workflows/elsa-foundation/issues/2096), PR #2118).
 
 Companion specs: [spec 180](../180-schema-upcaster-chain/spec.md) (B4,
 [#2100](https://github.com/elsa-workflows/elsa-foundation/issues/2100)) defines schema families and the write path

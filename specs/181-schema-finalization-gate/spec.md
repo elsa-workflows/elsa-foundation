@@ -2,7 +2,7 @@
 
 **Feature Branch**: `claude/2093-rollout-specs`
 **Created**: 2026-09-27
-**Status**: Draft
+**Status**: Approved
 **Input**: Workstream B5, [issue #2101](https://github.com/elsa-workflows/elsa-foundation/issues/2101), of the
 cluster-safe schema rollout program [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093). A host
 reads both formats as soon as it runs a new persisted-schema version, and keeps writing the old format until that
@@ -14,8 +14,8 @@ Decisions of record: [ADR 0078](../../docs/adr/0078-workflow-executions-are-virt
 ("The first consumers", "Features that need the new data wait for finalization", "Invariants every membership or
 actor provider must preserve") and
 [ADR 0077](../../docs/adr/0077-a-module-upgrades-in-place-only-when-its-persisted-schema-is-unchanged.md) ("How this
-composes with runtime module installation", "Known gap"). Both are Proposed, and B0
-([#2096](https://github.com/elsa-workflows/elsa-foundation/issues/2096)) accepts them. The refusal paths this spec
+composes with runtime module installation", "Known gap"). Both are accepted with these decisions through B0
+([#2096](https://github.com/elsa-workflows/elsa-foundation/issues/2096), PR #2118). The refusal paths this spec
 reuses are decided in [ADR 0076](../../docs/adr/0076-persistence-tooling-runs-inside-the-host-closure.md), D9 and D13,
 and specified in [spec 171](../171-persistence-script-cli/spec.md).
 
@@ -316,7 +316,7 @@ after each one.
   restored secret (spec 171, FR-061).
 - **FR-018**: A member that learns its membership has lapsed MAY keep writing through a gated EF module at the write
   version it last observed as finalized (FR-009): that version is still readable by every counted member, and spec
-  180's FR-015 already refuses it overwriting a row it cannot read. It MUST NOT write any version newer than that
+  180's FR-018 already refuses it overwriting a row it cannot read. It MUST NOT write any version newer than that
   observed version until it has rejoined as a new incarnation and passed FR-013 to FR-015 again (spec 183, Decisions,
   Q22). This narrows the rule so that a membership-store outage no longer stops gated writes fleet-wide by itself.
 
@@ -446,8 +446,9 @@ Recorded 2026-09-27, when the owner answered this spec's open questions on #2093
   compares families, so the record is keyed per family.
 - **Q8 — Detecting a misconfigured cluster.** A cluster must declare itself: composing a durable membership provider
   is the declaration. There is no startup warning and no detection of hosts sharing a database while each uses the
-  in-process provider (FR-021). A missed declaration fails loudly, not silently, once it bites: through FR-012's
-  write refusal or FR-015's activation refusal.
+  in-process provider (FR-021) — against the draft's own recommendation, a read-only startup diagnostic. A missed
+  declaration fails loudly, not silently, once it bites: through FR-012's write refusal or FR-015's activation
+  refusal.
 - **Q9 — An HTTP surface for hold and release.** Yes, as a second step, under the existing `module-management.manage`
   host-control permission (FR-020a). The CLI stays the pre-host path (FR-020).
 - **Q10 — Enable-time refusal under `AutoMigrate`.** The check reads the finalization record under both policies

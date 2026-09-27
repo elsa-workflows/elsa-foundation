@@ -2,7 +2,7 @@
 
 **Feature Branch**: `claude/2093-rollout-specs`
 **Created**: 2026-09-27
-**Status**: Draft
+**Status**: Approved
 **Input**: Workstream B4, [issue #2100](https://github.com/elsa-workflows/elsa-foundation/issues/2100), of the
 cluster-safe schema rollout program [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093). Each
 persisted-schema version of a module ships a transform from its predecessor. Reads apply the chain, and a row is
@@ -11,8 +11,8 @@ upgraded when it is next written, so a workflow started under one version can re
 Decisions of record: [ADR 0077](../../docs/adr/0077-a-module-upgrades-in-place-only-when-its-persisted-schema-is-unchanged.md)
 (Decision, "Skew is not corruption") and
 [ADR 0078](../../docs/adr/0078-workflow-executions-are-virtual-actors-and-cluster-membership-is-a-foundation-contract.md)
-("The first consumers", "The schema version gate"). Both are Proposed, and B0
-([#2096](https://github.com/elsa-workflows/elsa-foundation/issues/2096)) accepts them. The owner's decisions of
+("The first consumers", "The schema version gate"). Both are accepted with these decisions through B0
+([#2096](https://github.com/elsa-workflows/elsa-foundation/issues/2096), PR #2118). The owner's decisions of
 2026-09-23/24, recorded on #2093, bind this spec.
 
 Companion specs: [spec 181](../181-schema-finalization-gate/spec.md) (B5,
@@ -101,7 +101,7 @@ A workflow suspends while the host runs version 1 of the runtime's families. The
 stimulus arrives, a host running version 3 loads the suspended execution, bookmarks and scheduler state, and resumes
 it.
 
-**Why this priority**: This is the capability the chain exists for. Rows outlive versions (ADR 0078, "The first
+**Why this priority**: This is what the chain exists to do. Rows outlive versions (ADR 0078, "The first
 consumers"), and without the chain the version-3 host refuses every version-1 row as skew.
 
 **Independent Test**: Commit version-1 fixture rows for a family, run the store's read path in a build whose chain is
@@ -425,4 +425,4 @@ Recorded 2026-09-27, when the owner answered this spec's open questions on #2093
 - **Q5 — Identity-changing format changes.** A format change that would alter an executable's identity hash is never
   made in place. It ships as a new format version alongside every format version that has ever shipped, and the
   build keeps a reader for each of them (FR-028), preserving the Elsa constitution's §E2.6.1 promise.
-- **Q6 — Glossary entries.** Added when the specs are approved, not here.
+- **Q6 — Glossary entries.** Added when the specs were approved (PR #2109), not here.

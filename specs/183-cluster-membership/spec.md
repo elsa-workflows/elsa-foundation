@@ -1,8 +1,8 @@
 # Feature Specification: Cluster Membership
 
-**Feature Branch**: `claude/2093-membership-spec`
+**Feature Branch**: `claude/2093-rollout-specs`
 **Created**: 2026-09-27
-**Status**: Draft
+**Status**: Approved
 **Input**: Workstreams B1 ([#2097](https://github.com/elsa-workflows/elsa-foundation/issues/2097)), B2
 ([#2098](https://github.com/elsa-workflows/elsa-foundation/issues/2098)) and B3
 ([#2099](https://github.com/elsa-workflows/elsa-foundation/issues/2099)) of the cluster-safe schema rollout program
@@ -13,8 +13,9 @@ persisted-schema versions it can read.
 
 Decision of record: [ADR 0078](../../docs/adr/0078-workflow-executions-are-virtual-actors-and-cluster-membership-is-a-foundation-contract.md)
 (Decision; "Invariants every membership or actor provider must preserve"; "Actor frameworks"; "Considered options",
-in particular the rejection of "Durable membership on every host, even alone"; Consequences). It is Proposed, and B0
-([#2096](https://github.com/elsa-workflows/elsa-foundation/issues/2096)) accepts it. The boundary it is bounded by is
+in particular the rejection of "Durable membership on every host, even alone"; Consequences). It is accepted with
+these decisions through B0 ([#2096](https://github.com/elsa-workflows/elsa-foundation/issues/2096), PR #2118). The
+boundary it is bounded by is
 [ADR 0031](../../docs/adr/0031-runtime-burst-execution-sticky-single-writer-drain-with-in-process-fast-path.md): durable
 state is the truth, and in-process memory is only a cache. The rules this spec applies are the
 [framework constitution](../../.specify/memory/constitution-framework.md)'s §2.1 (three-layer separation), §2.6.2
@@ -183,8 +184,8 @@ development machine, the second's join MUST be refused rather than displacing th
 
 **Why this priority**: ADR 0078 makes "a restarted host is a new member" part of the contract, and that a crashed
 host's leases must not wait out their own timeouts. The same mechanism must never let a second live process seize a
-host id already in use. FR-003 now requires an explicit host id whenever a durable provider is composed, which
-removes the case where the machine-name default alone caused this collision; FR-004's refusal is the backstop for
+host id already in use. FR-003a now requires an explicit host id whenever a durable provider is composed, which
+removes the case where the machine-name default alone caused this collision; FR-004b's refusal is the backstop for
 the remaining case, an operator explicitly configuring two live processes with the same id.
 
 **Independent Test**: With the EF provider and a controllable clock, start a host, kill it, start it again with the
@@ -272,10 +273,10 @@ for identical fleets.
 - **SQLite as the membership store.** Several processes can share one SQLite file only on one machine. It suits
   development and tests, not a multi-machine cluster (FR-033).
 - **A host id that is too long, blank or malformed.** Configuration is refused at startup with a diagnostic.
-- **A durable provider composed with no explicit host id.** Refused at startup with a diagnostic (FR-003;
+- **A durable provider composed with no explicit host id.** Refused at startup with a diagnostic (FR-003a;
   Decisions, Q24), before any join is attempted.
 - **Two live durable-provider processes explicitly configured with the same host id.** The second's join is refused
-  at startup with a diagnostic naming the host id and instructing the operator to configure a distinct one (FR-004).
+  at startup with a diagnostic naming the host id and instructing the operator to configure a distinct one (FR-004b).
   The first is undisturbed.
 - **An ephemeral pod restarts under a new host id.** The old entry is never displaced, because no incarnation joins
   under its host id again. It is counted until its own entry expires, which only delays counting, and never lets two
@@ -343,21 +344,23 @@ for identical fleets.
     expiry; it is never made unsafe by it, because the old entry is not displaced or reused.
   - On a machine that runs more than one Elsa process (a developer machine, or multi-process hosting), the
     machine-name default gives every process on it the same host id. This is the one case the default does not
-    resolve safely by itself: two live processes must never share a host id. FR-004 refuses the second process's join
+    resolve safely by itself: two live processes must never share a host id. FR-004b refuses the second process's join
     rather than letting it displace the first.
 
-  The machine-name default applies only to the in-process provider. A host MUST configure an explicit host id
-  whenever a durable membership provider (B2, or any other provider under FR-061) is composed; starting a durable
-  provider without one MUST be refused at startup with a diagnostic. A clustered deployment therefore states its own
-  identity instead of relying solely on FR-004's collision refusal to catch a mistake (Decisions, Q24).
+  The machine-name default applies only to the in-process provider.
+- **FR-003a**: A host MUST configure an explicit host id whenever a durable membership provider (B2, or any other
+  provider under FR-061) is composed; starting a durable provider without one MUST be refused at startup with a
+  diagnostic. A clustered deployment therefore states its own identity instead of relying solely on FR-004b's
+  collision refusal to catch a mistake (Decisions, Q24).
 - **FR-004**: A member's incarnation MUST be new each time the host process starts and each time it rejoins after a
-  lapse. It is an opaque, unique value that consumers compare only for equality. When an incarnation joins under a
-  host id whose most recently joined incarnation is not live (it has expired or left), that earlier incarnation MUST
-  be marked displaced. When an incarnation joins under a host id whose most recently joined incarnation is still live
+  lapse. It is an opaque, unique value that consumers compare only for equality.
+- **FR-004a**: When an incarnation joins under a host id whose most recently joined incarnation is not live (it has
+  expired or left), that earlier incarnation MUST be marked displaced. Only a restart of the same host — one where
+  the earlier incarnation has stopped heartbeating, left, or expired — may displace it.
+- **FR-004b**: When an incarnation joins under a host id whose most recently joined incarnation is still live
   (heartbeating and not expired), the join MUST instead be refused at startup with a diagnostic naming the host id and
   instructing the operator to configure a distinct one; the existing live incarnation MUST NOT be displaced or
-  otherwise disturbed. Only a restart of the same host — one where the earlier incarnation has stopped heartbeating,
-  left, or expired — may displace it. A race where two joins are concurrently in flight for one host id MUST resolve
+  otherwise disturbed. A race where two joins are concurrently in flight for one host id MUST resolve
   to at most one live incarnation surviving; if both observe the other as live and both are refused, that is
   acceptable, but a live incarnation MUST NOT ever be silently displaced by another live one.
 - **FR-005**: A member's status MUST move only forward within an incarnation: joining, then active, then draining, then
@@ -501,7 +504,7 @@ for identical fleets.
   0078, invariant 2).
 - **FR-036**: Adopting the member's host id as `WorkflowsRuntimeDistributed`'s `NodeId`, and reclaiming a lapsed or
   displaced member's leases at once, are B7's. This spec only exposes the host id, the incarnation, displacement and
-  lapse (FR-003, FR-004, FR-007, FR-013) that they need.
+  lapse (FR-003, FR-004, FR-004a, FR-007, FR-013) that they need.
 
 **Diagnostics**
 
@@ -510,15 +513,12 @@ and MUST make visible in its own entry in the fleet view, so that a failure in a
 single requirement:
 
 - **FR-037**: A member MUST report a lapse (FR-007).
-- **FR-038**: A member MUST report a displacement (FR-004).
+- **FR-038**: A member MUST report a displacement (FR-004a).
 - **FR-039**: A member MUST report a duplicate host id: a displacement while its own heartbeats were still succeeding
   (FR-007).
 - **FR-040**: A member MUST report clock skew, naming both hosts (FR-029).
 - **FR-041**: A member MUST report an entry it cannot interpret (FR-012).
 - **FR-042**: A member MUST report a failed fresh read.
-- **FR-043**: A member MUST report shells of one process that disagree about membership, as a defensive backstop:
-  FR-017's host-level selection makes this impossible by construction, so the diagnostic exists only to catch a
-  future regression of that guarantee, not a case this spec expects to occur.
 
 **Conformance suite**
 
@@ -621,9 +621,9 @@ Spec 181's Q8 (a misconfigured cluster) and Q11 (fleets that span databases) are
   and each deliberately broken provider of FR-060 fails at least one named test.
 - **SC-008**: The contract package references no provider package, and one consumer test suite runs unchanged against
   the in-process and EF providers (#2097, Acceptance).
-- **SC-009**: A durable provider composed with no explicit host id refuses at startup with a diagnostic, before any
-  join is attempted. Two durable-provider processes explicitly configured with the same host id still resolve to at
-  most one live incarnation (FR-004), as SC-006 exercises for two opt-in providers.
+- **SC-009**: A durable provider composed with no explicit host id refuses at startup with a diagnostic (FR-003a),
+  before any join is attempted. Two durable-provider processes explicitly configured with the same host id still
+  resolve to at most one live incarnation (FR-004b), as SC-006 exercises for two opt-in providers.
 - **SC-010**: A readability query given a database identity counts only members whose entry for the family names it
   or names none; a member serving a different database never contributes to that answer.
 
@@ -655,7 +655,7 @@ Spec 181's Q8 (a misconfigured cluster) and Q11 (fleets that span databases) are
   lease's own timeout (ADR 0078, "Draining and failover"). This belongs to B7 (#2103) (Decisions).
 - Any actor-framework provider. This spec sets only the rules for admitting one (FR-061).
 - The expand-only migration guard (B8, [#2104](https://github.com/elsa-workflows/elsa-foundation/issues/2104)).
-- Operator surfaces for the fleet view, such as a CLI command, an HTTP endpoint or Attention items. FR-037 to FR-043
+- Operator surfaces for the fleet view, such as a CLI command, an HTTP endpoint or Attention items. FR-037 to FR-042
   make the conditions visible; carrying them to operators is left to spec 181's status and spec 182's Attention
   contributor.
 - Fleets whose members cannot all reach one membership store.
@@ -682,7 +682,7 @@ Recorded 2026-09-27, when the owner answered this spec's open questions on #2093
   version it last observed as finalized, rather than stopping every gated write. Spec 180's FR-015 already refuses
   it overwriting a row it cannot read, so the narrower rule keeps writes available through a membership outage
   without losing safety.
-- **Q23 — Glossary entries.** Added when the specs are approved, alongside the entries proposed for specs 180 to 182.
+- **Q23 — Glossary entries.** Added when the specs were approved (PR #2109), alongside the entries for specs 180 to 182.
 - **Q24 — The default host id source.** The machine name for the in-process provider. An explicit host id is
-  REQUIRED whenever a durable provider is composed (FR-003); starting one without an explicit id is refused at
-  startup. Two live processes that claim the same id are refused rather than displacing each other (FR-004).
+  REQUIRED whenever a durable provider is composed (FR-003a); starting one without an explicit id is refused at
+  startup. Two live processes that claim the same id are refused rather than displacing each other (FR-004b).
