@@ -1,9 +1,11 @@
 using CShells.Lifecycle;
 using CShells.Features;
+using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Persistence.EntityFramework;
@@ -15,17 +17,40 @@ namespace Elsa.Persistence.EntityFramework;
 /// <see cref="EfMigrateOptions.SectionName"/>, so an operator can apply migrations out of process and start hosts
 /// in validate mode without a code change.
 /// </summary>
+/// <remarks>
+/// Once the schema is current and its post-migration actions audited, the module's finalization gate admits it
+/// (spec 181, FR-015): a family whose finalized version this host cannot read refuses the module here, under both
+/// policies, before any shell task, seeder or store touches its tables, exactly as a pending migration under
+/// <see cref="EfMigratePolicy.Validate"/> does. The gate then keeps evaluating and refreshing in the background until
+/// the shell or host stops, so writers switch versions without a restart or a shell reload (FR-011).
+/// </remarks>
 public sealed class EfModuleMigrator<TContext>(
     IServiceScopeFactory scopes,
     EfModuleMigration<TContext> migration,
-    IOptions<EfMigrateOptions> options) : IHostedService, IShellInitializer
+    IOptions<EfMigrateOptions> options,
+    IServiceProvider services) : IHostedService, IShellInitializer, IAsyncDisposable
     where TContext : DbContext
 {
+    private readonly SemaphoreSlim _admission = new(1, 1);
+    private readonly CancellationTokenSource _stopping = new();
+    private EfSchemaModuleGate? _gate;
+    private Task? _gateLoop;
+
+    /// <summary>The module's finalization gate, once it has admitted the module.</summary>
+    public EfSchemaModuleGate? Gate => _gate;
+
     public Task InitializeAsync(CancellationToken cancellationToken = default) => ApplyAsync(cancellationToken);
 
     public Task StartAsync(CancellationToken cancellationToken) => ApplyAsync(cancellationToken);
 
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StopAsync(CancellationToken cancellationToken) => StopGateAsync();
+
+    public async ValueTask DisposeAsync()
+    {
+        await StopGateAsync();
+        _stopping.Dispose();
+        _admission.Dispose();
+    }
 
     private async Task ApplyAsync(CancellationToken cancellationToken)
     {
@@ -45,6 +70,57 @@ public sealed class EfModuleMigrator<TContext>(
             migration.Provider,
             migration.PostMigration,
             cancellationToken);
+        await AdmitAsync(context, cancellationToken);
+    }
+
+    /// <summary>
+    /// Admits the module through its finalization gate, once however many hooks run, and starts the gate's background
+    /// evaluation and refresh. A refusal propagates, so the shell or host does not activate the module.
+    /// </summary>
+    private async Task AdmitAsync(TContext context, CancellationToken cancellationToken)
+    {
+        await _admission.WaitAsync(cancellationToken);
+        try
+        {
+            if (_gate is not null)
+                return;
+            var families = EfSchemaModuleFamilies.For(migration.Module, typeof(TContext).Assembly);
+            // A context that owns no schema family, such as a test's own, has nothing to finalize.
+            if (families.Chains.Count == 0)
+                return;
+
+            var gate = new EfSchemaModuleGate(
+                families,
+                services.GetService<IEfSchemaFleet>(),
+                services.GetService<EfSchemaFinalizationObservations>() ?? new EfSchemaFinalizationObservations(),
+                services.GetService<IOptions<EfSchemaFinalizationOptions>>()?.Value ?? new EfSchemaFinalizationOptions(),
+                services.GetService<TimeProvider>(),
+                services.GetService<ILoggerFactory>()?.CreateLogger<EfModuleMigrator<TContext>>(),
+                publishBeforeRead: !migration.HostComposed);
+            await gate.ActivateAsync(context, cancellationToken);
+            services.GetService<EfSchemaFinalizationGates>()?.Register(gate);
+            _gate = gate;
+            _gateLoop = Task.Run(() => gate.RunAsync(WithContextAsync, _stopping.Token), CancellationToken.None);
+        }
+        finally
+        {
+            _admission.Release();
+        }
+    }
+
+    private async Task WithContextAsync(Func<DbContext, Task> action, CancellationToken cancellationToken)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        if (scope.ServiceProvider.GetService<TContext>() is { } context)
+            await action(context);
+    }
+
+    private async Task StopGateAsync()
+    {
+        if (!_stopping.IsCancellationRequested)
+            await _stopping.CancelAsync();
+        if (_gateLoop is { } loop)
+            await loop;
     }
 }
 
@@ -54,11 +130,17 @@ public sealed class EfModuleMigrator<TContext>(
 /// declaration this build cannot honour is refused while a host is still wiring itself up rather than
 /// mid-migrate.
 /// </summary>
+/// <param name="HostComposed">
+/// True for a module composed once on the host container and migrated before cluster membership joins, the membership
+/// module itself. Its finalization gate cannot publish this host's report before reading its records, because the join
+/// is that publish, so it is admitted without one and admitted again, publish first, once the member has joined.
+/// </param>
 public sealed record EfModuleMigration<TContext>(
     string ExpectedProviderName,
     string Module,
     string Provider,
-    IReadOnlyList<IEfPostMigrationAction> PostMigration) where TContext : DbContext;
+    IReadOnlyList<IEfPostMigrationAction> PostMigration,
+    bool HostComposed = false) where TContext : DbContext;
 
 public static class EfModuleMigrationServiceCollectionExtensions
 {
@@ -97,7 +179,8 @@ public static class EfModuleMigrationServiceCollectionExtensions
             EfRelationalProviderBinding.ExpectedProviderName(provider),
             module,
             EfRelationalProviderBinding.Select(provider, module, "Sqlite", "SqlServer", "PostgreSql", "MySql"),
-            EfPostMigrationActions.Create(module, descriptor?.PostMigration ?? []));
+            EfPostMigrationActions.Create(module, descriptor?.PostMigration ?? []),
+            HostComposed: !onShellActivation);
         // Registered first so the validator that reports a missing engine starts ahead of every migrator.
         services.AddEfProviderBindingValidation<TContext>(provider);
         foreach (var existing in services.Where(descriptor => descriptor.ServiceType == typeof(EfModuleMigration<TContext>)).ToArray())
@@ -107,6 +190,10 @@ public static class EfModuleMigrationServiceCollectionExtensions
         // One binding per container however many modules register a migrator; a host that configures the policy in
         // code after this call still wins, because IConfigureOptions run in registration order.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<EfMigrateOptions>, EfMigrateOptionsConfigurator>());
+        // One registry of finalization gates per container, and the gate's timings from that container's configuration.
+        services.TryAddSingleton<EfSchemaFinalizationGates>();
+        services.AddOptions<EfSchemaFinalizationOptions>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<EfSchemaFinalizationOptions>, EfSchemaFinalizationOptionsConfigurator>());
         if (services.Any(descriptor => descriptor.ServiceType == typeof(EfModuleMigrator<TContext>)))
             return services;
         // CShells runs initializers by lifecycle phase, not registration order, and shell tasks and seeders

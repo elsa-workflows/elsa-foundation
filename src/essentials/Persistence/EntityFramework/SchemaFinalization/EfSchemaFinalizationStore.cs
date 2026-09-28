@@ -122,6 +122,18 @@ public sealed class EfSchemaFinalizationStore
     }
 
     /// <summary>
+    /// <see cref="FindAsync"/> for a caller on a synchronous path, such as a synchronous <c>SaveChanges</c> that must
+    /// re-read a finalized version before it writes (spec 180, FR-015). It tracks nothing, so it leaves a context's
+    /// pending changes as they were.
+    /// </summary>
+    public SchemaFinalizationRecord? Find(string family)
+    {
+        ValidateFamily(family);
+        var row = Records.AsNoTracking().SingleOrDefault(record => record.Family == family);
+        return row is null ? null : Read(row);
+    }
+
+    /// <summary>
     /// The family's record, created now if it has none: finalized at <paramref name="initialVersion"/>, with the
     /// completion recorded at the same version (spec 181, Edge Cases, "A database with no record yet"; spec 186,
     /// FR-016). A record that exists is returned as it is, whatever <paramref name="initialVersion"/> says.
