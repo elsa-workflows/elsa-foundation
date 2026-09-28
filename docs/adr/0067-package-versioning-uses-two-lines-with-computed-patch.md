@@ -1,9 +1,9 @@
 ---
 status: proposed
 date: 2026-08-07
-amended: 2026-09-25
+amended: 2026-09-28
 decision_context: FR-1 discussion on issue #1144, agreed by Joey Barten, Sipke Schoorstra and Frans van Ek
-amendment_context: 2026-09-22, patch derivation changed from commit height to last-published state after the rename hazard was measured; agreed on PR #1948 by Frans van Ek, Joey Barten and Sipke Schoorstra, the same three who agreed the original. 2026-09-24, Line A membership is defined by a rule rather than a heuristic, which settles the six undecided packages; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten. 2026-09-24, the last-published record moves out of the generated dependency map into its own committed file that only publishing, or its audited repair workflow, writes, and on 2026-09-25 onto a dedicated publish-state branch so that writing it needs no bypass of main's protection; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten.
+amendment_context: 2026-09-22, patch derivation changed from commit height to last-published state after the rename hazard was measured; agreed on PR #1948 by Frans van Ek, Joey Barten and Sipke Schoorstra, the same three who agreed the original. 2026-09-24, Line A membership is defined by a rule rather than a heuristic, which settles the six undecided packages; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten. 2026-09-24, the last-published record moves out of the generated dependency map into its own committed file that only publishing, or its audited repair workflow, writes, and on 2026-09-25 onto a dedicated publish-state branch so that writing it needs no bypass of main's protection; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten. 2026-09-28, Line A sharing corrected: both hosts now share all ten (#2130, #2126); approved by Sipke Schoorstra.
 ---
 
 # Package versioning uses two version lines with a computed patch digit
@@ -201,18 +201,20 @@ propagates through the reverse closure.
   same way. The closure property is mechanically checkable — a Line A package referencing a Line B package
   is a defect — and should be enforced by an architecture test once the dependency map records each
   project's version line.
-- Every host must share all of Line A. `Elsa.Workbench` does not yet: it shares seven of the ten but
-  omits `Elsa.Events.Core`, `Elsa.Attention.Core` and `Elsa.Pipelines.Core`, although six of the
-  assemblies it does share depend on `Elsa.Events.Core` and seven on `Elsa.Pipelines.Core`. Which
-  assemblies each host shares is the clean host specification's concern (#1145), which now has a rule
-  to derive them from.
+- Every host must share all of Line A. Both hosts now do: `Elsa.Workbench` has since
+  [#2130](https://github.com/elsa-workflows/elsa-foundation/issues/2130) and `Elsa.Foundation.Host`
+  since [#2126](https://github.com/elsa-workflows/elsa-foundation/issues/2126). Which assemblies each
+  host shares is the clean host specification's concern (#1145), which now has a rule to derive them
+  from.
 
-  *Amended 2026-09-28:* This decision originally said neither host shared all of Line A, and that
-  `Elsa.Foundation.Host` shared no Elsa assembly at all. `Elsa.Foundation.Host` now shares Line A in
-  full: it references the ten Line A contract projects listed in `VersionLines.props`, shares them
-  with the Nuplane packages it loads, and a computed-version build records them in its `deps.json` and
-  `appsettings.Production.json` at the version the feed carries, per
-  [#2126](https://github.com/elsa-workflows/elsa-foundation/issues/2126).
+  *Amended 2026-09-28:* This decision originally said neither host shared all of Line A: `Elsa.Workbench`
+  shared seven of the ten, omitting `Elsa.Events.Core`, `Elsa.Attention.Core` and `Elsa.Pipelines.Core`,
+  and `Elsa.Foundation.Host` shared no Elsa assembly at all. Both hosts now share all ten. `Elsa.Workbench`'s
+  `ComputedVersions/appsettings.Production.json` declares all ten as of
+  [#2130](https://github.com/elsa-workflows/elsa-foundation/issues/2130). `Elsa.Foundation.Host` references
+  the ten Line A contract projects listed in `VersionLines.props`, shares them with the Nuplane packages it
+  loads, and a computed-version build records them in its `deps.json` and `appsettings.Production.json` at
+  the version the feed carries, per [#2126](https://github.com/elsa-workflows/elsa-foundation/issues/2126).
 - Nuplane must promote a domain's `.Core` to a shared assembly within that domain's subtree, for
   first-party and third-party domains alike; otherwise two features in one domain load separate copies
   and their types do not match. That work belongs to the clean host effort.

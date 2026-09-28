@@ -82,6 +82,14 @@ public sealed class DockerBuildContextGuardTests
                 continue;
             }
 
+            var applicationProjects = ApplicationProjectsOf(text);
+            if (applicationProjects.Count == 0)
+            {
+                violations.Add($"{label}: no dotnet restore/publish line names a .csproj, so the application-project " +
+                    "guard would check nothing for it");
+                continue;
+            }
+
             var (applicationFiles, unresolvable) = ResolveRequiredFilesForDockerfile(RepoRoot, text);
             violations.AddRange(unresolvable.Select(entry => $"{label}: {entry}"));
 
@@ -236,6 +244,26 @@ public sealed class DockerBuildContextGuardTests
         var (copies, missingRestore) = CopyInstructionsBeforeRestore(dockerfile);
         Assert.Null(missingRestore);
         Assert.Contains("VersionLines.props", UncoveredRequiredFiles(copies, ["VersionLines.props"]));
+    }
+
+    /// <summary>
+    /// The gap this finding fixes (round 2 of #2126): a <c>dotnet restore</c> line that names a <c>.sln</c>, or
+    /// none at all, yields no application project, and the per-Dockerfile guard must not check that Dockerfile
+    /// vacuously as a result - <see cref="Every_dockerfile_copies_every_required_build_file_before_restore"/>
+    /// flags it by name instead of silently passing.
+    /// </summary>
+    [Theory]
+    [InlineData("RUN dotnet restore Fixture.sln")]
+    [InlineData("RUN dotnet restore")]
+    public void A_dockerfile_whose_restore_names_no_csproj_yields_no_application_projects(string restoreInstruction)
+    {
+        var dockerfile = $"""
+            FROM mcr.microsoft.com/dotnet/sdk:10.0
+            COPY . .
+            {restoreInstruction}
+            """;
+
+        Assert.Empty(ApplicationProjectsOf(dockerfile));
     }
 
     [Fact]
