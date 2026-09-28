@@ -99,7 +99,7 @@ internal static class WorkflowDispatchEfSupport
         string scope,
         string? expectedDispatchId = null)
     {
-        if (EfSchemaVersion.NotReadable("RuntimeWorkflowDispatch", row.SchemaVersion, RuntimeWorkflowDispatchEfModule.SchemaVersion) ||
+        if (EfSchemaVersion.NotReadable(RuntimeWorkflowDispatchEfModule.Chain, row.SchemaVersion) ||
             row.Revision <= 0 ||
             row.ScopeKey != EfRelationalIdentity.Encode(scope) ||
             row.ScopeKeyHash != EfRelationalIdentity.Hash(scope))
@@ -121,7 +121,7 @@ internal static class WorkflowDispatchEfSupport
         WorkflowDispatchRecord record;
         try
         {
-            record = RuntimeArtifactJson.Deserialize<WorkflowDispatchRecord>(row.ContentJson);
+            record = RuntimeArtifactJson.Deserialize<WorkflowDispatchRecord>(RuntimeWorkflowDispatchEfModule.Chain.Upcast(row.SchemaVersion, RuntimeWorkflowDispatchEfModule.TableName, nameof(row.ContentJson), row.ContentJson));
         }
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
         {

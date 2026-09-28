@@ -277,14 +277,15 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
                 .SingleOrDefaultAsync(operation => operation.ScopeKey == ScopeKey && operation.BatchId == batchId, cancellationToken);
             if (existingOperation is not null)
             {
-                EfSchemaVersion.EnsureReadable(StructuredLogsEfModule.SchemaFamily, existingOperation.SchemaVersion, StructuredLogsEfModule.SchemaVersion);
+                EfSchemaVersion.EnsureReadable(StructuredLogsEfModule.Chain, existingOperation.SchemaVersion);
                 ValidateBinding(existingOperation.TenantId, existingOperation.ScopeId, existingOperation.StreamId);
                 if (existingOperation.IssuedAtTicks != batch.Id.IssuedAt.UtcTicks)
                     throw new StructuredLogsException("The structured log append operation identity was reused with a different issue time.");
                 if (!StringComparer.Ordinal.Equals(existingOperation.Fingerprint, fingerprint))
                     throw new StructuredLogsException("The structured log append operation was reused with a different payload.");
 
-                var replayed = DeserializeOutcome(existingOperation.OutcomeJson);
+                var replayed = DeserializeOutcome(StructuredLogsEfModule.Chain.Upcast(
+                    existingOperation.SchemaVersion, StructuredLogsEfModule.AppendOperationsTableName, nameof(existingOperation.OutcomeJson), existingOperation.OutcomeJson));
                 await db.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 return new DiagnosticsDrainCommit<StructuredLogEntry>(
@@ -522,7 +523,7 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
 
     private StructuredLogEntry ToEntry(StructuredLogRecord row)
     {
-        var payload = DeserializePayload(row.PayloadJson);
+        var payload = DeserializePayload(StructuredLogsEfModule.Chain.Upcast(row.SchemaVersion, StructuredLogsEfModule.RecordsTableName, nameof(row.PayloadJson), row.PayloadJson));
         return payload with
         {
             Timestamp = new DateTimeOffset(row.TimestampTicks, TimeSpan.FromMinutes(row.TimestampOffsetMinutes)),
@@ -566,7 +567,7 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
     /// </summary>
     private void ValidateRecord(StructuredLogRecord row)
     {
-        EfSchemaVersion.EnsureReadable(StructuredLogsEfModule.SchemaFamily, row.SchemaVersion, StructuredLogsEfModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(StructuredLogsEfModule.Chain, row.SchemaVersion);
         ValidateBinding(row.TenantId, row.ScopeId, row.StreamId);
     }
 
@@ -574,7 +575,7 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
     {
         if (state is null)
             return;
-        EfSchemaVersion.EnsureReadable(StructuredLogsEfModule.SchemaFamily, state.SchemaVersion, StructuredLogsEfModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(StructuredLogsEfModule.Chain, state.SchemaVersion);
         ValidateBinding(state.TenantId, state.ScopeId, state.StreamId);
     }
 

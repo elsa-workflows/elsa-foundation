@@ -43,10 +43,10 @@ internal static class EfSchemaVersionSkewTestSupport
         context.ChangeTracker.Clear();
     }
 
-    /// <summary>Asserts the skew was reported with the expected module and versions.</summary>
-    public static void AssertSchemaVersionSkew(EfSchemaVersionSkewException skew, string module, string expectedSchemaVersion)
+    /// <summary>Asserts the skew was reported with the expected schema family and versions.</summary>
+    public static void AssertSchemaVersionSkew(EfSchemaVersionSkewException skew, string family, string expectedSchemaVersion)
     {
-        Assert.Equal(module, skew.Module);
+        Assert.Equal(family, skew.Family);
         Assert.Equal(SkewedSchemaVersion, skew.Found);
         Assert.Equal(expectedSchemaVersion, skew.Expected);
     }

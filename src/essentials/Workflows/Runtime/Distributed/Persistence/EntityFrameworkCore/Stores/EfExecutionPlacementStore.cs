@@ -297,7 +297,7 @@ public sealed class EfExecutionPlacementStore(
         string? expectedWorkflowExecutionId = null,
         string? expectedOwnerId = null)
     {
-        if (EfSchemaVersion.NotReadable(ExecutionPlacementEfModule.SchemaFamily, row.SchemaVersion, ExecutionPlacementEfModule.SchemaVersion) ||
+        if (EfSchemaVersion.NotReadable(ExecutionPlacementEfModule.Chain, row.SchemaVersion) ||
             (expectedWorkflowExecutionId is not null &&
              !StringComparer.Ordinal.Equals(row.WorkflowExecutionId, expectedWorkflowExecutionId)))
             throw new InvalidOperationException("The placement identity digest maps to a different execution identity.");
@@ -313,7 +313,7 @@ public sealed class EfExecutionPlacementStore(
 
     private static void EnsureIdentity(ExecutionPlacementLeaseEntity row, string scope, string workflowExecutionId, string id)
     {
-        if (EfSchemaVersion.NotReadable(ExecutionPlacementEfModule.SchemaFamily, row.SchemaVersion, ExecutionPlacementEfModule.SchemaVersion) ||
+        if (EfSchemaVersion.NotReadable(ExecutionPlacementEfModule.Chain, row.SchemaVersion) ||
             !StringComparer.Ordinal.Equals(row.Id, id) ||
             !StringComparer.Ordinal.Equals(EfDistributedIdentity.DecodeScope(row.ScopeKey), scope) ||
             !StringComparer.Ordinal.Equals(row.WorkflowExecutionId, workflowExecutionId))

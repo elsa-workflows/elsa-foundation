@@ -119,15 +119,15 @@ public sealed class EfActivityPublicationReceiptStore(
         string? receiptTenantId,
         string idempotencyKey)
     {
+        EfSchemaVersion.EnsureReadable(PublishingLedgerEfModule.Chain, row.SchemaVersion);
         var receiptKey = ReceiptKey(receiptTenantId, idempotencyKey);
         if (!StringComparer.Ordinal.Equals(row.Id, EfPublishingStoreSupport.PhysicalId(scope, receiptKey)) ||
             !StringComparer.Ordinal.Equals(row.TenantIdHash, EfPublishingStoreSupport.TenantHash(scope)) ||
             !StringComparer.Ordinal.Equals(row.ReceiptKeyHash, EfPublishingStoreSupport.Hash(receiptKey)))
             throw new InvalidOperationException("The persisted activity-publication receipt identity projection is corrupt.");
-        if (EfSchemaVersion.NotReadable("PublishingLedger", row.SchemaVersion, PublishingLedgerEfModule.ContentSchemaVersion))
-            throw new InvalidOperationException($"Malformed persisted publication state: activity-publication receipt schema version '{row.SchemaVersion}' is not supported.");
 
-        var receipt = PublishingEfJson.Deserialize<ActivityPublicationReceipt>(row.Content, "activity-publication receipt");
+        var content = PublishingLedgerEfModule.Chain.Upcast(row.SchemaVersion, PublishingLedgerEfModule.ActivityPublicationReceiptTableName, nameof(row.Content), row.Content);
+        var receipt = PublishingEfJson.Deserialize<ActivityPublicationReceipt>(content, "activity-publication receipt");
         if (!StringComparer.Ordinal.Equals(receipt.TenantId, receiptTenantId) ||
             !StringComparer.Ordinal.Equals(receipt.IdempotencyKey, idempotencyKey))
             throw new InvalidOperationException("The activity publication receipt tenant or key does not match its storage identity.");

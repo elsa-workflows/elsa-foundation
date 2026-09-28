@@ -111,12 +111,12 @@ public sealed class EfSchedulerStateStore(
     // live in the identity condition below because that condition needs the deserialized state.
     internal static SchedulerState Read(SchedulerStateEntity row, string scope, string? expectedWorkflow = null)
     {
-        if (EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) ||
+        if (EfSchemaVersion.NotReadable(RuntimeOperationalStateEfModule.Chain, row.SchemaVersion) ||
             row.Revision <= 0 ||
             row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope) ||
             row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope))
             throw new InvalidDataException("The scheduler-state row scope, schema, or revision projection is corrupt.");
-        var state = EfSchedulerStateJson.Deserialize(row.ContentJson);
+        var state = EfSchedulerStateJson.Deserialize(RuntimeOperationalStateEfModule.Chain.Upcast(row.SchemaVersion, RuntimeOperationalStateEfModule.SchedulerTableName, nameof(row.ContentJson), row.ContentJson));
         if ((expectedWorkflow is not null && !StringComparer.Ordinal.Equals(expectedWorkflow, state.WorkflowExecutionId)) ||
             row.WorkflowExecutionId != EfRuntimeOperationalStoreSupport.Encode(state.WorkflowExecutionId) ||
             row.WorkflowExecutionIdHash != EfRuntimeOperationalStoreSupport.Hash(state.WorkflowExecutionId) ||

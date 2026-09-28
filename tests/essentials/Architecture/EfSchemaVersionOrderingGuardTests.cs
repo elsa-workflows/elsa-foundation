@@ -39,6 +39,14 @@ namespace Elsa.Architecture.Tests;
 /// their check is <c>EfSchemaVersionMaterializationInterceptor</c>, which this lexical scan does not see.
 /// </para>
 /// <para>
+/// Spec 180, FR-011: the version check must be the first thing a read path does with a row at all, not only the first
+/// clause of its own condition, and not only ahead of its deserializers. The third rule fails the build when any statement
+/// ahead of the check, in the same method, reads a member of the checked row other than its stamp: a projection compared,
+/// an identity decoded, a hash recomputed. Each evaluates the shape this build writes against a row a newer build may have
+/// written, and reports that skew as corruption. The row is the expression whose <c>SchemaVersion</c> the check passes, so
+/// a check whose stamp arrives through a parameter or a projection is not judged by it.
+/// </para>
+/// <para>
 /// Blind spot: detection here is lexical and scoped to a single method body. It cannot follow a
 /// deserialize call reached through a helper method the version-checking method calls, nor one written
 /// inside a lambda body - either indirection puts the call outside the enclosing-method text this scan
@@ -199,6 +207,178 @@ public sealed class EfSchemaVersionOrderingGuardTests
         Assert.True(CountDeserializeCalls(store) > 0, "Expected the guard to find a deserialize call in the finalization store.");
     }
 
+    [Fact]
+    public void No_statement_reads_the_checked_row_before_its_version_check_anywhere_in_its_method()
+    {
+        var violations = Directory.EnumerateFiles(Path.Join(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(file => !IsBuildOutput(file))
+            .SelectMany(file => FindRowReadBeforeVersionCheck(File.ReadAllText(file))
+                .Select(line => $"{Path.GetRelativePath(RepoRoot, file)}({line})"))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            violations.Length == 0,
+            "A read path checks a row's schema version before it reads anything else of the row, in any statement of " +
+            "its method, or an integrity clause written for this build's shape reports a newer row as corrupt (spec 180, " +
+            "FR-011). Offending checks:" + Environment.NewLine + string.Join(Environment.NewLine, violations));
+    }
+
+    /// <summary>
+    /// SC-006: the rule sees the read paths research.md ("Ordering") named - the two Publishing stores that checked
+    /// identity projections in an earlier statement, now restructured - and finds each check's row, so it passes on them
+    /// by judging them rather than by missing them.
+    /// </summary>
+    [Fact]
+    public void Row_read_guard_judges_the_read_paths_research_named()
+    {
+        string[] restructured =
+        [
+            "EfActivityPublicationReceiptStore.cs",
+            "EfActivityDraftTestRunStore.cs",
+            "EfExecutionLivenessStateStore.cs",
+            "EfWorkflowHoldStateStore.cs",
+            "EfWorkflowAlterationStore.cs",
+            "WorkflowTestScopeEfSupport.cs"
+        ];
+        var sources = Directory.EnumerateFiles(Path.Join(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(file => !IsBuildOutput(file))
+            .GroupBy(Path.GetFileName)
+            .ToDictionary(group => group.Key!, group => group.Select(File.ReadAllText).ToArray());
+
+        foreach (var store in restructured)
+        {
+            Assert.True(sources.TryGetValue(store, out var files), $"Expected '{store}' under src/.");
+            Assert.True(files!.Sum(CountJudgedChecks) > 0, $"Expected the row-read rule to find a check whose row it can name in '{store}'.");
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(RowReadBeforeCheckFixtures))]
+    public void Row_read_detector_flags_a_row_read_ahead_of_its_version_check(string name, string source) =>
+        Assert.True(FindRowReadBeforeVersionCheck(source).Length > 0, $"The row-read detector missed the fixture '{name}'.");
+
+    [Theory]
+    [MemberData(nameof(RowReadAfterCheckFixtures))]
+    public void Row_read_detector_accepts_a_version_check_that_comes_first(string name, string source) =>
+        Assert.True(FindRowReadBeforeVersionCheck(source).Length == 0, $"The row-read detector wrongly flagged the fixture '{name}'.");
+
+    private static int CountJudgedChecks(string source)
+    {
+        var masked = MaskLiteralsAndComments(source);
+        return CallTokens.Sum(token =>
+        {
+            var count = 0;
+            for (var index = masked.IndexOf(token, StringComparison.Ordinal); index >= 0; index = masked.IndexOf(token, index + token.Length, StringComparison.Ordinal))
+                count += CheckedRow.IsMatch(masked, index + token.Length) ? 1 : 0;
+            return count;
+        });
+    }
+
+    public static TheoryData<string, string> RowReadBeforeCheckFixtures() => new()
+    {
+        {
+            "an integrity clause in an earlier statement (the Publishing receipt shape research.md named)",
+            """
+            var receiptKey = ReceiptKey(tenant, key);
+            if (!StringComparer.Ordinal.Equals(row.Id, PhysicalId(scope, receiptKey)))
+                throw new InvalidOperationException("identity projection is corrupt");
+            if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion))
+                throw new InvalidOperationException("unsupported");
+            """
+        },
+        {
+            "an identity decoded ahead of the check",
+            """
+            var sourceReferenceId = Decode(row.SourceReferenceId);
+            if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion) || row.Revision <= 0)
+                throw new InvalidDataException("corrupt");
+            """
+        },
+        {
+            "a statement earlier in the method carrying its own integrity chain",
+            """
+            if (row.Revision <= 0 || row.ScopeKey != Encode(scope))
+                throw new InvalidDataException("corrupt");
+            if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion))
+                throw new InvalidDataException("corrupt");
+            """
+        },
+        {
+            "a helper handed a projection ahead of an EnsureReadable statement",
+            """
+            public sealed class Store
+            {
+                private static Record Read(Row record, string id)
+                {
+                    EnsureProjection(id, record.IdHash, record.IdOrderKey);
+                    EfSchemaVersion.EnsureReadable(Module.Chain, record.SchemaVersion);
+                    return Map(record);
+                }
+            }
+            """
+        }
+    };
+
+    public static TheoryData<string, string> RowReadAfterCheckFixtures() => new()
+    {
+        {
+            "the check first, integrity clauses after it",
+            """
+            EfSchemaVersion.EnsureReadable(Module.Chain, row.SchemaVersion);
+            var receiptKey = ReceiptKey(tenant, key);
+            if (!StringComparer.Ordinal.Equals(row.Id, PhysicalId(scope, receiptKey)))
+                throw new InvalidOperationException("identity projection is corrupt");
+            """
+        },
+        {
+            "the check as the first clause, the row read in later clauses of the same condition",
+            """
+            if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion) || row.Revision <= 0 || row.ScopeKey != Encode(scope))
+                throw new InvalidDataException("corrupt");
+            """
+        },
+        {
+            "a second check of the row after the first has settled its version",
+            """
+            EfSchemaVersion.EnsureReadable(Module.Chain, row.SchemaVersion);
+            var content = Module.Chain.Upcast(row.SchemaVersion, Table, nameof(row.ContentJson), row.ContentJson);
+            if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion) || row.Revision <= 0)
+                throw new InvalidDataException("corrupt");
+            """
+        },
+        {
+            "a query over the rows ahead of a check inside a lambda over each row",
+            """
+            var rows = await context.Rows.Where(row => row.ScopeKey == key).ToListAsync();
+            if (rows.Any(row => EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion) || row.Revision <= 0))
+                throw new InvalidDataException("corrupt");
+            """
+        },
+        {
+            "an expression-bodied check after a member that maps the row",
+            """
+            public sealed class Store
+            {
+                private static Role Map(RoleEntity entity) => new(entity.RoleId, entity.Name);
+
+                private static bool Matches(RoleEntity entity) =>
+                    EfSchemaVersion.Readable(Module.Chain, entity.SchemaVersion) && entity.Revision > 0;
+            }
+            """
+        },
+        {
+            "a check of a stamp handed in as a parameter",
+            """
+            public static void EnsureRowEnvelope(string schemaVersion, string scopeKey, long revision)
+            {
+                if (EfSchemaVersion.NotReadable(Module.Chain, schemaVersion) || revision <= 0)
+                    throw new InvalidDataException("corrupt");
+            }
+            """
+        }
+    };
+
     [Theory]
     [MemberData(nameof(DeserializeBeforeCheckFixtures))]
     public void Widened_detector_flags_a_deserialize_call_earlier_in_the_method_than_the_version_check(string name, string source)
@@ -227,7 +407,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             """
             var state = RuntimeArtifactJson.Deserialize<State>(row.ContentJson);
             var valid =
-                EfSchemaVersion.Readable("M", row.SchemaVersion, Module.SchemaVersion) &&
+                EfSchemaVersion.Readable(Module.Chain, row.SchemaVersion) &&
                 row.Id == state.Id;
             if (!valid)
                 throw new InvalidDataException("corrupt");
@@ -239,7 +419,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             Row state;
             try { state = RuntimeArtifactJson.Deserialize<Row>(row.ContentJson); }
             catch (JsonException exception) { throw new InvalidDataException("bad json", exception); }
-            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Id != state.Id)
+            if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion) || row.Id != state.Id)
                 throw new InvalidDataException("corrupt");
             """
         },
@@ -247,7 +427,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             "PublishingEfJson.Deserialize as an earlier statement",
             """
             var receipt = PublishingEfJson.Deserialize<Receipt>(row.Content, "receipt");
-            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Id != receipt.Id)
+            if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion) || row.Id != receipt.Id)
                 throw new InvalidDataException("corrupt");
             """
         },
@@ -255,7 +435,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             "bare JsonSerializer.Deserialize as an earlier statement",
             """
             var content = JsonSerializer.Deserialize<Content>(row.ContentJson, JsonOptions) ?? throw new JsonException("empty");
-            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Id != content.Id)
+            if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion) || row.Id != content.Id)
                 throw new InvalidDataException("corrupt");
             """
         },
@@ -263,7 +443,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             "a custom wrapper class's Deserialize as an earlier statement",
             """
             var state = FooJson.Deserialize(row.ContentJson);
-            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Id != state.Id)
+            if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion) || row.Id != state.Id)
                 throw new InvalidDataException("corrupt");
             """
         },
@@ -271,7 +451,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             "receiverless generic Deserialize ahead of an EnsureReadable statement",
             """
             var span = Deserialize<TelemetrySpan>(row.PayloadJson);
-            EfSchemaVersion.EnsureReadable("M", row.SchemaVersion, Module.SchemaVersion);
+            EfSchemaVersion.EnsureReadable(Module.Chain, row.SchemaVersion);
             return span;
             """
         },
@@ -279,7 +459,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             "receiverless Deserialize-prefixed helper ahead of an EnsureReadable statement",
             """
             var payload = DeserializePayload(row);
-            EfSchemaVersion.EnsureReadable("M", row.SchemaVersion, Module.SchemaVersion);
+            EfSchemaVersion.EnsureReadable(Module.Chain, row.SchemaVersion);
             return payload;
             """
         },
@@ -287,7 +467,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             "member-access Deserialize-prefixed helper ahead of the version check",
             """
             var ids = EfIdentityStoreSupport.DeserializeSet(row.ClaimIdsJson);
-            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || ids.Count == 0)
+            if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion) || ids.Count == 0)
                 throw new InvalidDataException("corrupt");
             """
         },
@@ -298,7 +478,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             {
                 private static bool Matches(RoleEntity entity) =>
                     Support.DeserializeSet(entity.PermissionsJson).Count > 0 &&
-                    EfSchemaVersion.Readable("M", entity.SchemaVersion, Module.SchemaVersion);
+                    EfSchemaVersion.Readable(Module.Chain, entity.SchemaVersion);
             }
             """
         },
@@ -310,7 +490,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
                 private static T Read<T>(Row row) where T : class
                 {
                     var value = Support.DeserializeSet(row.Json);
-                    EfSchemaVersion.EnsureReadable("M", row.SchemaVersion, Module.SchemaVersion);
+                    EfSchemaVersion.EnsureReadable(Module.Chain, row.SchemaVersion);
                     return value;
                 }
             }
@@ -323,7 +503,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
         {
             "version check first, deserialize follows as the next statement",
             """
-            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Revision <= 0)
+            if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion) || row.Revision <= 0)
                 throw new InvalidDataException("corrupt");
             var state = RuntimeArtifactJson.Deserialize<Row>(row.ContentJson);
             return state;
@@ -334,7 +514,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             """
             try
             {
-                if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Revision <= 0)
+                if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion) || row.Revision <= 0)
                     throw new InvalidDataException("corrupt");
                 var state = RuntimeArtifactJson.Deserialize<Row>(row.ContentJson);
                 return state;
@@ -349,7 +529,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
 
             private static Row Read(Entity row, string scope)
             {
-                if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Revision <= 0)
+                if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion) || row.Revision <= 0)
                     throw new InvalidDataException("corrupt");
                 return Project(row);
             }
@@ -358,7 +538,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
         {
             "version check first, PublishingEfJson.Deserialize follows as the next statement",
             """
-            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Revision <= 0)
+            if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion) || row.Revision <= 0)
                 throw new InvalidDataException("corrupt");
             var receipt = PublishingEfJson.Deserialize<Receipt>(row.Content, "receipt");
             return receipt;
@@ -367,7 +547,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
         {
             "version check first, bare JsonSerializer.Deserialize follows as the next statement",
             """
-            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Revision <= 0)
+            if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion) || row.Revision <= 0)
                 throw new InvalidDataException("corrupt");
             var content = JsonSerializer.Deserialize<Content>(row.ContentJson, JsonOptions) ?? throw new JsonException("empty");
             return content;
@@ -376,7 +556,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
         {
             "version check first, a custom wrapper class's Deserialize follows as the next statement",
             """
-            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Revision <= 0)
+            if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion) || row.Revision <= 0)
                 throw new InvalidDataException("corrupt");
             var state = FooJson.Deserialize(row.ContentJson);
             return state;
@@ -387,7 +567,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             """
             public static SchedulerState Deserialize(string content)
             {
-                if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Revision <= 0)
+                if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion) || row.Revision <= 0)
                     throw new InvalidDataException("corrupt");
                 return Project(content);
             }
@@ -396,7 +576,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
         {
             "EnsureReadable first, receiverless helpers follow",
             """
-            EfSchemaVersion.EnsureReadable("M", row.SchemaVersion, Module.SchemaVersion);
+            EfSchemaVersion.EnsureReadable(Module.Chain, row.SchemaVersion);
             var payload = DeserializePayload(row);
             return Deserialize<TelemetrySpan>(payload.Json);
             """
@@ -409,7 +589,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
                 private static Role Map(RoleEntity entity) => new(entity.RoleId, Support.DeserializeSet(entity.PermissionsJson));
 
                 private static bool Matches(RoleEntity entity) =>
-                    EfSchemaVersion.Readable("M", entity.SchemaVersion, Module.SchemaVersion) && entity.Revision > 0;
+                    EfSchemaVersion.Readable(Module.Chain, entity.SchemaVersion) && entity.Revision > 0;
             }
             """
         },
@@ -420,7 +600,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
 
             private static T DeserializeSet<T>(string json) where T : class
             {
-                EfSchemaVersion.EnsureReadable("M", row.SchemaVersion, Module.SchemaVersion);
+                EfSchemaVersion.EnsureReadable(Module.Chain, row.SchemaVersion);
                 return Decode<T>(json);
             }
             """
@@ -432,7 +612,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
         {
             "single-line or-chain",
             """
-            if (row.Revision <= 0 || EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion))
+            if (row.Revision <= 0 || EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion))
                 throw new InvalidDataException("corrupt");
             """
         },
@@ -440,7 +620,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             "multi-line or-chain",
             """
             if (row.Revision <= 0 ||
-                EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) ||
+                EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion) ||
                 row.ScopeKey != Encode(scope))
                 throw new InvalidDataException("corrupt");
             """
@@ -450,7 +630,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             """
             var valid =
                 (expectedId is null || row.Id == expectedId) &&
-                EfSchemaVersion.Readable("M", row.SchemaVersion, Module.SchemaVersion) &&
+                EfSchemaVersion.Readable(Module.Chain, row.SchemaVersion) &&
                 row.ScopeKey == Encode(scope);
             """
         },
@@ -459,14 +639,14 @@ public sealed class EfSchemaVersionOrderingGuardTests
             """
             if (row.Id != CreateId(scope, id) ||
                 row.ScopeKeyHash != Hash(scope) ||
-                EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion))
+                EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion))
                 throw new InvalidDataException("corrupt");
             """
         },
         {
             "nested inside a grouping parenthesis",
             """
-            if (row.Revision <= 0 || (row.ScopeKey != Encode(scope) && EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion)))
+            if (row.Revision <= 0 || (row.ScopeKey != Encode(scope) && EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion)))
                 throw new InvalidDataException("corrupt");
             """
         },
@@ -474,13 +654,13 @@ public sealed class EfSchemaVersionOrderingGuardTests
             "returned expression body",
             """
             private static bool Matches(Row row) =>
-                row.Revision > 0 && EfSchemaVersion.Readable("M", row.SchemaVersion, Module.SchemaVersion);
+                row.Revision > 0 && EfSchemaVersion.Readable(Module.Chain, row.SchemaVersion);
             """
         },
         {
             "preceded by a clause whose string literal looks like a statement boundary",
             """
-            if (row.Id != Hash("(;") && EfSchemaVersion.Readable("M", row.SchemaVersion, Module.SchemaVersion))
+            if (row.Id != Hash("(;") && EfSchemaVersion.Readable(Module.Chain, row.SchemaVersion))
                 throw new InvalidDataException("corrupt");
             """
         }
@@ -491,14 +671,14 @@ public sealed class EfSchemaVersionOrderingGuardTests
         {
             "single-line or-chain",
             """
-            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Revision <= 0)
+            if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion) || row.Revision <= 0)
                 throw new InvalidDataException("corrupt");
             """
         },
         {
             "multi-line or-chain",
             """
-            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) ||
+            if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion) ||
                 row.Revision <= 0 ||
                 row.ScopeKey != Encode(scope))
                 throw new InvalidDataException("corrupt");
@@ -508,7 +688,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             "multi-line and-chain assigned to a local",
             """
             var valid =
-                EfSchemaVersion.Readable("M", row.SchemaVersion, Module.SchemaVersion) &&
+                EfSchemaVersion.Readable(Module.Chain, row.SchemaVersion) &&
                 (expectedId is null || row.Id == expectedId) &&
                 row.ScopeKey == Encode(scope);
             """
@@ -516,7 +696,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
         {
             "and-chain opening a returned expression",
             """
-            return EfSchemaVersion.Readable("M", state.SchemaVersion, Module.SchemaVersion) &&
+            return EfSchemaVersion.Readable(Module.Chain, state.SchemaVersion) &&
                    state.Id == ProjectionId(scope, activation) &&
                    state.Revision > 0;
             """
@@ -525,7 +705,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             "the only earlier clause is commented out",
             """
             var valid =
-                /* row.Revision > 0 && */ EfSchemaVersion.Readable("M", row.SchemaVersion, Module.SchemaVersion) &&
+                /* row.Revision > 0 && */ EfSchemaVersion.Readable(Module.Chain, row.SchemaVersion) &&
                 row.Revision > 0;
             """
         },
@@ -533,7 +713,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             "an earlier statement's string literal holds boolean operators",
             """
             var message = "a || b && c";
-            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion))
+            if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion))
                 throw new InvalidDataException(message);
             """
         },
@@ -541,7 +721,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             "passed as a method argument after another argument",
             """
             Assert.True(row.Revision > 0, Describe(row));
-            Assert.True(EfSchemaVersion.Readable("M", row.SchemaVersion, Module.SchemaVersion));
+            Assert.True(EfSchemaVersion.Readable(Module.Chain, row.SchemaVersion));
             """
         },
         {
@@ -549,13 +729,50 @@ public sealed class EfSchemaVersionOrderingGuardTests
             """
             if (row.Revision <= 0 || row.ScopeKey != Encode(scope))
                 throw new InvalidDataException("corrupt");
-            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion))
+            if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion))
                 throw new InvalidDataException("corrupt");
             """
         }
     };
 
-    private static readonly string[] CallTokens = ["EfSchemaVersion.Readable(", "EfSchemaVersion.NotReadable(", "EfSchemaVersion.EnsureReadable("];
+    private static readonly string[] CallTokens =
+        ["EfSchemaVersion.Readable(", "EfSchemaVersion.NotReadable(", "EfSchemaVersion.EnsureReadable(", "EfSchemaVersion.EnsureCurrent(", "EfSchemaVersion.IsReadable("];
+
+    /// <summary>The row a check reads the stamp of: the expression ahead of <c>.SchemaVersion</c> in its second argument.</summary>
+    private static readonly Regex CheckedRow = new(@"\G[^,()]*,\s*(?<row>[A-Za-z_]\w*(?:\[\d+\])?(?:\.[A-Za-z_]\w*(?:\[\d+\])?)*?)\.SchemaVersion\s*\)", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Returns the one-based line of every check whose row has a member other than its stamp read earlier in the same
+    /// method (FR-011). Only the first check of a row in its method is judged: a second check of the same row follows the
+    /// first, which already settled the version. A check inside a lambda over the row, <c>rows.Any(row =&gt; ...)</c>, is
+    /// judged within that lambda.
+    /// </summary>
+    private static int[] FindRowReadBeforeVersionCheck(string source)
+    {
+        var masked = MaskLiteralsAndComments(source);
+        var violations = new List<int>();
+        foreach (var token in CallTokens)
+        {
+            for (var index = masked.IndexOf(token, StringComparison.Ordinal); index >= 0; index = masked.IndexOf(token, index + token.Length, StringComparison.Ordinal))
+            {
+                var checkedRow = CheckedRow.Match(masked, index + token.Length);
+                if (!checkedRow.Success)
+                    continue;
+
+                var row = Regex.Escape(checkedRow.Groups["row"].Value);
+                var start = FindEnclosingMethodStart(masked, index);
+                if (Regex.Matches(masked[start..index], $@"(?<![\w.]){row}\s*=>").LastOrDefault() is { } lambda)
+                    start += lambda.Index + lambda.Length;
+                var before = masked[start..index];
+                if (Regex.IsMatch(before, $@"EfSchemaVersion\.\w+\([^,()]*,\s*{row}\.SchemaVersion\s*\)"))
+                    continue;
+                if (Regex.IsMatch(before, $@"(?<![\w.]){row}\s*\.\s*(?!SchemaVersion\b)[A-Za-z_]"))
+                    violations.Add(LineOf(source, index));
+            }
+        }
+
+        return violations.Order().ToArray();
+    }
 
     /// <summary>
     /// Matches a method whose name starts with <c>Deserialize</c> - <c>X.Deserialize(</c>, <c>X.DeserializeSet(</c>,

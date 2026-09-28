@@ -1,3 +1,5 @@
+using Elsa.Persistence.EntityFramework;
+
 namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 
 /// <summary>Provider-safe sizes for the P02 publication-policy and P03 projection-intent tables.</summary>
@@ -28,4 +30,7 @@ public static class PublishingPolicyProjectionEfModule
     public const int MaximumMaterializedListEntries = 512;
     public const string SchemaVersion = "1.0.0";
     public const string SchemaFamily = "PublishingPolicyProjection";
+    /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
+    /// upcasts through (spec 180, FR-010).</summary>
+    public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(PublishingPolicyProjectionEfModule).Assembly, SchemaFamily);
 }

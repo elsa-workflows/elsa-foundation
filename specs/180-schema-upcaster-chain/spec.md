@@ -29,9 +29,9 @@ The code uses "module" for two different units, and this program has to keep the
 - **EF module**: an `[EfModule]` declaration (ADR 0076, D2). It owns one migrations-history table, `[UsesEfModule]`
   names it, and the activation guard refuses it. The tree declares 13.
 - **Schema family**: the set of tables whose rows stamp one persisted-schema version constant. The skew check names
-  a family, for example `RuntimeOperationalState`. ADR 0077's Context calls the fifteen families "EF modules", and
-  `EfSchemaVersionSkewException.Module` holds a family name, so the word "module" in those places means a family.
-  Each family belongs to exactly one EF module.
+  a family, for example `RuntimeOperationalState`. ADR 0077's Context calls the fifteen families "EF modules", so the
+  word "module" there means a family; `EfSchemaVersionSkewException` named its family property `Module` until this
+  spec renamed it `Family`. Each family belongs to exactly one EF module.
 - **Stamp**: the persisted-schema version a row carries in its `SchemaVersion` column.
 - **Readable set**: the versions of a family a build can read. It holds the build's current version and every
   predecessor the declared chain reaches without a gap.
@@ -456,3 +456,9 @@ this spec's implementation starts.
 
 **2026-09-28 note.** FR-001 gains the shared-family exception, needed for spec 181's finalization record (#2120), found
 while building B3 (#2099); lands with its PR, whose merge is the owner's approval.
+
+**2026-09-28 note.** Found while building B4 (#2100): two families, `ActivitiesDesign` and `WorkflowsDesign`, are read by
+EF materializing domain types directly, so their value converters deserialize the content before FR-009's upcast could
+run. Their read path cannot meet FR-006 with a chain longer than one, so it accepts their current version alone, and
+each declares no upcasters until its content moves to store code that upcasts before it deserializes; the build
+enforces both. Lands with the B4 PR, whose merge is the owner's approval.

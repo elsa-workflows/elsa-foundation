@@ -140,7 +140,7 @@ public sealed class EfActivityPublicationReceiptStoreTests : IAsyncLifetime
         // corruption sent an operator looking for data damage that does not exist (ADR 0077, #1950).
         var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(
             () => store.FindAsync("tenant-a", "drift-schema").AsTask());
-        Assert.Equal("PublishingLedger", skew.Module);
+        Assert.Equal("PublishingLedger", skew.Family);
         Assert.Equal("2", skew.Found);
         Assert.Equal(PublishingLedgerEfModule.ContentSchemaVersion, skew.Expected);
     }

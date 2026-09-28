@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
@@ -7,6 +8,9 @@ public static class RuntimeWorkflowExecutionEfModule
     public const string TableName = "elsa_runtime_workflow_execution_state";
     public const string SchemaVersion = "1.0.0";
     public const string SchemaFamily = "RuntimeWorkflowExecution";
+    /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
+    /// upcasts through (spec 180, FR-010).</summary>
+    public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(RuntimeWorkflowExecutionEfModule).Assembly, SchemaFamily);
     public const int IdentityMaximumLength = 128;
     public const int TenantMaximumLength = 256;
     public const int IdentityProjectionMaximumLength = 450;

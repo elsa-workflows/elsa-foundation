@@ -58,7 +58,7 @@ internal static class Elsa3ImportRecordCodec
         EnsureEnvelope(record.SchemaVersion, record.ContentJson, record.ContentHash);
         EnsureResidual(record.Handle, handle, "collection handle");
         EnsureScopeResiduals(record.TenantId, record.UserId, accessScope);
-        var collection = Deserialize<CollectionDocument>(record.ContentJson).Collection
+        var collection = Deserialize<CollectionDocument>(Elsa3ImportEfModule.Chain.Upcast(record.SchemaVersion, Elsa3ImportEfModule.CollectionTable, nameof(record.ContentJson), record.ContentJson)).Collection
                          ?? throw new InvalidDataException("The Elsa 3 import collection row has no collection.");
         if (!StringComparer.Ordinal.Equals(collection.Handle, handle) ||
             !SameScope(collection.AccessScope, accessScope) ||
@@ -106,7 +106,7 @@ internal static class Elsa3ImportRecordCodec
         EnsureScopeResiduals(record.TenantId, record.UserId, accessScope);
         if (string.IsNullOrWhiteSpace(record.CommitAttemptId))
             throw new InvalidDataException("The Elsa 3 import receipt row has no commit attempt.");
-        var receipt = Deserialize<ReceiptDocument>(record.ContentJson).Receipt
+        var receipt = Deserialize<ReceiptDocument>(Elsa3ImportEfModule.Chain.Upcast(record.SchemaVersion, Elsa3ImportEfModule.ReceiptTable, nameof(record.ContentJson), record.ContentJson)).Receipt
                       ?? throw new InvalidDataException("The Elsa 3 import receipt row has no receipt.");
         if (!StringComparer.Ordinal.Equals(receipt.ReceiptId, receiptId) ||
             !StringComparer.Ordinal.Equals(receipt.IdempotencyKey, Decode(record.IdempotencyKey, "idempotency key")) ||
@@ -150,7 +150,7 @@ internal static class Elsa3ImportRecordCodec
         string bindingId,
         string? tenantId)
     {
-        EfSchemaVersion.EnsureReadable("Elsa3Import", record.SchemaVersion, Elsa3ImportEfModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(Elsa3ImportEfModule.Chain, record.SchemaVersion);
         EnsureResidual(record.BindingId, bindingId, "definition binding");
         if (!StringComparer.Ordinal.Equals(DecodeNullable(record.TenantId, "tenant"), tenantId) ||
             !StringComparer.Ordinal.Equals(record.TenantKey, TenantKey(tenantId)))
@@ -193,7 +193,7 @@ internal static class Elsa3ImportRecordCodec
 
     private static void EnsureEnvelope(string schemaVersion, string contentJson, string contentHash)
     {
-        EfSchemaVersion.EnsureReadable("Elsa3Import", schemaVersion, Elsa3ImportEfModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(Elsa3ImportEfModule.Chain, schemaVersion);
         if (string.IsNullOrEmpty(contentJson) || !StringComparer.Ordinal.Equals(contentHash, Hash(contentJson)))
             throw new InvalidDataException("The Elsa 3 import row content does not match its content hash.");
     }

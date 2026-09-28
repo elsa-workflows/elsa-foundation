@@ -1,3 +1,5 @@
+using Elsa.Persistence.EntityFramework;
+
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
 /// <summary>Names and bounded projection sizes for the EF workflow activation-slot authority.</summary>
@@ -6,6 +8,9 @@ public static class RuntimeActivationSlotEfModule
     public const string TableName = "elsa_runtime_workflow_activation_slot";
     public const string SchemaVersion = "1.0.0";
     public const string SchemaFamily = "RuntimeActivationSlot";
+    /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
+    /// upcasts through (spec 180, FR-010).</summary>
+    public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(RuntimeActivationSlotEfModule).Assembly, SchemaFamily);
     // WorkflowActivationSlotIdentity formats two legal 128-code-unit identities into a
     // composite identity of 280 code units. Keep one defensive spare code unit for the
     // formatter contract, then size both lossless projections from that bound.

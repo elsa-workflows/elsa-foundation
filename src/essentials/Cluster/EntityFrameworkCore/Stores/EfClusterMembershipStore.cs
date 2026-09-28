@@ -178,8 +178,11 @@ internal sealed class EfClusterMembershipStore(IServiceScopeFactory scopes)
         if (string.Equals(row.ReportJson, reportJson, StringComparison.Ordinal))
             return;
 
+        // The report is the row's one content column and is written whole in the current format, so the row is stamped
+        // with it (spec 180, FR-014).
         row.ReportJson = reportJson;
         row.ReportRevision = checked(row.ReportRevision + 1);
+        row.SchemaVersion = ClusterMembershipEfModule.SchemaVersion;
     }
 
     private Task<T> WriteAsync<T>(EfWriteRetry retry, string operation, Func<ClusterMembershipDbContext, Task<T>> attempt, CancellationToken cancellationToken) =>

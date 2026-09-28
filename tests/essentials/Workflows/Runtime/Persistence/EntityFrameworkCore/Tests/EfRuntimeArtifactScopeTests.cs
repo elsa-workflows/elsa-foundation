@@ -964,7 +964,7 @@ public sealed class EfRuntimeArtifactScopeTests
 
         var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(
             () => fixture.Executable.FindAsync("artifact-skew").AsTask());
-        Assert.Equal("RuntimeArtifact", skew.Module);
+        Assert.Equal("RuntimeArtifact", skew.Family);
         Assert.Equal("2", skew.Found);
         Assert.Equal(RuntimeArtifactEfModule.SchemaVersion, skew.Expected);
     }

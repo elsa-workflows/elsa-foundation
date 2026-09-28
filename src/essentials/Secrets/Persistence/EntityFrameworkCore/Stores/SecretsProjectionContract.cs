@@ -156,12 +156,12 @@ public static class SecretsProjectionContract
     {
         // Settled before the payload is parsed: a row a newer module version wrote reports skew here rather than a
         // projection or payload fault.
-        EfSchemaVersion.EnsureReadable(SecretsEfModule.SchemaFamily, record.SchemaVersion, SecretsEfModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(SecretsEfModule.Chain, record.SchemaVersion);
         SecretDocument stored;
         SecretDocument current;
         try
         {
-            using var json = JsonDocument.Parse(record.Payload);
+            using var json = JsonDocument.Parse(SecretsEfModule.Chain.Upcast(record.SchemaVersion, SecretsEfModule.TableName, nameof(record.Payload), record.Payload));
             ValidatePayloadStructure(json.RootElement);
             stored = SecretDocument.Parse(json.RootElement);
             if (stored.Secret is null)

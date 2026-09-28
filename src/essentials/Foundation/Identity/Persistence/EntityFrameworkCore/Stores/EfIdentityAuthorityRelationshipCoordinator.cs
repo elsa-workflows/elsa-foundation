@@ -229,6 +229,8 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
                 return new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound);
             row.Value = string.Join(';', codes.Order(StringComparer.Ordinal));
             row.Revision = checked(row.Revision + 1);
+            // No registry changes, but the user row is written, so it is written current (spec 180, FR-014).
+            EfIdentityStoreSupport.Upgrade(user);
             user.Revision = checked(user.Revision + 1);
             return Updated(user.Id, user.Revision);
         }, cancellationToken);
@@ -247,7 +249,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
             if (existing is not null)
                 EfIdentityStoreSupport.EnsureRoleClaimIdentity(existing, tenantId, roleId);
             var beforeCount = RelationshipCount(role);
-            var ids = EfIdentityStoreSupport.DeserializeSet(role.ClaimIdsJson).ToHashSet(StringComparer.Ordinal);
+            var ids = RoleClaims(role);
             if (delete)
             { if (existing is not null) context.RoleClaims.Remove(existing); ids.Remove(id); }
             else
@@ -262,6 +264,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
                 }
                 ids.Add(id);
             }
+            EfIdentityStoreSupport.Upgrade(role);
             role.ClaimIdsJson = EfIdentityStoreSupport.SerializeSet(ids);
             EnsureRoleRelationshipCapacity(role, beforeCount);
             role.Revision = checked(role.Revision + 1);
@@ -295,7 +298,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
             if (newRow is not null && oldId != newId)
                 return Conflict(newId);
             var beforeCount = RelationshipCount(role);
-            var ids = EfIdentityStoreSupport.DeserializeSet(role.ClaimIdsJson).ToHashSet(StringComparer.Ordinal);
+            var ids = RoleClaims(role);
             if (oldRow is not null && oldId != newId)
                 context.RoleClaims.Remove(oldRow);
             Prepare(replacement, tenantId, roleId);
@@ -308,6 +311,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
             }
             ids.Remove(oldId);
             ids.Add(newId);
+            EfIdentityStoreSupport.Upgrade(role);
             role.ClaimIdsJson = EfIdentityStoreSupport.SerializeSet(ids);
             EnsureRoleRelationshipCapacity(role, beforeCount);
             role.Revision = checked(role.Revision + 1);
@@ -471,8 +475,8 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
             var beforeUserCount = RelationshipCount(user);
             var beforeRoleCount = RelationshipCount(role);
             var userIds = Registry(user, UserRegistry.RoleLinks);
-            var roleIds = EfIdentityStoreSupport.DeserializeSet(role.UserLinkIdsJson).ToHashSet(StringComparer.Ordinal);
-            var userRoleIds = EfIdentityStoreSupport.DeserializeSet(user.RoleIdsJson).ToHashSet(StringComparer.Ordinal);
+            var roleIds = RoleUserLinks(role);
+            var userRoleIds = EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.RoleIdsJson), user.RoleIdsJson).ToHashSet(StringComparer.Ordinal);
             userRoleIds.RemoveWhere(existingRoleId => Same(existingRoleId, roleId));
             if (delete)
             { if (existing is not null) context.UserRoles.Remove(existing); userIds.Remove(id); roleIds.Remove(id); }
@@ -492,6 +496,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
                 userRoleIds.Add(roleId);
             }
             SetRegistry(user, UserRegistry.RoleLinks, userIds);
+            EfIdentityStoreSupport.Upgrade(role);
             role.UserLinkIdsJson = EfIdentityStoreSupport.SerializeSet(roleIds);
             user.RoleIdsJson = EfIdentityStoreSupport.SerializeSet(userRoleIds);
             EnsureUserRelationshipCapacity(user, beforeUserCount);
@@ -547,9 +552,28 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
     private static void Apply(UserTokenEntity target, UserTokenEntity source) { target.TenantId = source.TenantId; target.TenantLookupKey = source.TenantLookupKey; target.UserId = source.UserId; target.UserLookupKey = source.UserLookupKey; target.LoginProvider = source.LoginProvider; target.Name = source.Name; target.TokenKey = source.TokenKey; target.Value = source.Value; }
     private static void Apply(UserRoleEntity target, UserRoleEntity source) { target.TenantId = source.TenantId; target.TenantLookupKey = source.TenantLookupKey; target.UserId = source.UserId; target.UserLookupKey = source.UserLookupKey; target.RoleId = source.RoleId; target.RoleLookupKey = source.RoleLookupKey; }
     private static void Apply(ExternalIdentityEntity target, ExternalIdentityEntity source) { target.TenantId = source.TenantId; target.TenantLookupKey = source.TenantLookupKey; target.UserId = source.UserId; target.UserLookupKey = source.UserLookupKey; target.Provider = source.Provider; target.ProviderDisplayName = source.ProviderDisplayName; target.ProviderLookupKey = source.ProviderLookupKey; target.ProviderSubject = source.ProviderSubject; target.ProviderSubjectLookupKey = source.ProviderSubjectLookupKey; target.ExternalOrderKey = source.ExternalOrderKey; target.LinkedAt = source.LinkedAt; target.LastSeenAt = source.LastSeenAt; target.LinkPolicy = source.LinkPolicy; target.Revision = source.Revision; }
-    private static void Apply(TenantMembershipEntity target, TenantMembershipEntity source) { target.Status = source.Status; target.RoleIdsJson = source.RoleIdsJson; target.DirectPermissionsJson = source.DirectPermissionsJson; }
+    private static void Apply(TenantMembershipEntity target, TenantMembershipEntity source) { target.Status = source.Status; target.RoleIdsJson = source.RoleIdsJson; target.DirectPermissionsJson = source.DirectPermissionsJson; target.SchemaVersion = IdentityIamEfModule.SchemaVersion; }
 
-    private static HashSet<string> Registry(UserEntity user, UserRegistry registry) => EfIdentityStoreSupport.DeserializeSet(registry switch { UserRegistry.Claims => user.ClaimIdsJson, UserRegistry.Logins => user.LoginIdsJson, UserRegistry.RoleLinks => user.RoleLinkIdsJson, UserRegistry.Tokens => user.TokenIdsJson, UserRegistry.TenantMemberships => user.TenantMembershipIdsJson, _ => "[]" }).ToHashSet(StringComparer.Ordinal);
+    /// <summary>
+    /// A user registry, read through the family's chain from the row's stamp (spec 180, FR-009): as stored before the
+    /// write upgrades the row, and unchanged by the chain after it has.
+    /// </summary>
+    private static HashSet<string> Registry(UserEntity user, UserRegistry registry) => (registry switch
+    {
+        UserRegistry.Claims => EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.ClaimIdsJson), user.ClaimIdsJson),
+        UserRegistry.Logins => EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.LoginIdsJson), user.LoginIdsJson),
+        UserRegistry.RoleLinks => EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.RoleLinkIdsJson), user.RoleLinkIdsJson),
+        UserRegistry.Tokens => EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.TokenIdsJson), user.TokenIdsJson),
+        UserRegistry.TenantMemberships => EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.TenantMembershipIdsJson), user.TenantMembershipIdsJson),
+        _ => EfIdentityStoreSupport.DeserializeSet(null)
+    }).ToHashSet(StringComparer.Ordinal);
+
+    private static HashSet<string> RoleClaims(RoleEntity role) =>
+        EfIdentityStoreSupport.ReadSet(role.SchemaVersion, IdentityIamEfModule.RoleTableName, nameof(role.ClaimIdsJson), role.ClaimIdsJson).ToHashSet(StringComparer.Ordinal);
+
+    private static HashSet<string> RoleUserLinks(RoleEntity role) =>
+        EfIdentityStoreSupport.ReadSet(role.SchemaVersion, IdentityIamEfModule.RoleTableName, nameof(role.UserLinkIdsJson), role.UserLinkIdsJson).ToHashSet(StringComparer.Ordinal);
+
     private static int RelationshipCount(UserEntity user)
     {
         var count = 0;
@@ -558,11 +582,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
         return count;
     }
 
-    private static int RelationshipCount(RoleEntity role)
-    {
-        return EfIdentityStoreSupport.DeserializeSet(role.ClaimIdsJson).Count +
-               EfIdentityStoreSupport.DeserializeSet(role.UserLinkIdsJson).Count;
-    }
+    private static int RelationshipCount(RoleEntity role) => RoleClaims(role).Count + RoleUserLinks(role).Count;
 
     private static void EnsureUserRelationshipCapacity(UserEntity user, int previousCount) =>
         EnsureRelationshipCapacity(RelationshipCount(user), previousCount, "user");
@@ -576,7 +596,11 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
             throw new IdentityEntityFrameworkAdmissionException($"The Identity {owner} relationship registry exceeds the {EfIdentityStoreSupport.MaximumMaterializedListEntries}-entry limit.");
     }
 
-    private static void SetRegistry(UserEntity user, UserRegistry registry, HashSet<string> values) { var json = EfIdentityStoreSupport.SerializeSet(values); switch (registry) { case UserRegistry.Claims: user.ClaimIdsJson = json; break; case UserRegistry.Logins: user.LoginIdsJson = json; break; case UserRegistry.RoleLinks: user.RoleLinkIdsJson = json; break; case UserRegistry.Tokens: user.TokenIdsJson = json; break; case UserRegistry.TenantMemberships: user.TenantMembershipIdsJson = json; break; } }
+    /// <summary>
+    /// Writes one user registry in the current format, so the row is upgraded first: its other registries are carried
+    /// over, and the stamp this write leaves must describe all of them (spec 180, FR-014).
+    /// </summary>
+    private static void SetRegistry(UserEntity user, UserRegistry registry, HashSet<string> values) { EfIdentityStoreSupport.Upgrade(user); var json = EfIdentityStoreSupport.SerializeSet(values); switch (registry) { case UserRegistry.Claims: user.ClaimIdsJson = json; break; case UserRegistry.Logins: user.LoginIdsJson = json; break; case UserRegistry.RoleLinks: user.RoleLinkIdsJson = json; break; case UserRegistry.Tokens: user.TokenIdsJson = json; break; case UserRegistry.TenantMemberships: user.TenantMembershipIdsJson = json; break; } }
     private static string ClaimId(string tenant, string owner, string type, string? value) => EfIdentityStoreSupport.CompoundKey(tenant, owner, type, value);
     private static string TokenId(string tenant, string user, string provider, string name) => EfIdentityStoreSupport.CompoundKey(tenant, user, provider, name);
     private static string RoleLinkId(string tenant, string user, string role) => EfIdentityStoreSupport.CompoundKey(tenant, user, role);

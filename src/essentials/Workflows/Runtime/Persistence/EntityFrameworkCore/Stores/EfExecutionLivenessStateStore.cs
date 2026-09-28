@@ -510,11 +510,12 @@ public sealed class EfExecutionLivenessStateStore(
     // Internal checkpoint staging uses the same envelope/projection validation before touching the ownership fence.
     internal static ExecutionLivenessState Read(ExecutionLivenessStateEntity row, string scope, string? expectedWorkflow = null, string? expectedOperational = null)
     {
-        if (EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) ||
+        if (EfSchemaVersion.NotReadable(RuntimeOperationalStateEfModule.Chain, row.SchemaVersion) ||
             row.Revision <= 0 || row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) || row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))
             throw new InvalidDataException("The execution-liveness row scope, schema, or revision projection is corrupt.");
         ExecutionLivenessState state;
-        try { state = RuntimeArtifactJson.Deserialize<ExecutionLivenessState>(row.ContentJson); }
+        var content = RuntimeOperationalStateEfModule.Chain.Upcast(row.SchemaVersion, RuntimeOperationalStateEfModule.ExecutionLivenessTableName, nameof(row.ContentJson), row.ContentJson);
+        try { state = RuntimeArtifactJson.Deserialize<ExecutionLivenessState>(content); }
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
         { throw new InvalidDataException("The persisted execution-liveness state is not valid current data.", exception); }
         var lease = state.ExecutionLease;

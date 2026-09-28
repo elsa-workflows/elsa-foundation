@@ -442,7 +442,7 @@ public sealed class EfIdentityAtomicWrite
 
     private static void EnsureReceiptSelfIdentity(MutationReceiptEntity row)
     {
-        if (EfSchemaVersion.NotReadable(IdentityIamEfModule.SchemaFamily, row.SchemaVersion, IdentityIamEfModule.SchemaVersion) ||
+        if (EfSchemaVersion.NotReadable(IdentityIamEfModule.Chain, row.SchemaVersion) ||
             !string.Equals(row.Id, row.MutationReceiptId, StringComparison.Ordinal) ||
             string.IsNullOrWhiteSpace(row.OperationId) ||
             string.IsNullOrWhiteSpace(row.RequestFingerprint))

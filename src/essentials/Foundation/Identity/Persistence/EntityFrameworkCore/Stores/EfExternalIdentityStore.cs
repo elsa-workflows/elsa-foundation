@@ -103,7 +103,7 @@ public sealed class EfExternalIdentityStore(
     private static ExternalIdentityEntity ToEntity(ExternalIdentityRecord record) => new() { TenantId = record.TenantId, Provider = record.Provider, ProviderSubject = record.ProviderSubject, UserId = record.UserId, LinkedAt = record.LinkedAt, LastSeenAt = record.LastSeenAt, LinkPolicy = (int)record.LinkPolicy };
     private static ExternalIdentityRecord Map(ExternalIdentityEntity row)
     {
-        EfSchemaVersion.EnsureReadable(IdentityIamEfModule.SchemaFamily, row.SchemaVersion, IdentityIamEfModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(IdentityIamEfModule.Chain, row.SchemaVersion);
         return new(row.TenantId, row.Provider, row.ProviderSubject, row.UserId, row.LinkedAt, row.LastSeenAt, (ExternalIdentityLinkPolicy)row.LinkPolicy);
     }
 

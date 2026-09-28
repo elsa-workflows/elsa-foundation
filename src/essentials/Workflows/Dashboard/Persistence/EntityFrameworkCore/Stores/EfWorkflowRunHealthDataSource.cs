@@ -184,7 +184,7 @@ public sealed class EfWorkflowRunHealthDataSource(
     {
         try
         {
-            if (EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) || row.Revision <= 0)
+            if (EfSchemaVersion.NotReadable(RuntimeOperationalStateEfModule.Chain, row.SchemaVersion) || row.Revision <= 0)
                 throw new InvalidDataException("The workflow run-health row envelope is corrupt.");
 
             var workflowExecutionId = Decode(row.WorkflowExecutionId);
@@ -197,7 +197,9 @@ public sealed class EfWorkflowRunHealthDataSource(
                 row.DefinitionIdOrderKey != Order(definitionId))
                 throw new InvalidDataException("The workflow run-health row identity envelope is corrupt.");
 
-            var raw = JsonSerializer.Deserialize<RawRunHealthProjection>(row.ContentJson, JsonOptions)
+            var content = RuntimeOperationalStateEfModule.Chain.Upcast(
+                row.SchemaVersion, RuntimeOperationalStateEfModule.WorkflowRunHealthTableName, nameof(row.ContentJson), row.ContentJson);
+            var raw = JsonSerializer.Deserialize<RawRunHealthProjection>(content, JsonOptions)
                       ?? throw new InvalidDataException("The workflow run-health content is empty.");
             var projection = new RunHealthProjection(
                 Decode(raw.WorkflowExecutionId),

@@ -495,10 +495,11 @@ public sealed class EfRecurringTriggerScheduleStore(
 
     private static RecurringTriggerSchedule Read(RecurringTriggerScheduleEntity row, string scope, string? expectedId = null)
     {
-        if (EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) || row.Id != Id(scope, Decode(row.ScheduleId)) || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) || expectedId is not null && row.ScheduleId != Encode(expectedId) || row.Revision <= 0)
+        if (EfSchemaVersion.NotReadable(RuntimeOperationalStateEfModule.Chain, row.SchemaVersion) || row.Id != Id(scope, Decode(row.ScheduleId)) || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) || expectedId is not null && row.ScheduleId != Encode(expectedId) || row.Revision <= 0)
             throw new InvalidDataException("The persisted EF recurring-trigger schedule row does not match its identity envelope.");
         RecurringTriggerSchedule schedule;
-        try { schedule = RuntimeArtifactJson.Deserialize<RecurringTriggerSchedule>(row.ContentJson); }
+        var scheduleContent = RuntimeOperationalStateEfModule.Chain.Upcast(row.SchemaVersion, RuntimeOperationalStateEfModule.RecurringScheduleTableName, nameof(row.ContentJson), row.ContentJson);
+        try { schedule = RuntimeArtifactJson.Deserialize<RecurringTriggerSchedule>(scheduleContent); }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException or InvalidOperationException or FormatException)
         { throw new InvalidDataException("The persisted EF recurring-trigger schedule content is not valid current JSON.", exception); }
         Validate(schedule);
@@ -565,18 +566,20 @@ public sealed class EfRecurringTriggerScheduleStore(
     {
         state.Entity.IsActive = state.IsActive;
         state.Entity.ContentJson = JsonSerializer.Serialize(new ProjectionStateContent(ProjectionKind, state.ActivationId, state.ArtifactId is null ? null : Decode(state.ArtifactId), state.IsActive, state.ScheduleCount, state.ProjectionFingerprint, state.ScheduleIds, state.ScheduleFingerprints), JsonOptions);
+        state.Entity.SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion;
     }
 
     private static ProjectionStateSnapshot ReadState(RecurringTriggerScheduleProjectionStateEntity entity, string scope, string? expectedActivation = null)
     {
-        if (EfSchemaVersion.NotReadable("RuntimeOperationalState", entity.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) || entity.Id != ProjectionId(scope, Decode(entity.ActivationId)) || entity.ScopeKey != Encode(scope) || entity.ScopeKeyHash != Hash(scope) || expectedActivation is not null && entity.ActivationId != Encode(expectedActivation) || entity.ActivationIdHash != Hash(Decode(entity.ActivationId)) || entity.ActivationIdOrderKey != Order(Decode(entity.ActivationId)) || entity.ArtifactId is null && (entity.ArtifactIdHash is not null || entity.ArtifactIdOrderKey is not null) || entity.ArtifactId is not null && (entity.ArtifactIdHash != Hash(Decode(entity.ArtifactId)) || entity.ArtifactIdOrderKey != Order(Decode(entity.ArtifactId))) || entity.Revision <= 0)
+        if (EfSchemaVersion.NotReadable(RuntimeOperationalStateEfModule.Chain, entity.SchemaVersion) || entity.Id != ProjectionId(scope, Decode(entity.ActivationId)) || entity.ScopeKey != Encode(scope) || entity.ScopeKeyHash != Hash(scope) || expectedActivation is not null && entity.ActivationId != Encode(expectedActivation) || entity.ActivationIdHash != Hash(Decode(entity.ActivationId)) || entity.ActivationIdOrderKey != Order(Decode(entity.ActivationId)) || entity.ArtifactId is null && (entity.ArtifactIdHash is not null || entity.ArtifactIdOrderKey is not null) || entity.ArtifactId is not null && (entity.ArtifactIdHash != Hash(Decode(entity.ArtifactId)) || entity.ArtifactIdOrderKey != Order(Decode(entity.ArtifactId))) || entity.Revision <= 0)
             throw new InvalidDataException("The persisted EF recurring-schedule projection state does not match its identity envelope.");
         ProjectionStateContent content;
         string[] ids;
         Dictionary<string, string> fps;
         try
         {
-            content = JsonSerializer.Deserialize<ProjectionStateContent>(entity.ContentJson, JsonOptions) ?? throw new JsonException("Projection content is empty.");
+            var stored = RuntimeOperationalStateEfModule.Chain.Upcast(entity.SchemaVersion, RuntimeOperationalStateEfModule.RecurringScheduleProjectionStateTableName, nameof(entity.ContentJson), entity.ContentJson);
+            content = JsonSerializer.Deserialize<ProjectionStateContent>(stored, JsonOptions) ?? throw new JsonException("Projection content is empty.");
             ids = JsonSerializer.Deserialize<string[]>(entity.ScheduleIdsJson, JsonOptions) ?? throw new JsonException("Schedule identities are empty.");
             fps = JsonSerializer.Deserialize<Dictionary<string, string>>(entity.ScheduleFingerprintsJson, JsonOptions) ?? throw new JsonException("Schedule fingerprints are empty.");
         }

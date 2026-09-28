@@ -502,7 +502,7 @@ public sealed class EfSchedulerWorkQueueStore(
         string? expectedWorkflowExecutionId = null,
         string? expectedWorkItemId = null)
     {
-        if (EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) || row.Revision <= 0 ||
+        if (EfSchemaVersion.NotReadable(RuntimeOperationalStateEfModule.Chain, row.SchemaVersion) || row.Revision <= 0 ||
             row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) ||
             row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))
             throw new InvalidDataException("The scheduler-work row scope, schema, or revision projection is corrupt.");
@@ -510,7 +510,7 @@ public sealed class EfSchedulerWorkQueueStore(
         RuntimeSchedulerWorkItem item;
         try
         {
-            item = RuntimeArtifactJson.Deserialize<RuntimeSchedulerWorkItem>(row.ContentJson);
+            item = RuntimeArtifactJson.Deserialize<RuntimeSchedulerWorkItem>(RuntimeOperationalStateEfModule.Chain.Upcast(row.SchemaVersion, RuntimeOperationalStateEfModule.SchedulerWorkTableName, nameof(row.ContentJson), row.ContentJson));
         }
         catch (Exception exception) when (exception is System.Text.Json.JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
         {

@@ -13,6 +13,9 @@ public static class SecretsEfModule
 
     /// <summary>The schema family this module's rows belong to, checked against when a row is read.</summary>
     public const string SchemaFamily = "Secrets";
+    /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
+    /// upcasts through (spec 180, FR-010).</summary>
+    public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(SecretsEfModule).Assembly, SchemaFamily);
     public const string DefaultConnectionName = EfConnectionDefaults.ConnectionName;
     public const string DefaultSqliteConnectionString = EfConnectionDefaults.SqliteConnectionString;
 

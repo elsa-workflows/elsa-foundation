@@ -19,6 +19,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Spec 180, FR-022: upcaster fixture pairs, frozen once committed (EfSchemaFamilyDeclarationGuardTests). -->
+    <None Include="Fixtures\SchemaUpcasters\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\essentials\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Tasks\Elsa.Tasks.csproj" />
