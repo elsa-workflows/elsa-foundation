@@ -5,6 +5,7 @@ using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.Core.Options;
 using Elsa.Cluster.Core.Services;
+using Elsa.Cluster.InProcess;
 using Elsa.Modularity.Api.Attention;
 using Elsa.Modularity.Api.Services;
 using Elsa.Modularity.Core.Contracts;
@@ -93,6 +94,15 @@ public sealed class FeatureDormancyReportingTests
         Assert.Contains("once every host can read version '2'", reason.Reason, StringComparison.Ordinal);
     }
 
+    /// <summary>A host that composes no check cannot tell, so the feature is dormant, never assumed available.</summary>
+    [Fact]
+    public async Task A_host_that_composes_no_check_lists_a_feature_that_declares_a_requirement_as_dormant()
+    {
+        var reason = Assert.Single((await CatalogItemAsync(enabled: true, check: null)).Availability!.Reasons);
+
+        Assert.Equal(nameof(SchemaDormancyKind.NotObserved), reason.Kind);
+    }
+
     [Fact]
     public async Task The_catalog_reads_no_status_when_nothing_is_dormant()
     {
@@ -134,14 +144,16 @@ public sealed class FeatureDormancyReportingTests
     }
 
     /// <summary>The runtime contributor hands each feature's class on, which is where its requirements are read from.</summary>
-    private async Task<FeatureCatalogItem> CatalogItemAsync(bool enabled, Type? featureType = null)
+    private Task<FeatureCatalogItem> CatalogItemAsync(bool enabled, Type? featureType = null) => CatalogItemAsync(enabled, _check, featureType);
+
+    private static async Task<FeatureCatalogItem> CatalogItemAsync(bool enabled, ISchemaDormancyCheck? check, Type? featureType = null)
     {
         var context = FeatureCatalogTestContext.Create();
         await new RuntimeFeatureCatalogContributor(new FakeRuntimeFeatureCatalog(
             new ShellFeatureDescriptor("OrdersApi") { StartupType = featureType ?? typeof(OrdersApiFeature) })).ContributeAsync(context);
         context.Items["OrdersApi"].Enabled = enabled;
 
-        await new FeatureAvailabilityCatalogContributor(_check).ContributeAsync(context);
+        await new FeatureAvailabilityCatalogContributor(check).ContributeAsync(context);
 
         return context.Items["OrdersApi"].ToItem();
     }

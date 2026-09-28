@@ -20,10 +20,11 @@ namespace Elsa.Modularity.Api.Services;
 /// </para>
 /// <para>
 /// A feature with no live descriptor on this host, such as one whose package is not loaded, has no class to read
-/// requirements from, so its availability is left unknown rather than claimed.
+/// requirements from, so its availability is left unknown rather than claimed. A host that composes no check has observed
+/// nothing, so every requirement a feature declares is reported unmet by the same rule, never available.
 /// </para>
 /// </remarks>
-public sealed class FeatureAvailabilityCatalogContributor(ISchemaDormancyCheck check) : IFeatureCatalogContributor
+public sealed class FeatureAvailabilityCatalogContributor(ISchemaDormancyCheck? check = null) : IFeatureCatalogContributor
 {
     public async Task ContributeAsync(FeatureCatalogContributionContext context, CancellationToken cancellationToken = default)
     {
@@ -32,7 +33,9 @@ public sealed class FeatureAvailabilityCatalogContributor(ISchemaDormancyCheck c
         foreach (var feature in context.Items.Values.Where(feature => feature is { Enabled: true, FeatureType: not null }))
         {
             var requirements = SchemaVersionRequirement.DeclaredBy(feature.FeatureType!);
-            var availability = requirements.Count == 0 ? SchemaAvailability.Available : await check.EvaluateAsync(requirements, cancellationToken);
+            var availability = requirements.Count == 0 ? SchemaAvailability.Available
+                : check is null ? SchemaDormancyRule.Evaluate(requirements, _ => null)
+                : await check.EvaluateAsync(requirements, cancellationToken);
             if (availability.IsAvailable)
                 feature.Availability = FeatureAvailability.Available;
             else
@@ -63,6 +66,8 @@ public sealed class FeatureAvailabilityCatalogContributor(ISchemaDormancyCheck c
     /// </summary>
     private async Task<IReadOnlyDictionary<string, SchemaFamilyObservation>> ReadStatusAsync(CancellationToken cancellationToken)
     {
+        if (check is null)
+            return new Dictionary<string, SchemaFamilyObservation>(StringComparer.Ordinal);
         try
         {
             return (await check.ReadStatusAsync(cancellationToken))

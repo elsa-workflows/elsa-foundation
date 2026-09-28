@@ -1,4 +1,3 @@
-using Elsa.Cluster.Core.Extensions;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Modularity.Api.Authorization;
 using Elsa.Modularity.Api.Options;
@@ -20,9 +19,8 @@ public static class ModularityApiServiceCollectionExtensions
         services.AddPermissionContributor<ModuleManagementPermissionContributor>();
         services.AddNuplaneFeatureCatalog();
         // After the runtime contributor, which supplies each feature's class: a dormant feature's availability and reason
-        // (spec 182, FR-009), from the shared dormancy check. A host that composes no observation of schema finalization
-        // has every declared requirement reported unmet, because it cannot tell, rather than available.
-        services.TryAddSchemaDormancyCheck();
+        // (spec 182, FR-009), from the shared dormancy check the host composes. A host that composes none has every
+        // declared requirement reported unmet, because it cannot tell, rather than available.
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IFeatureCatalogContributor, FeatureAvailabilityCatalogContributor>());
         services.RemoveAll<IShellFeatureConfigurationStore>();
         services.RemoveAll<IShellReloader>();

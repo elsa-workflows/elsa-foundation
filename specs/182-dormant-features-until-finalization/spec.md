@@ -364,11 +364,13 @@ Recorded 2026-09-27, when the owner answered this spec's open questions on #2093
 
 - **Where the check lives.** B5 built the finalization gate inside `Elsa.Persistence.EntityFramework`, which references
   EF Core, so the only foundation package that holds a finalization or membership contract and is free of EF Core and
-  of any provider is `Elsa.Cluster.Core`, the membership contract. `ISchemaDormancyCheck`, its default
-  `SchemaDormancyCheck` holding the one rule, `[RequiresSchemaVersion]` and the source contract
-  `IObservedSchemaFinalization` live there (FR-001, FR-003). The source over the EF gates, `EfObservedSchemaFinalization`,
-  lives in `Elsa.Cluster.Readability`, which already bridges persistence and membership so that neither depends on the
-  other. `AddEfSchemaDormancy()` composes both, and `AddEfSchemaReadability()` calls it.
+  of any provider is `Elsa.Cluster.Core`, the membership contract. `ISchemaDormancyCheck`, the one rule
+  (`SchemaDormancyRule`), `[RequiresSchemaVersion]` and the source contract `IObservedSchemaFinalization` live there
+  (FR-001, FR-003). A `.Core` project holds no implementation (`ArchitectureGuardTests`), so the default check,
+  `SchemaDormancyCheck`, sits beside the membership default in `Elsa.Cluster.InProcess`, which is as free of providers.
+  The source over the EF gates, `EfObservedSchemaFinalization`, lives in `Elsa.Cluster.Readability`, which already
+  bridges persistence and membership so that neither depends on the other. `AddEfSchemaDormancy()` composes both, and
+  `AddEfSchemaReadability()` calls it.
 - **The refusal and its code.** The check is EF-free, so its refusal, `SchemaDormancyRefusedException`, lives in
   `Elsa.Primitives` beside `SchemaWriteRefusedException` and derives from it, not from the EF
   `EfSchemaWriteRefusedException`. That is what every domain API already answers with 409 (spec 181's 2026-09-28

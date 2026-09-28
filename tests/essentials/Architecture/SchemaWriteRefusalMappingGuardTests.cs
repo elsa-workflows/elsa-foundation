@@ -41,7 +41,8 @@ public sealed class SchemaWriteRefusalMappingGuardTests
     private const string ProbeWriteVersion = "7.0.0";
     private const string ProbeRequiredVersion = "8.0.0";
     private const string ProbeFeature = "Probe.DormantFeature";
-    private const string ProbeReason = "It becomes available once every host can read version '8.0.0' of schema family 'Probe.Family'.";
+    // No character a JSON writer escapes, so the body carries it verbatim whichever envelope an owner writes.
+    private const string ProbeReason = "It becomes available once every host can read the newer version of Probe.Family.";
 
     /// <summary>Every first-party feature that registers failure services for its owner, with the file that registers them.</summary>
     private static readonly (Type Feature, string Source)[] OwnersWithTheirOwnFailureServices =

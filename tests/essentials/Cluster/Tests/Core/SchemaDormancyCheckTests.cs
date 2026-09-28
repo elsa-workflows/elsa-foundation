@@ -3,6 +3,7 @@ using Elsa.Cluster.Core.Extensions;
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.Core.Options;
 using Elsa.Cluster.Core.Services;
+using Elsa.Cluster.InProcess;
 using Elsa.Primitives.Exceptions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -230,19 +231,29 @@ public sealed class SchemaDormancyCheckTests
         Assert.Same(provider.GetRequiredService<IObservedSchemaFinalization>(), provider.GetRequiredService<IObservedSchemaFinalization>());
     }
 
-    /// <summary>§2.6.2: a second implementation of either replacement contract fails where it is composed.</summary>
+    /// <summary>§2.6.2: a second source fails where it is composed, and the same one again is a no-op.</summary>
     [Fact]
-    public void A_second_source_or_check_is_refused_where_it_is_composed_and_the_same_one_again_is_not()
+    public void A_second_source_is_refused_where_it_is_composed_and_the_same_one_again_is_not()
     {
-        var services = new ServiceCollection().TryAddSchemaDormancyCheck().AddObservedSchemaFinalization<FakeObservedSchemaFinalization>();
+        var services = new ServiceCollection().AddObservedSchemaFinalization<FakeObservedSchemaFinalization>();
 
         services.AddObservedSchemaFinalization<FakeObservedSchemaFinalization>();
         Assert.Throws<InvalidOperationException>(() => services.AddObservedSchemaFinalization<OtherObservedSchemaFinalization>());
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IObservedSchemaFinalization));
+    }
 
-        services.AddSchemaDormancyCheck<OtherCheck>();
-        Assert.Equal(typeof(OtherCheck), Assert.Single(services, descriptor => descriptor.ServiceType == typeof(ISchemaDormancyCheck)).ImplementationType);
-        services.TryAddSchemaDormancyCheck();
-        Assert.Throws<InvalidOperationException>(() => services.AddSchemaDormancyCheck<SchemaDormancyCheck>());
+    /// <summary>§2.6.2: the default yields to a check composed before it, and two composed checks fail when it is asked for.</summary>
+    [Fact]
+    public void The_default_check_yields_to_one_already_composed_and_refuses_to_join_two()
+    {
+        var replaced = new ServiceCollection().AddSingleton<ISchemaDormancyCheck, OtherCheck>().TryAddSchemaDormancyCheck();
+        Assert.Equal(typeof(OtherCheck), Assert.Single(replaced, descriptor => descriptor.ServiceType == typeof(ISchemaDormancyCheck)).ImplementationType);
+
+        var defaulted = new ServiceCollection().TryAddSchemaDormancyCheck().TryAddSchemaDormancyCheck();
+        Assert.Equal(typeof(SchemaDormancyCheck), Assert.Single(defaulted, descriptor => descriptor.ServiceType == typeof(ISchemaDormancyCheck)).ImplementationType);
+
+        var conflicting = new ServiceCollection().AddSingleton<ISchemaDormancyCheck, OtherCheck>().AddSingleton<ISchemaDormancyCheck, SchemaDormancyCheck>();
+        Assert.Throws<InvalidOperationException>(() => conflicting.TryAddSchemaDormancyCheck());
     }
 
     private static SchemaFamilyObservation Observed(string writeVersion) =>
