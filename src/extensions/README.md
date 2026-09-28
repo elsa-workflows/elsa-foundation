@@ -33,7 +33,7 @@ site already covers `src/extensions/`, and this is the complete list:
 
 | Site | What it enumerates | How it would have failed |
 |---|---|---|
-| `.github/workflows/packages.yml` | projects to pack | the module stops shipping to NuGet, release still green |
+| `.github/workflows/packages.yml` | nothing itself: it packs the dependency map's packable projects, which `RepoLayout.cs` below enumerates | the version calculator refuses a map that misses a project, so packing fails |
 | `.github/workflows/ci.yml` | container-free test projects | the module's tests stop running, job still green |
 | `.github/workflows/docker.yml` | paths that trigger an image build | image stops rebuilding on changes to the module |
 | `src/apps/Elsa.Workbench/Dockerfile` | restore inputs and the source copy | image build fails (the one that fails loudly) |

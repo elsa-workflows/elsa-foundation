@@ -1,16 +1,44 @@
 name: Packages
 
-# Packs the Elsa 4 (Elsa.*) libraries and publishes them:
-#   - every push to main / a feature branch, and every GitHub Release, pushes a
-#     preview build (4.0.0-preview.<run_number>) to the elsa-4 feedz.io feed
-#   - a *published* GitHub Release additionally pushes the tagged version to nuget.org
+# Packs the Elsa 4 (Elsa.*) libraries at the versions spec 150 computes, and publishes from main only the packages
+# whose inputs changed since their last publish, recording each on the publish-state branch. The logic lives in
+# tools/versioning/Elsa.Versioning.Publisher (tools/versioning/README.md, Publishing); this workflow only runs it.
+# Every run starts with the publisher's plan, which takes one of four modes:
 #
-# The full test suite is intentionally NOT run here (it includes Testcontainers-based
-# integration tests); testing belongs in a separate CI workflow. Packing only compiles
-# the libraries, so no containers are started.
+#   - branch     a push to any branch below but main, or a manual run from one: packs the affected set at
+#                branch-scoped versions for the run's artifact, and never pushes to a feed (spec 150 FR-008).
+#   - dry-run    a push to main, or a manual run from it, while publish-state does not exist: packs every package at
+#                the version the bootstrap would publish, uploads them, and publishes nothing. The job summary says the
+#                bootstrap is pending.
+#   - bootstrap  a manual run from main with bootstrap: true, the one-off first publish (#2081). It refuses if
+#                publish-state exists, or if the feed holds any version of these packages that does not sort below the
+#                one it would push, such as the old 4.0.0-preview.N and branch builds; otherwise it pushes every package
+#                and creates publish-state as an orphan branch holding only published-versions.json.
+#   - publish    a push to main, or a manual run from it, once publish-state exists: packs and pushes only the
+#                affected set (FR-006), with no global /p:Version (FR-005) and no --skip-duplicate (FR-011), settles a
+#                push the feed rejects by the input fingerprint of the feed's copy (FR-018), and writes the record back
+#                with this workflow's GITHUB_TOKEN (FR-017). A manual run can force-advance named packages (FR-003).
+#
+# A GitHub Release publishes nothing until the 4.0 release cut, #2085: the release job fails and says so.
+#
+# The full test suite is intentionally NOT run here (it includes Testcontainers-based integration tests); testing
+# belongs in CI. Packing only compiles the libraries, so no containers are started.
 
 on:
   workflow_dispatch:
+    inputs:
+      bootstrap:
+        description: 'One-off first publish, from main only: push every package and create publish-state. Refuses if publish-state exists or the feed still holds any 4.0.0-* prerelease.'
+        type: boolean
+        default: false
+      force_advance:
+        description: 'Package ids to advance although none of their inputs changed, comma-separated (spec 150 FR-003). Needs force_reason.'
+        type: string
+        default: ''
+      force_reason:
+        description: 'Why the force_advance packages advance; recorded in the computation.'
+        type: string
+        default: ''
   push:
     branches:
       - 'main'
@@ -26,53 +54,35 @@ on:
   release:
     types: [prereleased, published]
 
+# FR-020: every run from main - each push, each manual run, the bootstrap - is serialized on one group from its plan to
+# its write-back, so no two runs compute against the same record. A run in progress is never cancelled. GitHub drops a
+# queued run when a newer one queues, which FR-020 allows: the newer run publishes every change the dropped one would
+# have. The repair workflow (#2083) writes publish-state too, and must join this group. Every other run has its own.
+concurrency:
+  group: ${{ github.ref == 'refs/heads/main' && 'publish-state' || format('packages-{0}', github.run_id) }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
 env:
-  base_version: '4.0.0'
   feedz_feed_source: 'https://f.feedz.io/elsa-workflows/elsa-4/nuget/index.json'
-  nuget_feed_source: 'https://api.nuget.org/v3/index.json'
 
 jobs:
-  build:
+  pack:
     name: Build packages
+    if: ${{ github.event_name != 'release' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+      affected: ${{ steps.plan.outputs.affected }}
     steps:
-      - name: Extract branch name
-        run: |
-          BRANCH_NAME=${{ github.ref }} # e.g., refs/heads/main
-          BRANCH_NAME=${BRANCH_NAME#refs/heads/} # remove the refs/heads/ prefix
-          # Use the last path segment of the branch name as the version prefix (e.g. feat/issue-123 -> issue-123).
-          PACKAGE_PREFIX=$(echo $BRANCH_NAME | rev | cut -d/ -f1 | rev | tr '_' '-')
-          # main and long-lived branches publish as 'preview'.
-          if [[ "${BRANCH_NAME}" == "main" || "${BRANCH_NAME}" =~ ^develop/ || "${BRANCH_NAME}" =~ ^release/ || "${BRANCH_NAME}" =~ ^rc/ ]]; then
-              PACKAGE_PREFIX="preview"
-          fi
-          echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_ENV
-          echo "PACKAGE_PREFIX=${PACKAGE_PREFIX}" >> $GITHUB_ENV
-
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Verify commit exists in branch
-        run: |
-          if [[ "${{ github.ref }}" == refs/tags/* && "${{ github.event_name }}" == "release" && ("${{ github.event.action }}" == "published" || "${{ github.event.action }}" == "prereleased") ]]; then
-            git fetch --no-tags --prune origin +refs/heads/*:refs/remotes/origin/*
-            git branch --remote --contains | grep -E 'origin/(main|release/)'
-          else
-            git fetch --no-tags --prune origin +refs/heads/*:refs/remotes/origin/*
-            git branch --remote --contains | grep origin/${BRANCH_NAME}
-          fi
-
-      - name: Set VERSION variable
-        run: |
-          if [[ "${{ github.ref }}" == refs/tags/* && "${{ github.event_name }}" == "release" && ("${{ github.event.action }}" == "published" || "${{ github.event.action }}" == "prereleased") ]]; then
-            TAG_NAME=${{ github.ref }} # e.g., refs/tags/4.0.0
-            TAG_NAME=${TAG_NAME#refs/tags/} # remove the refs/tags/ prefix
-            TAG_NAME=${TAG_NAME#v} # tolerate a leading v (v4.0.0 -> 4.0.0) so the NuGet version is valid
-            echo "VERSION=${TAG_NAME}" >> $GITHUB_ENV
-          else
-            echo "VERSION=${{env.base_version}}-${PACKAGE_PREFIX}.${{github.run_number}}" >> $GITHUB_ENV
-          fi
+        with:
+          # The calculator compares trees at the commits the record names and proves ancestry (FR-021).
+          fetch-depth: 0
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -86,61 +96,108 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      - name: Generate packable solution filter
-        # Restrict build/pack to the library projects so the test tree (117 projects,
-        # including Testcontainers-based integration tests) is not compiled just to pack.
-        # The host under src/apps is excluded; project references pull in the full lib graph.
-        #
-        # One root covers every module: required under src/essentials, optional under src/extensions (#1815).
-        # Test projects are excluded by path rather than by root, because an extension carries its own
-        # tests/ subtree inside src/ rather than under the repository's tests/.
-        run: |
-          projects=$(find src -name '*.csproj' \
-            -not -path 'src/apps/*' -not -path '*/tests/*' \
-            | sort | sed 's|.*|"&"|' | paste -sd, -)
-          printf '{"solution":{"path":"Elsa.Server.slnx","projects":[%s]}}' "$projects" > Elsa.Server.pack.slnf
+      - name: Build the publisher
+        run: dotnet build tools/versioning/Elsa.Versioning.Publisher -c Release
 
+      - name: Plan
+        # Writes plan.json, computation.json, package-versions.props and packages.slnf (the affected set) under
+        # $RUNNER_TEMP/versions, the step outputs mode and affected, and the job summary.
+        id: plan
+        env:
+          BOOTSTRAP: ${{ inputs.bootstrap }}
+          FORCE_ADVANCE: ${{ inputs.force_advance }}
+          FORCE_REASON: ${{ inputs.force_reason }}
+        run: >-
+          dotnet run --project tools/versioning/Elsa.Versioning.Publisher -c Release --no-build --
+          plan --ref "$GITHUB_REF" --commit "$GITHUB_SHA" --bootstrap "${BOOTSTRAP:-false}"
+          --force-advance "$FORCE_ADVANCE" --force-reason "$FORCE_REASON"
+          --output "$RUNNER_TEMP/versions" --solution Elsa.Server.slnx
+          --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+
+      # Restore, build and pack the affected set alone (FR-006a), each through the computed pack-properties file, which
+      # PackageVersioning.props reads for every package's version and input fingerprint. No global /p:Version (FR-005).
       - name: Restore
-        run: dotnet restore Elsa.Server.pack.slnf -p:WarningsNotAsErrors=NU1603
+        if: ${{ steps.plan.outputs.affected != '0' }}
+        run: >-
+          dotnet restore "$RUNNER_TEMP/versions/packages.slnf"
+          -p:CustomBeforeDirectoryBuildProps="$RUNNER_TEMP/versions/package-versions.props" -p:WarningsNotAsErrors=NU1603
 
       - name: Build
-        run: dotnet build Elsa.Server.pack.slnf -c Release --no-restore /p:Version=${VERSION} -p:WarningsNotAsErrors=NU1603
+        if: ${{ steps.plan.outputs.affected != '0' }}
+        run: >-
+          dotnet build "$RUNNER_TEMP/versions/packages.slnf" -c Release --no-restore
+          -p:CustomBeforeDirectoryBuildProps="$RUNNER_TEMP/versions/package-versions.props" -p:WarningsNotAsErrors=NU1603
 
       - name: Pack
-        run: dotnet pack Elsa.Server.pack.slnf -c Release --no-build /p:Version=${VERSION} -p:WarningsNotAsErrors=NU1603 -p:PackageOutputPath=$(pwd)/packages/nuget
+        if: ${{ steps.plan.outputs.affected != '0' }}
+        run: >-
+          dotnet pack "$RUNNER_TEMP/versions/packages.slnf" -c Release --no-build
+          -p:CustomBeforeDirectoryBuildProps="$RUNNER_TEMP/versions/package-versions.props" -p:WarningsNotAsErrors=NU1603
+          -p:PackageOutputPath="$RUNNER_TEMP/versions/nuget"
 
       - name: Upload artifact
+        # The packages under nuget/, with the plan and computation the publish job checks them against.
         uses: actions/upload-artifact@v4
         with:
           name: elsa-foundation-nuget-packages
-          path: packages/nuget/*.nupkg
+          path: ${{ runner.temp }}/versions
+          if-no-files-found: error
 
-  publish_preview_feedz:
+  publish:
     name: Publish to feedz.io
-    needs: build
+    needs: pack
+    # Only a build of main that planned a publish or the bootstrap gets here; the publisher refuses anything else again.
+    if: >-
+      ${{ github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && (needs.pack.outputs.mode == 'publish' || needs.pack.outputs.mode == 'bootstrap')
+      && needs.pack.outputs.affected != '0' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    if: ${{ github.event_name == 'release' || github.event_name == 'push' }}
+    timeout-minutes: 30
+    permissions:
+      # FR-017: the write-back to publish-state is pushed with this job's GITHUB_TOKEN, which actions/checkout persists
+      # for origin. Pushes made with it start no workflow run.
+      contents: write
     steps:
-      - name: Download Packages
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Build the publisher
+        run: dotnet build tools/versioning/Elsa.Versioning.Publisher -c Release
+
+      - name: Download packages
         uses: actions/download-artifact@v4
         with:
           name: elsa-foundation-nuget-packages
+          path: ${{ runner.temp }}/versions
 
-      - name: Publish to feedz.io
-        run: dotnet nuget push *.nupkg -k ${{ secrets.FEEDZ_API_KEY }} -s ${{ env.feedz_feed_source }} --skip-duplicate
+      - name: Publish
+        # Refuses unless publish-state is where the plan found it (or, for the bootstrap, absent) and the versions
+        # recompute to the same bytes; then pushes in dependency order, stopping at the first failure, and writes back
+        # whatever landed.
+        env:
+          FEEDZ_API_KEY: ${{ secrets.FEEDZ_API_KEY }}
+        run: >-
+          dotnet run --project tools/versioning/Elsa.Versioning.Publisher -c Release --no-build --
+          publish --ref "$GITHUB_REF" --commit "$GITHUB_SHA" --plan-dir "$RUNNER_TEMP/versions"
+          --feed "$feedz_feed_source" --api-key-env FEEDZ_API_KEY --summary "$GITHUB_STEP_SUMMARY"
 
-  publish_nuget:
-    name: Publish release to nuget.org
-    needs: build
+  release:
+    name: Release packages
+    if: ${{ github.event_name == 'release' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    if: ${{ github.event.action == 'published' }}
+    timeout-minutes: 5
     steps:
-      - name: Download Packages
-        uses: actions/download-artifact@v4
-        with:
-          name: elsa-foundation-nuget-packages
-
-      - name: Publish to nuget.org
-        run: dotnet nuget push *.nupkg -k ${{ secrets.NUGET_API_KEY }} -s ${{ env.nuget_feed_source }} --skip-duplicate
+      - name: Refuse until the 4.0 release cut
+        # A release used to push its tag's version of every package, to feedz.io and nuget.org, through a global
+        # /p:Version and --skip-duplicate. Spec 150 forbids both, and a stable 4.0.0 on either feed would sort above every
+        # computed 4.0.N-preview. Promoting a release is #2085's to build.
+        run: |
+          echo "::error title=Releases publish nothing yet::Packages from a GitHub Release are not published until the 4.0 release cut is built (#2085, https://github.com/elsa-workflows/elsa-foundation/issues/2085). Previews publish from main."
+          exit 1

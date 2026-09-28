@@ -15960,6 +15960,50 @@
       ]
     },
     {
+      "path": "tests/essentials/Versioning/Publisher/Tests/Elsa.Versioning.Publisher.Tests.csproj",
+      "name": "Elsa.Versioning.Publisher.Tests",
+      "kind": "test",
+      "domain": "Elsa.Versioning",
+      "sub_domain": "Publisher.Tests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Versioning.Publisher",
+          "path": "tools/versioning/Elsa.Versioning.Publisher/Elsa.Versioning.Publisher.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "YamlDotNet",
+          "version": "16.3.0"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
       "path": "tests/essentials/Workbench/Tests/Elsa.Workbench.Tests.csproj",
       "name": "Elsa.Workbench.Tests",
       "kind": "test",

@@ -7,7 +7,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 ## Summary
 
 - Source projects: 134
-- Test projects: 121
+- Test projects: 122
 - Domains: 31
 - Direct cross-domain references: 712
 
@@ -41,7 +41,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Studio | 3 | 3 | contract<br>feature/implementation<br>test |
 | Elsa.Tasks | 3 | 1 | contract<br>feature/implementation<br>helper<br>test |
 | Elsa.Testing | 0 | 1 | test |
-| Elsa.Versioning | 0 | 1 | test |
+| Elsa.Versioning | 0 | 2 | test |
 | Elsa.Workbench | 1 | 1 | host<br>test |
 | Elsa.Workflows | 31 | 24 | contract<br>feature/implementation<br>test |
 | Elsa3 | 4 | 3 | feature/implementation<br>test |
@@ -281,6 +281,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Tasks.Tests](../../tests/essentials/Tasks/Tests/Elsa.Tasks.Tests.csproj) | test | Elsa.Tasks | Tests | test | Elsa.Locking.Core<br>Elsa.Tasks<br>Elsa.Tasks.Schedules |
 | [Elsa.Testing](../../tests/essentials/Testing/Elsa.Testing.csproj) | test | Elsa.Testing | (root) | test | Elsa.Primitives |
 | [Elsa.Versioning.Calculator.Tests](../../tests/essentials/Versioning/Calculator/Tests/Elsa.Versioning.Calculator.Tests.csproj) | test | Elsa.Versioning | Calculator.Tests | test | Elsa.Versioning.Calculator |
+| [Elsa.Versioning.Publisher.Tests](../../tests/essentials/Versioning/Publisher/Tests/Elsa.Versioning.Publisher.Tests.csproj) | test | Elsa.Versioning | Publisher.Tests | test | Elsa.Versioning.Publisher |
 | [Elsa.Workbench.Tests](../../tests/essentials/Workbench/Tests/Elsa.Workbench.Tests.csproj) | test | Elsa.Workbench | - | test | Elsa.Workbench |
 | [Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests](../../tests/essentials/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Workflows | Dashboard.Persistence.EntityFrameworkCore.ProviderTests | test | Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests |
 | [Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests](../../tests/essentials/Workflows/Dashboard/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Workflows | Dashboard.Persistence.EntityFrameworkCore.Tests | test | Elsa.Tasks<br>Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Resumption |

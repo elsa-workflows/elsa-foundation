@@ -54,6 +54,7 @@
   </Folder>
   <Folder Name="/tools/versioning/">
     <Project Path="tools/versioning/Elsa.Versioning.Calculator/Elsa.Versioning.Calculator.csproj" />
+    <Project Path="tools/versioning/Elsa.Versioning.Publisher/Elsa.Versioning.Publisher.csproj" />
   </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/apps/">
@@ -611,5 +612,8 @@
   <Folder Name="/tests/essentials/Versioning/" />
   <Folder Name="/tests/essentials/Versioning/Calculator/">
     <Project Path="tests/essentials/Versioning/Calculator/Tests/Elsa.Versioning.Calculator.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/essentials/Versioning/Publisher/">
+    <Project Path="tests/essentials/Versioning/Publisher/Tests/Elsa.Versioning.Publisher.Tests.csproj" />
   </Folder>
 </Solution>

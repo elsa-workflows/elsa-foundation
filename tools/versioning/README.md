@@ -1,10 +1,11 @@
-# Package version calculator
+# Package version calculator and publisher
 
 Computes every package's version, the affected set and each package's input fingerprint for one commit, against
 one revision of the last-published record
 ([spec 150](../../specs/150-package-version-computation/spec.md),
 [ADR 0067](../../docs/adr/0067-package-versioning-uses-two-lines-with-computed-patch.md)). Packing (#2080) and
-publishing (#2082) read its output; it packs, pushes and records nothing itself.
+publishing (#2082) read its output; it packs, pushes and records nothing itself. The publisher beside it does the
+pushing and the recording, and the Packages workflow runs it ([Publishing](#publishing)).
 
 ```bash
 dotnet run --project tools/versioning/Elsa.Versioning.Calculator -- \
@@ -133,7 +134,7 @@ dotnet pack Elsa.Server.pack.slnf -c Release --no-build -p:CustomBeforeDirectory
 The file sets `ElsaVersionComputationCommit`, and for each packable project, selected by project name,
 `ElsaComputedPackageVersion` and `ElsaInputFingerprint`. [`PackageVersioning.props`](../../PackageVersioning.props) at
 the repository root reads them for every project under `src/`, and makes the computed version both the package's and
-its assemblies' version, as `packages.yml`'s `/p:Version` does today. The file is a pure function of its inputs and is
+its assemblies' version. The file is a pure function of its inputs and is
 never committed, so the calculator never reads it as an input; a hook rather than an import in the root build files,
 because the calculator refuses an import whose path it cannot resolve statically.
 
@@ -154,8 +155,8 @@ because the calculator refuses an import whose path it cannot resolve statically
   upper bound - as the owner decided (spec 150 Decisions). After pack writes the nuspec, a last check fails
   the pack and deletes the package when a range on one of this repository's own packages is bounded anywhere else.
   Every one of these effects is gated on this file's own `ElsaVersionComputationCommit`: a pack that does not import
-  it - a dev pack, or a pack with only a global `/p:Version`, which is what `packages.yml` still runs until #2082
-  rewrites it - bounds nothing and carries no fingerprint, the same shape packing has always had.
+  it - a dev pack, or a local pack with only a global `/p:Version` - bounds nothing and carries no fingerprint, the
+  same shape packing has always had.
 - **Fingerprint and source commit (FR-018).** The fingerprint is `elsa-input-fingerprint.json` at the package root,
   `{"schema_version":1,"fingerprint":"sha256:<hex>"}`: NuGet has no custom nuspec metadata, and silently drops an
   element it does not know. The source commit is the nuspec's `<repository commit="…"/>`, and the pack fails unless
@@ -166,8 +167,76 @@ below every computed version, and carries no fingerprint. Its assemblies keep th
 build's activity versions and assembly-qualified names are what they were before package versions were computed.
 Projects outside `src/` are left as their own properties have them. Nothing else may set `PackageVersion`, nor, with
 the file, `Version`; the build fails when something did, except that without the file a global `/p:Version` becomes
-the package version, because `packages.yml` still stamps one on every package until #2082 replaces it.
+the package version, so a local pack can still name one. `packages.yml` passes none (FR-005).
 `PackageVersioning.props` lists each check and its code.
+
+## Publishing
+
+[`Elsa.Versioning.Publisher`](Elsa.Versioning.Publisher) holds the logic of
+[`.github/workflows/packages.yml`](../../.github/workflows/packages.yml), with the feed (`IPackageFeed`, the NuGet V3
+protocol) and the record branch (`IPublishState`, git) behind interfaces; the workflow only runs its two commands.
+
+```bash
+dotnet run --project tools/versioning/Elsa.Versioning.Publisher -- plan \
+  --ref "$GITHUB_REF" --commit "$GITHUB_SHA" --output "$RUNNER_TEMP/versions" [--bootstrap true|false] \
+  [--force-advance <ids> --force-reason <text>] [--github-output <file>] [--summary <file>] [--remote origin]
+dotnet run --project tools/versioning/Elsa.Versioning.Publisher -- publish \
+  --ref "$GITHUB_REF" --commit "$GITHUB_SHA" --plan-dir "$RUNNER_TEMP/versions" \
+  --feed <service index URL> --api-key-env FEEDZ_API_KEY [--summary <file>] [--remote origin]
+```
+
+Both exit 0 when done, 1 when they refused or a publish failed, and 2 on invalid input. An empty `--force-advance`
+with an empty `--force-reason` means none, so the workflow passes its dispatch inputs as they are.
+
+**`plan`**, the pack job's first step, asks the remote whether `publish-state` exists (an unanswered question fails;
+it is never taken for "no") and decides the run's mode:
+
+| Run | `publish-state` | Mode | Computed against | Pushes |
+|---|---|---|---|---|
+| Any branch but `main` | either | `branch` | the newest record revision whose latest publish the commit descends from, else an empty record | never (FR-008) |
+| `main` | absent | `dry-run` | an empty record: the bootstrap's versions | nothing; the job summary says the bootstrap is pending |
+| `main`, `bootstrap: true` | absent | `bootstrap` | an empty record | every package, then creates the record |
+| `main` | exists | `publish` | its tip | the affected set |
+
+The bootstrap is refused off `main` and once `publish-state` exists. The plan writes `plan.json`, the calculator's
+`computation.json`, its `package-versions.props` for the branch, and `packages.slnf`, a solution filter holding
+exactly the affected set, which the workflow restores, builds and packs through the props file into `nuget/`.
+
+**`publish`**, the publish job, pushes only for a plan of `main` in the `publish` or `bootstrap` mode. Before pushing
+anything it asks the remote for `publish-state` again, and refuses when a publish finds it moved since the plan (the
+versions may no longer be the ones to publish) or the bootstrap finds it existing; it recomputes and requires the
+calculator's output to be the plan's bytes, which runs the forward-only gate (FR-021) again; and it requires the
+packages to be exactly the affected set, each at its computed version with its computed fingerprint. Then:
+
+- **The bootstrap** also requires an empty record and every package in the set, and lists each package's versions on
+  the feed: it refuses, naming them, while any version does not sort below the one it would push — the old
+  `4.0.0-preview.N` and branch builds, or anything newer — and when the feed cannot list them.
+- **Pushes** go in dependency order, each package after every package of the set its nuspec depends on, and the
+  publish stops at the first failure, so no package is pushed with a range on a version the feed does not hold as
+  computed. No push skips a duplicate (FR-011). A 409 is settled by the input fingerprint of the feed's copy (FR-018):
+  the same fingerprint means an earlier run pushed it and did not record it, so it counts as published; another
+  fingerprint, or one that cannot be read, fails the publish and leaves the feed's copy alone. 200, 201 and 202 are
+  a push taken; any other answer, or none, is a failure.
+- **The write-back** records what reached the feed, even when the publish stopped part way, and nothing else (FR-006,
+  FR-014): each package's entry names the version and the commit built — for a package the feed already held, the
+  commit built too, whose inputs the equal fingerprint shows are the same — and `last_publish_commit` names the commit
+  built. It is one commit on `publish-state`, `published-versions.json` its only file, on top of the tip the plan
+  named, or an orphan for the bootstrap, pushed without force with the checkout's `GITHUB_TOKEN` (FR-017). A rejected
+  push fails the run.
+
+A run that dies between its pushes and its write-back, or whose write-back is rejected, leaves packages on the feed that
+the record does not name. The next run from `main` computes the same versions for them, the feed rejects them, and
+the equal fingerprints record them, with nobody intervening. The next run must see the same inputs for those
+packages; if a later commit changed one of them before any run recorded it, the feed's copy no longer matches and
+the publish fails as a collision for the repair workflow (FR-019, #2083). A bootstrap that stops part way records what
+it pushed, so `publish-state` exists and the next push to `main` publishes the rest at their first versions.
+
+The workflow serializes every run from `main`, from its plan to its write-back, on the concurrency group
+`publish-state`, and never cancels one in progress (FR-020); anything else that writes `publish-state` joins that
+group. A GitHub Release publishes nothing until the 4.0 release cut (#2085): its job fails and says so.
+
+To rehearse against a scratch feed, run `plan`, pack as the workflow does, and `publish` with `--feed` at the scratch
+feed and `--remote` at a scratch repository, which then holds the record.
 
 ## Tests
 
@@ -177,3 +246,10 @@ and runs in CI's fast test job, as do the label and pack-properties tests beside
 `tests/essentials/Architecture/PackageVersionBuildCheckTests.cs` and `PackageVersioningPackTests.cs` prove the MSBuild
 side against real builds and packs, and `PinnedTransitivePackTests.cs` that pack writes exactly the pinned-transitive
 packages restore lists, which is what the dependency map records.
+
+`tests/essentials/Versioning/Publisher/Tests` runs the publisher's plan and publish over the same synthetic histories,
+with a bare repository as the remote holding `publish-state` and an in-memory feed that answers 201, 409 with the
+same fingerprint and 409 with another: the dry run, the bootstrap and each of its refusals, one changed module publishing
+alone, a crash between push and write-back recovered by the next run, a collision failing without overwriting, the
+forward-only gate, and branch builds that never push. `NuGetFeedTests` pins how each HTTP answer maps, and
+`PackagesWorkflowTests` holds the workflow to FR-005, FR-008, FR-011 and FR-020.
