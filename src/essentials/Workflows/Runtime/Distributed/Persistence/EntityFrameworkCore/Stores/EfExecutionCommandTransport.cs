@@ -264,12 +264,190 @@ public sealed class EfExecutionCommandTransport(
         }, cancellationToken);
     }
 
-    public async ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(
+    public async ValueTask<bool> ReleaseLeaseAsync(
+        string workflowExecutionId,
+        string transportItemId,
+        string ownerId,
+        long leaseToken,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
+        ValidateTransportItemId(transportItemId);
+        DistributedRuntimeIdentityConstraints.Validate(ownerId, nameof(ownerId));
+        if (leaseToken <= 0)
+            throw new ArgumentOutOfRangeException(nameof(leaseToken), "Lease token must be positive.");
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = RequireScope();
+        var scopeHash = EfDistributedIdentity.Hash(scope);
+        var workflowHash = EfDistributedIdentity.Hash(workflowExecutionId);
+        var transportItemIdHash = EfDistributedIdentity.Hash(transportItemId);
+        var itemId = EfDistributedIdentity.CreateId(scope, transportItemId);
+        var staged = false;
+
+        return await CompareAndSwapAsync(AckRetry, "releasing", workflowExecutionId, async () =>
+        {
+            await using var transaction = await BeginConsistencyTransactionAsync(cancellationToken);
+            var head = await FindHeadAsync(scope, workflowExecutionId, cancellationToken);
+            var itemEntity = await context.CommandTransportItems.SingleOrDefaultAsync(
+                row => row.Id == itemId &&
+                       row.ScopeKeyHash == scopeHash &&
+                       row.WorkflowExecutionIdHash == workflowHash &&
+                       row.TransportItemIdHash == transportItemIdHash &&
+                       row.ScopeKey == EfDistributedIdentity.EncodeScope(scope) &&
+                       row.WorkflowExecutionId == workflowExecutionId &&
+                       row.TransportItemId == transportItemId,
+                cancellationToken);
+            if (itemEntity is null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+                return false;
+            }
+
+            var item = MapItem(itemEntity, scope);
+            var matches = StringComparer.Ordinal.Equals(item.WorkflowExecutionId, workflowExecutionId) &&
+                          StringComparer.Ordinal.Equals(item.LeasedByOwnerId, ownerId) &&
+                          item.LeaseToken == leaseToken;
+
+            // An attempt reported as lost may have committed: finding this call's own release settles it as released.
+            if (staged && matches && item.LeaseExpiresAt == now)
+            {
+                await transaction.CommitAsync(cancellationToken);
+                return true;
+            }
+
+            if (!matches || item.IsVisible(now))
+            {
+                await transaction.CommitAsync(cancellationToken);
+                return false;
+            }
+
+            if (head is null)
+                throw new InvalidOperationException("A command transport item exists without its stream head.");
+            EnsureHead(head, scope, workflowExecutionId);
+            await ValidateHeadStateAsync(head, scopeHash, workflowHash, scope, workflowExecutionId, cancellationToken);
+            if (item.Sequence > head.LastSequence)
+                throw new InvalidOperationException("A command transport item is ahead of its stream head.");
+
+            ApplyLease(itemEntity, item.ReleaseLease(now), scope, scopeHash, workflowHash);
+            await context.SaveChangesAsync(cancellationToken);
+            var summary = await ReadEarliestPendingAsync(scopeHash, workflowHash, scope, workflowExecutionId, head.PendingCount, head.LastSequence, cancellationToken);
+            head.PendingVisibleAtUtcTicks = summary.VisibleAtUtcTicks;
+            head.PendingSequence = summary.Sequence;
+            head.Revision = checked(head.Revision + 1);
+            staged = true;
+            await context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return true;
+        }, cancellationToken);
+    }
+
+    public async ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> PeekAsync(
+        string workflowExecutionId,
         DateTimeOffset now,
         int maxItems,
         CancellationToken cancellationToken = default)
     {
+        DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
         DistributedRuntimeQueryLimits.ValidateTake(maxItems, nameof(maxItems));
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = RequireScope();
+        var scopeHash = EfDistributedIdentity.Hash(scope);
+        var workflowHash = EfDistributedIdentity.Hash(workflowExecutionId);
+        try
+        {
+            var rows = await context.CommandTransportItems.AsNoTracking()
+                .Where(row => row.ScopeKeyHash == scopeHash &&
+                              row.WorkflowExecutionIdHash == workflowHash &&
+                              row.ScopeKey == EfDistributedIdentity.EncodeScope(scope) &&
+                              row.WorkflowExecutionId == workflowExecutionId &&
+                              row.VisibleAtUtcTicks <= now.UtcTicks)
+                .OrderBy(row => row.Sequence)
+                .ThenBy(row => row.TransportItemIdHash)
+                .Take(maxItems)
+                .ToListAsync(cancellationToken);
+            return rows.Select(row => MapItem(row, scope)).Where(item => item.IsVisible(now)).ToArray();
+        }
+        catch (OperationCanceledException)
+        {
+            context.ChangeTracker.Clear();
+            throw;
+        }
+        catch (Exception exception) when (IsPersistenceBoundaryFailure(exception))
+        {
+            context.ChangeTracker.Clear();
+            throw Normalize("peeking", workflowExecutionId, exception);
+        }
+    }
+
+    /// <remarks>
+    /// No index covers the holder column: a hand-off narrows by execution through the stream index, and a reclaim runs
+    /// only when a host id departs or a process starts (spec 184, FR-030), so a scope-bounded scan is its accepted cost.
+    /// </remarks>
+    public async ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> ListLeasedAsync(
+        string ownerId,
+        DateTimeOffset now,
+        int maxItems,
+        string? workflowExecutionId = null,
+        CancellationToken cancellationToken = default)
+    {
+        DistributedRuntimeIdentityConstraints.Validate(ownerId, nameof(ownerId));
+        if (workflowExecutionId is not null)
+            DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
+        DistributedRuntimeQueryLimits.ValidateTake(maxItems, nameof(maxItems));
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = RequireScope();
+        var scopeHash = EfDistributedIdentity.Hash(scope);
+        try
+        {
+            var source = context.CommandTransportItems.AsNoTracking()
+                .Where(row => row.ScopeKeyHash == scopeHash &&
+                              row.ScopeKey == EfDistributedIdentity.EncodeScope(scope) &&
+                              row.LeaseOwnerId == ownerId &&
+                              row.VisibleAtUtcTicks > now.UtcTicks);
+            if (workflowExecutionId is not null)
+            {
+                var workflowHash = EfDistributedIdentity.Hash(workflowExecutionId);
+                source = source.Where(row => row.WorkflowExecutionIdHash == workflowHash && row.WorkflowExecutionId == workflowExecutionId);
+            }
+
+            var rows = await source
+                .OrderBy(row => row.WorkflowExecutionIdHash)
+                .ThenBy(row => row.Sequence)
+                .ThenBy(row => row.TransportItemIdHash)
+                .Take(maxItems)
+                .ToListAsync(cancellationToken);
+            return rows
+                .Select(row => MapItem(row, scope))
+                .Where(item => StringComparer.Ordinal.Equals(item.LeasedByOwnerId, ownerId) && !item.IsVisible(now))
+                .ToArray();
+        }
+        catch (OperationCanceledException)
+        {
+            context.ChangeTracker.Clear();
+            throw;
+        }
+        catch (Exception exception) when (IsPersistenceBoundaryFailure(exception))
+        {
+            context.ChangeTracker.Clear();
+            throw Normalize("listing leased", $"scope:{scopeHash}", exception);
+        }
+    }
+
+    public ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(
+        DateTimeOffset now,
+        int maxItems,
+        CancellationToken cancellationToken = default) =>
+        ListPendingExecutionIdsAsync(now, maxItems, skip: 0, cancellationToken);
+
+    public async ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(
+        DateTimeOffset now,
+        int maxItems,
+        int skip,
+        CancellationToken cancellationToken = default)
+    {
+        DistributedRuntimeQueryLimits.ValidateTake(maxItems, nameof(maxItems));
+        ArgumentOutOfRangeException.ThrowIfNegative(skip);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         var scopeHash = EfDistributedIdentity.Hash(scope);
@@ -299,6 +477,7 @@ public sealed class EfExecutionCommandTransport(
                               row.PendingVisibleAtUtcTicks <= now.UtcTicks)
                 .OrderBy(row => row.WorkflowExecutionIdOrderKey)
                 .ThenBy(row => row.Id)
+                .Skip(skip)
                 .Take(maxItems)
                 .ToListAsync(cancellationToken);
             var ids = new List<string>(rows.Count);

@@ -97,6 +97,7 @@ public static class EfClusterMembershipServiceCollectionExtensions
                     services.GetRequiredService<IOptions<ClusterMembershipOptions>>(),
                     settings,
                     services.GetServices<IMemberReportSource<ReadabilitySection>>(),
+                    services.GetServices<IMemberReportSource<RunnabilitySection>>(),
                     services.GetRequiredService<TimeProvider>(),
                     Loggers(services).CreateLogger<EfClusterMembership>());
         }

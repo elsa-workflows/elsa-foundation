@@ -47,6 +47,19 @@ public interface IExecutionLivenessStateStore
             new NotSupportedException("This execution-liveness store does not support bounded pages."));
 
     /// <summary>
+    /// Returns one finite page of the current storage scope's states whose execution lease or heartbeat is held by
+    /// <paramref name="ownerId"/>, in the order of <see cref="ListAllPageAsync"/>. The distributed runtime reads it when
+    /// it reclaims a departed host id's leases (spec 184, FR-024), which happens only when a host id departs or a
+    /// process starts, so a store may answer it without an owner index.
+    /// </summary>
+    ValueTask<RuntimeStorePage<ExecutionLivenessState>> ListOwnedPageAsync(
+        string ownerId,
+        RuntimeStorePageRequest query,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RuntimeStorePage<ExecutionLivenessState>>(
+            new NotSupportedException("This execution-liveness store does not list states by owner."));
+
+    /// <summary>
     /// Legacy complete traversal. New production reads must use <see cref="ListPageAsync"/>; commands that need
     /// every record use <see cref="RuntimeOperationalStorePagingExtensions.ListAllAsync(IExecutionLivenessStateStore,string,CancellationToken)"/> explicitly.
     /// </summary>

@@ -103,6 +103,56 @@ public sealed class EfExecutionCommandTransportTests
         Assert.Equal(0, interceptor.Commands);
     }
 
+    /// <summary>
+    /// Spec 184, FR-019 and FR-024: a lease is released early only by its holder under its token, as a compare-and-set;
+    /// the item is visible at once, the released holder's acknowledgement is refused, and the next lease issues a
+    /// greater token. Peeking leases nothing, and the holder's live leases can be listed.
+    /// </summary>
+    [Fact]
+    public async Task An_early_released_lease_is_visible_at_once_refuses_the_old_holders_ack_and_leases_again_under_a_greater_token()
+    {
+        await using var fixture = await Fixture.CreateAsync("scope-a");
+        await fixture.Transport.SendAsync("wf-1", Envelope("wf-1", "first"), Now);
+        await fixture.Transport.SendAsync("wf-1", Envelope("wf-1", "second"), Now);
+        Assert.Equal(2, (await fixture.Transport.PeekAsync("wf-1", Now, 10)).Count);
+        var leased = await fixture.Transport.LeaseAsync("wf-1", "node-a", Now, LeaseDuration, 1);
+        var held = Assert.Single(leased);
+
+        Assert.Equal("envelope-second", Assert.Single(await fixture.Transport.PeekAsync("wf-1", Now, 10)).Envelope.EnvelopeId);
+        Assert.Equal(held.TransportItemId, Assert.Single(await fixture.Transport.ListLeasedAsync("node-a", Now, 10)).TransportItemId);
+        Assert.Single(await fixture.Transport.ListLeasedAsync("node-a", Now, 10, "wf-1"));
+        Assert.Empty(await fixture.Transport.ListLeasedAsync("node-a", Now, 10, "wf-2"));
+        Assert.Empty(await fixture.Transport.ListLeasedAsync("node-b", Now, 10));
+        Assert.Empty(await fixture.Transport.ListLeasedAsync("node-a", Now.Add(LeaseDuration), 10));
+
+        Assert.False(await fixture.Transport.ReleaseLeaseAsync("wf-1", held.TransportItemId, "node-b", held.LeaseToken!.Value, Now));
+        Assert.False(await fixture.Transport.ReleaseLeaseAsync("wf-1", held.TransportItemId, "node-a", held.LeaseToken.Value + 1, Now));
+        Assert.True(await fixture.Transport.ReleaseLeaseAsync("wf-1", held.TransportItemId, "node-a", held.LeaseToken.Value, Now));
+        Assert.False(await fixture.Transport.ReleaseLeaseAsync("wf-1", held.TransportItemId, "node-a", held.LeaseToken.Value, Now));
+
+        Assert.Equal(["wf-1"], await fixture.Transport.ListPendingExecutionIdsAsync(Now, 10));
+        Assert.Equal(2, (await fixture.Transport.PeekAsync("wf-1", Now, 10)).Count);
+        Assert.Empty(await fixture.Transport.ListLeasedAsync("node-a", Now, 10));
+        Assert.False(await fixture.Transport.AckAsync("wf-1", held.TransportItemId, "node-a", held.LeaseToken.Value, Now));
+
+        await using var reopened = await fixture.ReopenAsync("scope-a");
+        var releasedAgain = await reopened.Transport.LeaseAsync("wf-1", "node-b", Now, LeaseDuration, 1);
+        Assert.True(Assert.Single(releasedAgain).LeaseToken > held.LeaseToken);
+        Assert.Equal(2, await reopened.Transport.CountPendingAsync("wf-1"));
+    }
+
+    [Fact]
+    public async Task The_pending_listing_skips_an_offset_in_its_own_order()
+    {
+        await using var fixture = await Fixture.CreateAsync("scope-a");
+        foreach (var id in new[] { "wf-c", "wf-a", "wf-b" })
+            await fixture.Transport.SendAsync(id, Envelope(id, id), Now);
+
+        Assert.Equal(["wf-a", "wf-b"], await fixture.Transport.ListPendingExecutionIdsAsync(Now, 2, skip: 0));
+        Assert.Equal(["wf-c"], await fixture.Transport.ListPendingExecutionIdsAsync(Now, 2, skip: 2));
+        Assert.Empty(await fixture.Transport.ListPendingExecutionIdsAsync(Now, 2, skip: 3));
+    }
+
     [Fact]
     public async Task First_multi_sender_and_concurrent_sends_are_contiguous_and_unique()
     {

@@ -151,6 +151,24 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
         return new(ReadValues(states => CreateGlobalPage(query, states, cursor)));
     }
 
+    public ValueTask<RuntimeStorePage<ExecutionLivenessState>> ListOwnedPageAsync(
+        string ownerId,
+        RuntimeStorePageRequest query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var cursor = ParseGlobalCursor(query.ContinuationToken);
+        return new(ReadValues(states => CreateGlobalPage(
+            query,
+            states.Where(state =>
+                StringComparer.Ordinal.Equals(state.ExecutionLease?.OwnerId, ownerId) ||
+                StringComparer.Ordinal.Equals(state.Heartbeat?.OwnerId, ownerId)),
+            cursor)));
+    }
+
     ValueTask<RuntimeStorePage<ExecutionLivenessState>> IRuntimeRecoveryLivenessPageSource.ListRecoveryPageAsync(
         RuntimeRecoveryScanRequest request,
         RuntimeStorePageRequest query,

@@ -46,8 +46,36 @@ public sealed class RuntimeResumptionService(
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IWorkflowExecutionPartitionAccessor? partitionAccessor = null,
     IRuntimeRecoverySweepCursorStore? recoveryCursorStore = null,
-    IPersistenceAccessContextAccessor? persistenceAccessContextAccessor = null) : IRuntimeResumptionService
+    IPersistenceAccessContextAccessor? persistenceAccessContextAccessor = null,
+    IEnumerable<IRuntimeRecoveryCandidateSource>? recoveryCandidateSources = null) : IRuntimeResumptionService
 {
+    // Keep the pre-candidate-source signature in the binary surface for already compiled hosts.
+    public RuntimeResumptionService(
+        IRuntimePostCommitOutboxProcessor outboxProcessor,
+        IWorkflowSchedulerWorkQueue workQueue,
+        IRuntimeRecoveryScanner recoveryScanner,
+        IWorkflowExecutionActorProvider agentProvider,
+        IRuntimeExecutionIdGenerator idGenerator,
+        TimeProvider timeProvider,
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IWorkflowExecutionPartitionAccessor? partitionAccessor,
+        IRuntimeRecoverySweepCursorStore? recoveryCursorStore,
+        IPersistenceAccessContextAccessor? persistenceAccessContextAccessor)
+        : this(
+            outboxProcessor,
+            workQueue,
+            recoveryScanner,
+            agentProvider,
+            idGenerator,
+            timeProvider,
+            workflowExecutionStateStore,
+            partitionAccessor,
+            recoveryCursorStore,
+            persistenceAccessContextAccessor,
+            null)
+    {
+    }
+
     // Keep both pre-paging constructor signatures in the binary surface. Optional parameters preserve source
     // compatibility but do not preserve metadata constructors used by already compiled hosts.
     public RuntimeResumptionService(
@@ -97,6 +125,7 @@ public sealed class RuntimeResumptionService(
 
     private const string DispatchSource = "runtime-resumption";
     private readonly IRuntimeRecoverySweepCursorStore sweepCursorStore = recoveryCursorStore ?? new InMemoryRuntimeRecoverySweepCursorStore();
+    private readonly IRuntimeRecoveryCandidateSource[] candidateSources = recoveryCandidateSources?.ToArray() ?? [];
 
     // Safety cap on residual-item purge pages per terminal execution per sweep, so a provider that never actually
     // removes an item (Delete returning false) cannot spin this loop forever. Bounded residue is expected — one
@@ -140,6 +169,7 @@ public sealed class RuntimeResumptionService(
         }
 
         CommitRecoveryCursor(discovery, dispatches);
+        await SettleSourcedCandidatesAsync(discovery, dispatches, cancellationToken);
 
         var result = new RuntimeResumptionSweepResult(
             outboxAttemptedCount: outboxResult.AttemptedCount,
@@ -225,7 +255,11 @@ public sealed class RuntimeResumptionService(
 
     private async ValueTask<RecoveryDiscovery> DiscoverExecutionIdsAsync(RuntimeResumptionSweepRequest request, CancellationToken cancellationToken)
     {
-        var backlog = await workQueue.ListPendingWorkflowExecutionIdsAsync(request.BacklogBatchSize, cancellationToken);
+        var sourced = await ListSourcedCandidatesAsync(request, cancellationToken);
+        var backlog = (await workQueue.ListPendingWorkflowExecutionIdsAsync(request.BacklogBatchSize, cancellationToken))
+            .Concat(sourced.SelectMany(candidates => candidates.WorkflowExecutionIds))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
         var scope = persistenceAccessContextAccessor?.Current.Scope?.Value ?? PersistenceScope.DefaultValue;
         var scannerName = RecoveryCursorKey(recoveryScanner, request.ExcludedWorkflowExecutionIds);
         var cursor = sweepCursorStore.Get(scope, scannerName);
@@ -260,7 +294,8 @@ public sealed class RuntimeResumptionService(
                 scannerName,
                 cursor,
                 CursorToCommit: null,
-                ShouldUpdateCursor: false);
+                ShouldUpdateCursor: false,
+                sourced);
         }
         else
         {
@@ -287,7 +322,8 @@ public sealed class RuntimeResumptionService(
                     scannerName,
                     PreviousCursor: null,
                     CursorToCommit: null,
-                    ShouldUpdateCursor: false);
+                    ShouldUpdateCursor: false,
+                sourced);
             }
 
             var page = await recoveryScanner.ScanPageAsync(
@@ -313,9 +349,53 @@ public sealed class RuntimeResumptionService(
                 scannerName,
                 cursor,
                 cursorToCommit,
-                ShouldUpdateCursor: true);
+                ShouldUpdateCursor: true,
+                sourced);
         }
 
+    }
+
+    // Candidates a source supplies (spec 184, FR-027) are due now, so they join the sweep beside the durable backlog
+    // rather than competing with the scanner's cursor. Each source bounds its own list to the scan batch.
+    private async ValueTask<IReadOnlyList<SourcedCandidates>> ListSourcedCandidatesAsync(
+        RuntimeResumptionSweepRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (candidateSources.Length == 0)
+            return [];
+
+        var limit = Math.Min(request.RecoveryScanBatchSize, RuntimeStorePageRequest.MaximumLimit);
+        var sourced = new List<SourcedCandidates>(candidateSources.Length);
+        foreach (var source in candidateSources)
+        {
+            var candidates = await source.ListAsync(limit, cancellationToken);
+            if (candidates.Count > 0)
+                sourced.Add(new SourcedCandidates(source, candidates.Select(candidate => candidate.WorkflowExecutionId).Distinct(StringComparer.Ordinal).ToArray()));
+        }
+
+        return sourced;
+    }
+
+    // A sourced candidate is settled once this sweep dealt with it: re-driven into a mailbox or the durable transport,
+    // or purged as terminal. One whose re-drive faulted or was rejected, or that this sweep did not reach, stays listed.
+    private static async ValueTask SettleSourcedCandidatesAsync(
+        RecoveryDiscovery discovery,
+        IReadOnlyCollection<RuntimeResumptionDispatch> dispatches,
+        CancellationToken cancellationToken)
+    {
+        if (discovery.Sourced.Count == 0)
+            return;
+
+        var reached = discovery.ExecutionIds.ToHashSet(StringComparer.Ordinal);
+        reached.ExceptWith(dispatches
+            .Where(dispatch => dispatch.Outcome is RuntimeResumptionDispatchOutcome.Faulted or RuntimeResumptionDispatchOutcome.Rejected)
+            .Select(dispatch => dispatch.WorkflowExecutionId));
+        foreach (var sourced in discovery.Sourced)
+        {
+            var settled = sourced.WorkflowExecutionIds.Where(reached.Contains).ToArray();
+            if (settled.Length > 0)
+                await sourced.Source.SettleAsync(settled, cancellationToken);
+        }
     }
 
     private static IReadOnlyCollection<string> MergeExecutionIds(
@@ -438,5 +518,8 @@ public sealed class RuntimeResumptionService(
         string Scanner,
         RuntimeRecoverySweepCursor? PreviousCursor,
         RuntimeRecoverySweepCursor? CursorToCommit,
-        bool ShouldUpdateCursor);
+        bool ShouldUpdateCursor,
+        IReadOnlyList<SourcedCandidates> Sourced);
+
+    private sealed record SourcedCandidates(IRuntimeRecoveryCandidateSource Source, IReadOnlyCollection<string> WorkflowExecutionIds);
 }

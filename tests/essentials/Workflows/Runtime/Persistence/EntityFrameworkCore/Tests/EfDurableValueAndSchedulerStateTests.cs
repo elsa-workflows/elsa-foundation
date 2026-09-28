@@ -236,6 +236,36 @@ public sealed class EfDurableValueAndSchedulerStateTests
         Assert.Null(await tenantB.Liveness.FindAsync("workflow-a", "state-z"));
     }
 
+    /// <summary>
+    /// Spec 184, FR-024: reclaim lists the states a departed host id holds, by execution lease or by heartbeat, page by
+    /// page and only within the scope, whatever the lease's expiry.
+    /// </summary>
+    [Fact]
+    public async Task Execution_liveness_lists_what_one_owner_holds_by_lease_or_heartbeat_page_by_page_within_the_scope()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var now = new DateTimeOffset(2026, 9, 28, 12, 0, 0, TimeSpan.Zero);
+        await using (var tenantA = database.Open("tenant-a"))
+        {
+            await tenantA.Liveness.SaveAsync(Liveness("workflow-c", "state-1", "departed", leaseAcquiredAt: now, leaseExpiresAt: now.AddHours(1)));
+            await tenantA.Liveness.SaveAsync(Liveness("workflow-a", "state-1", "departed", heartbeatRecordedAt: now));
+            await tenantA.Liveness.SaveAsync(Liveness("workflow-b", "state-1", "survivor", leaseAcquiredAt: now, heartbeatRecordedAt: now));
+            await tenantA.Liveness.SaveAsync(Liveness("workflow-d", "state-1", "departed", leaseAcquiredAt: now.AddHours(-2), leaseExpiresAt: now.AddHours(-1)));
+        }
+
+        await using (var tenantB = database.Open("tenant-b"))
+            await tenantB.Liveness.SaveAsync(Liveness("workflow-e", "state-1", "departed", leaseAcquiredAt: now));
+
+        await using var reader = database.Open("tenant-a");
+        var first = await reader.Liveness.ListOwnedPageAsync("departed", new RuntimeStorePageRequest(2));
+        var second = await reader.Liveness.ListOwnedPageAsync("departed", new RuntimeStorePageRequest(2, first.NextContinuationToken));
+
+        Assert.Equal(["workflow-a", "workflow-c"], first.Items.Select(state => state.WorkflowExecutionId));
+        Assert.Equal(["workflow-d"], second.Items.Select(state => state.WorkflowExecutionId));
+        Assert.Null(second.NextContinuationToken);
+        Assert.Empty((await reader.Liveness.ListOwnedPageAsync("nobody", new RuntimeStorePageRequest(10))).Items);
+    }
+
     [Fact]
     public async Task Execution_liveness_recovery_pages_are_bounded_due_ordered_and_fail_closed_on_corruption()
     {

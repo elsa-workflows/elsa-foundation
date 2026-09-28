@@ -37,6 +37,7 @@ internal sealed class SharedStoreClusterMembership(
     ConformanceTimings timings,
     TimeProvider clock,
     IMemberReportSource<ReadabilitySection>? readability,
+    IMemberReportSource<RunnabilitySection>? runnability,
     SharedStoreFault fault) : IClusterMembership
 {
     private DateTimeOffset _lastSuccessWall;
@@ -58,7 +59,7 @@ internal sealed class SharedStoreClusterMembership(
 
     public async ValueTask JoinAsync(CancellationToken cancellationToken = default)
     {
-        var report = await MemberReportComposition.ComposeAsync(readability, cancellationToken);
+        var report = await MemberReportComposition.ComposeAsync(readability, runnability, cancellationToken);
         var now = clock.GetUtcNow();
         store.Join(Identity, report, now, timings);
         _lastSuccessWall = now;
@@ -96,7 +97,7 @@ internal sealed class SharedStoreClusterMembership(
 
         _lastSuccessWall = start;
         _lastSuccessMonotonic = startMonotonic;
-        store.Publish(Identity, _deferred ?? await MemberReportComposition.ComposeAsync(readability, cancellationToken));
+        store.Publish(Identity, _deferred ?? await MemberReportComposition.ComposeAsync(readability, runnability, cancellationToken));
         _deferred = null;
         _cached = View(FleetReadMode.Cached);
     }
@@ -130,7 +131,7 @@ internal sealed class SharedStoreClusterMembership(
         if (IsIsolated)
             throw new InvalidOperationException($"Member {Identity} cannot reach the membership store.");
 
-        var report = await MemberReportComposition.ComposeAsync(readability, cancellationToken);
+        var report = await MemberReportComposition.ComposeAsync(readability, runnability, cancellationToken);
         if (fault != SharedStoreFault.DeferPublish)
             return new PublishedMemberReport(Identity, report, store.Publish(Identity, report));
 

@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
+using Elsa.Workflows.Runtime.Distributed.Placement;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Distributed.Services;
@@ -23,7 +24,8 @@ public sealed class ForwardingWorkflowExecutionActor : IWorkflowExecutionActor
     private readonly string _workflowExecutionId;
     private readonly WorkflowExecutionPartition _partition;
     private readonly string _localNodeId;
-    private readonly string _owningNodeId;
+    private readonly string? _owningNodeId;
+    private readonly PlacementDecision? _refusal;
     private readonly IPersistenceOperationScopeFactory? _operationScopeFactory;
     private readonly IExecutionCommandTransport? _transport;
     private readonly TimeProvider _timeProvider;
@@ -47,11 +49,41 @@ public sealed class ForwardingWorkflowExecutionActor : IWorkflowExecutionActor
         IPersistenceOperationScopeFactory? operationScopeFactory,
         IExecutionCommandTransport? transport,
         TimeProvider timeProvider)
+        : this(workflowExecutionId, partition, localNodeId, owningNodeId, refusal: null, operationScopeFactory, transport, timeProvider)
+    {
+    }
+
+    /// <summary>
+    /// A forwarding stub for a command this member refused to run (spec 184, FR-013): no member owns the execution's
+    /// placement, and the refusal says why this one did not claim it. It never names another host.
+    /// </summary>
+    internal static ForwardingWorkflowExecutionActor Refused(
+        string workflowExecutionId,
+        WorkflowExecutionPartition partition,
+        string localNodeId,
+        PlacementDecision refusal,
+        IPersistenceOperationScopeFactory? operationScopeFactory,
+        IExecutionCommandTransport? transport,
+        TimeProvider timeProvider) =>
+        new(workflowExecutionId, partition, localNodeId, owningNodeId: null, refusal, operationScopeFactory, transport, timeProvider);
+
+    private ForwardingWorkflowExecutionActor(
+        string workflowExecutionId,
+        WorkflowExecutionPartition partition,
+        string localNodeId,
+        string? owningNodeId,
+        PlacementDecision? refusal,
+        IPersistenceOperationScopeFactory? operationScopeFactory,
+        IExecutionCommandTransport? transport,
+        TimeProvider timeProvider)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentNullException.ThrowIfNull(partition);
         ArgumentException.ThrowIfNullOrWhiteSpace(localNodeId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(owningNodeId);
+        if (refusal is null)
+            ArgumentException.ThrowIfNullOrWhiteSpace(owningNodeId);
+        else if (refusal.IsRunnable)
+            throw new ArgumentException("A refused forwarding stub needs a refusal.", nameof(refusal));
         if (operationScopeFactory is null)
             ArgumentNullException.ThrowIfNull(transport);
         ArgumentNullException.ThrowIfNull(timeProvider);
@@ -60,6 +92,7 @@ public sealed class ForwardingWorkflowExecutionActor : IWorkflowExecutionActor
         _partition = partition;
         _localNodeId = localNodeId;
         _owningNodeId = owningNodeId;
+        _refusal = refusal;
         _operationScopeFactory = operationScopeFactory;
         _transport = transport;
         _timeProvider = timeProvider;
@@ -72,7 +105,7 @@ public sealed class ForwardingWorkflowExecutionActor : IWorkflowExecutionActor
         status: WorkflowExecutionActorStatus.Unavailable,
         capabilities: WorkflowExecutionActorCapabilities.DistributedPlacement,
         activatedAt: _timeProvider.GetUtcNow(),
-        metadata: new Dictionary<string, string> { ["runtime.distributed.owningNode"] = _owningNodeId });
+        metadata: RoutingMetadata());
 
     public async ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
     {
@@ -105,18 +138,31 @@ public sealed class ForwardingWorkflowExecutionActor : IWorkflowExecutionActor
         var transport = scope?.ServiceProvider.GetRequiredService<IExecutionCommandTransport>() ?? _transport!;
         var item = await transport.SendAsync(_workflowExecutionId, envelope, now, cancellationToken);
 
+        var metadata = RoutingMetadata();
+        metadata[TransportItemIdMetadataKey] = item.TransportItemId;
         return new WorkflowExecutionCommandDispatchResult(
             envelopeId: envelope.EnvelopeId,
             workflowExecutionId: envelope.WorkflowExecutionId,
             status: WorkflowExecutionCommandDispatchStatus.Deferred,
             recordedAt: now,
-            reason: $"Forwarded to owning node '{_owningNodeId}' via durable transport.",
-            metadata: new Dictionary<string, string>
-            {
-                ["runtime.distributed.owningNode"] = _owningNodeId,
-                ["runtime.distributed.transportItemId"] = item.TransportItemId
-            });
+            reason: _refusal is null
+                ? $"Forwarded to owning node '{_owningNodeId}' via durable transport."
+                : $"Accepted for routing: the command waits in the durable transport and was not run on this member because {_refusal.Reason}.",
+            metadata: metadata);
     }
+
+    /// <summary>Dispatch-result metadata naming the owning node of an execution another member owns.</summary>
+    public const string OwningNodeMetadataKey = "runtime.distributed.owningNode";
+
+    /// <summary>Dispatch-result metadata naming why this member refused to claim the execution (spec 184, FR-013).</summary>
+    public const string PlacementRefusedMetadataKey = "runtime.distributed.placementRefused";
+
+    /// <summary>Dispatch-result metadata naming the durable transport item a forwarded command became.</summary>
+    public const string TransportItemIdMetadataKey = "runtime.distributed.transportItemId";
+
+    private Dictionary<string, string> RoutingMetadata() => _refusal is null
+        ? new() { [OwningNodeMetadataKey] = _owningNodeId! }
+        : new() { [PlacementRefusedMetadataKey] = _refusal.Refusal!.Value.ToString() };
 
     public ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(
         WorkflowExecutionCommandEnvelope envelope,

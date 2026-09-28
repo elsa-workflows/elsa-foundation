@@ -1,4 +1,6 @@
 using CShells.Features;
+using Elsa.Cluster.Core.Contracts;
+using Elsa.Cluster.Core.Options;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -6,6 +8,7 @@ using Elsa.Workflows.Runtime.Distributed;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;
 using Elsa.Workflows.Runtime.Distributed.Options;
+using Elsa.Workflows.Runtime.Distributed.Placement;
 using Elsa.Workflows.Runtime.Distributed.Services;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.DependencyInjection;
@@ -124,8 +127,9 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
         await pump.SweepOnceAsync();
         await pump.SweepOnceAsync();
 
-        Assert.Equal(2, lifecycle.CreatedIds.Count);
-        Assert.Equal(2, lifecycle.CreatedIds.Distinct().Count());
+        // The first tick also opens one scope for the shell's join sweep (spec 184, FR-022), which runs once per process.
+        Assert.Equal(3, lifecycle.CreatedIds.Count);
+        Assert.Equal(3, lifecycle.CreatedIds.Distinct().Count());
         Assert.Equal(
             lifecycle.CreatedIds.OrderBy(x => x),
             lifecycle.DisposedIds.OrderBy(x => x));
@@ -135,7 +139,7 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
     public async Task In_memory_defaults_isolate_equal_execution_ids_by_partition()
     {
         var services = BuildBaselineServices();
-        new WorkflowsRuntimeDistributedFeature { NodeId = "node-a" }.ConfigureServices(services);
+        new WorkflowsRuntimeDistributedFeature().ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         var scopeFactory = provider.GetRequiredService<IPersistenceOperationScopeFactory>();
@@ -192,7 +196,7 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
         var services = BuildBaselineServices();
         services.AddScoped<IExecutionCommandTransport>(_ => transport);
         services.AddSingleton<IPersistenceScopeSource>(new TestPersistenceScopeSource("tenant-a"));
-        new WorkflowsRuntimeDistributedFeature { NodeId = "node-a" }.ConfigureServices(services);
+        new WorkflowsRuntimeDistributedFeature().ConfigureServices(services);
         var actors = new CountingActorProvider();
         services.Replace(ServiceDescriptor.Singleton<IWorkflowExecutionActorProvider>(actors));
 
@@ -237,16 +241,19 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
     {
         var services = BuildBaselineServices();
         services.AddSingleton<IPersistenceScopeSource>(new TestPersistenceScopeSource("tenant-a", "tenant-b"));
-        new WorkflowsRuntimeDistributedFeature { NodeId = "node-a" }.ConfigureServices(services);
+        new WorkflowsRuntimeDistributedFeature().ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        var pump = Assert.Single(provider.GetServices<IRecurringTask>().OfType<ExecutionPlacementPumpTask>());
+
+        // The join sweep runs before anything is claimed; leases claimed under the host id before it are a predecessor's.
+        await pump.SweepOnceAsync();
         var operationScopeFactory = provider.GetRequiredService<IPersistenceOperationScopeFactory>();
         await using (var tenantA = await operationScopeFactory.CreateAsync(new PersistenceScope("tenant-a")))
             await tenantA.ServiceProvider.GetRequiredService<IExecutionPlacementService>().TryClaimAsync("same-execution");
         await using (var tenantB = await operationScopeFactory.CreateAsync(new PersistenceScope("tenant-b")))
             await tenantB.ServiceProvider.GetRequiredService<IExecutionPlacementService>().TryClaimAsync("same-execution");
 
-        var pump = Assert.Single(provider.GetServices<IRecurringTask>().OfType<ExecutionPlacementPumpTask>());
         var result = await pump.SweepOnceAsync();
 
         Assert.Equal(2, result.RenewedCount);
@@ -255,7 +262,7 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
     [Fact]
     public void MapsSettingsOntoOptions()
     {
-        var services = BuildBaselineServices();
+        var services = BuildBaselineServices(hostId: "node-x");
 
         new WorkflowsRuntimeDistributedFeature
         {
@@ -277,6 +284,59 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
         Assert.Equal(TimeSpan.FromMinutes(2), pump.MaxBackoffInterval);
         Assert.Equal(14, pump.MaxExecutionsPerSweep);
         Assert.Equal(7, pump.TransportLeaseBatchSize);
+    }
+
+    /// <summary>Spec 184, FR-001: one routing identity, the member's host id, for placement, transport and execution
+    /// leases alike.</summary>
+    [Fact]
+    public void The_routing_identity_is_the_member_host_id_for_every_lease()
+    {
+        var services = BuildBaselineServices(hostId: "host-7");
+        services.TryAddSingleton<RuntimeExecutionOwnershipOptions>();
+
+        new WorkflowsRuntimeDistributedFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Equal("host-7", provider.GetRequiredService<IOptions<ExecutionPlacementOptions>>().Value.NodeId);
+        Assert.Equal("host-7", provider.GetRequiredService<RuntimeExecutionOwnershipOptions>().OwnerId);
+        Assert.Equal("host-7", provider.GetRequiredService<IClusterMembership>().GetLocalStanding().Identity.HostId);
+    }
+
+    /// <summary>
+    /// Spec 184, FR-003: a NodeId that differs from the host id refuses the shell with a diagnostic naming the host-id
+    /// setting, at activation, through the startup task; one equal to the host id is accepted. The setting is kept and its
+    /// setter does not throw, because CShells would silently drop a deleted key and swallow a setter's exception.
+    /// </summary>
+    [Fact]
+    public async Task A_node_id_that_differs_from_the_host_id_refuses_the_shell_naming_the_host_id_setting()
+    {
+        var services = BuildBaselineServices(hostId: "host-7");
+        var feature = new WorkflowsRuntimeDistributedFeature { NodeId = "node-legacy" };
+        Assert.Equal("node-legacy", feature.NodeId);
+        feature.ConfigureServices(services);
+
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var startupTask = Assert.Single(scope.ServiceProvider.GetServices<IStartupTask>().OfType<ValidateDistributedRuntimeIdentityStartupTask>());
+        var refusal = await Assert.ThrowsAsync<OptionsValidationException>(() => startupTask.ExecuteAsync(CancellationToken.None));
+
+        Assert.Contains("node-legacy", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("host-7", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Elsa:Cluster:Membership:HostId", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_node_id_equal_to_the_host_id_is_accepted()
+    {
+        var services = BuildBaselineServices(hostId: "host-7");
+        new WorkflowsRuntimeDistributedFeature { NodeId = "host-7" }.ConfigureServices(services);
+
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        foreach (var task in scope.ServiceProvider.GetServices<IStartupTask>())
+            await task.ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal("host-7", provider.GetRequiredService<IOptions<ExecutionPlacementOptions>>().Value.NodeId);
     }
 
     [Theory]
@@ -305,12 +365,20 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
         Assert.Contains("Tasks", attribute.DependsOn.Select(d => d?.ToString()));
     }
 
-    private static ServiceCollection BuildBaselineServices()
+    /// <summary>
+    /// The host-level services the feature composes over: a host id for the in-process membership default, the
+    /// execution-state store the placement gate reads pins from, and a ledger of this simulated process's own, so one
+    /// test's join sweep does not stand in for another's.
+    /// </summary>
+    private static ServiceCollection BuildBaselineServices(string hostId = "node-a")
     {
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IWorkflowExecutionCommandExecutor>(NoopWorkflowExecutionCommandExecutor.Instance);
+        services.Configure<ClusterMembershipOptions>(options => options.HostId = hostId);
+        services.AddSingleton<IWorkflowExecutionStateStore, InMemoryWorkflowExecutionStateStore>();
+        services.AddSingleton(new JoinSweepLedger());
         return services;
     }
 
@@ -439,6 +507,21 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
             int maxItems,
             CancellationToken cancellationToken = default) => new(Array.Empty<string>());
 
+        public ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(
+            DateTimeOffset now,
+            int maxItems,
+            int skip,
+            CancellationToken cancellationToken = default) => new(Array.Empty<string>());
+
+        public ValueTask<bool> ReleaseLeaseAsync(string workflowExecutionId, string transportItemId, string ownerId, long leaseToken, DateTimeOffset now, CancellationToken cancellationToken = default) =>
+            new(false);
+
+        public ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> PeekAsync(string workflowExecutionId, DateTimeOffset now, int maxItems, CancellationToken cancellationToken = default) =>
+            new(Array.Empty<ExecutionCommandTransportItem>());
+
+        public ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> ListLeasedAsync(string ownerId, DateTimeOffset now, int maxItems, string? workflowExecutionId = null, CancellationToken cancellationToken = default) =>
+            new(Array.Empty<ExecutionCommandTransportItem>());
+
         public ValueTask<int> CountPendingAsync(
             string workflowExecutionId,
             CancellationToken cancellationToken = default) => new(0);
@@ -498,6 +581,22 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
             int maxItems,
             CancellationToken cancellationToken = default) =>
             new(new[] { "same-execution" });
+
+        public ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(
+            DateTimeOffset requestedAt,
+            int maxItems,
+            int skip,
+            CancellationToken cancellationToken = default) =>
+            new(skip == 0 ? new[] { "same-execution" } : []);
+
+        public ValueTask<bool> ReleaseLeaseAsync(string workflowExecutionId, string transportItemId, string ownerId, long leaseToken, DateTimeOffset releasedAt, CancellationToken cancellationToken = default) =>
+            new(false);
+
+        public ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> PeekAsync(string workflowExecutionId, DateTimeOffset requestedAt, int maxItems, CancellationToken cancellationToken = default) =>
+            new(Array.Empty<ExecutionCommandTransportItem>());
+
+        public ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> ListLeasedAsync(string ownerId, DateTimeOffset requestedAt, int maxItems, string? workflowExecutionId = null, CancellationToken cancellationToken = default) =>
+            new(Array.Empty<ExecutionCommandTransportItem>());
 
         public ValueTask<int> CountPendingAsync(
             string workflowExecutionId,

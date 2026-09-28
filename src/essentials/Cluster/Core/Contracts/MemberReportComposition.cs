@@ -25,9 +25,19 @@ public static class MemberReportComposition
         };
     }
 
+    /// <summary>Reads the readability section from its source at this moment, for a provider that composes no other
+    /// section.</summary>
+    public static ValueTask<MemberReport> ComposeAsync(
+        IMemberReportSource<ReadabilitySection>? readability,
+        CancellationToken cancellationToken = default) =>
+        ComposeAsync(readability, runnability: null, cancellationToken);
+
     /// <summary>Reads every section from its source at this moment.</summary>
     public static async ValueTask<MemberReport> ComposeAsync(
         IMemberReportSource<ReadabilitySection>? readability,
+        IMemberReportSource<RunnabilitySection>? runnability,
         CancellationToken cancellationToken = default) =>
-        new(readability is null ? null : await readability.ReadAsync(cancellationToken));
+        new(
+            readability is null ? null : await readability.ReadAsync(cancellationToken),
+            runnability is null ? null : await runnability.ReadAsync(cancellationToken));
 }

@@ -25,11 +25,21 @@ public sealed class InProcessClusterMembership : IClusterMembership
     private readonly InProcessMemberRecord _record;
     private readonly TimeSpan _expiryPeriod;
     private readonly IMemberReportSource<ReadabilitySection>? _readability;
+    private readonly IMemberReportSource<RunnabilitySection>? _runnability;
     private readonly TimeProvider _timeProvider;
 
     public InProcessClusterMembership(
         IOptions<ClusterMembershipOptions> options,
         IEnumerable<IMemberReportSource<ReadabilitySection>> readabilitySources,
+        TimeProvider timeProvider)
+        : this(options, readabilitySources, [], timeProvider)
+    {
+    }
+
+    public InProcessClusterMembership(
+        IOptions<ClusterMembershipOptions> options,
+        IEnumerable<IMemberReportSource<ReadabilitySection>> readabilitySources,
+        IEnumerable<IMemberReportSource<RunnabilitySection>> runnabilitySources,
         TimeProvider timeProvider)
     {
         var settings = options.Value;
@@ -37,6 +47,7 @@ public sealed class InProcessClusterMembership : IClusterMembership
             ClusterHostIdConstraints.Validate(settings.HostId ?? Environment.MachineName, nameof(settings.HostId)));
         _expiryPeriod = settings.ExpiryPeriod;
         _readability = MemberReportComposition.SingleSource(readabilitySources);
+        _runnability = MemberReportComposition.SingleSource(runnabilitySources);
         _timeProvider = timeProvider;
     }
 
@@ -63,7 +74,7 @@ public sealed class InProcessClusterMembership : IClusterMembership
     }
 
     public async ValueTask<PublishedMemberReport> PublishReportAsync(CancellationToken cancellationToken = default) =>
-        _record.Publish(await MemberReportComposition.ComposeAsync(_readability, cancellationToken));
+        _record.Publish(await MemberReportComposition.ComposeAsync(_readability, _runnability, cancellationToken));
 
     public async ValueTask<MemberQueryAnswer> QueryAsync(MemberQuery query, FleetReadMode mode, CancellationToken cancellationToken = default)
     {

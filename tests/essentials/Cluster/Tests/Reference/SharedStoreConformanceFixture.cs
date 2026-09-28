@@ -19,7 +19,8 @@ public sealed class SharedStoreConformanceFixture(SharedStoreFault fault = Share
     public const string Name = "shared-store";
 
     private readonly SharedMembershipStore _store = new();
-    private readonly FakeTimeProvider _clock = new();
+    // After 2020: the runtime tier composes the distributed runtime on these clocks, and its identities need one.
+    private readonly FakeTimeProvider _clock = new(new DateTimeOffset(2026, 9, 28, 12, 0, 0, TimeSpan.Zero));
     private readonly List<Member> _members = [];
 
     public string ProviderName => Name;
@@ -65,10 +66,11 @@ public sealed class SharedStoreConformanceFixture(SharedStoreFault fault = Share
     {
         var clock = new FakeTimeProvider(_clock.GetUtcNow() + setup.ClockOffset);
         var readability = setup.Readability is null ? null : new ConformanceReadabilitySource(setup.Readability);
-        var membership = Create(setup.HostId, clock, readability);
+        var runnability = setup.Runnability is null ? null : new ConformanceRunnabilitySource(setup.Runnability);
+        var membership = Create(setup.HostId, clock, readability, runnability);
         await membership.JoinAsync(cancellationToken);
 
-        var member = new Member(membership, clock, readability) { NextHeartbeatAt = _clock.GetUtcNow() + Timings.HeartbeatInterval };
+        var member = new Member(membership, clock, readability, runnability) { NextHeartbeatAt = _clock.GetUtcNow() + Timings.HeartbeatInterval };
         _members.Add(member);
         return member;
     }
@@ -103,8 +105,12 @@ public sealed class SharedStoreConformanceFixture(SharedStoreFault fault = Share
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
-    private SharedStoreClusterMembership Create(string hostId, TimeProvider clock, IMemberReportSource<ReadabilitySection>? readability) =>
-        new(_store, hostId, Timings, clock, readability, fault);
+    private SharedStoreClusterMembership Create(
+        string hostId,
+        TimeProvider clock,
+        IMemberReportSource<ReadabilitySection>? readability,
+        IMemberReportSource<RunnabilitySection>? runnability) =>
+        new(_store, hostId, Timings, clock, readability, runnability, fault);
 
     private void MoveClocksTo(DateTimeOffset instant)
     {
@@ -117,7 +123,11 @@ public sealed class SharedStoreConformanceFixture(SharedStoreFault fault = Share
             member.Clock.Advance(delta);
     }
 
-    private sealed class Member(SharedStoreClusterMembership membership, FakeTimeProvider clock, ConformanceReadabilitySource? readability) : IConformanceMember
+    private sealed class Member(
+        SharedStoreClusterMembership membership,
+        FakeTimeProvider clock,
+        ConformanceReadabilitySource? readability,
+        ConformanceRunnabilitySource? runnability) : IConformanceMember
     {
         public SharedStoreClusterMembership Membership => membership;
 
@@ -133,6 +143,9 @@ public sealed class SharedStoreConformanceFixture(SharedStoreFault fault = Share
 
         public void SetReadability(params ReadabilityEntry[] entries) =>
             (readability ?? throw new InvalidOperationException("This member has no readability source.")).Set(entries);
+
+        public void SetRunnability(params RunnabilityEntry[] entries) =>
+            (runnability ?? throw new InvalidOperationException("This member has no runnability source.")).Set(entries);
 
         public ValueTask ActivateAsync() => Transition(MemberStatus.Active);
 
@@ -175,7 +188,8 @@ public sealed class SharedStoreConformanceFixture(SharedStoreFault fault = Share
                 return _member ??= fixture.Create(
                     services.GetRequiredService<IOptions<ClusterMembershipOptions>>().Value.HostId!,
                     fixture._clock,
-                    MemberReportComposition.SingleSource(services.GetServices<IMemberReportSource<ReadabilitySection>>()));
+                    MemberReportComposition.SingleSource(services.GetServices<IMemberReportSource<ReadabilitySection>>()),
+                    MemberReportComposition.SingleSource(services.GetServices<IMemberReportSource<RunnabilitySection>>()));
         }
     }
 

@@ -66,6 +66,7 @@ using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed;
+using Elsa.Workflows.Runtime.Distributed.Placement;
 using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
@@ -213,6 +214,9 @@ builder.Services.AddEfPendingMigrationActivationGuard();
 // composed here, on the host container. It brings the in-process default, so an unclustered Workbench is a cluster of
 // one that reports the schema families it has loaded without any further configuration.
 builder.Services.AddEfSchemaReadability();
+// Beside it, on the same host container: what each shell's workflow runtime can activate (spec 184, FR-008), so the
+// host's member report carries one runnability entry per shell that runs the distributed runtime.
+builder.Services.AddWorkflowRuntimeRunnabilityReport();
 // The durable EF provider replaces that default only when the Elsa:Cluster:Membership section enables it (ADR 0078;
 // spec 183, FR-024), and then requires an explicit Elsa:Cluster:Membership:HostId. It publishes the same report.
 builder.Services.AddConfiguredClusterMembership(configuration);

@@ -82,6 +82,26 @@ public sealed class EfClusterMembershipRegistrationTests : IAsyncDisposable
         Assert.False(host.Services.GetRequiredService<IClusterMembership>().GetLocalStanding().HasLapsed);
     }
 
+    /// <summary>
+    /// The provider publishes every section whose source the host composed beside it (spec 183, FR-014; spec 184,
+    /// FR-008): a host whose runtime reports what it can run is seen with that section, never without it.
+    /// </summary>
+    [Fact]
+    public async Task A_started_host_publishes_every_section_whose_source_it_composed_beside_the_provider()
+    {
+        var observer = await _fixture.StartMemberAsync(new ConformanceMemberSetup(NewHostId("observer"), []));
+        var reads = new ReadabilityEntry("registration-family", "RegistrationModule", ["1"]);
+        var runs = new RunnabilityEntry([new RunnableConsumer("clr", ["1"])], ["json"], ["Elsa.WriteLine"]);
+        using var host = await StartHostAsync(NewHostId("hosted"), services => services
+            .AddSingleton<IMemberReportSource<ReadabilitySection>>(new ConformanceReadabilitySource([reads]))
+            .AddSingleton<IMemberReportSource<RunnabilitySection>>(new ConformanceRunnabilitySource([runs])));
+        var identity = host.Services.GetRequiredService<IClusterMembership>().GetLocalStanding().Identity;
+
+        var seen = (await SeenAsync(observer, identity))!;
+
+        Assert.Equal(new MemberReport(new ReadabilitySection([reads]), new RunnabilitySection([runs])), seen.Report);
+    }
+
     private static bool MigratesOnShellActivation(ServiceDescriptor descriptor) =>
         descriptor.ImplementationInstance is ShellInitializerRegistration { InitializerType: var type } &&
         type == typeof(EfModuleMigrator<ClusterMembershipDbContext>);
@@ -91,10 +111,11 @@ public sealed class EfClusterMembershipRegistrationTests : IAsyncDisposable
     private static async Task<FleetMember?> SeenAsync(IConformanceMember reader, ClusterMemberIdentity identity) =>
         (await reader.Membership.ReadFleetAsync(FleetReadMode.Fresh)).Find(identity);
 
-    private async Task<IHost> StartHostAsync(string hostId)
+    private async Task<IHost> StartHostAsync(string hostId, Action<IServiceCollection>? compose = null)
     {
         var builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings());
         builder.Services.Configure<ClusterMembershipOptions>(options => options.HostId = hostId);
+        compose?.Invoke(builder.Services);
         _fixture.ComposeProvider(builder.Services);
         var host = builder.Build();
         try

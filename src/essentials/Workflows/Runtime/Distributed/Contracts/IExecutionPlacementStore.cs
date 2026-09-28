@@ -35,10 +35,24 @@ public interface IExecutionPlacementStore
     ValueTask<ExecutionPlacementClaimResult> TryClaimAsync(ExecutionPlacementClaim claim, DateTimeOffset now, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Releases the placement lease only when the stored lease still matches the caller's owner id and placement token,
-    /// so a superseded holder cannot clear a newer owner's placement. A no-op otherwise.
+    /// Renews a placement lease only when the stored lease is still live, unreleased, and held under exactly
+    /// <paramref name="held"/>'s owner id and placement token, as a compare-and-set (spec 184, FR-014). A renewal
+    /// issues a strictly greater placement token and extends the expiry to <paramref name="expiresAt"/>. It never grants:
+    /// a lease that expired, was released or was claimed by another member since the caller last held it returns
+    /// <see langword="null"/>, so a reclaim and a renewal that race cannot both win.
     /// </summary>
-    ValueTask ReleaseAsync(ExecutionPlacementLease lease, CancellationToken cancellationToken = default);
+    ValueTask<ExecutionPlacementLease?> TryRenewAsync(
+        ExecutionPlacementLease held,
+        DateTimeOffset now,
+        DateTimeOffset expiresAt,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Releases the placement lease only when the stored lease still matches the caller's owner id and placement token,
+    /// so a superseded holder cannot clear a newer owner's placement. Returns whether this call released it; a no-op
+    /// that returns <see langword="false"/> otherwise.
+    /// </summary>
+    ValueTask<bool> ReleaseAsync(ExecutionPlacementLease lease, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Returns at most <see cref="ExecutionPlacementLeaseListRequest.Take"/> live leases held by one owner, ordered by

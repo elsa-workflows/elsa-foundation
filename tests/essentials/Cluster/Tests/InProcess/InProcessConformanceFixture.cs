@@ -38,15 +38,18 @@ public sealed class InProcessConformanceFixture : IClusterMembershipConformanceF
             throw new NotSupportedException(ClusterOfOne);
 
         var readability = setup.Readability is null ? null : new ConformanceReadabilitySource(setup.Readability);
+        var runnability = setup.Runnability is null ? null : new ConformanceRunnabilitySource(setup.Runnability);
         var services = new ServiceCollection()
             .AddSingleton<TimeProvider>(_clock)
             .Configure<ClusterMembershipOptions>(options => options.HostId = setup.HostId);
         if (readability is not null)
             services.AddSingleton<IMemberReportSource<ReadabilitySection>>(readability);
+        if (runnability is not null)
+            services.AddSingleton<IMemberReportSource<RunnabilitySection>>(runnability);
         ComposeProvider(services);
 
         _services = services.BuildServiceProvider();
-        return ValueTask.FromResult<IConformanceMember>(new Member(_services.GetRequiredService<IClusterMembership>(), _clock, readability));
+        return ValueTask.FromResult<IConformanceMember>(new Member(_services.GetRequiredService<IClusterMembership>(), _clock, readability, runnability));
     }
 
     public ValueTask<IConformanceMember> JoinMemberAsync(ConformanceMemberSetup setup, CancellationToken cancellationToken = default) =>
@@ -76,7 +79,11 @@ public sealed class InProcessConformanceFixture : IClusterMembershipConformanceF
         return new ConformanceTimings(defaults.HeartbeatInterval, defaults.ExpiryPeriod, defaults.SkewAllowance);
     }
 
-    private sealed class Member(IClusterMembership membership, TimeProvider clock, ConformanceReadabilitySource? readability) : IConformanceMember
+    private sealed class Member(
+        IClusterMembership membership,
+        TimeProvider clock,
+        ConformanceReadabilitySource? readability,
+        ConformanceRunnabilitySource? runnability) : IConformanceMember
     {
         public IClusterMembership Membership => membership;
 
@@ -84,6 +91,9 @@ public sealed class InProcessConformanceFixture : IClusterMembershipConformanceF
 
         public void SetReadability(params ReadabilityEntry[] entries) =>
             (readability ?? throw new InvalidOperationException("This member has no readability source.")).Set(entries);
+
+        public void SetRunnability(params RunnabilityEntry[] entries) =>
+            (runnability ?? throw new InvalidOperationException("This member has no runnability source.")).Set(entries);
 
         public ValueTask ActivateAsync() => throw new NotSupportedException(ClusterOfOne);
 
