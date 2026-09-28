@@ -1,6 +1,7 @@
 using Elsa.Modularity.Core.Exceptions;
 using Elsa.Modularity.Core.Models;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
 using Xunit;
 using static Elsa.Modularity.EntityFramework.Tests.ActivationGuardHarness;
@@ -117,18 +118,78 @@ public sealed class EfPendingMigrationActivationGuardTests : IDisposable
     }
 
     /// <summary>
-    /// FR-069's other half, proved by a connection whose use throws rather than by reading the code: the
-    /// same unreadable database that refuses under Validate passes under AutoMigrate, which it could not do
-    /// if the guard had opened it.
+    /// FR-069 as narrowed by spec 181's FR-016 (Q10 on #2093): under AutoMigrate the guard now opens the database to read
+    /// the finalization record, so the same unreadable database that refuses under Validate refuses under AutoMigrate
+    /// too, fail closed, in words that name the record rather than pending migrations, and still never the connection.
     /// </summary>
     [Fact]
-    public async Task Does_not_open_the_database_at_all_under_automigrate()
+    public async Task Refuses_an_unreadable_database_under_automigrate_too_because_its_finalization_record_cannot_be_read()
     {
-        var connection = ConnectionTo(_harness.UnreadableDatabase("unreadable"));
+        var connection = ConnectionTo(_harness.UnreadableDatabase($"unreadable-{Sentinel}"));
         var request = Request(Enabled(SecretsFeature, connection: connection));
 
         Assert.False((await _harness.Guard(EfMigratePolicy.Validate).EvaluateAsync(request)).IsAllowed);
-        Assert.True((await _harness.Guard(EfMigratePolicy.AutoMigrate).EvaluateAsync(request)).IsAllowed);
+        var decision = await _harness.Guard(EfMigratePolicy.AutoMigrate).EvaluateAsync(request);
+
+        var refusal = Assert.Single(decision.Refusals);
+        Assert.Contains("whose database could not be reached", refusal.Reason, StringComparison.Ordinal);
+        Assert.Contains("schema finalization record could not be read", refusal.Reason, StringComparison.Ordinal);
+        Assert.DoesNotContain("pending", refusal.Reason, StringComparison.Ordinal);
+        AssertNothingLeaked(connection, decision);
+    }
+
+    /// <summary>
+    /// Spec 181, FR-016 and SC-003: under both policies, a feature whose module's family is finalized at a version this
+    /// host cannot read is refused before anything is saved, naming the feature, the module, the family, the finalized
+    /// version, the versions this host reads and the remedy; one it can read passes, so the refusal is not blanket.
+    /// </summary>
+    [Theory]
+    [InlineData(EfMigratePolicy.Validate)]
+    [InlineData(EfMigratePolicy.AutoMigrate)]
+    public async Task Refuses_under_both_policies_a_feature_whose_module_is_finalized_at_a_version_this_host_cannot_read(EfMigratePolicy policy)
+    {
+        var connection = ConnectionTo(_harness.Database($"finalized-{Sentinel}"));
+        await FinalizeAsync("Secrets", connection, SecretsEfModule.SchemaFamily, [SecretsEfModule.SchemaVersion, "2.0.0"], "2.0.0");
+
+        var decision = await _harness.Guard(policy).EvaluateAsync(Request(Enabled(SecretsFeature, connection: connection)));
+
+        var refusal = Assert.Single(decision.Refusals);
+        Assert.Equal(SecretsFeature, refusal.Feature);
+        Assert.Equal(
+            $"Feature '{SecretsFeature}' depends on EF module 'Secrets'. EF module 'Secrets' cannot activate: schema family " +
+            $"'{SecretsEfModule.SchemaFamily}' is finalized at '2.0.0' in this database, and this host reads only " +
+            $"[{SecretsEfModule.SchemaVersion}]. Rows at '2.0.0' may exist, and this host cannot read them. Run a version of the " +
+            "module that reads '2.0.0', or restore a database backup taken before '2.0.0' was finalized. Nothing was saved.",
+            refusal.Reason);
+        AssertNothingLeaked(connection, decision);
+    }
+
+    [Theory]
+    [InlineData(EfMigratePolicy.Validate)]
+    [InlineData(EfMigratePolicy.AutoMigrate)]
+    public async Task Allows_under_both_policies_a_feature_whose_module_is_finalized_at_a_version_this_host_reads(EfMigratePolicy policy)
+    {
+        var connection = ConnectionTo(_harness.Database("readable"));
+        await FinalizeAsync("Secrets", connection, SecretsEfModule.SchemaFamily, [SecretsEfModule.SchemaVersion, "2.0.0"], SecretsEfModule.SchemaVersion);
+
+        Assert.True((await _harness.Guard(policy).EvaluateAsync(Request(Enabled(SecretsFeature, connection: connection)))).IsAllowed);
+    }
+
+    /// <summary>
+    /// Spec 181's FR-015 and FR-016 as amended for spec 186: a family complete only from a version this host cannot read
+    /// is refused as an unreadable finalized version is, although this host reads the finalized version itself.
+    /// </summary>
+    [Theory]
+    [InlineData(EfMigratePolicy.Validate)]
+    [InlineData(EfMigratePolicy.AutoMigrate)]
+    public async Task Refuses_under_both_policies_a_family_complete_only_from_a_version_this_host_no_longer_reads(EfMigratePolicy policy)
+    {
+        var connection = ConnectionTo(_harness.Database("incomplete"));
+        await FinalizeAsync("Secrets", connection, SecretsEfModule.SchemaFamily, ["0.9.0", SecretsEfModule.SchemaVersion], SecretsEfModule.SchemaVersion);
+
+        var refusal = Assert.Single((await _harness.Guard(policy).EvaluateAsync(Request(Enabled(SecretsFeature, connection: connection)))).Refusals);
+
+        Assert.Contains($"is complete only from '0.9.0' in this database, and this host reads only [{SecretsEfModule.SchemaVersion}]", refusal.Reason, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -243,12 +304,12 @@ public sealed class EfPendingMigrationActivationGuardTests : IDisposable
     /// there, not into any shell's), so the policy it must honor is the one a shell would actually resolve —
     /// its own <c>Configuration</c> node when that node defines the <c>Migrate</c> section, the host's
     /// otherwise (see <c>EfMigrateOptions</c>). A shell that declares AutoMigrate over a host running
-    /// Validate must not be falsely refused, and must not open the database to find that out.
+    /// Validate must not be refused for migrations its own migrator applies at Prepare.
     /// </summary>
     [Fact]
-    public async Task Allows_a_shell_that_declares_automigrate_over_a_host_running_validate_without_opening_the_database()
+    public async Task Allows_a_shell_that_declares_automigrate_over_a_host_running_validate_despite_pending_migrations()
     {
-        var connection = ConnectionTo(_harness.UnreadableDatabase("shell-automigrate"));
+        var connection = ConnectionTo(_harness.Database("shell-automigrate"));
 
         var decision = await _harness.Guard(EfMigratePolicy.Validate)
             .EvaluateAsync(Request(EfMigratePolicy.AutoMigrate, Enabled(SecretsFeature, connection: connection)));
