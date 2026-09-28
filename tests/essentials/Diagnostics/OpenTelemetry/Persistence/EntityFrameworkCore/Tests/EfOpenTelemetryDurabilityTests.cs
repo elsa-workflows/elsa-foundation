@@ -65,72 +65,52 @@ public sealed class EfOpenTelemetryDurabilityTests
     [Fact]
     public async Task Synchronous_disposal_does_not_race_an_in_flight_query()
     {
-        var directory = Path.Join(Path.GetTempPath(), "elsa-otel-dispose-" + Guid.NewGuid().ToString("N"));
-        var path = Path.Join(directory, "opentelemetry.db");
-        Directory.CreateDirectory(directory);
-        try
-        {
-            var interceptor = new BlockingReaderInterceptor();
-            await using var provider = OpenTelemetryEntityFrameworkCoreFixture.BuildInterceptingProvider(path, interceptor);
-            await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(provider);
-            var store = provider.GetRequiredService<EfOpenTelemetryStore>();
-            interceptor.Arm();
+        await using var temp = new TempDatabaseDirectory("elsa-otel-dispose-");
+        var interceptor = new BlockingReaderInterceptor();
+        await using var provider = OpenTelemetryEntityFrameworkCoreFixture.BuildInterceptingProvider(temp.DatabasePath, interceptor);
+        await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(provider);
+        var store = provider.GetRequiredService<EfOpenTelemetryStore>();
+        interceptor.Arm();
 
-            var query = store.QueryResourcesAsync(new() { Take = 1 }).AsTask();
-            await interceptor.WaitForReaderAsync().WaitAsync(TimeSpan.FromSeconds(5));
-            store.Dispose();
-            interceptor.Release();
+        var query = store.QueryResourcesAsync(new() { Take = 1 }).AsTask();
+        await interceptor.WaitForReaderAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        store.Dispose();
+        interceptor.Release();
 
-            Assert.Empty((await query).Items);
-            await Assert.ThrowsAsync<ObjectDisposedException>(() => store.QueryResourcesAsync(new() { Take = 1 }).AsTask());
-        }
-        finally
-        {
-            if (Directory.Exists(directory))
-                Directory.Delete(directory, recursive: true);
-        }
+        Assert.Empty((await query).Items);
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => store.QueryResourcesAsync(new() { Take = 1 }).AsTask());
     }
 
     [Fact]
     public async Task Caller_cancellation_after_acceptance_does_not_orphan_source_registration()
     {
-        var directory = Path.Join(Path.GetTempPath(), "elsa-otel-cancelled-source-" + Guid.NewGuid().ToString("N"));
-        var path = Path.Join(directory, "opentelemetry.db");
-        Directory.CreateDirectory(directory);
+        await using var temp = new TempDatabaseDirectory("elsa-otel-cancelled-source-");
+        var interceptor = new BlockingReaderInterceptor();
+        await using var provider = OpenTelemetryEntityFrameworkCoreFixture.BuildInterceptingProvider(temp.DatabasePath, interceptor);
+        await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(provider);
+        var store = provider.GetRequiredService<EfOpenTelemetryStore>();
+        var registry = provider.GetRequiredService<IOpenTelemetrySourceRegistry>();
+        var batch = TelemetryTestData.Batch("cancelled-source");
+        store.Start();
+        interceptor.Arm();
+        using var cancellation = new CancellationTokenSource();
+        var write = store.WriteAsync(batch, cancellation.Token).AsTask();
+        await interceptor.WaitForReaderAsync().WaitAsync(TimeSpan.FromSeconds(5));
         try
         {
-            var interceptor = new BlockingReaderInterceptor();
-            await using var provider = OpenTelemetryEntityFrameworkCoreFixture.BuildInterceptingProvider(path, interceptor);
-            await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(provider);
-            var store = provider.GetRequiredService<EfOpenTelemetryStore>();
-            var registry = provider.GetRequiredService<IOpenTelemetrySourceRegistry>();
-            var batch = TelemetryTestData.Batch("cancelled-source");
-            store.Start();
-            interceptor.Arm();
-            using var cancellation = new CancellationTokenSource();
-            var write = store.WriteAsync(batch, cancellation.Token).AsTask();
-            await interceptor.WaitForReaderAsync().WaitAsync(TimeSpan.FromSeconds(5));
-            try
-            {
-                Assert.Equal(batch.Resources.Single().Id, Assert.Single(registry.List()).Id);
-                cancellation.Cancel();
-                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => write);
-            }
-            finally
-            {
-                interceptor.Release();
-            }
-
-            await store.StopAsync().WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(batch.Resources.Single().Id, Assert.Single(registry.List()).Id);
-            await using var scope = provider.CreateAsyncScope();
-            Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<OpenTelemetryDbContext>().Resources.CountAsync());
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => write);
         }
         finally
         {
-            if (Directory.Exists(directory))
-                Directory.Delete(directory, recursive: true);
+            interceptor.Release();
         }
+
+        await store.StopAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(batch.Resources.Single().Id, Assert.Single(registry.List()).Id);
+        await using var scope = provider.CreateAsyncScope();
+        Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<OpenTelemetryDbContext>().Resources.CountAsync());
     }
 
     [Fact]
@@ -193,81 +173,61 @@ public sealed class EfOpenTelemetryDurabilityTests
     [Fact]
     public async Task Identical_writers_converge_to_one_durable_capture()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "elsa-otel-concurrent-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(directory);
-        var path = Path.Combine(directory, "concurrent.db");
+        await using var temp = new TempDatabaseDirectory("elsa-otel-concurrent-", "concurrent.db");
 
-        try
-        {
-            await using var first = OpenTelemetryEntityFrameworkCoreFixture.BuildProvider(path, new() { MaxQuerySize = 100 });
-            await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(first);
-            await using var second = OpenTelemetryEntityFrameworkCoreFixture.BuildProvider(path, new() { MaxQuerySize = 100 });
-            await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(second);
-            var firstStore = first.GetRequiredService<EfOpenTelemetryStore>();
-            var secondStore = second.GetRequiredService<EfOpenTelemetryStore>();
-            firstStore.Start();
-            secondStore.Start();
+        await using var first = OpenTelemetryEntityFrameworkCoreFixture.BuildProvider(temp.DatabasePath, new() { MaxQuerySize = 100 });
+        await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(first);
+        await using var second = OpenTelemetryEntityFrameworkCoreFixture.BuildProvider(temp.DatabasePath, new() { MaxQuerySize = 100 });
+        await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(second);
+        var firstStore = first.GetRequiredService<EfOpenTelemetryStore>();
+        var secondStore = second.GetRequiredService<EfOpenTelemetryStore>();
+        firstStore.Start();
+        secondStore.Start();
 
-            var batch = TelemetryTestData.Batch("concurrent-trace");
-            var batchId = DiagnosticsDrainBatchId.New();
-            await Task.WhenAll(
-                firstStore.WriteAsync(batchId, batch).AsTask(),
-                secondStore.WriteAsync(batchId, batch).AsTask());
+        var batch = TelemetryTestData.Batch("concurrent-trace");
+        var batchId = DiagnosticsDrainBatchId.New();
+        await Task.WhenAll(
+            firstStore.WriteAsync(batchId, batch).AsTask(),
+            secondStore.WriteAsync(batchId, batch).AsTask());
 
-            Assert.Single((await firstStore.QueryTracesAsync(new() { Take = 10 })).Items);
-            Assert.Single((await firstStore.QueryResourcesAsync(new() { Take = 10 })).Items);
-            Assert.Single((await firstStore.QueryMetricsAsync(new() { Take = 10 })).Points);
-            Assert.Single((await firstStore.QueryLogsAsync(new() { Take = 10 })).Items);
-            await firstStore.StopAsync();
-            await secondStore.StopAsync();
-        }
-        finally
-        {
-            if (Directory.Exists(directory))
-                Directory.Delete(directory, recursive: true);
-        }
+        Assert.Single((await firstStore.QueryTracesAsync(new() { Take = 10 })).Items);
+        Assert.Single((await firstStore.QueryResourcesAsync(new() { Take = 10 })).Items);
+        Assert.Single((await firstStore.QueryMetricsAsync(new() { Take = 10 })).Points);
+        Assert.Single((await firstStore.QueryLogsAsync(new() { Take = 10 })).Items);
+        await firstStore.StopAsync();
+        await secondStore.StopAsync();
     }
 
     [Fact]
     public async Task Durable_capture_survives_provider_restart_but_isolated_database_does_not_leak()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "elsa-otel-restart-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(directory);
-        var path = Path.Combine(directory, "restart.db");
-        var foreignPath = Path.Combine(directory, "foreign.db");
+        await using var temp = new TempDatabaseDirectory("elsa-otel-restart-", "restart.db");
+        var foreignPath = Path.Combine(temp.DirectoryPath, "foreign.db");
 
-        try
+        await using (var first = OpenTelemetryEntityFrameworkCoreFixture.BuildProvider(temp.DatabasePath))
         {
-            await using (var first = OpenTelemetryEntityFrameworkCoreFixture.BuildProvider(path))
-            {
-                await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(first);
-                var store = first.GetRequiredService<EfOpenTelemetryStore>();
-                store.Start();
-                await store.WriteAsync(TelemetryTestData.Batch("restart-trace"));
-                await store.StopAsync();
-            }
-
-            await using (var restarted = OpenTelemetryEntityFrameworkCoreFixture.BuildProvider(path))
-            {
-                await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(restarted);
-                var store = restarted.GetRequiredService<EfOpenTelemetryStore>();
-                store.Start();
-                Assert.Equal(["restart-trace"], (await store.QueryTracesAsync(new() { Take = 10 })).Items.Select(item => item.TraceId));
-                await store.StopAsync();
-            }
-
-            await using var foreign = OpenTelemetryEntityFrameworkCoreFixture.BuildProvider(foreignPath);
-            await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(foreign);
-            var foreignStore = foreign.GetRequiredService<EfOpenTelemetryStore>();
-            foreignStore.Start();
-            Assert.Empty((await foreignStore.QueryTracesAsync(new() { Take = 10 })).Items);
-            await foreignStore.StopAsync();
+            await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(first);
+            var store = first.GetRequiredService<EfOpenTelemetryStore>();
+            store.Start();
+            await store.WriteAsync(TelemetryTestData.Batch("restart-trace"));
+            await store.StopAsync();
         }
-        finally
+
+        await using (var restarted = OpenTelemetryEntityFrameworkCoreFixture.BuildProvider(temp.DatabasePath))
         {
-            if (Directory.Exists(directory))
-                Directory.Delete(directory, recursive: true);
+            await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(restarted);
+            var store = restarted.GetRequiredService<EfOpenTelemetryStore>();
+            store.Start();
+            Assert.Equal(["restart-trace"], (await store.QueryTracesAsync(new() { Take = 10 })).Items.Select(item => item.TraceId));
+            await store.StopAsync();
         }
+
+        await using var foreign = OpenTelemetryEntityFrameworkCoreFixture.BuildProvider(foreignPath);
+        await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(foreign);
+        var foreignStore = foreign.GetRequiredService<EfOpenTelemetryStore>();
+        foreignStore.Start();
+        Assert.Empty((await foreignStore.QueryTracesAsync(new() { Take = 10 })).Items);
+        await foreignStore.StopAsync();
     }
 
     [Theory]
@@ -450,28 +410,18 @@ public sealed class EfOpenTelemetryDurabilityTests
     [Fact]
     public async Task Transient_transaction_begin_failure_is_retried_within_the_durable_write()
     {
-        var directory = Path.Join(Path.GetTempPath(), "elsa-otel-transaction-retry-" + Guid.NewGuid().ToString("N"));
-        var path = Path.Join(directory, "opentelemetry.db");
-        Directory.CreateDirectory(directory);
-        try
-        {
-            var interceptor = new TransientTransactionStartInterceptor();
-            await using var provider = OpenTelemetryEntityFrameworkCoreFixture.BuildInterceptingProvider(path, interceptor);
-            await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(provider);
-            var beginAttemptsBeforeWrite = interceptor.BeginAttempts;
-            interceptor.FailNextBegin();
-            var store = provider.GetRequiredService<EfOpenTelemetryStore>();
+        await using var temp = new TempDatabaseDirectory("elsa-otel-transaction-retry-");
+        var interceptor = new TransientTransactionStartInterceptor();
+        await using var provider = OpenTelemetryEntityFrameworkCoreFixture.BuildInterceptingProvider(temp.DatabasePath, interceptor);
+        await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(provider);
+        var beginAttemptsBeforeWrite = interceptor.BeginAttempts;
+        interceptor.FailNextBegin();
+        var store = provider.GetRequiredService<EfOpenTelemetryStore>();
 
-            await store.WriteAsync(DiagnosticsDrainBatchId.New(), TelemetryTestData.Batch("transaction-begin-retry"));
+        await store.WriteAsync(DiagnosticsDrainBatchId.New(), TelemetryTestData.Batch("transaction-begin-retry"));
 
-            Assert.Equal(beginAttemptsBeforeWrite + 2, interceptor.BeginAttempts);
-            Assert.NotNull(await store.GetTraceAsync("transaction-begin-retry"));
-        }
-        finally
-        {
-            if (Directory.Exists(directory))
-                Directory.Delete(directory, recursive: true);
-        }
+        Assert.Equal(beginAttemptsBeforeWrite + 2, interceptor.BeginAttempts);
+        Assert.NotNull(await store.GetTraceAsync("transaction-begin-retry"));
     }
 
     /// <summary>
@@ -481,53 +431,33 @@ public sealed class EfOpenTelemetryDurabilityTests
     [Fact]
     public async Task A_schema_write_refusal_during_commit_reaches_the_caller_unwrapped()
     {
-        var directory = Path.Join(Path.GetTempPath(), "elsa-otel-write-refusal-" + Guid.NewGuid().ToString("N"));
-        var path = Path.Join(directory, "opentelemetry.db");
-        Directory.CreateDirectory(directory);
-        try
-        {
-            var interceptor = new ProviderFailures.FailingSaveInterceptor(() => new EfSchemaWriteRefusedException("OpenTelemetry", "1", "2"));
-            await using var provider = OpenTelemetryEntityFrameworkCoreFixture.BuildInterceptingProvider(path, interceptor);
-            await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(provider);
-            var store = provider.GetRequiredService<EfOpenTelemetryStore>();
+        await using var temp = new TempDatabaseDirectory("elsa-otel-write-refusal-");
+        var interceptor = new ProviderFailures.FailingSaveInterceptor(() => new EfSchemaWriteRefusedException("OpenTelemetry", "1", "2"));
+        await using var provider = OpenTelemetryEntityFrameworkCoreFixture.BuildInterceptingProvider(temp.DatabasePath, interceptor);
+        await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(provider);
+        var store = provider.GetRequiredService<EfOpenTelemetryStore>();
 
-            var refusal = await Assert.ThrowsAsync<EfSchemaWriteRefusedException>(
-                () => store.WriteAsync(DiagnosticsDrainBatchId.New(), TelemetryTestData.Batch("write-refusal")).AsTask());
+        var refusal = await Assert.ThrowsAsync<EfSchemaWriteRefusedException>(
+            () => store.WriteAsync(DiagnosticsDrainBatchId.New(), TelemetryTestData.Batch("write-refusal")).AsTask());
 
-            Assert.Equal("OpenTelemetry", refusal.Family);
-        }
-        finally
-        {
-            if (Directory.Exists(directory))
-                Directory.Delete(directory, recursive: true);
-        }
+        Assert.Equal("OpenTelemetry", refusal.Family);
     }
 
     /// <summary>The drain-queued entry point unwraps the same refusal from the <see cref="DiagnosticsDrainException"/> it acknowledges through.</summary>
     [Fact]
     public async Task A_schema_write_refusal_off_the_drain_queued_entry_point_reaches_the_caller_unwrapped()
     {
-        var directory = Path.Join(Path.GetTempPath(), "elsa-otel-write-refusal-queued-" + Guid.NewGuid().ToString("N"));
-        var path = Path.Join(directory, "opentelemetry.db");
-        Directory.CreateDirectory(directory);
-        try
-        {
-            var interceptor = new ProviderFailures.FailingSaveInterceptor(() => new EfSchemaWriteRefusedException("OpenTelemetry", "1", "2"));
-            await using var provider = OpenTelemetryEntityFrameworkCoreFixture.BuildInterceptingProvider(path, interceptor);
-            await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(provider);
-            var store = provider.GetRequiredService<EfOpenTelemetryStore>();
-            store.Start();
+        await using var temp = new TempDatabaseDirectory("elsa-otel-write-refusal-queued-");
+        var interceptor = new ProviderFailures.FailingSaveInterceptor(() => new EfSchemaWriteRefusedException("OpenTelemetry", "1", "2"));
+        await using var provider = OpenTelemetryEntityFrameworkCoreFixture.BuildInterceptingProvider(temp.DatabasePath, interceptor);
+        await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(provider);
+        var store = provider.GetRequiredService<EfOpenTelemetryStore>();
+        store.Start();
 
-            var refusal = await Assert.ThrowsAsync<EfSchemaWriteRefusedException>(
-                () => store.WriteAsync(TelemetryTestData.Batch("write-refusal-queued")).AsTask());
+        var refusal = await Assert.ThrowsAsync<EfSchemaWriteRefusedException>(
+            () => store.WriteAsync(TelemetryTestData.Batch("write-refusal-queued")).AsTask());
 
-            Assert.Equal("OpenTelemetry", refusal.Family);
-        }
-        finally
-        {
-            if (Directory.Exists(directory))
-                Directory.Delete(directory, recursive: true);
-        }
+        Assert.Equal("OpenTelemetry", refusal.Family);
     }
 
     [Fact]
@@ -703,5 +633,26 @@ public sealed class EfOpenTelemetryDurabilityTests
         var fixture = new OpenTelemetryEntityFrameworkCoreFixture();
         await fixture.InitializeAsync(new() { MaxQuerySize = 100 });
         return fixture;
+    }
+
+    /// <summary>Creates a fresh temp directory (and, by default, a database file path inside it) and deletes it on disposal.</summary>
+    private sealed class TempDatabaseDirectory : IAsyncDisposable
+    {
+        public string DirectoryPath { get; }
+        public string DatabasePath { get; }
+
+        public TempDatabaseDirectory(string prefix, string fileName = "opentelemetry.db")
+        {
+            DirectoryPath = Path.Join(Path.GetTempPath(), prefix + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(DirectoryPath);
+            DatabasePath = Path.Join(DirectoryPath, fileName);
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            if (Directory.Exists(DirectoryPath))
+                Directory.Delete(DirectoryPath, recursive: true);
+            return ValueTask.CompletedTask;
+        }
     }
 }

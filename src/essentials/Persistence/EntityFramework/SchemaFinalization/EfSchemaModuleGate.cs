@@ -387,7 +387,7 @@ public sealed class EfSchemaModuleGate
                          ?? throw new InvalidOperationException($"The finalization record of '{chain.Family}' vanished while EF module '{Module}' was activating.");
             if (reread.Intent is { } still && !chain.IsReadable(still.Version) && reread.Revision == record.Revision)
             {
-                await (PollWithinBound(deadline, cancellationToken) ?? throw Refuse(chain, EfSchemaActivationRefusal.IntentUnresolved, still.Version));
+                await WaitOrRefuseAsync(deadline, Refuse(chain, EfSchemaActivationRefusal.IntentUnresolved, still.Version), cancellationToken);
                 reread = await store.FindAsync(chain.Family, cancellationToken) ?? reread;
             }
 
@@ -617,6 +617,13 @@ public sealed class EfSchemaModuleGate
     /// </summary>
     private Task? PollWithinBound(DateTimeOffset deadline, CancellationToken cancellationToken) =>
         _time.GetUtcNow() >= deadline ? null : Task.Delay(_options.IntentPollInterval, _time, cancellationToken);
+
+    /// <summary>
+    /// Waits one <see cref="EfSchemaFinalizationOptions.IntentPollInterval"/> if <paramref name="deadline"/> has not
+    /// passed yet; once it has, throws <paramref name="refusal"/> instead of waiting.
+    /// </summary>
+    private Task WaitOrRefuseAsync(DateTimeOffset deadline, EfSchemaActivationRefusedException refusal, CancellationToken cancellationToken) =>
+        _time.GetUtcNow() >= deadline ? throw refusal : Task.Delay(_options.IntentPollInterval, _time, cancellationToken);
 
     private async Task PublishQuietlyAsync(CancellationToken cancellationToken)
     {

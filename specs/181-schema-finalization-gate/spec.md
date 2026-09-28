@@ -505,9 +505,10 @@ rather than a record of its own.
 - **Every domain API answers both write refusals with a 409** (spec 180, FR-016a), carrying the code, the family and
   both versions. An API resolves no EF Core, so both refusals derive from `Elsa.Primitives`'
   `SchemaWriteRefusedException`, and `Elsa.Api.AspNetCore`'s `SchemaWriteRefusalProblem` is the one place the
-  refusal's part of every envelope is decided. Stores that wrap a failed save in a failure of their own (today
-  Identity's, OpenTelemetry's, Structured Logs' and the Elsa 3 import's) still turn the refusal into that failure's
-  status; letting it leave as itself is follow-up work.
+  refusal's part of every envelope is decided. Stores that wrap a failed save in a failure of their own (Identity's,
+  OpenTelemetry's, Structured Logs' and the Elsa 3 import's) now exclude the refusal from that wrapping and let it
+  pass through unwrapped, the same way `EfSchemaVersionSkewException` already does (commit c41f8a250, "Let schema
+  write refusals pass through store failure wrappers (#2101)").
 - **The write check refuses deletes as well** while a family's writes are refused (FR-012), and it covers every
   write through `SaveChanges`. `ExecuteUpdate` and `ExecuteDelete` bypass it; no first-party store writes a stamp
   that way.
