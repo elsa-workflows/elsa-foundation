@@ -28,6 +28,7 @@ One stable client-visible promise contributed by an active shell feature.
 | `ContractMajorVersion` | positive integer | Required; changes only for a breaking capability-contract revision |
 | `Links` | collection of `ApiCapabilityLink` | Canonical shell-relative domain links; relation names are unique within the declaration |
 | `SourceFeatureId` | `string` | Diagnostic composition identity; not part of the public capability identity |
+| `DormantReason` | `string?` | Set by a typed source while the owning feature is dormant ([spec 182](../182-dormant-features-until-finalization/spec.md), FR-007); the view then carries `status: dormant` and this caller-neutral `reason` instead of omitting the capability |
 
 `ApiCapabilityLink` contains a stable relation and a shell-relative URI template. Links do not carry
 caller permissions, arbitrary domain state, or rich bootstrap payloads.

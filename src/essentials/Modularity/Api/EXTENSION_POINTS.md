@@ -40,6 +40,7 @@ Known default contributors:
 
 - `RuntimeFeatureCatalogContributor` - merges CShells runtime feature descriptors discovered from public feature assembly providers.
 - `PackageManifestFeatureCatalogContributor` - merges Nuplane package manifest metadata and feature settings.
+- `FeatureAvailabilityCatalogContributor` (`Elsa.Modularity.Api`) *(cross-domain)* - sets each enabled feature's `Availability` (spec 182, FR-009): available, or dormant with a reason per unmet `[RequiresSchemaVersion]` requirement its class declares, asked of the shared `ISchemaDormancyCheck` (`Elsa.Cluster.Core`) and carrying the finalization gate's status. `AddModularityApi` registers it after the runtime contributor, which supplies each feature's class, and adds the default check; `ModularityAttentionContributor` turns a dormant feature into an `Info` Attention item and a schema family whose writes the host refuses into a `Critical` one.
 
 Known activation guards:
 
