@@ -232,8 +232,8 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
                 return null;
             // These columns are a portable integrity projection as well as a corruption probe; filters use
             // normalized membership rows, never provider JSON operators.
-            _ = ValidatePersistedMemberships(summary.ServiceMembershipJson, nameof(summary.ServiceMembershipJson));
-            _ = ValidatePersistedMemberships(summary.WorkflowMembershipJson, nameof(summary.WorkflowMembershipJson));
+            _ = ValidatePersistedMemberships(summary, nameof(summary.ServiceMembershipJson), summary.ServiceMembershipJson);
+            _ = ValidatePersistedMemberships(summary, nameof(summary.WorkflowMembershipJson), summary.WorkflowMembershipJson);
             var trace = ToTrace(summary);
             if (!StringComparer.Ordinal.Equals(summary.TraceIdSearchKey, traceSearchKey))
                 return null;
@@ -711,9 +711,9 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
                 var row = existing ?? new OpenTelemetryTraceSummaryEntity { ScopeKey = binding.ScopeKey, TraceKey = group.Key, Version = Guid.NewGuid() };
                 var retainedServices = existing is null
                     ? []
-                    : ValidatePersistedMemberships(existing.ServiceMembershipJson, nameof(existing.ServiceMembershipJson));
+                    : ValidatePersistedMemberships(existing, nameof(existing.ServiceMembershipJson), existing.ServiceMembershipJson);
                 if (existing is not null)
-                    _ = ValidatePersistedMemberships(existing.WorkflowMembershipJson, nameof(existing.WorkflowMembershipJson));
+                    _ = ValidatePersistedMemberships(existing, nameof(existing.WorkflowMembershipJson), existing.WorkflowMembershipJson);
                 var serviceNames = CanonicalSummaryElements(
                     retainedServices.Concat(merged.ResourceIds.Select(id => ResolveService(services, id)).OfType<string>()),
                     nameof(OpenTelemetryTraceSummaryEntity.ServiceMembershipJson));
@@ -862,9 +862,14 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         return canonical;
     }
 
-    private static string[] ValidatePersistedMemberships(string json, string field)
+    /// <summary>
+    /// A membership column of <paramref name="summary"/>, upcast from the row's stamp before it is parsed: the memberships
+    /// restate the payload's and are merged with new ones or compared with the upcast payload, so they are content (spec
+    /// 180, FR-009; #2140).
+    /// </summary>
+    private static string[] ValidatePersistedMemberships(OpenTelemetryTraceSummaryEntity summary, string field, string json)
     {
-        var values = Deserialize<string[]>(json);
+        var values = Deserialize<string[]>(EfOpenTelemetryModule.Chain.Upcast(summary.SchemaVersion, EfOpenTelemetryModule.SummaryTable, field, json));
         string[] canonical;
         try
         {
@@ -1192,8 +1197,8 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         RequirePersisted(normalized.EndTime >= normalized.StartTime && normalized.Duration == normalized.EndTime - normalized.StartTime, nameof(normalized.Duration));
         RequirePersisted(normalized.SpanCount >= 0 && x.SpanCount == normalized.SpanCount, nameof(x.SpanCount));
         RequirePersisted(x.Version != Guid.Empty, nameof(x.Version));
-        _ = ValidatePersistedMemberships(x.ServiceMembershipJson, nameof(x.ServiceMembershipJson));
-        var workflows = ValidatePersistedMemberships(x.WorkflowMembershipJson, nameof(x.WorkflowMembershipJson));
+        _ = ValidatePersistedMemberships(x, nameof(x.ServiceMembershipJson), x.ServiceMembershipJson);
+        var workflows = ValidatePersistedMemberships(x, nameof(x.WorkflowMembershipJson), x.WorkflowMembershipJson);
         RequirePersisted(workflows.SequenceEqual(normalized.WorkflowInstanceIds, StringComparer.Ordinal), nameof(x.WorkflowMembershipJson));
         return normalized;
     });

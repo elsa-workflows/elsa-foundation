@@ -21,11 +21,17 @@ namespace Elsa.Architecture.Tests;
 /// <item>a family EF materializes directly, through <c>IEfSchemaVersionedContext</c>, declares no upcasters, since its
 /// content is deserialized before any upcaster could run;</item>
 /// <item>every write that stamps a constant stamps the version its family's declaration names current (FR-013);</item>
-/// <item>every write that rewrites a row's content in place stamps the row again in the same member, itself or through a
+/// <item>every content and integrity column is declared beside its family (<c>[EfSchemaContent]</c>,
+/// <c>[EfSchemaIntegrity]</c>), naming a declared family, and an integrity column records its reason (FR-008);
+/// EfSchemaContentDeclarationTests holds the declaration complete against every module's model;</item>
+/// <item>every column a store reads through a family's chain is declared content by that family, so the declaration is
+/// at least as complete as the call sites the restamp rule used to infer content from;</item>
+/// <item>every write that changes a declared content column stamps the row again in the same member, itself or through a
 /// helper that does, so its stamp always describes its content: a row read at an older version and written back is
-/// upgraded, never left claiming the old version over content now in the current format (FR-014). A content column is
-/// one the tree names as such, or one any store reads through its family's chain;</item>
-/// <item>every read of an Identity content column goes through the family's chain (FR-009);</item>
+/// upgraded, never left claiming the old version over content now in the current format (FR-014);</item>
+/// <item>every read of a declared content column, in every EF persistence source that can see its declaration, goes
+/// through the family's chain or deserializes nothing, so no content is parsed or compared from a stamp other than the
+/// current one without the chain (FR-009);</item>
 /// <item>every upcaster ships a committed fixture pair, and a committed fixture is frozen: editing, deleting or adding
 /// one without recording it in <c>Baselines/schema-upcaster-fixtures.sha256</c> fails the build (FR-022, SC-005);</item>
 /// <item>every upcaster, and every committed fixture pair, is proven by a test class deriving from
@@ -243,89 +249,193 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
         }
     };
 
+    /// <summary>
+    /// Every production source a stored row's content can be read or written in: every file of an EF persistence project,
+    /// read whether or not it mentions a stamp, and every other source <see cref="Production"/> reads. A test project that
+    /// lives under <c>src/</c> is left out, since its tests corrupt rows on purpose.
+    /// </summary>
+    private static SchemaFamilyScan Persistence { get; } = SchemaFamilyScan.Of(
+        Directory.EnumerateFiles(Path.Join(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(file => !IsBuildOutput(file) && !HasSegment(RepoRoot, file, "Migrations") && !HasSegment(RepoRoot, file, "tests"))
+            .Select(file => (Path: Path.GetRelativePath(RepoRoot, file), Text: File.ReadAllText(file)))
+            .Where(source => IsPersistenceSource(source.Path) || MentionsSchema(source.Text)));
+
+    /// <summary>A source of an EF persistence project: one under a directory named EntityFrameworkCore or EntityFramework.</summary>
+    private static bool IsPersistenceSource(string path) =>
+        HasSegment(RepoRoot, Path.Join(RepoRoot, path), "EntityFrameworkCore") || HasSegment(RepoRoot, Path.Join(RepoRoot, path), "EntityFramework");
+
+    private static bool MentionsSchema(string text) =>
+        text.Contains("SchemaFamily", StringComparison.Ordinal) ||
+        text.Contains("SchemaVersion", StringComparison.Ordinal) ||
+        text.Contains("EfSchemaUpcaster", StringComparison.Ordinal);
+
+    [Fact]
+    public void Every_content_and_integrity_declaration_names_a_declared_family() =>
+        AssertNone(Production.ColumnDeclarationViolations(), "A family's content and integrity columns are declared beside it, naming it by its " +
+            "SchemaFamily constant, the entity with typeof and each column with nameof; an integrity column records why it is compared " +
+            "as stored bytes (spec 180, FR-008 and FR-009):");
+
+    [Fact]
+    public void Every_column_a_store_upcasts_is_declared_content_by_its_family() =>
+        AssertNone(Persistence.UpcastDeclarationViolations(), "A column a store reads through a family's chain is that family's content, so the " +
+            "family declares it with [EfSchemaContent] and the read and restamp rules hold every other read and write of it " +
+            "(spec 180, FR-009 and FR-014):");
+
     [Fact]
     public void Every_in_place_content_rewrite_restamps_the_row() =>
-        AssertNone(Production.RestampViolations(), "A write that rewrites a row's content column in place writes it in the current format, so it " +
+        AssertNone(Persistence.RestampViolations(), "A write that changes a declared content column writes it in the current format, so it " +
             "stamps the row with the current version in the same member; left at an older stamp, the next read would upcast " +
             "content that is already current (spec 180, FR-014):");
 
-    /// <summary>Every Identity source: its entities, its stores and its adapters', read whether or not they mention a stamp.</summary>
-    private static SchemaFamilyScan Identity { get; } = SchemaFamilyScan.Of(
-        Directory.EnumerateFiles(Path.Join(RepoRoot, "src", "essentials", "Foundation", "Identity"), "*.cs", SearchOption.AllDirectories)
-            .Where(file => !IsBuildOutput(file) && !HasSegment(RepoRoot, file, "Migrations"))
-            .Select(file => (Path: Path.GetRelativePath(RepoRoot, file), Text: File.ReadAllText(file))));
-
     /// <summary>
-    /// The two reads of the caller's new tenant-membership row, not a stored one: EfTenantMembershipStore serializes its
-    /// sets in the current format, and it carries no stamp until the coordinator prepares it, so there is nothing to upcast.
+    /// The reads of a declared content column that deserialize no stored row's content past the chain, each keyed by file,
+    /// member, the read and what consumes it, with the reason. An exemption that no longer matches a read fails the build,
+    /// so the list cannot outlive the code it describes, and it excuses that one use, not every read in its member.
     /// </summary>
-    private static readonly IReadOnlySet<(string File, string Member, string Receiver)> IdentityIncomingRowReads =
-        new HashSet<(string, string, string)>
+    private static readonly IReadOnlyDictionary<(string File, string Member, string Read, string Consumer), string> ContentReadExemptions =
+        new Dictionary<(string File, string Member, string Read, string Consumer), string>
         {
-            ("EfIdentityAuthorityRelationshipCoordinator.cs", "MutateMembershipAsync", "membership"),
-            ("EfIdentityAuthorityRelationshipCoordinator.cs", "Apply", "source")
+            [("EfIdentityAuthorityRelationshipCoordinator.cs", "MutateMembershipAsync", "membership.RoleIdsJson", "Fingerprint(...)")] =
+                "The caller's new tenant membership, serialized in the current format by EfTenantMembershipStore and not yet stamped, " +
+                "fingerprinted for replay; no stored row.",
+            [("EfIdentityAuthorityRelationshipCoordinator.cs", "MutateMembershipAsync", "membership.DirectPermissionsJson", "Fingerprint(...)")] =
+                "The caller's new tenant membership, serialized in the current format by EfTenantMembershipStore and not yet stamped, " +
+                "fingerprinted for replay; no stored row.",
+            [("Elsa3ImportRecordCodec.cs", "ReadCollection", "record.ContentJson", "EnsureEnvelope(...)")] =
+                "The content hash check, an integrity clause over the stored bytes evaluated at the row's stamp before the upcast (FR-008).",
+            [("Elsa3ImportRecordCodec.cs", "ReadReceipt", "record.ContentJson", "EnsureEnvelope(...)")] =
+                "The content hash check, an integrity clause over the stored bytes evaluated at the row's stamp before the upcast (FR-008).",
+            [("EfClusterMembershipStore.cs", "Republish", "row.ReportJson", "Equals(...)")] =
+                "Compared with the report being published only on a row at the current version, whose report the chain returns " +
+                "unchanged (FR-021); a row at an older version is always rewritten and restamped (FR-014).",
+            [("EfStructuredLogStore.cs", "CommitBatchAsync", "item.PayloadJson", "new PersistedOutcome(...)")] =
+                "An EfPendingAppend: the payload this batch serialized a moment ago in the current format, not a stored row.",
+            [("EfStructuredLogStore.cs", "CommitBatchAsync", "outcome.PayloadJson", "DeserializePayload(...)")] =
+                "A PersistedOutcome this batch built from its pending appends, in the current format, not a stored row.",
+            [("EfStructuredLogStore.cs", "ToEntry", "outcome.PayloadJson", "DeserializePayload(...)")] =
+                "A PersistedOutcome built by this batch, or read from an append operation's OutcomeJson after the chain upcast it; " +
+                "its payload is a field of that document, upcast with it, not the records' column.",
+            [("StructuredLogAppendFingerprint.cs", "Compute", "item.PayloadJson", "Append(...)")] =
+                "An EfPendingAppend of the batch being appended, serialized in the current format; the fingerprint of an incoming " +
+                "batch, not a stored row."
         };
 
     /// <summary>
-    /// Identity's coordinators read a user's and a role's registries outside any mapper, and one that read a registry
-    /// past the chain passed every store test, because Identity has only ever had one version (#2100 review). Every read
-    /// of an Identity content column - every string column its entities map whose name ends in Json - goes through the
-    /// family's chain (spec 180, FR-009). IdentityIamContentUpgradeTests proves the upgrade those writes call covers every
-    /// such column.
+    /// Every read of a declared content column goes through its family's chain, from the row's stamp, so a row stamped at
+    /// an older version is upcast before anything deserializes it (spec 180, FR-009). The columns come from the families'
+    /// <c>[EfSchemaContent]</c> declarations, which EfSchemaContentDeclarationTests holds complete against every module's
+    /// model; a family EF materializes directly meets the rule through the materialization interceptor, which reads its
+    /// rows at the current version alone.
     /// </summary>
     /// <remarks>
-    /// Scoped to Identity on purpose: a tree-wide rule would have to know which columns are content, and the tree does not
-    /// say. The same column name is a content document in one family and a projection a query compares in SQL in another;
-    /// an integrity clause reads a row's stored bytes before any upcast, by design (FR-008); and telling a stored row from
-    /// a freshly built replacement copied into it takes data flow this syntax-only guard does not have. Identity's
-    /// entities carry none of that ambiguity: each such column is an id or permission set, read and written only here.
+    /// Tree-wide over every EF persistence source, where the Identity-only pin this replaces could not be, since nothing
+    /// said which columns were content. A read that deserializes nothing - a copy into the same column of another row, a
+    /// presence check, model configuration - is no violation; a read of a freshly built row, or of stored bytes an integrity
+    /// clause compares (FR-008), is exempted by name with its reason, because telling it from a stored row's content takes
+    /// data flow this syntax-only guard does not have.
     /// </remarks>
     [Fact]
-    public void Every_Identity_content_column_is_read_through_its_chain()
+    public void Every_declared_content_column_is_read_through_its_chain()
     {
-        var (violations, columns, reads) = Identity.ContentReads(IsIdentityEntityFile, IsIdentityStoreFile, IdentityIncomingRowReads);
+        var (violations, unused, reads) = Persistence.ContentReads(IsPersistenceSource, ProjectVisibility.Sees, ContentReadExemptions);
 
-        AssertNone(violations, "An Identity content column is read through its family's chain, from the row's stamp, so an older row " +
-            "is upcast before it is parsed (spec 180, FR-009):");
-        Assert.True(columns.Count >= 14, $"Expected Identity's fourteen content column names; found {columns.Count}: {string.Join(", ", columns)}.");
-        Assert.True(reads >= 40, $"Expected the Identity stores to keep reading their content columns; found {reads} reads.");
+        AssertNone(violations, "A declared content column is read through its family's chain, from the row's stamp, so an older row is " +
+            "upcast before it is parsed or compared with anything this build serializes (spec 180, FR-009):");
+        AssertNone(unused, "Every exemption from the content read rule still matches a read:");
+        Assert.True(reads >= 200, $"Expected the EF stores to keep reading their content columns; found {reads} reads.");
+    }
+
+    /// <summary>
+    /// The read rule judges a source only where its project can see a declaration, so it passes vacuously if that stops
+    /// resolving: a reader in another module that references the family's, such as the Dashboard's, sees it; an unrelated
+    /// module does not, so a member there that shares a declared column's name is not judged as one.
+    /// </summary>
+    [Fact]
+    public void Read_rule_sees_a_declaration_from_its_own_and_referencing_projects_only()
+    {
+        const string runtime = "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/AssemblyInfo.cs";
+        const string secrets = "src/essentials/Secrets/Persistence/EntityFrameworkCore/AssemblyInfo.cs";
+
+        Assert.True(ProjectVisibility.Sees("src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfBookmarkStateStore.cs", runtime));
+        Assert.True(ProjectVisibility.Sees("src/essentials/Workflows/Dashboard/Persistence/EntityFrameworkCore/Stores/EfWorkflowPortfolioDataSource.cs", runtime));
+        Assert.False(ProjectVisibility.Sees("src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfBookmarkStateStore.cs", secrets));
     }
 
     [Fact]
-    public void Content_read_detector_flags_a_registry_read_past_the_chain()
+    public void Content_read_detector_flags_a_read_past_the_chain_and_accepts_one_that_deserializes_nothing()
     {
-        var scan = SchemaFamilyScan.Of(
-        [
-            ("Entities/Row.cs", """public sealed class Row { public string SchemaVersion { get; set; } = ""; public string ClaimIdsJson { get; set; } = "[]"; public string Name { get; set; } = ""; }"""),
-            ("Stores/Store.cs",
-                """
-                public sealed class Store
-                {
-                    Set Raw(Row row) => Parse(row.ClaimIdsJson);
-                    Set Through(Row row) => ReadSet(row.SchemaVersion, "rows", nameof(row.ClaimIdsJson), row.ClaimIdsJson);
-                    Set Incoming(Row caller) => Parse(caller.ClaimIdsJson);
-                    void Write(Row row, Set ids) { Upgrade(row); row.ClaimIdsJson = Serialize(ids); }
-                    static Set ReadSet(string? stamp, string table, string column, string json) => Parse(Orders.Chain.Upcast(stamp, table, column, json));
-                    static void Upgrade(Row row) { row.ClaimIdsJson = Orders.Chain.Upcast(row.SchemaVersion, "rows", nameof(row.ClaimIdsJson), row.ClaimIdsJson); row.SchemaVersion = Orders.Chain.CurrentVersion; }
-                }
-                """)
-        ]);
+        var scan = Scan(
+            """
+            [assembly: EfSchemaFamily(Orders.SchemaFamily, "Sales", Orders.SchemaVersion)]
+            [assembly: EfSchemaContent(Orders.SchemaFamily, typeof(Row), nameof(Row.ClaimIdsJson), nameof(Row.ContentJson))]
+            [assembly: EfSchemaIntegrity(Orders.SchemaFamily, typeof(Row), nameof(Row.DigestJson), "Compared as stored bytes.")]
 
-        var (violations, columns, _) = scan.ContentReads(
-            path => path.StartsWith("Entities/", StringComparison.Ordinal),
-            path => path.StartsWith("Stores/", StringComparison.Ordinal),
-            new HashSet<(string, string, string)> { ("Store.cs", "Incoming", "caller") });
+            public static class Orders
+            {
+                public const string SchemaVersion = "1";
+                public const string SchemaFamily = "Orders";
+                public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(Orders).Assembly, SchemaFamily);
+            }
 
-        Assert.Equal(["ClaimIdsJson"], columns);
+            public sealed class Store
+            {
+                Set Raw(Row row) => Parse(row.ClaimIdsJson);
+                Set Through(Row row) => ReadSet(row.SchemaVersion, "rows", nameof(row.ClaimIdsJson), row.ClaimIdsJson);
+                Set Incoming(Row caller) => Parse(caller.ClaimIdsJson);
+                bool Present(Row row) => row.ContentJson is not null && !string.IsNullOrWhiteSpace(row.ClaimIdsJson);
+                void Copy(Row row, Row replacement) { row.ContentJson = replacement.ContentJson; row.SchemaVersion = replacement.SchemaVersion; }
+                Row Fresh(Row source) => new() { ContentJson = source.ContentJson, SchemaVersion = Orders.SchemaVersion };
+                void Configure(Builder b) => b.Property(x => x.ContentJson).IsRequired();
+                bool Digest(Row row) => Hash(row.DigestJson) == row.Hash;
+                static Set ReadSet(string? stamp, string table, string column, string json) => Parse(Orders.Chain.Upcast(stamp, table, column, json));
+            }
+            """);
+
+        var (violations, unused, _) = scan.ContentReads(
+            _ => true,
+            (_, _) => true,
+            new Dictionary<(string, string, string, string), string>
+            {
+                [("Fixture.cs", "Incoming", "caller.ClaimIdsJson", "Parse(...)")] = "new row",
+                [("Fixture.cs", "Gone", "row.ClaimIdsJson", "Parse(...)")] = "stale"
+            });
+
         var violation = Assert.Single(violations);
-        Assert.StartsWith("Stores/Store.cs(3): reads 'row.ClaimIdsJson'", violation);
+        Assert.StartsWith("Fixture.cs(14): reads 'row.ClaimIdsJson' in 'Raw' (Parse(...))", violation);
+        Assert.StartsWith("Fixture.cs, Gone, row.ClaimIdsJson, Parse(...)", Assert.Single(unused));
     }
 
-    private static bool IsIdentityEntityFile(string path) =>
-        path.Replace(Path.DirectorySeparatorChar, '/').StartsWith("src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/Entities/", StringComparison.Ordinal);
+    /// <summary>A family EF materializes directly meets the read rule through the interceptor, so its content reads are not judged.</summary>
+    [Fact]
+    public void Content_read_detector_leaves_a_family_EF_materializes_to_the_interceptor()
+    {
+        var scan = Scan(
+            """
+            [assembly: EfSchemaFamily(Designs.SchemaFamily, "Design", Designs.SchemaVersion)]
+            [assembly: EfSchemaContent(Designs.SchemaFamily, typeof(Plan), nameof(Plan.PlanJson))]
 
-    private static bool IsIdentityStoreFile(string path) =>
-        path.Replace(Path.DirectorySeparatorChar, '/').Contains("/EntityFrameworkCore/Stores/", StringComparison.Ordinal);
+            public static class Designs
+            {
+                public const string SchemaVersion = "1";
+                public const string SchemaFamily = "Designs";
+                public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(Designs).Assembly, SchemaFamily);
+            }
+
+            public abstract class DesignContext : DbContext, IEfSchemaVersionedContext
+            {
+                EfSchemaChain IEfSchemaVersionedContext.SchemaChain => Designs.Chain;
+            }
+
+            public sealed class Store
+            {
+                PlanValue Read(Plan row) => Parse(row.PlanJson);
+                void Write(Plan row, PlanValue plan) => row.PlanJson = Serialize(plan);
+            }
+            """);
+
+        Assert.Empty(scan.ContentReads(_ => true, (_, _) => true, new Dictionary<(string, string, string, string), string>()).Violations);
+        Assert.Empty(scan.RestampViolations());
+    }
 
     /// <summary>
     /// The rules pass vacuously if the scan stops finding what they judge, so pin floors rather than counts: the
@@ -342,11 +452,19 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
         Assert.True(Production.Handles.Count >= 28, $"Expected a chain handle for each of at least twenty-eight families; found {Production.Handles.Count}.");
         Assert.True(Production.Stamps.Count >= 60, $"Expected the EF stores to keep stamping their families' constants; found {Production.Stamps.Count} stamps.");
         Assert.True(Production.MaterializedFamilies.Count >= 2, $"Expected the two design contexts EF materializes directly; found {Production.MaterializedFamilies.Count}.");
-        Assert.True(Production.ContentRewrites.Count >= 20, $"Expected the EF stores' in-place content rewrites; found {Production.ContentRewrites.Count}.");
+        Assert.True(Persistence.ContentRewrites.Count >= 60, $"Expected the EF stores' in-place content rewrites; found {Persistence.ContentRewrites.Count}.");
+        Assert.True(Persistence.BulkContentWrites().Count >= 1, $"Expected the bulk update of a workflow draft's state; found {Persistence.BulkContentWrites().Count}.");
+        Assert.True(Production.DeclaredColumns().Count >= 100, $"Expected the families' content and integrity declarations; found {Production.DeclaredColumns().Count} columns.");
         Assert.Superset(
-            new HashSet<string> { "ClaimIdsJson", "LoginIdsJson", "RoleLinkIdsJson", "TokenIdsJson", "TenantMembershipIdsJson", "UserLinkIdsJson", "RoleIdsJson" },
-            Production.ContentColumns.ToHashSet());
-        Assert.Contains(("Upgrade", 1, 0), Production.StampingMethods);
+            new HashSet<string>
+            {
+                "ClaimIdsJson", "LoginIdsJson", "RoleLinkIdsJson", "TokenIdsJson", "TenantMembershipIdsJson", "UserLinkIdsJson", "RoleIdsJson",
+                "ContentJson", "PayloadJson", "MetadataJson", "OutcomeJson", "PendingPostCommitWorkIdsJson", "ConsumedSchedulerWorkItemIdsJson",
+                "Content", "Payload", "ValueJson", "ReportJson"
+            },
+            Persistence.ContentColumns.ToHashSet());
+        Assert.Superset(new HashSet<string> { "WorkflowsDesign", "ActivitiesDesign" }, Persistence.MaterializedFamilyNames.ToHashSet());
+        Assert.Contains(("Upgrade", 1, 0), Persistence.StampingMethods);
     }
 
     [Theory]
@@ -395,6 +513,8 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
         """
         [assembly: EfSchemaFamily(Orders.SchemaFamily, "Sales", Orders.SchemaVersion, Upcasters = new[] { typeof(OrdersOneToTwo), typeof(OrdersTwoToThree) })]
         [assembly: Elsa.Persistence.EntityFramework.EfSchemaFamilyAttribute(Invoices.SchemaFamily, "Sales", Invoices.SchemaVersion)]
+        [assembly: EfSchemaContent(Orders.SchemaFamily, typeof(Row), nameof(Row.ContentJson), nameof(Row.ClaimIdsJson))]
+        [assembly: Elsa.Persistence.EntityFramework.EfSchemaIntegrityAttribute(Invoices.SchemaFamily, typeof(Invoice), nameof(Invoice.DigestJson), "Compared as stored bytes.")]
 
         public static class Orders
         {
@@ -435,6 +555,11 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
             void Upgrade(Row row) => row.SchemaVersion = Invoices.Chain.CurrentVersion;
 
             Cursor Page() => new() { SchemaVersion = 1 };
+
+            Task Bulk(IQueryable<Row> rows, string content) =>
+                rows.ExecuteUpdateAsync(updates => updates
+                    .SetProperty(x => x.ContentJson, content)
+                    .SetProperty(x => EF.Property<string>(x, EfSchemaVersionMaterializationInterceptor.PropertyName), Orders.Chain.CurrentVersion));
 
             void Rewrite(Row row, Order order)
             {
@@ -658,6 +783,8 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
         {
             "a content rewrite that leaves the row's old stamp",
             """
+            [assembly: EfSchemaContent("Orders", typeof(Row), nameof(Row.ContentJson))]
+
             public sealed class Store
             {
                 void Touch(Row row, Order order)
@@ -670,8 +797,10 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
             "rewrites 'row.ContentJson' but never stamps 'row'"
         },
         {
-            "a registry declared content by the chain helper that reads it, then rewritten without its stamp",
+            "a declared registry rewritten without its stamp",
             """
+            [assembly: EfSchemaContent(Users.SchemaFamily, typeof(Row), nameof(Row.ClaimIdsJson))]
+
             public sealed class Store
             {
                 Set Read(Row row) => ReadSet(row.SchemaVersion, "users", nameof(row.ClaimIdsJson), row.ClaimIdsJson);
@@ -686,6 +815,88 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
             }
             """,
             "rewrites 'row.ClaimIdsJson' but never stamps 'row'"
+        },
+        {
+            "a bulk update that sets a content column but not the stamp",
+            """
+            [assembly: EfSchemaContent("Designs", typeof(Draft), nameof(Draft.StateSource))]
+
+            public sealed class Store
+            {
+                Task Update(IQueryable<Draft> rows, string state) =>
+                    rows.ExecuteUpdateAsync(updates => updates.SetProperty(x => x.StateSource, state).SetProperty(x => x.LastModifiedAt, now));
+            }
+            """,
+            "sets 'StateSource' in a bulk update that never sets the row's SchemaVersion"
+        },
+        {
+            "a column a store upcasts through a family's chain that the family does not declare content",
+            """
+            [assembly: EfSchemaFamily(Orders.SchemaFamily, "Sales", Orders.SchemaVersion)]
+            [assembly: EfSchemaContent(Orders.SchemaFamily, typeof(Row), nameof(Row.ContentJson))]
+
+            public static class Orders
+            {
+                public const string SchemaVersion = "1";
+                public const string SchemaFamily = "Orders";
+                public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(Orders).Assembly, SchemaFamily);
+            }
+
+            public sealed class Store
+            {
+                Order Read(Row row) => Parse(Orders.Chain.Upcast(row.SchemaVersion, "orders", nameof(row.PayloadJson), row.PayloadJson));
+            }
+            """,
+            "upcasts 'PayloadJson' through the 'Orders' chain, but 'Orders' does not declare it content"
+        },
+        {
+            "a content column read and deserialized past the chain",
+            """
+            [assembly: EfSchemaFamily("Orders", "Sales", "1")]
+            [assembly: EfSchemaContent("Orders", typeof(Row), nameof(Row.PayloadJson))]
+
+            public sealed class Store
+            {
+                Order Read(Row row) => JsonSerializer.Deserialize<Order>(row.PayloadJson);
+            }
+            """,
+            "reads 'row.PayloadJson' in 'Read' (Deserialize(...)) without its family's chain"
+        },
+        {
+            "a content column read past the chain through a conditional access",
+            """
+            [assembly: EfSchemaFamily("Orders", "Sales", "1")]
+            [assembly: EfSchemaContent("Orders", typeof(Row), nameof(Row.PayloadJson))]
+
+            public sealed class Store
+            {
+                Order? Read(Row? row) => Parse(row?.PayloadJson);
+            }
+            """,
+            "reads 'row?.PayloadJson' in 'Read' (Parse(...)) without its family's chain"
+        },
+        {
+            "a content declaration of a family nothing declares",
+            """
+            [assembly: EfSchemaContent("Orders", typeof(Row), nameof(Row.ContentJson))]
+            """,
+            "declares a content column of 'Orders', which no [EfSchemaFamily] declares"
+        },
+        {
+            "a content declaration whose column this guard cannot resolve",
+            """
+            [assembly: EfSchemaFamily("Orders", "Sales", "1")]
+            [assembly: EfSchemaContent("Orders", typeof(Row), Columns.Content)]
+            """,
+            "declares a content column this guard cannot resolve"
+        },
+        {
+            "an integrity column with no reason",
+            """
+            [assembly: EfSchemaFamily("Orders", "Sales", "1")]
+            [assembly: EfSchemaIntegrity("Orders", typeof(Row), nameof(Row.DigestJson), "")]
+            """,
+            "declares an integrity column 'Row.DigestJson' with no reason"
         },
         {
             "a stamp of a constant no declaration names current",
@@ -720,6 +931,8 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
         private static readonly string[] CheckMethods = ["EnsureReadable", "Readable", "NotReadable", "IsReadable", "EnsureCurrent"];
         private static readonly string[] DeclarationNames = ["EfSchemaFamily", "EfSchemaFamilyAttribute"];
         private static readonly string[] UpcasterNames = ["EfSchemaUpcaster", "EfSchemaUpcasterAttribute"];
+        private static readonly string[] ContentNames = ["EfSchemaContent", "EfSchemaContentAttribute"];
+        private static readonly string[] IntegrityNames = ["EfSchemaIntegrity", "EfSchemaIntegrityAttribute"];
 
         private readonly Dictionary<string, string?> _constants = new(StringComparer.Ordinal);
         private readonly List<(string Location, string Class, string Value)> _familyConstants = [];
@@ -736,6 +949,13 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
         public List<(string Location, string Context, string? FamilyClass)> MaterializedFamilies { get; } = [];
 
         /// <summary>
+        /// Every <c>[EfSchemaContent(family, typeof(Entity), columns...)]</c> and <c>[EfSchemaIntegrity(family,
+        /// typeof(Entity), column, reason)]</c> declaration: where it is, the family, the entity type and columns it names,
+        /// and for an integrity column the reason.
+        /// </summary>
+        public List<(string Location, string Path, ExpressionSyntax? Family, string? Entity, ExpressionSyntax[] Columns, bool Integrity, ExpressionSyntax? Reason)> ColumnDeclarations { get; } = [];
+
+        /// <summary>
         /// Every concrete class deriving directly from <c>EfSchemaUpcasterProof&lt;TUpcaster, TValue&gt;(family, store)</c>:
         /// where it is, the upcaster it proves, and the family it names.
         /// </summary>
@@ -745,14 +965,12 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
         public IReadOnlyList<(string Path, string Class, string? From, string? To)> UpcasterVersions() =>
             _upcasters.Select(upcaster => (upcaster.Path, upcaster.Class, Resolve(upcaster.From), Resolve(upcaster.To))).ToArray();
 
-        /// <summary>The columns a family's stores keep their content document in, by the names the tree gives them.</summary>
-        private static readonly string[] NamedContentColumns = ["ContentJson", "PayloadJson", "Content", "Payload", "ValueJson", "OutcomeJson"];
-
         private readonly List<(string Path, CompilationUnitSyntax Root)> _roots = [];
-        private readonly List<(string Location, string Row, string Column, SyntaxNode? Member)> _columnWrites = [];
+        private readonly List<(string Location, string Row, string Column, SyntaxNode? Member)> _memberWrites = [];
         private readonly List<(string Name, int Arity, string[] Parameters, SyntaxNode Node)> _methods = [];
         private IReadOnlySet<(string Name, int Arity)>? _upcastingMethods;
         private IReadOnlySet<(string Name, int Arity, int Parameter)>? _stampingMethods;
+        private IReadOnlyList<(string Location, string Path, string? Family, string? Entity, string? Column, bool Integrity, string? Reason)>? _declaredColumns;
         private IReadOnlySet<string>? _contentColumns;
 
         /// <summary>
@@ -781,55 +999,129 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
                 .ToArray());
 
         /// <summary>
-        /// The content columns this rule knows: the names the tree gives its content documents, and every column a store
-        /// names, by <c>nameof</c>, when it reads the column through its family's chain. A column one store upcasts is
-        /// content wherever it is written.
+        /// Every content and integrity column the tree declares, resolved: the family, the entity type, the column, whether
+        /// it is an integrity column, and that column's reason. A part this guard cannot resolve reads null.
         /// </summary>
-        public IReadOnlySet<string> ContentColumns => _contentColumns ??= NamedContentColumns
-            .Concat(_roots.SelectMany(source => source.Root.DescendantNodes().OfType<InvocationExpressionSyntax>())
-                .Where(invocation => UpcastingMethods.Contains((InvokedName(invocation), invocation.ArgumentList.Arguments.Count)))
-                .SelectMany(invocation => invocation.ArgumentList.Arguments)
-                .Select(argument => NameOf(argument.Expression))
-                .OfType<string>())
-            .ToHashSet(StringComparer.Ordinal);
+        public IReadOnlyList<(string Location, string Path, string? Family, string? Entity, string? Column, bool Integrity, string? Reason)> DeclaredColumns() =>
+            _declaredColumns ??= ColumnDeclarations
+                .SelectMany(declaration => (declaration.Columns.Length == 0 ? [null] : declaration.Columns.Cast<ExpressionSyntax?>())
+                    .Select(column => (declaration.Location, declaration.Path, Resolve(declaration.Family), declaration.Entity, Column: ColumnName(column),
+                        declaration.Integrity, Reason: declaration.Reason is null ? null : Resolve(declaration.Reason))))
+                .ToArray();
+
+        /// <summary>
+        /// The families EF materializes directly (<c>IEfSchemaVersionedContext</c>): the materialization interceptor reads
+        /// their rows at the current version alone, and their context stamps every row it writes, so their content columns
+        /// meet the read and write rules by that mechanism rather than at each call site.
+        /// </summary>
+        public IReadOnlySet<string> MaterializedFamilyNames =>
+            MaterializedFamilies
+                .Select(context => context.FamilyClass is null ? null : _familyConstants.FirstOrDefault(constant => constant.Class == context.FamilyClass).Value)
+                .OfType<string>()
+                .ToHashSet(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The content columns the read and write rules hold to the chain and the stamp: every column a family's
+        /// <c>[EfSchemaContent]</c> declares, apart from those of a family EF materializes directly. Matched by name, since
+        /// this guard reads syntax: a name one family declares content is held to both rules wherever it is read or written,
+        /// the loud direction.
+        /// </summary>
+        public IReadOnlySet<string> ContentColumns => _contentColumns ??= HeldContent().Select(column => column.Column).ToHashSet(StringComparer.Ordinal);
+
+        /// <summary>The declared content columns the rules hold, each with the path of its declaration.</summary>
+        private IEnumerable<(string Column, string Path)> HeldContent()
+        {
+            var materialized = MaterializedFamilyNames;
+            return DeclaredColumns()
+                .Where(column => !column.Integrity && column.Column is not null && (column.Family is null || !materialized.Contains(column.Family)))
+                .Select(column => (column.Column!, column.Path));
+        }
 
         /// <summary>In-place writes of a content column: the receiver, the column, and whether the same member restamps it.</summary>
         public IReadOnlyList<(string Location, string Row, string Column, bool Restamped)> ContentRewrites =>
-            _columnWrites
+            _memberWrites
                 .Where(write => ContentColumns.Contains(write.Column))
                 .Select(write => (write.Location, write.Row, write.Column, Restamped: write.Member is not null && StampsRow(write.Member, write.Row, StampingMethods)))
                 .ToArray();
 
         /// <summary>
-        /// Every read of a content column of the entities in the files <paramref name="isEntityFile"/> accepts, in the
-        /// files <paramref name="isStoreFile"/> accepts, that does not go through the family's chain: one that is not an
-        /// argument of an upcasting method, a <c>nameof</c>, or the target of a write, and that
-        /// <paramref name="exempt"/> does not name by file, member and receiver. A content column there is every string
-        /// property whose name ends in <c>Json</c>.
+        /// Every read of a declared content column (<see cref="ContentColumns"/>) in the files <paramref name="isReader"/>
+        /// accepts, whose source <paramref name="sees"/> the declaration from, that does not go through the family's chain;
+        /// and the exemptions that matched nothing. A read goes through the chain when it is an argument of an upcasting
+        /// method. It deserializes nothing when it is a <c>nameof</c>, the target of a write, a copy into the same column of
+        /// another row (<c>a.C = b.C</c>, or <c>C = b.C</c> in an initializer, whose target the restamp rule then holds to a
+        /// stamp), a presence check (<c>is null</c>, <c>== null</c>, <c>string.IsNullOrWhiteSpace</c>), or a column named in
+        /// model configuration (<c>Property(x =&gt; x.C)</c>). Anything else is a violation unless <paramref name="exempt"/>
+        /// names it by file, member, the read, and what consumes it (<see cref="Consumer"/>), with the reason.
         /// </summary>
-        public (IReadOnlyList<string> Violations, IReadOnlySet<string> Columns, int Reads) ContentReads(
-            Func<string, bool> isEntityFile,
-            Func<string, bool> isStoreFile,
-            IReadOnlySet<(string File, string Member, string Receiver)> exempt)
+        public (IReadOnlyList<string> Violations, IReadOnlyList<string> UnusedExemptions, int Reads) ContentReads(
+            Func<string, bool> isReader,
+            Func<string, string, bool> sees,
+            IReadOnlyDictionary<(string File, string Member, string Read, string Consumer), string> exempt)
         {
-            var columns = _roots.Where(source => isEntityFile(source.Path))
-                .SelectMany(source => source.Root.DescendantNodes().OfType<PropertyDeclarationSyntax>())
-                .Where(property => property.Type is PredefinedTypeSyntax { Keyword.ValueText: "string" } &&
-                                   property.Identifier.ValueText.EndsWith("Json", StringComparison.Ordinal))
-                .Select(property => property.Identifier.ValueText)
-                .ToHashSet(StringComparer.Ordinal);
-            var reads = _roots.Where(source => isStoreFile(source.Path))
-                .SelectMany(source => source.Root.DescendantNodes().OfType<MemberAccessExpressionSyntax>()
-                    .Where(access => columns.Contains(access.Name.Identifier.ValueText) && !IsWriteTarget(access) && NameOf(access.Parent?.Parent?.Parent as ExpressionSyntax) is null)
+            var declarations = HeldContent().ToLookup(column => column.Column, column => column.Path, StringComparer.Ordinal);
+            var reads = _roots.Where(source => isReader(source.Path))
+                .SelectMany(source => source.Root.DescendantNodes().OfType<ExpressionSyntax>()
+                    .Where(access => ColumnOf(access) is { } column && declarations[column].Any(declaration => sees(Normalize(source.Path), declaration)) &&
+                                     !IsWriteTarget(access) && !InNameOf(access))
                     .Select(access => (source.Path, Access: access)))
                 .ToArray();
-            var violations = reads
-                .Where(read => !(read.Access.Parent is ArgumentSyntax { Parent.Parent: InvocationExpressionSyntax invocation } &&
-                                 UpcastingMethods.Contains((InvokedName(invocation), invocation.ArgumentList.Arguments.Count))))
-                .Where(read => !exempt.Contains((Path.GetFileName(read.Path), MemberName(read.Access), read.Access.Expression.ToString())))
-                .Select(read => $"{Locate(read.Path, read.Access)}: reads '{read.Access}' without its family's chain; pass it to the chain's Upcast, or a " +
-                                "helper that does, with the row's stamp (spec 180, FR-009).");
-            return (Ordered(violations), columns, reads.Length);
+            var unchained = reads
+                .Where(read => !IsChained(read.Access) && !IsCopy(read.Access) && !IsPresenceCheck(read.Access) && !IsModelConfiguration(read.Access))
+                .Select(read => (read.Path, read.Access, Key: (File: Path.GetFileName(read.Path), Member: MemberName(read.Access), Read: read.Access.ToString(), Consumer: Consumer(read.Access))))
+                .ToArray();
+            var violations = unchained
+                .Where(read => !exempt.ContainsKey(read.Key))
+                .Select(read => $"{Locate(read.Path, read.Access)}: reads '{read.Access}' in '{read.Key.Member}' ({read.Key.Consumer}) without its family's chain; " +
+                                "pass it to the chain's Upcast, or a helper that does, with the row's stamp (spec 180, FR-009).");
+            var unused = exempt.Keys
+                .Where(key => !unchained.Any(read => read.Key == key))
+                .Select(key => $"{key.File}, {key.Member}, {key.Read}, {key.Consumer}: exempts a read that no longer exists; remove the exemption.");
+            return (Ordered(violations), Ordered(unused), reads.Length);
+        }
+
+        /// <summary>
+        /// Every content or integrity declaration this guard cannot hold the tree to: one naming a family no
+        /// <c>[EfSchemaFamily]</c> declares, one whose entity or column is not a <c>typeof</c>, <c>nameof</c>, literal or
+        /// constant, and an integrity column with no reason.
+        /// </summary>
+        public IReadOnlyList<string> ColumnDeclarationViolations()
+        {
+            var families = Declared().Select(declaration => declaration.Family).OfType<string>().ToHashSet(StringComparer.Ordinal);
+            return Ordered(DeclaredColumns().SelectMany(column =>
+            {
+                var kind = column.Integrity ? "an integrity column" : "a content column";
+                var problems = new List<string>();
+                if (column.Family is null || !families.Contains(column.Family))
+                    problems.Add($"{column.Location}: declares {kind} of '{column.Family ?? "a family this guard cannot resolve"}', which no [EfSchemaFamily] declares.");
+                if (column.Entity is null || column.Column is null)
+                    problems.Add($"{column.Location}: declares {kind} this guard cannot resolve; name the entity with typeof and the column with nameof, a literal or a constant.");
+                if (column.Integrity && string.IsNullOrWhiteSpace(column.Reason))
+                    problems.Add($"{column.Location}: declares an integrity column '{column.Entity}.{column.Column}' with no reason; record why it is compared as stored bytes.");
+                return problems;
+            }));
+        }
+
+        /// <summary>
+        /// Every column a store names, by <c>nameof</c>, when it reads it through a family's chain, that the family does
+        /// not declare content: the chain the call goes through when it calls <c>&lt;Module&gt;.Chain.Upcast</c> directly,
+        /// any family when it calls a helper. This keeps the declaration at least as complete as the call sites, which is
+        /// what the restamp rule inferred content from before the declaration existed.
+        /// </summary>
+        public IReadOnlyList<string> UpcastDeclarationViolations()
+        {
+            var content = DeclaredColumns().Where(column => !column.Integrity).ToArray();
+            return Ordered(_roots.SelectMany(source => source.Root.DescendantNodes().OfType<InvocationExpressionSyntax>()
+                .Where(invocation => UpcastingMethods.Contains((InvokedName(invocation), invocation.ArgumentList.Arguments.Count)))
+                .SelectMany(invocation => invocation.ArgumentList.Arguments
+                    .Select(argument => NameOf(argument.Expression))
+                    .OfType<string>()
+                    .Select(column => (Invocation: invocation, Column: column,
+                        Family: invocation.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Upcast", Expression: var handle } ? FamilyOfHandle(handle) : null)))
+                .Where(read => !content.Any(column => column.Column == read.Column && (read.Family is null || column.Family == read.Family)))
+                .Select(read => $"{Locate(source.Path, read.Invocation)}: upcasts '{read.Column}' through " +
+                                (read.Family is null ? "a family's chain, but no family declares it content" : $"the '{read.Family}' chain, but '{read.Family}' does not declare it content") +
+                                "; declare it with [EfSchemaContent] (spec 180, FR-009).")));
         }
 
         /// <summary>Every family a check names through a handle, or a <c>SchemaFamily</c> constant holds.</summary>
@@ -849,7 +1141,8 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
         public IReadOnlyList<string> AllViolations() =>
         [
             .. DeclarationViolations(), .. HandleViolations(), .. ChainViolations(), .. UpcasterViolations(),
-            .. MaterializedFamilyViolations(), .. StampViolations(), .. RestampViolations()
+            .. MaterializedFamilyViolations(), .. StampViolations(), .. RestampViolations(), .. ColumnDeclarationViolations(),
+            .. UpcastDeclarationViolations(), .. ContentReads(_ => true, (_, _) => true, new Dictionary<(string, string, string, string), string>()).Violations
         ];
 
         /// <summary>Every declared chain's steps, resolved: the family, and the versions each upcaster reads and produces.</summary>
@@ -870,7 +1163,46 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
         public IReadOnlyList<string> RestampViolations() =>
             Ordered(ContentRewrites
                 .Where(rewrite => !rewrite.Restamped)
-                .Select(rewrite => $"{rewrite.Location}: rewrites '{rewrite.Row}.{rewrite.Column}' but never stamps '{rewrite.Row}' in the same member."));
+                .Select(rewrite => $"{rewrite.Location}: rewrites '{rewrite.Row}.{rewrite.Column}' but never stamps '{rewrite.Row}' in the same member.")
+                .Concat(BulkContentWrites()
+                    .Where(write => !write.Restamped)
+                    .Select(write => $"{write.Location}: sets '{write.Column}' in a bulk update that never sets the row's SchemaVersion.")));
+
+        /// <summary>
+        /// Every bulk update (<c>ExecuteUpdate</c>) that sets a declared content column, and whether the same update sets
+        /// the row's stamp. Such an update bypasses the change tracker, so a family EF materializes directly, whose context
+        /// stamps what it saves, is held to it too.
+        /// </summary>
+        public IReadOnlyList<(string Location, string Column, bool Restamped)> BulkContentWrites()
+        {
+            var content = DeclaredColumns().Where(column => !column.Integrity).Select(column => column.Column).OfType<string>().ToHashSet(StringComparer.Ordinal);
+            return _roots.SelectMany(source => source.Root.DescendantNodes().OfType<InvocationExpressionSyntax>()
+                    .Where(invocation => InvokedName(invocation) == "SetProperty" && SetTarget(invocation) is { } column && content.Contains(column))
+                    .Select(invocation => (
+                        Location: Locate(source.Path, invocation),
+                        Column: SetTarget(invocation)!,
+                        Restamped: invocation.Ancestors().OfType<InvocationExpressionSyntax>().FirstOrDefault(update => InvokedName(update).StartsWith("ExecuteUpdate", StringComparison.Ordinal)) is { } update &&
+                                   update.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(set => InvokedName(set) == "SetProperty" && SetTarget(set) == "SchemaVersion"))))
+                .ToArray();
+        }
+
+        /// <summary>
+        /// The column a <c>SetProperty(x =&gt; x.Column, ...)</c> or <c>SetProperty(x =&gt; EF.Property&lt;T&gt;(x, name), ...)</c>
+        /// sets, where the name is a literal, a constant, or the stamp's own <c>ColumnName</c> or <c>PropertyName</c>.
+        /// </summary>
+        private string? SetTarget(InvocationExpressionSyntax setProperty) =>
+            setProperty.ArgumentList.Arguments.FirstOrDefault()?.Expression is LambdaExpressionSyntax { Body: var body }
+                ? body switch
+                {
+                    MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText,
+                    InvocationExpressionSyntax { ArgumentList.Arguments: [_, var name] } property when InvokedName(property) == "Property" =>
+                        name.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "ColumnName" or "PropertyName" } stamp &&
+                        Rightmost(stamp.Expression) is "EfSchemaVersion" or "EfSchemaVersionMaterializationInterceptor"
+                            ? "SchemaVersion"
+                            : Resolve(name.Expression),
+                    _ => null
+                }
+                : null;
 
         public IReadOnlyList<string> DeclarationViolations()
         {
@@ -1032,6 +1364,20 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
                 Declarations.Add((Locate(path, attribute), positional[0].Expression, positional[^1].Expression, upcasters));
             }
 
+            // A content declaration names its family, the entity type, then its columns; an integrity one a single column
+            // and its reason.
+            foreach (var attribute in root.AttributeLists
+                         .Where(list => list.Target?.Identifier.IsKind(SyntaxKind.AssemblyKeyword) == true)
+                         .SelectMany(list => list.Attributes)
+                         .Where(attribute => ContentNames.Concat(IntegrityNames).Contains(Rightmost(attribute.Name), StringComparer.Ordinal)))
+            {
+                var integrity = IntegrityNames.Contains(Rightmost(attribute.Name), StringComparer.Ordinal);
+                var positional = (attribute.ArgumentList?.Arguments ?? default).Where(argument => argument.NameEquals is null).Select(argument => argument.Expression).ToArray();
+                var entity = positional.ElementAtOrDefault(1) is TypeOfExpressionSyntax typeOf ? Rightmost(typeOf.Type) ?? typeOf.Type.ToString() : null;
+                var columns = integrity ? positional.Skip(2).Take(1).ToArray() : positional.Skip(2).ToArray();
+                ColumnDeclarations.Add((Locate(path, attribute), Normalize(path), positional.ElementAtOrDefault(0), entity, columns, integrity, integrity ? positional.ElementAtOrDefault(3) : null));
+            }
+
             foreach (var type in root.DescendantNodes().OfType<TypeDeclarationSyntax>())
             {
                 var upcaster = type.AttributeLists.SelectMany(list => list.Attributes).FirstOrDefault(attribute => UpcasterNames.Contains(Rightmost(attribute.Name), StringComparer.Ordinal));
@@ -1081,11 +1427,9 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
                     return (Locate(path, variable), owner, assemblyOf, family);
                 }));
 
-            // A column is known to be content only once every source is read, so every write that may be one is kept.
-            _columnWrites.AddRange(root.DescendantNodes().OfType<AssignmentExpressionSyntax>()
-                .Where(assignment => assignment.IsKind(SyntaxKind.SimpleAssignmentExpression) &&
-                                     assignment.Left is MemberAccessExpressionSyntax { Name.Identifier.ValueText: var column } &&
-                                     (column.EndsWith("Json", StringComparison.Ordinal) || NamedContentColumns.Contains(column, StringComparer.Ordinal)))
+            // A column is known to be content only once every declaration is read, so every member write is kept.
+            _memberWrites.AddRange(root.DescendantNodes().OfType<AssignmentExpressionSyntax>()
+                .Where(assignment => assignment.IsKind(SyntaxKind.SimpleAssignmentExpression) && assignment.Left is MemberAccessExpressionSyntax)
                 .Select(assignment => (
                     Locate(path, assignment),
                     ((MemberAccessExpressionSyntax)assignment.Left).Expression.ToString(),
@@ -1138,6 +1482,73 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
 
         private static bool IsWriteTarget(ExpressionSyntax expression) =>
             expression.Parent is AssignmentExpressionSyntax assignment && assignment.Left == expression;
+
+        /// <summary>
+        /// What consumes a read, so an exemption names the one use it excuses rather than every read in its member: the
+        /// method or type it is an argument of, the operator it is an operand of, or the kind of node it sits in.
+        /// </summary>
+        private static string Consumer(ExpressionSyntax access) => access.Parent switch
+        {
+            ArgumentSyntax { Parent.Parent: InvocationExpressionSyntax invocation } => InvokedName(invocation) + "(...)",
+            ArgumentSyntax { Parent.Parent: BaseObjectCreationExpressionSyntax creation } => creation is ObjectCreationExpressionSyntax named ? $"new {Rightmost(named.Type) ?? named.Type.ToString()}(...)" : "new(...)",
+            BinaryExpressionSyntax binary => binary.OperatorToken.ValueText,
+            AssignmentExpressionSyntax { Left: var target } => $"{target} =",
+            var parent => parent?.Kind().ToString() ?? ""
+        };
+
+        /// <summary>True when <paramref name="access"/> is an argument of an upcasting method: it goes through the chain.</summary>
+        private bool IsChained(ExpressionSyntax access) =>
+            access.Parent is ArgumentSyntax { Parent.Parent: InvocationExpressionSyntax invocation } &&
+            UpcastingMethods.Contains((InvokedName(invocation), invocation.ArgumentList.Arguments.Count));
+
+        /// <summary>True when <paramref name="access"/> is copied, unread, into the same column of another row.</summary>
+        private static bool IsCopy(ExpressionSyntax access) =>
+            access.Parent is AssignmentExpressionSyntax { Left: var target } assignment && assignment.Right == access &&
+            target switch
+            {
+                MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText == ColumnOf(access),
+                IdentifierNameSyntax name => name.Identifier.ValueText == ColumnOf(access) && assignment.Parent is InitializerExpressionSyntax,
+                _ => false
+            };
+
+        /// <summary>
+        /// The column <paramref name="expression"/> reads: <c>row.Column</c>, or <c>row?.Column</c>, whose conditional access
+        /// is read as a whole; anything else reads none.
+        /// </summary>
+        private static string? ColumnOf(ExpressionSyntax expression) => expression switch
+        {
+            MemberAccessExpressionSyntax access => access.Name.Identifier.ValueText,
+            ConditionalAccessExpressionSyntax { WhenNotNull: MemberBindingExpressionSyntax binding } => binding.Name.Identifier.ValueText,
+            _ => null
+        };
+
+        /// <summary>True when <paramref name="access"/> is only tested for presence, which no upcaster changes.</summary>
+        private static bool IsPresenceCheck(ExpressionSyntax access) => access.Parent switch
+        {
+            IsPatternExpressionSyntax { Pattern: ConstantPatternSyntax { Expression: LiteralExpressionSyntax nullLiteral } } =>
+                nullLiteral.IsKind(SyntaxKind.NullLiteralExpression),
+            IsPatternExpressionSyntax { Pattern: UnaryPatternSyntax { Pattern: ConstantPatternSyntax { Expression: LiteralExpressionSyntax nullLiteral } } } =>
+                nullLiteral.IsKind(SyntaxKind.NullLiteralExpression),
+            BinaryExpressionSyntax binary when binary.IsKind(SyntaxKind.EqualsExpression) || binary.IsKind(SyntaxKind.NotEqualsExpression) =>
+                (binary.Left == access ? binary.Right : binary.Left).IsKind(SyntaxKind.NullLiteralExpression),
+            ArgumentSyntax { Parent.Parent: InvocationExpressionSyntax invocation } =>
+                InvokedName(invocation) is "IsNullOrEmpty" or "IsNullOrWhiteSpace" && invocation.ArgumentList.Arguments.Count == 1,
+            _ => false
+        };
+
+        /// <summary>
+        /// True when <paramref name="access"/> only names its column to EF: to the model builder, <c>Property(x =&gt; x.C)</c>,
+        /// or as the target of a bulk update, <c>SetProperty(x =&gt; x.C, value)</c>, which the restamp rule holds instead.
+        /// </summary>
+        private static bool IsModelConfiguration(ExpressionSyntax access) =>
+            access.Parent is LambdaExpressionSyntax { Parent: ArgumentSyntax { Parent.Parent: InvocationExpressionSyntax invocation } argument } &&
+            (InvokedName(invocation) == "Property" || InvokedName(invocation) == "SetProperty" && invocation.ArgumentList.Arguments[0] == argument);
+
+        private static bool InNameOf(ExpressionSyntax expression) =>
+            expression.Ancestors().OfType<InvocationExpressionSyntax>().Any(invocation => NameOf(invocation) is not null);
+
+        /// <summary>A declared column's name: its <c>nameof</c>, or the literal or constant it is written as.</summary>
+        private string? ColumnName(ExpressionSyntax? expression) => NameOf(expression) ?? Resolve(expression);
 
         private static string MemberName(SyntaxNode node) =>
             node.Ancestors().OfType<MemberDeclarationSyntax>().FirstOrDefault() switch
@@ -1202,6 +1613,58 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
             $"{path.Replace(Path.DirectorySeparatorChar, '/')}({node.GetLocation().GetLineSpan().StartLinePosition.Line + 1})";
 
         private sealed record StringConstantSyntax(string Location, string Key, string Value);
+    }
+
+    /// <summary>
+    /// Which source can see which declaration: a source sees an entity's content declaration when its project is the
+    /// declaring project or references it, directly or through other projects, since only then can it name the entity at
+    /// all. The read rule matches columns by name, so this keeps a name one family declares, such as Secrets'
+    /// <c>Payload</c>, from judging an unrelated member of the same name in a project that cannot see that family.
+    /// </summary>
+    private static class ProjectVisibility
+    {
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> Owners = new(StringComparer.Ordinal);
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, IReadOnlySet<string>> Closures = new(StringComparer.Ordinal);
+        private static readonly System.Text.RegularExpressions.Regex ProjectReference = new(@"<ProjectReference\s+Include=""(?<path>[^""]+)""");
+
+        public static bool Sees(string reader, string declaration)
+        {
+            var declaring = Owner(declaration);
+            var project = Owner(reader);
+            return project == declaring || Closure(project).Contains(declaring);
+        }
+
+        /// <summary>The project file that owns <paramref name="path"/>: the nearest one in its directory or above.</summary>
+        private static string Owner(string path) => Owners.GetOrAdd(path, relative =>
+        {
+            for (var directory = Path.GetDirectoryName(Path.GetFullPath(Path.Join(RepoRoot, relative))); directory is not null; directory = Path.GetDirectoryName(directory))
+            {
+                if (Directory.EnumerateFiles(directory, "*.csproj").FirstOrDefault() is { } project)
+                    return project;
+                if (string.Equals(directory, Path.GetFullPath(RepoRoot).TrimEnd(Path.DirectorySeparatorChar), StringComparison.Ordinal))
+                    break;
+            }
+
+            throw new InvalidOperationException($"'{relative}' belongs to no project, so the read rule cannot tell what it sees.");
+        });
+
+        /// <summary>Every project <paramref name="project"/> references, directly or transitively.</summary>
+        private static IReadOnlySet<string> Closure(string project) => Closures.GetOrAdd(project, root =>
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var pending = new Stack<string>([root]);
+            while (pending.TryPop(out var current))
+            {
+                foreach (System.Text.RegularExpressions.Match reference in ProjectReference.Matches(File.ReadAllText(current)))
+                {
+                    var referenced = Path.GetFullPath(Path.Join(Path.GetDirectoryName(current)!, reference.Groups["path"].Value.Replace('\\', Path.DirectorySeparatorChar)));
+                    if (File.Exists(referenced) && seen.Add(referenced))
+                        pending.Push(referenced);
+                }
+            }
+
+            return seen;
+        });
     }
 
     /// <summary>

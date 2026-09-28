@@ -15,6 +15,19 @@ public sealed record EfSchemaFamilyDescriptor(string Name, string? Module, strin
     public IReadOnlyList<EfSchemaUpcasterDescriptor> Upcasters { get; init; } = [];
 
     /// <summary>
+    /// The family's content columns, as its <see cref="EfSchemaContentAttribute"/> declarations name them: what every
+    /// read upcasts through the chain before deserializing, and every write that changes restamps (spec 180, FR-009 and
+    /// FR-014).
+    /// </summary>
+    public IReadOnlyList<EfSchemaColumn> ContentColumns { get; init; } = [];
+
+    /// <summary>
+    /// The family's document columns compared as stored bytes rather than upcast, as its
+    /// <see cref="EfSchemaIntegrityAttribute"/> declarations name them, each with the reason (spec 180, FR-008).
+    /// </summary>
+    public IReadOnlyList<EfSchemaIntegrityColumn> IntegrityColumns { get; init; } = [];
+
+    /// <summary>
     /// The versions this declaration can read, as opaque labels in chain order ending at <see cref="CurrentVersion"/>
     /// (spec 180, FR-004): the current version and every predecessor the chain reaches from it without a gap. A version
     /// below a gap, or reached only through an upcaster that is malformed, is never in it. A store's read accepts
@@ -29,6 +42,12 @@ public sealed record EfSchemaFamilyDescriptor(string Name, string? Module, strin
     /// </summary>
     public IReadOnlyList<string> Defects => EfSchemaChainRules.Defects(CurrentVersion, Upcasters);
 }
+
+/// <summary>A content column of a family's table: the type its context maps to the table, and the property.</summary>
+public sealed record EfSchemaColumn(Type Entity, string Name);
+
+/// <summary>An integrity column of a family's table, and why it is compared as stored bytes rather than upcast.</summary>
+public sealed record EfSchemaIntegrityColumn(Type Entity, string Name, string Reason);
 
 /// <summary>
 /// One entry of a family's declared chain, read as metadata: the upcaster type, the versions its

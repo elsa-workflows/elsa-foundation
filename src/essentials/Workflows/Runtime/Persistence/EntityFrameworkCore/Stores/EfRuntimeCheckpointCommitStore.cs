@@ -335,7 +335,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
         MarkerDocument content;
         try
         {
-            var stored = RuntimeOperationalStateEfModule.Chain.Upcast(row.SchemaVersion, RuntimeOperationalStateEfModule.CheckpointCommitTableName, nameof(row.ContentJson), row.ContentJson);
+            var stored = Upcast(row, nameof(row.ContentJson), row.ContentJson);
             content = JsonSerializer.Deserialize<MarkerDocument>(stored, JsonOptions)
                       ?? throw new InvalidDataException();
         }
@@ -348,14 +348,22 @@ public sealed class EfRuntimeCheckpointCommitStore(
             !StringComparer.Ordinal.Equals(content.WorkflowExecutionId, workflowExecutionId) ||
             content.OccurredAt.UtcTicks != row.OccurredAtUtcTicks ||
             !StringComparer.Ordinal.Equals(content.Fingerprint, row.Fingerprint) ||
-            !IdsEqual(content.PendingPostCommitWorkIds, row.PendingPostCommitWorkIdsJson, "pending post-commit work") ||
-            !IdsEqual(content.ConsumedSchedulerWorkItemIds, row.ConsumedSchedulerWorkItemIdsJson, "consumed scheduler work"))
+            !IdsEqual(content.PendingPostCommitWorkIds, Upcast(row, nameof(row.PendingPostCommitWorkIdsJson), row.PendingPostCommitWorkIdsJson), "pending post-commit work") ||
+            !IdsEqual(content.ConsumedSchedulerWorkItemIds, Upcast(row, nameof(row.ConsumedSchedulerWorkItemIdsJson), row.ConsumedSchedulerWorkItemIdsJson), "consumed scheduler work"))
         {
             throw new InvalidDataException("The persisted runtime checkpoint marker content does not match its projections.");
         }
 
         return row;
     }
+
+    /// <summary>
+    /// A content column of the marker <paramref name="row"/>, upcast from its stamp to the current version. The id sets
+    /// restate the content document's, and are compared with it and returned to a replay, so they are content too (spec
+    /// 180, FR-009; #2140).
+    /// </summary>
+    private static string Upcast(RuntimeCheckpointCommitEntity row, string column, string content) =>
+        RuntimeOperationalStateEfModule.Chain.Upcast(row.SchemaVersion, RuntimeOperationalStateEfModule.CheckpointCommitTableName, column, content);
 
     private static bool IdsEqual(IReadOnlyCollection<string> content, string projectionJson, string label) =>
         content.SequenceEqual(DeserializeIds(projectionJson, label), StringComparer.Ordinal);
@@ -376,9 +384,9 @@ public sealed class EfRuntimeCheckpointCommitStore(
         }
 
         return new RuntimeCheckpointCommitStoreResult(
-            DeserializeIds(marker.PendingPostCommitWorkIdsJson, "pending post-commit work"))
+            DeserializeIds(Upcast(marker, nameof(marker.PendingPostCommitWorkIdsJson), marker.PendingPostCommitWorkIdsJson), "pending post-commit work"))
         {
-            ConsumedSchedulerWorkItemIds = DeserializeIds(marker.ConsumedSchedulerWorkItemIdsJson, "consumed scheduler work")
+            ConsumedSchedulerWorkItemIds = DeserializeIds(Upcast(marker, nameof(marker.ConsumedSchedulerWorkItemIdsJson), marker.ConsumedSchedulerWorkItemIdsJson), "consumed scheduler work")
         };
     }
 

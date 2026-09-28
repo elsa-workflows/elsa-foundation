@@ -20,13 +20,22 @@ internal sealed record SyntheticFamily(string Name, string? Module, string Curre
 internal sealed record SyntheticUpcaster(string TypeName, string? From, string? To);
 
 /// <summary>
+/// One <c>[EfSchemaContent]</c> column, or with a <see cref="Reason"/> one <c>[EfSchemaIntegrity]</c> column, to emit for
+/// <see cref="Family"/>, on an entity type the image defines as <see cref="Entity"/>.
+/// </summary>
+internal sealed record SyntheticColumn(string Family, string Entity, string Column, string? Reason = null);
+
+/// <summary>
 /// Throwaway assemblies carrying real <c>[EfModule]</c>, <c>[EfSchemaFamily]</c> and upcaster metadata, for the
 /// declarations no first-party module has: malformed ones, shared ones, chained ones, and ones loaded where the host's
 /// own copy of the attribute type is not.
 /// </summary>
 internal static class SyntheticSchemaFamilies
 {
-    public static byte[] Image(string assemblyName, string[] modules, params SyntheticFamily[] families)
+    public static byte[] Image(string assemblyName, string[] modules, params SyntheticFamily[] families) =>
+        Image(assemblyName, modules, [], families);
+
+    public static byte[] Image(string assemblyName, string[] modules, IReadOnlyList<SyntheticColumn> columns, params SyntheticFamily[] families)
     {
         var moduleConstructor = typeof(EfModuleAttribute).GetConstructor([typeof(string), typeof(Type)])!;
         var builder = new PersistedAssemblyBuilder(
@@ -36,6 +45,12 @@ internal static class SyntheticSchemaFamilies
         var module = builder.DefineDynamicModule(assemblyName);
         foreach (var family in families)
             builder.SetCustomAttribute(Declaration(family, (family.Upcasters ?? []).Select(upcaster => Emit(module, upcaster)).ToArray()));
+        var entities = columns.Select(column => column.Entity).Distinct(StringComparer.Ordinal)
+            .ToDictionary(name => name, name => module.DefineType(name, TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class).CreateType(), StringComparer.Ordinal);
+        foreach (var column in columns)
+            builder.SetCustomAttribute(column.Reason is null
+                ? new CustomAttributeBuilder(typeof(EfSchemaContentAttribute).GetConstructors().Single(), [column.Family, entities[column.Entity], new[] { column.Column }])
+                : new CustomAttributeBuilder(typeof(EfSchemaIntegrityAttribute).GetConstructors().Single(), [column.Family, entities[column.Entity], column.Column, column.Reason]));
 
         using var image = new MemoryStream();
         builder.Save(image);
