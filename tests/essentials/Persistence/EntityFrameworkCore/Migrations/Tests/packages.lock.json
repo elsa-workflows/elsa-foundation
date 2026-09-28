@@ -492,6 +492,26 @@
       "elsa.attention.core": {
         "type": "Project"
       },
+      "elsa.cluster.core": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.10, )",
+          "Microsoft.Extensions.Options": "[10.0.10, )",
+          "Microsoft.Extensions.Primitives": "[10.0.10, )"
+        }
+      },
+      "elsa.cluster.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Cluster.Core": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )",
+          "Microsoft.Extensions.Configuration.Abstractions": "[10.0.10, )",
+          "Microsoft.Extensions.Hosting.Abstractions": "[10.0.10, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )"
+        }
+      },
       "elsa.diagnostics.opentelemetry": {
         "type": "Project",
         "dependencies": {
@@ -578,6 +598,7 @@
         "type": "Project",
         "dependencies": {
           "Elsa.Activities.Design.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
+          "Elsa.Cluster.EntityFrameworkCore": "[4.0.0-dev, )",
           "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
           "Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
