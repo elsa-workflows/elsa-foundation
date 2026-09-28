@@ -89,13 +89,20 @@ internal static class RuntimePlacementProviderSmoke
                 lease => Assert.Equal(upperCaseLease.WorkflowExecutionId, lease.WorkflowExecutionId),
                 lease => Assert.Equal(lowerCaseLease.WorkflowExecutionId, lease.WorkflowExecutionId));
 
-            await store.ReleaseAsync(granted.Lease);
+            // Spec 184, FR-014: renewal is a compare-and-set on the lease as held and never grants.
+            var renewed = await store.TryRenewAsync(granted.Lease, Now, Now.AddMinutes(5));
+            Assert.NotNull(renewed);
+            Assert.Equal(granted.Lease.PlacementToken + 1, renewed.PlacementToken);
+            AssertLease(renewed, await store.FindAsync(workflowId));
+            Assert.Null(await store.TryRenewAsync(granted.Lease, Now, Now.AddMinutes(5)));
+            Assert.True(await store.ReleaseAsync(renewed));
+            Assert.Null(await store.TryRenewAsync(renewed, Now, Now.AddMinutes(5)));
             Assert.Null(await store.FindAsync(workflowId));
             var reclaimed = (await store.TryClaimAsync(
                 new(workflowId, claim.OwnerId, Now.AddSeconds(1), Now.AddMinutes(6)),
                 Now.AddSeconds(1))).Lease;
-            Assert.Equal(granted.Lease.PlacementToken + 1, reclaimed.PlacementToken);
-            await store.ReleaseAsync(granted.Lease);
+            Assert.Equal(renewed.PlacementToken + 1, reclaimed.PlacementToken);
+            Assert.False(await store.ReleaseAsync(renewed));
             AssertLease(reclaimed, await store.FindAsync(workflowId));
             await store.ReleaseAsync(reclaimed);
             await store.ReleaseAsync(upperCaseLease);

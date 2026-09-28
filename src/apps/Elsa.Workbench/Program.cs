@@ -65,6 +65,7 @@ using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed;
+using Elsa.Workflows.Runtime.Distributed.Placement;
 using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
@@ -212,6 +213,9 @@ builder.Services.AddEfPendingMigrationActivationGuard();
 // composed here, on the host container. It brings the in-process default, so an unclustered Workbench is a cluster of
 // one that reports the schema families it has loaded without any further configuration.
 builder.Services.AddEfSchemaReadability();
+// Beside it, on the same host container: what each shell's workflow runtime can activate (spec 184, FR-008), so the
+// host's member report carries one runnability entry per shell that runs the distributed runtime.
+builder.Services.AddWorkflowRuntimeRunnabilityReport();
 builder.Services.AddDynamicEndpointApiExplorerRefresh();
 
 builder.Services.AddCShellsAspNetCore(shells =>

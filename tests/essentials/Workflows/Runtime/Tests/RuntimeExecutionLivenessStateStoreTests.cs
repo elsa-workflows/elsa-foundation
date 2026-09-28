@@ -27,6 +27,25 @@ public sealed class RuntimeExecutionLivenessStateStoreTests
         Assert.Null(await store.FindAsync("wfexec-1", "missing"));
     }
 
+    /// <summary>Spec 184, FR-024: reclaim lists what one owner holds, by execution lease or by heartbeat, page by page.</summary>
+    [Fact]
+    public async Task InMemoryOperationalStateStore_ListsWhatOneOwnerHoldsPageByPage()
+    {
+        var store = new InMemoryExecutionLivenessStateStore();
+        await store.SaveAsync(NewExecutionLivenessState("operational-1", "wfexec-c", "departed"));
+        await store.SaveAsync(NewExecutionLivenessState("operational-1", "wfexec-a", "departed"));
+        await store.SaveAsync(NewExecutionLivenessState("operational-1", "wfexec-b", "survivor"));
+        var heartbeatOnly = NewExecutionLivenessState("operational-2", "wfexec-d", "departed");
+        await store.SaveAsync(new ExecutionLivenessState("operational-2", "wfexec-d", null, heartbeatOnly.Heartbeat, null, null));
+
+        var first = await store.ListOwnedPageAsync("departed", new RuntimeStorePageRequest(2));
+        var second = await store.ListOwnedPageAsync("departed", new RuntimeStorePageRequest(2, first.NextContinuationToken));
+
+        Assert.Equal(["wfexec-a", "wfexec-c"], first.Items.Select(state => state.WorkflowExecutionId));
+        Assert.Equal(["wfexec-d"], second.Items.Select(state => state.WorkflowExecutionId));
+        Assert.Null(second.NextContinuationToken);
+    }
+
     private ExecutionLivenessState NewExecutionLivenessState(string operationalStateId, string workflowExecutionId, string ownerId) =>
         new(
             executionLivenessStateId: operationalStateId,

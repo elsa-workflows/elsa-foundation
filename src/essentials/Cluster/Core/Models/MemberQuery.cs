@@ -34,6 +34,11 @@ public sealed record MemberQuery
     /// Answers the query over <paramref name="fleet"/>: the members it considered that meet every requirement, and for
     /// each other member it considered, the first requirement that member failed.
     /// </summary>
+    /// <remarks>
+    /// Runnability requirements are met jointly, by one entry of the member's runnability section (spec 184, FR-009),
+    /// so the requirement reported for a member that fails them is the first one no entry can meet together with the
+    /// runnability requirements before it.
+    /// </remarks>
     public MemberQueryAnswer Evaluate(FleetView fleet)
     {
         ArgumentNullException.ThrowIfNull(fleet);
@@ -42,7 +47,7 @@ public sealed record MemberQuery
             ? fleet.Members.Where(member => member.IsLive).ToArray()
             : PlacementCandidates(fleet.Members);
         var outcomes = considered
-            .Select(member => (Member: member, Failed: Requirements.FirstOrDefault(requirement => !requirement.IsMetBy(member, Purpose))))
+            .Select(member => (Member: member, Failed: FirstFailed(member)))
             .ToArray();
 
         return new MemberQueryAnswer(
@@ -50,6 +55,14 @@ public sealed record MemberQuery
             fleet,
             outcomes.Where(outcome => outcome.Failed is null).Select(outcome => outcome.Member).ToArray(),
             outcomes.Where(outcome => outcome.Failed is not null).Select(outcome => new MemberQueryFailure(outcome.Member, outcome.Failed!)).ToArray());
+    }
+
+    private MemberRequirement? FirstFailed(FleetMember member)
+    {
+        var jointlyUnmet = RunnabilityRequirement.FirstUnmetJointly(member, Requirements.OfType<RunnabilityRequirement>());
+        return Requirements.FirstOrDefault(requirement => requirement is RunnabilityRequirement
+            ? ReferenceEquals(requirement, jointlyUnmet)
+            : !requirement.IsMetBy(member, Purpose));
     }
 
     /// <summary>

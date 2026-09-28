@@ -2,7 +2,7 @@
 
 **Feature Branch**: `claude/2093-specs-b7-b9`
 **Created**: 2026-09-27
-**Status**: Approved
+**Status**: Implemented — B7 ([#2103](https://github.com/elsa-workflows/elsa-foundation/issues/2103)). FR-012's exclusion of a member whose writes to a Runtime family spec 181 refuses, and FR-008's per-database identity in the runnability entry, take effect when [spec 181](../181-schema-finalization-gate/spec.md) (B5, [#2101](https://github.com/elsa-workflows/elsa-foundation/issues/2101)) is built; until then no entry names a database, which applies to every database. FR-019 hands a mid-drain execution off when its in-flight command's drain ends, the in-process mailbox's boundary, which can be later than the drain's next checkpoint commit: the runtime has no signal that stops a drain at its next checkpoint.
 **Input**: Workstream B7, [issue #2103](https://github.com/elsa-workflows/elsa-foundation/issues/2103), of the
 cluster-safe schema rollout program [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093). Work that
 needs a module version is placed only on hosts that can run it, and placement becomes a query on cluster membership.

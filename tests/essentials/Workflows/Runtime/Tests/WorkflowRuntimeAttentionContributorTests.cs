@@ -41,6 +41,30 @@ public sealed class WorkflowRuntimeAttentionContributorTests
         Assert.Equal("/workflows/instances/run-1", incident.Destination.Path);
     }
 
+    /// <summary>
+    /// Spec 184, FR-017: unplaceable work is a warning naming what it needs and how many executions wait, never a host,
+    /// ranked after critical items, and counted in the total.
+    /// </summary>
+    [Fact]
+    public async Task ReportsUnplaceableWorkAsAWarningAfterCriticalItems()
+    {
+        var now = DateTimeOffset.Parse("2026-09-28T10:00:00Z");
+        var query = new StubQuery(new(1, [Record("run-1", "definition-1", null, WorkflowRuntimeAttentionKind.FaultedExecution, now.AddMinutes(-5), "Execution faulted")]));
+        var contributor = new WorkflowRuntimeAttentionContributor(query, [new StubPlacement(new UnplaceableWorkReport(
+            "no active member activates runtime consumer acme.approvals at schema version 2", 3, now.AddMinutes(-2), now))]);
+
+        var contribution = await contributor.EvaluateAsync(Context(2));
+
+        Assert.Equal(2, contribution.TotalCount);
+        Assert.Equal(AttentionSeverity.Critical, contribution.Items.First().Severity);
+        var unplaceable = contribution.Items.Last();
+        Assert.Equal(AttentionSeverity.Warning, unplaceable.Severity);
+        Assert.StartsWith("placement:", unplaceable.Id, StringComparison.Ordinal);
+        Assert.Equal(3, unplaceable.Count);
+        Assert.Equal("3 workflow execution(s) waiting: no active member activates runtime consumer acme.approvals at schema version 2.", unplaceable.Summary);
+        Assert.Empty(unplaceable.Correlations);
+    }
+
     [Fact]
     public async Task PropagatesExplicitQueryUnavailabilityWithoutInventingAllClear()
     {
@@ -142,6 +166,12 @@ public sealed class WorkflowRuntimeAttentionContributorTests
             LastRequest = request;
             return ValueTask.FromResult(result);
         }
+    }
+
+    private sealed class StubPlacement(params UnplaceableWorkReport[] reports) : IWorkflowRuntimePlacementAttention
+    {
+        public ValueTask<IReadOnlyCollection<UnplaceableWorkReport>> ListUnplaceableWorkAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<UnplaceableWorkReport>>(reports);
     }
 
     private static WorkflowExecutionState Execution(

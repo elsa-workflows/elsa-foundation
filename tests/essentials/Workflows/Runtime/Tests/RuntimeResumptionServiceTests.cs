@@ -198,6 +198,32 @@ public sealed class RuntimeResumptionServiceTests
         Assert.Equal("recovery-filtered-next", harness.RecoveryScanner.Requests[1].ContinuationToken);
     }
 
+    /// <summary>
+    /// Spec 184, FR-027: candidates a source supplies, as the distributed runtime's reclaim does, are re-driven by the
+    /// next sweep although no lease timed out; one the sweep re-drove is settled, one whose re-drive faulted is listed
+    /// again and re-driven by the following sweep.
+    /// </summary>
+    [Fact]
+    public async Task SweepAsync_ReDrivesSourcedCandidatesAndSettlesOnlyThoseItDealtWith()
+    {
+        var source = new FakeCandidateSource(NewCandidate("wfexec-reclaimed"), NewCandidate("wfexec-retry"));
+        var harness = new Harness(source);
+        harness.AgentProvider.FailFor = "wfexec-retry";
+
+        var first = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        Assert.Equal(RuntimeResumptionDispatchOutcome.Accepted, first.Dispatches.Single(dispatch => dispatch.WorkflowExecutionId == "wfexec-reclaimed").Outcome);
+        Assert.Equal(RuntimeResumptionDispatchOutcome.Faulted, first.Dispatches.Single(dispatch => dispatch.WorkflowExecutionId == "wfexec-retry").Outcome);
+        Assert.Equal(["wfexec-reclaimed"], source.Settled);
+        Assert.Equal(["wfexec-retry"], source.Listed);
+
+        harness.AgentProvider.FailFor = null;
+        var second = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        Assert.Equal("wfexec-retry", Assert.Single(second.Dispatches).WorkflowExecutionId);
+        Assert.Empty(source.Listed);
+    }
+
     [Fact]
     public async Task SweepAsync_RewindsRecoveryCursorWhenARecoveryDispatchFails()
     {
@@ -607,7 +633,7 @@ public sealed class RuntimeResumptionServiceTests
 
     private sealed class Harness
     {
-        public Harness()
+        public Harness(IRuntimeRecoveryCandidateSource? candidateSource = null)
         {
             Service = new RuntimeResumptionService(
                 OutboxProcessor,
@@ -616,7 +642,8 @@ public sealed class RuntimeResumptionServiceTests
                 AgentProvider,
                 new ShortRuntimeExecutionIdGenerator(),
                 new FakeTimeProvider(Now),
-                StateStore);
+                StateStore,
+                recoveryCandidateSources: candidateSource is null ? null : [candidateSource]);
         }
 
         public FakeOutboxProcessor OutboxProcessor { get; } = new();
@@ -625,6 +652,26 @@ public sealed class RuntimeResumptionServiceTests
         public FakeAgentProvider AgentProvider { get; } = new();
         public InMemoryWorkflowExecutionStateStore StateStore { get; } = new();
         public RuntimeResumptionService Service { get; }
+    }
+
+    /// <summary>A candidate source like the distributed runtime's reclaim registry: it lists until settled.</summary>
+    private sealed class FakeCandidateSource(params RuntimeRecoveryCandidate[] candidates) : IRuntimeRecoveryCandidateSource
+    {
+        private readonly List<RuntimeRecoveryCandidate> _listed = [.. candidates];
+
+        public List<string> Settled { get; } = [];
+
+        public IReadOnlyList<string> Listed => _listed.Select(candidate => candidate.WorkflowExecutionId).ToArray();
+
+        public ValueTask<IReadOnlyCollection<RuntimeRecoveryCandidate>> ListAsync(int limit, CancellationToken cancellationToken = default) =>
+            new(_listed.Take(limit).ToArray());
+
+        public ValueTask SettleAsync(IReadOnlyCollection<string> workflowExecutionIds, CancellationToken cancellationToken = default)
+        {
+            Settled.AddRange(workflowExecutionIds);
+            _listed.RemoveAll(candidate => workflowExecutionIds.Contains(candidate.WorkflowExecutionId));
+            return default;
+        }
     }
 
     private sealed class FakeOutboxProcessor : IRuntimePostCommitOutboxProcessor

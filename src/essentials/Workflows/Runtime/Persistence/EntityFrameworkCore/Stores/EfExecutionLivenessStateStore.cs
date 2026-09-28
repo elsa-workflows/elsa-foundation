@@ -179,6 +179,47 @@ public sealed class EfExecutionLivenessStateStore(
     }
 
     /// <summary>
+    /// Pages the scope's states whose execution lease or heartbeat names <paramref name="ownerId"/>, in the global
+    /// identity order. No index covers the owner columns: reclaim runs only when a host id departs or a process starts
+    /// (spec 184, FR-030), so a scope-bounded scan is the accepted cost rather than a schema change.
+    /// </summary>
+    public async ValueTask<RuntimeStorePage<ExecutionLivenessState>> ListOwnedPageAsync(
+        string ownerId,
+        RuntimeStorePageRequest query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
+        var cursor = DecodeGlobalCursor(query.ContinuationToken, scope, query);
+        var owner = EfRuntimeOperationalStoreSupport.Encode(ownerId);
+        var source = context.ExecutionLivenessStates.AsNoTracking().Where(row =>
+            row.ScopeKeyHash == EfRuntimeOperationalStoreSupport.Hash(scope) &&
+            row.ScopeKey == EfRuntimeOperationalStoreSupport.Encode(scope) &&
+            (row.LeaseOwnerId == owner || row.HeartbeatOwnerId == owner));
+        if (cursor is not null)
+        {
+            var workflowOrder = EfRuntimeOperationalStoreSupport.Order(cursor.WorkflowExecutionId);
+            var operationalOrder = EfRuntimeOperationalStoreSupport.Order(cursor.OperationalStateId);
+            source = source.Where(row =>
+                string.Compare(row.WorkflowExecutionIdOrderKey, workflowOrder) > 0 ||
+                row.WorkflowExecutionIdOrderKey == workflowOrder && string.Compare(row.OperationalStateIdOrderKey, operationalOrder) > 0);
+        }
+        var rows = await source.OrderBy(row => row.WorkflowExecutionIdOrderKey).ThenBy(row => row.OperationalStateIdOrderKey)
+            .Take(checked(query.Limit + 1)).ToArrayAsync(cancellationToken);
+        var hasMore = rows.Length > query.Limit;
+        if (hasMore)
+            rows = rows[..query.Limit];
+        var items = rows.Select(row => Read(row, scope)).ToArray();
+        if (items.Any(state => !StringComparer.Ordinal.Equals(state.ExecutionLease?.OwnerId, ownerId) &&
+                               !StringComparer.Ordinal.Equals(state.Heartbeat?.OwnerId, ownerId)))
+            throw new InvalidDataException("An execution-liveness row's owner projection disagrees with its state.");
+        var next = hasMore ? EncodeGlobalCursor(scope, items[^1]) : null;
+        return new RuntimeStorePage<ExecutionLivenessState>(query, items, next);
+    }
+
+    /// <summary>
     /// Executes a bounded union of the indexed interruption, lease, and heartbeat routes. Each route reads at most
     /// one requested page plus a look-ahead row; the final page is ordered by the provider-neutral earliest due time.
     /// </summary>

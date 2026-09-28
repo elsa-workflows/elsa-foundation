@@ -79,7 +79,36 @@ public sealed class InMemoryExecutionPlacementStore : IExecutionPlacementStore
         }
     }
 
-    public ValueTask ReleaseAsync(ExecutionPlacementLease lease, CancellationToken cancellationToken = default)
+    public ValueTask<ExecutionPlacementLease?> TryRenewAsync(
+        ExecutionPlacementLease held,
+        DateTimeOffset now,
+        DateTimeOffset expiresAt,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(held);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_state.SyncRoot)
+        {
+            var key = Key(held.WorkflowExecutionId);
+            if (!_state.Leases.TryGetValue(key, out var current) ||
+                !StringComparer.Ordinal.Equals(current.OwnerId, held.OwnerId) ||
+                current.PlacementToken != held.PlacementToken ||
+                current.IsExpired(now))
+                return ValueTask.FromResult<ExecutionPlacementLease?>(null);
+
+            var renewed = new ExecutionPlacementLease(
+                workflowExecutionId: current.WorkflowExecutionId,
+                ownerId: current.OwnerId,
+                placementToken: current.PlacementToken + 1,
+                acquiredAt: now,
+                expiresAt: expiresAt);
+            _state.Leases[key] = renewed;
+            return ValueTask.FromResult<ExecutionPlacementLease?>(renewed);
+        }
+    }
+
+    public ValueTask<bool> ReleaseAsync(ExecutionPlacementLease lease, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(lease);
         cancellationToken.ThrowIfCancellationRequested();
@@ -87,15 +116,12 @@ public sealed class InMemoryExecutionPlacementStore : IExecutionPlacementStore
         lock (_state.SyncRoot)
         {
             var key = Key(lease.WorkflowExecutionId);
-            if (_state.Leases.TryGetValue(key, out var current) &&
+            return ValueTask.FromResult(
+                _state.Leases.TryGetValue(key, out var current) &&
                 StringComparer.Ordinal.Equals(current.OwnerId, lease.OwnerId) &&
-                current.PlacementToken == lease.PlacementToken)
-            {
-                _state.Leases.TryRemove(KeyValuePair.Create(key, current));
-            }
+                current.PlacementToken == lease.PlacementToken &&
+                _state.Leases.TryRemove(KeyValuePair.Create(key, current)));
         }
-
-        return ValueTask.CompletedTask;
     }
 
     public ValueTask<IReadOnlyList<ExecutionPlacementLease>> ListOwnedAsync(

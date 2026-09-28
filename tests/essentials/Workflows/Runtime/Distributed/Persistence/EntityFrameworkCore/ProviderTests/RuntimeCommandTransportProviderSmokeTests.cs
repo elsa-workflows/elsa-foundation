@@ -83,8 +83,23 @@ internal static class RuntimeCommandTransportProviderSmoke
             Assert.Equal(2, await transport.CountPendingAsync(executionId));
             Assert.Equal([executionId], await transport.ListPendingExecutionIdsAsync(Now, 10));
 
+            // Spec 184, FR-016, FR-019 and FR-024: peeking leases nothing, a holder's leases can be listed, and an early
+            // release is a compare-and-set that leaves the item visible and the next lease under a greater token.
+            Assert.Equal(2, (await transport.PeekAsync(executionId, Now, 10)).Count);
+            Assert.Equal([executionId], await transport.ListPendingExecutionIdsAsync(Now, 10, skip: 0));
+            Assert.Empty(await transport.ListPendingExecutionIdsAsync(Now, 10, skip: 1));
+            var released = Assert.Single(await transport.LeaseAsync(executionId, "provider-node-a", Now, LeaseDuration, 1));
+            Assert.Equal(released.TransportItemId, Assert.Single(await transport.ListLeasedAsync("provider-node-a", Now, 10)).TransportItemId);
+            Assert.Single(await transport.ListLeasedAsync("provider-node-a", Now, 10, executionId));
+            Assert.Empty(await transport.ListLeasedAsync("provider-node-b", Now, 10));
+            Assert.False(await transport.ReleaseLeaseAsync(executionId, released.TransportItemId, "provider-node-b", released.LeaseToken!.Value, Now));
+            Assert.True(await transport.ReleaseLeaseAsync(executionId, released.TransportItemId, "provider-node-a", released.LeaseToken.Value, Now));
+            Assert.Empty(await transport.ListLeasedAsync("provider-node-a", Now, 10));
+            Assert.Equal(2, (await transport.PeekAsync(executionId, Now, 10)).Count);
+
             var lease = Assert.Single(await transport.LeaseAsync(executionId, "provider-node-a", Now, LeaseDuration, 1));
             Assert.Equal(first.TransportItemId, lease.TransportItemId);
+            Assert.True(lease.LeaseToken > released.LeaseToken);
             Assert.Equal(2, await transport.CountPendingAsync(executionId));
             Assert.False(await transport.AckAsync(executionId, lease.TransportItemId, "provider-node-b", lease.LeaseToken!.Value, Now.AddSeconds(1)));
             Assert.True(await transport.AckAsync(executionId, lease.TransportItemId, "provider-node-a", lease.LeaseToken.Value, Now.AddSeconds(1)));

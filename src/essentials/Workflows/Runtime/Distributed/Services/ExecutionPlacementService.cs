@@ -47,7 +47,17 @@ public sealed class ExecutionPlacementService : IExecutionPlacementService
         return _store.TryClaimAsync(claim, now, cancellationToken);
     }
 
-    public ValueTask ReleaseAsync(ExecutionPlacementLease lease, CancellationToken cancellationToken = default)
+    public ValueTask<ExecutionPlacementLease?> TryRenewAsync(ExecutionPlacementLease lease, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(lease);
+        if (!string.Equals(lease.OwnerId, _options.NodeId, StringComparison.Ordinal))
+            return ValueTask.FromResult<ExecutionPlacementLease?>(null);
+
+        var now = _timeProvider.GetUtcNow();
+        return _store.TryRenewAsync(lease, now, now + _options.LeaseDuration, cancellationToken);
+    }
+
+    public ValueTask<bool> ReleaseAsync(ExecutionPlacementLease lease, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(lease);
         return _store.ReleaseAsync(lease, cancellationToken);

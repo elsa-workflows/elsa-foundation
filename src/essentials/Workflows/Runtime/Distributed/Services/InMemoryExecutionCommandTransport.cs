@@ -136,12 +136,86 @@ public sealed class InMemoryExecutionCommandTransport : IExecutionCommandTranspo
         }
     }
 
+    public ValueTask<bool> ReleaseLeaseAsync(string workflowExecutionId, string transportItemId, string ownerId, long leaseToken, DateTimeOffset now, CancellationToken cancellationToken = default)
+    {
+        DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
+        ArgumentException.ThrowIfNullOrWhiteSpace(transportItemId);
+        DistributedRuntimeIdentityConstraints.Validate(ownerId, nameof(ownerId));
+        if (leaseToken <= 0)
+            throw new ArgumentOutOfRangeException(nameof(leaseToken), "Lease token must be positive.");
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_state.SyncRoot)
+        {
+            if (!_state.Inboxes.TryGetValue(Key(workflowExecutionId), out var inbox))
+                return new ValueTask<bool>(false);
+
+            var index = inbox.FindIndex(item => string.Equals(item.TransportItemId, transportItemId, StringComparison.Ordinal));
+            if (index < 0)
+                return new ValueTask<bool>(false);
+
+            var current = inbox[index];
+            if (!string.Equals(current.LeasedByOwnerId, ownerId, StringComparison.Ordinal) ||
+                current.LeaseToken != leaseToken ||
+                current.IsVisible(now))
+                return new ValueTask<bool>(false);
+
+            inbox[index] = current.ReleaseLease(now);
+            return new ValueTask<bool>(true);
+        }
+    }
+
+    public ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> PeekAsync(string workflowExecutionId, DateTimeOffset now, int maxItems, CancellationToken cancellationToken = default)
+    {
+        DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
+        DistributedRuntimeQueryLimits.ValidateTake(maxItems, nameof(maxItems));
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_state.SyncRoot)
+        {
+            IReadOnlyList<ExecutionCommandTransportItem> visible = _state.Inboxes.TryGetValue(Key(workflowExecutionId), out var inbox)
+                ? inbox.Where(item => item.IsVisible(now)).Take(maxItems).ToArray()
+                : [];
+            return new ValueTask<IReadOnlyList<ExecutionCommandTransportItem>>(visible);
+        }
+    }
+
+    public ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> ListLeasedAsync(string ownerId, DateTimeOffset now, int maxItems, string? workflowExecutionId = null, CancellationToken cancellationToken = default)
+    {
+        DistributedRuntimeIdentityConstraints.Validate(ownerId, nameof(ownerId));
+        if (workflowExecutionId is not null)
+            DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
+        DistributedRuntimeQueryLimits.ValidateTake(maxItems, nameof(maxItems));
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_state.SyncRoot)
+        {
+            IReadOnlyList<ExecutionCommandTransportItem> leased = _state.Inboxes
+                .Where(pair => StringComparer.Ordinal.Equals(pair.Key.Partition, _partition))
+                .Where(pair => workflowExecutionId is null || StringComparer.Ordinal.Equals(pair.Key.WorkflowExecutionId, workflowExecutionId))
+                .OrderBy(pair => pair.Key.WorkflowExecutionId, StringComparer.Ordinal)
+                .SelectMany(pair => pair.Value)
+                .Where(item => string.Equals(item.LeasedByOwnerId, ownerId, StringComparison.Ordinal) && !item.IsVisible(now))
+                .Take(maxItems)
+                .ToArray();
+            return new ValueTask<IReadOnlyList<ExecutionCommandTransportItem>>(leased);
+        }
+    }
+
     public ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(
         DateTimeOffset now,
         int maxItems,
+        CancellationToken cancellationToken = default) =>
+        ListPendingExecutionIdsAsync(now, maxItems, skip: 0, cancellationToken);
+
+    public ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(
+        DateTimeOffset now,
+        int maxItems,
+        int skip,
         CancellationToken cancellationToken = default)
     {
         DistributedRuntimeQueryLimits.ValidateTake(maxItems, nameof(maxItems));
+        ArgumentOutOfRangeException.ThrowIfNegative(skip);
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_state.SyncRoot)
@@ -151,6 +225,7 @@ public sealed class InMemoryExecutionCommandTransport : IExecutionCommandTranspo
                 .Where(pair => pair.Value.Any(item => item.IsVisible(now)))
                 .Select(pair => pair.Key.WorkflowExecutionId)
                 .OrderBy(id => id, StringComparer.Ordinal)
+                .Skip(skip)
                 .Take(maxItems)
                 .ToArray();
 

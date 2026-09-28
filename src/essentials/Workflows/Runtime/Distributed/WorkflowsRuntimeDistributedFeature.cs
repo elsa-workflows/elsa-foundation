@@ -1,4 +1,6 @@
 using CShells.Features;
+using Elsa.Cluster.Core.Contracts;
+using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Tasks.Core;
@@ -6,6 +8,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Options;
+using Elsa.Workflows.Runtime.Distributed.Placement;
 using Elsa.Workflows.Runtime.Distributed.Services;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,7 +44,13 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
     private int _maxExecutionsPerSweep = 100;
     private int _transportLeaseBatchSize = 100;
 
-    [ManifestSetting(DisplayName = "Node ID", Description = "Stable identity of this node as a placement owner, up to 128 well-formed UTF-16 code units. Defaults to a machine/process-derived value.", Category = "Runtime")]
+    /// <summary>
+    /// No longer a source of identity: the routing identity is this member's cluster host id (spec 184, FR-001). A value
+    /// that differs from the host id refuses the shell (FR-003); a value equal to it is accepted. The setting is kept,
+    /// rather than deleted or made to throw in its setter, because CShells silently ignores an unknown key and swallows
+    /// a setter's exception, and either would accept a configuration that still names a different id.
+    /// </summary>
+    [ManifestSetting(DisplayName = "Node ID", Description = "Retired: the routing identity is the cluster host id (Elsa:Cluster:Membership:HostId). A value that differs from the host id refuses the shell.", Category = "Runtime")]
     public string? NodeId { get; set; }
 
     [ManifestSetting(DisplayName = "Lease duration (seconds)", Description = "Placement and transport visibility lease TTL. A node that stops renewing within this window loses its executions to a survivor.", Category = "Runtime", DefaultValue = "30")]
@@ -76,12 +85,21 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
         ArgumentNullException.ThrowIfNull(services);
         services.AddPersistenceCore();
 
-        services.Configure<ExecutionPlacementOptions>(options =>
+        // One routing identity, the member's host id, for the placement lease, the transport item lease and the
+        // execution lease alike (spec 184, FR-001), so one departure verdict reclaims all three.
+        services.AddShellRunnabilitySource();
+        services.AddOptions<ExecutionPlacementOptions>()
+            .Configure<IClusterMembership>((options, membership) =>
+            {
+                options.NodeId = membership.GetLocalStanding().Identity.HostId;
+                options.LeaseDuration = TimeSpan.FromSeconds(LeaseDurationSeconds);
+            });
+        services.AddSingleton<IValidateOptions<ExecutionPlacementOptions>>(new DistributedRuntimeNodeIdValidator(NodeId));
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateDistributedRuntimeIdentityStartupTask>());
+        services.Replace(ServiceDescriptor.Singleton(sp => new RuntimeExecutionOwnershipOptions
         {
-            if (!string.IsNullOrWhiteSpace(NodeId))
-                options.NodeId = NodeId;
-            options.LeaseDuration = TimeSpan.FromSeconds(LeaseDurationSeconds);
-        });
+            OwnerId = sp.GetRequiredService<ExecutionPlacementOptions>().NodeId
+        }));
 
         services.Configure<ExecutionPlacementPumpOptions>(options =>
         {
@@ -141,11 +159,25 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
         services.TryAddSingleton(sp => new InProcessWorkflowExecutionActorProvider(
             sp.GetRequiredService<IWorkflowExecutionCommandExecutor>(),
             sp.GetRequiredService<RuntimeActorEvictionOptions>()));
+        // Placement as a membership query (spec 184): the gate both claim paths ask, what the pump reclaims and reports,
+        // and the contracts through which the runtime's core and Attention consume them without referencing this leaf.
+        services.TryAddSingleton(JoinSweepLedger.Process);
+        services.TryAddSingleton(DistributedRuntimeShell.From);
+        services.TryAddSingleton<ExecutionPlacementRequirementResolver>();
+        services.TryAddSingleton<ExecutionPlacementGate>();
+        services.TryAddSingleton<ReclaimedExecutionRegistry>();
+        services.TryAddSingleton<UnplaceableWorkRegistry>();
+        services.TryAddSingleton<HostIdReclaimer>();
+        services.TryAddSingleton<ExecutionPlacementMembership>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeRecoveryCandidateSource, ReclaimedRecoveryCandidateSource>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowRuntimePlacementAttention, UnplaceableWorkAttention>());
+
         services.TryAddSingleton(sp => new DistributedWorkflowExecutionActorProvider(
             sp.GetRequiredService<InProcessWorkflowExecutionActorProvider>(),
             sp.GetRequiredService<IPersistenceOperationScopeFactory>(),
             sp.GetRequiredService<TimeProvider>(),
-            sp.GetRequiredService<IWorkflowExecutionLeaseFencingCapability>()));
+            sp.GetRequiredService<IWorkflowExecutionLeaseFencingCapability>(),
+            sp.GetRequiredService<ExecutionPlacementGate>()));
         services.Replace(ServiceDescriptor.Singleton<IWorkflowExecutionActorProvider>(sp => sp.GetRequiredService<DistributedWorkflowExecutionActorProvider>()));
 
         services.AddSingleton<IRecurringTask>(sp => new ExecutionPlacementPumpTask(
@@ -154,7 +186,8 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
             sp.GetRequiredService<IOptions<ExecutionPlacementOptions>>(),
             sp.GetRequiredService<IOptions<ExecutionPlacementPumpOptions>>(),
             sp.GetRequiredService<TimeProvider>(),
-            sp.GetRequiredService<ILogger<ExecutionPlacementPumpTask>>()));
+            sp.GetRequiredService<ILogger<ExecutionPlacementPumpTask>>(),
+            sp.GetRequiredService<ExecutionPlacementMembership>()));
     }
 
     private sealed class ProcessLocalDistributionEvidence : IWorkflowDispatchDurabilityEvidence

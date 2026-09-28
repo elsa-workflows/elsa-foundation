@@ -65,11 +65,22 @@ public interface IConformanceMember
 {
     IClusterMembership Membership { get; }
 
-    /// <summary>The member's clock. Clocks of different members may be offset from each other.</summary>
+    /// <summary>
+    /// The member's clock. Clocks of different members may be offset from each other. The runtime tier runs the
+    /// distributed runtime on it, whose identities need a clock that reads after 2020-01-01.
+    /// </summary>
     TimeProvider Clock { get; }
 
     /// <summary>Sets what the member's readability source reports from its next publish.</summary>
     void SetReadability(params ReadabilityEntry[] entries);
+
+    /// <summary>
+    /// Sets what the member's runnability source reports from its next publish (spec 184, FR-010). A fixture that
+    /// registers no runnability source leaves this unimplemented, and the runnability tests fail for it: a provider that
+    /// drops the section is not a supported provider.
+    /// </summary>
+    void SetRunnability(params RunnabilityEntry[] entries) =>
+        throw new NotSupportedException($"{GetType().Name} does not register a runnability source.");
 
     /// <summary>The host finished starting: joining becomes active.</summary>
     ValueTask ActivateAsync();
@@ -88,8 +99,13 @@ public interface IConformanceMember
 }
 
 /// <summary>How to start a member. <paramref name="Readability"/> <see langword="null"/> means the member has no
-/// readability source at all.</summary>
-public sealed record ConformanceMemberSetup(string HostId, IReadOnlyList<ReadabilityEntry>? Readability, TimeSpan ClockOffset = default);
+/// readability source at all, and <paramref name="Runnability"/> <see langword="null"/> that it has no runnability source
+/// (spec 184, FR-008).</summary>
+public sealed record ConformanceMemberSetup(
+    string HostId,
+    IReadOnlyList<ReadabilityEntry>? Readability,
+    TimeSpan ClockOffset = default,
+    IReadOnlyList<RunnabilityEntry>? Runnability = null);
 
 /// <summary>The liveness settings a conformance fleet runs with.</summary>
 public sealed record ConformanceTimings(TimeSpan HeartbeatInterval, TimeSpan ExpiryPeriod, TimeSpan SkewAllowance);

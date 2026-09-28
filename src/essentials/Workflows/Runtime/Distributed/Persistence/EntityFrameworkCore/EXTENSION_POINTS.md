@@ -21,7 +21,9 @@ even malformed scope values losslessly; execution and owner contracts retain the
 well-formed strings. An explicit revision is an EF concurrency token. Claims
 use bounded read/insert-or-update/save retries; first claims use the primary-key uniqueness boundary,
 renewals and expired takeovers use revision CAS, and release marks a durable tombstone rather than
-deleting the row. The tombstone preserves the per-execution fencing high-water mark, so reclaim
+deleting the row. `TryRenewAsync` is the pump's renew-only compare-and-set (spec 184, FR-014): it
+extends only a live, unreleased lease held under the presented owner and placement token, and never
+grants, so a lease a reclaim released is not taken back; `ReleaseAsync` reports whether it released. The tombstone preserves the per-execution fencing high-water mark, so reclaim
 advances both token and revision and a delayed release cannot match a successor.
 Listing filters live rows and applies `Take` in SQL, ordering by UTC expiry ticks and an ordinal
 UTF-16 order key encoded as fixed-width big-endian binary data, so database collation cannot alter
@@ -45,8 +47,8 @@ phase (or as a hosted service in plain hosts), according to the host-wide `EfMig
 
 The opt-in D02-D03 provider replaces exactly `IExecutionCommandTransport` with the EF command
 transport adapter. It owns both the per-execution stream-head and ordered transport-item entities in
-one dedicated EF context, so send, lease, and acknowledgement can update the projection and item in
-one relational transaction. It does not register or replace `IExecutionPlacementStore`; D01 placement
+one dedicated EF context, so send, lease, early lease release, and acknowledgement can update the
+projection and item in one relational transaction. It does not register or replace `IExecutionPlacementStore`; D01 placement
 ownership remains independently selectable; the in-memory transport remains in place until this EF
 transport is explicitly selected.
 

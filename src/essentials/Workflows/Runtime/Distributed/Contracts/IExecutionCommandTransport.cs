@@ -50,12 +50,47 @@ public interface IExecutionCommandTransport
     ValueTask<bool> AckAsync(string workflowExecutionId, string transportItemId, string ownerId, long leaseToken, DateTimeOffset now, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Makes an item visible again before its lease expires, when <paramref name="ownerId"/> still holds it under
+    /// <paramref name="leaseToken"/> and the lease is live, as a compare-and-set (spec 184, FR-019 and FR-024). Returns
+    /// whether this call released it. The released holder's acknowledgement is refused afterwards, and the next lease
+    /// issues a greater token.
+    /// </summary>
+    ValueTask<bool> ReleaseLeaseAsync(string workflowExecutionId, string transportItemId, string ownerId, long leaseToken, DateTimeOffset now, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns at most <paramref name="maxItems"/> items for <paramref name="workflowExecutionId"/> that are visible at
+    /// <paramref name="now"/>, in enqueue order, without leasing them. Placement reads the pinned executable of pending
+    /// work through it before it decides whether to claim (spec 184, FR-016), so a refused claim leases nothing.
+    /// </summary>
+    ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> PeekAsync(string workflowExecutionId, DateTimeOffset now, int maxItems, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns at most <paramref name="maxItems"/> items whose live lease <paramref name="ownerId"/> holds at
+    /// <paramref name="now"/>, optionally for one execution, so a hand-off or a reclaim can release them (spec 184,
+    /// FR-019 and FR-024). A store may answer it without an owner index: it runs only when a member hands work off or a
+    /// host id departs.
+    /// </summary>
+    ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> ListLeasedAsync(string ownerId, DateTimeOffset now, int maxItems, string? workflowExecutionId = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Lists at most <paramref name="maxItems"/> execution IDs that currently have at least one visible item, in
     /// deterministic ordinal order, for the placement pump's bounded backlog sweep.
     /// </summary>
     ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(
         DateTimeOffset now,
         int maxItems,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists, as <see cref="ListPendingExecutionIdsAsync(DateTimeOffset, int, CancellationToken)"/> does, the execution
+    /// IDs that follow the first <paramref name="skip"/> in the same order. The placement pump rotates through the
+    /// backlog with it, because work no active member can run stays pending (spec 184, FR-018) and must not starve the
+    /// work behind it. The backlog moves between calls, so a rotation may miss or repeat an id once; the next reaches it.
+    /// </summary>
+    ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(
+        DateTimeOffset now,
+        int maxItems,
+        int skip,
         CancellationToken cancellationToken = default);
 
     /// <summary>Returns the number of undelivered (not-yet-acked) items for an execution, regardless of lease state. Primarily for diagnostics and tests.</summary>
