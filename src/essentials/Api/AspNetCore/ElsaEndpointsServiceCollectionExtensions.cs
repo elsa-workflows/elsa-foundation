@@ -20,6 +20,11 @@ public static class ElsaEndpointsServiceCollectionExtensions
     /// <see cref="ElsaEndpointConventions.ElsaModuleOperation"/>), and Elsa's fallback problem
     /// writer, which keeps the failure shape owners without their own writer already publish.
     /// </para>
+    /// <para>
+    /// It also adds one translator for every owner, unkeyed so each owner's own translators are asked
+    /// first: a schema write refusal becomes <see cref="SchemaWriteRefusalProblem.For"/>'s 409, which
+    /// the owner's problem writer then writes in its own envelope (spec 180, FR-016a).
+    /// </para>
     /// </remarks>
     public static IServiceCollection AddElsaEndpoints(this IServiceCollection services)
     {
@@ -28,6 +33,7 @@ public static class ElsaEndpointsServiceCollectionExtensions
         // Registered before AddNativeEndpoints, which uses TryAdd: first registration wins, so this
         // is what displaces the package's ProblemDetails default rather than racing it.
         services.TryAddSingleton<IEndpointProblemWriter, ElsaFallbackEndpointProblemWriter>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IEndpointExceptionTranslator, SchemaWriteRefusalTranslator>());
         services.AddNativeEndpoints(options => options.OperationConvention = ElsaEndpointConventions.ElsaModuleOperation);
         return services;
     }

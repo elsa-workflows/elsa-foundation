@@ -1,3 +1,5 @@
+using Elsa.Api.AspNetCore;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Runtime.Api.Models.Alterations;
 using Microsoft.AspNetCore.Http;
 using System.Text.Json;
@@ -14,10 +16,23 @@ internal static class RuntimeProblemWriting
     private const string ProblemJson = "application/problem+json";
 
     /// <summary>The generic runtime problem: RFC shape, no trace id, problem+json with charset.</summary>
-    public static async Task ProblemAsync(HttpContext context, int status, string detail)
+    public static Task ProblemAsync(HttpContext context, int status, string detail) =>
+        ProblemAsync(context, new RuntimeProblemDetails("https://elsa.dev/problems/runtime-request", "Runtime request failed", status, detail, null));
+
+    /// <summary>
+    /// A schema write refusal (spec 180, FR-016a) in the generic runtime problem: a 409 carrying the refusal's code, and
+    /// its entries, the family and both versions among them, as errors.
+    /// </summary>
+    public static Task SchemaWriteRefusedAsync(HttpContext context, SchemaWriteRefusedException refusal)
     {
-        var problem = new RuntimeProblemDetails("https://elsa.dev/problems/runtime-request", "Runtime request failed", status, detail, null);
-        context.Response.StatusCode = status;
+        var problem = SchemaWriteRefusalProblem.For(refusal);
+        return ProblemAsync(context, new RuntimeProblemDetails(
+            "https://elsa.dev/problems/runtime-request", "Runtime request failed", problem.StatusCode, refusal.Message, null, problem.Errors, refusal.Code));
+    }
+
+    private static async Task ProblemAsync(HttpContext context, RuntimeProblemDetails problem)
+    {
+        context.Response.StatusCode = problem.Status;
         context.Response.ContentType = $"{ProblemJson}; charset=utf-8";
         await JsonSerializer.SerializeAsync(context.Response.Body, problem, WorkflowsRuntimeJsonContext.Default.RuntimeProblemDetails, context.RequestAborted);
     }

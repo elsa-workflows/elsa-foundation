@@ -16,7 +16,9 @@ namespace Elsa.Workflows.Runtime.Api.Endpoints;
 /// <summary>
 /// Renders every dispatch failure for the Runtime owner's endpoints, reproducing the hand-written
 /// mapper's per-endpoint catch ladders: endpoint signals first, then the family the endpoint's
-/// shape marker names. Cancellation never reaches this renderer — the pipeline rethrows it.
+/// shape marker names. Cancellation never reaches this renderer — the pipeline rethrows it. Every
+/// shape, and an endpoint of none, answers a schema write refusal with a 409 carrying its code
+/// (spec 180, FR-016a).
 /// </summary>
 internal sealed class WorkflowsRuntimeFaultRenderer : IEndpointFaultRenderer
 {
@@ -52,6 +54,9 @@ internal sealed class WorkflowsRuntimeFaultRenderer : IEndpointFaultRenderer
                     return true;
                 case ArgumentException argument:
                     await ActivityExecutionProblemDetails.InvalidRequestAsync(context, argument.Message, context.RequestAborted);
+                    return true;
+                case SchemaWriteRefusedException refusal:
+                    await ActivityExecutionProblemDetails.SchemaWriteRefusedAsync(context, refusal, context.RequestAborted);
                     return true;
                 default:
                     LogUnexpected(context, exception, inspection.Operation);
@@ -89,6 +94,9 @@ internal sealed class WorkflowsRuntimeFaultRenderer : IEndpointFaultRenderer
                 case ArgumentException:
                     await RuntimeProblemWriting.AlterationProblemAsync(context, alteration.ArgumentCode, alteration.ArgumentMessage);
                     return true;
+                case SchemaWriteRefusedException refusal:
+                    await RuntimeProblemWriting.AlterationProblemAsync(context, refusal.Code, refusal.Message, StatusCodes.Status409Conflict);
+                    return true;
                 default:
                     LogUnexpected(context, exception, alteration.Operation);
                     await RuntimeProblemWriting.AlterationProblemAsync(context, "UnexpectedError", "Unexpected error occurred.", StatusCodes.Status500InternalServerError);
@@ -113,11 +121,22 @@ internal sealed class WorkflowsRuntimeFaultRenderer : IEndpointFaultRenderer
                 case ArgumentException argument:
                     await RuntimeProblemWriting.ProblemAsync(context, StatusCodes.Status400BadRequest, runtime.ArgumentDetail ?? argument.Message);
                     return true;
+                case SchemaWriteRefusedException refusal:
+                    await RuntimeProblemWriting.SchemaWriteRefusedAsync(context, refusal);
+                    return true;
                 default:
                     LogUnexpected(context, exception, runtime.Operation);
                     await RuntimeProblemWriting.ProblemAsync(context, StatusCodes.Status500InternalServerError, "Unexpected error occurred.");
                     return true;
             }
+        }
+
+        // An endpoint of no shape leaves the rest to translation, but WorkflowsRuntimeProblemWriter keeps only a
+        // problem's first message, which would drop a refusal's code.
+        if (exception is SchemaWriteRefusedException unshaped)
+        {
+            await RuntimeProblemWriting.SchemaWriteRefusedAsync(context, unshaped);
+            return true;
         }
 
         return false;

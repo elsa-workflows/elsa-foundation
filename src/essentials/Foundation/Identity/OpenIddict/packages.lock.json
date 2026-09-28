@@ -319,6 +319,7 @@
       "elsa.api.aspnetcore": {
         "type": "Project",
         "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )",
           "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
@@ -342,6 +343,9 @@
           "OpenIddict.Abstractions": "[7.5.0, )",
           "OpenIddict.AspNetCore": "[7.5.0, )"
         }
+      },
+      "elsa.primitives": {
+        "type": "Project"
       },
       "CShells.AspNetCore.Abstractions": {
         "type": "CentralTransitive",

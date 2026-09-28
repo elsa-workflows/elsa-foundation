@@ -1,5 +1,6 @@
 using Elsa.Api.AspNetCore;
 using Elsa.Modularity.Core.Exceptions;
+using Elsa.Primitives.Exceptions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -11,14 +12,17 @@ namespace Elsa.Modularity.Api.Endpoints;
 /// <summary>The owner's published legacy error envelope, written exactly as the mapper wrote it.</summary>
 internal static class ModularityProblemWriting
 {
-    public static Task WriteLegacyErrorAsync(HttpContext context, string message, int statusCode)
+    public static Task WriteLegacyErrorAsync(HttpContext context, string message, int statusCode) =>
+        WriteLegacyErrorAsync(context, EndpointProblem.General(statusCode, message));
+
+    public static Task WriteLegacyErrorAsync(HttpContext context, EndpointProblem problem)
     {
-        context.Response.StatusCode = statusCode;
+        context.Response.StatusCode = problem.StatusCode;
         context.Response.ContentType = "application/problem+json; charset=utf-8";
         var error = new ModularityError(
-            new Dictionary<string, string[]> { ["generalErrors"] = [message] },
+            new Dictionary<string, string[]>(problem.Errors),
             "One or more errors occurred!",
-            statusCode);
+            problem.StatusCode);
         return context.Response.WriteAsync(
             JsonSerializer.Serialize(error, ModularityJsonContext.Default.ModularityError),
             context.RequestAborted);
@@ -52,6 +56,11 @@ public sealed class ModularityFaultRenderer : IEndpointFaultRenderer
             // above (ADR 0076 D9) and, deriving from InvalidOperationException too, ahead of that arm.
             case FeatureActivationRefusedException refused:
                 await ModularityProblemWriting.WriteLegacyErrorAsync(context, refused.Message, StatusCodes.Status409Conflict);
+                return true;
+            // A write the database may not hold yet is a conflict too (spec 180, FR-016a), carrying its code, family and
+            // versions as further entries of the envelope's errors.
+            case SchemaWriteRefusedException refusal:
+                await ModularityProblemWriting.WriteLegacyErrorAsync(context, SchemaWriteRefusalProblem.For(refusal));
                 return true;
             case ArgumentException argument:
                 await ModularityProblemWriting.WriteLegacyErrorAsync(context, argument.Message, StatusCodes.Status400BadRequest);

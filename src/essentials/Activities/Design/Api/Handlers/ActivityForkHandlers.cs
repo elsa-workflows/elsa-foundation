@@ -11,6 +11,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Contracts;
+using Elsa.Primitives.Exceptions;
 using Microsoft.Extensions.Options;
 using Elsa.Primitives.Diagnostics;
 
@@ -283,7 +284,9 @@ public sealed class ActivityForkService(
         {
             throw;
         }
-        catch (Exception exception)
+        // A schema write refusal saved nothing, since the apply is one transaction, so its outcome is known: it leaves as
+        // itself and is answered 409 (spec 180, FR-016a), never reported as an apply whose outcome is unknown.
+        catch (Exception exception) when (exception is not SchemaWriteRefusedException)
         {
             var reconciled = await forkStore.FindReceiptAsync(ReceiptId(command.IdempotencyKey), cancellationToken);
             if (reconciled is not null)
