@@ -263,7 +263,10 @@ the build fails each time with a message naming the family and versions.
 - **FR-013**: A write MUST stamp the host's write version for the family, as spec 181 defines it. A host MUST NOT
   stamp a version that is not finalized, even when it is the host's own current version.
 - **FR-014**: A row read at an older version and written again MUST be written at the write version. That is the only
-  way a row moves forward: no read, startup step or background task rewrites rows as a side effect.
+  way a row moves forward on its own: no read or startup step rewrites rows as a side effect, and the only background
+  task that rewrites rows is B9's post-finalization backfill (spec 186), whose rewrite is not a side effect because it
+  is that task's stated purpose, done through the same write path and the same compare-and-set this requirement
+  governs (spec 186, FR-004).
 - **FR-015**: A write MUST NOT lower a row's stamp. When a host reads a row stamped later than its write version, it
   MUST re-read the finalized version before writing that row, because a row at version V exists only once V is
   finalized. If the record does not confirm V, the write is refused.
@@ -326,7 +329,9 @@ the build fails each time with a message naming the family and versions.
 - **FR-026**: Each of the ten EF modules and the two Publishing tables that carry no stamp today (Current state) MUST
   gain a `SchemaVersion` stamp column in its 4.0 baseline (`Initial`) migration, landing before #1976 freezes it.
   From that baseline forward, a missing stamp on those tables is skew (FR-007), exactly as it already is for the
-  fifteen stamped families.
+  fifteen stamped families. The same baseline change also carries a non-unique index on every stamped table's
+  `SchemaVersion` column, for every one of the fifteen families and for the tables this requirement stamps for the
+  first time (spec 186, FR-025).
 - **FR-027**: A content change to a family's stored shape that is not additive — a rename, retype or restructure of a
   JSON member — MUST NOT be expressed as a single version with a reverse transform. It MUST be split across two
   versions: the new member is added beside the old one at one version, and the old member is removed only once no
@@ -426,3 +431,9 @@ Recorded 2026-09-27, when the owner answered this spec's open questions on #2093
   made in place. It ships as a new format version alongside every format version that has ever shipped, and the
   build keeps a reader for each of them (FR-028), preserving the Elsa constitution's §E2.6.1 promise.
 - **Q6 — Glossary entries.** Added when the specs were approved (PR #2109), not here.
+
+Recorded 2026-09-28, when the owner answered spec 186's Q27 on #2093, which touches FR-026's baseline change.
+
+- **Q27 — An index on each stamp column.** A non-unique `SchemaVersion` index on every stamped table lands in the
+  same 4.0 baseline change as FR-026's stamp columns (#2119), so the upgrade pass, verification pass and hourly audit
+  spec 186 runs can select by stamp without a full table scan (spec 186, FR-025).
