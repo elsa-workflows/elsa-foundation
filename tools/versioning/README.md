@@ -131,6 +131,10 @@ dotnet build Elsa.Server.pack.slnf -c Release -p:CustomBeforeDirectoryBuildProps
 dotnet pack Elsa.Server.pack.slnf -c Release --no-build -p:CustomBeforeDirectoryBuildProps="$PWD/package-versions.props"
 ```
 
+The Docker Images workflow builds the Workbench image through the same file, from the publisher's plan for the same
+ref and commit, so the image's Elsa assemblies and its `deps.json` carry the versions the feed does (#2084). Its
+restore reads the file too: `deps.json` takes a project reference's version from the restore, not the build.
+
 The file sets `ElsaVersionComputationCommit`, and for each packable project, selected by project name,
 `ElsaComputedPackageVersion` and `ElsaInputFingerprint`. [`PackageVersioning.props`](../../PackageVersioning.props) at
 the repository root reads them for every project under `src/`, and makes the computed version both the package's and

@@ -7,6 +7,9 @@ name: Docker Images
 # elsaworkflows/elsa-server name is reserved for the clean host once it exists.
 # The Elsa major version (4) is encoded in the image tags:
 #   - pushes to main produce latest + 4.0.0-preview.<run_number>
+# That tag is a build number and names no package version. The Elsa assemblies in the
+# workbench image carry the versions the Packages workflow computes for the same commit
+# (the versions job below); the foundation host is built from source.
 # Pull requests touching the same paths build both images for both platforms
 # but push nothing, so a Dockerfile that no longer builds fails on the PR, not
 # on main. Without this, #2087 added a root props file the Dockerfiles did not
@@ -56,8 +59,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  versions:
+    name: Compute package versions
+    # The Workbench image is built with computed package versions (ADR 0067, spec 150, #2084), so its deps.json
+    # records every Elsa package at the version the feed carries, and its production configuration declares the
+    # Elsa shares host-provided: Nuplane then refuses a feed package that needs a newer one than the image carries.
+    # The versions come from the publisher's plan, exactly as the Packages workflow computes them for the same ref
+    # and commit - against publish-state's tip on main, against an empty record while publish-state does not exist,
+    # and at branch-scoped versions for anything else - and reach the image build as one build arg, the
+    # pack-properties file gzipped and base64-encoded, because the builder takes build args one per line and checks
+    # out the commit itself. A pull request is computed as its head branch, since the plan only knows branch refs.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      package-versions: ${{ steps.encode.outputs.package-versions }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # The calculator compares trees at the commits the record names and proves ancestry (FR-021).
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Build the publisher
+        run: dotnet build tools/versioning/Elsa.Versioning.Publisher -c Release
+
+      - name: Plan
+        env:
+          REF: ${{ github.event_name == 'pull_request' && format('refs/heads/{0}', github.head_ref) || github.ref }}
+        run: >-
+          dotnet run --project tools/versioning/Elsa.Versioning.Publisher -c Release --no-build --
+          plan --ref "$REF" --commit "$GITHUB_SHA" --output "$RUNNER_TEMP/versions"
+
+      - name: Encode
+        id: encode
+        run: echo "package-versions=$(gzip -9n < "$RUNNER_TEMP/versions/package-versions.props" | base64 -w0)" >> "$GITHUB_OUTPUT"
+
   build-and-push:
     name: Build & push elsa-workbench
+    needs: versions
     # Pinned to an exact release, not the floating @v1. This workflow pins the
     # BuildKit and Buildx versions the build runs on, and a frontend older than
     # that BuildKit fails the build outright -- see the `# syntax=` pin in
@@ -73,6 +116,9 @@ jobs:
       push: ${{ github.event_name != 'pull_request' }}
       context: .
       file: src/apps/Elsa.Workbench/Dockerfile
+      # An empty value fails the build rather than falling back to a source build (see the Dockerfile).
+      build-args: |
+        ELSA_PACKAGE_VERSIONS=${{ needs.versions.outputs.package-versions }}
       platforms: linux/amd64,linux/arm64
       cache: true
       cache-mode: max

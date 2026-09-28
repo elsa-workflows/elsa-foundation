@@ -31,6 +31,10 @@ namespace Elsa.Architecture.Tests;
 /// Docker itself matches it: last pattern wins, and a pattern excludes a path via itself or any ancestor
 /// directory.
 /// </para>
+/// <para>
+/// The Workbench's publish is held to the same rule for its computed package versions (#2084): the restore it relies
+/// on must be given every property it is given, the pack-properties file among them.
+/// </para>
 /// </remarks>
 public sealed class DockerBuildContextGuardTests
 {
@@ -92,7 +96,39 @@ public sealed class DockerBuildContextGuardTests
         Assert.True(violations.Length == 0, Report(violations));
     }
 
+    /// <summary>
+    /// The same silent failure one level down (#2084). A Workbench image built with computed package versions gives its
+    /// no-restore publish the calculator's pack-properties file, and <c>deps.json</c> takes a project reference's version
+    /// from the restore, not the build: a publish whose restore was not given the file too stamps the computed versions
+    /// into the assemblies and still records the dev versions in <c>deps.json</c>, which is what Nuplane checks a feed
+    /// package's range against. So the <c>RUN</c> that publishes restores first, with every property it publishes with.
+    /// </summary>
+    [Fact]
+    public void The_workbench_publish_restores_with_every_property_it_publishes_with()
+    {
+        var dockerfile = File.ReadAllText(Path.Join(RepoRoot, "src", "apps", "Elsa.Workbench", "Dockerfile"));
+
+        Assert.Contains("-p:CustomBeforeDirectoryBuildProps=", PublishInstruction(dockerfile), StringComparison.Ordinal);
+        Assert.Empty(PublishPropertiesItsRestoreLacks(dockerfile));
+    }
+
     // ---- Mutation proofs: same predicates, synthetic inputs ----------------------------------------------------
+
+    [Theory]
+    [InlineData("-r \"$RID\" -p:PublishReadyToRun=true \"$@\"", null)]
+    [InlineData("-r \"$RID\" -p:PublishReadyToRun=true", "\"$@\"")]
+    [InlineData("-r \"$RID\" \"$@\"", "-p:PublishReadyToRun=true")]
+    public void A_publish_whose_restore_lacks_one_of_its_properties_is_flagged(string restoreArguments, string? lacking)
+    {
+        var dockerfile = $"""
+            FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+            RUN set -- -p:CustomBeforeDirectoryBuildProps=/tmp/elsa/package-versions.props \
+                && dotnet restore src/apps/Fixture/Fixture.csproj {restoreArguments} \
+                && dotnet publish src/apps/Fixture/Fixture.csproj -c Release --no-restore -p:PublishReadyToRun=true "$@" -o /app/publish
+            """;
+
+        Assert.Equal(lacking is null ? [] : [lacking], PublishPropertiesItsRestoreLacks(dockerfile));
+    }
 
     [Fact]
     public void A_dockerfile_copying_root_files_except_one_before_restore_is_flagged_for_the_missing_one()
@@ -303,6 +339,36 @@ public sealed class DockerBuildContextGuardTests
             .ToArray();
         return (copies, null);
     }
+
+    /// <summary>The one <c>RUN</c> instruction that runs <c>dotnet publish</c>.</summary>
+    private static string PublishInstruction(string dockerfileText) =>
+        LogicalInstructions(dockerfileText).Single(instruction =>
+            instruction.StartsWith("RUN ", StringComparison.OrdinalIgnoreCase) &&
+            instruction.Contains("dotnet publish", StringComparison.Ordinal));
+
+    /// <summary>
+    /// The properties the <c>dotnet publish</c> in <see cref="PublishInstruction"/> is given - its <c>-p:</c> arguments,
+    /// and <c>"$@"</c>, which carries the pack-properties file - that the <c>dotnet restore</c> before it in the same
+    /// instruction is not given: every one of them when no restore precedes it there.
+    /// </summary>
+    private static IReadOnlyList<string> PublishPropertiesItsRestoreLacks(string dockerfileText)
+    {
+        var run = PublishInstruction(dockerfileText);
+        var publish = run.IndexOf("dotnet publish", StringComparison.Ordinal);
+        var restore = run.LastIndexOf("dotnet restore", publish, StringComparison.Ordinal);
+        IReadOnlyList<string> restoreArguments = restore < 0 ? [] : Arguments(run[restore..publish]);
+
+        return
+        [
+            .. Arguments(run[publish..])
+                .Where(argument => argument.StartsWith("-p:", StringComparison.Ordinal) || argument == "\"$@\"")
+                .Where(argument => !restoreArguments.Contains(argument))
+        ];
+    }
+
+    /// <summary>A command's whitespace-separated arguments, up to the <c>&amp;&amp;</c> that ends it.</summary>
+    private static IReadOnlyList<string> Arguments(string command) =>
+        [.. command.Split(' ', StringSplitOptions.RemoveEmptyEntries).TakeWhile(argument => argument != "&&")];
 
     /// <summary>
     /// Joins `\`-continued lines into one instruction each. Blank lines and `#` comments are dropped even inside a

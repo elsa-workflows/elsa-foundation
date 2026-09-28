@@ -160,15 +160,22 @@ version check apply: a feed package that needs a newer version of a declared pac
 being bound to the older copy and failing later at a missing member.
 
 `Elsa.Foundation.Host` is fully declared: it shares only the three `CShells.*.Abstractions` assemblies, and
-declares all three. `Elsa.Workbench` declares its two CShells shares but carries a named exemption for its
-Elsa ones (`Elsa.Primitives`, `Elsa.Workflows.Runtime.Core` and the rest of its `SharedAssemblies`). A
-Workbench built from source records its own Elsa packages as `1.0.0`, while Elsa feed packages are built
-against `4.0.0-preview.N` and require at least that, so declaring those packages would refuse every Elsa
-feed package that depends on one. Until then those shares are unchecked, which is the late-failure shape
-this section describes. The exemption lives in the guard with its reason beside each entry, the guard fails
-if an exempted assembly stops being shared, and it lifts once source builds carry real versions
+declares all three. `Elsa.Workbench` declares all its shares, the Elsa ones included, when it is built with
+computed package versions, as CI builds its image
 ([ADR 0067](adr/0067-package-versioning-uses-two-lines-with-computed-patch.md),
-[#1144](https://github.com/elsa-workflows/elsa-foundation/issues/1144)).
+[#2084](https://github.com/elsa-workflows/elsa-foundation/issues/2084)). Such a build records each Elsa package
+in its `deps.json` at the version the feed carries, and ships `ComputedVersions/appsettings.Production.json` as
+its `appsettings.Production.json`: the committed file plus a `Nuplane:HostProvidedPackages` list naming every
+share, `Elsa.Primitives`, `Elsa.Workflows.Runtime.Core` and the rest. So the image
+refuses a feed package that needs a newer shared Elsa package than it carries. A Workbench built from source
+records its Elsa packages at their line's dev version (`4.0.0-dev` today), which every Elsa feed package's range
+excludes, so declaring them would refuse every Elsa feed package that depends on one. A source build therefore
+keeps the committed `appsettings.Production.json`, declares only its two CShells shares, and carries a named
+exemption for the Elsa ones, which it leaves unchecked: the late-failure shape this section describes. That covers
+`dotnet run`, the Docker image built locally and the source-built compose stack alike. The exemption lives in the
+guard with its reason beside each entry, and applies to source builds only; the guard fails if an exempted assembly
+stops being shared or a source build declares it after all, if a computed build leaves any share undeclared, and if
+the computed production file differs from the committed one in anything but that list.
 
 Sharing is also closed under Elsa project dependencies. A shared assembly's dependencies are not shared
 with it. A feed-loaded feature gets its own private copy of any Elsa dependency the host does not also
@@ -177,7 +184,7 @@ share, so the types it exchanges with the shared assembly do not match the host'
 assembly built from a project under `src/` without sharing every Elsa project it references, directly or
 transitively. That is why `Elsa.Workbench` shares `Elsa.Events.Core`, `Elsa.Pipelines.Core` and
 `Elsa.Workflows.Design.Validations.Core`, and it shares `Elsa.Attention.Core` because that assembly is a
-Line A contract features exchange with one another. All four sit under the same exemption as its other
+Line A contract features exchange with one another. All four are declared and exempted like its other
 Elsa shares.
 
 Neither case is caught by the version range or the lock file, because nothing was resolved to check.
