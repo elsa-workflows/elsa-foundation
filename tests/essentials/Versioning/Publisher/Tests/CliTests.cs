@@ -37,10 +37,17 @@ public sealed class CliTests : PublishingHistory
     public void Publish_exits_1_for_a_plan_that_pushes_nothing()
     {
         var run = PlanAndPack();
+        var previous = Environment.GetEnvironmentVariable("ELSA_PUBLISHER_TEST_KEY");
         Environment.SetEnvironmentVariable("ELSA_PUBLISHER_TEST_KEY", "key");
-
-        Assert.Equal(1, Run("publish", "--repo", Repo.Root, "--ref", PublishPlan.MainRef, "--plan-dir", run.Directory,
-            "--feed", "https://feed.invalid/index.json", "--api-key-env", "ELSA_PUBLISHER_TEST_KEY"));
+        try
+        {
+            Assert.Equal(1, Run("publish", "--repo", Repo.Root, "--ref", PublishPlan.MainRef, "--plan-dir", run.Directory,
+                "--feed", "https://feed.invalid/index.json", "--api-key-env", "ELSA_PUBLISHER_TEST_KEY"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ELSA_PUBLISHER_TEST_KEY", previous);
+        }
     }
 
     [Theory]
