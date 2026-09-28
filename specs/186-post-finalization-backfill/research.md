@@ -37,6 +37,12 @@ once and rarely or never again:
 Once spec 180's FR-026 stamps the ten unstamped EF modules and two Publishing tables in their 4.0 baselines (#2119),
 they become families too, and each needs a rewriter (FR-004) before its first version bump.
 
+**2026-09-28 note.** [#2119](https://github.com/elsa-workflows/elsa-foundation/issues/2119) (PR
+[#2131](https://github.com/elsa-workflows/elsa-foundation/pull/2131)) landed after this inventory was read from the
+tree: every EF module now stamps a schema family, taking the total from the fifteen named above to twenty-six.
+Whether the ten-and-two named here still need the rewriter this section calls for, or already have one, should be
+checked against what #2131 shipped before FR-004 is scoped.
+
 ## What the spec relies on from specs 180 to 183
 
 | Need | Where it is specified |

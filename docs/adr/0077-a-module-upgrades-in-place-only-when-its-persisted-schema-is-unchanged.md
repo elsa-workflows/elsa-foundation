@@ -33,10 +33,19 @@ the `Workflows.Runtime` EF module (`BookmarkStateEfModule`, `RuntimeActivationSl
 `RuntimeActivityExecutionEfModule`, `RuntimeArtifactEfModule`, `RuntimeOperationalStateEfModule`,
 `RuntimePostCommitOutboxEfModule`, `RuntimeSchedulerPoisonEfModule`, `RuntimeTriggerBindingEfModule`,
 `RuntimeWorkflowAlterationEfModule`, `RuntimeWorkflowDispatchEfModule`, `RuntimeWorkflowExecutionEfModule`,
-`RuntimeWorkflowTestScopeEfModule`); two publishing families, inside `Workflows.Publishing`
-(`PublishingLedgerEfModule.ContentSchemaVersion` and `PublishingPolicyProjectionEfModule.SchemaVersion`);
-and one import family, inside `Elsa3.Activities.Design.Import` (`Elsa3ImportEfModule`) — module names
-from [ADR 0076](0076-persistence-tooling-runs-inside-the-host-closure.md) D3's thirteen-name vocabulary.
+`RuntimeWorkflowTestScopeEfModule`); three publishing families, inside `Workflows.Publishing`
+(`PublishingLedgerEfModule.ContentSchemaVersion`, `PublishingPolicyProjectionEfModule.SchemaVersion` and
+`PublishingSnapshotReviewEfModule.SchemaVersion`); one import family, inside
+`Elsa3.Activities.Design.Import` (`Elsa3ImportEfModule`); and one family in each of the remaining ten EF
+modules — `Secrets` (`SecretsEfModule`), `Workflows.Design` (`WorkflowsDesignEfModule`),
+`Workflows.Runtime.Distributed.Placement` (`ExecutionPlacementEfModule`),
+`Workflows.Runtime.Distributed.CommandTransport` (`ExecutionCommandTransportEfModule`),
+`Activities.Design` (`ActivitiesDesignEfModule`), `Identity.Iam` (`IdentityIamEfModule`),
+`Identity.ProviderConfiguration` (`IdentityProviderConfigurationEfModule`), `Diagnostics.OpenTelemetry`
+(`EfOpenTelemetryModule`), `Diagnostics.StructuredLogs` (`StructuredLogsEfModule`) and
+`Studio.Preferences` (`StudioPreferencesEfModule`) — module names
+from [ADR 0076](0076-persistence-tooling-runs-inside-the-host-closure.md) D3's thirteen-name vocabulary,
+every one of which now stamps at least one family.
 All are `1.0.0` except `ContentSchemaVersion`, which is `1`. Only fourteen checked it when this ADR was
 written: the fifteenth,
 `PublishingPolicyProjectionEfModule.SchemaVersion`, was declared but neither written nor read, so
@@ -56,8 +65,9 @@ operator meeting this during a deploy sees a data-incident message for what is a
 
 *Amended 2026-09-27.* This ADR first called these fifteen constants "EF modules". They are schema
 families instead: what a row's `SchemaVersion` carries, and what the mismatch check above compares.
-Twenty-six families live inside three of the thirteen EF modules ADR 0076 D3 names, not one family per
-module. Decided by Sipke Schoorstra on [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093)
+Twenty-six families live inside all thirteen EF modules ADR 0076 D3 names — most modules host exactly
+one, but `Workflows.Runtime` hosts twelve and `Workflows.Publishing` hosts three — so it is still not
+one family per module. Decided by Sipke Schoorstra on [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093)
 (2026-09-27), settling drift the acceptance review on
 [#2096](https://github.com/elsa-workflows/elsa-foundation/issues/2096) found between this text and the
 code. Enable-time refusals stay per EF module ([ADR 0076](0076-persistence-tooling-runs-inside-the-host-closure.md)
@@ -65,7 +75,8 @@ D9): a guard maps a feature to the module it depends on, not to one family insid
 
 *Amended 2026-09-28.* [#2119](https://github.com/elsa-workflows/elsa-foundation/issues/2119) (PR
 [#2131](https://github.com/elsa-workflows/elsa-foundation/pull/2131)) stamped every EF content table's
-schema version, growing the checked count from fifteen to twenty-six. Approved by Sipke Schoorstra.
+schema version, growing the checked count from fifteen to twenty-six and taking the count of EF modules
+with a checked family from three of thirteen to all thirteen. Approved by Sipke Schoorstra.
 
 **The default migrate policy opens the skew window automatically.** `EfMigrateOptions.DefaultPolicy`
 is `EfMigratePolicy.AutoMigrate`, and `EfDatabaseMigrator.ApplyAsync` migrates in-process. The
