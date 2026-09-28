@@ -28,7 +28,7 @@ public sealed class EfModuleMigrator<TContext>(
     IServiceScopeFactory scopes,
     EfModuleMigration<TContext> migration,
     IOptions<EfMigrateOptions> options,
-    IServiceProvider services) : IHostedService, IShellInitializer, IAsyncDisposable
+    IServiceProvider services) : IHostedService, IShellInitializer, IAsyncDisposable, IDisposable
     where TContext : DbContext
 {
     private readonly SemaphoreSlim _admission = new(1, 1);
@@ -51,6 +51,9 @@ public sealed class EfModuleMigrator<TContext>(
         _stopping.Dispose();
         _admission.Dispose();
     }
+
+    /// <summary>For a container disposed synchronously: the gate's loop ends as soon as it is cancelled.</summary>
+    public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
 
     private async Task ApplyAsync(CancellationToken cancellationToken)
     {

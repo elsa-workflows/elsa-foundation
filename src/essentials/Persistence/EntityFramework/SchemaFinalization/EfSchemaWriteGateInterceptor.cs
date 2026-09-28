@@ -25,9 +25,10 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// content is in the format the store wrote, and only the store can write an older one.</item>
 /// </list>
 /// <para>
-/// A context whose module no gate has admitted in its container, as in a test or a tool, can only write a family that
-/// has one version, the one every reader reads; a family with a longer chain is refused rather than written at a
-/// version nothing has confirmed is finalized.
+/// The check applies once a module's gate has admitted it in the container the context was built from. The module's
+/// migrator admits it at Prepare, or as a plain host starts, before any shell task, seeder or store of that container
+/// touches its tables, and a module the gate refuses never activates, so every write a running host makes is checked.
+/// A context outside that, such as a test's own, a tool's, or one standing for another build's writer, is not.
 /// </para>
 /// <para>
 /// A write that bypasses <c>SaveChanges</c>, such as <c>ExecuteUpdate</c>, does not pass through here. No first-party
@@ -74,9 +75,9 @@ public sealed class EfSchemaWriteGateInterceptor : SaveChangesInterceptor
     /// <summary>Checks every pending write of <paramref name="context"/>; completes synchronously when <paramref name="synchronous"/>.</summary>
     internal static async ValueTask CheckAsync(DbContext context, bool synchronous, CancellationToken cancellationToken)
     {
-        var gate = FindGate(context);
-        if ((gate?.Families ?? EfSchemaModuleFamilies.ForContext(context.GetType())) is not { } families)
+        if (FindGate(context) is not { } gate)
             return;
+        var families = gate.Families;
         if (context.ChangeTracker.AutoDetectChangesEnabled)
             context.ChangeTracker.DetectChanges();
 
@@ -97,7 +98,8 @@ public sealed class EfSchemaWriteGateInterceptor : SaveChangesInterceptor
                             $"EF module '{families.Module}' writes '{entry.Metadata.ClrType.Name}', a stamped table no single schema family of the " +
                             "module claims. Name it in the Entities of its family's [EfSchemaFamily] declaration.");
             if (!versions.TryGetValue(chain.Family, out var state))
-                versions[chain.Family] = state = StateOf(gate, chain, families.Module);
+                versions[chain.Family] = state = gate.StateOf(chain.Family)
+                                                 ?? throw new InvalidOperationException($"EF module '{families.Module}' was admitted without a write version for '{chain.Family}'.");
             if (state.WritesRefused)
                 throw new EfSchemaFamilyWritesRefusedException(chain.Family, state.WriteVersion, state.UnreadableFinalizedVersion!, state.ReadableVersions);
             if (entry.State is EntityState.Deleted)
@@ -108,9 +110,7 @@ public sealed class EfSchemaWriteGateInterceptor : SaveChangesInterceptor
             {
                 // Spec 180, FR-015: a row at a later version exists only once that version is finalized, so the record
                 // is read again before the row is written, and the save is refused if it does not confirm it.
-                state = versions[chain.Family] = gate is null
-                    ? state
-                    : await gate.ConfirmAsync(context, chain, synchronous, cancellationToken);
+                state = versions[chain.Family] = await gate.ConfirmAsync(context, chain, synchronous, cancellationToken);
                 if (state.WritesRefused)
                     throw new EfSchemaFamilyWritesRefusedException(chain.Family, state.WriteVersion, state.UnreadableFinalizedVersion!, state.ReadableVersions);
                 if (Later(chain, stored, state.WriteVersion))
@@ -121,19 +121,6 @@ public sealed class EfSchemaWriteGateInterceptor : SaveChangesInterceptor
             if (!StringComparer.Ordinal.Equals(written, state.WriteVersion))
                 throw new EfSchemaWriteRefusedException(chain.Family, state.WriteVersion, written ?? "(no stamp)");
         }
-    }
-
-    /// <summary>
-    /// What <paramref name="chain"/> may write: the gate's state once it has admitted the module, and otherwise the
-    /// family's only version, when it has just one.
-    /// </summary>
-    private static EfSchemaFamilyWriteState StateOf(EfSchemaModuleGate? gate, EfSchemaChain chain, string module)
-    {
-        if (gate?.StateOf(chain.Family) is { } state)
-            return state;
-        if (chain.ReadableVersions.Count == 1)
-            return new EfSchemaFamilyWriteState(chain.CurrentVersion, null, chain.ReadableVersions);
-        throw new EfSchemaWriteRefusedException(chain.Family, chain.ReadableVersions[0], chain.CurrentVersion);
     }
 
     /// <summary>True when <paramref name="stamp"/> comes after <paramref name="writeVersion"/> along the chain, or is not in it.</summary>

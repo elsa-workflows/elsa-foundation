@@ -120,7 +120,17 @@ public sealed class EfSchemaModuleGate
             _admittedIncarnation = _publishBeforeRead ? standing?.Member.Incarnation : null;
 
         await PublishQuietlyAsync(cancellationToken);
-        await EvaluateAsync(context, cancellationToken);
+        try
+        {
+            await EvaluateAsync(context, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // The module is admitted: what it may write is settled. An evaluation that cannot read the fleet now only
+            // delays finalization to the next round, so it does not refuse the activation.
+            _logger.LogWarning(exception, "EF module {Module} was admitted, but its first evaluation failed; the next round tries again.", Module);
+        }
+
         await RefreshAsync(context, cancellationToken);
     }
 
