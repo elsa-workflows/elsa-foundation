@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The opt-in EF Core cluster membership provider (spec 183, B2, #2098): a Layer 3 provider of Elsa.Cluster.Core. A host
+    composes it once, on its own container and from host configuration (ADR 0078, amended; ADR 0076 D9), never through
+    a shell feature. Provider-neutral module: EF Core + Relational only; the host brings the one engine it selects.
+  -->
+  <PropertyGroup>
+    <Description>
+      Opt-in EF Core cluster membership: hosts register, heartbeat and expire through one shared table, and read the
+      fleet from it. Composed once per host from configuration; the in-process default stays otherwise.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Core\Elsa.Cluster.Core.csproj" />
+    <ProjectReference Include="..\..\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="nuplane.json" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>

@@ -17,7 +17,7 @@ public sealed class EfSchemaFamilyDescriptorTests
         var modules = EfModuleCatalog.Discover(ModuleContextCatalog.Modules);
         var families = EfSchemaFamilyCatalog.Discover(ModuleContextCatalog.Modules);
 
-        Assert.True(families.Count >= 26, $"Expected the twenty-six families every EF content table stamps since #2119 at least; found {families.Count}.");
+        Assert.True(families.Count >= 27, $"Expected the twenty-six families every EF content table stamps since #2119, and cluster membership's (#2098), at least; found {families.Count}.");
         Assert.Equal(families.Count, families.Select(family => family.Name).Distinct(StringComparer.Ordinal).Count());
         Assert.All(families, family => Assert.Contains(modules, module => module.Name == family.Module && module.Assembly == family.Assembly));
     }

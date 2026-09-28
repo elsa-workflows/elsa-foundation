@@ -24,6 +24,7 @@ using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities;
 using Elsa.Attention.Api;
 using Elsa.Caching.Memory;
+using Elsa.Cluster.Hosting;
 using Elsa.Cluster.Readability;
 using Elsa.Diagnostics.ConsoleLogStreaming;
 using Elsa.Diagnostics.OpenTelemetry;
@@ -212,6 +213,9 @@ builder.Services.AddEfPendingMigrationActivationGuard();
 // composed here, on the host container. It brings the in-process default, so an unclustered Workbench is a cluster of
 // one that reports the schema families it has loaded without any further configuration.
 builder.Services.AddEfSchemaReadability();
+// The durable EF provider replaces that default only when the Elsa:Cluster:Membership section enables it (ADR 0078;
+// spec 183, FR-024), and then requires an explicit Elsa:Cluster:Membership:HostId. It publishes the same report.
+builder.Services.AddConfiguredClusterMembership(configuration);
 builder.Services.AddDynamicEndpointApiExplorerRefresh();
 
 builder.Services.AddCShellsAspNetCore(shells =>
