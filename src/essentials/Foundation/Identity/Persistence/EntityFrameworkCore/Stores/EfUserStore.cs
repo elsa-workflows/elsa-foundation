@@ -3,6 +3,7 @@ using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 
@@ -44,7 +45,12 @@ public sealed class EfUserStore(
                 context,
                 "Unable to find the Identity user by email.",
                 () => context.Users.AsNoTracking().Where(x => x.TenantLookupKey == EfIdentityStoreSupport.TenantLookup(tenantId) && x.NormalizedEmailKey == key).OrderBy(x => x.Id).Take(2).ToListAsync(cancellationToken));
-            return rows.Count == 1 && string.Equals(EfIdentityStoreSupport.Normalize(rows[0].Email), EfIdentityStoreSupport.Normalize(email), StringComparison.Ordinal) ? Map(rows[0]) : null;
+            if (rows.Count != 1)
+                return null;
+            return EfSchemaVersion.Readable("IdentityIam", rows[0].SchemaVersion, IdentityIamEfModule.SchemaVersion) &&
+                   string.Equals(EfIdentityStoreSupport.Normalize(rows[0].Email), EfIdentityStoreSupport.Normalize(email), StringComparison.Ordinal)
+                ? Map(rows[0])
+                : null;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { context.ChangeTracker.Clear(); throw; }
         catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException) { context.ChangeTracker.Clear(); throw Failure("Unable to find the Identity user by email.", exception); }
@@ -95,12 +101,17 @@ public sealed class EfUserStore(
         cancellationToken.ThrowIfCancellationRequested();
     }
 
-    private static UserRecord Map(UserEntity entity) => new(
-        entity.UserId, entity.TenantId, entity.UserName, entity.Email, entity.DisplayName,
-        (UserStatus)entity.Status, (ResourceOwnership)entity.Ownership,
-        EfIdentityStoreSupport.DeserializeSet(entity.RoleIdsJson), EfIdentityStoreSupport.DeserializeSet(entity.DirectPermissionsJson));
+    private static UserRecord Map(UserEntity entity)
+    {
+        EfSchemaVersion.EnsureReadable("IdentityIam", entity.SchemaVersion, IdentityIamEfModule.SchemaVersion);
+        return new(
+            entity.UserId, entity.TenantId, entity.UserName, entity.Email, entity.DisplayName,
+            (UserStatus)entity.Status, (ResourceOwnership)entity.Ownership,
+            EfIdentityStoreSupport.DeserializeSet(entity.RoleIdsJson), EfIdentityStoreSupport.DeserializeSet(entity.DirectPermissionsJson));
+    }
 
     private static bool Matches(UserEntity entity, string tenantId, string userId) =>
+        EfSchemaVersion.Readable("IdentityIam", entity.SchemaVersion, IdentityIamEfModule.SchemaVersion) &&
         string.Equals(entity.Id, EfIdentityStoreSupport.RecordId(tenantId, userId), StringComparison.Ordinal) &&
         string.Equals(EfIdentityStoreSupport.Normalize(entity.TenantId), EfIdentityStoreSupport.Normalize(tenantId), StringComparison.Ordinal) &&
         string.Equals(EfIdentityStoreSupport.Normalize(entity.UserId), EfIdentityStoreSupport.Normalize(userId), StringComparison.Ordinal);
@@ -112,5 +123,5 @@ public sealed class EfUserStore(
             throw new ArgumentException($"Identity key values cannot exceed {IdentityProviderConfigurationCanonicalizer.MaximumIdentityLength} UTF-16 code units.", parameter);
     }
 
-    private static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception) => new(message, exception);
+    private static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception) => EfIdentityStoreSupport.Failure(message, exception);
 }

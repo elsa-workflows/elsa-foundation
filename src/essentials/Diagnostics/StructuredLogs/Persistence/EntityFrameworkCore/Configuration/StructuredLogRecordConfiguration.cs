@@ -22,6 +22,7 @@ public sealed class StructuredLogRecordConfiguration : IEntityTypeConfiguration<
         builder.Property(record => record.SourceKey).HasMaxLength(64).IsRequired();
         builder.Property(record => record.ReplayToken).HasMaxLength(32).IsRequired();
         builder.Property(record => record.PayloadJson).IsRequired();
+        builder.Property(record => record.SchemaVersion).HasMaxLength(32).IsRequired();
 
         builder.HasIndex(record => new { record.ScopeKey, record.Level, record.Position })
             .HasDatabaseName("IX_elsa_structured_log_records_scope_level_position");

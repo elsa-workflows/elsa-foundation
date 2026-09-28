@@ -41,7 +41,8 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
                 cancellationToken);
         if (record is null)
             return null;
-        if (record.ConcurrencyToken is not { Length: 16 })
+        if (EfSchemaVersion.NotReadable("Secrets", record.SchemaVersion, SecretsEfModule.SchemaVersion) ||
+            record.ConcurrencyToken is not { Length: 16 })
             throw new InvalidOperationException("The EF secret row has no optimistic concurrency token.");
         return new SecretRevisionedRecord(Map(record, tenantId), SecretRevisionMapper.Revision(record.ConcurrencyToken));
     }
@@ -113,7 +114,11 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
             if (existing is null)
                 context.Secrets.Add(document.ToRecord());
             else
+            {
+                // A row this build cannot read is never overwritten in this build's format.
+                EfSchemaVersion.EnsureReadable("Secrets", existing.SchemaVersion, SecretsEfModule.SchemaVersion);
                 document.CopyProjectionsTo(existing);
+            }
 
             try
             {
@@ -146,6 +151,9 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
         ValidateIdentity(secret.TenantId, secret.Name);
         var document = SecretDocument.FromSecret(secret);
         var existing = await context.Secrets.FindAsync([secret.TenantId, secret.Name], cancellationToken);
+        // Settled before the stored revision is compared, and before a row this build cannot read is replaced.
+        if (existing is not null)
+            EfSchemaVersion.EnsureReadable("Secrets", existing.SchemaVersion, SecretsEfModule.SchemaVersion);
 
         if (expectedToken is null)
         {
@@ -274,6 +282,7 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
 
     private static Secret Map(SecretRecord record, string tenantId)
     {
+        EfSchemaVersion.EnsureReadable("Secrets", record.SchemaVersion, SecretsEfModule.SchemaVersion);
         var document = SecretDocument.Parse(record.Payload);
         if (!string.Equals(document.TenantId, document.Secret.TenantId, StringComparison.Ordinal))
             throw new InvalidOperationException("Secret document contains conflicting tenant identities.");

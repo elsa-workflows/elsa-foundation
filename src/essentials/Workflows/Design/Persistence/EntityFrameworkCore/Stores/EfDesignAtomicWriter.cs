@@ -344,8 +344,10 @@ public sealed class EfDesignAtomicWriter(
                 _ = exception;
             }
             catch (DesignPersistenceException) { throw; }
-            catch (Exception exception) when (exception is InvalidDataException or JsonException)
+            catch (Exception exception) when (exception is InvalidDataException or JsonException or EfSchemaVersionSkewException)
             {
+                // A marker a newer module version wrote does not become readable by retrying, and retrying until the
+                // window closes would report the skew as an unknown outcome.
                 throw;
             }
             catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException))

@@ -25,6 +25,7 @@ public abstract class StructuredLogsDbContext(DbContextOptions options) : DbCont
             this,
             "PayloadJson",
             "OutcomeJson");
+        modelBuilder.IndexSchemaVersionStamps();
     }
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);

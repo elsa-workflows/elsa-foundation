@@ -253,7 +253,11 @@ public sealed class EfCoreIdentityUserStore(
                     .ToListAsync(cancellationToken));
         EnsureRelationshipMaterializationLimit(rows.Count, "user claims");
         return rows
-            .Select(x => new Claim(x.ClaimType, x.ClaimValue ?? string.Empty))
+            .Select(x =>
+            {
+                IdentityEntityFrameworkAdapterSupport.EnsureReadable(x.SchemaVersion);
+                return new Claim(x.ClaimType, x.ClaimValue ?? string.Empty);
+            })
             .ToList();
     }
 
@@ -385,7 +389,11 @@ public sealed class EfCoreIdentityUserStore(
                     .OrderBy(x => x.Id).Take(MaximumMaterializedRelationshipEntries + 1).ToListAsync(cancellationToken));
         EnsureRelationshipMaterializationLimit(rows.Count, "external logins");
         return rows
-            .Select(x => new UserLoginInfo(x.Provider, x.ProviderSubject, x.ProviderDisplayName))
+            .Select(x =>
+            {
+                IdentityEntityFrameworkAdapterSupport.EnsureReadable(x.SchemaVersion);
+                return new UserLoginInfo(x.Provider, x.ProviderSubject, x.ProviderDisplayName);
+            })
             .ToList();
     }
 
@@ -398,7 +406,10 @@ public sealed class EfCoreIdentityUserStore(
             db,
             "Unable to find the ASP.NET Core Identity user by login.",
             () => db.ExternalIdentities.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.TenantLookupKey == TenantKey(tenantId), cancellationToken));
-        return login is null ? null : await FindByIdAsync(login.UserId, cancellationToken);
+        if (login is null)
+            return null;
+        IdentityEntityFrameworkAdapterSupport.EnsureReadable(login.SchemaVersion);
+        return await FindByIdAsync(login.UserId, cancellationToken);
     }
 
     public async Task AddToRoleAsync(AspNetCoreIdentityUser user, string roleName, CancellationToken cancellationToken)
@@ -443,23 +454,34 @@ public sealed class EfCoreIdentityUserStore(
                 .Where(x => x.TenantLookupKey == TenantKey(user.TenantId) && x.UserLookupKey == UserKey(user.TenantId, user.Id))
                 .OrderBy(x => x.RoleLookupKey)
                 .ThenBy(x => x.Id)
-                .Select(x => x.RoleId)
+                .Select(x => new { x.SchemaVersion, x.RoleId })
                 .Take(MaximumMaterializedRelationshipEntries + 1)
                 .ToListAsync(cancellationToken));
         EnsureRelationshipMaterializationLimit(roleIds.Count, "user roles");
         var roleRecordIds = roleIds
-            .Select(roleId => IdentityEntityFrameworkAdapterSupport.RecordId(user.TenantId, roleId))
+            .Select(link =>
+            {
+                IdentityEntityFrameworkAdapterSupport.EnsureReadable(link.SchemaVersion);
+                return IdentityEntityFrameworkAdapterSupport.RecordId(user.TenantId, link.RoleId);
+            })
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        return await IdentityEntityFrameworkAdapterSupport.ReadAsync(
+        var roles = await IdentityEntityFrameworkAdapterSupport.ReadAsync(
             db,
             "Unable to read ASP.NET Core Identity role names.",
             () => db.Roles.AsNoTracking()
                 .Where(x => x.TenantLookupKey == TenantKey(user.TenantId) && roleRecordIds.Contains(x.Id))
                 .OrderBy(x => x.RoleIdOrderKey)
                 .ThenBy(x => x.Id)
-                .Select(x => x.Name)
+                .Select(x => new { x.SchemaVersion, x.Name })
                 .ToListAsync(cancellationToken));
+        return roles
+            .Select(role =>
+            {
+                IdentityEntityFrameworkAdapterSupport.EnsureReadable(role.SchemaVersion);
+                return role.Name;
+            })
+            .ToList();
     }
 
     public async Task<bool> IsInRoleAsync(AspNetCoreIdentityUser user, string roleName, CancellationToken cancellationToken)
@@ -543,7 +565,10 @@ public sealed class EfCoreIdentityUserStore(
             db,
             "Unable to read ASP.NET Core Identity user token.",
             () => db.UserTokens.AsNoTracking().SingleOrDefaultAsync(x => x.Id == IdentityEntityFrameworkAdapterSupport.CompoundKey(user.TenantId, user.Id, loginProvider, name), cancellationToken));
-        return token?.Value;
+        if (token is null)
+            return null;
+        IdentityEntityFrameworkAdapterSupport.EnsureReadable(token.SchemaVersion);
+        return token.Value;
     }
 
     public Task SetAuthenticatorKeyAsync(AspNetCoreIdentityUser user, string key, CancellationToken cancellationToken) =>
@@ -676,13 +701,18 @@ public sealed class EfCoreIdentityUserStore(
         EnsureRelationshipSucceeded(result, "user-claim mutation");
     }
 
-    private async Task<RoleEntity?> FindRoleAsync(string tenantId, string name, CancellationToken cancellationToken) =>
-        await IdentityEntityFrameworkAdapterSupport.ReadAsync(
+    private async Task<RoleEntity?> FindRoleAsync(string tenantId, string name, CancellationToken cancellationToken)
+    {
+        var role = await IdentityEntityFrameworkAdapterSupport.ReadAsync(
             db,
             "Unable to find the ASP.NET Core Identity role for the user operation.",
             () => db.Roles.AsNoTracking().SingleOrDefaultAsync(
                 x => x.TenantLookupKey == TenantKey(tenantId) && x.NormalizedNameKey == RoleKey(tenantId, name),
                 cancellationToken));
+        if (role is not null)
+            IdentityEntityFrameworkAdapterSupport.EnsureReadable(role.SchemaVersion);
+        return role;
+    }
 
     private async Task<UserEntity?> FindEntityAsync(string tenantId, string userId, bool forWrite, CancellationToken cancellationToken)
     {
@@ -714,30 +744,38 @@ public sealed class EfCoreIdentityUserStore(
         entity.AccessFailedCount = user.AccessFailedCount;
     }
 
-    private static AspNetCoreIdentityUser ToFrameworkUser(UserEntity entity) => new()
+    private static AspNetCoreIdentityUser ToFrameworkUser(UserEntity entity)
     {
-        Id = entity.UserId,
-        TenantId = entity.TenantId,
-        UserName = entity.UserName,
-        NormalizedUserName = entity.NormalizedUserName,
-        Email = entity.Email,
-        NormalizedEmail = entity.NormalizedEmail,
-        DisplayName = entity.DisplayName,
-        EmailConfirmed = entity.EmailConfirmed,
-        PasswordHash = entity.PasswordHash,
-        SecurityStamp = entity.SecurityStamp,
-        ConcurrencyStamp = IdentityEntityFrameworkRevisionSupport.FromUser(entity.TenantId, entity.UserId, entity.Revision),
-        PhoneNumber = entity.PhoneNumber,
-        PhoneNumberConfirmed = entity.PhoneNumberConfirmed,
-        TwoFactorEnabled = entity.TwoFactorEnabled,
-        LockoutEnd = entity.LockoutEnd,
-        LockoutEnabled = entity.LockoutEnabled,
-        AccessFailedCount = entity.AccessFailedCount
-    };
+        IdentityEntityFrameworkAdapterSupport.EnsureReadable(entity.SchemaVersion);
+        return new()
+        {
+            Id = entity.UserId,
+            TenantId = entity.TenantId,
+            UserName = entity.UserName,
+            NormalizedUserName = entity.NormalizedUserName,
+            Email = entity.Email,
+            NormalizedEmail = entity.NormalizedEmail,
+            DisplayName = entity.DisplayName,
+            EmailConfirmed = entity.EmailConfirmed,
+            PasswordHash = entity.PasswordHash,
+            SecurityStamp = entity.SecurityStamp,
+            ConcurrencyStamp = IdentityEntityFrameworkRevisionSupport.FromUser(entity.TenantId, entity.UserId, entity.Revision),
+            PhoneNumber = entity.PhoneNumber,
+            PhoneNumberConfirmed = entity.PhoneNumberConfirmed,
+            TwoFactorEnabled = entity.TwoFactorEnabled,
+            LockoutEnd = entity.LockoutEnd,
+            LockoutEnabled = entity.LockoutEnabled,
+            AccessFailedCount = entity.AccessFailedCount
+        };
+    }
 
-    private static UserRecord ToUserRecord(UserEntity entity) => new(
-        entity.UserId, entity.TenantId, entity.UserName, entity.Email, entity.DisplayName, (UserStatus)entity.Status, (ResourceOwnership)entity.Ownership,
-        IdentityEntityFrameworkAdapterSupport.DeserializeSet(entity.RoleIdsJson), IdentityEntityFrameworkAdapterSupport.DeserializeSet(entity.DirectPermissionsJson));
+    private static UserRecord ToUserRecord(UserEntity entity)
+    {
+        IdentityEntityFrameworkAdapterSupport.EnsureReadable(entity.SchemaVersion);
+        return new(
+            entity.UserId, entity.TenantId, entity.UserName, entity.Email, entity.DisplayName, (UserStatus)entity.Status, (ResourceOwnership)entity.Ownership,
+            IdentityEntityFrameworkAdapterSupport.DeserializeSet(entity.RoleIdsJson), IdentityEntityFrameworkAdapterSupport.DeserializeSet(entity.DirectPermissionsJson));
+    }
 
     private static AspNetCoreIdentityUser CloneUser(AspNetCoreIdentityUser source) => new()
     {

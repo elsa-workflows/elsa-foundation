@@ -127,7 +127,8 @@ internal static class StructuredLogsProviderSmoke
                 CategoryKey = "rollback",
                 SourceKey = "rollback",
                 ReplayToken = "rollback-token",
-                PayloadJson = "{}"
+                PayloadJson = "{}",
+                SchemaVersion = StructuredLogsEfModule.SchemaVersion
             });
             await rollbackDb.SaveChangesAsync();
             await transaction.RollbackAsync();
@@ -152,7 +153,8 @@ internal static class StructuredLogsProviderSmoke
                 StreamId = operation.StreamId,
                 IssuedAtTicks = operation.IssuedAtTicks,
                 Fingerprint = operation.Fingerprint,
-                OutcomeJson = operation.OutcomeJson
+                OutcomeJson = operation.OutcomeJson,
+                SchemaVersion = operation.SchemaVersion
             });
             await Assert.ThrowsAsync<DbUpdateException>(() => conflictDb.SaveChangesAsync());
         }

@@ -39,6 +39,9 @@ public sealed class UserEntity
     public bool LockoutEnabled { get; set; }
     public int AccessFailedCount { get; set; }
     public long Revision { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="IdentityIamEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }
 
 /// <summary>Relational authority root for one tenant-local Identity role.</summary>
@@ -59,6 +62,9 @@ public sealed class RoleEntity
     public string UserLinkIdsJson { get; set; } = "[]";
     public string? ConcurrencyStamp { get; set; }
     public long Revision { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="IdentityIamEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }
 
 public sealed class ClaimMappingEntity
@@ -78,6 +84,9 @@ public sealed class ClaimMappingEntity
     public int Order { get; set; }
     public bool StopOnMatch { get; set; }
     public long Revision { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="IdentityIamEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }
 
 public sealed class ExternalIdentityEntity
@@ -97,6 +106,9 @@ public sealed class ExternalIdentityEntity
     public DateTimeOffset? LastSeenAt { get; set; }
     public int LinkPolicy { get; set; }
     public long Revision { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="IdentityIamEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }
 
 public sealed class UserClaimEntity
@@ -110,6 +122,9 @@ public sealed class UserClaimEntity
     public string? ClaimValue { get; set; }
     public string ClaimKey { get; set; } = "";
     public long Revision { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="IdentityIamEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }
 
 public sealed class RoleClaimEntity
@@ -123,6 +138,9 @@ public sealed class RoleClaimEntity
     public string? ClaimValue { get; set; }
     public string ClaimKey { get; set; } = "";
     public long Revision { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="IdentityIamEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }
 
 public sealed class UserRoleEntity
@@ -135,6 +153,9 @@ public sealed class UserRoleEntity
     public string RoleId { get; set; } = "";
     public string RoleLookupKey { get; set; } = "";
     public long Revision { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="IdentityIamEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }
 
 public sealed class UserTokenEntity
@@ -149,6 +170,9 @@ public sealed class UserTokenEntity
     public string TokenKey { get; set; } = "";
     public string? Value { get; set; }
     public long Revision { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="IdentityIamEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }
 
 public sealed class TenantMembershipEntity
@@ -162,6 +186,9 @@ public sealed class TenantMembershipEntity
     public string RoleIdsJson { get; set; } = "[]";
     public string DirectPermissionsJson { get; set; } = "[]";
     public long Revision { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="IdentityIamEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }
 
 public sealed class UserNameReservationEntity
@@ -173,6 +200,9 @@ public sealed class UserNameReservationEntity
     public string NormalizedUserNameKey { get; set; } = "";
     public string UserId { get; set; } = "";
     public long Revision { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="IdentityIamEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }
 
 public sealed class EmailReservationEntity
@@ -184,6 +214,9 @@ public sealed class EmailReservationEntity
     public string NormalizedEmailKey { get; set; } = "";
     public string UserId { get; set; } = "";
     public long Revision { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="IdentityIamEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }
 
 public sealed class RoleNameReservationEntity
@@ -195,6 +228,9 @@ public sealed class RoleNameReservationEntity
     public string NormalizedRoleNameKey { get; set; } = "";
     public string RoleId { get; set; } = "";
     public long Revision { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="IdentityIamEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }
 
 public sealed class MutationReceiptEntity
@@ -211,4 +247,7 @@ public sealed class MutationReceiptEntity
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
     public long Revision { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="IdentityIamEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }

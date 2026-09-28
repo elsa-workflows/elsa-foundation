@@ -26,13 +26,25 @@ namespace Elsa.Architecture.Tests;
 /// not just within the condition that holds the check. A fifth instance - <c>EfSchedulerStateStore</c>'s
 /// own custom <c>EfSchedulerStateJson.Deserialize</c> wrapper - surfaced only once the rule stopped
 /// naming specific wrapper classes and started matching the method name itself, which is why the rule
-/// matches any <c>X.Deserialize(...)</c> call rather than a fixed list of receivers.
+/// matches the method name rather than a fixed list of receivers.
+/// </para>
+/// <para>
+/// #2119 stamped the ten EF modules and two Publishing tables that had no stamp. Their stores also check with
+/// <c>EfSchemaVersion.EnsureReadable</c>, which throws by itself rather than feeding a condition, and
+/// deserialize through receiverless helpers (<c>Deserialize&lt;T&gt;(json)</c>, <c>DeserializePayload(row)</c>)
+/// or <c>Deserialize</c>-prefixed ones
+/// (<c>EfIdentityStoreSupport.DeserializeSet</c>). The widened guard counts all of them as what they are: a
+/// version check, and deserializers that must not run ahead of it. The two modules that map domain types
+/// directly (Workflows and Activities design) have no store code between EF reading a row and building it, so
+/// their check is <c>EfSchemaVersionMaterializationInterceptor</c>, which this lexical scan does not see.
 /// </para>
 /// <para>
 /// Blind spot: detection here is lexical and scoped to a single method body. It cannot follow a
 /// deserialize call reached through a helper method the version-checking method calls, nor one written
 /// inside a lambda body - either indirection puts the call outside the enclosing-method text this scan
-/// walks, so an out-of-order deserializer hidden behind either one will not be flagged.
+/// walks, so an out-of-order deserializer hidden behind either one will not be flagged. It also knows a
+/// deserializer only by a name starting with <c>Deserialize</c>, so a helper named otherwise (<c>ReadJson</c>,
+/// <c>ReadState</c>) is not seen.
 /// </para>
 /// </summary>
 public sealed class EfSchemaVersionOrderingGuardTests
@@ -102,7 +114,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
 
         Assert.True(
             violations.Length == 0,
-            "No call to a method named Deserialize may run before EfSchemaVersion.Readable/NotReadable " +
+            "No call to a method whose name starts with Deserialize may run before EfSchemaVersion.Readable/NotReadable/EnsureReadable " +
             "anywhere in the same method, or a skewed row's changed shape is reported as corruption before " +
             "the version check ever gets to run (#2108). Offending call sites:" +
             Environment.NewLine + string.Join(Environment.NewLine, violations));
@@ -136,6 +148,37 @@ public sealed class EfSchemaVersionOrderingGuardTests
             Assert.True(
                 deserializeCallSitesByFile.TryGetValue(store, out var count) && count > 0,
                 $"Expected the widened scan to examine '{store}' - one of the stores #2108 fixed - and find at least one Deserialize call site in it.");
+        }
+    }
+
+    /// <summary>
+    /// The stores #2119 stamped check with <c>EnsureReadable</c> and deserialize through receiverless or
+    /// <c>Deserialize</c>-prefixed helpers. Each file named here holds both, so a scan that stopped recognising
+    /// either form would find nothing in it and fail here instead of passing the ordering rule vacuously.
+    /// </summary>
+    [Fact]
+    public void Widened_guard_examines_the_stores_number_2119_stamped()
+    {
+        var sources = Directory.EnumerateFiles(Path.Join(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(file => !IsBuildOutput(file))
+            .GroupBy(Path.GetFileName)
+            .ToDictionary(group => group.Key!, group => group.Select(File.ReadAllText).ToArray());
+
+        string[] storesStampedByIssue2119 =
+        [
+            "EfStructuredLogStore.cs",
+            "EfOpenTelemetryStore.cs",
+            "EfExecutionCommandTransport.cs",
+            "EfIdentityStoreSupport.cs",
+            "EfApplicationStore.cs",
+            "EfProviderConfigurationStore.cs"
+        ];
+
+        foreach (var store in storesStampedByIssue2119)
+        {
+            Assert.True(sources.TryGetValue(store, out var files), $"Expected '{store}', one of the stores #2119 stamped, under src/.");
+            Assert.True(files!.Sum(CountCalls) > 0, $"Expected the guard to find an EfSchemaVersion check in '{store}'.");
+            Assert.True(files!.Sum(CountDeserializeCalls) > 0, $"Expected the guard to find a deserialize call in '{store}'.");
         }
     }
 
@@ -205,6 +248,55 @@ public sealed class EfSchemaVersionOrderingGuardTests
             var state = FooJson.Deserialize(row.ContentJson);
             if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Id != state.Id)
                 throw new InvalidDataException("corrupt");
+            """
+        },
+        {
+            "receiverless generic Deserialize ahead of an EnsureReadable statement",
+            """
+            var span = Deserialize<TelemetrySpan>(row.PayloadJson);
+            EfSchemaVersion.EnsureReadable("M", row.SchemaVersion, Module.SchemaVersion);
+            return span;
+            """
+        },
+        {
+            "receiverless Deserialize-prefixed helper ahead of an EnsureReadable statement",
+            """
+            var payload = DeserializePayload(row);
+            EfSchemaVersion.EnsureReadable("M", row.SchemaVersion, Module.SchemaVersion);
+            return payload;
+            """
+        },
+        {
+            "member-access Deserialize-prefixed helper ahead of the version check",
+            """
+            var ids = EfIdentityStoreSupport.DeserializeSet(row.ClaimIdsJson);
+            if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || ids.Count == 0)
+                throw new InvalidDataException("corrupt");
+            """
+        },
+        {
+            "deserialize earlier in the same expression-bodied member",
+            """
+            public sealed class Store
+            {
+                private static bool Matches(RoleEntity entity) =>
+                    Support.DeserializeSet(entity.PermissionsJson).Count > 0 &&
+                    EfSchemaVersion.Readable("M", entity.SchemaVersion, Module.SchemaVersion);
+            }
+            """
+        },
+        {
+            "a method whose class constraint must not read as a type declaration",
+            """
+            public sealed class Store
+            {
+                private static T Read<T>(Row row) where T : class
+                {
+                    var value = Support.DeserializeSet(row.Json);
+                    EfSchemaVersion.EnsureReadable("M", row.SchemaVersion, Module.SchemaVersion);
+                    return value;
+                }
+            }
             """
         }
     };
@@ -281,6 +373,38 @@ public sealed class EfSchemaVersionOrderingGuardTests
                 if (EfSchemaVersion.NotReadable("M", row.SchemaVersion, Module.SchemaVersion) || row.Revision <= 0)
                     throw new InvalidDataException("corrupt");
                 return Project(content);
+            }
+            """
+        },
+        {
+            "EnsureReadable first, receiverless helpers follow",
+            """
+            EfSchemaVersion.EnsureReadable("M", row.SchemaVersion, Module.SchemaVersion);
+            var payload = DeserializePayload(row);
+            return Deserialize<TelemetrySpan>(payload.Json);
+            """
+        },
+        {
+            "an expression-bodied check after a member that deserializes",
+            """
+            public sealed class Store
+            {
+                private static Role Map(RoleEntity entity) => new(entity.RoleId, Support.DeserializeSet(entity.PermissionsJson));
+
+                private static bool Matches(RoleEntity entity) =>
+                    EfSchemaVersion.Readable("M", entity.SchemaVersion, Module.SchemaVersion) && entity.Revision > 0;
+            }
+            """
+        },
+        {
+            "expression-bodied and constrained helper declarations are not mistaken for calls",
+            """
+            private static T Deserialize<T>(string json) => Decode<T>(json);
+
+            private static T DeserializeSet<T>(string json) where T : class
+            {
+                EfSchemaVersion.EnsureReadable("M", row.SchemaVersion, Module.SchemaVersion);
+                return Decode<T>(json);
             }
             """
         }
@@ -414,30 +538,69 @@ public sealed class EfSchemaVersionOrderingGuardTests
         }
     };
 
-    private static readonly string[] CallTokens = ["EfSchemaVersion.Readable(", "EfSchemaVersion.NotReadable("];
+    private static readonly string[] CallTokens = ["EfSchemaVersion.Readable(", "EfSchemaVersion.NotReadable(", "EfSchemaVersion.EnsureReadable("];
 
     /// <summary>
-    /// Matches any member-access call to a method named <c>Deserialize</c> - <c>X.Deserialize(</c>,
-    /// <c>X.Deserialize&lt;T&gt;(</c>, or a nested-generic argument list such as
-    /// <c>X.Deserialize&lt;Dictionary&lt;string, string&gt;&gt;(</c> - regardless of the receiver. A fixed
-    /// token list (<c>RuntimeArtifactJson.Deserialize</c>, <c>PublishingEfJson.Deserialize</c>, ...) missed
-    /// custom wrappers like <c>EfSchedulerStateJson.Deserialize</c> (#2108); matching the method name
-    /// itself instead of naming every wrapper class closes that gap. The lookbehind for a preceding
-    /// <c>.</c> is deliberate: it matches call sites (always member-access in this codebase) and skips
-    /// the wrapper methods' own declarations, e.g. <c>public static T Deserialize&lt;T&gt;(string value)</c>,
-    /// which never has a <c>.</c> immediately before <c>Deserialize</c>.
+    /// Matches a method whose name starts with <c>Deserialize</c> - <c>X.Deserialize(</c>, <c>X.DeserializeSet(</c>,
+    /// a receiverless <c>Deserialize&lt;T&gt;(</c> or <c>DeserializePayload(</c>, or a nested-generic argument list
+    /// such as <c>X.Deserialize&lt;Dictionary&lt;string, string&gt;&gt;(</c> - regardless of the receiver. A fixed
+    /// token list (<c>RuntimeArtifactJson.Deserialize</c>, <c>PublishingEfJson.Deserialize</c>, ...) missed custom
+    /// wrappers like <c>EfSchedulerStateJson.Deserialize</c> (#2108), and a member-access-only rule missed the
+    /// receiverless helpers #2119's stores call; matching the name itself closes both gaps. The pattern also
+    /// matches a helper's own declaration, which <see cref="FindDeserializeCalls"/> drops.
     /// </summary>
-    private static readonly Regex DeserializeCallPattern = new(@"(?<=\.)\s*Deserialize\s*(?:<[^()]*>)?\s*\(", RegexOptions.Compiled);
+    private static readonly Regex DeserializeNamePattern = new(@"(?<![\w@])Deserialize\w*\s*(?:<[^()]*>)?\s*\(", RegexOptions.Compiled);
 
-    private static int CountDeserializeCalls(string source)
+    private static int CountDeserializeCalls(string source) => FindDeserializeCalls(MaskLiteralsAndComments(source)).Length;
+
+    /// <summary>
+    /// Returns the index of every <see cref="DeserializeNamePattern"/> match that is a call. A match whose parameter
+    /// list is followed by a body, <c>=&gt;</c> or a <c>where</c> constraint is the method's own declaration, e.g.
+    /// <c>public static T Deserialize&lt;T&gt;(string value) =&gt; ...</c>, and is not one.
+    /// </summary>
+    private static int[] FindDeserializeCalls(string masked) =>
+        DeserializeNamePattern.Matches(masked)
+            .Where(match => !IsDeclaration(masked, match.Index + match.Length - 1))
+            .Select(match => match.Index)
+            .ToArray();
+
+    private static bool IsDeclaration(string masked, int openParen)
     {
-        var masked = MaskLiteralsAndComments(source);
-        return DeserializeCallPattern.Matches(masked).Count;
+        var index = FindMatchingCloseParen(masked, openParen) + 1;
+        if (index <= 0)
+            return false;
+
+        while (index < masked.Length && char.IsWhiteSpace(masked[index]))
+            index++;
+
+        var rest = masked.AsSpan(index);
+        return rest.StartsWith("{") || rest.StartsWith("=>") ||
+               (rest.StartsWith("where") && (rest.Length == 5 || !char.IsLetterOrDigit(rest[5])));
+    }
+
+    private static int FindMatchingCloseParen(string masked, int openParenIndex)
+    {
+        var depth = 0;
+        for (var index = openParenIndex; index < masked.Length; index++)
+        {
+            if (masked[index] == '(')
+            {
+                depth++;
+            }
+            else if (masked[index] == ')')
+            {
+                depth--;
+                if (depth == 0)
+                    return index;
+            }
+        }
+
+        return -1;
     }
 
     /// <summary>
-    /// Returns the one-based line number of every <c>EfSchemaVersion.Readable</c> /
-    /// <c>NotReadable</c> call that has a <see cref="DeserializeCallPattern"/> match earlier in its
+    /// Returns the one-based line number of every <c>EfSchemaVersion.Readable</c> / <c>NotReadable</c> /
+    /// <c>EnsureReadable</c> call that has a deserialize call (<see cref="FindDeserializeCalls"/>) earlier in its
     /// enclosing method - whether that deserialize call sits in an earlier statement, an earlier
     /// nested <c>try</c>/<c>if</c>/<c>using</c> block, or the same condition <see cref="HasEarlierClause"/>
     /// already covers.
@@ -445,7 +608,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
     private static int[] FindDeserializeBeforeVersionCheck(string source)
     {
         var masked = MaskLiteralsAndComments(source);
-        var deserializeCallIndices = DeserializeCallPattern.Matches(masked).Select(match => match.Index).Order().ToArray();
+        var deserializeCallIndices = FindDeserializeCalls(masked);
         var violations = new List<int>();
         foreach (var token in CallTokens)
         {
@@ -469,8 +632,9 @@ public sealed class EfSchemaVersionOrderingGuardTests
     /// <c>lock</c>, <c>switch</c>, <c>else</c>, <c>do</c>, <c>checked</c>, <c>unchecked</c>, <c>fixed</c>,
     /// <c>unsafe</c>) until it reaches the block that is <paramref name="position"/>'s enclosing method,
     /// local function, lambda, or accessor body, and returns the index just past that block's opening
-    /// brace. Returns <c>0</c> when no enclosing brace exists at all, so a bare statement fixture with no
-    /// wrapping method is treated as the whole method body.
+    /// brace. An expression-bodied member has no brace of its own, so when the nearest one opens a type body
+    /// the member starts where the previous member ended. Returns <c>0</c> when no enclosing brace exists at
+    /// all, so a bare statement fixture with no wrapping method is treated as the whole method body.
     /// </summary>
     private static int FindEnclosingMethodStart(string masked, int position)
     {
@@ -480,11 +644,57 @@ public sealed class EfSchemaVersionOrderingGuardTests
             if (brace < 0)
                 return 0;
 
+            if (IsTypeBodyBrace(masked, brace))
+                return FindMemberStart(masked, brace + 1, position);
+
             if (!IsControlBlockBrace(masked, brace))
                 return brace + 1;
 
             position = brace;
         }
+    }
+
+    /// <summary>
+    /// A type declaration's header, and not a generic constraint: <c>where T : class</c> names the keyword
+    /// after a colon or comma, a declaration never does.
+    /// </summary>
+    private static readonly Regex TypeDeclarationHeader = new(
+        @"(?<![:,]\s*)\b(?:class|struct|interface|enum)\b|\brecord\s+(?:class\s+|struct\s+)?[A-Z_]", RegexOptions.Compiled);
+
+    private static bool IsTypeBodyBrace(string masked, int brace)
+    {
+        var headerStart = masked.LastIndexOfAny([';', '{', '}'], brace - 1) + 1;
+        return TypeDeclarationHeader.IsMatch(masked[headerStart..brace]);
+    }
+
+    /// <summary>
+    /// Returns where the type member holding <paramref name="position"/> starts: just past the last <c>;</c> or
+    /// member-closing <c>}</c> at the type body's own depth.
+    /// </summary>
+    private static int FindMemberStart(string masked, int bodyStart, int position)
+    {
+        var start = bodyStart;
+        var depth = 0;
+        for (var index = bodyStart; index < position; index++)
+        {
+            var current = masked[index];
+            if (current is '(' or '[' or '{')
+            {
+                depth++;
+            }
+            else if (current is ')' or ']' or '}')
+            {
+                depth--;
+                if (depth == 0 && current == '}')
+                    start = index + 1;
+            }
+            else if (current == ';' && depth == 0)
+            {
+                start = index + 1;
+            }
+        }
+
+        return start;
     }
 
     /// <summary>Finds the index of the nearest unmatched '{' walking backward from <paramref name="position"/>.</summary>

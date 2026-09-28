@@ -22,6 +22,7 @@ public sealed class PublicationSnapshotReviewEntityConfiguration : IEntityTypeCo
         builder.Property(row => row.RequestedExpectedPublicationId).HasMaxLength(PublishingSnapshotReviewEfModule.IdentityMaximumLength);
         builder.Property(row => row.ActivePublicationId).HasMaxLength(PublishingSnapshotReviewEfModule.IdentityMaximumLength);
         builder.Property(row => row.TenantId).HasMaxLength(PublishingSnapshotReviewEfModule.IdentityMaximumLength);
+        builder.Property(row => row.SchemaVersion).HasMaxLength(PublishingPolicyProjectionEfModule.SchemaVersionMaximumLength).IsRequired();
         builder.Property(row => row.ExpiresAt)
             .HasConversion(value => value.UtcTicks, value => new DateTimeOffset(value, TimeSpan.Zero))
             .IsRequired();

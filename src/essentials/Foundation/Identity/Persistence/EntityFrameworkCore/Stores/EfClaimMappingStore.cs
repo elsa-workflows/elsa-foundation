@@ -5,6 +5,7 @@ using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
 using System.Globalization;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 
@@ -83,6 +84,7 @@ public sealed class EfClaimMappingStore(
         {
             var id = Id(rule.TenantId, rule.Provider, rule.Id);
             var row = await context.ClaimMappings.SingleOrDefaultAsync(x => x.Id == id, token);
+            if (row is not null) EfSchemaVersion.EnsureReadable("IdentityIam", row.SchemaVersion, IdentityIamEfModule.SchemaVersion);
             if (createOnly && row is not null) return Conflict(id);
             if (expectedVersion is > 0 && (row is null || row.Revision != expectedVersion)) return row is null ? NotFound(id) : Conflict(id);
             if (expectedVersion == 0 && !createOnly && row is null) return NotFound(id);
@@ -101,14 +103,20 @@ public sealed class EfClaimMappingStore(
         row.Id = Id(rule.TenantId, rule.Provider, rule.Id); row.TenantId = rule.TenantId; row.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(rule.TenantId);
         row.Provider = rule.Provider; row.ProviderLookupKey = EfIdentityStoreSupport.Lookup(rule.TenantId, rule.Provider); row.RuleId = rule.Id; row.RuleLookupKey = EfIdentityStoreSupport.CompoundKey(rule.TenantId, rule.Provider, rule.Id); row.RuleIdOrderKey = EfIdentityStoreSupport.SortableOrderKey(rule.Id, nameof(rule.Id));
         row.MatchClaimType = rule.MatchClaimType; row.MatchValue = rule.MatchValue; row.GrantRolesJson = EfIdentityStoreSupport.SerializeSet(rule.GrantRoles); row.GrantPermissionsJson = EfIdentityStoreSupport.SerializeSet(rule.GrantPermissions); row.Order = rule.Order; row.StopOnMatch = rule.StopOnMatch;
+        row.SchemaVersion = IdentityIamEfModule.SchemaVersion;
     }
 
-    private static ClaimMappingRule Map(ClaimMappingEntity row) => new(row.RuleId, row.TenantId, row.Provider, row.MatchClaimType, row.MatchValue, EfIdentityStoreSupport.DeserializeSet(row.GrantRolesJson), EfIdentityStoreSupport.DeserializeSet(row.GrantPermissionsJson), row.Order, row.StopOnMatch);
+    private static ClaimMappingRule Map(ClaimMappingEntity row)
+    {
+        EfSchemaVersion.EnsureReadable("IdentityIam", row.SchemaVersion, IdentityIamEfModule.SchemaVersion);
+        return new(row.RuleId, row.TenantId, row.Provider, row.MatchClaimType, row.MatchValue, EfIdentityStoreSupport.DeserializeSet(row.GrantRolesJson), EfIdentityStoreSupport.DeserializeSet(row.GrantPermissionsJson), row.Order, row.StopOnMatch);
+    }
+
     private static string Id(string tenantId, string provider, string ruleId) => EfIdentityStoreSupport.CompoundKey(tenantId, provider, ruleId);
     private static EfIdentityWriteResult Conflict(string id) => new(EfIdentityWriteStatus.Conflict, Message: "Identity claim mapping write conflicted.", Id: id);
     private static EfIdentityWriteResult NotFound(string id) => new(EfIdentityWriteStatus.NotFound, Message: "Identity claim mapping was not found.", Id: id);
     private static void ValidateRule(ClaimMappingRule rule) { Validate(rule.TenantId, nameof(rule.TenantId)); Validate(rule.Id, nameof(rule.Id)); _ = EfIdentityStoreSupport.SortableOrderKey(rule.Id, nameof(rule.Id)); Validate(rule.Provider, nameof(rule.Provider)); ArgumentNullException.ThrowIfNull(rule.MatchClaimType); ArgumentNullException.ThrowIfNull(rule.MatchValue); ArgumentNullException.ThrowIfNull(rule.GrantRoles); ArgumentNullException.ThrowIfNull(rule.GrantPermissions); }
     private static void Validate(string value, string parameter) { ArgumentNullException.ThrowIfNull(value); if (value.Length > IdentityProviderConfigurationCanonicalizer.MaximumIdentityLength) throw new ArgumentException($"Identity key values cannot exceed {IdentityProviderConfigurationCanonicalizer.MaximumIdentityLength} UTF-16 code units.", parameter); }
     private void Prepare(string tenantId, CancellationToken cancellationToken) { Validate(tenantId, nameof(tenantId)); EfIdentityStoreSupport.EnsureTenant(accessContextAccessor, tenantId); context.EnsureProviderBinding(); cancellationToken.ThrowIfCancellationRequested(); }
-    private static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception) => new(message, exception);
+    private static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception) => EfIdentityStoreSupport.Failure(message, exception);
 }

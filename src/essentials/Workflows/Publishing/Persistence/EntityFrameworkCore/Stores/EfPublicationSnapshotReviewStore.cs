@@ -55,6 +55,7 @@ public sealed class EfPublicationSnapshotReviewStore(
         if (entity is null)
             return null;
 
+        EfSchemaVersion.EnsureReadable("PublishingSnapshotReview", entity.SchemaVersion, PublishingSnapshotReviewEfModule.SchemaVersion);
         EnsureAuthorizedTenant(accessContextAccessor, entity.TenantId);
         EnsureIncarnation(entity);
         var review = ToModel(entity);
@@ -70,6 +71,7 @@ public sealed class EfPublicationSnapshotReviewStore(
         if (entity is null)
             return false;
 
+        EfSchemaVersion.EnsureReadable("PublishingSnapshotReview", entity.SchemaVersion, PublishingSnapshotReviewEfModule.SchemaVersion);
         EnsureAuthorizedTenant(accessContextAccessor, entity.TenantId);
         EnsureIncarnation(entity);
         _ = ToModel(entity);
@@ -101,6 +103,7 @@ public sealed class EfPublicationSnapshotReviewStore(
             if (entity is null)
                 continue;
 
+            EfSchemaVersion.EnsureReadable("PublishingSnapshotReview", entity.SchemaVersion, PublishingSnapshotReviewEfModule.SchemaVersion);
             EnsureAuthorizedTenant(accessContextAccessor, entity.TenantId);
             EnsureIncarnation(entity);
             _ = ToModel(entity);
@@ -132,7 +135,8 @@ public sealed class EfPublicationSnapshotReviewStore(
         SlotRevision = review.SlotRevision,
         ActivePublicationId = review.ActivePublicationId,
         TenantId = review.TenantId,
-        ExpiresAt = review.ExpiresAt
+        ExpiresAt = review.ExpiresAt,
+        SchemaVersion = PublishingSnapshotReviewEfModule.SchemaVersion
     };
 
     private static void ValidateForWrite(PublicationSnapshotReview review)

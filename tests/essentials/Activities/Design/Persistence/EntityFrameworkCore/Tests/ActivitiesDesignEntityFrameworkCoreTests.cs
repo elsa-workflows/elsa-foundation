@@ -1,4 +1,5 @@
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
@@ -14,6 +15,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -90,6 +92,92 @@ public sealed class ActivitiesDesignEntityFrameworkCoreTests
         var store = new EfActivityDesignStores(read);
         Assert.Equal("tenant-a", (await store.GetAsync("d1")).TenantId);
         Assert.Equal("provider", (await ((Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionVersionStore)store).GetAsync("v1")).ProviderKey);
+    }
+
+    [Fact]
+    public async Task Every_table_carries_a_required_stamp_and_every_row_the_context_writes_carries_the_current_version()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = await SeedSchemaVersionRowsAsync(connection);
+
+        Assert.All(db.Model.GetEntityTypes(), entityType =>
+            Assert.False(entityType.FindProperty(EfSchemaVersionMaterializationInterceptor.PropertyName)!.IsNullable));
+        foreach (var entityType in SchemaVersionSeededTypes.Select(type => db.Model.FindEntityType(type)!))
+        {
+            var stamps = "SELECT DISTINCT \"" + EfSchemaVersionMaterializationInterceptor.PropertyName + "\" AS \"Value\" FROM \"" + entityType.GetTableName() + "\"";
+            Assert.Equal([ActivitiesDesignEfModule.SchemaVersion], await db.Database.SqlQueryRaw<string>(stamps).ToListAsync());
+        }
+    }
+
+    /// <summary>
+    /// This module maps domain types directly and EF deserializes their JSON columns while it materializes a row, so
+    /// the stamp is checked as EF materializes the row, before any converter runs. A row a newer module version wrote
+    /// reports skew as itself, from every store read of its table.
+    /// </summary>
+    [Theory]
+    [InlineData(typeof(ActivityDefinition), nameof(ActivityDefinition.Category))]
+    [InlineData(typeof(ActivityDefinitionVersion), nameof(ActivityDefinitionVersion.InputsSource))]
+    [InlineData(typeof(ActivityDefinitionDraft), nameof(ActivityDefinitionDraft.State))]
+    [InlineData(typeof(ActivityDefinitionDraftLayout), nameof(ActivityDefinitionDraftLayout.Records))]
+    [InlineData(typeof(ActivityDefinitionVersionPublication), nameof(ActivityDefinitionVersionPublication.Contract))]
+    public async Task A_row_with_a_newer_schema_reports_skew_before_EF_converts_its_content(Type entityType, string content)
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = await SeedSchemaVersionRowsAsync(connection);
+        var store = new EfActivityDesignStores(db);
+        Func<Task>[] reads = entityType.Name switch
+        {
+            nameof(ActivityDefinition) => [() => store.GetAsync("d1"), () => store.ListAsync(new Elsa.Activities.Design.Persistence.Core.Filters.ActivityDefinitionFilter())],
+            nameof(ActivityDefinitionVersion) => [() => ((IActivityDefinitionVersionStore)store).GetAsync("v1"), () => ((IActivityDefinitionVersionStore)store).ListByDefinitionAsync("d1")],
+            nameof(ActivityDefinitionDraft) => [() => ((IActivityDefinitionDraftStore)store).FindAsync("draft"), () => ((IActivityDefinitionDraftStore)store).ListByDefinitionAsync("d1")],
+            nameof(ActivityDefinitionDraftLayout) => [() => store.FindDraftLayoutAsync("draft")],
+            _ => [() => ((IActivityDefinitionVersionPublicationStore)store).FindAsync("v1"), () => ((IActivityDefinitionVersionPublicationStore)store).ListByDefinitionAsync("d1")]
+        };
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedTableAsync(db, entityType, content);
+
+        foreach (var read in reads)
+            EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(
+                await Assert.ThrowsAsync<EfSchemaVersionSkewException>(read), "ActivitiesDesign", ActivitiesDesignEfModule.SchemaVersion);
+    }
+
+    /// <summary>
+    /// The witness for the skew test above: at the current version the same corrupt draft state fails in EF's converter,
+    /// as corruption. The check neither hides that failure nor reports it as skew.
+    /// </summary>
+    [Fact]
+    public async Task A_current_row_whose_content_is_corrupt_still_fails_as_corruption_rather_than_skew()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = await SeedSchemaVersionRowsAsync(connection);
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedTableAsync(
+            db, typeof(ActivityDefinitionDraft), nameof(ActivityDefinitionDraft.State), ActivitiesDesignEfModule.SchemaVersion);
+
+        var failure = await Assert.ThrowsAnyAsync<Exception>(() => ((IActivityDefinitionDraftStore)new EfActivityDesignStores(db)).FindAsync("draft"));
+        Assert.IsNotType<EfSchemaVersionSkewException>(failure);
+        Assert.Equal(DesignPersistenceFailureKind.Serialization, Assert.IsType<DesignPersistenceException>(failure).FailureKind);
+    }
+
+    /// <summary>
+    /// A pooled context's options are frozen before <c>OnConfiguring</c> runs, so the registration adds the check up
+    /// front. Either way the context the container hands out carries it exactly once.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Ef_registration_adds_the_schema_version_check_once_pooled_or_not(bool pooling)
+    {
+        var services = new ServiceCollection();
+        services.AddActivitiesDesignEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = "Data Source=:memory:", Pooling = pooling });
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+
+        var context = scope.ServiceProvider.GetRequiredService<ActivitiesDesignDbContext>();
+        Assert.Single(
+            context.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()!.Interceptors!,
+            interceptor => ReferenceEquals(interceptor, EfSchemaVersionMaterializationInterceptor.Instance));
     }
 
     [Fact]
@@ -2232,6 +2320,24 @@ public sealed class ActivitiesDesignEntityFrameworkCoreTests
             var indexedStrings = index.Properties.Where(x => x.ClrType == typeof(string)).ToArray();
             Assert.True(indexedStrings.Sum(x => x.GetMaxLength() ?? 450) <= 450, $"{index.DeclaringEntityType.Name} index exceeds SQL Server's 900-byte key budget");
         }
+    }
+
+    private static readonly Type[] SchemaVersionSeededTypes =
+        [typeof(ActivityDefinition), typeof(ActivityDefinitionVersion), typeof(ActivityDefinitionDraft), typeof(ActivityDefinitionDraftLayout), typeof(ActivityDefinitionVersionPublication)];
+
+    /// <summary>Writes one row to each of <see cref="SchemaVersionSeededTypes"/>' tables and returns the context, its tracker cleared.</summary>
+    private static async Task<ActivitiesDesignSqliteDbContext> SeedSchemaVersionRowsAsync(SqliteConnection connection)
+    {
+        var db = new ActivitiesDesignSqliteDbContext(new DbContextOptionsBuilder<ActivitiesDesignSqliteDbContext>().UseSqlite(connection).Options);
+        await db.Database.EnsureCreatedAsync();
+        db.ActivityDefinitions.Add(Definition("d1", "tenant-a"));
+        db.ActivityDefinitionVersions.Add(Version("d1", "v1", "tenant-a"));
+        db.ActivityDefinitionDrafts.Add(Draft("draft", "d1", "tenant-a", 1));
+        db.ActivityDefinitionDraftLayouts.Add(Layout("draft", "tenant-a", 1));
+        db.ActivityDefinitionVersionPublications.Add(Publication("d1", "v1", "tenant-a", "provider"));
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        return db;
     }
 
     private static ActivityDefinition Definition(string id, string? tenant, string category = "Tests") =>

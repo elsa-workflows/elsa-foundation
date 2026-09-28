@@ -29,6 +29,7 @@ public sealed class CredentialEntityConfiguration : IEntityTypeConfiguration<Cre
                 value => IdentityEntityFrameworkDateTimeOffsetCodec.Encode(value),
                 value => IdentityEntityFrameworkDateTimeOffsetCodec.Decode(value));
         builder.Property(credential => credential.Revision).IsRequired().IsConcurrencyToken();
+        builder.Property(credential => credential.SchemaVersion).HasMaxLength(32).IsRequired();
     }
 
     private static void ConfigureText(PropertyBuilder<string> property, bool required)

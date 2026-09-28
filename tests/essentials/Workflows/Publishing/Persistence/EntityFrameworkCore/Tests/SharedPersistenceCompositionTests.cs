@@ -82,7 +82,8 @@ public sealed class SharedPersistenceCompositionTests : IDisposable
                 ActivatedAtOffsetMinutes = 0,
                 TenantId = "tenant-a",
                 TenantIdHash = "tenant-hash-a",
-                Revision = 2
+                Revision = 2,
+                SchemaVersion = PublishingLedgerEfModule.ContentSchemaVersion
             });
             await database.SaveChangesAsync();
         }

@@ -4,6 +4,7 @@ using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.Support;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -56,8 +57,9 @@ public sealed class SqlServerEfSecretRepositoryTests(SqlServerContainerFixture f
         var migrator = context.GetService<IMigrator>();
         await migrator.MigrateAsync("20260910210213_Initial");
 
+        await using (var preStamp = CreatePreStampContext(connectionString))
+            await new EfSecretRepository(preStamp).SaveAsync(Secret("tenant-a", "before.upgrade", "preserved", scope: "Finance"));
         var repository = new EfSecretRepository(context);
-        await repository.SaveAsync(Secret("tenant-a", "before.upgrade", "preserved", scope: "Finance"));
         await EfDatabaseMigrator.ApplyAsync(context, SecretsSqlServerDbContext.ExpectedProviderName);
         Assert.Equal(
             "before.upgrade",
@@ -112,15 +114,17 @@ public sealed class SqlServerEfSecretRepositoryTests(SqlServerContainerFixture f
         Assert.Equal(101, await context.Secrets.CountAsync(record => record.TypeNameLookupKey == expectedTypeKey));
     }
 
-    private static SecretsSqlServerDbContext CreateContext(string connectionString)
-    {
-        var options = new DbContextOptionsBuilder<SecretsSqlServerDbContext>()
+    private static SecretsSqlServerDbContext CreateContext(string connectionString) => new(Options(connectionString).Options);
+
+    /// <summary>A context with the model builds from before the schema-version stamp had, to write rows the way they did.</summary>
+    private static SecretsSqlServerDbContext CreatePreStampContext(string connectionString) =>
+        new(PreStampSecretsModel.Use(Options(connectionString)).Options);
+
+    private static DbContextOptionsBuilder<SecretsSqlServerDbContext> Options(string connectionString) =>
+        new DbContextOptionsBuilder<SecretsSqlServerDbContext>()
             .UseSqlServer(connectionString, sqlServer => sqlServer
                 .MigrationsAssembly(typeof(SecretsSqlServerDbContext).Assembly.GetName().Name)
-                .MigrationsHistoryTable(SecretsEfModule.HistoryTableName))
-            .Options;
-        return new SecretsSqlServerDbContext(options);
-    }
+                .MigrationsHistoryTable(SecretsEfModule.HistoryTableName));
 
     private static Secret Secret(string tenantId, string name, string value, string? scope = null) => new()
     {

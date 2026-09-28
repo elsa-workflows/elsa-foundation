@@ -87,6 +87,7 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
             "PayloadJson",
             "MetadataJson",
             "CleanupSafeFailureJson");
+        modelBuilder.IndexSchemaVersionStamps();
     }
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);

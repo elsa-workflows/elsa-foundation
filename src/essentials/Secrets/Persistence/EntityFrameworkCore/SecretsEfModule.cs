@@ -7,6 +7,9 @@ public static class SecretsEfModule
     public const string HistoryModuleName = "ElsaSecrets";
     public const string TableName = "elsa_secrets";
     public const string FilteredListIndex = "IX_elsa_secrets_tenantId_status_normalizedName";
+
+    /// <summary>The persisted-schema version every secret row is stamped with, and checked against when read.</summary>
+    public const string SchemaVersion = "1.0.0";
     public const string DefaultConnectionName = EfConnectionDefaults.ConnectionName;
     public const string DefaultSqliteConnectionString = EfConnectionDefaults.SqliteConnectionString;
 

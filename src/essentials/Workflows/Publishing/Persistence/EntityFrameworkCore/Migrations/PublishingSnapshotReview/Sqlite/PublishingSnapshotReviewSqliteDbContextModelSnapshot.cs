@@ -72,6 +72,8 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.HasIndex("TenantIdHash", "TestRunIdHash")
                         .IsUnique()
                         .HasDatabaseName("IX_elsa_activity_draft_test_runs_scope_testRunId");
@@ -126,6 +128,8 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantIdHash", "ReceiptKeyHash")
                         .IsUnique()
@@ -193,6 +197,8 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantIdHash", "PolicyKeyHash")
                         .IsUnique()
@@ -289,6 +295,8 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.HasIndex("TenantIdHash", "IntentIdHash")
                         .IsUnique()
                         .HasDatabaseName("IX_elsa_publication_projection_intents_scope_intentId");
@@ -351,6 +359,11 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("SlotId")
                         .IsRequired()
                         .HasMaxLength(1200)
@@ -395,6 +408,8 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantIdHash", "PublicationIdHash")
                         .IsUnique()
@@ -459,6 +474,11 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .HasMaxLength(256)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("SlotName")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -472,6 +492,8 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .HasColumnType("TEXT");
 
                     b.HasKey("PreflightToken");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ExpiresAt", "PreflightToken")
                         .HasDatabaseName("IX_elsa_publication_snapshot_reviews_expiresAt_preflightToken");

@@ -3,6 +3,7 @@ using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 
@@ -100,9 +101,14 @@ public sealed class EfExternalIdentityStore(
 
     private IQueryable<ExternalIdentityEntity> QueryForUser(string tenantId, string userId) => context.ExternalIdentities.AsNoTracking().Where(x => x.TenantLookupKey == EfIdentityStoreSupport.TenantLookup(tenantId) && x.UserLookupKey == EfIdentityStoreSupport.Lookup(tenantId, userId));
     private static ExternalIdentityEntity ToEntity(ExternalIdentityRecord record) => new() { TenantId = record.TenantId, Provider = record.Provider, ProviderSubject = record.ProviderSubject, UserId = record.UserId, LinkedAt = record.LinkedAt, LastSeenAt = record.LastSeenAt, LinkPolicy = (int)record.LinkPolicy };
-    private static ExternalIdentityRecord Map(ExternalIdentityEntity row) => new(row.TenantId, row.Provider, row.ProviderSubject, row.UserId, row.LinkedAt, row.LastSeenAt, (ExternalIdentityLinkPolicy)row.LinkPolicy);
+    private static ExternalIdentityRecord Map(ExternalIdentityEntity row)
+    {
+        EfSchemaVersion.EnsureReadable("IdentityIam", row.SchemaVersion, IdentityIamEfModule.SchemaVersion);
+        return new(row.TenantId, row.Provider, row.ProviderSubject, row.UserId, row.LinkedAt, row.LastSeenAt, (ExternalIdentityLinkPolicy)row.LinkPolicy);
+    }
+
     private static string Id(string tenantId, string provider, string subject) => EfIdentityStoreSupport.CompoundKey(tenantId, provider, subject);
     private void Prepare(string tenantId, CancellationToken cancellationToken) { Validate(tenantId, nameof(tenantId)); EfIdentityStoreSupport.EnsureTenant(accessContextAccessor, tenantId); context.EnsureProviderBinding(); cancellationToken.ThrowIfCancellationRequested(); }
     private static void Validate(string value, string parameter) { ArgumentNullException.ThrowIfNull(value); if (value.Length > IdentityProviderConfigurationCanonicalizer.MaximumIdentityLength) throw new ArgumentException($"Identity key values cannot exceed {IdentityProviderConfigurationCanonicalizer.MaximumIdentityLength} UTF-16 code units.", parameter); }
-    private static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception) => new(message, exception);
+    private static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception) => EfIdentityStoreSupport.Failure(message, exception);
 }

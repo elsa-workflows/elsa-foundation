@@ -22,4 +22,7 @@ public sealed class ExecutionPlacementLeaseEntity
     /// claims can mismatch.
     /// </summary>
     public long Revision { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="ExecutionPlacementEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }

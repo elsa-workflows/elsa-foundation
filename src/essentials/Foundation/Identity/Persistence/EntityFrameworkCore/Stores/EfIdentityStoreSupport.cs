@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
@@ -101,6 +102,7 @@ internal static class EfIdentityStoreSupport
 
     public static void EnsureUserIdentity(UserEntity entity, string tenantId, string userId)
     {
+        EfSchemaVersion.EnsureReadable("IdentityIam", entity.SchemaVersion, IdentityIamEfModule.SchemaVersion);
         EnsureIdentity(entity.TenantId, tenantId, "user tenant");
         EnsureIdentity(entity.UserId, userId, "user identifier");
         EnsureExact(entity.Id, RecordId(tenantId, userId), "user record key");
@@ -118,6 +120,7 @@ internal static class EfIdentityStoreSupport
 
     public static void EnsureRoleIdentity(RoleEntity entity, string tenantId, string roleId)
     {
+        EfSchemaVersion.EnsureReadable("IdentityIam", entity.SchemaVersion, IdentityIamEfModule.SchemaVersion);
         EnsureIdentity(entity.TenantId, tenantId, "role tenant");
         EnsureIdentity(entity.RoleId, roleId, "role identifier");
         EnsureExact(entity.Id, RecordId(tenantId, roleId), "role record key");
@@ -131,12 +134,14 @@ internal static class EfIdentityStoreSupport
 
     public static void EnsureUserClaimIdentity(UserClaimEntity entity, string tenantId, string userId)
     {
+        EfSchemaVersion.EnsureReadable("IdentityIam", entity.SchemaVersion, IdentityIamEfModule.SchemaVersion);
         EnsureUserChildIdentity(entity.Id, entity.TenantId, entity.TenantLookupKey, entity.UserId, entity.UserLookupKey, tenantId, userId, CompoundKey(tenantId, userId, entity.ClaimType, entity.ClaimValue), "user claim");
         EnsureExact(entity.ClaimKey, CompoundKey(tenantId, entity.ClaimType, entity.ClaimValue), "user-claim lookup key");
     }
 
     public static void EnsureRoleClaimIdentity(RoleClaimEntity entity, string tenantId, string roleId)
     {
+        EfSchemaVersion.EnsureReadable("IdentityIam", entity.SchemaVersion, IdentityIamEfModule.SchemaVersion);
         EnsureIdentity(entity.TenantId, tenantId, "role-claim tenant");
         EnsureIdentity(entity.RoleId, roleId, "role-claim owner");
         EnsureExact(entity.Id, CompoundKey(tenantId, roleId, entity.ClaimType, entity.ClaimValue), "role-claim record key");
@@ -147,6 +152,7 @@ internal static class EfIdentityStoreSupport
 
     public static void EnsureUserRoleIdentity(UserRoleEntity entity, string tenantId, string userId, string roleId)
     {
+        EfSchemaVersion.EnsureReadable("IdentityIam", entity.SchemaVersion, IdentityIamEfModule.SchemaVersion);
         EnsureUserChildIdentity(entity.Id, entity.TenantId, entity.TenantLookupKey, entity.UserId, entity.UserLookupKey, tenantId, userId, CompoundKey(tenantId, userId, roleId), "user-role link");
         EnsureIdentity(entity.RoleId, roleId, "user-role role");
         EnsureExact(entity.RoleLookupKey, Lookup(tenantId, roleId), "user-role role lookup key");
@@ -154,12 +160,16 @@ internal static class EfIdentityStoreSupport
 
     public static void EnsureUserTokenIdentity(UserTokenEntity entity, string tenantId, string userId)
     {
+        EfSchemaVersion.EnsureReadable("IdentityIam", entity.SchemaVersion, IdentityIamEfModule.SchemaVersion);
         EnsureUserChildIdentity(entity.Id, entity.TenantId, entity.TenantLookupKey, entity.UserId, entity.UserLookupKey, tenantId, userId, CompoundKey(tenantId, userId, entity.LoginProvider, entity.Name), "user token");
         EnsureExact(entity.TokenKey, CompoundKey(tenantId, entity.LoginProvider, entity.Name), "user-token lookup key");
     }
 
-    public static void EnsureTenantMembershipIdentity(TenantMembershipEntity entity, string tenantId, string userId) =>
+    public static void EnsureTenantMembershipIdentity(TenantMembershipEntity entity, string tenantId, string userId)
+    {
+        EfSchemaVersion.EnsureReadable("IdentityIam", entity.SchemaVersion, IdentityIamEfModule.SchemaVersion);
         EnsureUserChildIdentity(entity.Id, entity.TenantId, entity.TenantLookupKey, entity.UserId, entity.UserLookupKey, tenantId, userId, RecordId(tenantId, userId), "tenant membership");
+    }
 
     public static void EnsureExternalIdentity(
         ExternalIdentityEntity entity,
@@ -168,6 +178,7 @@ internal static class EfIdentityStoreSupport
         string providerSubject,
         string? expectedUserId = null)
     {
+        EfSchemaVersion.EnsureReadable("IdentityIam", entity.SchemaVersion, IdentityIamEfModule.SchemaVersion);
         EnsureIdentity(entity.TenantId, tenantId, "external-login tenant");
         EnsureIdentity(entity.Provider, provider, "external-login provider");
         EnsureIdentity(entity.ProviderSubject, providerSubject, "external-login subject");
@@ -187,6 +198,7 @@ internal static class EfIdentityStoreSupport
         string normalizedUserName,
         string? expectedUserId = null)
     {
+        EfSchemaVersion.EnsureReadable("IdentityIam", entity.SchemaVersion, IdentityIamEfModule.SchemaVersion);
         EnsureReservationOwner(entity.UserId, expectedUserId, "user-name reservation owner");
         EnsureIdentity(entity.TenantId, tenantId, "user-name reservation tenant");
         EnsureIdentity(entity.NormalizedUserName, normalizedUserName, "user-name reservation value");
@@ -202,6 +214,7 @@ internal static class EfIdentityStoreSupport
         string normalizedEmail,
         string? expectedUserId = null)
     {
+        EfSchemaVersion.EnsureReadable("IdentityIam", entity.SchemaVersion, IdentityIamEfModule.SchemaVersion);
         EnsureReservationOwner(entity.UserId, expectedUserId, "email reservation owner");
         EnsureIdentity(entity.TenantId, tenantId, "email reservation tenant");
         EnsureIdentity(entity.NormalizedEmail, normalizedEmail, "email reservation value");
@@ -217,6 +230,7 @@ internal static class EfIdentityStoreSupport
         string normalizedRoleName,
         string? expectedRoleId = null)
     {
+        EfSchemaVersion.EnsureReadable("IdentityIam", entity.SchemaVersion, IdentityIamEfModule.SchemaVersion);
         EnsureReservationOwner(entity.RoleId, expectedRoleId, "role-name reservation owner");
         EnsureIdentity(entity.TenantId, tenantId, "role-name reservation tenant");
         EnsureIdentity(entity.NormalizedRoleName, normalizedRoleName, "role-name reservation value");
@@ -413,8 +427,17 @@ internal static class EfIdentityStoreSupport
         }
     }
 
-    public static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception) =>
-        new(message, exception);
+    /// <summary>
+    /// The one wrapper every Identity failure ladder builds. Skew is not a persistence failure, and this wrapper is an
+    /// <see cref="InvalidOperationException"/> that callers treat as one, so a skewed row leaves as itself whichever
+    /// ladder caught it (ADR 0077).
+    /// </summary>
+    public static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception)
+    {
+        if (exception is EfSchemaVersionSkewException)
+            ExceptionDispatchInfo.Throw(exception);
+        return new(message, exception);
+    }
 
     private static void EnsureUserChildIdentity(
         string id,
