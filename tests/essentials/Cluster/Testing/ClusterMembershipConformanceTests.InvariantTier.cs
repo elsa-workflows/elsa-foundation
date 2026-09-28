@@ -99,7 +99,7 @@ public abstract partial class ClusterMembershipConformanceTests
     public async Task FR058_a_member_query_returns_only_members_whose_report_satisfies_it()
     {
         RequireMultipleMembers();
-        var active = await Fixture.StartMemberAsync(Setup("active", Reads("1", "2")));
+        var active = await Fixture.StartMemberAsync(Setup("active", Reads("1", "2")) with { ClockOffset = DisplacedButStillLiveObserverOffset });
         var draining = await Fixture.StartMemberAsync(Setup("draining", Reads("1", "2")));
         var displaced = await Fixture.StartMemberAsync(Setup("displaced", Reads("1", "2")));
         var expired = await Fixture.StartMemberAsync(Setup("expired", Reads("1", "2")));
@@ -110,8 +110,7 @@ public abstract partial class ClusterMembershipConformanceTests
 
         await expired.KillAsync();
         await Fixture.AdvanceAsync(Timings.ExpiryPeriod + Timings.SkewAllowance + Timings.HeartbeatInterval);
-        await displaced.KillAsync();
-        await Fixture.AdvanceAsync(DisplacementDelay);
+        await KillAndAdvanceToDisplaceableAsync(active, displaced);
         var restarted = await Fixture.StartMemberAsync(Restart(displaced, Reads("1", "2")));
         await draining.BeginStopAsync();
         await departed.StopAsync();

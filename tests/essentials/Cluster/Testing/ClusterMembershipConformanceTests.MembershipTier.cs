@@ -151,11 +151,10 @@ public abstract partial class ClusterMembershipConformanceTests
     public async Task FR050_a_displaced_incarnation_is_counted_until_it_expires_and_excluded_from_placement_at_once()
     {
         RequireMultipleMembers();
-        var observer = await Fixture.StartMemberAsync(Setup("observer"));
+        var observer = await Fixture.StartMemberAsync(Setup("observer") with { ClockOffset = DisplacedButStillLiveObserverOffset });
         var earlier = await Fixture.StartMemberAsync(Setup("restarting", Reads("1")));
         await Fixture.AdvanceAsync(Timings.HeartbeatInterval);
-        await earlier.KillAsync();
-        await Fixture.AdvanceAsync(DisplacementDelay);
+        await KillAndAdvanceToDisplaceableAsync(observer, earlier);
 
         var later = await Fixture.StartMemberAsync(Restart(earlier, Reads("1", "2")));
         var displaced = (await SeenAsync(observer, Identity(earlier)))!;
@@ -198,6 +197,94 @@ public abstract partial class ClusterMembershipConformanceTests
         var seen = Assert.Single(sameHost);
         Assert.Equal(identity, seen.Identity);
         Assert.True(seen is { IsLive: true, IsDisplaced: false });
+    }
+
+    /// <summary>
+    /// The gap FR-004a and FR-004b close: a killed incarnation that is well past one heartbeat interval, but still
+    /// live by FR-006's own rule (heartbeat, expiry and skew), MUST NOT be displaceable yet. A reference store that
+    /// checked only heartbeat interval and skew (rather than the full liveness rule) would let this join through.
+    /// </summary>
+    [SkippableFact]
+    public async Task FR004a_a_member_within_its_expiry_period_is_not_displaceable_though_past_one_heartbeat_interval()
+    {
+        RequireMultipleMembers();
+        var observer = await Fixture.StartMemberAsync(Setup("observer"));
+        var first = await Fixture.StartMemberAsync(Setup("claimed"));
+        var identity = Identity(first);
+        await first.KillAsync();
+
+        // Two heartbeat intervals safely exceed a heartbeat-interval-only threshold, and, because FR-006 requires the
+        // expiry period to be at least three heartbeat intervals, safely stay within the correct expiry+skew window.
+        await Fixture.AdvanceAsync(Timings.HeartbeatInterval * 2);
+        Assert.True((await SeenAsync(observer, identity))!.IsLive, "Test setup assumption: the member must still be live by FR-006 at this point.");
+
+        var refusal = await Assert.ThrowsAsync<ClusterMembershipJoinRefusedException>(async () => await Fixture.StartMemberAsync(Restart(first)));
+        Assert.Equal(identity.HostId, refusal.HostId);
+
+        var survivor = Assert.Single((await FreshViewAsync(observer)).Members, member => member.HostId == identity.HostId);
+        Assert.Equal(identity, survivor.Identity);
+        Assert.False(survivor.IsDisplaced);
+    }
+
+    [SkippableFact]
+    public async Task FR004a_a_crashed_incumbent_is_displaced_once_a_full_liveness_window_has_passed()
+    {
+        RequireMultipleMembers();
+        var observer = await Fixture.StartMemberAsync(Setup("observer") with { ClockOffset = DisplacedButStillLiveObserverOffset });
+        var first = await Fixture.StartMemberAsync(Setup("claimed"));
+        var identity = Identity(first);
+        await KillAndAdvanceToDisplaceableAsync(observer, first);
+
+        var restarted = await Fixture.StartMemberAsync(Restart(first));
+
+        Assert.Equal(identity.HostId, Identity(restarted).HostId);
+        Assert.NotEqual(identity, Identity(restarted));
+        var seen = (await FreshViewAsync(observer)).Members.Where(member => member.HostId == identity.HostId).ToArray();
+        Assert.Equal(2, seen.Length);
+        Assert.Contains(seen, member => member.Identity == identity && member.IsDisplaced);
+    }
+
+    /// <summary>
+    /// A joiner refused throughout one full liveness window, with the incumbent renewing the whole time, is looking at
+    /// a live duplicate, not a crash to wait out; it MUST stop retrying and fail startup instead (FR-004b, FR-039,
+    /// #2097 review). Bite-proofed by reverting the escalation: a joiner that always throws the retryable refusal
+    /// leaves <c>terminal</c> null forever, and this test fails.
+    /// </summary>
+    [SkippableFact]
+    public async Task FR004b_a_live_duplicate_that_keeps_renewing_fails_startup_within_one_liveness_window()
+    {
+        RequireMultipleMembers();
+        var first = await Fixture.StartMemberAsync(Setup("claimed"));
+        var identity = Identity(first);
+        var attempts = (int)Math.Ceiling((Timings.ExpiryPeriod + Timings.SkewAllowance) / Timings.HeartbeatInterval) + 2;
+
+        ClusterMembershipDuplicateHostIdException? terminal = null;
+        for (var attempt = 0; attempt < attempts && terminal is null; attempt++)
+        {
+            await Fixture.AdvanceAsync(Timings.HeartbeatInterval);
+            try
+            {
+                await Fixture.StartMemberAsync(Restart(first));
+                Assert.Fail("The join must not succeed while the live incumbent keeps renewing throughout the window.");
+            }
+            catch (ClusterMembershipDuplicateHostIdException duplicate)
+            {
+                terminal = duplicate;
+            }
+            catch (ClusterMembershipJoinRefusedException)
+            {
+                // Expected while inside the liveness window; the caller keeps retrying.
+            }
+        }
+
+        Assert.NotNull(terminal);
+        Assert.Equal(identity.HostId, terminal!.HostId);
+        Assert.Equal(MemberConditionKind.DuplicateHostId, terminal.Condition.Kind);
+        Assert.Contains(identity.HostId, terminal.Condition.HostIds);
+
+        var standing = first.Membership.GetLocalStanding();
+        Assert.Equal(identity, standing.Identity);
+        Assert.False(standing.HasLapsed, "The undisturbed incumbent must not itself conclude that it lapsed.");
     }
 
     [SkippableFact]
@@ -264,7 +351,7 @@ public abstract partial class ClusterMembershipConformanceTests
     {
         RequireMultipleMembers();
         var question = MemberQuery.Counting(new ReadsSchemaVersion(Family, "2"));
-        var observer = await Fixture.StartMemberAsync(Setup("observer"));
+        var observer = await Fixture.StartMemberAsync(Setup("observer") with { ClockOffset = DisplacedButStillLiveObserverOffset });
         var a = await Fixture.StartMemberAsync(Setup("a", Reads("1")));
         var b = await Fixture.StartMemberAsync(Setup("b", Reads("1")));
         var c = await Fixture.StartMemberAsync(Setup("c", Reads("1")));
@@ -278,8 +365,7 @@ public abstract partial class ClusterMembershipConformanceTests
         await AssertBlockersAsync("every member reads only 1", a, b, c);
 
         await Fixture.AdvanceAsync(Timings.HeartbeatInterval);
-        await a.KillAsync();
-        await Fixture.AdvanceAsync(DisplacementDelay);
+        await KillAndAdvanceToDisplaceableAsync(observer, a);
         var upgradedA = await Fixture.StartMemberAsync(Restart(a, Reads("1", "2")));
         await AssertBlockersAsync("the displaced incarnation of a is still counted", a, b, c);
 

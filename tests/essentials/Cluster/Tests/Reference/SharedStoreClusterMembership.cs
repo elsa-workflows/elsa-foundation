@@ -2,6 +2,7 @@ using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Exceptions;
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.Testing;
+using Microsoft.Extensions.Primitives;
 
 namespace Elsa.Cluster.Tests.Reference;
 
@@ -43,6 +44,7 @@ internal sealed class SharedStoreClusterMembership(
     private MemberLapse? _lapse;
     private FleetView? _cached;
     private MemberReport? _deferred;
+    private bool _hadFailedFreshRead;
 
     public ClusterMemberIdentity Identity { get; } = new(hostId, MemberIncarnation.New());
 
@@ -111,10 +113,16 @@ internal sealed class SharedStoreClusterMembership(
     public ValueTask<FleetView> ReadFleetAsync(FleetReadMode mode, CancellationToken cancellationToken = default)
     {
         if (mode == FleetReadMode.Cached && _cached is { } cached)
-            return ValueTask.FromResult(cached);
+            return ValueTask.FromResult(_hadFailedFreshRead ? WithFailedFreshRead(cached) : cached);
         if (IsIsolated)
+        {
+            _hadFailedFreshRead = true;
             throw new ClusterMembershipReadException($"Member {Identity} cannot reach the membership store.");
-        return ValueTask.FromResult(View(mode));
+        }
+
+        var view = View(mode);
+        _hadFailedFreshRead = false;
+        return ValueTask.FromResult(view);
     }
 
     public async ValueTask<PublishedMemberReport> PublishReportAsync(CancellationToken cancellationToken = default)
@@ -133,6 +141,12 @@ internal sealed class SharedStoreClusterMembership(
     public async ValueTask<MemberQueryAnswer> QueryAsync(MemberQuery query, FleetReadMode mode, CancellationToken cancellationToken = default) =>
         query.Evaluate(await ReadFleetAsync(mode, cancellationToken));
 
+    /// <summary>
+    /// A change token that completes once, the next time the shared store observes a fleet change (FR-013). Call this
+    /// again after it completes to observe the next one.
+    /// </summary>
+    public IChangeToken GetChangeToken() => store.GetChangeToken();
+
     private FleetView View(FleetReadMode mode)
     {
         var now = clock.GetUtcNow();
@@ -147,10 +161,55 @@ internal sealed class SharedStoreClusterMembership(
                 entry.Displaced,
                 entry.Report ?? MemberReport.Unknown,
                 entry.ReportRevision,
-                Conditions: []))
+                Conditions(entry, now, skewAllowance)))
             .ToList();
         if (fault == SharedStoreFault.Truncate && members.Count > 1)
             members.RemoveAt(members.Count - 1);
         return new FleetView(ClusterProviderKind.Durable, mode, now, members);
+    }
+
+    /// <summary>
+    /// The FR-037 to FR-042 conditions this reader observes about <paramref name="entry"/> from data already in the
+    /// store, without a separate write for each: a lapse and a displacement are visible because they change what is
+    /// stored (FR-004a, FR-007); an uninterpretable entry, because its report is missing; a clock skew, by comparing
+    /// the entry's own heartbeat time to this reader's clock. FR-039 (a duplicate host id: a displacement while the
+    /// member's own heartbeats were still succeeding) cannot occur for this store: <see cref="SharedMembershipStore.Join"/>
+    /// holds one lock across the liveness check and the displacement, so a live incumbent is never displaced.
+    /// </summary>
+    private IReadOnlyList<MemberCondition> Conditions(StoredMember entry, DateTimeOffset now, TimeSpan skewAllowance)
+    {
+        var isLive = MemberLiveness.IsLive(entry.Status, entry.HeartbeatAt, entry.ExpiryPeriod, skewAllowance, now);
+        List<MemberCondition>? conditions = null;
+        void Add(MemberConditionKind kind, IReadOnlyList<string> hostIds, string message) => (conditions ??= []).Add(new MemberCondition(kind, hostIds, message));
+
+        if (entry.Displaced)
+            Add(MemberConditionKind.Displaced, [entry.Identity.HostId], $"A later incarnation of host id '{entry.Identity.HostId}' has joined; this incarnation is displaced.");
+
+        if (!isLive && entry.Status != MemberStatus.Left)
+            Add(MemberConditionKind.Lapsed, [entry.Identity.HostId], $"Host id '{entry.Identity.HostId}' has not renewed within its expiry period and the skew allowance; it has lapsed.");
+
+        if (entry.Report is null)
+            Add(MemberConditionKind.UninterpretableEntry, [entry.Identity.HostId], $"This reader cannot interpret the entry for host id '{entry.Identity.HostId}'.");
+
+        if (entry.Identity.HostId != Identity.HostId && entry.HeartbeatAt > now + skewAllowance)
+            Add(MemberConditionKind.ClockSkew, [Identity.HostId, entry.Identity.HostId], $"Host id '{entry.Identity.HostId}' heartbeated ahead of host id '{Identity.HostId}''s clock by more than the skew allowance.");
+
+        if (entry.Identity == Identity && _hadFailedFreshRead)
+            Add(MemberConditionKind.FailedFreshRead, [Identity.HostId], $"The previous fresh read by host id '{Identity.HostId}' failed.");
+
+        return conditions ?? [];
+    }
+
+    /// <summary>Attaches a <see cref="MemberConditionKind.FailedFreshRead"/> condition to this reader's own entry in
+    /// <paramref name="cached"/>, and clears the flag so it is reported once (FR-042).</summary>
+    private FleetView WithFailedFreshRead(FleetView cached)
+    {
+        _hadFailedFreshRead = false;
+        var members = cached.Members
+            .Select(member => member.Identity == Identity
+                ? member with { Conditions = [.. member.Conditions, new MemberCondition(MemberConditionKind.FailedFreshRead, [Identity.HostId], $"The previous fresh read by host id '{Identity.HostId}' failed.")] }
+                : member)
+            .ToList();
+        return cached with { Members = members };
     }
 }

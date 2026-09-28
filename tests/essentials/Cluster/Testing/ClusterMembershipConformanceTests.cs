@@ -34,13 +34,29 @@ public abstract partial class ClusterMembershipConformanceTests(IClusterMembersh
     protected ConformanceTimings Timings => Fixture.Timings;
 
     /// <summary>
-    /// How long after its last heartbeat a killed member has stopped heartbeating, so a restart may displace it while
-    /// it is still counted: one heartbeat interval and the skew allowance, and a tenth of an interval more.
+    /// An observer clock offset that stays within the skew allowance of the boundary <see cref="KillAndAdvanceToDisplaceableAsync"/>
+    /// advances to: at that boundary, a restart may displace the killed member (FR-004a: only a non-live earlier
+    /// incarnation may be displaced), while an observer running this far behind still counts it live, within the skew
+    /// allowance the framework already tolerates (FR-050).
     /// </summary>
-    protected TimeSpan DisplacementDelay => Timings.HeartbeatInterval + Timings.SkewAllowance + Timings.HeartbeatInterval / 10;
+    protected TimeSpan DisplacedButStillLiveObserverOffset => -Timings.SkewAllowance;
 
     /// <summary>A margin well above any store's timestamp precision, used on either side of a boundary.</summary>
     protected static TimeSpan Margin => TimeSpan.FromMilliseconds(1);
+
+    /// <summary>
+    /// Kills <paramref name="member"/> and advances every clock until <paramref name="reader"/> is exactly at its own
+    /// perceived expiry boundary for it (FR-006). At that instant a restart under the same host id may displace it
+    /// (FR-004a), and, because <paramref name="reader"/> runs <see cref="DisplacedButStillLiveObserverOffset"/> behind,
+    /// it still counts the about-to-be-displaced incarnation live (FR-050). Deterministic regardless of where the
+    /// fixture's heartbeat schedule happens to land, unlike advancing by a fixed guessed delay.
+    /// </summary>
+    protected async Task KillAndAdvanceToDisplaceableAsync(IConformanceMember reader, IConformanceMember member)
+    {
+        var identity = Identity(member);
+        await member.KillAsync();
+        await AdvanceUntilAsync(reader, await ExpiryAsSeenByAsync(reader, identity));
+    }
 
     public async ValueTask DisposeAsync()
     {

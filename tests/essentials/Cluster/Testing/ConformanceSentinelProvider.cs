@@ -2,6 +2,7 @@ using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Extensions;
 using Elsa.Cluster.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Primitives;
 
 namespace Elsa.Cluster.Testing;
 
@@ -38,5 +39,6 @@ public static class ConformanceSentinelProvider
         public ValueTask<FleetView> ReadFleetAsync(FleetReadMode mode, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<PublishedMemberReport> PublishReportAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<MemberQueryAnswer> QueryAsync(MemberQuery query, FleetReadMode mode, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public IChangeToken GetChangeToken() => throw new NotSupportedException();
     }
 }

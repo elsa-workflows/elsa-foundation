@@ -1,7 +1,7 @@
 namespace Elsa.Cluster.Core.Models;
 
 /// <summary>
-/// What a member says about itself, in named sections (FR-014). ADR 0078 calls it the member's capabilities.
+/// What a member says about itself, in named sections (FR-014). ADR 0078 calls this the member's self-report.
 /// </summary>
 /// <remarks>
 /// A report the reader cannot interpret, for instance one written by a newer provider version, is

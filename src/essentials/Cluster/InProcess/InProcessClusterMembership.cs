@@ -2,6 +2,7 @@ using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.Core.Options;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Primitives;
 
 namespace Elsa.Cluster.InProcess;
 
@@ -13,6 +14,11 @@ namespace Elsa.Cluster.InProcess;
 /// once, and the member never lapses. It writes nothing durable and runs no heartbeat, hosted service or timer; its
 /// only state is the process's <see cref="InProcessMemberRecord"/>. Its host id is the configured one or, by default,
 /// the machine name (spec 183, Decisions, Q24).
+/// <para>
+/// It never meets FR-037 to FR-042 (the lapse, displacement, duplicate-host-id, clock-skew, uninterpretable-entry and
+/// failed-fresh-read conditions): a cluster of one never lapses, is never displaced, never disagrees with another
+/// clock, and its fresh read never fails, so <see cref="FleetMember.Conditions"/> on its own entry is always empty.
+/// </para>
 /// </remarks>
 public sealed class InProcessClusterMembership : IClusterMembership
 {
@@ -64,4 +70,6 @@ public sealed class InProcessClusterMembership : IClusterMembership
         ArgumentNullException.ThrowIfNull(query);
         return query.Evaluate(await ReadFleetAsync(mode, cancellationToken));
     }
+
+    public IChangeToken GetChangeToken() => _record.GetChangeToken();
 }

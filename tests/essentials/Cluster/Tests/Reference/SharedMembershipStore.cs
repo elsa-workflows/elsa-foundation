@@ -1,6 +1,7 @@
 using Elsa.Cluster.Core.Exceptions;
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.Testing;
+using Microsoft.Extensions.Primitives;
 
 namespace Elsa.Cluster.Tests.Reference;
 
@@ -12,7 +13,9 @@ internal sealed class SharedMembershipStore
 {
     private readonly object _gate = new();
     private readonly List<StoredMember> _entries = [];
+    private readonly Dictionary<string, RefusalWatch> _refusalWatches = new(StringComparer.Ordinal);
     private long _sequence;
+    private CancellationTokenSource _changeSource = new();
 
     public int Count
     {
@@ -25,20 +28,42 @@ internal sealed class SharedMembershipStore
 
     /// <summary>
     /// Inserts a new incarnation and displaces the earlier ones of its host id, unless the most recent one is still
-    /// heartbeating: renewed within one heartbeat interval and the skew allowance (FR-004a, FR-004b).
+    /// live by FR-006's own liveness rule (heartbeat, expiry and skew): only a non-live (expired or left) earlier
+    /// incarnation may be displaced (FR-004a, FR-004b).
     /// </summary>
+    /// <remarks>
+    /// A refusal while the incumbent is live is retryable: <see cref="ClusterMembershipJoinRefusedException"/>, so the
+    /// caller waits and tries again. But a joiner that has now been refused throughout one full liveness window since
+    /// its first observation of this exact incumbent, with the incumbent renewing the whole time, is not looking at a
+    /// crash to wait out: it is a live duplicate. That escalates to <see cref="ClusterMembershipDuplicateHostIdException"/>,
+    /// which the caller MUST NOT retry (FR-004b, FR-039, #2097 review).
+    /// </remarks>
     public void Join(ClusterMemberIdentity identity, MemberReport report, DateTimeOffset now, ConformanceTimings timings)
     {
         lock (_gate)
         {
             var sameHost = _entries.Where(entry => entry.Identity.HostId == identity.HostId).ToArray();
             var latest = sameHost.MaxBy(entry => entry.Sequence);
-            if (latest is not null && latest.Status != MemberStatus.Left && now - latest.HeartbeatAt <= timings.HeartbeatInterval + timings.SkewAllowance)
-                throw new ClusterMembershipJoinRefusedException(identity.HostId);
+            if (latest is not null && MemberLiveness.IsLive(latest.Status, latest.HeartbeatAt, latest.ExpiryPeriod, timings.SkewAllowance, now))
+            {
+                if (!_refusalWatches.TryGetValue(identity.HostId, out var watch) || watch.Incumbent != latest.Identity)
+                    _refusalWatches[identity.HostId] = new RefusalWatch(latest.Identity, now);
+                else if (now - watch.FirstObservedAt >= latest.ExpiryPeriod + timings.SkewAllowance)
+                    throw new ClusterMembershipDuplicateHostIdException(
+                        identity.HostId,
+                        new MemberCondition(
+                            MemberConditionKind.DuplicateHostId,
+                            [identity.HostId],
+                            $"Host id '{identity.HostId}' has been claimed by a live process for a full liveness window; it kept renewing throughout it."));
 
+                throw new ClusterMembershipJoinRefusedException(identity.HostId);
+            }
+
+            _refusalWatches.Remove(identity.HostId);
             foreach (var earlier in sameHost)
                 Replace(earlier with { Displaced = true });
             _entries.Add(new StoredMember(identity, ++_sequence, MemberStatus.Joining, now, timings.ExpiryPeriod, Displaced: false, report, ReportRevision: 1, LeftAt: null));
+            SignalChanged();
         }
     }
 
@@ -57,8 +82,11 @@ internal sealed class SharedMembershipStore
     {
         lock (_gate)
         {
-            if (Find(identity) is { } entry)
-                Replace(entry with { Status = status, LeftAt = status == MemberStatus.Left ? now : null });
+            if (Find(identity) is not { } entry)
+                return;
+
+            Replace(entry with { Status = status, LeftAt = status == MemberStatus.Left ? now : null });
+            SignalChanged();
         }
     }
 
@@ -68,8 +96,33 @@ internal sealed class SharedMembershipStore
         lock (_gate)
         {
             var entry = Find(identity) ?? throw new InvalidOperationException($"{identity} has no entry.");
-            return Equals(entry.Report, report) ? entry.ReportRevision : Replace(entry with { Report = report, ReportRevision = entry.ReportRevision + 1 }).ReportRevision;
+            if (Equals(entry.Report, report))
+                return entry.ReportRevision;
+
+            var revision = Replace(entry with { Report = report, ReportRevision = entry.ReportRevision + 1 }).ReportRevision;
+            SignalChanged();
+            return revision;
         }
+    }
+
+    /// <summary>
+    /// A change token that completes once, the next time this store observes a fleet change: a join, a status change
+    /// (including a leave) or a report change (FR-013). Call this again after it completes to observe the next one, as
+    /// with <see cref="IChangeToken"/> elsewhere in the framework (Elsa.Caching). It carries no dependency on the
+    /// Events feature.
+    /// </summary>
+    public IChangeToken GetChangeToken()
+    {
+        lock (_gate)
+            return new CancellationChangeToken(_changeSource.Token);
+    }
+
+    /// <summary>Fires the current change token and starts a new one. Called with <see cref="_gate"/> already held.</summary>
+    private void SignalChanged()
+    {
+        var previous = _changeSource;
+        _changeSource = new CancellationTokenSource();
+        previous.Cancel();
     }
 
     public long RevisionOf(ClusterMemberIdentity identity)
@@ -119,3 +172,7 @@ internal sealed record StoredMember(
     MemberReport? Report,
     long ReportRevision,
     DateTimeOffset? LeftAt);
+
+/// <summary>When a joiner first observed <see cref="Incumbent"/> refusing it, so a later join for the same host id can
+/// tell a live duplicate (refused throughout a full liveness window) from a fresh crash (FR-004b, FR-039).</summary>
+internal sealed record RefusalWatch(ClusterMemberIdentity Incumbent, DateTimeOffset FirstObservedAt);

@@ -1,4 +1,5 @@
 using Elsa.Cluster.Core.Models;
+using Microsoft.Extensions.Primitives;
 
 namespace Elsa.Cluster.Core.Contracts;
 
@@ -56,4 +57,16 @@ public interface IClusterMembership
     /// here, never a provider's store or a framework's placement API (ADR 0078, invariant 3).
     /// </summary>
     ValueTask<MemberQueryAnswer> QueryAsync(MemberQuery query, FleetReadMode mode, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// A change token that completes once, the next time the provider observes a fleet change: a join, a status
+    /// change, a new report, a lapse, a displacement or an expiry (FR-013; #2097, owner decision). It carries no
+    /// dependency on the Events feature: <see cref="IChangeToken"/> (Microsoft.Extensions.Primitives) is the pattern
+    /// this framework already uses for a signal a consumer polls or re-registers against (Elsa.Caching's
+    /// <c>IChangeTokenSignaler</c>), so membership uses it too rather than introducing an <c>IObservable</c>
+    /// dependency the rest of the codebase does not otherwise take. Call this again after the token completes to
+    /// observe the next change. A consumer MUST NOT depend on it as its only way to learn of a change; it MUST also
+    /// compare successive reads (FR-013).
+    /// </summary>
+    IChangeToken GetChangeToken();
 }
