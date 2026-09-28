@@ -111,8 +111,11 @@ Findings:
 Observation: with these defaults, a crashed host that does not restart is judged expired after 35 s, while its
 placement leases expire after at most 30 s. Departure-driven reclaim therefore gains nothing for placement leases in
 that case; it gains for execution leases (one minute) and transport items, and it makes failover independent of lease
-length, so a deployment can lengthen leases to cut renewal traffic. The restart case (User Story 3) and a graceful
-stop (User Story 6) are where it gains most, because neither waits for any expiry.
+length, so a deployment can lengthen leases to cut renewal traffic. A graceful stop (User Story 6) is where it gains
+most, because the departing host writes left at once and neither its own restart nor a survivor waits for any expiry.
+A same-host-id restart after a crash (User Story 3) no longer gains anything over departure-driven reclaim: spec 183's
+FR-004b refuses and retries the new incarnation's join until the earlier one is no longer live, so the restarting
+host's own join sweep runs no sooner than a survivor's departure reclaim would.
 
 ## Attention
 

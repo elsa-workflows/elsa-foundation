@@ -174,24 +174,31 @@ and the transport. Start a capable host and assert the work runs and the warning
 
 ### User Story 3 - A crashed host that restarts reclaims its own leases at once (Priority: P1)
 
-Host A, configured with host id `a` and the durable provider, crashes mid-drain and restarts within seconds under the
-same host id. Before its runtime takes any work, the new process releases every placement lease and transport item
-lease held under `a`, and makes every execution whose execution lease is held under `a` eligible for recovery. The
-interrupted executions are re-driven within one sweep, not once their leases expire.
+Host A, configured with host id `a` and the durable provider, crashes mid-drain and restarts under the same host id.
+Because `a`'s earlier incarnation was still live when it crashed, the new incarnation's join is refused and retried
+until that entry is no longer live — at most the expiry period plus the skew allowance (spec 183, FR-004b) — so the
+restart gains nothing over a survivor's own expiry-triggered reclaim (User Story 4). Once the join succeeds, before
+its runtime takes any work, the new process releases every placement lease and transport item lease still held under
+`a`, and makes every execution whose execution lease is still held under `a` eligible for recovery, covering whatever
+a survivor has not already reclaimed.
 
-**Why this priority**: ADR 0078 requires that a host rejoining as a new incarnation has its leases reclaimed at once.
-On a host whose id survives restarts (a VM, a `StatefulSet` pod) this is the common failover.
+**Why this priority**: ADR 0078 requires that a host rejoining as a new incarnation has its leases reclaimed by the
+time it takes any work, whether that reclaim runs through its own join sweep or a survivor's departure-triggered
+reclaim got there first. On a host whose id survives restarts (a VM, a `StatefulSet` pod) this is the common failover,
+delayed for a live-collision restart by up to spec 183's expiry period plus the skew allowance (FR-004b).
 
-**Independent Test**: With a controllable clock, kill host A mid-drain and restart it under the same host id without
-advancing the clock past any lease's expiry. Assert the re-drive happens within one sweep and that exactly one commit
-lands per checkpoint.
+**Independent Test**: With a controllable clock, kill host A mid-drain and restart it under the same host id. Advance
+the clock to the earlier incarnation's expiry so the new incarnation's join succeeds, and assert its join sweep
+reclaims any leases a survivor has not already reclaimed, and that exactly one commit lands per checkpoint.
 
 **Acceptance Scenarios**:
 
-1. **Given** leases held under `a` by the earlier process, **When** the new process starts, **Then** its join sweep
-   releases them before its runtime claims anything.
+1. **Given** leases held under `a` by the earlier process, **When** the new process's join succeeds, after the earlier
+   incarnation's entry is no longer live, **Then** its join sweep releases any of those leases a survivor has not
+   already reclaimed, before its runtime claims anything.
 2. **Given** the interrupted execution, **When** the next recovery sweep runs on any member, **Then** the execution is
-   a recovery candidate although its execution lease has not expired, and the recovery says it was reclaimed.
+   a recovery candidate although its execution lease has not expired, whether because the join sweep or a survivor's
+   departure reclaim reached it first, and the recovery says it was reclaimed.
 3. **Given** the re-drive, **When** it commits, **Then** it holds a strictly greater fencing token than the crashed
    drain did.
 
@@ -435,9 +442,9 @@ fleet view, the leases and the database.
   id; under the in-process provider, composing it is the declaration that the host is alone (spec 183, FR-018a). A
   shell reload within the process and a rejoin after a lapse are not a first activation, and MUST NOT sweep: the
   leases under the host id are that process's own.
-- **FR-023**: An active member that observes a departed host id, through a membership event or by comparing successive
-  reads (spec 183, FR-013), MUST confirm the departure with a fresh read, and then reclaim that host id's per-execution
-  leases in each of its shells' stores within one sweep. Only positive evidence counts. A host id absent from the view,
+- **FR-023**: An active member that observes a departed host id, through membership's change signal or by comparing
+  successive reads (spec 183, FR-013), MUST confirm the departure with a fresh read, and then reclaim that host id's
+  per-execution leases in each of its shells' stores within one sweep. Only positive evidence counts. A host id absent from the view,
   a host id with a live incarnation, and a host id seen departed only in a cached read are never reclaimed from.
 - **FR-024**: Reclaim MUST release each live placement lease held under the host id, matched on host id and placement
   token as observed; MUST make each transport item leased to the host id visible, matched on holder and lease token as
@@ -490,7 +497,7 @@ are already met.
 | The three runnability requirement kinds and the runnability section (FR-006, FR-008) | spec 183, FR-014 and FR-015 | New kinds and a new section. |
 | The local member's host id, incarnation, status and lapse | spec 183, FR-003 to FR-007 | None. |
 | Fresh reads, and each member's status, liveness and displacement per host id | spec 183, FR-009 and FR-010 | None. Departure (Terms) is derived from these. |
-| Change notifications | spec 183, FR-013 | None. Events accelerate FR-023; reads are the backstop. |
+| Change notifications | spec 183, FR-013 | None. The change signal accelerates FR-023; reads are the backstop. |
 
 ### Key Entities
 
@@ -511,7 +518,8 @@ are already met.
 - **SC-002**: Work that no active member can run is never failed, dropped or recorded as an incident, and is reported
   in Attention for as long as it waits.
 - **SC-003**: After a crash and a restart under the same host id, every interrupted execution is re-driven within one
-  sweep of the new process becoming active, without the clock passing any lease's expiry.
+  sweep of whichever runs first: the new process's own join sweep, once its join succeeds, or a survivor's
+  departure-triggered reclaim.
 - **SC-004**: After a crash without restart, every lease held under the host id is reclaimed within one sweep of its
   membership entry expiring.
 - **SC-005**: Across every interleaving of reclaim, re-drive and a late commit by the reclaimed member, exactly one
@@ -597,3 +605,12 @@ and merging the spec approves them.
 - **Schema readability is not a placement requirement.** Spec 181 already refuses a host that cannot read a family's
   finalized version before its runtime can activate. Adding the kind to every placement query would only repeat that
   check.
+
+Recorded 2026-09-28, when the owner tightened spec 183's rejoin rule on #2093.
+
+- **User Story 3 no longer claims a same-host-id restart reclaims sooner than a survivor's own departure reclaim.**
+  Spec 183's FR-004b now refuses and retries a join under a still-live host id until that incarnation expires, so a
+  crash-restart under a stable host id never rejoins, and never runs its own join sweep, before its earlier
+  incarnation would already read as departed to a survivor. FR-022's join sweep still matters as the reclaim path for
+  a single host with no survivor (User Story 7), and as a backstop wherever a survivor has not already reclaimed by
+  the time the join succeeds.
