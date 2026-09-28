@@ -89,6 +89,11 @@ provider each module context is configured for, and `EfProviderBindingValidator`
 `Prepare` phase ahead of every migrator (and as the first `IHostedService` on a plain host). There is no extension
 point here: a module opts in by registering its migrations, and the validator reads what that registration recorded.
 
+A module composed once on the host container rather than by a shell feature, such as cluster membership, registers
+with `AddEfModuleHostMigrations<TContext>` instead: the same migrator and validation, run only as a plain-host hosted
+service. CShells copies every root registration into each shell, so the shell hook would otherwise migrate the module
+again on every shell activation, from the shell's configuration rather than the host's.
+
 ## Shared transactions
 
 `EfSharedTransaction` is the owner a cross-module write uses when several module contexts must commit

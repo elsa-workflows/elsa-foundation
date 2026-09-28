@@ -63,6 +63,8 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\..\essentials\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
+		<!-- Cluster membership, selected from host configuration on the host container (spec 183, FR-024). -->
+		<ProjectReference Include="..\..\essentials\Cluster\EntityFrameworkCore\Elsa.Cluster.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="..\..\extensions\Agent\src\Core\Elsa.Agent.Core.csproj" />
 		<ProjectReference Include="..\..\extensions\Agent\src\Api\Elsa.Agent.Api.csproj" />
 		<ProjectReference Include="..\..\extensions\Agent\src\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />

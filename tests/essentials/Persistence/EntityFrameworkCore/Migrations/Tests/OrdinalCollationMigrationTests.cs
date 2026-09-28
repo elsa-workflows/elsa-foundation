@@ -23,7 +23,7 @@ public sealed class OrdinalCollationMigrationTests
     /// <summary>The modules #1837 put in scope, by the prefix their context names share.</summary>
     private static readonly string[] CollatingModules =
     [
-        "ActivitiesDesign", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
+        "ActivitiesDesign", "ClusterMembership", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
         "PublishingSnapshotReview", "Secrets", "WorkflowsDesign"
     ];
 
@@ -43,6 +43,10 @@ public sealed class OrdinalCollationMigrationTests
         ("ActivitiesDesign", "elsa_activity_definition_versions_v2", "DefinitionId"),
         ("ActivitiesDesign", "elsa_activity_definition_versions_v2", "DefinitionIdIdentityHash"),
         ("ActivitiesDesign", "elsa_activity_definition_versions_v2", "SemVerSortKey"),
+        // Host ids compare ordinally (spec 183, FR-003); a linguistic default would let two differing only in case
+        // share one current incarnation.
+        ("ClusterMembership", "elsa_cluster_members", "HostId"),
+        ("ClusterMembership", "elsa_cluster_members", "CurrentHostId"),
         ("Elsa3Import", "elsa3_reusable_import_collections", "TenantKey"),
         ("Elsa3Import", "elsa3_reusable_import_collections", "HandleHash"),
         ("Elsa3Import", "elsa3_reusable_import_collections", "ContentHash"),
@@ -70,6 +74,7 @@ public sealed class OrdinalCollationMigrationTests
         ("ActivitiesDesign", "elsa_activity_management_definitions", "SearchText"),
         ("ActivitiesDesign", "elsa_activity_definitions", "Description"),
         ("ActivitiesDesign", "elsa_activity_definitions", "DisplayName"),
+        ("ClusterMembership", "elsa_cluster_members", "ReportJson"),
         ("Elsa3Import", "elsa3_reusable_import_collections", "ContentJson"),
         ("IdentityIam", "identity_users", "PasswordHash"),
         ("IdentityIam", "identity_roles", "PermissionsJson"),
