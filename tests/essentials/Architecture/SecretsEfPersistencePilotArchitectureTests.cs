@@ -54,6 +54,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
 
     private static readonly string[] PilotSources =
     [
+        "src/essentials/Persistence/EntityFramework/AssemblyInfo.cs",
         "src/essentials/Persistence/EntityFramework/EfConnectionDefaults.cs",
         "src/essentials/Persistence/EntityFramework/EfDatabaseMigrator.cs",
         "src/essentials/Persistence/EntityFramework/EfMigrateOptions.cs",

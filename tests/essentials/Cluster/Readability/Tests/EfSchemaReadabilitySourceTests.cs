@@ -106,6 +106,16 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
         Assert.Equal(["1"], entry.ReadableVersions);
     }
 
+    /// <summary>The finalization tables' family (spec 180, FR-001 extension; spec 181) is declared in
+    /// Elsa.Persistence.EntityFramework itself, shared by no single EF module, so a host that has loaded only that
+    /// assembly - none of the EF modules that call <see cref="EfSchemaFinalization.MapSchemaFinalization"/> - still
+    /// reports it, naming no module.</summary>
+    [Fact]
+    public void A_host_that_has_loaded_the_finalization_assembly_reports_its_shared_family_with_no_module() =>
+        Assert.Contains(
+            new ReadabilityEntry(EfSchemaFinalization.SchemaFamily, null, [EfSchemaFinalization.SchemaVersion]),
+            Read(typeof(EfSchemaFinalization).Assembly).Entries);
+
     [Fact]
     public void Declarations_that_disagree_on_the_owning_module_report_no_readable_version_and_log_the_disagreement()
     {

@@ -57,8 +57,8 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
     public void Guard_scans_the_checks_and_declarations_it_claims_to_scan()
     {
         Assert.True(Production.Checks.Count >= 30, $"Expected the EF stores to keep checking families through EfSchemaVersion; found {Production.Checks.Count} checks.");
-        Assert.True(Production.Declarations.Count >= 26, $"Expected at least twenty-six [EfSchemaFamily] declarations; found {Production.Declarations.Count}.");
-        Assert.True(Production.NamedFamilies.Count >= 26, $"Expected at least twenty-six families named by checks and constants; found {Production.NamedFamilies.Count}.");
+        Assert.True(Production.Declarations.Count >= 27, $"Expected at least twenty-seven [EfSchemaFamily] declarations; found {Production.Declarations.Count}.");
+        Assert.True(Production.NamedFamilies.Count >= 27, $"Expected at least twenty-seven families named by checks and constants; found {Production.NamedFamilies.Count}.");
     }
 
     [Theory]
