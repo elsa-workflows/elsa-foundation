@@ -1,0 +1,85 @@
+name: Publish repair
+
+# Settles by hand what a publish cannot settle itself (spec 150 FR-019), run from main only, through the repair
+# command of tools/versioning/Elsa.Versioning.Publisher (tools/versioning/README.md, Publishing). This workflow only
+# runs it; the logic - reading the feed, refusing to lower an entry, refusing a commit not on main - lives in the
+# tool, tested against a fake feed and local git (tests/essentials/Versioning/Publisher/Tests).
+#
+# A separate workflow rather than a dispatch mode of packages.yml: a repair packs and builds nothing, so folding it
+# into the pack/publish job graph there would either run pack's restore-build-pack steps for no reason or need a
+# third conditional path through jobs shaped for packing. A repair is one step against publish-state and the feed's
+# metadata; its own workflow says so directly and keeps packages.yml's modes (branch, dry-run, bootstrap, publish) as
+# they are.
+#
+# Exactly one of the two inputs below is given, and reason is always required:
+#   - package_id   settles a collision: reads the feed's highest version of that package and its source commit (the
+#                  nuspec's repository commit, FR-018), and sets the record's entry to them, refusing to lower it
+#                  (FR-012).
+#   - main_commit  settles a rewritten main (FR-021's edge case): resets last_publish_commit to a commit that is on
+#                  main's history, refusing one that is not.
+#
+# The write-back commit names the package or the reset, the old and new entries, the reason and github.actor, and is
+# pushed the way a publish's write-back is: without force, onto the tip this run read (FR-017).
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_id:
+        description: 'The package id whose record entry is settled against the feed. Give this or main_commit, not both.'
+        type: string
+        default: ''
+      main_commit:
+        description: 'The commit last_publish_commit is reset to, after a rewritten main. Must be on main. Give this or package_id, not both.'
+        type: string
+        default: ''
+      reason:
+        description: 'Why this repair is being made; recorded in the write-back commit.'
+        type: string
+        required: true
+
+# FR-020: this run joins the same group every run from main shares, from packages.yml's plan to its write-back, so it
+# never computes or writes alongside one; a run in progress, here or there, is never cancelled.
+concurrency:
+  group: publish-state
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  feedz_feed_source: 'https://f.feedz.io/elsa-workflows/elsa-4/nuget/index.json'
+
+jobs:
+  repair:
+    name: Repair publish-state
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      # The write-back is pushed with this job's GITHUB_TOKEN, which actions/checkout persists for origin (FR-017).
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # The forward-only check for main_commit, and the record's own history, both need full history.
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Build the publisher
+        run: dotnet build tools/versioning/Elsa.Versioning.Publisher -c Release
+
+      - name: Repair
+        env:
+          FEEDZ_API_KEY: ${{ secrets.FEEDZ_API_KEY }}
+          PACKAGE_ID: ${{ inputs.package_id }}
+          MAIN_COMMIT: ${{ inputs.main_commit }}
+          REASON: ${{ inputs.reason }}
+        run: >-
+          dotnet run --project tools/versioning/Elsa.Versioning.Publisher -c Release --no-build --
+          repair --ref "$GITHUB_REF" --commit "$GITHUB_SHA" --reason "$REASON" --actor "${{ github.actor }}"
+          --package-id "$PACKAGE_ID" --main-commit "$MAIN_COMMIT"
+          --feed "$feedz_feed_source" --api-key-env FEEDZ_API_KEY --summary "$GITHUB_STEP_SUMMARY"

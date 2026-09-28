@@ -49,12 +49,18 @@ internal sealed class FakeFeed : IPackageFeed
     public Task<IReadOnlyList<string>> ListVersionsAsync(string packageId, CancellationToken cancellationToken) =>
         ListingFails ? throw new FeedException("503 Service Unavailable") : Task.FromResult(Versions(packageId));
 
-    public Task<string> ReadFingerprintAsync(string packageId, string version, CancellationToken cancellationToken)
+    public Task<string> ReadFingerprintAsync(string packageId, string version, CancellationToken cancellationToken) =>
+        ReadAsync(packageId, version, PackedPackage.ReadFingerprint);
+
+    public Task<string> ReadSourceCommitAsync(string packageId, string version, CancellationToken cancellationToken) =>
+        ReadAsync(packageId, version, PackedPackage.ReadSourceCommit);
+
+    private Task<string> ReadAsync(string packageId, string version, Func<Stream, string, string> read)
     {
         var bytes = Package(packageId, version) ?? throw new FeedException($"{packageId} {version} answered 404 Not Found.");
         try
         {
-            return Task.FromResult(PackedPackage.ReadFingerprint(new MemoryStream(bytes), $"{packageId} {version}"));
+            return Task.FromResult(read(new MemoryStream(bytes), $"{packageId} {version}"));
         }
         catch (InvalidOperationException exception)
         {

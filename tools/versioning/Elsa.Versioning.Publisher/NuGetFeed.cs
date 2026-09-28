@@ -39,6 +39,10 @@ public interface IPackageFeed
     /// <summary>The input fingerprint the feed's copy of a version carries.</summary>
     /// <exception cref="FeedException">The copy could not be downloaded, or carries no readable fingerprint.</exception>
     Task<string> ReadFingerprintAsync(string packageId, string version, CancellationToken cancellationToken);
+
+    /// <summary>The nuspec's repository commit the feed's copy of a version carries, for the repair workflow (spec 150 FR-019).</summary>
+    /// <exception cref="FeedException">The copy could not be downloaded, or carries no readable source commit.</exception>
+    Task<string> ReadSourceCommitAsync(string packageId, string version, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -104,7 +108,14 @@ public sealed class NuGetFeed(HttpClient http, Uri serviceIndex, string apiKey) 
         }
     }
 
-    public async Task<string> ReadFingerprintAsync(string packageId, string version, CancellationToken cancellationToken)
+    public Task<string> ReadFingerprintAsync(string packageId, string version, CancellationToken cancellationToken) =>
+        ReadAsync(packageId, version, PackedPackage.ReadFingerprint, cancellationToken);
+
+    public Task<string> ReadSourceCommitAsync(string packageId, string version, CancellationToken cancellationToken) =>
+        ReadAsync(packageId, version, PackedPackage.ReadSourceCommit, cancellationToken);
+
+    /// <summary>Downloads a version's package and reads one thing from it, wrapping a read failure as a <see cref="FeedException"/>.</summary>
+    private async Task<string> ReadAsync(string packageId, string version, Func<Stream, string, string> read, CancellationToken cancellationToken)
     {
         var (_, content) = await EndpointsAsync(cancellationToken);
         var (id, lowerVersion) = (packageId.ToLowerInvariant(), version.ToLowerInvariant());
@@ -116,7 +127,7 @@ public sealed class NuGetFeed(HttpClient http, Uri serviceIndex, string apiKey) 
         try
         {
             using var package = new MemoryStream(await response.Content.ReadAsByteArrayAsync(cancellationToken));
-            return PackedPackage.ReadFingerprint(package, url.ToString());
+            return read(package, url.ToString());
         }
         catch (Exception exception) when (exception is InvalidOperationException or InvalidDataException or HttpRequestException or IOException or TaskCanceledException)
         {

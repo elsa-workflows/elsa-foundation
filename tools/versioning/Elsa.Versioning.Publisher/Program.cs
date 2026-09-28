@@ -1,7 +1,8 @@
 using Elsa.Versioning.Calculator;
 using Elsa.Versioning.Publisher;
 
-// Plans a Packages workflow run, and publishes what it packed (spec 150; #2081, #2082). See ../README.md, Publishing.
+// Plans a Packages workflow run, publishes what it packed, and repairs publish-state by hand (spec 150; #2081, #2082,
+// #2083). See ../README.md, Publishing.
 //
 // Usage: dotnet run --project tools/versioning/Elsa.Versioning.Publisher -- plan \
 //          --ref <GITHUB_REF> --output <dir> [--commit <revision>] [--bootstrap true|false] [--solution <file>] [--repo <dir>] \
@@ -9,17 +10,23 @@ using Elsa.Versioning.Publisher;
 //        dotnet run --project tools/versioning/Elsa.Versioning.Publisher -- publish \
 //          --ref <GITHUB_REF> --plan-dir <dir> --feed <service index URL> --api-key-env <variable> [--commit <revision>] [--repo <dir>] \
 //          [--remote <name>] [--summary <file>]
+//        dotnet run --project tools/versioning/Elsa.Versioning.Publisher -- repair \
+//          --ref <GITHUB_REF> --reason <text> --actor <github.actor> [--repo <dir>] [--remote <name>] [--summary <file>]
+//          (--package-id <id> --feed <service index URL> --api-key-env <variable> | --commit <GITHUB_SHA> --main-commit <commit>)
 //
 // Exit codes: 0 done; 1 refused or failed (a gate, the bootstrap's preconditions, a moved record, a failed or colliding
-// push, a failed write-back); 2 invalid input or usage.
+// push, a failed write-back, a repair that would lower an entry or names a commit not on main); 2 invalid input or usage.
 
 const string Usage =
     "Usage: plan --ref <ref> --output <dir> [--commit <revision>] [--bootstrap true|false] [--solution <file>] [--repo <dir>] [--remote <name>] " +
     "[--force-advance <ids> --force-reason <text>] [--github-output <file>] [--summary <file>] | " +
-    "publish --ref <ref> --plan-dir <dir> --feed <url> --api-key-env <variable> [--commit <revision>] [--repo <dir>] [--remote <name>] [--summary <file>]";
+    "publish --ref <ref> --plan-dir <dir> --feed <url> --api-key-env <variable> [--commit <revision>] [--repo <dir>] [--remote <name>] [--summary <file>] | " +
+    "repair --ref <ref> --reason <text> --actor <name> [--repo <dir>] [--remote <name>] [--summary <file>] " +
+    "(--package-id <id> --feed <url> --api-key-env <variable> | --commit <revision> --main-commit <commit>)";
 
 string[] planOptions = ["--ref", "--output", "--commit", "--bootstrap", "--solution", "--repo", "--remote", "--force-advance", "--force-reason", "--github-output", "--summary"];
 string[] publishOptions = ["--ref", "--plan-dir", "--feed", "--api-key-env", "--commit", "--repo", "--remote", "--summary"];
+string[] repairOptions = ["--ref", "--reason", "--actor", "--package-id", "--main-commit", "--feed", "--api-key-env", "--commit", "--repo", "--remote", "--summary"];
 
 try
 {
@@ -28,7 +35,8 @@ try
     {
         "plan" => planOptions,
         "publish" => publishOptions,
-        _ => throw new ArgumentException($"Name a command, plan or publish. {Usage}")
+        "repair" => repairOptions,
+        _ => throw new ArgumentException($"Name a command, plan, publish or repair. {Usage}")
     });
     string Required(string name) => options.GetValueOrDefault(name) is { Length: > 0 } value ? value : throw new ArgumentException($"{command} needs {name}. {Usage}");
     var repository = options.GetValueOrDefault("--repo") ?? Directory.GetCurrentDirectory();
@@ -53,6 +61,43 @@ try
                 options.GetValueOrDefault("--github-output"),
                 options.GetValueOrDefault("--summary")),
             state);
+        return 0;
+    }
+
+    if (command == "repair")
+    {
+        var (packageId, mainCommit) = (options.GetValueOrDefault("--package-id") ?? string.Empty, options.GetValueOrDefault("--main-commit") ?? string.Empty);
+        var reference = Required("--ref");
+        var reason = Required("--reason");
+        var actor = Required("--actor");
+        var summary = options.GetValueOrDefault("--summary");
+
+        RepairReport repaired;
+        if (packageId.Length > 0 && mainCommit.Length == 0)
+        {
+            var repairApiKey = Environment.GetEnvironmentVariable(Required("--api-key-env")) is { Length: > 0 } repairKey
+                ? repairKey
+                : throw new ArgumentException($"The environment variable {options["--api-key-env"]} holds no API key.");
+            using var repairHttp = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+            repaired = await RepairCommand.RepairPackageAsync(
+                new RepairPackageOptions(repository, reference, packageId, reason, actor, summary),
+                new NuGetFeed(repairHttp, new Uri(Required("--feed")), repairApiKey),
+                state,
+                Console.Out);
+        }
+        else if (mainCommit.Length > 0 && packageId.Length == 0)
+        {
+            repaired = await RepairCommand.RepairLastPublishCommitAsync(
+                new RepairLastPublishCommitOptions(repository, reference, options.GetValueOrDefault("--commit") ?? "HEAD", mainCommit, reason, actor, summary),
+                state,
+                Console.Out);
+        }
+        else
+        {
+            throw new ArgumentException($"repair needs exactly one of --package-id (with --feed and --api-key-env) or --main-commit. {Usage}");
+        }
+
+        Console.WriteLine(repaired.Message);
         return 0;
     }
 

@@ -18,14 +18,7 @@ public sealed record PackedPackage(string Path, string PackageId, string Version
     public static PackedPackage Read(string path)
     {
         using var archive = ZipFile.OpenRead(path);
-        var nuspecs = archive.Entries.Where(entry => !entry.FullName.Contains('/') && entry.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase)).ToArray();
-        if (nuspecs.Length != 1)
-            throw new InvalidOperationException($"{path} holds {nuspecs.Length} nuspec files at its root; a package holds exactly one.");
-
-        XElement metadata;
-        using (var stream = nuspecs[0].Open())
-            metadata = XDocument.Load(stream).Root?.Elements().SingleOrDefault(element => element.Name.LocalName == "metadata")
-                       ?? throw new InvalidOperationException($"{path}'s nuspec has no metadata.");
+        var metadata = Metadata(archive, path);
 
         string Required(string name) =>
             metadata.Elements().SingleOrDefault(element => element.Name.LocalName == name)?.Value.Trim() is { Length: > 0 } value
@@ -51,6 +44,31 @@ public sealed record PackedPackage(string Path, string PackageId, string Version
     {
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
         return ReadFingerprint(archive, source);
+    }
+
+    /// <summary>
+    /// The nuspec's <c>repository</c> <c>commit</c> a package carries — the commit it was built from (spec 150 FR-018)
+    /// — read from its bytes; the feed's copy is read the same way, for the repair workflow (FR-019).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The nuspec names no repository commit.</exception>
+    public static string ReadSourceCommit(Stream package, string source)
+    {
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var metadata = Metadata(archive, source);
+        return metadata.Elements().SingleOrDefault(element => element.Name.LocalName == "repository")?.Attribute("commit")?.Value is { Length: > 0 } commit
+            ? commit
+            : throw new InvalidOperationException($"{source}'s nuspec names no repository commit.");
+    }
+
+    private static XElement Metadata(ZipArchive archive, string source)
+    {
+        var nuspecs = archive.Entries.Where(entry => !entry.FullName.Contains('/') && entry.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (nuspecs.Length != 1)
+            throw new InvalidOperationException($"{source} holds {nuspecs.Length} nuspec files at its root; a package holds exactly one.");
+
+        using var stream = nuspecs[0].Open();
+        return XDocument.Load(stream).Root?.Elements().SingleOrDefault(element => element.Name.LocalName == "metadata")
+               ?? throw new InvalidOperationException($"{source}'s nuspec has no metadata.");
     }
 
     private static string ReadFingerprint(ZipArchive archive, string source)

@@ -238,6 +238,39 @@ group. A GitHub Release publishes nothing until the 4.0 release cut (#2085): its
 To rehearse against a scratch feed, run `plan`, pack as the workflow does, and `publish` with `--feed` at the scratch
 feed and `--remote` at a scratch repository, which then holds the record.
 
+## Repair
+
+[`.github/workflows/publish-repair.yml`](../../.github/workflows/publish-repair.yml) settles by hand what a publish
+cannot settle itself (spec 150 FR-019): a manually triggered run from `main` over `repair`, which takes a reason and
+exactly one of two modes.
+
+```bash
+dotnet run --project tools/versioning/Elsa.Versioning.Publisher -- repair \
+  --ref "$GITHUB_REF" --reason "<why>" --actor "<who ran it>" \
+  --package-id <id> --feed <service index URL> --api-key-env FEEDZ_API_KEY [--remote origin] [--repo <dir>] [--summary <file>]
+
+dotnet run --project tools/versioning/Elsa.Versioning.Publisher -- repair \
+  --ref "$GITHUB_REF" --reason "<why>" --actor "<who ran it>" \
+  --commit "$GITHUB_SHA" --main-commit <commit> [--remote origin] [--repo <dir>] [--summary <file>]
+```
+
+**A package id** settles a collision (FR-018): it reads the feed's highest version of the package and that version's
+source commit — the nuspec's `repository` `commit` — and sets the record's entry to them, so the next publish from
+`main` computes one past the feed's version and publishes the current content. It refuses an entry lower than the
+current one (FR-012).
+
+**A `--main-commit`** settles a rewritten `main` (FR-021's edge case, ADR 0067 Consequences): it resets
+`last_publish_commit` to a commit the record shows next to `--commit` — the commit the run was built from, `main`'s
+tip — as its ancestor or itself; a commit that is not is refused.
+
+Exit 0 is done, 1 is refused (not run from `main`, `publish-state` does not exist yet, the feed holds no version of
+the package or none with a readable source commit, the settlement would lower the entry, or `--main-commit` names a
+commit not on `main`), 2 is invalid input, including giving both modes or neither. Either way the write-back is one
+commit on `publish-state`, pushed the way a publish's is: without force, onto the tip this run read (FR-017), naming
+the package or the reset, the old and new entries, the reason and `--actor` (`github.actor`). It joins the
+`publish-state` concurrency group beside every run from `main` (FR-020), and is besides a publish and the bootstrap
+the record's only other writer.
+
 ## Tests
 
 `tests/essentials/Versioning/Calculator/Tests` builds synthetic histories in throwaway repositories — moves, renames,
@@ -253,3 +286,9 @@ same fingerprint and 409 with another: the dry run, the bootstrap and each of it
 alone, a crash between push and write-back recovered by the next run, a collision failing without overwriting, the
 forward-only gate, and branch builds that never push. `NuGetFeedTests` pins how each HTTP answer maps, and
 `PackagesWorkflowTests` holds the workflow to FR-005, FR-008, FR-011 and FR-020.
+
+`RepairTests` runs `repair` over the same fixture: settling a collision against the feed, refusing to lower an entry,
+resetting `last_publish_commit` to a commit on `main` and refusing one that is not, and the end-to-end acceptance —
+a repair followed by a publish that succeeds at one past the feed's version. `PublishRepairWorkflowTests` holds
+`publish-repair.yml` to running from `main` only and joining the `publish-state` concurrency group without
+cancelling a run in progress (FR-020).
