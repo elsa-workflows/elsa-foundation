@@ -201,11 +201,18 @@ propagates through the reverse closure.
   same way. The closure property is mechanically checkable — a Line A package referencing a Line B package
   is a defect — and should be enforced by an architecture test once the dependency map records each
   project's version line.
-- Every host must share all of Line A. Today none does: `Elsa.Workbench` shares seven of the ten but
+- Every host must share all of Line A. `Elsa.Workbench` does not yet: it shares seven of the ten but
   omits `Elsa.Events.Core`, `Elsa.Attention.Core` and `Elsa.Pipelines.Core`, although six of the
-  assemblies it does share depend on `Elsa.Events.Core` and seven on `Elsa.Pipelines.Core`; and
-  `Elsa.Foundation.Host` shares no Elsa assembly at all. Which assemblies each host shares is the clean
-  host specification's concern (#1145), which now has a rule to derive them from.
+  assemblies it does share depend on `Elsa.Events.Core` and seven on `Elsa.Pipelines.Core`. Which
+  assemblies each host shares is the clean host specification's concern (#1145), which now has a rule
+  to derive them from.
+
+  *Amended 2026-09-28:* This decision originally said neither host shared all of Line A, and that
+  `Elsa.Foundation.Host` shared no Elsa assembly at all. `Elsa.Foundation.Host` now shares Line A in
+  full: it references the ten Line A contract projects listed in `VersionLines.props`, shares them
+  with the Nuplane packages it loads, and a computed-version build records them in its `deps.json` and
+  `appsettings.Production.json` at the version the feed carries, per
+  [#2126](https://github.com/elsa-workflows/elsa-foundation/issues/2126).
 - Nuplane must promote a domain's `.Core` to a shared assembly within that domain's subtree, for
   first-party and third-party domains alike; otherwise two features in one domain load separate copies
   and their types do not match. That work belongs to the clean host effort.
