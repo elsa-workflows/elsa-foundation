@@ -208,7 +208,10 @@ public sealed class EfSchemaModuleGate
                     "activated. No surface removes a record; this host keeps writing what it last observed.", chain.Family, Module);
         }
 
-        Adopt(identity, records, mayAdvance);
+        // The readability report carries the version this host writes (spec 183, FR-019), so a change is published now
+        // rather than left to a provider that publishes only when asked.
+        if (Adopt(identity, records, mayAdvance))
+            await PublishQuietlyAsync(cancellationToken);
     }
 
     /// <summary>
@@ -473,11 +476,15 @@ public sealed class EfSchemaModuleGate
         return null;
     }
 
-    /// <summary>Records what the gate read. A newer finalized version is adopted only when <paramref name="mayAdvance"/>.</summary>
-    private void Adopt(string identity, IReadOnlyDictionary<string, SchemaFinalizationRecord> records, bool mayAdvance)
+    /// <summary>
+    /// Records what the gate read. A newer finalized version is adopted only when <paramref name="mayAdvance"/>. Returns
+    /// whether what this host writes for any family changed.
+    /// </summary>
+    private bool Adopt(string identity, IReadOnlyDictionary<string, SchemaFinalizationRecord> records, bool mayAdvance)
     {
         lock (_lock)
         {
+            var changed = false;
             _databaseIdentity = identity;
             var states = new Dictionary<string, EfSchemaFamilyWriteState>(_states, StringComparer.Ordinal);
             foreach (var chain in Families.Chains)
@@ -486,6 +493,7 @@ public sealed class EfSchemaModuleGate
                     continue;
                 var previous = states.GetValueOrDefault(chain.Family);
                 var next = Next(chain, record, previous, mayAdvance);
+                changed |= next != previous;
                 states[chain.Family] = next;
                 if (next.WritesRefused && previous is not { WritesRefused: true })
                     _logger.LogError(
@@ -496,6 +504,7 @@ public sealed class EfSchemaModuleGate
             }
 
             _states = states;
+            return changed;
         }
     }
 
