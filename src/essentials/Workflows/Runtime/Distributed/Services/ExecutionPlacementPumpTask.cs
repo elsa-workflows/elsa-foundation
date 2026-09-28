@@ -227,7 +227,17 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask, IRecurrin
             if (handedOff > 0)
                 Logger.LogInformation("Handed off {Count} workflow execution(s) before stopping.", handedOff);
         }
-        catch (Exception exception)
+        // `bounded` links the caller's token with its own lease-duration timer, so a caller cancellation and the timer
+        // both surface as OperationCanceledException on `bounded.Token`; only the timer firing is a hand-off failure to
+        // swallow, as the class remarks say a drain that outlasts the lease is left as a crash would be. A caller
+        // cancellation must still propagate.
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            Logger.LogWarning("Could not hand off every workflow execution within the lease duration before stopping; the rest are reclaimed once this host id is departed, or expire.");
+        }
+        // The placement service and transport behind the hand-off are pluggable (EF, HTTP, etc.) and can throw
+        // provider-specific exceptions this method cannot enumerate; hand-off must not block shutdown (FR-021).
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             Logger.LogWarning(exception, "Could not hand off every workflow execution before stopping; the rest are reclaimed once this host id is departed, or expire.");
         }

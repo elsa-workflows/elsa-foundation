@@ -50,11 +50,11 @@ public sealed class ExecutionPlacementRequirementResolver
                   ?? StartPin(inHand)
                   ?? (pending is null ? null : StartPin(await pending(cancellationToken)));
         }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception exception)
+        // The state store and the transport behind `pending` are pluggable (EF, HTTP, etc.) and can throw
+        // provider-specific exceptions this resolver cannot enumerate, on top of StartPin's own JSON/data-format and
+        // invalid-operation exceptions; per the class remarks, any failure here must resolve to "not placeable" rather
+        // than crash the caller (FR-016). Cancellation and out-of-memory still propagate.
+        catch (Exception exception) when (exception is not OperationCanceledException and not OutOfMemoryException)
         {
             return ExecutionPlacementRequirement.Unresolved($"the execution's pinned executable cannot be read ({exception.GetType().Name}: {exception.Message})");
         }
@@ -77,11 +77,10 @@ public sealed class ExecutionPlacementRequirementResolver
         {
             executable = await services.GetRequiredService<IWorkflowExecutableReader>().FindAsync(pin.ArtifactId, cancellationToken);
         }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception exception)
+        // The executable reader is pluggable and can throw provider-specific data-format or storage exceptions this
+        // resolver cannot enumerate; per the class remarks, any failure here must resolve to "not placeable" rather
+        // than crash the caller (FR-016). Cancellation and out-of-memory still propagate.
+        catch (Exception exception) when (exception is not OperationCanceledException and not OutOfMemoryException)
         {
             return ExecutionPlacementRequirement.Unresolved($"pinned executable '{pin.ArtifactId}' cannot be loaded ({exception.GetType().Name}: {exception.Message})");
         }
