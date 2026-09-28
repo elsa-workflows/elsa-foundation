@@ -131,9 +131,10 @@ dotnet run --project tools/maps/Elsa.Maps.Generator -- all
 ```
 
 The tool needs the .NET SDK. If it is unavailable, ask the user to install it before refreshing maps.
-It also needs a restore of the tree: the dependency map reads the packages NuGet pins for each packable project
-transitively from its restore output, and refuses output older than the project's pins or references. Run
-`dotnet restore Elsa.Server.slnx` first; the `Maps` workflow restores before its check.
+It needs no restore of the tree: the dependency map reads the packages NuGet pins for each packable project
+transitively from the `packages.lock.json` committed beside it, and refuses a lock file older than the project's pins
+or references. After a dependency change, update the lock files first; see
+[NuGet lock files](docs/reference/nuget-lock-files.md).
 
 **After regenerating, stage every changed map file by explicit path, `docs/maps/manifest.json`
 included.** The manifest holds no per-commit provenance, so a run that changed no map leaves it

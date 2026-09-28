@@ -71,11 +71,11 @@ jobs:
 
       - name: Validate committed integration filter
         run: |
-          dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -- solution-filters-check
+          dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -p:RestoreLockedMode=true -- solution-filters-check
           dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- solution-filters-self-test
 
       - name: Restore
-        run: dotnet restore Elsa.Server.slnx -p:WarningsNotAsErrors=NU1603
+        run: dotnet restore Elsa.Server.slnx --locked-mode -p:WarningsNotAsErrors=NU1603
 
       - name: Restore repository-local .NET tools
         # A test that shells out to a repository-local tool fails with 'Run "dotnet tool restore" to
