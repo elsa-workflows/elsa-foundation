@@ -23,7 +23,7 @@ namespace Elsa.Cluster.EntityFrameworkCore.Stores;
 /// whole read instead: nothing can be said about it, and leaving it out would be the partial view FR-012 forbids.
 /// </para>
 /// </remarks>
-internal sealed record StoredMember(
+public sealed record StoredMember(
     ClusterMemberIdentity Identity,
     bool IsCurrent,
     MemberStatus Status,
@@ -75,7 +75,7 @@ internal sealed record StoredMember(
     /// parsed (spec 180, FR-009), or <see langword="null"/> when this build cannot interpret it. The stamp is readable by
     /// the time this runs. Membership has only ever had one version, so its tests drive this over a chain of their own.
     /// </summary>
-    internal static MemberReport? ReadReport(ClusterMemberEntity row, EfSchemaChain chain)
+    public static MemberReport? ReadReport(ClusterMemberEntity row, EfSchemaChain chain)
     {
         string report;
         try

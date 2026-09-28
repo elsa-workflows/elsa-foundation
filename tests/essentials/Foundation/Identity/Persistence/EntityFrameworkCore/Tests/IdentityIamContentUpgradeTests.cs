@@ -1,7 +1,7 @@
-using System.Reflection;
 using System.Text.Json.Nodes;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -19,8 +19,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests;
 /// <remarks>
 /// Identity IAM has only ever had one version, so its own chain cannot hold a row two versions behind. These tests drive
 /// the upgrade the coordinators call over an Identity IAM chain 1, 2, 3 of their own, whose upcasters each append a
-/// marker to every column they are given. The module keeps that overload internal and §2.23.3 allows no
-/// InternalsVisibleTo, so it is reached by reflection. Which columns count as content comes from the model the module
+/// marker to every column they are given, by calling <see cref="EfIdentityStoreSupport.Upgrade(UserEntity, EfSchemaChain)"/>
+/// and its role overload directly (§2.23.3). Which columns count as content comes from the model the module
 /// maps, not from a list here, so a content column added to either entity without being added to the upgrade fails.
 /// EfSchemaFamilyDeclarationGuardTests holds the other half: every Identity IAM content read goes through the chain, and
 /// every in-place content write upgrades or stamps its row.
@@ -153,10 +153,17 @@ public sealed class IdentityIamContentUpgradeTests : IAsyncDisposable
     /// <summary>The coordinators' upgrade, over <see cref="TwoStepChain"/>.</summary>
     private static void Upgrade(object row)
     {
-        var support = typeof(IdentityIamDbContext).Assembly.GetType("Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores.EfIdentityStoreSupport", throwOnError: true)!;
-        var upgrade = support.GetMethod("Upgrade", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, [row.GetType(), typeof(EfSchemaChain)])
-                      ?? throw new MissingMethodException(support.FullName, $"Upgrade({row.GetType().Name}, EfSchemaChain)");
-        upgrade.Invoke(null, BindingFlags.DoNotWrapExceptions, null, [row, TwoStepChain], null);
+        switch (row)
+        {
+            case UserEntity user:
+                EfIdentityStoreSupport.Upgrade(user, TwoStepChain);
+                break;
+            case RoleEntity role:
+                EfIdentityStoreSupport.Upgrade(role, TwoStepChain);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(row), row.GetType(), "Unexpected entity type.");
+        }
     }
 
     private static string Mark(EfSchemaContent content, string marker)

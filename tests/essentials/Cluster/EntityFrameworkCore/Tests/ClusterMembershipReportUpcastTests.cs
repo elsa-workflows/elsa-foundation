@@ -1,7 +1,7 @@
-using System.Reflection;
 using System.Text.Json.Nodes;
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.EntityFrameworkCore.Entities;
+using Elsa.Cluster.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Cluster.EntityFrameworkCore.Tests;
@@ -13,9 +13,8 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 /// <see cref="MemberReport.Unknown"/>, as the store tests show for a report this build cannot parse.
 /// </summary>
 /// <remarks>
-/// Membership has only ever had one version, so its own chain cannot hold an older report. These tests drive the report
-/// read the store uses over chains of their own. It is internal and §2.23.3 allows no InternalsVisibleTo, so it is
-/// reached by reflection.
+/// Membership has only ever had one version, so its own chain cannot hold an older report. These tests drive
+/// <see cref="StoredMember.ReadReport"/>, the report read the store uses, directly over chains of their own (§2.23.3).
 /// </remarks>
 public sealed class ClusterMembershipReportUpcastTests
 {
@@ -63,14 +62,9 @@ public sealed class ClusterMembershipReportUpcastTests
 
     private static EfSchemaUpcasterDescriptor Step<TUpcaster>(string from, string to) where TUpcaster : IEfSchemaUpcaster => new(typeof(TUpcaster), from, to);
 
-    /// <summary>The store's report read, <c>StoredMember.ReadReport</c>, over <paramref name="chain"/>.</summary>
-    private static MemberReport? ReadReport(ClusterMemberEntity row, EfSchemaChain chain)
-    {
-        var storedMember = typeof(ClusterMembershipEfModule).Assembly.GetType("Elsa.Cluster.EntityFrameworkCore.Stores.StoredMember", throwOnError: true)!;
-        var readReport = storedMember.GetMethod("ReadReport", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, [typeof(ClusterMemberEntity), typeof(EfSchemaChain)])
-                         ?? throw new MissingMethodException(storedMember.FullName, "ReadReport(ClusterMemberEntity, EfSchemaChain)");
-        return (MemberReport?)readReport.Invoke(null, BindingFlags.DoNotWrapExceptions, null, [row, chain], null);
-    }
+    /// <summary>The store's report read, over <paramref name="chain"/>.</summary>
+    private static MemberReport? ReadReport(ClusterMemberEntity row, EfSchemaChain chain) =>
+        StoredMember.ReadReport(row, chain);
 
     private sealed class Failing : IEfSchemaUpcaster
     {

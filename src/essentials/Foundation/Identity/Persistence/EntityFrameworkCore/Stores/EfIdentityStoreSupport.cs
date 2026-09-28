@@ -39,7 +39,7 @@ public sealed record EfIdentityAuthorityWriteResult(
     EfIdentityWriteResult WriteResult,
     EfIdentityAuthorityConflict Conflict = EfIdentityAuthorityConflict.None);
 
-internal static class EfIdentityStoreSupport
+public static class EfIdentityStoreSupport
 {
     public const int MaximumMaterializedListEntries = 512;
     // Pinned: the Identity EF behavior tests assert that writes give up after 3 attempts.
@@ -390,7 +390,7 @@ internal static class EfIdentityStoreSupport
     /// <see cref="Upgrade(UserEntity)"/> over <paramref name="chain"/>. Identity IAM has only ever had one version, so
     /// its tests prove the upgrade, and that it covers every content column the model maps, over a chain of their own.
     /// </summary>
-    internal static void Upgrade(UserEntity user, EfSchemaChain chain)
+    public static void Upgrade(UserEntity user, EfSchemaChain chain)
     {
         const string table = IdentityIamEfModule.UserTableName;
         user.RoleIdsJson = chain.Upcast(user.SchemaVersion, table, nameof(user.RoleIdsJson), user.RoleIdsJson);
@@ -404,7 +404,7 @@ internal static class EfIdentityStoreSupport
     }
 
     /// <summary><see cref="Upgrade(RoleEntity)"/> over <paramref name="chain"/>, for the same reason as the user overload.</summary>
-    internal static void Upgrade(RoleEntity role, EfSchemaChain chain)
+    public static void Upgrade(RoleEntity role, EfSchemaChain chain)
     {
         const string table = IdentityIamEfModule.RoleTableName;
         role.PermissionsJson = chain.Upcast(role.SchemaVersion, table, nameof(role.PermissionsJson), role.PermissionsJson);
