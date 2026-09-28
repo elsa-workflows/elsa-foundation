@@ -6,22 +6,29 @@ using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Cluster.Readability.Tests;
 
-/// <summary>One <c>[EfSchemaFamily]</c> declaration to emit.</summary>
-internal sealed record SyntheticFamily(string Name, string Module, string CurrentVersion);
+/// <summary>
+/// One <c>[EfSchemaFamily]</c> declaration to emit. A <see langword="null"/> <see cref="Module"/> emits the
+/// two-argument constructor - a family shared by no single EF module - rather than naming one.
+/// </summary>
+internal sealed record SyntheticFamily(string Name, string? Module, string CurrentVersion);
 
 /// <summary>
 /// Throwaway assemblies carrying real <c>[EfModule]</c> and <c>[EfSchemaFamily]</c> metadata, for the declarations no
-/// first-party module has: malformed ones, and ones loaded where the host's own copy of the attribute type is not.
+/// first-party module has: malformed ones, shared ones, and ones loaded where the host's own copy of the attribute
+/// type is not.
 /// </summary>
 internal static class SyntheticSchemaFamilies
 {
     public static byte[] Image(string assemblyName, string[] modules, params SyntheticFamily[] families)
     {
         var moduleConstructor = typeof(EfModuleAttribute).GetConstructor([typeof(string), typeof(Type)])!;
-        var familyConstructor = typeof(EfSchemaFamilyAttribute).GetConstructor([typeof(string), typeof(string), typeof(string)])!;
+        var ownedFamilyConstructor = typeof(EfSchemaFamilyAttribute).GetConstructor([typeof(string), typeof(string), typeof(string)])!;
+        var sharedFamilyConstructor = typeof(EfSchemaFamilyAttribute).GetConstructor([typeof(string), typeof(string)])!;
         var declarations = modules
             .Select(module => new CustomAttributeBuilder(moduleConstructor, [module, typeof(object)]))
-            .Concat(families.Select(family => new CustomAttributeBuilder(familyConstructor, [family.Name, family.Module, family.CurrentVersion])));
+            .Concat(families.Select(family => family.Module is null
+                ? new CustomAttributeBuilder(sharedFamilyConstructor, [family.Name, family.CurrentVersion])
+                : new CustomAttributeBuilder(ownedFamilyConstructor, [family.Name, family.Module, family.CurrentVersion])));
 
         var builder = new PersistedAssemblyBuilder(new AssemblyName(assemblyName), typeof(object).Assembly, declarations);
         builder.DefineDynamicModule(assemblyName);

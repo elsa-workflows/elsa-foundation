@@ -1,8 +1,10 @@
 using System.Reflection;
 using Elsa.Cluster.Core.Models;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Testing;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Cluster.Readability.Tests;
 
@@ -93,13 +95,37 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
     }
 
     [Fact]
-    public void Declarations_that_disagree_on_the_owning_module_are_refused_rather_than_reported()
+    public void Declarations_that_disagree_on_the_owning_module_report_no_readable_version_and_log_the_disagreement()
     {
-        var refusal = Assert.Throws<InvalidOperationException>(() =>
-            EfSchemaReadabilitySource.Read([Declaration("Orders", "1", "Sales"), Declaration("Orders", "1", "Billing")]));
+        var logger = new RecordingLogger<EfSchemaReadabilitySource>();
 
-        Assert.Contains("'Sales'", refusal.Message, StringComparison.Ordinal);
-        Assert.Contains("'Billing'", refusal.Message, StringComparison.Ordinal);
+        var section = EfSchemaReadabilitySource.Read([Declaration("Orders", "1", "Sales"), Declaration("Orders", "1", "Billing")], logger);
+
+        // Isolated, not dropped: the malformed family still gets an entry, reading no version - the conservative
+        // direction, since ReadsSchemaVersion counts and fails a host for a family it cannot read at all - rather than
+        // silently missing from the report the way a thrown exception or a filtered-out family would.
+        var entry = Assert.Single(section.Entries);
+        Assert.Equal("Orders", entry.Family);
+        Assert.Empty(entry.ReadableVersions);
+
+        var error = Assert.Single(logger.Entries, logged => logged.Level == LogLevel.Error);
+        Assert.Contains("'Sales'", error.Message, StringComparison.Ordinal);
+        Assert.Contains("'Billing'", error.Message, StringComparison.Ordinal);
+        Assert.Contains("Orders", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>Bite-proof: an implementation that drops a malformed family instead of isolating it still passes every
+    /// other assertion above, since an empty section and a single-entry section both contain no violation. This is the
+    /// one assertion that only an isolated (not a dropped) family satisfies.</summary>
+    [Fact]
+    public void A_family_that_disagrees_on_the_owning_module_still_appears_beside_a_well_formed_one()
+    {
+        var section = EfSchemaReadabilitySource.Read(
+            [Declaration("Orders", "1", "Sales"), Declaration("Orders", "1", "Billing"), Declaration("Invoices", "1")]);
+
+        Assert.Equal(2, section.Entries.Count);
+        Assert.Contains(section.Entries, entry => entry.Family == "Orders" && entry.ReadableVersions.Count == 0);
+        Assert.Contains(section.Entries, entry => entry.Family == "Invoices" && entry.ReadableVersions.SequenceEqual(["1"]));
     }
 
     [Fact]

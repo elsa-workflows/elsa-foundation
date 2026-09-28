@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 135
 - Test projects: 123
 - Domains: 31
-- Direct cross-domain references: 716
+- Direct cross-domain references: 717
 
 ## Domains
 
@@ -234,7 +234,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Acme.Widgets](../../tests/essentials/Cli/Fixtures/Widgets/Acme.Widgets.csproj) | test | Other | - | test | Elsa.Persistence.EntityFramework |
 | [Elsa.Cli.Fixtures.WorkerContextHost](../../tests/essentials/Cli/Fixtures/WorkerContextHost/Elsa.Cli.Fixtures.WorkerContextHost.csproj) | test | Elsa.Cli | Fixtures.WorkerContextHost | test | - |
 | [Elsa.Cli.Tests](../../tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj) | test | Elsa.Cli | Tests | test | Acme.Widgets<br>Elsa.Cli<br>Elsa.Cli.Fixtures.CollisionHost<br>Elsa.Cli.Fixtures.Host<br>Elsa.Cli.Fixtures.LegacyHost<br>Elsa.Cli.Fixtures.MinimalHost<br>Elsa.Cli.Fixtures.NuplaneCapabilityHost<br>Elsa.Cli.Fixtures.NuplaneHost<br>Elsa.Cli.Fixtures.PartialContextHost<br>Elsa.Cli.Fixtures.ResourceAwareLiveHost<br>Elsa.Cli.Fixtures.ShellsHost<br>Elsa.Cli.Fixtures.UnsupportedContextHost<br>Elsa.Cli.Fixtures.WorkerContextHost<br>Elsa.Modularity.Planning |
-| [Elsa.Cluster.Readability.Tests](../../tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj) | test | Elsa.Cluster | Readability.Tests | test | Elsa.Cluster.Readability<br>Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
+| [Elsa.Cluster.Readability.Tests](../../tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj) | test | Elsa.Cluster | Readability.Tests | test | Elsa.Cluster.Readability<br>Elsa.Testing<br>Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
 | [Elsa.Cluster.Testing](../../tests/essentials/Cluster/Testing/Elsa.Cluster.Testing.csproj) | test | Elsa.Cluster | Testing | test | Elsa.Cluster.Core |
 | [Elsa.Cluster.Tests](../../tests/essentials/Cluster/Tests/Elsa.Cluster.Tests.csproj) | test | Elsa.Cluster | Tests | test | Elsa.Cluster.Core<br>Elsa.Cluster.InProcess<br>Elsa.Cluster.Testing |
 | [Elsa.Diagnostics.ConsoleLogStreaming.Tests](../../tests/essentials/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj) | test | Elsa.Diagnostics | ConsoleLogStreaming.Tests | test | Elsa.Diagnostics.ConsoleLogStreaming |
@@ -561,6 +561,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Cli.Tests](../../tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj) | Elsa.Cli | [Acme.Widgets](../../tests/essentials/Cli/Fixtures/Widgets/Acme.Widgets.csproj) | Other |
 | [Elsa.Cli.Tests](../../tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj) | Elsa.Cli | [Elsa.Modularity.Planning](../../src/essentials/Modularity/Planning/Elsa.Modularity.Planning.csproj) | Elsa.Modularity |
 | [Elsa.Cluster.Readability](../../src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj) | Elsa.Cluster | [Elsa.Persistence.EntityFramework](../../src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
+| [Elsa.Cluster.Readability.Tests](../../tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj) | Elsa.Cluster | [Elsa.Testing](../../tests/essentials/Testing/Elsa.Testing.csproj) | Elsa.Testing |
 | [Elsa.Cluster.Readability.Tests](../../tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj) | Elsa.Cluster | [Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore](../../src/essentials/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj) | Elsa.Workflows |
 | [Elsa.Cluster.Readability.Tests](../../tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj) | Elsa.Cluster | [Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore](../../src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj) | Elsa.Workflows |
 | [Elsa.Diagnostics.OpenTelemetry](../../src/essentials/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | Elsa.Diagnostics | [Elsa.Api.AspNetCore](../../src/essentials/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |

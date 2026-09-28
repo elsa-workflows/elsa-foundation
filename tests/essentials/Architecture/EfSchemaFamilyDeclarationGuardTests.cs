@@ -71,6 +71,34 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
             $"The detector missed '{name}'. It reported: {string.Join("; ", violations)}");
     }
 
+    /// <summary>
+    /// The shared, no-module form (spec 180, FR-001 extension for a family owned by no single EF module, #2099 B3) is a
+    /// two-argument declaration; it must still be read, not silently dropped for having one fewer argument than an
+    /// owned family's.
+    /// </summary>
+    [Fact]
+    public void Detector_accepts_a_family_declared_shared_with_no_module()
+    {
+        var scan = Scan(
+            """
+            [assembly: EfSchemaFamily(SchemaFinalization.SchemaFamily, SchemaFinalization.SchemaVersion)]
+
+            public static class SchemaFinalization
+            {
+                public const string SchemaVersion = "1";
+                public const string SchemaFamily = "SchemaFinalization";
+            }
+
+            public sealed class Store
+            {
+                bool Valid(Row row) => EfSchemaVersion.Readable(SchemaFinalization.SchemaFamily, row.SchemaVersion, SchemaFinalization.SchemaVersion);
+            }
+            """);
+
+        Assert.Empty(scan.Violations());
+        Assert.Equal(["SchemaFinalization"], scan.NamedFamilies);
+    }
+
     [Fact]
     public void Detector_accepts_families_declared_at_the_version_they_are_checked_at()
     {
@@ -265,13 +293,15 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
                 } && CheckMethods.Contains(method, StringComparer.Ordinal) && Rightmost(access.Expression) == "EfSchemaVersion")
                 .Select(invocation => (Locate(path, invocation), invocation.ArgumentList.Arguments[0].Expression, invocation.ArgumentList.Arguments[2].Expression)));
 
+            // A declaration's version is its last constructor argument, so the shared, no-module two-argument form
+            // (name, currentVersion) and the owned three-argument form (name, module, currentVersion) are both read.
             Declarations.AddRange(root.AttributeLists
                 .Where(list => list.Target?.Identifier.IsKind(SyntaxKind.AssemblyKeyword) == true)
                 .SelectMany(list => list.Attributes)
                 .Where(attribute => DeclarationNames.Contains(Rightmost(attribute.Name), StringComparer.Ordinal))
                 .Select(attribute => (Attribute: attribute, Arguments: attribute.ArgumentList?.Arguments ?? default))
-                .Where(declaration => declaration.Arguments.Count >= 3)
-                .Select(declaration => (Locate(path, declaration.Attribute), declaration.Arguments[0].Expression, declaration.Arguments[2].Expression)));
+                .Where(declaration => declaration.Arguments.Count >= 2)
+                .Select(declaration => (Locate(path, declaration.Attribute), declaration.Arguments[0].Expression, declaration.Arguments[^1].Expression)));
         }
 
         /// <summary>A <c>const string</c> field of a type, initialized with a literal, keyed <c>Type.Field</c>.</summary>

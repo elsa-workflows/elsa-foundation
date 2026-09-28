@@ -2610,6 +2610,11 @@
           "path": "src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"
         },
         {
+          "type": "external",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
           "type": "pinned-transitive",
           "id": "CShells",
           "version": "0.0.30-preview.159"
@@ -2677,11 +2682,6 @@
         {
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Logging",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Logging.Abstractions",
           "version": "10.0.10"
         },
         {
@@ -12777,6 +12777,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
           "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Testing",
+          "path": "tests/essentials/Testing/Elsa.Testing.csproj"
         },
         {
           "type": "external",

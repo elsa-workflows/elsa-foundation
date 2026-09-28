@@ -8,6 +8,10 @@
     it once, on its host container, with AddEfSchemaReadability, which also brings the in-process membership default.
   -->
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Core\Elsa.Cluster.Core.csproj" />
     <ProjectReference Include="..\InProcess\Elsa.Cluster.InProcess.csproj" />
     <ProjectReference Include="..\..\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />

@@ -15,19 +15,44 @@ namespace Elsa.Persistence.EntityFramework;
 /// Spec 180's upcaster chain (B4, #2100) joins this declaration. Until it does, a build reads only its
 /// <see cref="CurrentVersion"/>, which is what <see cref="EfSchemaFamilyDescriptor.ReadableVersions"/> reports.
 /// </para>
+/// <para>
+/// A family owned by shared mapping code that several EF modules' contexts call into - <c>modelBuilder.MapXyz(...)</c>
+/// from a package with no <see cref="EfModuleAttribute"/> of its own, one version defined once - has no single owning
+/// module to name. The two-argument constructor declares exactly that: <see cref="Module"/> reads
+/// <see cref="SharedModule"/>, and <see cref="EfSchemaFamilyCatalog"/> accepts it only in an assembly that declares no
+/// <see cref="EfModuleAttribute"/> at all, so a module's own family still names its module explicitly.
+/// </para>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true, Inherited = false)]
-public sealed class EfSchemaFamilyAttribute(string name, string module, string currentVersion) : Attribute
+public sealed class EfSchemaFamilyAttribute : Attribute
 {
-    /// <summary>The family's identity, as its skew check names it: the module class's <c>SchemaFamily</c> constant.</summary>
-    public string Name { get; } = name;
+    /// <summary>The value <see cref="Module"/> reads for a family declared with the two-argument constructor.</summary>
+    public const string SharedModule = "<shared>";
 
-    /// <summary>The canonical <see cref="EfModuleAttribute.Name"/> of the EF module that owns the family.</summary>
-    public string Module { get; } = module;
+    public EfSchemaFamilyAttribute(string name, string module, string currentVersion)
+    {
+        Name = name;
+        Module = module;
+        CurrentVersion = currentVersion;
+    }
+
+    /// <summary>Declares <paramref name="name"/> shared: owned by no single EF module. See <see cref="SharedModule"/>.</summary>
+    public EfSchemaFamilyAttribute(string name, string currentVersion) : this(name, SharedModule, currentVersion)
+    {
+    }
+
+    /// <summary>The family's identity, as its skew check names it: the module class's <c>SchemaFamily</c> constant.</summary>
+    public string Name { get; }
+
+    /// <summary>
+    /// The canonical <see cref="EfModuleAttribute.Name"/> of the EF module that owns the family, or
+    /// <see cref="SharedModule"/> for a family the two-argument constructor declared.
+    /// </summary>
+    public string Module { get; }
 
     /// <summary>
     /// The version this build stamps on the family's rows and compares their stamps against: the same constant its
     /// skew check passes to <see cref="EfSchemaVersion"/>.
     /// </summary>
-    public string CurrentVersion { get; } = currentVersion;
+    public string CurrentVersion { get; }
 }

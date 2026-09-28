@@ -22,8 +22,10 @@ public static class EfSchemaFamilyCatalog
     /// Enumerates every <see cref="EfSchemaFamilyAttribute"/> declared on <paramref name="assemblies"/>, one
     /// <see cref="EfSchemaFamilyDescriptor"/> per declaration. Refuses discovery, naming the assembly, when a declaration
     /// has no name or no current version, when its module is not one the same assembly declares with
-    /// <see cref="EfModuleAttribute"/>, or when one assembly declares a family twice. The same family declared by two
-    /// assemblies, such as two generations of one package, is two descriptors: combining them is the caller's decision.
+    /// <see cref="EfModuleAttribute"/>, when a family declared shared (<see cref="EfSchemaFamilyAttribute.SharedModule"/>)
+    /// sits in an assembly that declares an <see cref="EfModuleAttribute"/> of its own, or when one assembly declares a
+    /// family twice. The same family declared by two assemblies, such as two generations of one package, is two
+    /// descriptors: combining them is the caller's decision.
     /// </summary>
     public static IReadOnlyList<EfSchemaFamilyDescriptor> Discover(IEnumerable<Assembly> assemblies)
     {
@@ -58,13 +60,27 @@ public static class EfSchemaFamilyCatalog
     private static EfSchemaFamilyDescriptor Describe(Assembly assembly, CustomAttributeData declaration, string[] modules)
     {
         var name = Argument(declaration, 0);
-        var module = Argument(declaration, 1);
-        var currentVersion = Argument(declaration, 2);
+        // The two-argument constructor (name, currentVersion) declares a family shared by no single EF module; the
+        // three-argument one (name, module, currentVersion) names its owner explicitly.
+        var shared = declaration.ConstructorArguments.Count < 3;
+        var module = shared ? EfSchemaFamilyAttribute.SharedModule : Argument(declaration, 1);
+        var currentVersion = Argument(declaration, shared ? 1 : 2);
 
         if (string.IsNullOrWhiteSpace(name))
             throw new InvalidOperationException($"{assembly.GetName().Name} declares an [EfSchemaFamily] with no name.");
         if (string.IsNullOrWhiteSpace(currentVersion))
             throw new InvalidOperationException($"{assembly.GetName().Name} declares [EfSchemaFamily(\"{name}\")] with no current version.");
+
+        if (shared)
+        {
+            if (modules.Length > 0)
+                throw new InvalidOperationException(
+                    $"{assembly.GetName().Name} declares [EfSchemaFamily(\"{name}\")] shared, with no single owning EF module, but also declares " +
+                    $"{string.Join(", ", modules.Select(declared => $"'{declared}'"))}. An assembly that owns an [EfModule] names it as the family's " +
+                    "owner instead of declaring the family shared.");
+
+            return new EfSchemaFamilyDescriptor(name, EfSchemaFamilyAttribute.SharedModule, currentVersion, assembly);
+        }
 
         var owner = modules.FirstOrDefault(declared => StringComparer.OrdinalIgnoreCase.Equals(declared, module));
         if (owner is null)
