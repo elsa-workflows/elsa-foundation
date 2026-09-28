@@ -27,4 +27,5 @@ public static class PublishingPolicyProjectionEfModule
     public const int FailureMessageMaximumLength = 512;
     public const int MaximumMaterializedListEntries = 512;
     public const string SchemaVersion = "1.0.0";
+    public const string SchemaFamily = "PublishingPolicyProjection";
 }

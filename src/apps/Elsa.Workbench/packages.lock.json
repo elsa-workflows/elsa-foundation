@@ -1163,6 +1163,23 @@
           "Elsa.Caching.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.cluster.core": {
+        "type": "Project"
+      },
+      "elsa.cluster.inprocess": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Cluster.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.cluster.readability": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Cluster.Core": "[4.0.0-dev, )",
+          "Elsa.Cluster.InProcess": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )"
+        }
+      },
       "elsa.diagnostics.consolelogstreaming": {
         "type": "Project",
         "dependencies": {
