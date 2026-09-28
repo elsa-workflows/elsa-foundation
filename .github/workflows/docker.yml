@@ -20,6 +20,27 @@ name: Docker Images
 # Docker's maintained builder fans the platforms out to native x64 and ARM64
 # GitHub-hosted runners, then assembles the multi-platform manifest.
 #
+# MAIN BUILDS TAKE THE PACKAGES WORKFLOW'S OWN COMPUTATION (#2084, spec 150 FR-020). A push to
+# main used to make this workflow compute its own plan against publish-state's tip, racing the
+# Packages workflow's plan and write-back for the same commit: two independent reads of a record
+# one of them was about to change. Joining Packages' `publish-state` concurrency group does not fix
+# this - GitHub keeps only one PENDING run per group and cancels the older pending one, so a queued
+# image build could silently drop a queued publish run. Instead, a main build is triggered by
+# `workflow_run` once Packages completes, and only when it concluded `success`; the versions job
+# then downloads that exact run's `elsa-foundation-nuget-packages` artifact (uploaded by the pack
+# job in packages.yml) for `package-versions.props`, rather than planning again. Its Elsa package
+# versions are then exactly what Packages just computed (and, on a publish, exactly what it wrote to
+# the feed) for that commit - never a plan raced against the write-back.
+#
+# docker/github-builder always builds the git context at the calling run's own commit (GITHUB_SHA),
+# which for `workflow_run` and `workflow_dispatch` is the ref's current tip, not an input the
+# reusable workflow lets a caller override to an arbitrary historical commit. So the versions job
+# also refuses outright, rather than building silently against the wrong tree, if main has moved
+# past the commit the Packages run (or the dispatch input) named - see the "Refuse to build a commit
+# main has moved past" step. PR and non-main branch builds are unaffected: they still compute their
+# own plan on `pull_request`, exactly as before, and never write to publish-state, so there is no
+# race to avoid.
+#
 # POLICY DEPENDENCY: the job below calls a reusable workflow from another
 # organization, so elsa-workflows must allow-list it under
 # Settings -> Actions -> General -> "Allow specified actions and reusable
@@ -37,9 +58,13 @@ name: Docker Images
 # applies to actions, not to reusable workflows.
 
 on:
-  push:
+  workflow_run:
+    workflows: [Packages]
+    types: [completed]
     branches: [main]
-    paths: &image-inputs
+  pull_request:
+    branches: [main]
+    paths:
       - .dockerignore
       - .github/workflows/docker.yml
       - '*.props'
@@ -47,12 +72,20 @@ on:
       - Elsa.Server.slnx
       - NuGet.config
       - src/**
-  pull_request:
-    branches: [main]
-    paths: *image-inputs
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: >-
+          Commit SHA on main to build. Uses the latest successful Packages workflow run for that
+          commit and refuses if there is none. Also refuses if main has since moved past that
+          commit, because the builder can only build the branch's current tip (see the header
+          comment above).
+        required: true
+        type: string
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: docker-image-${{ github.ref }}
@@ -64,32 +97,87 @@ jobs:
     # The Workbench image is built with computed package versions (ADR 0067, spec 150, #2084), so its deps.json
     # records every Elsa package at the version the feed carries, and its production configuration declares the
     # Elsa shares host-provided: Nuplane then refuses a feed package that needs a newer one than the image carries.
-    # The versions come from the publisher's plan, exactly as the Packages workflow computes them for the same ref
-    # and commit - against publish-state's tip on main, against an empty record while publish-state does not exist,
-    # and at branch-scoped versions for anything else - and reach the image build as one build arg, the
-    # pack-properties file gzipped and base64-encoded, because the builder takes build args one per line and checks
-    # out the commit itself. A pull request is computed as its head branch, since the plan only knows branch refs.
+    # For a pull request the versions come from this job's own plan, exactly as the Packages workflow computes them
+    # for the same ref and commit, at branch-scoped versions (PRs never touch publish-state, so there is nothing to
+    # race). For a push to main the versions come from the Packages workflow run that triggered this one instead -
+    # never a plan this job computes itself - because that is the run whose plan may have just been written back to
+    # publish-state (see the header comment: spec 150 FR-020, #2084). Either way the versions reach the image build
+    # as one build arg, the pack-properties file gzipped and base64-encoded, because the builder takes build args
+    # one per line and checks out the commit itself.
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
       package-versions: ${{ steps.encode.outputs.package-versions }}
     steps:
+      # main (workflow_run, workflow_dispatch): find the Packages run to take the computation from, rather than
+      # planning again - the run that triggered this one, or for a manual dispatch, the latest successful Packages
+      # run for the requested commit.
+      - name: Resolve the Packages run to build from
+        id: resolve
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            run_id="${{ github.event.workflow_run.id }}"
+            commit="${{ github.event.workflow_run.head_sha }}"
+          else
+            commit="${{ inputs.commit }}"
+            run_id=$(gh api "repos/${{ github.repository }}/actions/workflows/packages.yml/runs?branch=main&status=success&head_sha=$commit" \
+              --jq '.workflow_runs | sort_by(.run_started_at) | last | .id // empty')
+            if [ -z "$run_id" ]; then
+              echo "::error title=No successful Packages run::No successful Packages workflow run found on main for commit $commit. Push it and wait for Packages to succeed before dispatching an image build for it."
+              exit 1
+            fi
+          fi
+          echo "run-id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+      # docker/github-builder builds the git context at this run's own commit, not an arbitrary one this job
+      # names, so a resolved commit main has since moved past would be built silently wrong. Refuse instead.
+      - name: Refuse to build a commit main has moved past
+        if: github.event_name != 'pull_request'
+        run: |
+          if [ "$GITHUB_SHA" != "${{ steps.resolve.outputs.commit }}" ]; then
+            echo "::error title=Commit drift::main is at $GITHUB_SHA, past the requested commit ${{ steps.resolve.outputs.commit }}. Refusing rather than building the wrong commit."
+            exit 1
+          fi
+
+      - name: Download the Packages run's computation
+        if: github.event_name != 'pull_request'
+        uses: actions/download-artifact@v4
+        with:
+          name: elsa-foundation-nuget-packages
+          path: ${{ runner.temp }}/versions
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.resolve.outputs.run-id }}
+
+      # pull_request: no Packages run to take a computation from - branch-scoped versions, planned here.
       - name: Checkout
+        if: github.event_name == 'pull_request'
         uses: actions/checkout@v4
         with:
           # The calculator compares trees at the commits the record names and proves ancestry (FR-021).
           fetch-depth: 0
 
       - uses: actions/setup-dotnet@v4
+        if: github.event_name == 'pull_request'
         with:
           dotnet-version: 10.x
 
       - name: Build the publisher
+        if: github.event_name == 'pull_request'
         run: dotnet build tools/versioning/Elsa.Versioning.Publisher -c Release
 
       - name: Plan
+        if: github.event_name == 'pull_request'
         env:
-          REF: ${{ github.event_name == 'pull_request' && format('refs/heads/{0}', github.head_ref) || github.ref }}
+          REF: refs/heads/${{ github.head_ref }}
         run: >-
           dotnet run --project tools/versioning/Elsa.Versioning.Publisher -c Release --no-build --
           plan --ref "$REF" --commit "$GITHUB_SHA" --output "$RUNNER_TEMP/versions"
@@ -139,6 +227,10 @@ jobs:
 
   build-and-push-foundation-host:
     name: Build & push elsa-foundation-host
+    # Built from source, so it needs none of the versions job's outputs - but it still needs to run only for the
+    # same events the versions job does (not, say, a failed or cancelled Packages run's workflow_run), so it
+    # depends on that job the same way build-and-push does, purely to inherit its gate (see that job's "if").
+    needs: versions
     # Same pinned reusable builder as the workbench job above (see the pinning note there):
     # the BuildKit/Buildx versions must match the `# syntax=` pin in
     # src/apps/Elsa.Foundation.Host/Dockerfile.

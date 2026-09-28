@@ -131,9 +131,13 @@ dotnet build Elsa.Server.pack.slnf -c Release -p:CustomBeforeDirectoryBuildProps
 dotnet pack Elsa.Server.pack.slnf -c Release --no-build -p:CustomBeforeDirectoryBuildProps="$PWD/package-versions.props"
 ```
 
-The Docker Images workflow builds the Workbench image through the same file, from the publisher's plan for the same
-ref and commit, so the image's Elsa assemblies and its `deps.json` carry the versions the feed does (#2084). Its
-restore reads the file too: `deps.json` takes a project reference's version from the restore, not the build.
+The Docker Images workflow builds the Workbench image through the same file, so the image's Elsa assemblies and its
+`deps.json` carry the versions the feed does (#2084). Its restore reads the file too: `deps.json` takes a project
+reference's version from the restore, not the build. A pull request plans its own file, at branch-scoped versions,
+exactly as above. A push to main does not plan again - planning twice for the same commit would race the Packages
+workflow's own plan and write-back to `publish-state` (spec 150 FR-020) - it instead takes the file the Packages
+run for that commit already produced, from that run's `elsa-foundation-nuget-packages` artifact, so its Elsa package
+versions are exactly what Packages computed (and, on a publish, exactly what it wrote to the feed).
 
 The file sets `ElsaVersionComputationCommit`, and for each packable project, selected by project name,
 `ElsaComputedPackageVersion` and `ElsaInputFingerprint`. [`PackageVersioning.props`](../../PackageVersioning.props) at

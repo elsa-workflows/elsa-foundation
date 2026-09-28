@@ -71,11 +71,14 @@ docker run --rm -p 13000:8080 \
 
 That is a source build, as `docker compose up --build` is: the image records its Elsa packages at their
 line's dev version, and Nuplane does not check a feed package's Elsa dependencies against the ones it shares.
-The images CI publishes are built with the package versions the Packages workflow computes for the same
-commit, and refuse a feed package that needs a newer shared Elsa package than they carry
-([Foundation host feeds](foundation-host-feeds.md#why-a-declared-dependency-can-go-missing)). To build one
-locally, compute the versions and pass them as the `ELSA_PACKAGE_VERSIONS` build arg, gzipped and
-base64-encoded as `.github/workflows/docker.yml` does:
+The images CI publishes from main are built with the exact package versions the Packages workflow computed for
+that commit - `.github/workflows/docker.yml`'s `versions` job downloads that run's `elsa-foundation-nuget-packages`
+artifact rather than planning again, so a queued image build never races Packages' own plan and write-back to
+`publish-state` (spec 150 FR-020, #2084). It refuses to build if main has moved past that commit, since the
+builder can only build the branch's current tip. The images refuse a feed package that needs a newer shared Elsa
+package than they carry ([Foundation host feeds](foundation-host-feeds.md#why-a-declared-dependency-can-go-missing)).
+To build one locally, compute the versions and pass them as the `ELSA_PACKAGE_VERSIONS` build arg, gzipped and
+base64-encoded as `.github/workflows/docker.yml`'s pull-request path does:
 
 ```bash
 dotnet run --project tools/versioning/Elsa.Versioning.Publisher -- \
