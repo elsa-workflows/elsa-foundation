@@ -17,19 +17,17 @@ public sealed class ExpandOnlyMigrationScanTests
     /// <summary>
     /// FR-003, SC-004, User Story 4 Acceptance Scenario 3. #1976 has not happened (spec 185, "Current state"):
     /// no baseline is frozen and no freeze manifest exists, and ADR 0078 says this guard does not apply to a
-    /// real database before then. This is that state, proven rather than assumed, over the real scan and the
-    /// real first-party module set — not <see cref="FreezeManifestReader.Load"/> alone — so what this proves is
-    /// that the real scan itself refuses to guess and never quietly reports success over zero migrations, not
-    /// merely that the reader does.
+    /// real database before then. This is that state, proven rather than assumed, over
+    /// <see cref="ExpandOnlyMigrationScanner.Scan(IReadOnlyList{Assembly}, IReadOnlyList{string}, string)"/>
+    /// itself — the overload that owns loading the manifest, not a caller that loads it first and hands
+    /// <c>Scan</c> an already-failed-or-not decision — so what this proves is that the real scan itself refuses
+    /// to guess and never quietly reports success over zero migrations, not merely that the reader does.
     /// </summary>
     [Fact]
     public void The_real_scan_over_every_first_party_module_fails_naming_the_path_when_the_freeze_manifest_is_missing()
     {
         var failure = Assert.Throws<FreezeManifestMissingException>(() =>
-        {
-            var manifest = FreezeManifestReader.Load(FreezeManifestReader.ExpectedPath);
-            return ExpandOnlyMigrationScanner.Scan(ModuleContextCatalog.Modules, ModuleContextCatalog.Providers, manifest);
-        });
+            ExpandOnlyMigrationScanner.Scan(ModuleContextCatalog.Modules, ModuleContextCatalog.Providers, FreezeManifestReader.ExpectedPath));
 
         Assert.Contains(FreezeManifestReader.ExpectedPath, failure.Message, StringComparison.Ordinal);
     }
@@ -95,6 +93,31 @@ public sealed class ExpandOnlyMigrationScanTests
             failure.Contains("Secrets/Sqlite", StringComparison.Ordinal) &&
             failure.Contains(staleId, StringComparison.Ordinal) &&
             failure.Contains("does not exist in this context", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// FR-020b's floor (<see cref="ExpandOnlyMigrationScanner.MigrationTypesDeclaredFor"/> minus the manifest's
+    /// baseline count) is only a floor at all if the manifest's baseline count means "how many distinct
+    /// migrations are baselined". A baseline id repeated in the manifest inflates that count without excluding
+    /// any more migrations from postFreeze, so it must fail, naming the repeated id, rather than being read as
+    /// one extra baselined migration that quietly widens the floor.
+    /// </summary>
+    [Fact]
+    public void A_duplicate_baseline_migration_id_fails_naming_it()
+    {
+        var manifest = FreezeEveryCurrentMigrationAsBaseline();
+        var duplicatedId = manifest.BaselineOf("Secrets", "Sqlite")[0];
+        var withDuplicateEntry = new FreezeManifest(manifest.Baselines.ToDictionary(
+            entry => entry.Key,
+            entry => entry.Key == ("Secrets", "Sqlite") ? (IReadOnlyList<string>)[.. entry.Value, duplicatedId] : entry.Value));
+
+        var report = ExpandOnlyMigrationScanner.Scan(ModuleContextCatalog.Modules, ModuleContextCatalog.Providers, withDuplicateEntry);
+
+        Assert.False(report.Passed);
+        Assert.Contains(report.Failures, failure =>
+            failure.Contains("Secrets/Sqlite", StringComparison.Ordinal) &&
+            failure.Contains(duplicatedId, StringComparison.Ordinal) &&
+            failure.Contains("more than once", StringComparison.Ordinal));
     }
 
     /// <summary>

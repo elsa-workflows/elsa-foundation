@@ -120,6 +120,16 @@ internal static class ExpandOnlyMigrationScanner
     internal static bool ShouldRecordOptOutHonoured(ExpandOnlyMigrationOptOutAttribute? optOut, ExpandOnlyMigrationResult result) =>
         optOut is not null && result.Passed;
 
+    /// <summary>
+    /// FR-003: the scan itself owns loading the freeze manifest — not a caller that loads it first and only
+    /// then decides whether to run the scan — so a missing or unreadable manifest fails <em>inside</em> a real
+    /// scan rather than before one ever starts, naming <paramref name="manifestRepoRelativePath"/>. Delegates to
+    /// <see cref="FreezeManifestReader.Load"/> for the actual read and the <see cref="FreezeManifestMissingException"/>
+    /// this raises unchanged.
+    /// </summary>
+    public static ExpandOnlyMigrationScanReport Scan(IReadOnlyList<Assembly> moduleAssemblies, IReadOnlyList<string> providers, string manifestRepoRelativePath) =>
+        Scan(moduleAssemblies, providers, FreezeManifestReader.Load(manifestRepoRelativePath));
+
     public static ExpandOnlyMigrationScanReport Scan(IReadOnlyList<Assembly> moduleAssemblies, IReadOnlyList<string> providers, FreezeManifest manifest)
     {
         var modules = EfModuleCatalog.Discover(moduleAssemblies).Count;
@@ -164,13 +174,24 @@ internal static class ExpandOnlyMigrationScanner
 
             var postFreeze = ordered.Where(migration => !baseline.Contains(migration.Key, StringComparer.Ordinal)).ToArray();
 
-            // FR-020b's independent floor: the post-freeze count must equal the context's total migration
-            // count minus the manifest's baseline count for it — computed from raw counts, not from the
-            // same membership test that built postFreeze above, so a defect there still surfaces here.
-            if (postFreeze.Length != ordered.Length - baseline.Count)
+            // FR-020b: two manifest entries baselining the same migration id inflate baseline.Count without
+            // changing which migrations postFreeze excludes, which would otherwise make the floor below fail
+            // for the wrong reason. Caught here by name instead.
+            foreach (var duplicateId in baseline.GroupBy(id => id, StringComparer.Ordinal).Where(group => group.Count() > 1).Select(group => group.Key))
+                failures.Add($"{descriptor.Name}/{provider}: the freeze manifest's baseline lists migration '{duplicateId}' more than once.");
+
+            // FR-020b's independently-sourced floor: the post-freeze count must equal this context's migration
+            // count minus the manifest's baseline count for it — but the migration count comes from reading
+            // [Migration]/[DbContext] attributes directly off the migrations assembly's types
+            // (MigrationTypesDeclaredFor), not from IMigrationsAssembly.Migrations, which is also what `ordered`
+            // and postFreeze above are built from. A defect in that dictionary still surfaces here; this is
+            // "independently sourced" for the migration count only — baseline.Count still reads the same
+            // manifest the membership test above does.
+            var declaredMigrationCount = MigrationTypesDeclaredFor(contextType);
+            if (postFreeze.Length != declaredMigrationCount - baseline.Count)
                 failures.Add($"{descriptor.Name}/{provider}: post-freeze migration count ({postFreeze.Length}) " +
-                             $"does not equal the context's migration count ({ordered.Length}) minus the " +
-                             $"manifest's baseline count ({baseline.Count}) for this context.");
+                             $"does not equal the migration types declared for this context ({declaredMigrationCount}) " +
+                             $"minus the manifest's baseline count ({baseline.Count}) for this context.");
 
             baselineMigrations += ordered.Length - postFreeze.Length;
             postFreezeMigrations += postFreeze.Length;
@@ -212,6 +233,21 @@ internal static class ExpandOnlyMigrationScanner
             optOutsHonoured,
             failures);
     }
+
+    /// <summary>
+    /// FR-020b's independent source for a provider context's migration count: every type in
+    /// <paramref name="contextType"/>'s own migrations assembly carrying both a <see cref="MigrationAttribute"/>
+    /// and a <see cref="DbContextAttribute"/> naming <paramref name="contextType"/>, read directly off those
+    /// attributes rather than through <see cref="IMigrationsAssembly.Migrations"/>. EF puts both attributes on
+    /// the type's designer partial (never on the hand-edited half), and <see cref="ModuleContextCatalog.Create"/>
+    /// binds every module's migrations assembly to the context's own declaring assembly (no module overrides
+    /// it), so <c>contextType.Assembly</c> is where <see cref="Scan"/> already loads that context's migrations
+    /// from.
+    /// </summary>
+    internal static int MigrationTypesDeclaredFor(Type contextType) =>
+        contextType.Assembly.GetTypes().Count(type =>
+            type.GetCustomAttribute<MigrationAttribute>() is not null &&
+            type.GetCustomAttribute<DbContextAttribute>()?.ContextType == contextType);
 
     private static string FormatFailure(string module, string provider, string migrationId, ExpandOnlyMigrationResult result)
     {
