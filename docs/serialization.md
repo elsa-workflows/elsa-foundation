@@ -116,8 +116,11 @@ From 4.0 on, a change to what a family stores is a new version of that family ([
    across two versions (FR-027), and an executable's identity-hashed format never changes in place (FR-028).
 3. Gate every integrity clause for a projection the version introduces on the row's stamp
    (`<Module>.Chain.IsAtOrAfter(row.SchemaVersion, "<version>")`), since an older writer left it unset (FR-008).
-4. Commit the upcaster's fixture pair and prove the upcast, the old-format round trip and the store's read of the
-   source fixture (FR-022).
+4. Commit the upcaster's fixture pair under `Fixtures/SchemaUpcasters/<family>/<from>-to-<to>/` in the module's
+   test project, record it in `tests/essentials/Architecture/Baselines/schema-upcaster-fixtures.sha256`, and prove the
+   upcast, the old-format round trip and the store's read of the source fixture (FR-022), as
+   `EfSchemaChainStoreTests` does for its synthetic family with `EfSchemaUpcasterFixtureSupport`. The build fails for
+   an upcaster without a pair, and for a recorded fixture that is edited or deleted.
 
 ## Cross-execution stimulus routing (W7, E3-1 / E3-5)
 

@@ -158,6 +158,67 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
         Assert.Equal(("1", (string?)null, stored), await RawAsync("order-1"));
     }
 
+    public static TheoryData<string, string> Steps() => new() { { "1", "2" }, { "2", "3" } };
+
+    /// <summary>FR-022, first proof: each upcaster turns its committed source fixture into its committed expected fixture.</summary>
+    [Theory]
+    [MemberData(nameof(Steps))]
+    public void Each_upcaster_turns_its_source_fixture_into_its_expected_fixture(string from, string to) =>
+        EfSchemaUpcasterFixtureSupport.AssertUpcasts(from == "1" ? new AddCurrency() : new AddLines(), Fixture(from, to));
+
+    /// <summary>
+    /// FR-022, second proof, the old-format round trip that enforces expand-only content (FR-027): writing the expected
+    /// value in the source version's format, with every member the target version introduced left unset, reproduces the
+    /// source fixture. A renamed or retyped member would not.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Steps))]
+    public void Writing_the_expected_value_at_the_source_version_reproduces_the_source_fixture(string from, string to)
+    {
+        var fixture = Fixture(from, to);
+        var expected = JsonSerializer.Deserialize<Order>(Orders.Upcast(to, Table, nameof(OrderRow.ContentJson), fixture.Expected))!;
+
+        EfSchemaUpcasterFixtureSupport.AssertSemanticallyEqual(fixture.Source, FormatAt(expected, from), $"Writing the '{to}' fixture at '{from}'");
+    }
+
+    /// <summary>
+    /// FR-022, third proof: the source fixture, stored as a row at its version and read through the store's own read
+    /// path, is the same domain value as the expected fixture stored at its version.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Steps))]
+    public async Task Reading_the_source_fixture_through_the_store_equals_reading_the_expected_fixture(string from, string to)
+    {
+        var fixture = Fixture(from, to);
+        await InsertAsync("order-1", from, Orders.IsAtOrAfter(from, "2") ? "EUR" : null, fixture.Source);
+        var source = await Store().ReadAsync("order-1");
+
+        await using (var context = new OrdersContext(new DbContextOptionsBuilder<OrdersContext>().UseSqlite(database.ConnectionString).Options))
+        {
+            var row = await context.Orders.SingleAsync(order => order.Id == "order-1");
+            row.SchemaVersion = to;
+            row.Currency = Orders.IsAtOrAfter(to, "2") ? "EUR" : null;
+            row.ContentJson = fixture.Expected;
+            await context.SaveChangesAsync();
+        }
+
+        Assert.Equal(source, await Store().ReadAsync("order-1"));
+    }
+
+    private static EfSchemaUpcasterFixture Fixture(string from, string to) =>
+        EfSchemaUpcasterFixtureSupport.Load("SyntheticOrders", from, to, Table, nameof(OrderRow.ContentJson));
+
+    /// <summary>The order in <paramref name="version"/>'s format: every member a later version introduced left unset.</summary>
+    private static string FormatAt(Order order, string version)
+    {
+        var content = new JsonObject { ["Id"] = order.Id, ["Total"] = order.Total };
+        if (Orders.IsAtOrAfter(version, "2"))
+            content["Currency"] = order.Currency;
+        if (Orders.IsAtOrAfter(version, "3"))
+            content["Lines"] = new JsonArray([.. order.Lines.Select(line => JsonValue.Create(line))]);
+        return content.ToJsonString();
+    }
+
     public async ValueTask DisposeAsync()
     {
         foreach (var context in contexts)

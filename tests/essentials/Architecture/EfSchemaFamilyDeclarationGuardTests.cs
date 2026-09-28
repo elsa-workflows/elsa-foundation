@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -21,7 +23,9 @@ namespace Elsa.Architecture.Tests;
 /// <item>every write that stamps a constant stamps the version its family's declaration names current (FR-013);</item>
 /// <item>every write that rewrites a row's content in place stamps the row again, so its stamp always describes its
 /// content: a row read at an older version and written back is upgraded, never left claiming the old version over
-/// content now in the current format (FR-014).</item>
+/// content now in the current format (FR-014);</item>
+/// <item>every upcaster ships a committed fixture pair, and a committed fixture is frozen: editing, deleting or adding
+/// one without recording it in <c>Baselines/schema-upcaster-fixtures.sha256</c> fails the build (FR-022, SC-005).</item>
 /// </list>
 /// </summary>
 /// <remarks>
@@ -72,6 +76,77 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
     public void Every_constant_stamp_is_its_familys_declared_current_version() =>
         AssertNone(Production.StampViolations(), "A write stamps the current version its family's declaration names (spec 180, FR-013), " +
             "never a literal or another constant:");
+
+    /// <summary>Where the frozen upcaster fixtures are recorded, one '&lt;sha-256&gt;  &lt;repo-relative path&gt;' line each.</summary>
+    private const string FixtureLock = "tests/essentials/Architecture/Baselines/schema-upcaster-fixtures.sha256";
+
+    /// <summary>Every committed upcaster fixture: a file under a <c>Fixtures/SchemaUpcasters</c> directory of a test tree.</summary>
+    private static IReadOnlyList<(string Path, string Text)> UpcasterFixtures { get; } =
+        new[] { "tests", "src" }
+            .SelectMany(root => Directory.EnumerateDirectories(Path.Join(RepoRoot, root), "SchemaUpcasters", SearchOption.AllDirectories))
+            .Where(directory => !IsBuildOutput(directory) && Path.GetFileName(Path.GetDirectoryName(directory)) == "Fixtures")
+            .SelectMany(directory => Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
+            .Select(file => (Path: Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/'), Text: File.ReadAllText(file)))
+            .OrderBy(fixture => fixture.Path, StringComparer.Ordinal)
+            .ToArray();
+
+    [Fact]
+    public void Every_upcaster_ships_a_fixture_pair_and_every_fixture_is_frozen() =>
+        AssertNone(
+            UpcasterFixtureRules.Violations(UpcasterFixtures, File.ReadAllText(Path.Join(RepoRoot, FixtureLock)), Production.UpcasterSteps()),
+            $"Every upcaster ships a committed fixture pair under Fixtures/SchemaUpcasters/<family>/<from>-to-<to>/, and a " +
+            $"fixture is frozen once its version ships: record a new one in {FixtureLock}, never edit or delete one (spec 180, " +
+            "FR-022 and FR-024):");
+
+    [Theory]
+    [MemberData(nameof(ViolatingFixtureSets))]
+    public void Fixture_detector_flags_a_missing_unpaired_edited_unrecorded_or_deleted_fixture(
+        string name, string[] paths, string lockText, string[] upcasters, string expected)
+    {
+        var violations = UpcasterFixtureRules.Violations(
+            paths.Select(path => (path, "{}")).ToArray(),
+            lockText,
+            upcasters.Select(upcaster => upcaster.Split('/')).Select(step => ("Fixture.cs(1)", step[0], step[1], step[2])));
+
+        Assert.True(violations.Any(violation => violation.Contains(expected, StringComparison.Ordinal)),
+            $"The fixture detector missed '{name}'. It reported: {string.Join("; ", violations)}");
+    }
+
+    [Fact]
+    public void Fixture_detector_accepts_a_recorded_pair_for_every_upcaster() =>
+        Assert.Empty(UpcasterFixtureRules.Violations(
+            [(Pair + "orders.Content.source.json", "{}"), (Pair + "orders.Content.expected.json", "{}")],
+            $"{UpcasterFixtureRules.Hash("{}")}  {Pair}orders.Content.expected.json\n{UpcasterFixtureRules.Hash("{}")}  {Pair}orders.Content.source.json\n",
+            [("Fixture.cs(1)", "Orders", "1", "2")]));
+
+    /// <summary>The scan must find the committed fixtures, or the frozen rule would pass having checked nothing.</summary>
+    [Fact]
+    public void Fixture_scan_finds_the_committed_fixtures() =>
+        Assert.True(UpcasterFixtures.Count >= 4, $"Expected at least the four synthetic upcaster fixtures; found {UpcasterFixtures.Count}.");
+
+    private const string Pair = "tests/Module/Fixtures/SchemaUpcasters/Orders/1-to-2/";
+
+    public static TheoryData<string, string[], string, string[], string> ViolatingFixtureSets() => new()
+    {
+        { "an upcaster with no fixture pair", [], "", ["Orders/1/2"], "'Orders' upcaster from '1' to '2' ships no fixture pair" },
+        { "a source fixture without its expected fixture", [Pair + "orders.Content.source.json"], "", [], "has no matching expected fixture" },
+        { "a fixture named outside the convention", [Pair + "orders.json"], "", [], "is not named <table>.<column>.source.<ext> or .expected.<ext>" },
+        { "a committed fixture not recorded in the lock", [Pair + "orders.Content.source.json", Pair + "orders.Content.expected.json"], "", [], "is not recorded" },
+        {
+            "an edited fixture",
+            [Pair + "orders.Content.source.json", Pair + "orders.Content.expected.json"],
+            $"0000  {Pair}orders.Content.source.json\n{UpcasterFixtureRules.Hash("{}")}  {Pair}orders.Content.expected.json\n",
+            [],
+            "was edited"
+        },
+        {
+            "a recorded fixture that was deleted",
+            [],
+            $"{UpcasterFixtureRules.Hash("{}")}  {Pair}orders.Content.source.json\n",
+            [],
+            "was deleted"
+        }
+    };
 
     [Fact]
     public void Every_in_place_content_rewrite_restamps_the_row() =>
@@ -467,6 +542,17 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
             .. MaterializedFamilyViolations(), .. StampViolations(), .. RestampViolations()
         ];
 
+        /// <summary>Every declared chain's steps, resolved: the family, and the versions each upcaster reads and produces.</summary>
+        public IEnumerable<(string Location, string Family, string From, string To)> UpcasterSteps() =>
+            Declared()
+                .Where(declaration => declaration.Family is not null)
+                .SelectMany(declaration => declaration.Upcasters
+                    .Select(name => _upcasters.FirstOrDefault(upcaster => upcaster.Class == name))
+                    .Where(upcaster => upcaster.Class is not null)
+                    .Select(upcaster => (upcaster.Location, Family: declaration.Family!, From: Resolve(upcaster.From), To: Resolve(upcaster.To))))
+                .Where(step => step.From is not null && step.To is not null)
+                .Select(step => (step.Location, step.Family, step.From!, step.To!));
+
         public IReadOnlyList<string> RestampViolations() =>
             Ordered(ContentRewrites
                 .Where(rewrite => !rewrite.Restamped)
@@ -726,5 +812,66 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
             $"{path.Replace(Path.DirectorySeparatorChar, '/')}({node.GetLocation().GetLineSpan().StartLinePosition.Line + 1})";
 
         private sealed record StringConstantSyntax(string Location, string Key, string Value);
+    }
+
+    /// <summary>
+    /// FR-022's fixture rules over a set of committed fixtures, their lock and the declared upcasters, so the detector can
+    /// be pinned on fixtures that never touch the tree.
+    /// </summary>
+    internal static class UpcasterFixtureRules
+    {
+        private static readonly System.Text.RegularExpressions.Regex Named = new(
+            @"/Fixtures/SchemaUpcasters/(?<family>[^/]+)/(?<from>[^/]+)-to-(?<to>[^/]+)/(?<name>[^/]+)\.(?<role>source|expected)\.(?<ext>[^./]+)$");
+
+        public static IReadOnlyList<string> Violations(
+            IReadOnlyList<(string Path, string Text)> fixtures,
+            string lockText,
+            IEnumerable<(string Location, string Family, string From, string To)> upcasters)
+        {
+            var violations = new List<string>();
+            var named = fixtures.Select(fixture => (fixture.Path, fixture.Text, Match: Named.Match("/" + fixture.Path))).ToArray();
+            violations.AddRange(named.Where(fixture => !fixture.Match.Success)
+                .Select(fixture => $"{fixture.Path}: is not named <table>.<column>.source.<ext> or .expected.<ext> under Fixtures/SchemaUpcasters/<family>/<from>-to-<to>/."));
+
+            var pairs = named.Where(fixture => fixture.Match.Success)
+                .GroupBy(fixture => fixture.Path[..(fixture.Path.Length - fixture.Match.Groups["role"].Length - fixture.Match.Groups["ext"].Length - 1)], StringComparer.Ordinal)
+                .ToArray();
+            foreach (var pair in pairs)
+            {
+                var roles = pair.Select(fixture => fixture.Match.Groups["role"].Value).ToHashSet(StringComparer.Ordinal);
+                if (!roles.Contains("expected"))
+                    violations.Add($"{pair.Key}source: has no matching expected fixture.");
+                if (!roles.Contains("source"))
+                    violations.Add($"{pair.Key}expected: has no matching source fixture.");
+            }
+
+            foreach (var (location, family, from, to) in upcasters)
+            {
+                var complete = pairs.Any(pair => pair.Count() == 2 && pair.All(fixture =>
+                    fixture.Match.Groups["family"].Value == family && fixture.Match.Groups["from"].Value == from && fixture.Match.Groups["to"].Value == to));
+                if (!complete)
+                    violations.Add($"{location}: the '{family}' upcaster from '{from}' to '{to}' ships no fixture pair under Fixtures/SchemaUpcasters/{family}/{from}-to-{to}/.");
+            }
+
+            var recorded = lockText.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(line => line.Split("  ", 2))
+                .Where(parts => parts.Length == 2)
+                .ToDictionary(parts => parts[1], parts => parts[0], StringComparer.Ordinal);
+            foreach (var (path, text) in fixtures)
+            {
+                if (!recorded.TryGetValue(path, out var hash))
+                    violations.Add($"{path}: is not recorded in the fixture lock; record '{Hash(text)}  {path}' once its version ships.");
+                else if (!StringComparer.Ordinal.Equals(hash, Hash(text)))
+                    violations.Add($"{path}: was edited after it was recorded; a shipped fixture is frozen and never regenerated.");
+            }
+
+            violations.AddRange(recorded.Keys.Where(path => fixtures.All(fixture => fixture.Path != path))
+                .Select(path => $"{path}: was deleted; a fixture stays committed even after its upcaster retires (FR-024)."));
+            return violations.Order(StringComparer.Ordinal).ToArray();
+        }
+
+        /// <summary>SHA-256 of the fixture with line endings normalized, so a checkout's line-ending conversion is no edit.</summary>
+        public static string Hash(string text) =>
+            Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.Replace("\r\n", "\n", StringComparison.Ordinal)))).ToLowerInvariant();
     }
 }

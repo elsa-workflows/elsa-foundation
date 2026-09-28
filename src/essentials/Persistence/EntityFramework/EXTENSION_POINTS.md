@@ -79,7 +79,9 @@ unreadable stamp as skew, and reports a failing upcaster as corruption (FR-009).
 branch or a cycle, or one that does not end at the current version, fails the build and is refused when the module
 registers (`AddEfModuleMigrations`), and a read never bridges a gap (FR-005). A family whose context EF materializes
 directly (`IEfSchemaVersionedContext`) declares no upcasters: its value converters deserialize the content before any
-upcaster could run, so `EfSchemaVersionMaterializationInterceptor` accepts its current version alone.
+upcaster could run, so `EfSchemaVersionMaterializationInterceptor` accepts its current version alone. Every upcaster
+ships a committed fixture pair under `Fixtures/SchemaUpcasters/<family>/<from>-to-<to>/` in its module's test project,
+frozen by `tests/essentials/Architecture/Baselines/schema-upcaster-fixtures.sha256` (FR-022).
 
 `EfSchemaWriteRefusedException` is the write refusal (FR-016a): a write whose value needs a version later than the
 version the host may write. It carries a stable code, the family and both versions, and spec 182 derives from it for
