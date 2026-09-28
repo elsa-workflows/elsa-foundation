@@ -141,6 +141,15 @@ transaction between them, commits or rolls back once, and refuses contexts that 
 or connection strings. Module atomic writers join it through their transaction-factory seam
 (`EfSharedTransaction.BeginOperationAsync`); a writer that rolls back makes the owner rollback-only.
 
+## Expand-only migration guard
+
+Not an extension point in the usual sense: `ExpandOnlyMigrationGuard.Classify`/`Evaluate` read a
+migration's `Up` operations against a closed allowed list, and `ExpandOnlyMigrationOptOutAttribute` is
+the reviewed, per-migration permission for exactly the destructive operations it lists
+([spec 185](../../../../specs/185-expand-only-migration-guard/spec.md), #2104). Both types are public
+so a third-party module can run the same check from its own tests; the guard's own enforcement runs
+only over first-party modules. See the package README's table for both types.
+
 ## Ordinal string collation
 
 `EfOrdinalCollation` is a pinned decision, not an extension point: one binary collation per provider
