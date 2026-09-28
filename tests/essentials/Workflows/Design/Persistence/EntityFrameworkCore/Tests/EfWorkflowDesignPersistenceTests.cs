@@ -134,7 +134,8 @@ public sealed class EfWorkflowDesignPersistenceTests
         await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
         await SeedSchemaVersionRowsAsync(db, new EfDesignAtomicWriter(db, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))));
 
-        foreach (var entityType in db.Model.GetEntityTypes())
+        // The finalization tables belong to their own family, and their store stamps them.
+        foreach (var entityType in db.Model.GetEntityTypes().Where(entityType => !EfSchemaFinalization.Maps(entityType.ClrType)))
         {
             var stamps = "SELECT DISTINCT \"" + EfSchemaVersionMaterializationInterceptor.PropertyName + "\" AS \"Value\" FROM \"" + entityType.GetTableName() + "\"";
             Assert.Equal([WorkflowsDesignEfModule.SchemaVersion], await db.Database.SqlQueryRaw<string>(stamps).ToListAsync());

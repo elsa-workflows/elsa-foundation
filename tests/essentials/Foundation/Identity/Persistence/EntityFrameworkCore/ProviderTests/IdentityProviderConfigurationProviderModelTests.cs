@@ -39,7 +39,8 @@ public sealed class IdentityProviderConfigurationProviderModelTests
         };
 
         Assert.Equal(expectedProvider, context.Database.ProviderName);
-        var entityTypes = context.Model.GetEntityTypes().ToArray();
+        // The module's own tables; the finalization tables every module maps are pinned by the migration guards.
+        var entityTypes = context.Model.GetEntityTypes().Where(entity => !EfSchemaFinalization.Maps(entity.ClrType)).ToArray();
         Assert.Equal(2, entityTypes.Length);
         Assert.Contains(entityTypes, entity => entity.ClrType == typeof(TenantProviderConfigurationEntity));
         Assert.Contains(entityTypes, entity => entity.ClrType == typeof(GlobalProviderConfigurationEntity));

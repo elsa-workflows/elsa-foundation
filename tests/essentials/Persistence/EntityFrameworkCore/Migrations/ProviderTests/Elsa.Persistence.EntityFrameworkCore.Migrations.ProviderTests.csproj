@@ -18,6 +18,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Tests\ModuleContextCatalog.cs" Link="ModuleContextCatalog.cs" />
+    <Compile Include="..\Tests\ModuleSchemaFinalizationScenario.cs" Link="ModuleSchemaFinalizationScenario.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />

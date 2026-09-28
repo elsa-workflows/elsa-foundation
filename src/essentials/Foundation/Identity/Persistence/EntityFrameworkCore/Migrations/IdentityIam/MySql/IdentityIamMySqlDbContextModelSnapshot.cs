@@ -1238,6 +1238,80 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
 
                     b.ToTable("identity_user_tokens", (string)null);
                 });
+
+            modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfDatabaseIdentityRow", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DatabaseIdentity")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("__ElsaDatabaseIdentity_ElsaIdentityIam", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfSchemaFinalizationRecordRow", b =>
+                {
+                    b.Property<string>("Family")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("DatabaseIdentity")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("FinalizedVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<string>("FinishHistoryJson")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("FinishJson")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("HistoryJson")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("HoldsJson")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("IntentJson")
+                        .HasColumnType("longtext");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.HasKey("Family");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("__ElsaSchemaFinalization_ElsaIdentityIam", (string)null);
+                });
 #pragma warning restore 612, 618
         }
     }

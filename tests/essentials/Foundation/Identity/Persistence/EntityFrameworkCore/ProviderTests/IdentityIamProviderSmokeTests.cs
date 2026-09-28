@@ -53,7 +53,7 @@ internal static class IdentityIamProviderSmoke
                 typeof(UserNameReservationEntity), typeof(EmailReservationEntity), typeof(RoleNameReservationEntity),
                 typeof(MutationReceiptEntity)
             }.OrderBy(type => type.FullName),
-            context.Model.GetEntityTypes().Select(entity => entity.ClrType).OrderBy(type => type.FullName));
+            context.Model.GetEntityTypes().Where(entity => !EfSchemaFinalization.Maps(entity.ClrType)).Select(entity => entity.ClrType).OrderBy(type => type.FullName));
         await IdentityEfProviderDatabaseProvisioning.EnsureModuleTablesAsync(
             context,
             provider,

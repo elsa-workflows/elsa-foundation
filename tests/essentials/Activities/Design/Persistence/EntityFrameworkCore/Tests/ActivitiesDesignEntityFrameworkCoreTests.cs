@@ -60,7 +60,7 @@ public sealed class ActivitiesDesignEntityFrameworkCoreTests
         await connection.OpenAsync();
         var options = new DbContextOptionsBuilder<ActivitiesDesignSqliteDbContext>().UseSqlite(connection).Options;
         await using var db = new ActivitiesDesignSqliteDbContext(options);
-        Assert.Equal(21, db.Model.GetEntityTypes().Count(type => !type.IsOwned() && !type.ClrType.IsAbstract));
+        Assert.Equal(21, db.Model.GetEntityTypes().Count(type => !type.IsOwned() && !type.ClrType.IsAbstract && !EfSchemaFinalization.Maps(type.ClrType)));
         Assert.False(db.Model.FindEntityType(typeof(ActivityDefinition))!.FindProperty("TenantKey")!.IsNullable);
         var receiptType = db.Model.FindEntityType(typeof(ActivityForkReceipt))!;
         Assert.Null(receiptType.FindNavigation(nameof(ActivityForkReceipt.Definition)));

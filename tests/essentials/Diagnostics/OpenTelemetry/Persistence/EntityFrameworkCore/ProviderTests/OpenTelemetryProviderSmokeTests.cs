@@ -6,6 +6,7 @@ using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Diagnostics.Persistence.Draining;
+using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -42,7 +43,8 @@ public sealed class OpenTelemetryProviderModelTests
 
         Assert.Equal(expectedProvider, context.Database.ProviderName);
         Assert.Equal(expectedContextName, context.GetType().Name);
-        var entityTypes = context.Model.GetEntityTypes().ToArray();
+        // The module's own tables; the finalization tables every module maps are keyed by schema family, not by scope.
+        var entityTypes = context.Model.GetEntityTypes().Where(entity => !EfSchemaFinalization.Maps(entity.ClrType)).ToArray();
         Assert.NotEmpty(entityTypes);
         Assert.All(entityTypes, entity => Assert.NotNull(entity.FindPrimaryKey()));
         var payloadEntities = entityTypes

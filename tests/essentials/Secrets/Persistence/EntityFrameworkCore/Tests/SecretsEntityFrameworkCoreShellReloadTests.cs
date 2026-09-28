@@ -226,6 +226,8 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
         await using var command = connection.CreateCommand();
         command.CommandText =
             $"DROP TABLE IF EXISTS \"{SecretsEfModule.TableName}\"; " +
+            $"DROP TABLE IF EXISTS \"{EfSchemaFinalization.RecordTableName(SecretsEfModule.HistoryModuleName)}\"; " +
+            $"DROP TABLE IF EXISTS \"{EfSchemaFinalization.DatabaseIdentityTableName(SecretsEfModule.HistoryModuleName)}\"; " +
             $"DROP TABLE IF EXISTS \"{SecretsEfModule.HistoryTableName}\";";
         await command.ExecuteNonQueryAsync();
     }
