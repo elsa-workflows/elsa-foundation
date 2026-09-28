@@ -30,12 +30,88 @@ public sealed class WorkflowRestoreLockTests
         Assert.True(violations.Length == 0, string.Join(Environment.NewLine, violations));
     }
 
-    /// <summary>Every logical, backslash-joined shell line in <paramref name="script"/> that restores unlocked.</summary>
+    /// <summary>A chained <c>&amp;&amp;</c> line where an earlier <c>dotnet restore --locked-mode</c> does not cover a
+    /// later <c>dotnet build</c> that restores unlocked on its own: judging the whole logical line instead of each
+    /// chained command would wrongly let this pass.</summary>
+    [Fact]
+    public void Unlocked_dotnet_build_chained_after_a_locked_restore_is_a_violation()
+    {
+        var violations = Violations("chained.yml", "dotnet restore --locked-mode && dotnet build tools/foo -c Release").ToArray();
+
+        Assert.Single(violations);
+        Assert.Contains("dotnet build tools/foo -c Release", violations[0]);
+    }
+
+    /// <summary>The same chain shape, but every restoring <c>dotnet</c> command in it carries its own lock or skip
+    /// marker: this must not report a violation.</summary>
+    [Fact]
+    public void Chained_line_where_every_restoring_command_is_locked_has_no_violations()
+    {
+        var violations = Violations(
+            "chained.yml",
+            "dotnet restore --locked-mode && dotnet build tools/foo -c Release -p:RestoreLockedMode=true").ToArray();
+
+        Assert.Empty(violations);
+    }
+
+    /// <summary>Every chained command, within every logical, backslash-joined shell line in <paramref name="script"/>,
+    /// that restores unlocked. A logical line can chain several commands with <c>&amp;&amp;</c>, <c>||</c>, <c>;</c> or
+    /// <c>|</c>; a lock marker earlier in the chain does not cover a later <c>dotnet build|test|...</c> that restores
+    /// on its own, so each chained command is judged only against its own markers.</summary>
     private static IEnumerable<string> Violations(string fileName, string script)
     {
         foreach (var line in LogicalLines(WithoutHeredocBodies(script)))
-            if (RestoringDotnetCommand.IsMatch(line) && !LockOrSkipMarkers.Any(marker => line.Contains(marker, StringComparison.Ordinal)))
-                yield return $"{fileName}: '{line.Trim()}' restores without --locked-mode, -p:RestoreLockedMode=true, --no-restore or --no-build";
+            foreach (var command in SplitChainedCommands(line))
+                if (RestoringDotnetCommand.IsMatch(command) && !LockOrSkipMarkers.Any(marker => command.Contains(marker, StringComparison.Ordinal)))
+                    yield return $"{fileName}: '{command.Trim()}' restores without --locked-mode, -p:RestoreLockedMode=true, --no-restore or --no-build";
+    }
+
+    /// <summary>Splits a logical shell line into its chained commands on unquoted <c>&amp;&amp;</c>, <c>||</c>,
+    /// <c>;</c> and <c>|</c>, so a marker on one chained command is not mistaken for covering another. Quoting is
+    /// tracked well enough for the workflow shapes in this repo: single and double quoted spans are opaque, and a
+    /// delimiter character inside one of them does not split the line.</summary>
+    private static IEnumerable<string> SplitChainedCommands(string line)
+    {
+        var current = new System.Text.StringBuilder();
+        char? openQuote = null;
+        for (var i = 0; i < line.Length; i++)
+        {
+            var c = line[i];
+
+            if (openQuote is { } quote)
+            {
+                current.Append(c);
+                if (c == quote)
+                    openQuote = null;
+                continue;
+            }
+
+            if (c is '\'' or '"')
+            {
+                openQuote = c;
+                current.Append(c);
+                continue;
+            }
+
+            if ((c is '&' or '|') && i + 1 < line.Length && line[i + 1] == c)
+            {
+                yield return current.ToString();
+                current.Clear();
+                i++;
+                continue;
+            }
+
+            if (c is ';' or '|')
+            {
+                yield return current.ToString();
+                current.Clear();
+                continue;
+            }
+
+            current.Append(c);
+        }
+
+        yield return current.ToString();
     }
 
     /// <summary>
