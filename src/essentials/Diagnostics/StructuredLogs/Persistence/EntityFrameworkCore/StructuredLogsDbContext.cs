@@ -18,6 +18,7 @@ public abstract class StructuredLogsDbContext(DbContextOptions options) : DbCont
         modelBuilder.ApplyConfiguration(new StructuredLogRecordConfiguration());
         modelBuilder.ApplyConfiguration(new StructuredLogStreamStateConfiguration());
         modelBuilder.ApplyConfiguration(new StructuredLogAppendOperationConfiguration());
+        modelBuilder.MapSchemaFinalization(StructuredLogsEfModule.HistoryModuleName);
         ConfigureProvider(modelBuilder);
         // Installed unconditionally, so this context reads a frame whatever wrote it. Nothing here enables an
         // encoder: with no codec configured these columns are written exactly as they were before.

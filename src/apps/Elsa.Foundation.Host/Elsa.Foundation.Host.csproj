@@ -43,6 +43,26 @@
     <PackageReference Include="Nuplane.Admin" />
   </ItemGroup>
 
+  <!--
+    Line A, the host baseline every host shares with every feature (ADR 0067, #2126): the ten cross-cutting
+    contract packages, closed under their own dependencies, so referencing exactly these ten keeps the closure
+    SharedAssemblyClosureGuardTests holds every shared assembly to. None of these is a feature implementation —
+    they are the contract surface the comment above already carves out an exception for — so referencing them
+    does not compile a feature into this host; every actual feature still arrives only through the Nuplane feed.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\essentials\Attention\Core\Elsa.Attention.Core.csproj" />
+    <ProjectReference Include="..\..\essentials\Caching\Core\Elsa.Caching.Core.csproj" />
+    <ProjectReference Include="..\..\essentials\Events\Core\Elsa.Events.Core.csproj" />
+    <ProjectReference Include="..\..\essentials\Expressions\Core\Elsa.Expressions.Core.csproj" />
+    <ProjectReference Include="..\..\essentials\Locking\Core\Elsa.Locking.Core.csproj" />
+    <ProjectReference Include="..\..\essentials\Mediator\Core\Elsa.Mediator.Core.csproj" />
+    <ProjectReference Include="..\..\essentials\Pipelines\Core\Elsa.Pipelines.Core.csproj" />
+    <ProjectReference Include="..\..\essentials\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\essentials\Serialization\Core\Elsa.Serialization.Core.csproj" />
+    <ProjectReference Include="..\..\essentials\Tasks\Core\Elsa.Tasks.Core.csproj" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- The Nuplane directory feed drop-folder. -->
     <Folder Include="packages\" />
@@ -53,5 +73,8 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+
+  <!-- The computed-vs-source-build production configuration swap this host shares with Elsa.Workbench (#2084, #2126). -->
+  <Import Project="$(MSBuildThisFileDirectory)../ComputedProductionSettings.targets" />
 
 </Project>

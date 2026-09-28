@@ -16,6 +16,8 @@
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\TemporarySqliteDatabase.cs" Link="TemporarySqliteDatabase.cs" />
     <!-- Arranges and asserts a newer-schema row that must report skew, not corruption. -->
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\EfSchemaVersionSkewTestSupport.cs" Link="EfSchemaVersionSkewTestSupport.cs" />
+    <!-- Excludes the finalization tables every module maps from own-table assertions. -->
+    <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\EfSchemaFinalizationTestFilter.cs" Link="EfSchemaFinalizationTestFilter.cs" />
   </ItemGroup>
   <ItemGroup>
     <!-- Wrapped provider failures this suite injects without a real server. -->

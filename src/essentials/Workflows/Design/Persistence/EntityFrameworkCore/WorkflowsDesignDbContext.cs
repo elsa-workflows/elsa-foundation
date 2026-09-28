@@ -28,6 +28,7 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
         DesignEntityConfigurations.ConfigureDraftLayout(modelBuilder.Entity<WorkflowDefinitionDraftLayout>());
         DesignEntityConfigurations.ConfigureVersionLayout(modelBuilder.Entity<WorkflowDefinitionVersionLayout>());
         DesignEntityConfigurations.ConfigureOperation(modelBuilder.Entity<DesignOperationEntity>());
+        modelBuilder.MapSchemaFinalization(WorkflowsDesignEfModule.HistoryModuleName);
         ConfigureProvider(modelBuilder);
         // Installed unconditionally, so this context reads a frame whatever wrote it. Nothing here enables an
         // encoder: with no codec configured these columns are written exactly as they were before.

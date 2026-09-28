@@ -482,6 +482,7 @@ public sealed class StudioPreferenceEntityFrameworkCoreTests
     {
         await using var fixture = await SqliteFixture.CreateAsync();
         var entity = fixture.Context.Model.GetEntityTypes()
+            .ExcludingSchemaFinalization()
             .SingleOrDefault(candidate =>
                 candidate.FindPrimaryKey() is not null &&
                 candidate.GetProperties().Any(property => property.Name.Contains("Revision", StringComparison.OrdinalIgnoreCase)));

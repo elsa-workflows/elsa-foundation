@@ -7,9 +7,8 @@ name: Docker Images
 # elsaworkflows/elsa-server name is reserved for the clean host once it exists.
 # The Elsa major version (4) is encoded in the image tags:
 #   - pushes to main produce latest + 4.0.0-preview.<run_number>
-# That tag is a build number and names no package version. The Elsa assemblies in the
-# workbench image carry the versions the Packages workflow computes for the same commit
-# (the versions job below); the foundation host is built from source.
+# That tag is a build number and names no package version. The Elsa assemblies in both images
+# carry the versions the Packages workflow computes for the same commit (the versions job below).
 # Pull requests touching the same paths build both images for both platforms
 # but push nothing, so a Dockerfile that no longer builds fails on the PR, not
 # on main. Without this, #2087 added a root props file the Dockerfiles did not
@@ -94,14 +93,14 @@ concurrency:
 jobs:
   versions:
     name: Compute package versions
-    # The Workbench image is built with computed package versions (ADR 0067, spec 150, #2084), so its deps.json
-    # records every Elsa package at the version the feed carries, and its production configuration declares the
+    # Both images are built with computed package versions (ADR 0067, spec 150, #2084, #2126), so each deps.json
+    # records every Elsa package at the version the feed carries, and each production configuration declares its
     # Elsa shares host-provided: Nuplane then refuses a feed package that needs a newer one than the image carries.
     # For a pull request the versions come from this job's own plan, exactly as the Packages workflow computes them
     # for the same ref and commit, at branch-scoped versions (PRs never touch publish-state, so there is nothing to
     # race). For a push to main the versions come from the Packages workflow run that triggered this one instead -
     # never a plan this job computes itself - because that is the run whose plan may have just been written back to
-    # publish-state (see the header comment: spec 150 FR-020, #2084). Either way the versions reach the image build
+    # publish-state (see the header comment: spec 150 FR-020, #2084). Either way the versions reach each image build
     # as one build arg, the pack-properties file gzipped and base64-encoded, because the builder takes build args
     # one per line and checks out the commit itself.
     if: >-
@@ -227,9 +226,6 @@ jobs:
 
   build-and-push-foundation-host:
     name: Build & push elsa-foundation-host
-    # Built from source, so it needs none of the versions job's outputs - but it still needs to run only for the
-    # same events the versions job does (not, say, a failed or cancelled Packages run's workflow_run), so it
-    # depends on that job the same way build-and-push does, purely to inherit its gate (see that job's "if").
     needs: versions
     # Same pinned reusable builder as the workbench job above (see the pinning note there):
     # the BuildKit/Buildx versions must match the `# syntax=` pin in
@@ -243,6 +239,9 @@ jobs:
       push: ${{ github.event_name != 'pull_request' }}
       context: .
       file: src/apps/Elsa.Foundation.Host/Dockerfile
+      # An empty value fails the build rather than falling back to a source build (see the Dockerfile).
+      build-args: |
+        ELSA_PACKAGE_VERSIONS=${{ needs.versions.outputs.package-versions }}
       platforms: linux/amd64,linux/arm64
       cache: true
       cache-mode: max

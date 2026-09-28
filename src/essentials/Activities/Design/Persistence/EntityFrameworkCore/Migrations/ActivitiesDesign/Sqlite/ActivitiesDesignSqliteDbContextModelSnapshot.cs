@@ -1906,6 +1906,78 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
 
                     b.ToTable("elsa_activity_availability_settings", (string)null);
                 });
+
+            modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfDatabaseIdentityRow", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DatabaseIdentity")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("__ElsaDatabaseIdentity_ElsaActivitiesDesign", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfSchemaFinalizationRecordRow", b =>
+                {
+                    b.Property<string>("Family")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DatabaseIdentity")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FinalizedVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FinishHistoryJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FinishJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HistoryJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HoldsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("IntentJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Family");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("__ElsaSchemaFinalization_ElsaActivitiesDesign", (string)null);
+                });
 #pragma warning restore 612, 618
         }
     }
