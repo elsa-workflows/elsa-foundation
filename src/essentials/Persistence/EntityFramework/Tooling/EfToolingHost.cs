@@ -205,6 +205,8 @@ public static class EfToolingHost
             EfToolingCommands.Apply => await Apply(ordered, provider!, schema, actions, request.Connection!, cancellationToken),
             EfToolingCommands.Validate => await Validate(ordered, provider!, schema, actions, request.Connection!, cancellationToken),
             EfToolingCommands.PostMigrate => await PostMigrate(ordered, provider!, schema, actions, request.Connection!, cancellationToken),
+            EfToolingCommands.Hold or EfToolingCommands.Release or EfToolingCommands.Status =>
+                await Finalization(command, ordered, provider!, schema, request.Finalization, request.Connection!, cancellationToken),
             _ => throw new InvalidOperationException($"Unreachable: '{command}' passed envelope validation without a handler.")
         };
     }
@@ -238,7 +240,9 @@ public static class EfToolingHost
     {
         var list = command == EfToolingCommands.List;
         var script = command == EfToolingCommands.Script;
-        var opensDatabase = command is EfToolingCommands.Apply or EfToolingCommands.Validate or EfToolingCommands.PostMigrate;
+        var finalization = EfToolingCommands.IsFinalization(command);
+        var changesHolds = command is EfToolingCommands.Hold or EfToolingCommands.Release;
+        var opensDatabase = command is EfToolingCommands.Apply or EfToolingCommands.Validate or EfToolingCommands.PostMigrate || finalization;
         (string Name, bool Present, bool Allowed, bool Required)[] fields =
         [
             ("selection", request.Selection is not null, true, !list),
@@ -252,7 +256,12 @@ public static class EfToolingHost
             // Optional everywhere it is accepted: absent means the host sets no such key, which is not the
             // same answer as "the selection agrees" and must not be required into looking like one.
             ("capabilitySelection", request.CapabilitySelection is not null, !list, false),
-            ("connection", request.Connection is not null, opensDatabase, opensDatabase)
+            ("connection", request.Connection is not null, opensDatabase, opensDatabase),
+            ("finalization", request.Finalization is not null, finalization, changesHolds),
+            ("finalization.family", request.Finalization?.Family is not null, finalization, changesHolds),
+            ("finalization.version", request.Finalization?.Version is not null, changesHolds, false),
+            ("finalization.reason", request.Finalization?.Reason is not null, command == EfToolingCommands.Hold, command == EfToolingCommands.Hold),
+            ("finalization.operator", request.Finalization?.Operator is not null, changesHolds, changesHolds)
         ];
 
         var offenders = fields
@@ -918,6 +927,144 @@ public static class EfToolingHost
             ExitCode = EfToolingExitCode.Success,
             Command = EfToolingCommands.Validate,
             Validate = new() { Provider = provider, Schema = schema, Modules = entries }
+        };
+    }
+
+    /// <summary>
+    /// <c>hold</c>, <c>release</c> and <c>status</c> (spec 181, FR-019, FR-020 and FR-022): each reads the finalization
+    /// record of the selected modules' schema families in the database directly, so an operator can place a hold before
+    /// any gate-aware host runs, which a canary requires. None finalizes, forces finalization or lowers a finalized
+    /// version: a hold only ever keeps a version from finalizing, and one on a version already finalized is refused,
+    /// because the rollback boundary has been crossed. A hold placed on a database whose family has no record yet
+    /// creates the record first, at the oldest version this host's build reads, as the first activation would.
+    /// </summary>
+    private static async Task<EfToolingResponse> Finalization(
+        string command,
+        IReadOnlyList<EfModuleDescriptor> modules,
+        string provider,
+        string? schema,
+        EfToolingFinalizationRequest? request,
+        string connection,
+        CancellationToken cancellationToken)
+    {
+        var owned = modules
+            .SelectMany(descriptor => SchemaFinalization.EfSchemaModuleFamilies.For(descriptor.Name, descriptor.Assembly).Chains
+                .Select(chain => (Descriptor: descriptor, Chain: chain)))
+            .Where(candidate => request?.Family is null || StringComparer.Ordinal.Equals(candidate.Chain.Family, request.Family))
+            .ToArray();
+        if (request?.Family is { } family && owned.Length != 1)
+            throw EfToolingRefusal.Resolution(
+                "unknown-family",
+                owned.Length == 0
+                    ? $"No selected module owns schema family '{family}'."
+                    : $"Schema family '{family}' is owned by more than one selected module; select the one to act on with --modules.",
+                [.. owned.Select(candidate => candidate.Descriptor.Name)]);
+
+        var families = new List<EfToolingFinalizationFamily>(owned.Length);
+        foreach (var (descriptor, chain) in owned)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var contextType = descriptor.RequireProviderContext(provider);
+            try
+            {
+                await using var context = CreateContext(descriptor, contextType, provider, connection, schema);
+                // The record table is created by the module's own migrations; a record read or written against a
+                // schema that is not current would answer for a database the host will not run against.
+                await EfDatabaseMigrator.ApplyAsync(context, EfRelationalProviderBinding.ExpectedProviderName(provider), EfMigratePolicy.Validate, cancellationToken);
+                var record = command switch
+                {
+                    EfToolingCommands.Hold => await ChangeHoldsAsync(context, chain, request!, place: true, cancellationToken),
+                    EfToolingCommands.Release => await ChangeHoldsAsync(context, chain, request!, place: false, cancellationToken),
+                    _ => await new SchemaFinalization.EfSchemaFinalizationStore(context).FindAsync(chain.Family, cancellationToken)
+                };
+                families.Add(Describe(descriptor.Name, chain, record));
+            }
+            catch (EfPendingMigrationsException failure)
+            {
+                throw EfToolingRefusal.NegativeResult(
+                    "pending-migrations",
+                    $"'{descriptor.Name}' has pending migrations, so its finalization record cannot be read or written. Apply them first.",
+                    [EfToolingRedaction.Redact(failure.Message, connection)]);
+            }
+            catch (SchemaFinalization.SchemaFinalizationRefusedException refusal)
+            {
+                throw EfToolingRefusal.Usage(RefusalCode(refusal.Refusal), refusal.Message);
+            }
+            catch (Exception failure) when (failure is not EfToolingRefusal and not OperationCanceledException)
+            {
+                throw EfToolingRefusal.DatabaseFailure(
+                    "finalization-record-failed",
+                    EfToolingRedaction.Redact($"The finalization record of '{chain.Family}' in '{descriptor.Name}' could not be read or written for {provider}: {failure.Message}", connection));
+            }
+        }
+
+        return new()
+        {
+            ExitCode = EfToolingExitCode.Success,
+            Command = command,
+            Finalization = new() { Provider = provider, Schema = schema, Families = families }
+        };
+    }
+
+    /// <summary>
+    /// Places or releases a hold by compare-and-set, reading the record again after a lost race rather than failing:
+    /// another host evaluating at the same moment is not a reason to refuse an operator.
+    /// </summary>
+    private static async Task<SchemaFinalization.SchemaFinalizationRecord> ChangeHoldsAsync(
+        DbContext context,
+        EfSchemaChain chain,
+        EfToolingFinalizationRequest request,
+        bool place,
+        CancellationToken cancellationToken)
+    {
+        var store = new SchemaFinalization.EfSchemaFinalizationStore(context);
+        var readable = chain.ReadableVersions;
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            var record = place
+                ? await store.GetOrCreateAsync(chain.Family, readable[0], readable, SchemaFinalization.SchemaFinalizationActor.OfOperator(request.Operator!), cancellationToken)
+                : await store.FindAsync(chain.Family, cancellationToken)
+                  ?? throw new SchemaFinalization.SchemaFinalizationRefusedException(chain.Family, SchemaFinalization.SchemaFinalizationRefusal.NoHold, "has no finalization record in this database, so no hold is in place.");
+            var write = place
+                ? await store.PlaceHoldAsync(chain.Family, record.Revision, request.Version, request.Reason!, request.Operator!, readable, cancellationToken)
+                : await store.ReleaseHoldAsync(chain.Family, record.Revision, request.Version, request.Operator!, cancellationToken);
+            if (write.Applied)
+                return write.Record;
+        }
+
+        throw EfToolingRefusal.DatabaseFailure(
+            "finalization-record-contended",
+            $"The finalization record of '{chain.Family}' kept changing under this command; nothing was changed. Run it again.");
+    }
+
+    private static string RefusalCode(SchemaFinalization.SchemaFinalizationRefusal refusal) => refusal switch
+    {
+        SchemaFinalization.SchemaFinalizationRefusal.RollbackBoundaryCrossed => "rollback-boundary-crossed",
+        SchemaFinalization.SchemaFinalizationRefusal.HoldAlreadyPlaced => "hold-already-placed",
+        SchemaFinalization.SchemaFinalizationRefusal.NoHold => "no-hold",
+        SchemaFinalization.SchemaFinalizationRefusal.UnknownVersion => "unknown-version",
+        _ => "finalization-refused"
+    };
+
+    private static EfToolingFinalizationFamily Describe(string module, EfSchemaChain chain, SchemaFinalization.SchemaFinalizationRecord? record)
+    {
+        var status = SchemaFinalization.EfSchemaFamilyStatus.Describe(chain, record);
+        return new()
+        {
+            Module = module,
+            Family = chain.Family,
+            DatabaseIdentity = status.DatabaseIdentity,
+            FinalizedVersion = status.FinalizedVersion,
+            ReadableVersions = status.ReadableVersions,
+            Intent = status.Intent is { } intent ? new() { Version = intent.Version, Member = intent.Member.ToString(), At = intent.At } : null,
+            Holds = [.. status.Holds.Select(hold => new EfToolingFinalizationHold { Version = hold.Version, Reason = hold.Reason, PlacedBy = hold.PlacedBy, PlacedAt = hold.PlacedAt })],
+            Pending = [.. status.Pending.Select(pending => new EfToolingPendingVersion
+            {
+                Version = pending.Version,
+                State = pending.State == SchemaFinalization.SchemaFinalizationState.ReadableEverywhere ? "readable-everywhere" : "pending",
+                HeldBy = [.. pending.HeldBy.Select(hold => hold.Reason)]
+            })],
+            CompletionVersion = status.Finish?.CompletionVersion
         };
     }
 

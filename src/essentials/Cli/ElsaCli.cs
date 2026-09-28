@@ -5,7 +5,8 @@ namespace Elsa.Cli;
 
 /// <summary>
 /// The <c>dotnet elsa</c> command surface (FR-024): <c>persistence list</c>, <c>plan</c>, <c>script</c>,
-/// <c>script-check</c>, <c>apply</c>, <c>validate</c> and <c>post-migrate</c>.
+/// <c>script-check</c>, <c>apply</c>, <c>validate</c> and <c>post-migrate</c>, and spec 181's <c>hold</c>,
+/// <c>release</c> and <c>status</c>.
 /// </summary>
 internal static class ElsaCli
 {
@@ -19,7 +20,10 @@ internal static class ElsaCli
             ScriptCheckCommand(),
             OpensDatabase(WorkerCommands.Apply, "Run each selected module's compiled migrations against a database."),
             OpensDatabase(WorkerCommands.Validate, "Fail if any selected module has a pending migration, or has a post-migration action that has not been run. Applies nothing."),
-            OpensDatabase(WorkerCommands.PostMigrate, "Run each selected module's required post-migration actions against a database. The only command that runs one.")
+            OpensDatabase(WorkerCommands.PostMigrate, "Run each selected module's required post-migration actions against a database. The only command that runs one."),
+            Finalization(WorkerCommands.Hold, "Hold a schema family's finalization, optionally at one version and every later one, with a reason. Refused once that version is finalized: the rollback boundary has been crossed."),
+            Finalization(WorkerCommands.Release, "Release a hold on a schema family's finalization."),
+            Finalization(WorkerCommands.Status, "Report each selected schema family's finalized version, the versions still pending and why, any intent in flight, and its holds.")
         };
 
         var composition = new Command("composition", "Inspect and review feature selections.")
@@ -119,6 +123,64 @@ internal static class ElsaCli
                 Schema = Schema(result, schema),
                 ConnectionEnv = connection.Env,
                 Connection = connection.Value
+            };
+            return Report.Render(name, await WorkerProcess.RunAsync(layout, request, cancellationToken), Console.Out, Console.Error);
+        }, cancellationToken));
+
+        return command;
+    }
+
+    /// <summary>
+    /// <c>hold</c>, <c>release</c> and <c>status</c> (spec 181, FR-019, FR-020 and FR-022): the options and connection
+    /// handling of the commands that open a database, plus what each acts on. They write the finalization record
+    /// directly, so a hold can be placed before any gate-aware host runs. None finalizes, forces finalization or lowers
+    /// a finalized version.
+    /// </summary>
+    private static Command Finalization(string name, string description)
+    {
+        var selectors = new Selectors();
+        var provider = ProviderOption();
+        var schema = SchemaOption();
+        var connectionEnv = ConnectionEnvOption();
+        var connectionStdin = ConnectionStdinOption();
+        var changesHolds = name != WorkerCommands.Status;
+        var family = new Option<string?>("--family")
+        {
+            Description = changesHolds ? "The schema family." : "Report only this schema family.",
+            Required = changesHolds
+        };
+        var version = new Option<string?>("--version") { Description = "Hold or release only this version, and every later one. Default: the whole family." };
+        var reason = new Option<string?>("--reason") { Description = "Why the hold is placed; the history records it.", Required = name == WorkerCommands.Hold };
+        var @operator = new Option<string?>("--operator") { Description = "The operator identity the history records.", Required = changesHolds };
+        Option[] extra = name switch
+        {
+            WorkerCommands.Hold => [provider, schema, connectionEnv, connectionStdin, family, version, reason, @operator],
+            WorkerCommands.Release => [provider, schema, connectionEnv, connectionStdin, family, version, @operator],
+            _ => [provider, schema, connectionEnv, connectionStdin, family]
+        };
+        var command = selectors.Build(name, description, extra);
+
+        command.SetAction((result, cancellationToken) => Guarded(async () =>
+        {
+            var (layout, resolved) = selectors.Resolve(name, result, selectionRequired: true);
+            if (resolved.ContextSource is not null)
+                throw CliRefusal.Usage("invalid-selection", $"'{name}' does not take --configuration-context; name the module and its connection directly.");
+            var connection = await ResolveConnection(result, connectionEnv, connectionStdin, cancellationToken);
+            var request = resolved with
+            {
+                Provider = result.GetRequiredValue(provider),
+                Schema = Schema(result, schema),
+                ConnectionEnv = connection.Env,
+                Connection = connection.Value,
+                Finalization = changesHolds || result.GetValue(family) is not null
+                    ? new WorkerFinalization
+                    {
+                        Family = result.GetValue(family),
+                        Version = changesHolds ? result.GetValue(version) : null,
+                        Reason = name == WorkerCommands.Hold ? result.GetValue(reason) : null,
+                        Operator = changesHolds ? result.GetValue(@operator) : null
+                    }
+                    : null
             };
             return Report.Render(name, await WorkerProcess.RunAsync(layout, request, cancellationToken), Console.Out, Console.Error);
         }, cancellationToken));

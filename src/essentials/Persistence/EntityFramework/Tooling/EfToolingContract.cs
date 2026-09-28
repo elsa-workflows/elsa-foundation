@@ -39,7 +39,19 @@ public static class EfToolingCommands
     /// <summary>The one command that ever calls <see cref="IEfPostMigrationAction.RunAsync"/> (ADR 0076 D8).</summary>
     public const string PostMigrate = "post-migrate";
 
-    public static readonly string[] All = [List, Plan, Script, Apply, Validate, PostMigrate];
+    /// <summary>Places an operator's hold on a schema family's finalization (spec 181, FR-019 and FR-020).</summary>
+    public const string Hold = "hold";
+
+    /// <summary>Releases an operator's hold (spec 181, FR-019 and FR-020).</summary>
+    public const string Release = "release";
+
+    /// <summary>Reports each schema family's finalization status (spec 181, FR-020 and FR-022).</summary>
+    public const string Status = "status";
+
+    public static readonly string[] All = [List, Plan, Script, Apply, Validate, PostMigrate, Hold, Release, Status];
+
+    /// <summary>The commands that read or write a finalization record rather than migrations. None finalizes, forces finalization or lowers a finalized version.</summary>
+    public static bool IsFinalization(string command) => command is Hold or Release or Status;
 }
 
 /// <summary>
@@ -131,12 +143,34 @@ public sealed class EfToolingRequest
     public IReadOnlyList<string>? CapabilitySelection { get; init; }
 
     /// <summary>
+    /// What <c>hold</c>, <c>release</c> and <c>status</c> act on (spec 181, FR-020). Required by <c>hold</c> and
+    /// <c>release</c>, optional for <c>status</c>, and refused by every other command.
+    /// </summary>
+    public EfToolingFinalizationRequest? Finalization { get; init; }
+
+    /// <summary>
     /// The connection string <c>apply</c>, <c>validate</c> and <c>post-migrate</c> run against. Required for
     /// those three commands, refused otherwise — <c>list</c>, <c>plan</c> and <c>script</c> never open a
     /// database (D7). This is the one field this build never echoes back: not in a response, a refusal
     /// detail, or an exception message.
     /// </summary>
     public string? Connection { get; init; }
+}
+
+/// <summary>The schema family, version, reason and operator a finalization command names (spec 181, FR-019).</summary>
+public sealed class EfToolingFinalizationRequest
+{
+    /// <summary>The schema family. Required by <c>hold</c> and <c>release</c>; narrows <c>status</c> to one family.</summary>
+    public string? Family { get; init; }
+
+    /// <summary>The one version a hold is limited to, or null for a hold on the whole family.</summary>
+    public string? Version { get; init; }
+
+    /// <summary>Why the hold is placed. Required by <c>hold</c>, refused otherwise.</summary>
+    public string? Reason { get; init; }
+
+    /// <summary>The operator identity the history records. Required by <c>hold</c> and <c>release</c>, refused by <c>status</c>.</summary>
+    public string? Operator { get; init; }
 }
 
 /// <summary>Which modules a command runs against. Discriminated rather than inferred from a null list.</summary>
@@ -248,6 +282,10 @@ public sealed class EfToolingResponse
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public EfToolingPostMigratePayload? PostMigrate { get; init; }
+
+    /// <summary>What <c>hold</c>, <c>release</c> or <c>status</c> found or changed.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public EfToolingFinalizationPayload? Finalization { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public EfToolingErrorPayload? Error { get; init; }
@@ -366,6 +404,68 @@ public sealed class EfToolingPostMigrateEntry
 
     /// <summary>The actions that audited as required and were therefore run. Empty means there was nothing to do.</summary>
     public IReadOnlyList<string> Ran { get; init; } = [];
+}
+
+/// <summary>
+/// Each selected module's schema families as <c>hold</c>, <c>release</c> or <c>status</c> leaves them (spec 181,
+/// FR-022). <c>hold</c> and <c>release</c> report the one family they changed.
+/// </summary>
+public sealed class EfToolingFinalizationPayload
+{
+    public string Provider { get; init; } = "";
+    public string? Schema { get; init; }
+    public IReadOnlyList<EfToolingFinalizationFamily> Families { get; init; } = [];
+}
+
+public sealed class EfToolingFinalizationFamily
+{
+    public string Module { get; init; } = "";
+    public string Family { get; init; } = "";
+
+    /// <summary>The database's opaque identity, or null when no record has been written yet.</summary>
+    public string? DatabaseIdentity { get; init; }
+
+    /// <summary>The finalized version, or null when no record has been written yet.</summary>
+    public string? FinalizedVersion { get; init; }
+
+    /// <summary>The versions this host's build reads, oldest first.</summary>
+    public IReadOnlyList<string> ReadableVersions { get; init; } = [];
+
+    public EfToolingFinalizationIntent? Intent { get; init; }
+    public IReadOnlyList<EfToolingFinalizationHold> Holds { get; init; } = [];
+
+    /// <summary>Each version this host reads above the finalized one, and why it is not finalized.</summary>
+    public IReadOnlyList<EfToolingPendingVersion> Pending { get; init; } = [];
+
+    /// <summary>The finish record's completion version (spec 186), or null when none stands.</summary>
+    public string? CompletionVersion { get; init; }
+}
+
+public sealed class EfToolingFinalizationIntent
+{
+    public string Version { get; init; } = "";
+    public string Member { get; init; } = "";
+    public DateTimeOffset At { get; init; }
+}
+
+public sealed class EfToolingFinalizationHold
+{
+    /// <summary>The version the hold is limited to, or null for the whole family.</summary>
+    public string? Version { get; init; }
+    public string Reason { get; init; } = "";
+    public string PlacedBy { get; init; } = "";
+    public DateTimeOffset PlacedAt { get; init; }
+}
+
+public sealed class EfToolingPendingVersion
+{
+    public string Version { get; init; } = "";
+
+    /// <summary><c>pending</c> or <c>readable-everywhere</c>.</summary>
+    public string State { get; init; } = "";
+
+    /// <summary>The reasons of the holds that keep it. The counted members that cannot read it are known only to a running host.</summary>
+    public IReadOnlyList<string> HeldBy { get; init; } = [];
 }
 
 public sealed class EfToolingErrorPayload
