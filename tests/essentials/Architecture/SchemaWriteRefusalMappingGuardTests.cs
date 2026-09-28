@@ -237,7 +237,8 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         }
 
         context.Response.Body.Position = 0;
-        return (context.Response.StatusCode, await new StreamReader(context.Response.Body).ReadToEndAsync());
+        using var reader = new StreamReader(context.Response.Body);
+        return (context.Response.StatusCode, await reader.ReadToEndAsync());
     }
 
     /// <summary>A refusal as a store raises one, without the EF Core an API never resolves.</summary>

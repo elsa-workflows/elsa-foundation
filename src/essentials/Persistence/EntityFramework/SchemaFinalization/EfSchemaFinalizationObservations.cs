@@ -47,11 +47,8 @@ public sealed class EfSchemaFinalizationObservations
         ArgumentNullException.ThrowIfNull(families);
         lock (_gate)
         {
-            foreach (var family in families)
-            {
-                var observations = For(family);
+            foreach (var observations in families.Select(For))
                 observations.PendingActivations = Math.Max(0, observations.PendingActivations - 1);
-            }
         }
     }
 

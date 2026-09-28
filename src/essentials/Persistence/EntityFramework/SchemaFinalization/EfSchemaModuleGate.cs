@@ -298,8 +298,11 @@ public sealed class EfSchemaModuleGate
                 // Stopping, as the shell or host is: whatever the round was doing is abandoned, not failed.
                 return;
             }
-            catch (Exception exception)
+            catch (Exception exception) when (exception is not OperationCanceledException and not OutOfMemoryException)
             {
+                // An arbitrary store or provider failure must not kill the loop; it is logged and the next round tries
+                // again on schedule. OperationCanceledException reaching here (stopping not requested) and
+                // OutOfMemoryException are not this round's business to swallow.
                 _logger.LogWarning(exception, "The finalization gate of EF module {Module} could not evaluate or refresh; it tries again on schedule.", Module);
             }
 
@@ -320,7 +323,16 @@ public sealed class EfSchemaModuleGate
         {
             changed = true;
             // A token that has already fired calls back at once; the wait below then returns without delay.
-            try { linked.Cancel(); } catch (ObjectDisposedException) { }
+            try
+            {
+                linked.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // The wait already returned and disposed the linked source; the change is still recorded above,
+                // so the caller sees it on its next call. Nothing else to do.
+                _logger.LogDebug("The finalization gate of EF module {Module} saw a fleet change after its wait had already ended.", Module);
+            }
         }, null);
         try
         {
@@ -328,6 +340,9 @@ public sealed class EfSchemaModuleGate
         }
         catch (OperationCanceledException) when (!stopping.IsCancellationRequested)
         {
+            // Not a stop: the fleet's change token fired and cancelled the linked source. `changed` already
+            // carries that, so falling through to return it below is the whole handling.
+            _logger.LogDebug("The finalization gate of EF module {Module} woke early because the fleet signalled a change.", Module);
         }
         catch (OperationCanceledException)
         {
@@ -490,10 +505,10 @@ public sealed class EfSchemaModuleGate
             var changed = false;
             _databaseIdentity = identity;
             var states = new Dictionary<string, EfSchemaFamilyWriteState>(_states, StringComparer.Ordinal);
-            foreach (var chain in Families.Chains)
+            // Only a chain the caller actually read a record for is adopted; the rest keeps whatever it last wrote.
+            foreach (var chain in Families.Chains.Where(chain => records.ContainsKey(chain.Family)))
             {
-                if (!records.TryGetValue(chain.Family, out var record))
-                    continue;
+                var record = records[chain.Family];
                 var previous = states.GetValueOrDefault(chain.Family);
                 var next = Next(chain, record, previous, mayAdvance);
                 changed |= next != previous;
