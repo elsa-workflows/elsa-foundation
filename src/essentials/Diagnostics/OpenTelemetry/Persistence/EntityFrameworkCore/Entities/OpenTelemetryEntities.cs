@@ -3,6 +3,9 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Entitie
 public abstract class EfOpenTelemetryScopedEntity
 {
     public string ScopeKey { get; set; } = null!;
+
+    /// <summary>The persisted-schema version of this row: <see cref="EfOpenTelemetryModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }
 
 public abstract class EfOpenTelemetrySignalEntity : EfOpenTelemetryScopedEntity

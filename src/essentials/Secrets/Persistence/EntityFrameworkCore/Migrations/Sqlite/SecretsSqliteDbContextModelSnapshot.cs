@@ -49,6 +49,11 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.Sqlite
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ScopeLookupKey")
                         .HasColumnType("TEXT");
 
@@ -66,6 +71,8 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.Sqlite
                         .HasColumnType("TEXT");
 
                     b.HasKey("TenantId", "NormalizedName");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantId", "Status", "NormalizedName")
                         .HasDatabaseName("IX_elsa_secrets_tenantId_status_normalizedName");

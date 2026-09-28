@@ -1,6 +1,7 @@
 using System.Data.Common;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
+using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.Data.SqlClient;
 using MySql.Data.MySqlClient;
@@ -180,15 +181,15 @@ public sealed class OrdinalCollationProviderTests
         [
             "TenantId", "NormalizedName", "NameSearchKey", "DisplayNameSearchKey",
             "TypeNameLookupKey", "StoreNameLookupKey", "Status", "HasNonExpiringActiveVersion",
-            "Payload", "ConcurrencyToken"
+            "Payload", "SchemaVersion", "ConcurrencyToken"
         ];
         foreach (var key in Keys)
             await ExecuteAsync(
                 connection,
                 $"INSERT INTO {quote("elsa_secrets")} ({string.Join(", ", columns.Select(quote))}) " +
-                $"VALUES (@tenant, @key, @key, @key, @key, @key, @status, @active, {payload}, @token)",
+                $"VALUES (@tenant, @key, @key, @key, @key, @key, @status, @active, {payload}, @schemaVersion, @token)",
                 ("@tenant", "t"), ("@key", key), ("@status", "Active"),
-                ("@active", false), ("@payload", "{}"), ("@token", new byte[] { 0 }));
+                ("@active", false), ("@payload", "{}"), ("@schemaVersion", SecretsEfModule.SchemaVersion), ("@token", new byte[] { 0 }));
 
         var column = quote("NormalizedName");
         Assert.Equal(Ordinal(), await ReadAsync(connection, $"SELECT {column} FROM {quote("elsa_secrets")} ORDER BY {column}"));
@@ -212,8 +213,8 @@ public sealed class OrdinalCollationProviderTests
                          ModuleContextCatalog.Contexts(provider).Single(type => type.Name.StartsWith("Secrets", StringComparison.Ordinal)),
                          connectionString))
         {
-            context.Add(new SecretRecord { TenantId = tenant, NormalizedName = "A", Status = "Active" });
-            context.Add(new SecretRecord { TenantId = tenant, NormalizedName = "a", Status = "Active" });
+            context.Add(new SecretRecord { TenantId = tenant, NormalizedName = "A", Status = "Active", SchemaVersion = SecretsEfModule.SchemaVersion });
+            context.Add(new SecretRecord { TenantId = tenant, NormalizedName = "a", Status = "Active", SchemaVersion = SecretsEfModule.SchemaVersion });
             await context.SaveChangesAsync();
         }
 

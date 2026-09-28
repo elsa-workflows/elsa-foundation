@@ -56,6 +56,11 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Mig
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasColumnType("text");
@@ -76,6 +81,8 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Mig
                         .HasColumnType("bytea");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKeyHash", "OwnerIdHash", "IsReleased", "ExpiresAtUtcTicks", "WorkflowExecutionIdOrderKey");
 

@@ -26,12 +26,17 @@ namespace Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Migrations.Stu
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("PreferenceSchemaVersion")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("SchemaVersion")
-                        .HasColumnType("INTEGER");
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("StudioHostId")
                         .IsRequired()
@@ -55,6 +60,8 @@ namespace Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Migrations.Stu
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.ToTable("elsa_studio_preferences", (string)null);
                 });

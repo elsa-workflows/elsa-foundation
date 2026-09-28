@@ -1,4 +1,5 @@
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -221,6 +222,30 @@ public sealed class EfPublicationRecordStoreTests : IAsyncLifetime
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.FindAsync("drift-status").AsTask());
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.FindAsync("drift-residual").AsTask());
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.ListBySlotAsync("slot-3").AsTask());
+    }
+
+    [Fact]
+    public async Task A_record_with_a_newer_schema_reports_skew_on_every_read_and_before_it_is_transitioned()
+    {
+        await using var context = Open();
+        var store = Store(context, "tenant-a");
+        var record = Record("skewed", "slot-1");
+        await store.SaveAsync(record);
+        var row = await context.PublicationRecords.SingleAsync();
+        Assert.Equal(PublishingLedgerEfModule.ContentSchemaVersion, row.SchemaVersion);
+        // The foreign identity residual is the witness: a residual check that ran first would report it as corruption.
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(context, v => row.SchemaVersion = v, _ => row.PublicationId = EfRelationalIdentity.Encode("someone-else"));
+
+        Func<Task>[] operations =
+        [
+            () => store.FindAsync("skewed").AsTask(),
+            () => store.ListBySlotAsync("slot-1").AsTask(),
+            () => store.SaveAsync(record).AsTask(),
+            () => store.TryTransitionAsync(record with { Status = PublicationStatus.Active }, PublicationStatus.Candidate).AsTask()
+        ];
+        foreach (var operation in operations)
+            EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(
+                await Assert.ThrowsAsync<EfSchemaVersionSkewException>(operation), "PublishingLedger", PublishingLedgerEfModule.ContentSchemaVersion);
     }
 
     [Fact]

@@ -117,9 +117,20 @@ public sealed class IdentityIamProviderModelTests
             entityTypes.Where(IsAuthorityEntity).SelectMany(entity => entity.GetProperties())
                 .Where(property => property.ClrType == typeof(string) &&
                                    property.Name != "Id" &&
+                                   property.Name != EfSchemaVersion.ColumnName &&
                                    !property.Name.EndsWith("Json", StringComparison.Ordinal) &&
                                    !TechnicalKeyProperties.Contains(property.Name)),
             property => Assert.NotNull(property.GetValueConverter()));
+        // The schema-version stamp is written by this module, never by a user, so it bypasses the UTF-16 codec
+        // user text goes through, and it is indexed on its own.
+        Assert.All(entityTypes, entity =>
+        {
+            var stamp = entity.FindProperty(EfSchemaVersion.ColumnName)!;
+            Assert.Null(stamp.GetValueConverter());
+            Assert.False(stamp.IsNullable);
+            Assert.Equal(32, stamp.GetMaxLength());
+            Assert.False(Assert.Single(entity.GetIndexes(), index => index.Properties.SequenceEqual([stamp])).IsUnique);
+        });
         Assert.DoesNotContain(
             entityTypes,
             entity => entity.ClrType.FullName?.Contains("OpenIddict", StringComparison.Ordinal) == true);

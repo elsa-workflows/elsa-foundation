@@ -1,6 +1,7 @@
 using System.Data;
 using System.Reflection;
 using System.Text.Json;
+using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.EntityFrameworkCore;
@@ -405,6 +406,7 @@ public sealed class MySqlProviderFeasibilityTests(MySqlContainerFixture fixture)
         Status = "active",
         HasNonExpiringActiveVersion = true,
         Payload = payload,
+        SchemaVersion = SecretsEfModule.SchemaVersion,
         ConcurrencyToken = []
     };
 

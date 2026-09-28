@@ -89,6 +89,11 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
                         .HasColumnType("varchar(128)")
@@ -96,6 +101,8 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "Id");
 
@@ -130,6 +137,11 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
                     b.Property<string>("SourceVersionId")
                         .HasMaxLength(128)
                         .HasColumnType("varchar(128)")
@@ -160,6 +172,8 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "WorkflowDefinitionIdLookupHash", "LastModifiedAt", "IdLookupHash");
 
@@ -201,6 +215,11 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .IsRequired()
                         .HasColumnType("longtext");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
                         .HasColumnType("varchar(128)")
@@ -222,6 +241,8 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "WorkflowDefinitionDraftIdLookupHash")
                         .IsUnique();
@@ -270,6 +291,11 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .IsConcurrencyToken()
                         .HasColumnType("datetime(6)");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
                     b.Property<string>("SemVerSortKey")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -300,6 +326,8 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "DefinitionIdLookupHash", "SemVerSortKey")
                         .IsUnique()
@@ -343,6 +371,11 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .IsRequired()
                         .HasColumnType("longtext");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
                         .HasColumnType("varchar(128)")
@@ -364,6 +397,8 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "WorkflowDefinitionVersionIdLookupHash")
                         .IsUnique();
@@ -426,6 +461,11 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .IsRequired()
                         .HasColumnType("longtext");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
                     b.Property<string>("TenantId")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -434,6 +474,8 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("ScopeKey", "OperationKindLookupHash", "OperationKeyLookupHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.ToTable("elsa_design_operations", (string)null);
                 });

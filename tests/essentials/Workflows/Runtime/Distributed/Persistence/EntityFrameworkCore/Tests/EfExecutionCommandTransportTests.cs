@@ -1,4 +1,5 @@
 using System.Data.Common;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tests;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -318,6 +319,48 @@ public sealed class EfExecutionCommandTransportTests
         Assert.Empty(fixture.Context.ChangeTracker.Entries());
         Assert.Equal(0, await fixture.Transport.CountPendingAsync("wf-contention"));
     }
+
+    [Fact]
+    public async Task A_transport_item_with_a_newer_schema_reports_skew_before_its_payload_is_read()
+    {
+        await using var fixture = await Fixture.CreateAsync("scope-a");
+        var sent = await fixture.Transport.SendAsync("wf-1", Envelope("wf-1", "one"), Now);
+        var row = await fixture.Context.CommandTransportItems.SingleAsync();
+        Assert.Equal(ExecutionCommandTransportEfModule.SchemaVersion, row.SchemaVersion);
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = v, v => row.PayloadJson = v);
+
+        Func<Task>[] operations =
+        [
+            () => fixture.Transport.LeaseAsync("wf-1", "node-a", Now, LeaseDuration, 1).AsTask(),
+            () => fixture.Transport.CountPendingAsync("wf-1").AsTask(),
+            () => fixture.Transport.SendAsync("wf-1", Envelope("wf-1", "two"), Now).AsTask(),
+            () => fixture.Transport.AckAsync("wf-1", sent.TransportItemId, "node-a", 1, Now).AsTask()
+        ];
+        foreach (var operation in operations)
+            AssertTransportSkew(await Assert.ThrowsAsync<EfSchemaVersionSkewException>(operation));
+    }
+
+    [Fact]
+    public async Task A_stream_head_with_a_newer_schema_reports_skew_before_its_summary_is_trusted()
+    {
+        await using var fixture = await Fixture.CreateAsync("scope-a");
+        await fixture.Transport.SendAsync("wf-1", Envelope("wf-1", "one"), Now);
+        var head = await fixture.Context.CommandStreamHeads.SingleAsync();
+        Assert.Equal(ExecutionCommandTransportEfModule.SchemaVersion, head.SchemaVersion);
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => head.SchemaVersion = v, _ => head.LastSequence = 0);
+
+        Func<Task>[] operations =
+        [
+            () => fixture.Transport.CountPendingAsync("wf-1").AsTask(),
+            () => fixture.Transport.ListPendingExecutionIdsAsync(Now, 10).AsTask(),
+            () => fixture.Transport.SendAsync("wf-1", Envelope("wf-1", "two"), Now).AsTask()
+        ];
+        foreach (var operation in operations)
+            AssertTransportSkew(await Assert.ThrowsAsync<EfSchemaVersionSkewException>(operation));
+    }
+
+    private static void AssertTransportSkew(EfSchemaVersionSkewException skew) =>
+        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "ExecutionCommandTransport", ExecutionCommandTransportEfModule.SchemaVersion);
 
     [Fact]
     public async Task Indexed_projection_and_json_disagreement_fails_closed_for_addressed_item()

@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Primitives.Entities;
 
 namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Configuration;
@@ -15,18 +16,20 @@ internal static class DesignEntityConfigurations
 {
     private const int ScopeKeyMaximumLength = 65;
 
-    private static void ConfigureScopeKey<T>(EntityTypeBuilder<T> b) where T : class
+    /// <summary>Maps <paramref name="b"/> to <paramref name="table"/> with the scope key and schema-version stamp every table of this module carries.</summary>
+    private static void ConfigureTable<T>(EntityTypeBuilder<T> b, string table) where T : class
     {
+        b.ToTable(table);
         b.Property<string>(Stores.EfDesignSupport.ScopeKeyProperty)
             .HasMaxLength(ScopeKeyMaximumLength)
             .IsRequired()
             .HasValueGenerator<TenantScopeKeyValueGenerator>();
+        b.Property<string>(EfSchemaVersionMaterializationInterceptor.PropertyName).HasMaxLength(32).IsRequired();
     }
 
     public static void ConfigureDefinition(EntityTypeBuilder<WorkflowDefinition> b)
     {
-        b.ToTable(WorkflowsDesignEfModule.DefinitionTable);
-        ConfigureScopeKey(b);
+        ConfigureTable(b, WorkflowsDesignEfModule.DefinitionTable);
         // SQL Server pads trailing spaces even under BIN2 collations. The folded hash therefore
         // owns relational identity while Id remains the exact domain value returned to callers.
         b.Property(x => x.IdLookupHash)
@@ -72,8 +75,7 @@ internal static class DesignEntityConfigurations
 
     public static void ConfigureVersion(EntityTypeBuilder<WorkflowDefinitionVersion> b)
     {
-        b.ToTable(WorkflowsDesignEfModule.VersionTable);
-        ConfigureScopeKey(b);
+        ConfigureTable(b, WorkflowsDesignEfModule.VersionTable);
         b.HasKey(Stores.EfDesignSupport.ScopeKeyProperty, nameof(WorkflowDefinitionVersion.IdLookupHash));
         b.Ignore(x => x.RowNumber);
         b.Property(x => x.Id).HasMaxLength(128);
@@ -105,8 +107,7 @@ internal static class DesignEntityConfigurations
 
     public static void ConfigureDraft(EntityTypeBuilder<WorkflowDefinitionDraft> b)
     {
-        b.ToTable(WorkflowsDesignEfModule.DraftTable);
-        ConfigureScopeKey(b);
+        ConfigureTable(b, WorkflowsDesignEfModule.DraftTable);
         b.HasKey(Stores.EfDesignSupport.ScopeKeyProperty, nameof(WorkflowDefinitionDraft.IdLookupHash));
         b.Ignore(x => x.RowNumber);
         b.Property(x => x.Id).HasMaxLength(128);
@@ -130,8 +131,7 @@ internal static class DesignEntityConfigurations
 
     public static void ConfigureDraftLayout(EntityTypeBuilder<WorkflowDefinitionDraftLayout> b)
     {
-        b.ToTable(WorkflowsDesignEfModule.DraftLayoutTable);
-        ConfigureScopeKey(b);
+        ConfigureTable(b, WorkflowsDesignEfModule.DraftLayoutTable);
         b.HasKey(Stores.EfDesignSupport.ScopeKeyProperty, nameof(WorkflowDefinitionDraftLayout.IdLookupHash));
         b.Ignore(x => x.RowNumber);
         b.Property(x => x.Id).HasMaxLength(128);
@@ -155,8 +155,7 @@ internal static class DesignEntityConfigurations
 
     public static void ConfigureVersionLayout(EntityTypeBuilder<WorkflowDefinitionVersionLayout> b)
     {
-        b.ToTable(WorkflowsDesignEfModule.VersionLayoutTable);
-        ConfigureScopeKey(b);
+        ConfigureTable(b, WorkflowsDesignEfModule.VersionLayoutTable);
         b.HasKey(Stores.EfDesignSupport.ScopeKeyProperty, nameof(WorkflowDefinitionVersionLayout.IdLookupHash));
         b.Ignore(x => x.RowNumber);
         b.Property(x => x.Id).HasMaxLength(128);
@@ -183,8 +182,7 @@ internal static class DesignEntityConfigurations
 
     public static void ConfigureOperation(EntityTypeBuilder<DesignOperationEntity> b)
     {
-        b.ToTable(WorkflowsDesignEfModule.OperationTable);
-        ConfigureScopeKey(b);
+        ConfigureTable(b, WorkflowsDesignEfModule.OperationTable);
         b.Property(x => x.TenantId).HasMaxLength(128);
         b.Property(x => x.OperationKind).HasMaxLength(256);
         b.Property(x => x.OperationKey).HasMaxLength(256);

@@ -19,6 +19,7 @@ public abstract class StudioPreferencesDbContext(DbContextOptions options) : DbC
         modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new StudioPreferenceRecordConfiguration());
         ConfigureProvider(modelBuilder);
+        modelBuilder.IndexSchemaVersionStamps();
     }
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);

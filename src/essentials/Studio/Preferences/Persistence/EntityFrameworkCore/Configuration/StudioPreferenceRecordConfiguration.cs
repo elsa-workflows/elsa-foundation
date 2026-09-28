@@ -16,7 +16,8 @@ public sealed class StudioPreferenceRecordConfiguration : IEntityTypeConfigurati
         builder.Property(record => record.TenantId).IsRequired();
         builder.Property(record => record.StudioHostId).HasMaxLength(128).IsRequired();
         builder.Property(record => record.Namespace).IsRequired();
-        builder.Property(record => record.SchemaVersion).IsRequired();
+        builder.Property(record => record.PreferenceSchemaVersion).IsRequired();
+        builder.Property(record => record.SchemaVersion).HasMaxLength(32).IsRequired();
         builder.Property(record => record.ValueJson).IsRequired();
         builder.Property(record => record.UpdatedAt)
             .HasConversion(

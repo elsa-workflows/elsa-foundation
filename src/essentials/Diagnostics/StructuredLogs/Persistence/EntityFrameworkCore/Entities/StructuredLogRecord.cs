@@ -14,4 +14,7 @@ public sealed class StructuredLogRecord
     public string SourceKey { get; set; } = "";
     public string ReplayToken { get; set; } = "";
     public string PayloadJson { get; set; } = "";
+
+    /// <summary>The persisted-schema version of this row: <see cref="StructuredLogsEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }

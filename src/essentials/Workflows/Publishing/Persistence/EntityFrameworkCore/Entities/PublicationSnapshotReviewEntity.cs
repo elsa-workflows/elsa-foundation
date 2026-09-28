@@ -18,4 +18,7 @@ public sealed class PublicationSnapshotReviewEntity
     public string? ActivePublicationId { get; set; }
     public string? TenantId { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="PublishingSnapshotReviewEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }

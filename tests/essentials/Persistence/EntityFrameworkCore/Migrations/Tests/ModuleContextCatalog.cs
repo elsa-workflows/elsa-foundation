@@ -114,6 +114,10 @@ internal static class ModuleContextCatalog
     {
         var builder = (DbContextOptionsBuilder)Activator.CreateInstance(typeof(DbContextOptionsBuilder<>).MakeGenericType(context))!;
         EfRelationalProviderBinding.Use(builder, ProviderOf(context), connectionString, HistoryTable(context), context.Assembly.GetName().Name, schema);
+        // The design modules' contexts always carry the shared schema-version interceptor, and EF builds an internal
+        // service provider per distinct set of such interceptors. Every context built here carries it too, so building
+        // every module in every configuration stays within EF's limit of twenty providers per process.
+        EfSchemaVersionMaterializationInterceptor.EnsureAdded(builder);
         configure?.Invoke(builder);
         return (DbContext)Activator.CreateInstance(context, builder.Options)!;
     }

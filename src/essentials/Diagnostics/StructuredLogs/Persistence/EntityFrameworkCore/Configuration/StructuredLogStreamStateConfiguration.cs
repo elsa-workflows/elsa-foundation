@@ -18,5 +18,6 @@ public sealed class StructuredLogStreamStateConfiguration : IEntityTypeConfigura
         builder.Property(state => state.AppendOperationCutoffTicks).IsRequired();
         builder.Property(state => state.Version).HasMaxLength(32).IsRequired().IsConcurrencyToken();
         builder.Property(state => state.UpdatedAtTicks).IsRequired();
+        builder.Property(state => state.SchemaVersion).HasMaxLength(32).IsRequired();
     }
 }

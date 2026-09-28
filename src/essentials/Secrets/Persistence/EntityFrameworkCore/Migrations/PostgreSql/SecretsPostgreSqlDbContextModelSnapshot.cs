@@ -56,6 +56,11 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.PostgreSql
                         .IsRequired()
                         .HasColumnType("jsonb");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("ScopeLookupKey")
                         .HasColumnType("text")
                         .UseCollation("C");
@@ -77,6 +82,8 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.PostgreSql
                         .UseCollation("C");
 
                     b.HasKey("TenantId", "NormalizedName");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantId", "Status", "NormalizedName")
                         .HasDatabaseName("IX_elsa_secrets_tenantId_status_normalizedName");

@@ -159,6 +159,8 @@ public abstract class OpenTelemetryDbContext(DbContextOptions options) : DbConte
             entity.Property(x => x.ValueKey).HasMaxLength(64).IsRequired();
             entity.HasIndex(x => new { x.ScopeKey, x.Kind, x.ValueKey, x.TraceKey });
         });
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+            modelBuilder.Entity(entityType.ClrType).Property<string>(nameof(EfOpenTelemetryScopedEntity.SchemaVersion)).HasMaxLength(32).IsRequired();
         ConfigureProvider(modelBuilder);
         // Installed unconditionally, so this context reads a frame whatever wrote it. Nothing here enables an
         // encoder: with no codec configured these columns are written exactly as they were before.
@@ -167,6 +169,7 @@ public abstract class OpenTelemetryDbContext(DbContextOptions options) : DbConte
             "PayloadJson",
             "ServiceMembershipJson",
             "WorkflowMembershipJson");
+        modelBuilder.IndexSchemaVersionStamps();
     }
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);

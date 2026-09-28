@@ -67,6 +67,11 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("TenantId")
                         .HasColumnType("nvarchar(max)")
                         .UseCollation("Latin1_General_100_BIN2");
@@ -78,6 +83,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantKey", "ActivityTypeKey")
                         .IsUnique();
@@ -153,11 +160,18 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("nvarchar(64)")
                         .UseCollation("Latin1_General_100_BIN2");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("TenantId")
                         .HasColumnType("nvarchar(max)")
                         .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantScopeKey", "DefinitionIdIdentityHash")
                         .IsUnique();
@@ -223,6 +237,11 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<long>("Revision")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("SourceVersionId")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)")
@@ -245,6 +264,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantScopeKey", "DefinitionIdIdentityHash", "IdIdentityHash");
 
@@ -299,11 +320,18 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<long>("Revision")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("TenantId")
                         .HasColumnType("nvarchar(max)")
                         .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantScopeKey", "DraftIdIdentityHash")
                         .IsUnique();
@@ -389,6 +417,11 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<long>("Revision")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("SearchText")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -438,6 +471,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantId", "ValidFromSequence", "ValidToSequenceExclusive");
 
@@ -580,6 +615,11 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("nvarchar(64)")
                         .UseCollation("Latin1_General_100_BIN2");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("SearchText")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -619,6 +659,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantId", "ValidFromSequence", "ValidToSequenceExclusive");
 
@@ -707,6 +749,11 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("SemVerSortKey")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -731,6 +778,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantScopeKey", "DefinitionIdIdentityHash", "SemVerSortKey")
                         .IsUnique();
@@ -783,11 +832,18 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("TenantId")
                         .HasColumnType("nvarchar(max)")
                         .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantScopeKey", "DefinitionVersionIdIdentityHash")
                         .IsUnique();
@@ -873,6 +929,11 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("nvarchar(64)")
                         .UseCollation("Latin1_General_100_BIN2");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("SearchText")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -911,6 +972,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantId", "ValidFromSequence", "ValidToSequenceExclusive");
 
@@ -1015,6 +1078,11 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("SourceDraftId")
                         .HasColumnType("nvarchar(max)");
 
@@ -1050,6 +1118,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantScopeKey", "DefinitionVersionIdIdentityHash")
                         .IsUnique();
@@ -1157,11 +1227,18 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("nvarchar(64)")
                         .UseCollation("Latin1_General_100_BIN2");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("TenantId")
                         .HasColumnType("nvarchar(max)")
                         .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantScopeKey", "DependencyVersionIdIdentityHash");
 
@@ -1213,6 +1290,11 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<long>("Sequence")
                         .HasColumnType("bigint");
 
@@ -1221,6 +1303,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.ToTable("elsa_activity_dependency_projection", (string)null);
                 });
@@ -1273,6 +1357,11 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<long>("Revision")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("TenantId")
                         .HasColumnType("nvarchar(max)")
                         .UseCollation("Latin1_General_100_BIN2");
@@ -1281,6 +1370,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("datetimeoffset");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantScopeKey", "DraftIdIdentityHash", "Revision")
                         .IsUnique();
@@ -1398,6 +1489,11 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("nvarchar(256)")
                         .UseCollation("Latin1_General_100_BIN2");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("SourceContractFingerprint")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -1451,6 +1547,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantScopeKey", "ActorIdentityHash", "CandidateIdIdentityHash")
                         .IsUnique();
@@ -1595,6 +1693,11 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
@@ -1603,6 +1706,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantScopeKey", "ActorIdentityHash", "IdempotencyIdentityHash")
                         .IsUnique();
@@ -1642,6 +1747,11 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<long>("Sequence")
                         .HasColumnType("bigint");
 
@@ -1650,6 +1760,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("Sequence")
                         .IsUnique();
@@ -1692,6 +1804,11 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                     b.Property<long>("RetainedFromSequence")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<long>("Sequence")
                         .HasColumnType("bigint");
 
@@ -1700,6 +1817,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.ToTable("elsa_activity_management_watermarks", (string)null);
                 });
@@ -1771,11 +1890,18 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .HasColumnType("nvarchar(64)")
                         .UseCollation("Latin1_General_100_BIN2");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("TenantId")
                         .HasColumnType("nvarchar(max)")
                         .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantScopeKey", "OperationKindIdentityHash", "OperationKeyIdentityHash")
                         .IsUnique();
@@ -1845,11 +1971,18 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("TenantId")
                         .HasColumnType("nvarchar(max)")
                         .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantScopeKey", "PlanIdIdentityHash", "IdempotencyKeyHash")
                         .IsUnique();
@@ -1901,11 +2034,18 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("TenantId")
                         .HasColumnType("nvarchar(max)")
                         .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("TenantScopeKey", "IdIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.ToTable("elsa_activity_upgrade_plans", (string)null);
                 });
@@ -1945,6 +2085,11 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("Scope")
                         .IsRequired()
                         .HasMaxLength(450)
@@ -1952,6 +2097,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Migrations.Acti
                         .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("TenantScopeKey", "ScopeIdentityHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.ToTable("elsa_activity_availability_settings", (string)null);
                 });

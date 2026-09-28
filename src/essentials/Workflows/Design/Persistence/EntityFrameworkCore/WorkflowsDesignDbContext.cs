@@ -9,7 +9,7 @@ using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 
-public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbContext(options)
+public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbContext(options), IEfSchemaVersionedContext
 {
     public DbSet<WorkflowDefinition> Definitions => Set<WorkflowDefinition>();
     public DbSet<WorkflowDefinitionVersion> Versions => Set<WorkflowDefinitionVersion>();
@@ -37,9 +37,18 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
             "RecordsJson",
             "ActivityPresentationJson",
             "ResultJson");
+        modelBuilder.IndexSchemaVersionStamps();
     }
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);
+
+    string IEfSchemaVersionedContext.SchemaFamily => WorkflowsDesignEfModule.SchemaFamily;
+
+    string IEfSchemaVersionedContext.SchemaVersion => WorkflowsDesignEfModule.SchemaVersion;
+
+    /// <summary>Every instance checks its rows' stamps, however its options were built.</summary>
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
+        EfSchemaVersionMaterializationInterceptor.EnsureAdded(optionsBuilder);
 
     /// <summary>
     /// The string columns this module compares or orders in SQL beyond the ones a key or an index already
@@ -82,6 +91,7 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
 
     private void PrepareDefinitionKeys()
     {
+        EfSchemaVersionMaterializationInterceptor.StampWrites(this);
         foreach (var entry in ChangeTracker.Entries()
                      .Where(entry => entry.Entity is TenantEntity or DesignOperationEntity)
                      .Where(entry => entry.State is EntityState.Added or EntityState.Modified))

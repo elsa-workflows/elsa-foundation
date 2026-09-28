@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Studio.Preferences.Core;
 using Elsa.Studio.Preferences.Core.Contracts;
@@ -82,6 +83,24 @@ public sealed class StudioPreferenceEntityFrameworkCoreTests
             timestamp.AddMinutes(4));
 
         Assert.Equal(StudioPreferenceStoreWriteStatus.NotFound, missing.Status);
+    }
+
+    [Fact]
+    public async Task A_row_with_a_newer_incompatible_schema_reports_skew_on_read_and_before_a_write_replaces_it()
+    {
+        await using var fixture = await SqliteFixture.CreateAsync();
+        var timestamp = DateTimeOffset.Parse("2026-09-12T09:05:00Z");
+        var saved = (await fixture.Store.WriteAsync(Key(), new(1, Json("{}")), StudioPreferenceWriteCondition.MustNotExist, timestamp)).Document!;
+        var row = await fixture.Context.Set<StudioPreferenceRecord>().SingleAsync();
+        Assert.Equal(StudioPreferencesEfModule.SchemaVersion, row.SchemaVersion);
+
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = v, v => row.ValueJson = v);
+
+        var read = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.Store.FindAsync(Key()).AsTask());
+        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(read, "StudioPreferences", StudioPreferencesEfModule.SchemaVersion);
+        var write = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.Store.WriteAsync(
+            Key(), new(1, Json("{}")), StudioPreferenceWriteCondition.Matches(saved.Revision), timestamp.AddMinutes(1)).AsTask());
+        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(write, "StudioPreferences", StudioPreferencesEfModule.SchemaVersion);
     }
 
     [Fact]

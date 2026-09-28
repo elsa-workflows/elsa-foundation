@@ -23,7 +23,7 @@ internal static class ProviderConfigurationEntityConfiguration
         builder.Property(record => record.PermissionPropagation).IsRequired();
         builder.Property(record => record.SettingsJson).IsRequired();
         builder.Property(record => record.Revision).IsRequired().IsConcurrencyToken();
-
+        builder.Property(record => record.SchemaVersion).HasMaxLength(32).IsRequired();
     }
 }
 

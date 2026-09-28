@@ -1,4 +1,5 @@
 using System.Data.Common;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -42,6 +43,28 @@ public sealed class EfExecutionPlacementStoreTests
 
         await using var reopened = await fixture.ReopenAsync("scope-a");
         Assert.Null(await reopened.Store.FindAsync("wf-ä"));
+    }
+
+    [Fact]
+    public async Task A_row_with_a_newer_schema_reports_skew_on_every_read_and_before_a_claim_or_release_rewrites_it()
+    {
+        await using var fixture = await Fixture.CreateAsync("scope-a");
+        var claimed = await fixture.Store.TryClaimAsync(Claim("node-a", "wf-1"), Now);
+        var row = await fixture.Context.PlacementLeases.SingleAsync();
+        Assert.Equal(ExecutionPlacementEfModule.SchemaVersion, row.SchemaVersion);
+        // The damaged lease state is the witness: an integrity check that ran first would report it as corruption.
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = v, _ => row.PlacementToken = 0);
+
+        Func<Task>[] operations =
+        [
+            () => fixture.Store.FindAsync("wf-1").AsTask(),
+            () => fixture.Store.ListOwnedAsync(new("node-a", Now)).AsTask(),
+            () => fixture.Store.TryClaimAsync(Claim("node-b", "wf-1", Now.AddMinutes(1)), Now.AddMinutes(1)).AsTask(),
+            () => fixture.Store.ReleaseAsync(claimed.Lease).AsTask()
+        ];
+        foreach (var operation in operations)
+            EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(
+                await Assert.ThrowsAsync<EfSchemaVersionSkewException>(operation), "ExecutionPlacement", ExecutionPlacementEfModule.SchemaVersion);
     }
 
     [Fact]

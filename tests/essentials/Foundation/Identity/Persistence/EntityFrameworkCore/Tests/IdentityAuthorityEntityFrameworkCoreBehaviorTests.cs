@@ -798,7 +798,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                     LockoutEnd = DateTimeOffset.ParseExact("2030-04-05T06:07:08.1234567-03:30", "O", System.Globalization.CultureInfo.InvariantCulture),
                     LockoutEnabled = true,
                     AccessFailedCount = 7,
-                    Revision = 1
+                    Revision = 1,
+                    SchemaVersion = IdentityIamEfModule.SchemaVersion
                 });
                 context.Roles.Add(new RoleEntity
                 {
@@ -815,7 +816,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                     ClaimIdsJson = "[\"role-claim-a\"]",
                     UserLinkIdsJson = "[\"link-a\"]",
                     ConcurrencyStamp = "role-concurrency\ud800",
-                    Revision = 1
+                    Revision = 1,
+                    SchemaVersion = IdentityIamEfModule.SchemaVersion
                 });
                 context.UserClaims.Add(new UserClaimEntity
                 {
@@ -827,7 +829,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                     ClaimType = "preferred_username\ud800",
                     ClaimValue = "ada\udc00",
                     ClaimKey = "preferred_username\u001fada\udc00",
-                    Revision = 1
+                    Revision = 1,
+                    SchemaVersion = IdentityIamEfModule.SchemaVersion
                 });
                 context.RoleClaims.Add(new RoleClaimEntity
                 {
@@ -838,7 +841,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                     RoleLookupKey = "tenant-a\u001frole-a\udc00",
                     ClaimType = "permission\ud800",
                     ClaimValue = "identity.users.read\udc00",
-                    Revision = 1
+                    Revision = 1,
+                    SchemaVersion = IdentityIamEfModule.SchemaVersion
                 });
                 context.UserRoles.Add(new UserRoleEntity
                 {
@@ -849,7 +853,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                     UserLookupKey = "tenant-a\u001fuser-a\udc00",
                     RoleId = "role-a\udc00",
                     RoleLookupKey = "tenant-a\u001frole-a\udc00",
-                    Revision = 1
+                    Revision = 1,
+                    SchemaVersion = IdentityIamEfModule.SchemaVersion
                 });
                 context.UserTokens.Add(new UserTokenEntity
                 {
@@ -861,7 +866,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                     LoginProvider = "Identity\ud800",
                     Name = "RecoveryCode\udc00",
                     Value = "recovery\ud800😀\udc00",
-                    Revision = 1
+                    Revision = 1,
+                    SchemaVersion = IdentityIamEfModule.SchemaVersion
                 });
                 context.TenantMemberships.Add(new TenantMembershipEntity
                 {
@@ -873,7 +879,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                     Status = (int)TenantMembershipStatus.Suspended,
                     RoleIdsJson = "[\"role-a\"]",
                     DirectPermissionsJson = "[\"identity.users.read\"]",
-                    Revision = 1
+                    Revision = 1,
+                    SchemaVersion = IdentityIamEfModule.SchemaVersion
                 });
                 context.UserNameReservations.Add(new UserNameReservationEntity
                 {
@@ -883,7 +890,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                     NormalizedUserName = "ADA\ud800",
                     NormalizedUserNameKey = "tenant-a\u001fADA\ud800",
                     UserId = "user-a\udc00",
-                    Revision = 1
+                    Revision = 1,
+                    SchemaVersion = IdentityIamEfModule.SchemaVersion
                 });
                 context.EmailReservations.Add(new EmailReservationEntity
                 {
@@ -893,7 +901,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                     NormalizedEmail = "ADA\ud800@EXAMPLE.TEST",
                     NormalizedEmailKey = "tenant-a\u001fADA\ud800@EXAMPLE.TEST",
                     UserId = "user-a\udc00",
-                    Revision = 1
+                    Revision = 1,
+                    SchemaVersion = IdentityIamEfModule.SchemaVersion
                 });
                 context.RoleNameReservations.Add(new RoleNameReservationEntity
                 {
@@ -903,7 +912,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                     NormalizedRoleName = "OPERATORS\ud800",
                     NormalizedRoleNameKey = "tenant-a\u001fOPERATORS\ud800",
                     RoleId = "role-a\udc00",
-                    Revision = 1
+                    Revision = 1,
+                    SchemaVersion = IdentityIamEfModule.SchemaVersion
                 });
                 context.ExternalIdentities.Add(new ExternalIdentityEntity
                 {
@@ -919,7 +929,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                     LinkedAt = DateTimeOffset.UnixEpoch,
                     LastSeenAt = DateTimeOffset.ParseExact("2031-02-03T04:05:06.1234567+05:30", "O", System.Globalization.CultureInfo.InvariantCulture),
                     LinkPolicy = (int)ExternalIdentityLinkPolicy.Admin,
-                    Revision = 1
+                    Revision = 1,
+                    SchemaVersion = IdentityIamEfModule.SchemaVersion
                 });
                 context.MutationReceipts.Add(new MutationReceiptEntity
                 {
@@ -933,7 +944,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                     AuthoritativeId = "user-a\udc00",
                     CreatedAt = DateTimeOffset.UnixEpoch,
                     ExpiresAt = DateTimeOffset.ParseExact("2040-01-02T03:04:05.1234567Z", "O", System.Globalization.CultureInfo.InvariantCulture),
-                    Revision = 1
+                    Revision = 1,
+                    SchemaVersion = IdentityIamEfModule.SchemaVersion
                 });
 
                 await context.SaveChangesAsync();
@@ -1470,7 +1482,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                 Message = "persisted",
                 CreatedAt = DateTimeOffset.UtcNow,
                 ExpiresAt = DateTimeOffset.UtcNow.AddDays(1),
-                Revision = 1
+                Revision = 1,
+                SchemaVersion = IdentityIamEfModule.SchemaVersion
             });
             await context.SaveChangesAsync();
             context.ChangeTracker.Clear();
@@ -1516,7 +1529,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                 Message = "persisted",
                 CreatedAt = DateTimeOffset.UtcNow,
                 ExpiresAt = DateTimeOffset.UtcNow.AddDays(1),
-                Revision = 1
+                Revision = 1,
+                SchemaVersion = IdentityIamEfModule.SchemaVersion
             };
             switch (corruptedProperty)
             {
@@ -1571,7 +1585,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                 Version = 1,
                 CreatedAt = DateTimeOffset.UnixEpoch,
                 ExpiresAt = DateTimeOffset.UnixEpoch,
-                Revision = 1
+                Revision = 1,
+                SchemaVersion = IdentityIamEfModule.SchemaVersion
             });
             await context.SaveChangesAsync();
             context.ChangeTracker.Clear();
@@ -2490,7 +2505,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         LinkedAt = DateTimeOffset.UnixEpoch,
         LastSeenAt = DateTimeOffset.UnixEpoch,
         LinkPolicy = (int)ExternalIdentityLinkPolicy.Auto,
-        Revision = 1
+        Revision = 1,
+        SchemaVersion = IdentityIamEfModule.SchemaVersion
     };
 
     private static UserRoleEntity UserRoleEntity(string tenantId, string userId, string roleId, string id) => new()
@@ -2502,7 +2518,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         UserLookupKey = $"{tenantId}\u001f{userId}",
         RoleId = roleId,
         RoleLookupKey = $"{tenantId}\u001f{roleId}",
-        Revision = 1
+        Revision = 1,
+        SchemaVersion = IdentityIamEfModule.SchemaVersion
     };
 
     private static UserClaimEntity UserClaimEntity(string tenantId, string userId, string id) => new()
@@ -2515,7 +2532,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         ClaimType = "type",
         ClaimValue = "value",
         ClaimKey = $"{tenantId}\u001f{userId}\u001ftype",
-        Revision = 1
+        Revision = 1,
+        SchemaVersion = IdentityIamEfModule.SchemaVersion
     };
 
     private static UserTokenEntity UserTokenEntity(string tenantId, string userId, string provider, string name, string value) => new()
@@ -2528,7 +2546,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         LoginProvider = provider,
         Name = name,
         Value = value,
-        Revision = 1
+        Revision = 1,
+        SchemaVersion = IdentityIamEfModule.SchemaVersion
     };
 
     private static TenantMembershipEntity TenantMembershipEntity(string tenantId, string userId, string roleId) => new()
@@ -2541,7 +2560,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         Status = (int)TenantMembershipStatus.Active,
         RoleIdsJson = $"[\"{roleId}\"]",
         DirectPermissionsJson = "[]",
-        Revision = 1
+        Revision = 1,
+        SchemaVersion = IdentityIamEfModule.SchemaVersion
     };
 
     private static MutationReceiptEntity MutationReceiptEntity(string receiptId, string operationId) => new()
@@ -2555,7 +2575,8 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         Message = "committed",
         CreatedAt = DateTimeOffset.UnixEpoch,
         ExpiresAt = DateTimeOffset.UnixEpoch.AddDays(1),
-        Revision = 1
+        Revision = 1,
+        SchemaVersion = IdentityIamEfModule.SchemaVersion
     };
 
     private static void DeleteDatabaseFiles(string databasePath) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles(databasePath);

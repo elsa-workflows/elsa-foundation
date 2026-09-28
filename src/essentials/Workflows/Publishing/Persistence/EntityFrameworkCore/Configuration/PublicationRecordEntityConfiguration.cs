@@ -31,6 +31,7 @@ public sealed class PublicationRecordEntityConfiguration : IEntityTypeConfigurat
         builder.Property(row => row.TenantId).HasMaxLength(PublishingPolicyProjectionEfModule.EncodedIdentityMaximumLength);
         builder.Property(row => row.TenantIdHash).HasMaxLength(PublishingPolicyProjectionEfModule.HashMaximumLength).IsRequired();
         builder.Property(row => row.Revision).IsConcurrencyToken().IsRequired();
+        builder.Property(row => row.SchemaVersion).HasMaxLength(PublishingPolicyProjectionEfModule.SchemaVersionMaximumLength).IsRequired();
 
         // Raw residuals are intentionally excluded: MySQL's composite index budget is provider dependent. The
         // adapter reads a bounded hash candidate set and checks the exact encoded residuals.

@@ -4,6 +4,7 @@ using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 
@@ -302,6 +303,7 @@ public sealed class EfProviderConfigurationStore(
         entity.SupportsRevocation = configuration.Capabilities.SupportsRevocation;
         entity.PermissionPropagation = (int)configuration.Capabilities.PermissionPropagation;
         entity.SettingsJson = IdentityProviderConfigurationSettingsCodec.Serialize(configuration.Settings);
+        entity.SchemaVersion = IdentityProviderConfigurationEfModule.SchemaVersion;
     }
 
     private static ProviderConfigurationRecord Map(ProviderConfigurationEntity entity)
@@ -324,7 +326,7 @@ public sealed class EfProviderConfigurationStore(
             IdentityProviderConfigurationSettingsCodec.Deserialize(entity.SettingsJson));
     }
 
-    private static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception) => new(message, exception);
+    private static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception) => EfIdentityStoreSupport.Failure(message, exception);
 
     private static void ValidateConfiguration(ProviderConfigurationRecord configuration)
     {
@@ -336,6 +338,7 @@ public sealed class EfProviderConfigurationStore(
     }
 
     private static bool Matches(ProviderConfigurationEntity entity, string? tenantId, string provider) =>
+        EfSchemaVersion.Readable("IdentityProviderConfiguration", entity.SchemaVersion, IdentityProviderConfigurationEfModule.SchemaVersion) &&
         string.Equals(
             entity.Id,
             tenantId is null

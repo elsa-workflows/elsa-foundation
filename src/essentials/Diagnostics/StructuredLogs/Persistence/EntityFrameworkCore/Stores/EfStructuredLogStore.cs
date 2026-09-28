@@ -11,6 +11,7 @@ using Elsa.Diagnostics.StructuredLogs.Core.Exceptions;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Core.Options;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -251,7 +252,8 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
                 ScopeId = binding.ScopeId,
                 StreamId = binding.StreamId,
                 HighWater = 0,
-                Version = NewVersion()
+                Version = NewVersion(),
+                SchemaVersion = StructuredLogsEfModule.SchemaVersion
             };
             var now = DateTimeOffset.UtcNow;
             var cutoffAdvanced = AdvanceAppendOperationCutoff(state, now);
@@ -275,6 +277,7 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
                 .SingleOrDefaultAsync(operation => operation.ScopeKey == ScopeKey && operation.BatchId == batchId, cancellationToken);
             if (existingOperation is not null)
             {
+                EfSchemaVersion.EnsureReadable(StructuredLogsEfModule.SchemaFamily, existingOperation.SchemaVersion, StructuredLogsEfModule.SchemaVersion);
                 ValidateBinding(existingOperation.TenantId, existingOperation.ScopeId, existingOperation.StreamId);
                 if (existingOperation.IssuedAtTicks != batch.Id.IssuedAt.UtcTicks)
                     throw new StructuredLogsException("The structured log append operation identity was reused with a different issue time.");
@@ -310,7 +313,8 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
                     CategoryKey = Hash(entry.Category),
                     SourceKey = Hash(entry.SourceId),
                     ReplayToken = outcome.RecordToken,
-                    PayloadJson = outcome.PayloadJson
+                    PayloadJson = outcome.PayloadJson,
+                    SchemaVersion = StructuredLogsEfModule.SchemaVersion
                 });
             }
 
@@ -327,7 +331,8 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
                 StreamId = binding.StreamId,
                 IssuedAtTicks = batch.Id.IssuedAt.UtcTicks,
                 Fingerprint = fingerprint,
-                OutcomeJson = JsonSerializer.Serialize(outcomes, SerializerOptions)
+                OutcomeJson = JsonSerializer.Serialize(outcomes, SerializerOptions),
+                SchemaVersion = StructuredLogsEfModule.SchemaVersion
             });
             await db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
@@ -497,6 +502,11 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
             {
                 throw;
             }
+            // Skew is not an operation failure, so it leaves as itself (ADR 0077).
+            catch (EfSchemaVersionSkewException)
+            {
+                throw;
+            }
             catch (Exception exception)
             {
                 throw new StructuredLogsException(failureMessage, exception);
@@ -550,13 +560,22 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
             ValidateRecord(row);
     }
 
-    private void ValidateRecord(StructuredLogRecord row) =>
+    /// <summary>
+    /// Runs before a record is mapped or its binding trusted, so a row another module version wrote reports skew
+    /// before its payload is deserialized.
+    /// </summary>
+    private void ValidateRecord(StructuredLogRecord row)
+    {
+        EfSchemaVersion.EnsureReadable(StructuredLogsEfModule.SchemaFamily, row.SchemaVersion, StructuredLogsEfModule.SchemaVersion);
         ValidateBinding(row.TenantId, row.ScopeId, row.StreamId);
+    }
 
     private void ValidateState(StructuredLogStreamState? state)
     {
-        if (state is not null)
-            ValidateBinding(state.TenantId, state.ScopeId, state.StreamId);
+        if (state is null)
+            return;
+        EfSchemaVersion.EnsureReadable(StructuredLogsEfModule.SchemaFamily, state.SchemaVersion, StructuredLogsEfModule.SchemaVersion);
+        ValidateBinding(state.TenantId, state.ScopeId, state.StreamId);
     }
 
     private static void ValidateBinding(StructuredLogStoreBinding value)

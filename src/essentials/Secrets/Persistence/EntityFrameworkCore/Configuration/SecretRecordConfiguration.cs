@@ -21,6 +21,7 @@ public sealed class SecretRecordConfiguration : IEntityTypeConfiguration<SecretR
         builder.Property(record => record.Status).HasMaxLength(32).IsRequired();
         builder.Property(record => record.HasNonExpiringActiveVersion).IsRequired();
         builder.Property(record => record.Payload).IsRequired();
+        builder.Property(record => record.SchemaVersion).HasMaxLength(32).IsRequired();
         builder.Property(record => record.ConcurrencyToken).IsRequired().IsConcurrencyToken();
         builder.HasIndex(record => new { record.TenantId, record.Status, record.NormalizedName })
             .HasDatabaseName(SecretsEfModule.FilteredListIndex);

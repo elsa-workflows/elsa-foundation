@@ -58,7 +58,8 @@ public sealed class ModuleSchemaMigrationTests
                 TenantId = "tenant",
                 StudioHostId = "host",
                 Namespace = "namespace",
-                SchemaVersion = 1,
+                PreferenceSchemaVersion = 1,
+                SchemaVersion = StudioPreferencesEfModule.SchemaVersion,
                 ValueJson = """{"theme":"stone"}""",
                 UpdatedAt = DateTimeOffset.UnixEpoch,
                 Revision = 1

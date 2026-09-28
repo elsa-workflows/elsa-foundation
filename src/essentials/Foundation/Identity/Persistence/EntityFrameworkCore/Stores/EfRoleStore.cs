@@ -3,6 +3,7 @@ using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 
@@ -98,8 +99,13 @@ public sealed class EfRoleStore(
     }
 
     private void Prepare(string tenantId, CancellationToken cancellationToken) { context.EnsureProviderBinding(); EfIdentityStoreSupport.EnsureTenant(accessContextAccessor, tenantId); cancellationToken.ThrowIfCancellationRequested(); }
-    private static RoleRecord Map(RoleEntity entity) => new(entity.RoleId, entity.TenantId, entity.Name, entity.Description, EfIdentityStoreSupport.DeserializeSet(entity.PermissionsJson), entity.System);
-    private static bool Matches(RoleEntity entity, string tenantId, string roleId) => string.Equals(entity.Id, EfIdentityStoreSupport.RecordId(tenantId, roleId), StringComparison.Ordinal) && string.Equals(EfIdentityStoreSupport.Normalize(entity.TenantId), EfIdentityStoreSupport.Normalize(tenantId), StringComparison.Ordinal) && string.Equals(EfIdentityStoreSupport.Normalize(entity.RoleId), EfIdentityStoreSupport.Normalize(roleId), StringComparison.Ordinal);
+    private static RoleRecord Map(RoleEntity entity)
+    {
+        EfSchemaVersion.EnsureReadable(IdentityIamEfModule.SchemaFamily, entity.SchemaVersion, IdentityIamEfModule.SchemaVersion);
+        return new(entity.RoleId, entity.TenantId, entity.Name, entity.Description, EfIdentityStoreSupport.DeserializeSet(entity.PermissionsJson), entity.System);
+    }
+
+    private static bool Matches(RoleEntity entity, string tenantId, string roleId) => EfSchemaVersion.Readable(IdentityIamEfModule.SchemaFamily, entity.SchemaVersion, IdentityIamEfModule.SchemaVersion) && string.Equals(entity.Id, EfIdentityStoreSupport.RecordId(tenantId, roleId), StringComparison.Ordinal) && string.Equals(EfIdentityStoreSupport.Normalize(entity.TenantId), EfIdentityStoreSupport.Normalize(tenantId), StringComparison.Ordinal) && string.Equals(EfIdentityStoreSupport.Normalize(entity.RoleId), EfIdentityStoreSupport.Normalize(roleId), StringComparison.Ordinal);
     private static void Validate(string value, string parameter) { ArgumentNullException.ThrowIfNull(value); if (value.Length > IdentityProviderConfigurationCanonicalizer.MaximumIdentityLength) throw new ArgumentException($"Identity key values cannot exceed {IdentityProviderConfigurationCanonicalizer.MaximumIdentityLength} UTF-16 code units.", parameter); }
-    private static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception) => new(message, exception);
+    private static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception) => EfIdentityStoreSupport.Failure(message, exception);
 }

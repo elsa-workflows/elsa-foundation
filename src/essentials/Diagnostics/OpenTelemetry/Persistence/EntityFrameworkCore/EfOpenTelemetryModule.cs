@@ -14,6 +14,12 @@ public static class EfOpenTelemetryModule
     public const string LedgerTable = "elsa_otel_capture_ledger";
     public const string SummaryTable = "elsa_otel_trace_summaries";
     public const string MembershipTable = "elsa_otel_trace_summary_memberships";
+
+    /// <summary>The persisted-schema version every OpenTelemetry row is stamped with, and checked against when read.</summary>
+    public const string SchemaVersion = "1.0.0";
+
+    /// <summary>The schema family this module's rows belong to, checked against when a row is read.</summary>
+    public const string SchemaFamily = "OpenTelemetry";
     public const string DefaultConnectionName = "ElsaOpenTelemetry";
     public const string DefaultSqliteConnectionString = "Data Source=elsa-opentelemetry.db";
 

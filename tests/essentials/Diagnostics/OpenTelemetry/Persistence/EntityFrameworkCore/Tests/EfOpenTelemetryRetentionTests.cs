@@ -548,13 +548,13 @@ public sealed class EfOpenTelemetryRetentionTests
         var ticks = TelemetryTestData.Now.UtcTicks;
         db.TraceSummaries.Add(new OpenTelemetryTraceSummaryEntity
         {
-            ScopeKey = scopeKey, TraceKey = traceKey, TraceId = "foreign-trace", TraceIdSearchKey = "foreign-trace",
+            ScopeKey = scopeKey, SchemaVersion = EfOpenTelemetryModule.SchemaVersion, TraceKey = traceKey, TraceId = "foreign-trace", TraceIdSearchKey = "foreign-trace",
             StartTimeTicks = ticks, EndTimeTicks = ticks, SpanCount = 1,
             PayloadJson = "{}", ServiceMembershipJson = "[]", WorkflowMembershipJson = "[]", Version = Guid.NewGuid()
         });
         db.TraceSummaryMemberships.Add(new OpenTelemetryTraceSummaryMembershipEntity
         {
-            ScopeKey = scopeKey, TraceKey = traceKey, Kind = OpenTelemetryTraceSummaryMembershipKind.Resource,
+            ScopeKey = scopeKey, SchemaVersion = EfOpenTelemetryModule.SchemaVersion, TraceKey = traceKey, Kind = OpenTelemetryTraceSummaryMembershipKind.Resource,
             Value = "foreign-resource", ValueSearchKey = "foreign-resource", ValueKey = "foreign-resource"
         });
     }
@@ -605,13 +605,13 @@ public sealed class EfOpenTelemetryRetentionTests
             var ticks = TelemetryTestData.Now.AddSeconds(index).UtcTicks;
             db.Traces.Add(new OpenTelemetryTraceEntity
             {
-                ScopeKey = scopeKey, Sequence = index, Id = name, IdSearchKey = name, IdOrderKey = name,
+                ScopeKey = scopeKey, SchemaVersion = EfOpenTelemetryModule.SchemaVersion, Sequence = index, Id = name, IdSearchKey = name, IdOrderKey = name,
                 TraceId = name, TraceIdSearchKey = name, TraceKey = name, PayloadJson = "{}",
                 StartTimeTicks = ticks, EndTimeTicks = ticks, SpanCount = 1
             });
             db.Spans.Add(new OpenTelemetrySpanEntity
             {
-                ScopeKey = scopeKey, Sequence = index, Id = name, IdSearchKey = name, IdOrderKey = name,
+                ScopeKey = scopeKey, SchemaVersion = EfOpenTelemetryModule.SchemaVersion, Sequence = index, Id = name, IdSearchKey = name, IdOrderKey = name,
                 TraceId = name, TraceIdSearchKey = name, TraceKey = name,
                 SpanId = name, SpanIdSearchKey = name, SpanIdOrderKey = name,
                 ResourceId = name, ResourceIdSearchKey = name, Name = name, NameSearchKey = name,
@@ -619,33 +619,33 @@ public sealed class EfOpenTelemetryRetentionTests
             });
             db.MetricPoints.Add(new OpenTelemetryMetricPointEntity
             {
-                ScopeKey = scopeKey, Sequence = index, Id = name, IdSearchKey = name, IdOrderKey = name,
+                ScopeKey = scopeKey, SchemaVersion = EfOpenTelemetryModule.SchemaVersion, Sequence = index, Id = name, IdSearchKey = name, IdOrderKey = name,
                 InstrumentId = name, InstrumentIdSearchKey = name, InstrumentName = name, InstrumentNameSearchKey = name,
                 ResourceId = name, ResourceIdSearchKey = name, PayloadJson = "{}", TimestampTicks = ticks
             });
             db.Logs.Add(new OpenTelemetryLogEntity
             {
-                ScopeKey = scopeKey, Sequence = index, Id = name, IdSearchKey = name, IdOrderKey = name,
+                ScopeKey = scopeKey, SchemaVersion = EfOpenTelemetryModule.SchemaVersion, Sequence = index, Id = name, IdSearchKey = name, IdOrderKey = name,
                 ResourceId = name, ResourceIdSearchKey = name,
                 SeverityText = "Information", SeveritySearchKey = "INFORMATION", Body = name, BodySearchKey = name,
                 PayloadJson = "{}", TimestampTicks = ticks
             });
             db.Resources.Add(new OpenTelemetryResourceEntity
             {
-                ScopeKey = scopeKey, Id = name, IdSearchKey = name, IdOrderKey = name,
+                ScopeKey = scopeKey, SchemaVersion = EfOpenTelemetryModule.SchemaVersion, Id = name, IdSearchKey = name, IdOrderKey = name,
                 ServiceName = name, ServiceNameSearchKey = name, ServiceNameKey = name,
                 LastSeenTicks = ticks, PayloadJson = "{}"
             });
             db.Instruments.Add(new OpenTelemetryMetricInstrumentEntity
             {
-                ScopeKey = scopeKey, Id = name, IdSearchKey = name, IdOrderKey = name,
+                ScopeKey = scopeKey, SchemaVersion = EfOpenTelemetryModule.SchemaVersion, Id = name, IdSearchKey = name, IdOrderKey = name,
                 ResourceId = name, ResourceIdSearchKey = name, Name = name, NameSearchKey = name,
                 LastSeenTicks = ticks, PayloadJson = "{}"
             });
             if (index < 2)
                 db.CaptureLedger.Add(new OpenTelemetryCaptureLedgerEntity
                 {
-                    ScopeKey = scopeKey, BatchId = Guid.NewGuid(), Fingerprint = name,
+                    ScopeKey = scopeKey, SchemaVersion = EfOpenTelemetryModule.SchemaVersion, BatchId = Guid.NewGuid(), Fingerprint = name,
                     IssuedAtTicks = issuedAt.UtcTicks, Status = 1
                 });
         }

@@ -8,6 +8,8 @@ using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.DependencyI
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Diagnostics.Persistence.Draining;
+using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tests;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
@@ -553,6 +555,85 @@ public sealed class EfOpenTelemetryDurabilityTests
         Assert.Equal(1, diagnostics.DroppedMetricPointCount);
         Assert.Equal(1, diagnostics.DroppedLogRecordCount);
     }
+
+    /// <summary>
+    /// A row a newer module version wrote is skew, reported as itself: never corrupt data, never a provider failure,
+    /// and its payload is never deserialized.
+    /// </summary>
+    [Theory]
+    [InlineData("resource")]
+    [InlineData("summary")]
+    [InlineData("span")]
+    [InlineData("instrument")]
+    [InlineData("point")]
+    [InlineData("log")]
+    public async Task A_row_with_a_newer_incompatible_schema_reports_skew_not_corruption(string table)
+    {
+        await using var fixture = await CreateFixtureAsync();
+        var batch = TelemetryTestData.Batch("skewed-" + table);
+        await fixture.Store.WriteAsync(batch);
+        await SkewAsync(fixture, async db => table switch
+        {
+            "resource" => await db.Resources.SingleAsync(),
+            "summary" => await db.TraceSummaries.SingleAsync(),
+            "span" => await db.Spans.SingleAsync(),
+            "instrument" => await db.Instruments.SingleAsync(),
+            "point" => await db.MetricPoints.SingleAsync(),
+            _ => await db.Logs.SingleAsync()
+        });
+
+        Func<Task> read = table switch
+        {
+            "resource" => () => fixture.Store.QueryResourcesAsync(new() { Take = 10 }).AsTask(),
+            "summary" => () => fixture.Store.QueryTracesAsync(new() { Take = 10 }).AsTask(),
+            "span" => () => fixture.Store.GetTraceAsync(batch.Traces.Single().TraceId).AsTask(),
+            "instrument" or "point" => () => fixture.Store.QueryMetricsAsync(new() { Take = 10 }).AsTask(),
+            _ => () => fixture.Store.QueryLogsAsync(new() { Take = 10 }).AsTask()
+        };
+        AssertSkew(await Assert.ThrowsAsync<EfSchemaVersionSkewException>(read));
+    }
+
+    /// <summary>A capture that would merge into, or catalog over, a row this build cannot read refuses before it writes anything.</summary>
+    [Theory]
+    [InlineData("summary")]
+    [InlineData("resource")]
+    [InlineData("ledger")]
+    public async Task A_capture_never_merges_into_or_overwrites_a_row_with_a_newer_schema(string table)
+    {
+        await using var fixture = await CreateFixtureAsync();
+        var batch = TelemetryTestData.Batch("skewed-write-" + table);
+        var captured = DiagnosticsDrainBatchId.New();
+        await fixture.EfStore.WriteAsync(captured, batch);
+        await SkewAsync(fixture, async db => table switch
+        {
+            "summary" => await db.TraceSummaries.SingleAsync(),
+            "resource" => await db.Resources.SingleAsync(),
+            _ => await db.CaptureLedger.SingleAsync()
+        });
+
+        var next = table == "ledger" ? captured : DiagnosticsDrainBatchId.New();
+        AssertSkew(await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.EfStore.WriteAsync(next, batch).AsTask()));
+        Assert.Equal(1, await fixture.WithDbAsync(db => db.Traces.CountAsync()));
+    }
+
+    private static Task SkewAsync(OpenTelemetryEntityFrameworkCoreFixture fixture, Func<OpenTelemetryDbContext, Task<EfOpenTelemetryScopedEntity>> select) =>
+        fixture.WithDbAsync(async db =>
+        {
+            var row = await select(db);
+            Assert.Equal(EfOpenTelemetryModule.SchemaVersion, row.SchemaVersion);
+            var entry = db.Entry(row);
+            await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(
+                db,
+                v => row.SchemaVersion = v,
+                v =>
+                {
+                    if (entry.Metadata.FindProperty("PayloadJson") is not null)
+                        entry.Property("PayloadJson").CurrentValue = v;
+                });
+        });
+
+    private static void AssertSkew(EfSchemaVersionSkewException skew) =>
+        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "OpenTelemetry", EfOpenTelemetryModule.SchemaVersion);
 
     private static async Task CorruptTraceSummaryAsync(OpenTelemetryDbContext db, string persistedMemberships)
     {

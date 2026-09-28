@@ -14,6 +14,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tests;
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
@@ -539,6 +540,55 @@ public sealed class StructuredLogsEntityFrameworkCoreTests
                 Directory.Delete(directory, recursive: true);
         }
     }
+
+    /// <summary>
+    /// Every other read failure is wrapped in <see cref="StructuredLogsException"/>; skew leaves as itself, and the
+    /// payload a newer module version wrote is never deserialized.
+    /// </summary>
+    [Fact]
+    public async Task A_record_with_a_newer_incompatible_schema_reports_skew_on_every_read()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        await fixture.Store.AppendAsync(Entry("first", LogLevel.Information, "source-a"));
+        await WithDatabaseAsync(fixture, async db =>
+        {
+            var row = await db.Records.SingleAsync();
+            Assert.Equal(StructuredLogsEfModule.SchemaVersion, row.SchemaVersion);
+            Assert.Equal(StructuredLogsEfModule.SchemaVersion, (await db.StreamStates.AsNoTracking().SingleAsync()).SchemaVersion);
+            Assert.Equal(StructuredLogsEfModule.SchemaVersion, (await db.AppendOperations.AsNoTracking().SingleAsync()).SchemaVersion);
+            await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(db, v => row.SchemaVersion = v, v => row.PayloadJson = v);
+            return true;
+        });
+
+        Func<Task>[] reads =
+        [
+            () => fixture.Store.GetRecentAsync(StructuredLogFilter.None),
+            () => fixture.Store.GetTailCursorAsync(),
+            () => fixture.Store.ReadAfterAsync(null, StructuredLogFilter.None, 10)
+        ];
+        foreach (var read in reads)
+            AssertSkew(await Assert.ThrowsAsync<EfSchemaVersionSkewException>(read));
+    }
+
+    [Fact]
+    public async Task A_stream_state_with_a_newer_schema_reports_skew_before_its_high_water_is_trusted()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        await fixture.Store.AppendAsync(Entry("first", LogLevel.Information, "source-a"));
+        await WithDatabaseAsync(fixture, async db =>
+        {
+            var state = await db.StreamStates.SingleAsync();
+            await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(db, v => state.SchemaVersion = v, _ => state.HighWater = long.MaxValue);
+            return true;
+        });
+
+        AssertSkew(await Assert.ThrowsAsync<EfSchemaVersionSkewException>(
+            () => fixture.Store.ReadAfterAsync(null, StructuredLogFilter.None, 10)));
+        AssertSkew(await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.Store.TrimAsync(0)));
+    }
+
+    private static void AssertSkew(EfSchemaVersionSkewException skew) =>
+        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "StructuredLogs", StructuredLogsEfModule.SchemaVersion);
 
     [Fact]
     public async Task Append_before_the_drain_starts_is_rejected_and_counted_without_provider_io()

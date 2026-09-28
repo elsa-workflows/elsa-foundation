@@ -30,6 +30,7 @@ public sealed class ExecutionPlacementLeaseEntityConfiguration : IEntityTypeConf
         builder.Property(row => row.ExpiresAtOffsetMinutes).IsRequired();
         builder.Property(row => row.IsReleased).IsRequired();
         builder.Property(row => row.Revision).IsRequired().IsConcurrencyToken();
+        builder.Property(row => row.SchemaVersion).HasMaxLength(32).IsRequired();
         builder.HasIndex(row => new
         {
             row.ScopeKeyHash,
