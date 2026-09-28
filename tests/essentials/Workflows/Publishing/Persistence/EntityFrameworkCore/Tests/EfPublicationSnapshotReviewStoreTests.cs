@@ -1,3 +1,5 @@
+using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
@@ -95,6 +97,29 @@ public sealed class EfPublicationSnapshotReviewStoreTests
     }
 
     [Fact]
+    public async Task A_review_with_a_newer_schema_reports_skew_before_it_is_disclosed_consumed_or_expired()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var context = database.Context();
+        var store = database.Store(context, "tenant-a");
+        await store.TryAddAsync(Review("skewed", "tenant-a", database.Now.AddMinutes(-1)));
+        var row = await context.SnapshotReviews.SingleAsync();
+        Assert.Equal(PublishingSnapshotReviewEfModule.SchemaVersion, row.SchemaVersion);
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(context, v => row.SchemaVersion = v, v => row.Action = v);
+
+        Func<Task>[] operations =
+        [
+            () => store.FindAsync("skewed").AsTask(),
+            () => store.TryConsumeAsync("skewed").AsTask(),
+            () => store.DeleteExpiredAsync(database.Now, 10).AsTask()
+        ];
+        foreach (var operation in operations)
+            EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(
+                await Assert.ThrowsAsync<EfSchemaVersionSkewException>(operation), "PublishingSnapshotReview", PublishingSnapshotReviewEfModule.SchemaVersion);
+        Assert.Equal(1, await context.SnapshotReviews.CountAsync());
+    }
+
+    [Fact]
     public async Task Malformed_persisted_enum_is_refused()
     {
         await using var database = await Database.CreateAsync();
@@ -110,7 +135,8 @@ public sealed class EfPublicationSnapshotReviewStoreTests
             PolicySource = nameof(PublicationPolicySource.Host),
             TenantId = "tenant-a",
             SlotRevision = 0,
-            ExpiresAt = database.Now.AddMinutes(1)
+            ExpiresAt = database.Now.AddMinutes(1),
+            SchemaVersion = PublishingSnapshotReviewEfModule.SchemaVersion
         });
         await context.SaveChangesAsync();
         await Assert.ThrowsAsync<InvalidOperationException>(() => database.Store(context, "tenant-a").FindAsync("malformed").AsTask());
@@ -131,7 +157,8 @@ public sealed class EfPublicationSnapshotReviewStoreTests
             SlotName = "default",
             PolicySource = nameof(PublicationPolicySource.Host),
             TenantId = "tenant-b",
-            ExpiresAt = database.Now.AddMinutes(1)
+            ExpiresAt = database.Now.AddMinutes(1),
+            SchemaVersion = PublishingSnapshotReviewEfModule.SchemaVersion
         });
         await context.SaveChangesAsync();
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => database.Store(context, "tenant-a").FindAsync("foreign-malformed").AsTask());

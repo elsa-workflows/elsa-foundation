@@ -3,9 +3,12 @@ using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.Support;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Xunit;
 
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests;
@@ -338,6 +341,89 @@ public sealed class SqliteEfSecretRepositoryTests
         Assert.Equal(SecretRevisionSaveStatus.Conflict, saved.Status);
         Assert.Empty(fixture.Context.ChangeTracker.Entries());
     }
+
+    [Fact]
+    public async Task A_row_with_a_newer_incompatible_schema_reports_skew_on_every_read_and_before_a_write_replaces_it()
+    {
+        await using var fixture = await SqliteFixture.CreateAsync();
+        var revisions = Assert.IsAssignableFrom<IRevisionAwareSecretRepository>(fixture.Repository);
+        var secret = Secret("tenant-a", "payments.api", "alpha");
+        await fixture.Repository.SaveAsync(secret);
+        var revision = (await revisions.FindWithRevisionAsync("tenant-a", secret.Name))!.Revision;
+        var row = await fixture.Context.Secrets.SingleAsync();
+        Assert.Equal(SecretsEfModule.SchemaVersion, row.SchemaVersion);
+
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = v, v => row.Payload = v);
+
+        Func<Task>[] operations =
+        [
+            () => fixture.Repository.FindAsync("tenant-a", secret.Name).AsTask(),
+            () => revisions.FindWithRevisionAsync("tenant-a", secret.Name).AsTask(),
+            () => fixture.Repository.ListPageAsync("tenant-a", new SecretRepositoryListRequest()).AsTask(),
+            () => fixture.Repository.SaveAsync(Secret("tenant-a", secret.Name, "beta")).AsTask(),
+            () => revisions.SaveWithRevisionAsync(Secret("tenant-a", secret.Name, "beta"), revision).AsTask(),
+            () => SecretsProjectionContract.HasLegacyProjectionsAsync(fixture.Context)
+        ];
+        foreach (var operation in operations)
+        {
+            var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(operation);
+            EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "Secrets", SecretsEfModule.SchemaVersion);
+            fixture.Context.ChangeTracker.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Secrets keeps a migration chain, so a database can hold rows written before the stamp column existed. Those
+    /// builds wrote the 1.0.0 content format, and the migration that adds the column stamps the rows it finds with
+    /// it, so a secret saved before the upgrade reads the same after it.
+    /// </summary>
+    [Fact]
+    public async Task A_row_written_before_the_stamp_existed_carries_the_version_it_was_written_in_after_the_stamp_migration()
+    {
+        await using var database = new TemporarySqliteDatabase("secrets-ef-prestamp");
+        await using var connection = new SqliteConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using var context = new SecretsSqliteDbContext(SqliteOptions(connection).Options);
+        var migrations = context.Database.GetMigrations().ToArray();
+        var stampMigration = Assert.Single(migrations, migration => migration.EndsWith("_SchemaVersionStamp", StringComparison.Ordinal));
+        var migrator = context.GetService<IMigrator>();
+        await migrator.MigrateAsync(migrations[Array.IndexOf(migrations, stampMigration) - 1]);
+        await using (var preStamp = new SecretsSqliteDbContext(PreStampSecretsModel.Use(SqliteOptions(connection)).Options))
+            await new EfSecretRepository(preStamp).SaveAsync(Secret("tenant-a", "payments.api", "alpha"));
+
+        await migrator.MigrateAsync();
+
+        Assert.Equal(SecretsEfModule.SchemaVersion, (await context.Secrets.AsNoTracking().SingleAsync()).SchemaVersion);
+        Assert.Equal("alpha", (await new EfSecretRepository(context).FindAsync("tenant-a", "payments.api"))!.LatestActiveVersion!.Payload.Value);
+        Assert.False(await new SecretsProjectionReindex().AuditAsync(context));
+    }
+
+    /// <summary>
+    /// The stamp migration fills the column only for the rows it finds, then drops the default: a row written later
+    /// without a stamp is refused, never read as the baseline.
+    /// </summary>
+    [Fact]
+    public async Task A_row_written_without_a_stamp_after_the_stamp_migration_is_refused()
+    {
+        await using var database = new TemporarySqliteDatabase("secrets-ef-poststamp");
+        await using var connection = new SqliteConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using var context = new SecretsSqliteDbContext(SqliteOptions(connection).Options);
+        await context.Database.MigrateAsync();
+        await using var preStamp = new SecretsSqliteDbContext(PreStampSecretsModel.Use(SqliteOptions(connection)).Options);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => new EfSecretRepository(preStamp).SaveAsync(Secret("tenant-a", "payments.api", "alpha")).AsTask());
+
+        var constraint = Assert.IsType<SqliteException>(Assert.IsType<DbUpdateException>(failure.InnerException).InnerException);
+        Assert.Contains($"{SecretsEfModule.TableName}.SchemaVersion", constraint.Message, StringComparison.Ordinal);
+    }
+
+    private static DbContextOptionsBuilder<SecretsSqliteDbContext> SqliteOptions(SqliteConnection connection) =>
+        new DbContextOptionsBuilder<SecretsSqliteDbContext>()
+            .UseSqlite(connection, sqlite => sqlite
+                .MigrationsAssembly(typeof(SecretsSqliteDbContext).Assembly.GetName().Name)
+                .MigrationsHistoryTable(SecretsEfModule.HistoryTableName));
 
     private static Secret Secret(
         string tenantId,

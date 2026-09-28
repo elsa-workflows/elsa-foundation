@@ -81,7 +81,8 @@ public sealed class EfExecutionCommandTransport(
                     PendingCount = 1,
                     PendingVisibleAtUtcTicks = 0,
                     PendingSequence = sequence,
-                    Revision = 1
+                    Revision = 1,
+                    SchemaVersion = ExecutionCommandTransportEfModule.SchemaVersion
                 });
             }
             else
@@ -479,6 +480,7 @@ public sealed class EfExecutionCommandTransport(
         row.LeaseExpiresAtUtcTicks = item.LeaseExpiresAt?.UtcTicks ?? 0;
         row.LeaseExpiresAtOffsetMinutes = item.LeaseExpiresAt is { } expiry ? OffsetMinutes(expiry) : 0;
         row.PayloadJson = Serialize(item);
+        row.SchemaVersion = ExecutionCommandTransportEfModule.SchemaVersion;
         row.Revision = checked(row.Revision + 1);
     }
 
@@ -504,13 +506,15 @@ public sealed class EfExecutionCommandTransport(
             LeaseExpiresAtUtcTicks = 0,
             LeaseExpiresAtOffsetMinutes = 0,
             PayloadJson = Serialize(item),
-            Revision = 1
+            Revision = 1,
+            SchemaVersion = ExecutionCommandTransportEfModule.SchemaVersion
         };
 
     private static ExecutionCommandTransportItem MapItem(
         ExecutionCommandTransportItemEntity row,
         string scope)
     {
+        EfSchemaVersion.EnsureReadable(ExecutionCommandTransportEfModule.SchemaFamily, row.SchemaVersion, ExecutionCommandTransportEfModule.SchemaVersion);
         EnsureItemIdentity(row, scope);
         var item = Deserialize<ExecutionCommandTransportItem>(row.PayloadJson);
         var rowEnqueuedAt = ReadTimestamp(row.EnqueuedAtUtcTicks, row.EnqueuedAtOffsetMinutes);
@@ -548,7 +552,8 @@ public sealed class EfExecutionCommandTransport(
 
     private static void EnsureHead(ExecutionCommandStreamHeadEntity row, string scope, string expectedWorkflowExecutionId)
     {
-        if (!StringComparer.Ordinal.Equals(row.ScopeKey, EfDistributedIdentity.EncodeScope(scope)) ||
+        if (EfSchemaVersion.NotReadable(ExecutionCommandTransportEfModule.SchemaFamily, row.SchemaVersion, ExecutionCommandTransportEfModule.SchemaVersion) ||
+            !StringComparer.Ordinal.Equals(row.ScopeKey, EfDistributedIdentity.EncodeScope(scope)) ||
             !StringComparer.Ordinal.Equals(row.ScopeKeyHash, EfDistributedIdentity.Hash(scope)) ||
             !StringComparer.Ordinal.Equals(row.WorkflowExecutionId, expectedWorkflowExecutionId) ||
             !StringComparer.Ordinal.Equals(row.WorkflowExecutionIdHash, EfDistributedIdentity.Hash(row.WorkflowExecutionId)) ||

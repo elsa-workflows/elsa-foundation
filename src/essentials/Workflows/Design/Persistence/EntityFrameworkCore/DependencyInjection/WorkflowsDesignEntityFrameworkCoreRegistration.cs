@@ -81,7 +81,11 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
     private static void AddContext<T>(IServiceCollection services, WorkflowsDesignEntityFrameworkCoreOptions options) where T : WorkflowsDesignDbContext
     {
         Binding.AddContext<T>(services, options.Pooling, (provider, builder) =>
-            Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName, options.Schema));
+        {
+            Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName, options.Schema);
+            // A pooled context's options are frozen before OnConfiguring runs, so the check is added here.
+            builder.AddInterceptors(EfSchemaVersionMaterializationInterceptor.Instance);
+        });
         services.AddScoped<WorkflowsDesignDbContext>(sp => sp.GetRequiredService<T>());
     }
 

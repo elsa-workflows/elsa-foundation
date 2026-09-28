@@ -21,6 +21,12 @@ public static class IdentityIamEfModule
     public const string EmailReservationTableName = "identity_email_reservations";
     public const string RoleNameReservationTableName = "identity_role_name_reservations";
     public const string MutationReceiptTableName = "identity_mutation_receipts";
+
+    /// <summary>The persisted-schema version every Identity IAM row is stamped with, and checked against when read.</summary>
+    public const string SchemaVersion = "1.0.0";
+
+    /// <summary>The schema family this module's rows belong to, checked against when a row is read.</summary>
+    public const string SchemaFamily = "IdentityIam";
     public const string DefaultConnectionName = EfConnectionDefaults.ConnectionName;
     public const string DefaultSqliteConnectionString = EfConnectionDefaults.SqliteConnectionString;
 

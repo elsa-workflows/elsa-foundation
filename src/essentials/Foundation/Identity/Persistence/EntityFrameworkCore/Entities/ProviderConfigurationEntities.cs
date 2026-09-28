@@ -28,6 +28,9 @@ public abstract class ProviderConfigurationEntity : IRevisionedIdentityEntity
     public int PermissionPropagation { get; set; }
     public string SettingsJson { get; set; } = "{}";
     public long Revision { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="IdentityProviderConfigurationEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }
 
 public sealed class TenantProviderConfigurationEntity : ProviderConfigurationEntity;

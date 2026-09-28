@@ -8,6 +8,12 @@ public static class StructuredLogsEfModule
     public const string RecordsTableName = "elsa_structured_log_records";
     public const string StreamStatesTableName = "elsa_structured_log_stream_states";
     public const string AppendOperationsTableName = "elsa_structured_log_append_operations";
+
+    /// <summary>The persisted-schema version every structured-log row is stamped with, and checked against when read.</summary>
+    public const string SchemaVersion = "1.0.0";
+
+    /// <summary>The schema family this module's rows belong to, checked against when a row is read.</summary>
+    public const string SchemaFamily = "StructuredLogs";
     public const string DefaultConnectionName = EfConnectionDefaults.ConnectionName;
     public const string DefaultSqliteConnectionString = EfConnectionDefaults.SqliteConnectionString;
 

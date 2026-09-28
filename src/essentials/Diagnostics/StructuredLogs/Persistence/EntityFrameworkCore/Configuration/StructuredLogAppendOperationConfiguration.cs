@@ -18,6 +18,7 @@ public sealed class StructuredLogAppendOperationConfiguration : IEntityTypeConfi
         builder.Property(operation => operation.IssuedAtTicks).IsRequired();
         builder.Property(operation => operation.Fingerprint).HasMaxLength(64).IsRequired();
         builder.Property(operation => operation.OutcomeJson).IsRequired();
+        builder.Property(operation => operation.SchemaVersion).HasMaxLength(32).IsRequired();
         builder.HasIndex(operation => new { operation.ScopeKey, operation.IssuedAtTicks });
     }
 }

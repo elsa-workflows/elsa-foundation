@@ -102,7 +102,8 @@ internal static class RuntimeCommandTransportProviderSmoke
                 PendingCount = 0,
                 PendingVisibleAtUtcTicks = 0,
                 PendingSequence = 0,
-                Revision = 1
+                Revision = 1,
+                SchemaVersion = ExecutionCommandTransportEfModule.SchemaVersion
             });
             await context.SaveChangesAsync();
             await rollback.RollbackAsync();

@@ -22,4 +22,7 @@ public sealed class CredentialEntity : IRevisionedIdentityEntity
     public int Status { get; set; }
     public DateTimeOffset? ExpiresAt { get; set; }
     public long Revision { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="IdentityIamEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }

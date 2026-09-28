@@ -59,6 +59,11 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
                     b.Property<string>("SettingsJson")
                         .IsRequired()
                         .HasColumnType("longtext");
@@ -97,6 +102,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.ToTable("identity_global_provider_configurations", (string)null);
                 });
@@ -140,6 +147,11 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
                     b.Property<string>("SettingsJson")
                         .IsRequired()
                         .HasColumnType("longtext");
@@ -180,6 +192,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.ToTable("identity_provider_configurations", (string)null);
                 });

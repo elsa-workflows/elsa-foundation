@@ -23,6 +23,7 @@ public sealed class ExecutionCommandStreamHeadEntityConfiguration : IEntityTypeC
         builder.Property(row => row.PendingVisibleAtUtcTicks).IsRequired();
         builder.Property(row => row.PendingSequence).IsRequired();
         builder.Property(row => row.Revision).IsRequired().IsConcurrencyToken();
+        builder.Property(row => row.SchemaVersion).HasMaxLength(32).IsRequired();
         builder.HasIndex(row => new { row.ScopeKeyHash, row.WorkflowExecutionIdHash }).IsUnique();
         builder.HasIndex(row => new { row.ScopeKeyHash, row.PendingVisibleAtUtcTicks, row.WorkflowExecutionIdOrderKey, row.Id });
         builder.HasIndex(row => new { row.ScopeKeyHash, row.WorkflowExecutionIdHash, row.PendingCount });

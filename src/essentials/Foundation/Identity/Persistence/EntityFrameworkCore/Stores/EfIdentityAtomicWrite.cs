@@ -178,7 +178,8 @@ public sealed class EfIdentityAtomicWrite
                     FailedUnitId = result.FailedUnitId,
                     CreatedAt = now,
                     ExpiresAt = now.Add(receiptLifetime),
-                    Revision = 1
+                    Revision = 1,
+                    SchemaVersion = IdentityIamEfModule.SchemaVersion
                 });
                 await context.SaveChangesAsync(cancellationToken);
                 if (transaction is not null)
@@ -441,7 +442,8 @@ public sealed class EfIdentityAtomicWrite
 
     private static void EnsureReceiptSelfIdentity(MutationReceiptEntity row)
     {
-        if (!string.Equals(row.Id, row.MutationReceiptId, StringComparison.Ordinal) ||
+        if (EfSchemaVersion.NotReadable(IdentityIamEfModule.SchemaFamily, row.SchemaVersion, IdentityIamEfModule.SchemaVersion) ||
+            !string.Equals(row.Id, row.MutationReceiptId, StringComparison.Ordinal) ||
             string.IsNullOrWhiteSpace(row.OperationId) ||
             string.IsNullOrWhiteSpace(row.RequestFingerprint))
         {

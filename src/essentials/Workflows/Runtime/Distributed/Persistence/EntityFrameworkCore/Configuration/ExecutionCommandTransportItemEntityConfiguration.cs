@@ -27,6 +27,7 @@ public sealed class ExecutionCommandTransportItemEntityConfiguration : IEntityTy
         builder.Property(row => row.LeaseExpiresAtOffsetMinutes).IsRequired();
         builder.Property(row => row.PayloadJson).IsRequired();
         builder.Property(row => row.Revision).IsRequired().IsConcurrencyToken();
+        builder.Property(row => row.SchemaVersion).HasMaxLength(32).IsRequired();
         builder.HasIndex(row => new { row.ScopeKeyHash, row.WorkflowExecutionIdHash, row.Sequence }).IsUnique();
         builder.HasIndex(row => new { row.ScopeKeyHash, row.WorkflowExecutionIdHash, row.VisibleAtUtcTicks, row.Sequence, row.TransportItemIdHash });
     }

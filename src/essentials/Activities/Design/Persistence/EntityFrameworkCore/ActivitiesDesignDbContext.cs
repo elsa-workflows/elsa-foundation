@@ -20,7 +20,7 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 /// Shared Activities Design model. Provider-specific contexts only supply column annotations;
 /// no provider SQL or IQueryable crosses the domain contracts.
 /// </summary>
-public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbContext(options)
+public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbContext(options), IEfSchemaVersionedContext
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     /// <summary>
@@ -164,9 +164,18 @@ public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbCo
             "InputsSource",
             "OutputsSource",
             "DesignFacetsSource");
+        modelBuilder.IndexSchemaVersionStamps();
     }
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);
+
+    string IEfSchemaVersionedContext.SchemaFamily => ActivitiesDesignEfModule.SchemaFamily;
+
+    string IEfSchemaVersionedContext.SchemaVersion => ActivitiesDesignEfModule.SchemaVersion;
+
+    /// <summary>Every instance checks its rows' stamps, however its options were built.</summary>
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
+        EfSchemaVersionMaterializationInterceptor.EnsureAdded(optionsBuilder);
 
     /// <summary>
     /// The string columns this module compares or orders in SQL beyond the ones a key or an index already
@@ -207,6 +216,7 @@ public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbCo
 
     private void StampWriteMetadata()
     {
+        EfSchemaVersionMaterializationInterceptor.StampWrites(this);
         var now = DateTimeOffset.UtcNow;
         StampScopedIdentity();
         foreach (var entry in ChangeTracker.Entries<ActivityDefinition>()
@@ -354,6 +364,7 @@ public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbCo
         foreach (var name in new[] { "TenantId", "CreatedAt", "LastModifiedAt" }.Where(name => typeof(TEntity).GetProperty(name) is not null))
             entity.Property(name);
         entity.Property<byte[]>("ConcurrencyToken").IsConcurrencyToken().IsRequired(false);
+        entity.Property<string>(EfSchemaVersionMaterializationInterceptor.PropertyName).HasMaxLength(32).IsRequired();
         ConfigureConversions(entity);
     }
 

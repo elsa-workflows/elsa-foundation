@@ -34,6 +34,7 @@ public abstract class PublishingSnapshotReviewDbContext(DbContextOptions options
         modelBuilder.UseElsaPayloadColumns(
             this,
             "Content");
+        modelBuilder.IndexSchemaVersionStamps();
     }
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);

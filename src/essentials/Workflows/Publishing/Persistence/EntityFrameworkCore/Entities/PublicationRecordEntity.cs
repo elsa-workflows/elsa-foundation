@@ -26,4 +26,7 @@ public sealed class PublicationRecordEntity
     public string? TenantId { get; set; }
     public string TenantIdHash { get; set; } = null!;
     public long Revision { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="PublishingLedgerEfModule.ContentSchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }

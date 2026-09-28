@@ -128,6 +128,88 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Every_row_the_context_writes_carries_the_current_schema_version()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        await SeedSchemaVersionRowsAsync(db, new EfDesignAtomicWriter(db, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))));
+
+        foreach (var entityType in db.Model.GetEntityTypes())
+        {
+            var stamps = "SELECT DISTINCT \"" + EfSchemaVersionMaterializationInterceptor.PropertyName + "\" AS \"Value\" FROM \"" + entityType.GetTableName() + "\"";
+            Assert.Equal([WorkflowsDesignEfModule.SchemaVersion], await db.Database.SqlQueryRaw<string>(stamps).ToListAsync());
+        }
+    }
+
+    /// <summary>
+    /// This module maps domain types directly, so no store code runs between EF reading a row and building it: the
+    /// stamp is checked as EF materializes the row. Every store that reads a table reports a row a newer module version
+    /// wrote as skew, before anything reads the content the arrange corrupted.
+    /// </summary>
+    [Theory]
+    [InlineData("definition")]
+    [InlineData("version")]
+    [InlineData("draft")]
+    [InlineData("draft layout")]
+    [InlineData("version layout")]
+    [InlineData("operation")]
+    public async Task A_row_with_a_newer_schema_reports_skew_before_its_content_is_read(string table)
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var definitions = new EfWorkflowDefinitionStore(db, access);
+        var versions = new EfWorkflowDefinitionVersionStore(db, new TestSerializer(), definitions, access);
+        var drafts = new EfWorkflowDefinitionDraftStore(db, new TestSerializer(), access);
+        var list = new EfWorkflowDefinitionListProjectionStore(db, access);
+        var writer = new EfDesignAtomicWriter(db, access);
+        await SeedSchemaVersionRowsAsync(db, writer);
+
+        var (entityType, content, reads) = table switch
+        {
+            "definition" => (typeof(WorkflowDefinition), nameof(WorkflowDefinition.Name), new Func<Task>[] { () => definitions.FindByIdAsync("alpha"), () => definitions.ListAsync(new WorkflowDefinitionFilter()), () => versions.GetWithDefinitionAsync("version") }),
+            "version" => (typeof(WorkflowDefinitionVersion), nameof(WorkflowDefinitionVersion.StateSource), [() => versions.FindByIdAsync("version"), () => versions.ListByDefinitionAsync("alpha"), () => list.ListByDefinitionIdsAsync(["alpha"])]),
+            "draft" => (typeof(WorkflowDefinitionDraft), nameof(WorkflowDefinitionDraft.StateSource), [() => drafts.FindByIdAsync("draft"), () => drafts.FindWithLayoutByIdAsync("draft"), () => list.ListByDefinitionIdsAsync(["alpha"])]),
+            "draft layout" => (typeof(WorkflowDefinitionDraftLayout), nameof(WorkflowDefinitionDraftLayout.RecordsJson), [() => drafts.FindLayoutByDraftIdAsync("draft"), () => drafts.FindWithLayoutByIdAsync("draft")]),
+            "version layout" => (typeof(WorkflowDefinitionVersionLayout), nameof(WorkflowDefinitionVersionLayout.RecordsJson), [() => new EfWorkflowDefinitionVersionLayoutStore(db, access).FindByVersionIdAsync("version")]),
+            _ => (typeof(DesignOperationEntity), nameof(DesignOperationEntity.ResultJson), [() => ExecuteSchemaVersionOperationAsync(writer)])
+        };
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedTableAsync(db, entityType, content);
+
+        foreach (var read in reads)
+            EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(
+                await Assert.ThrowsAsync<EfSchemaVersionSkewException>(read), "WorkflowsDesign", WorkflowsDesignEfModule.SchemaVersion);
+    }
+
+    /// <summary>
+    /// A pooled context's options are frozen before <c>OnConfiguring</c> runs, so the registration adds the check up
+    /// front. Either way the context the container hands out carries it exactly once.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Ef_registration_adds_the_schema_version_check_once_pooled_or_not(bool pooling)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IPayloadSerializer, TestSerializer>();
+        services.AddSingleton<IIdentityGenerator, TestIdentity>();
+        services.AddSingleton<IActivityStructureService, EmptyActivityStructureService>();
+        services.AddWorkflowsDesignEntityFrameworkCore(new WorkflowsDesignEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:",
+            Pooling = pooling
+        });
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+
+        var context = scope.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>();
+        Assert.Single(
+            context.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()!.Interceptors!,
+            interceptor => ReferenceEquals(interceptor, EfSchemaVersionMaterializationInterceptor.Instance));
+    }
+
+    [Fact]
     public async Task Draft_with_layout_reads_keep_tenant_relationships_and_reject_ambiguous_cross_scope_ids()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
@@ -2038,6 +2120,37 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.Single(await db.Operations.ToListAsync());
     }
 
+    /// <summary>
+    /// Reconciliation retries a failing marker read until its window closes. A marker a newer module version wrote does
+    /// not become readable by retrying, so its skew surfaces as itself rather than as an unknown outcome.
+    /// </summary>
+    [Fact]
+    public async Task Ef_reconciliation_reports_a_marker_with_a_newer_schema_as_skew_rather_than_an_unknown_outcome()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        var interceptor = new AcknowledgementLostInterceptor
+        {
+            BeforeFailure = () =>
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = "UPDATE \"" + WorkflowsDesignEfModule.OperationTable + "\" SET \"SchemaVersion\" = '" + EfSchemaVersionSkewTestSupport.SkewedSchemaVersion + "'";
+                command.ExecuteNonQuery();
+            }
+        };
+        var options = new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>()
+            .UseSqlite(connection).AddInterceptors(interceptor).Options;
+        await using var db = new WorkflowsDesignSqliteDbContext(options); await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        IDesignAtomicWriter writer = new EfDesignAtomicWriter(db, access, reconciliationTimeout: TimeSpan.FromSeconds(5));
+        interceptor.FailNextCommit = true;
+
+        var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => writer.ExecuteAsync(
+            new DesignOperationKey("ack-lost-newer-marker"), "test.op", new { Value = 1 }, ["test"],
+            (_, _) => Task.FromResult(DesignAtomicWriteStage<ResultValue>.Accepted(new ResultValue("durable")))));
+
+        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "WorkflowsDesign", WorkflowsDesignEfModule.SchemaVersion);
+    }
+
     [Fact]
     public async Task Ef_maps_reconciliation_timeout_after_provider_read_failures_to_unknown_outcome()
     {
@@ -2699,6 +2812,23 @@ public sealed class EfWorkflowDesignPersistenceTests
     };
 
     private static WorkflowsDesignSqliteDbContext Create(SqliteConnection connection) => new(new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>().UseSqlite(connection).Options);
+
+    /// <summary>Writes one row to every table of the module: a definition with a version, a draft, both layouts and an operation marker.</summary>
+    private static async Task SeedSchemaVersionRowsAsync(WorkflowsDesignDbContext db, EfDesignAtomicWriter writer)
+    {
+        db.Definitions.Add(new WorkflowDefinition { Id = "alpha", TenantId = "tenant-a", Name = "Alpha" });
+        db.Versions.Add(new WorkflowDefinitionVersion("alpha", "1.0.0", "{}") { Id = "version", TenantId = "tenant-a" });
+        db.Drafts.Add(new WorkflowDefinitionDraft { Id = "draft", TenantId = "tenant-a", WorkflowDefinitionId = "alpha", StateSource = "{}" });
+        db.DraftLayouts.Add(new WorkflowDefinitionDraftLayout { Id = "draft-layout", TenantId = "tenant-a", WorkflowDefinitionDraftId = "draft" });
+        db.VersionLayouts.Add(new WorkflowDefinitionVersionLayout { Id = "version-layout", TenantId = "tenant-a", WorkflowDefinitionVersionId = "version" });
+        await db.SaveChangesAsync();
+        await ExecuteSchemaVersionOperationAsync(writer);
+        db.ChangeTracker.Clear();
+    }
+
+    /// <summary>Runs the seeded operation; a second run replays it from its marker.</summary>
+    private static Task ExecuteSchemaVersionOperationAsync(EfDesignAtomicWriter writer) => writer.ExecuteAsync(
+        new DesignOperationKey("schema-version"), "test.op", new { Value = 1 }, ["test"], _ => Task.FromResult(new { Id = "staged" }));
     private static string LookupHash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(WorkflowDefinitionIdentity.Fold(value)))).ToLowerInvariant();
 
     private static string ExactLookupHash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
@@ -2920,11 +3050,15 @@ public sealed class EfWorkflowDesignPersistenceTests
     {
         public bool FailNextCommit { get; set; }
 
+        /// <summary>Runs against the committed database before the lost acknowledgement is reported.</summary>
+        public Action? BeforeFailure { get; init; }
+
         public override void TransactionCommitted(DbTransaction transaction, TransactionEndEventData eventData)
         {
             if (!FailNextCommit)
                 return;
             FailNextCommit = false;
+            BeforeFailure?.Invoke();
             throw new InvalidOperationException("commit acknowledgement lost");
         }
 
@@ -2933,6 +3067,7 @@ public sealed class EfWorkflowDesignPersistenceTests
             if (!FailNextCommit)
                 return Task.CompletedTask;
             FailNextCommit = false;
+            BeforeFailure?.Invoke();
             return Task.FromException(new InvalidOperationException("commit acknowledgement lost"));
         }
     }

@@ -22,6 +22,7 @@ public sealed class ApplicationEntityConfiguration : IEntityTypeConfiguration<Ap
         builder.Property(entity => entity.AllowedGrantTypesJson).IsRequired();
         builder.Property(entity => entity.ScopesJson).IsRequired();
         builder.Property(entity => entity.Revision).IsRequired().IsConcurrencyToken();
+        builder.Property(entity => entity.SchemaVersion).HasMaxLength(32).IsRequired();
     }
 
     private static void ConfigureText(PropertyBuilder<string> property) =>

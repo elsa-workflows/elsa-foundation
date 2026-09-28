@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+
 namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
@@ -19,6 +21,27 @@ namespace Elsa.Persistence.EntityFramework;
 /// </remarks>
 public static class EfSchemaVersion
 {
+    /// <summary>The column every stamped table carries its row's schema version in.</summary>
+    public const string ColumnName = "SchemaVersion";
+
+    /// <summary>
+    /// Gives the <see cref="ColumnName"/> stamp of every table <paramref name="modelBuilder"/> maps a non-unique index
+    /// under EF's default name, so the rows still at a given version are found without scanning the table. A module's
+    /// context calls this last in <c>OnModelCreating</c>, once every table and its stamp are configured.
+    /// </summary>
+    public static ModelBuilder IndexSchemaVersionStamps(this ModelBuilder modelBuilder)
+    {
+        ArgumentNullException.ThrowIfNull(modelBuilder);
+        var unindexed = modelBuilder.Model.GetEntityTypes()
+            .Where(entityType => entityType.GetTableName() is not null)
+            .Select(entityType => (EntityType: entityType, Stamp: entityType.FindProperty(ColumnName)))
+            .Where(table => table.Stamp is not null && table.EntityType.FindIndex(table.Stamp) is null)
+            .ToList();
+        foreach (var (entityType, stamp) in unindexed)
+            entityType.AddIndex(stamp!);
+        return modelBuilder;
+    }
+
     /// <summary>
     /// Throws <see cref="EfSchemaVersionSkewException"/> when <paramref name="found"/> is not the
     /// version this build reads.

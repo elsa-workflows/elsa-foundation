@@ -17,5 +17,8 @@ public sealed class SecretRecord
     public bool HasNonExpiringActiveVersion { get; set; }
     public DateTimeOffset? MaxActiveVersionExpiresAt { get; set; }
     public string Payload { get; set; } = "{}";
+
+    /// <summary>The persisted-schema version of this row: <see cref="SecretsEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
     public byte[] ConcurrencyToken { get; set; } = [];
 }

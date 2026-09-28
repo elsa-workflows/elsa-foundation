@@ -91,7 +91,8 @@ public sealed class EfPublicationRecordStore(
                 .OrderBy(row => row.PublicationIdHash)
                 .Take(PublishingLedgerEfModule.SlotListPageSize)
                 .ToArrayAsync(cancellationToken);
-            if (rows.Any(row => !StringComparer.Ordinal.Equals(row.TenantId, encodedTenantId) ||
+            if (rows.Any(row => EfSchemaVersion.NotReadable("PublishingLedger", row.SchemaVersion, PublishingLedgerEfModule.ContentSchemaVersion) ||
+                                !StringComparer.Ordinal.Equals(row.TenantId, encodedTenantId) ||
                                 !StringComparer.Ordinal.Equals(row.SlotId, encodedSlotId)))
                 throw new InvalidOperationException("A publication-record hash candidate did not match its encoded identity residual.");
             records.AddRange(rows.Select(ToModel));
@@ -156,7 +157,8 @@ public sealed class EfPublicationRecordStore(
         if (candidates.Length == 0)
             return null;
 
-        if (candidates.Length != 1 ||
+        if (EfSchemaVersion.NotReadable("PublishingLedger", candidates[0].SchemaVersion, PublishingLedgerEfModule.ContentSchemaVersion) ||
+            candidates.Length != 1 ||
             !StringComparer.Ordinal.Equals(candidates[0].TenantId, EfPublishingStoreSupport.EncodeNullable(tenantId)) ||
             !StringComparer.Ordinal.Equals(candidates[0].PublicationId, EfPublishingStoreSupport.Encode(publicationId)))
             throw new InvalidOperationException("A publication-record hash candidate did not match its encoded identity residual.");
@@ -203,9 +205,10 @@ public sealed class EfPublicationRecordStore(
         return row;
     }
 
-    /// <summary>Copies the lifecycle members a transition may change and advances the row revision.</summary>
+    /// <summary>Copies the lifecycle members a transition may change, stamps the schema version, and advances the row revision.</summary>
     private static void CopyMutable(PublicationRecordEntity row, PublicationRecord publication)
     {
+        row.SchemaVersion = PublishingLedgerEfModule.ContentSchemaVersion;
         row.SourceReferenceId = EfPublishingStoreSupport.EncodeNullable(publication.SourceReferenceId);
         row.Status = publication.Status.ToString();
         (row.ActivatedAtUtcTicks, row.ActivatedAtOffsetMinutes) = NullableParts(publication.ActivatedAt);
@@ -218,6 +221,7 @@ public sealed class EfPublicationRecordStore(
 
     private static PublicationRecord ToModel(PublicationRecordEntity row)
     {
+        EfSchemaVersion.EnsureReadable("PublishingLedger", row.SchemaVersion, PublishingLedgerEfModule.ContentSchemaVersion);
         var publicationId = EfPublishingStoreSupport.DecodeIdentity(row.PublicationId, nameof(row.PublicationId));
         var tenantId = EfPublishingStoreSupport.DecodeNullableIdentity(row.TenantId, nameof(row.TenantId));
         if (!StringComparer.Ordinal.Equals(row.TenantIdHash, EfPublishingStoreSupport.TenantHash(tenantId)) ||
