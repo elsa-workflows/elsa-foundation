@@ -56,7 +56,7 @@ internal sealed class SharedMembershipStore
                             [identity.HostId],
                             $"Host id '{identity.HostId}' has been claimed by a live process for a full liveness window; it kept renewing throughout it."));
 
-                throw new ClusterMembershipJoinRefusedException(identity.HostId);
+                throw new ClusterMembershipJoinRefusedException(identity.HostId, latest.Identity.Incarnation, latest.HeartbeatAt);
             }
 
             _refusalWatches.Remove(identity.HostId);

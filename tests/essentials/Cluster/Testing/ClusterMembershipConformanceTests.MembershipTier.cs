@@ -188,6 +188,8 @@ public abstract partial class ClusterMembershipConformanceTests
         var refusal = await Assert.ThrowsAsync<ClusterMembershipJoinRefusedException>(async () => await Fixture.StartMemberAsync(Restart(first)));
         Assert.Equal(identity.HostId, refusal.HostId);
         Assert.Contains(identity.HostId, refusal.Message, StringComparison.Ordinal);
+        Assert.Equal(identity.Incarnation, refusal.Incarnation);
+        Assert.Contains(identity.Incarnation.ToString(), refusal.Message, StringComparison.Ordinal);
 
         await Fixture.AdvanceAsync(Timings.HeartbeatInterval);
         var standing = first.Membership.GetLocalStanding();
@@ -220,6 +222,7 @@ public abstract partial class ClusterMembershipConformanceTests
 
         var refusal = await Assert.ThrowsAsync<ClusterMembershipJoinRefusedException>(async () => await Fixture.StartMemberAsync(Restart(first)));
         Assert.Equal(identity.HostId, refusal.HostId);
+        Assert.Equal(identity.Incarnation, refusal.Incarnation);
 
         var survivor = Assert.Single((await FreshViewAsync(observer)).Members, member => member.HostId == identity.HostId);
         Assert.Equal(identity, survivor.Identity);

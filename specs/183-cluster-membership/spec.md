@@ -552,8 +552,9 @@ for identical fleets.
 **Diagnostics**
 
 Each of the following is its own failure mode a member MUST report as a warning or error naming the hosts involved,
-and MUST make visible in its own entry in the fleet view, so that a failure in any one of them is traceable to a
-single requirement:
+so that a failure in any one of them is traceable to a single requirement. Every condition appears in the subject's
+own entry in the fleet view, except FR-039: the refused joiner reports it at startup, because it never joins and so
+never has an entry (Decisions, 2026-09-28).
 
 - **FR-037**: A member MUST report a lapse (FR-007).
 - **FR-038**: A member MUST report a displacement (FR-004a).
@@ -773,3 +774,10 @@ Recorded 2026-09-28, implementing the rejoin decision above; not a new decision.
   on. FR-007's cross-reference to FR-039 is corrected to match. User Story 4's scenarios, and SC-009/SC-011, are
   amended so a live duplicate's outcome is "startup refused with FR-039 within one liveness window," not an unbounded
   retry.
+
+Recorded 2026-09-28, reconciling the diagnostics preamble with the FR-039 move above; not a new decision.
+
+- **The diagnostics preamble no longer promises every condition its own fleet entry.** FR-039 is now raised by a
+  joiner that is refused before it ever joins (FR-004b), so it has no fleet entry to carry the diagnostic; it reports
+  the diagnostic at startup instead. FR-037, FR-038, FR-040, FR-041 and FR-042 still appear in the subject's own
+  entry.

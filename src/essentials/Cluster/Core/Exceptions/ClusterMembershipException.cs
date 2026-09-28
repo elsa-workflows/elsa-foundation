@@ -25,12 +25,25 @@ public sealed class ClusterMembershipReadException(string message, Exception? in
 /// A join was refused because another live process holds the host id (FR-004b). The live incarnation is left
 /// undisturbed; the operator must configure a distinct host id.
 /// </summary>
-public sealed class ClusterMembershipJoinRefusedException(string hostId)
+/// <remarks>
+/// The caller retries this refusal (FR-004b), so it recurs once per attempt while the wait lasts. This exception
+/// carries the incarnation it is waiting on so each attempt can be reported, but it does not log anything itself:
+/// whichever caller owns the retry loop — B2's hosted join, or any other shipped retry — MUST log a warning per
+/// refused attempt naming the host id and this incarnation (#2097 review). The retry loop in this contract's own
+/// conformance test is a test helper, not shipped code, and does not log.
+/// </remarks>
+public sealed class ClusterMembershipJoinRefusedException(string hostId, MemberIncarnation incarnation, DateTimeOffset lastHeartbeatAt)
     : ClusterMembershipException(
-        $"Cannot join the cluster as host id '{hostId}': another live process is already a member under it. " +
-        "Configure a distinct host id for this process.")
+        $"Cannot join the cluster as host id '{hostId}': another live process (incarnation '{incarnation}', last " +
+        $"heartbeat at {lastHeartbeatAt:O}) is already a member under it. Configure a distinct host id for this process.")
 {
     public string HostId { get; } = hostId;
+
+    /// <summary>The live incarnation this join is waiting on.</summary>
+    public MemberIncarnation Incarnation { get; } = incarnation;
+
+    /// <summary>The live incarnation's last heartbeat at the moment this join was refused.</summary>
+    public DateTimeOffset LastHeartbeatAt { get; } = lastHeartbeatAt;
 }
 
 /// <summary>
