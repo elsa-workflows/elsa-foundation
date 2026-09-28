@@ -67,6 +67,10 @@ public static class JobSummary
         return (report.Failure is { } failure ? text.Append($"**Failure:** {Cell(failure)}\n\n") : text).ToString();
     }
 
+    /// <summary>What the repair command wrote to <c>publish-state</c> (spec 150 FR-019).</summary>
+    public static string Repair(string message, string recordCommit) =>
+        $"### Repaired `{GitPublishState.DefaultBranch}`\n\n```\n{message}```\n\nRecorded as `{recordCommit}`.\n\n";
+
     private static string Reasons(IReadOnlyList<string> reasons) =>
         string.Join("; ", reasons.Take(ReasonsShown)) + (reasons.Count > ReasonsShown ? $"; and {reasons.Count - ReasonsShown} more" : string.Empty);
 
