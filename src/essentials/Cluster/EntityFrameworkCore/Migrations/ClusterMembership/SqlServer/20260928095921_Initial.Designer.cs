@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Elsa.Cluster.EntityFrameworkCore.Migrations.ClusterMembership.SqlServer
 {
     [DbContext(typeof(ClusterMembershipSqlServerDbContext))]
-    [Migration("20260928082355_Initial")]
+    [Migration("20260928095921_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -80,6 +80,79 @@ namespace Elsa.Cluster.EntityFrameworkCore.Migrations.ClusterMembership.SqlServe
                     b.HasIndex("SchemaVersion");
 
                     b.ToTable("elsa_cluster_members", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfDatabaseIdentityRow", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DatabaseIdentity")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("__ElsaDatabaseIdentity_ElsaClusterMembership", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfSchemaFinalizationRecordRow", b =>
+                {
+                    b.Property<string>("Family")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("DatabaseIdentity")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("FinalizedVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("FinishHistoryJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FinishJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("HistoryJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("HoldsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("IntentJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.HasKey("Family");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("__ElsaSchemaFinalization_ElsaClusterMembership", (string)null);
                 });
 #pragma warning restore 612, 618
         }

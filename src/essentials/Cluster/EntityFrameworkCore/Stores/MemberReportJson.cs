@@ -12,7 +12,9 @@ namespace Elsa.Cluster.EntityFrameworkCore.Stores;
 /// Reading is strict on purpose. A report with a member, a section or an entry field this build does not know was
 /// written by a provider version that says something this one cannot interpret, and ignoring the part it cannot read
 /// could credit the member with more than it reported. Such a report reads as <see langword="null"/>, which the reader
-/// returns as <see cref="MemberReport.Unknown"/>: counted, reading nothing (spec 183, FR-012).
+/// returns as <see cref="MemberReport.Unknown"/>: counted, reading nothing (spec 183, FR-012). A report that lacks an
+/// entry field reads the same way: every writer writes every field, null included, so a missing one was not written by
+/// this envelope, and reading it as its default would credit the member with a claim it never made.
 /// </remarks>
 internal static class MemberReportJson
 {
@@ -31,7 +33,7 @@ internal static class MemberReportJson
             throw new ArgumentException("An unknown report is what a reader returns; no member publishes one.", nameof(report));
 
         var readability = report.Readability is { } section
-            ? new ReadabilityDocument(section.Entries.Select(entry => new EntryDocument(entry.Family, entry.EfModule, entry.ReadableVersions, entry.DatabaseIdentity)).ToArray())
+            ? new ReadabilityDocument(section.Entries.Select(EntryDocument.From).ToArray())
             : null;
         return JsonSerializer.Serialize(new ReportDocument(readability), Options);
     }
@@ -47,8 +49,7 @@ internal static class MemberReportJson
             if (document.Readability is not { } readability)
                 return new MemberReport();
 
-            return new MemberReport(new ReadabilitySection(readability.Entries.Select(entry =>
-                new ReadabilityEntry(entry.Family, entry.EfModule, entry.ReadableVersions, entry.DatabaseIdentity))));
+            return new MemberReport(new ReadabilitySection(readability.Entries.Select(entry => entry.ToEntry())));
         }
         catch (Exception exception) when (exception is JsonException or ArgumentException or NotSupportedException)
         {
@@ -60,5 +61,22 @@ internal static class MemberReportJson
 
     private sealed record ReadabilityDocument(IReadOnlyList<EntryDocument> Entries);
 
-    private sealed record EntryDocument(string Family, string EfModule, IReadOnlyList<string> ReadableVersions, string? DatabaseIdentity);
+    /// <summary>
+    /// Every field of <see cref="ReadabilityEntry"/>, nullable exactly where it is. A field left out would be dropped on
+    /// write and read back as its default: a report that looks whole but says less than the member published. The store
+    /// tests round-trip an entry with every field set, so a field <see cref="ReadabilityEntry"/> gains fails them until
+    /// it is mapped here.
+    /// </summary>
+    private sealed record EntryDocument(
+        string Family,
+        string? EfModule,
+        IReadOnlyList<string> ReadableVersions,
+        string? DatabaseIdentity,
+        string? ObservedFinalizedVersion)
+    {
+        public static EntryDocument From(ReadabilityEntry entry) =>
+            new(entry.Family, entry.EfModule, entry.ReadableVersions, entry.DatabaseIdentity, entry.ObservedFinalizedVersion);
+
+        public ReadabilityEntry ToEntry() => new(Family, EfModule, ReadableVersions, DatabaseIdentity, ObservedFinalizedVersion);
+    }
 }

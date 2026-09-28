@@ -24,6 +24,9 @@ public abstract class ClusterMembershipDbContext(DbContextOptions options) : DbC
         // The host's optional schema; nothing changes when none is configured.
         modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new ClusterMemberEntityConfiguration());
+        // After this module's own table and before its provider configuration, so the ordinal collation covers the
+        // family key and the stamp index covers both finalization tables (spec 181, FR-002).
+        modelBuilder.MapSchemaFinalization(ClusterMembershipEfModule.HistoryModuleName);
         ConfigureProvider(modelBuilder);
         modelBuilder.IndexSchemaVersionStamps();
     }

@@ -1,3 +1,4 @@
+using System.Reflection;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Exceptions;
 using Elsa.Cluster.Core.Models;
@@ -41,19 +42,67 @@ public sealed class EfClusterMembershipStoreTests : IAsyncDisposable
     /// credit the member with more than it reported, so the whole report reads as unknown.
     /// </summary>
     [Fact]
-    public async Task A_report_with_a_field_this_build_does_not_know_is_returned_as_unknown_rather_than_read_in_part()
+    public Task A_report_with_a_field_this_build_does_not_know_is_returned_as_unknown_rather_than_read_in_part() =>
+        AssertStoredReportReadsAsUnknownAsync(
+            $$$"""{"readability":{"entries":[{"family":"{{{Family}}}","efModule":"M","readableVersions":["1"],"databaseIdentity":null,"observedFinalizedVersion":null,"excludes":["1"]}]}}""");
+
+    /// <summary>
+    /// Every writer writes every entry field, so a document without one was not written by this envelope. Reading the
+    /// missing field as its default would credit the member with a claim it never made, such as having observed no
+    /// finalized version, so the report reads as unknown instead.
+    /// </summary>
+    [Fact]
+    public Task A_report_missing_an_entry_field_is_returned_as_unknown_rather_than_read_with_a_default() =>
+        AssertStoredReportReadsAsUnknownAsync(
+            $$$"""{"readability":{"entries":[{"family":"{{{Family}}}","efModule":"M","readableVersions":["1"],"databaseIdentity":null}]}}""");
+
+    /// <summary>
+    /// The stored envelope names <see cref="ReadabilityEntry"/>'s fields one by one, so a field the entry gains would be
+    /// dropped on write and read back as its default: a report that looks whole but says less than the member published.
+    /// An entry with every constructor parameter set must come back with every public property equal.
+    /// </summary>
+    [Fact]
+    public async Task Every_readability_entry_field_round_trips_through_the_stored_report()
     {
+        var constructor = Assert.Single(typeof(ReadabilityEntry).GetConstructors());
+        var parameters = constructor.GetParameters();
+        var properties = typeof(ReadabilityEntry).GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        Assert.All(parameters, parameter => Assert.Contains(properties, property => string.Equals(property.Name, parameter.Name, StringComparison.OrdinalIgnoreCase)));
+        var published = (ReadabilityEntry)constructor.Invoke(parameters.Select(SampleArgument).ToArray());
+
         var reader = await StartAsync("reader");
-        var newer = NewHostId("newer");
-        await _fixture.WriteRowAsync(_fixture.NewRow(newer) with
+        var subject = await StartAsync("subject", published);
+        var read = Assert.Single((await SeenAsync(reader, Identity(subject)))!.Report.Readability!.Entries);
+
+        Assert.All(properties, property =>
         {
-            ReportJson = $$$"""{"readability":{"entries":[{"family":"{{{Family}}}","efModule":"M","readableVersions":["1"],"databaseIdentity":null,"excludes":["1"]}]}}"""
+            var expected = property.GetValue(published);
+            var actual = property.GetValue(read);
+            Assert.False(expected is null || expected is IEnumerable<string> values && !values.Any(), $"{nameof(ReadabilityEntry)}.{property.Name} is not set in the sample entry, so this test cannot prove it round-trips.");
+            if (expected is IEnumerable<string> sequence)
+                Assert.Equal(sequence, Assert.IsAssignableFrom<IEnumerable<string>>(actual));
+            else
+                Assert.Equal(expected, actual);
         });
+    }
 
-        var seen = Assert.Single((await FreshAsync(reader)).Members, member => member.HostId == newer);
+    /// <summary>
+    /// A family shared by no single EF module, as the finalization tables' is, has a null module (spec 180, FR-001). It
+    /// must round-trip as null: refusing it would fail every publish of a host that has loaded one, and reading it as
+    /// unknown would stop that host counting for every family.
+    /// </summary>
+    [Fact]
+    public async Task A_shared_family_with_no_module_round_trips_with_its_module_null()
+    {
+        var shared = new ReadabilityEntry(Family, efModule: null, ["1"]);
+        var reader = await StartAsync("reader");
+        var subject = await StartAsync("subject", shared);
 
-        Assert.True(seen.Report.IsUnknown);
-        Assert.Equal(newer, Assert.Single((await CountingAsync(reader)).Failures).Member.HostId);
+        var seen = (await SeenAsync(reader, Identity(subject)))!;
+
+        Assert.False(seen.Report.IsUnknown);
+        Assert.Null(Assert.Single(seen.Report.Readability!.Entries).EfModule);
+        Assert.Equal(new MemberReport(new ReadabilitySection([shared])), seen.Report);
     }
 
     [Fact]
@@ -151,6 +200,26 @@ public sealed class EfClusterMembershipStoreTests : IAsyncDisposable
     private static string NewHostId(string name) => $"{name}-{Guid.NewGuid():N}"[..(name.Length + 9)];
 
     private static ReadabilityEntry Reads(params string[] versions) => new(Family, "StoreModule", versions);
+
+    /// <summary>A distinct, non-default argument for each of <see cref="ReadabilityEntry"/>'s constructor parameters.</summary>
+    private static object SampleArgument(ParameterInfo parameter) =>
+        parameter.ParameterType == typeof(string) ? $"{parameter.Name}-sample"
+        : parameter.ParameterType == typeof(IEnumerable<string>) ? new[] { $"{parameter.Name}-1", $"{parameter.Name}-2" }
+        : throw new InvalidOperationException(
+            $"{nameof(ReadabilityEntry)} gained parameter '{parameter.Name}' of type {parameter.ParameterType}. Give it a sample here, and map it in MemberReportJson.");
+
+    /// <summary>A row holding <paramref name="reportJson"/> is returned with an unknown report and counted as a failure.</summary>
+    private async Task AssertStoredReportReadsAsUnknownAsync(string reportJson)
+    {
+        var reader = await StartAsync("reader");
+        var writer = NewHostId("writer");
+        await _fixture.WriteRowAsync(_fixture.NewRow(writer) with { ReportJson = reportJson });
+
+        var seen = Assert.Single((await FreshAsync(reader)).Members, member => member.HostId == writer);
+
+        Assert.True(seen.Report.IsUnknown);
+        Assert.Equal(writer, Assert.Single((await CountingAsync(reader)).Failures).Member.HostId);
+    }
 
     private static ClusterMemberIdentity Identity(IConformanceMember member) => member.Membership.GetLocalStanding().Identity;
 

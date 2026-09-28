@@ -51,14 +51,15 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
 
     /// <summary>
     /// The rule passes vacuously if the scan stops finding the checks and declarations, so pin floors rather than
-    /// counts: the twenty-six families every EF content table stamps since #2119, and the call sites that check them.
+    /// counts: the twenty-six families every EF content table stamps since #2119, the shared finalization family (#2134),
+    /// the cluster membership family (#2098), and the call sites that check them.
     /// </summary>
     [Fact]
     public void Guard_scans_the_checks_and_declarations_it_claims_to_scan()
     {
         Assert.True(Production.Checks.Count >= 30, $"Expected the EF stores to keep checking families through EfSchemaVersion; found {Production.Checks.Count} checks.");
-        Assert.True(Production.Declarations.Count >= 27, $"Expected at least twenty-seven [EfSchemaFamily] declarations; found {Production.Declarations.Count}.");
-        Assert.True(Production.NamedFamilies.Count >= 27, $"Expected at least twenty-seven families named by checks and constants; found {Production.NamedFamilies.Count}.");
+        Assert.True(Production.Declarations.Count >= 28, $"Expected at least twenty-eight [EfSchemaFamily] declarations; found {Production.Declarations.Count}.");
+        Assert.True(Production.NamedFamilies.Count >= 28, $"Expected at least twenty-eight families named by checks and constants; found {Production.NamedFamilies.Count}.");
     }
 
     [Theory]
