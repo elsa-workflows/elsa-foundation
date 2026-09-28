@@ -98,6 +98,8 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/essentials/Persistence/EntityFramework/EfSharedTransaction.cs",
         "src/essentials/Persistence/EntityFramework/EfWriteConflict.cs",
         "src/essentials/Persistence/EntityFramework/EfWriteRetry.cs",
+        "src/essentials/Persistence/EntityFramework/ExpandOnlyMigrationGuard.cs",
+        "src/essentials/Persistence/EntityFramework/ExpandOnlyMigrationOptOutAttribute.cs",
         "src/essentials/Persistence/EntityFramework/IEfPostMigrationAction.cs",
         "src/essentials/Persistence/EntityFramework/IEfSchemaUpcaster.cs",
         "src/essentials/Persistence/EntityFramework/IEfSchemaVersionedContext.cs",
