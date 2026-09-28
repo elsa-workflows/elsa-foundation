@@ -7,6 +7,9 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 /// </summary>
 public static class PublishingLedgerEfModule
 {
+    /// <summary>The schema family whose rows stamp <see cref="ContentSchemaVersion"/>, as its skew check names it.</summary>
+    public const string SchemaFamily = "PublishingLedger";
+
     public const string PublicationRecordTableName = "elsa_publication_records";
     public const string ActivityPublicationReceiptTableName = "elsa_activity_publication_receipts";
     public const string ActivityDraftTestRunTableName = "elsa_activity_draft_test_runs";

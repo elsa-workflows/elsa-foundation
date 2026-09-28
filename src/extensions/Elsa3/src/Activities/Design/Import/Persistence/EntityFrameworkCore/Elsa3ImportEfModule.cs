@@ -14,6 +14,7 @@ public static class Elsa3ImportEfModule
     public const string DefinitionBindingTable = "elsa3_reusable_import_definition_bindings";
 
     public const string SchemaVersion = "1.0.0";
+    public const string SchemaFamily = "Elsa3Import";
 
     /// <summary>Opaque identities are bounded like the other Elsa relational identity projections.</summary>
     public const int IdentityMaximumLength = 450;

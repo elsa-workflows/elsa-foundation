@@ -30,3 +30,9 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 
 [assembly: ManifestExtension("efModules", "Identity.Iam")]
 [assembly: ManifestExtension("efModules", "Identity.ProviderConfiguration")]
+
+// The schema families these modules own (spec 180, FR-001), each at the version its skew check reads. A host's
+// readability report is derived from these alone (spec 183, FR-020); EfSchemaFamilyDeclarationGuardTests fails the
+// build when a family the stores check is not declared here, or is declared at another version.
+[assembly: EfSchemaFamily(IdentityIamEfModule.SchemaFamily, "Identity.Iam", IdentityIamEfModule.SchemaVersion)]
+[assembly: EfSchemaFamily(IdentityProviderConfigurationEfModule.SchemaFamily, "Identity.ProviderConfiguration", IdentityProviderConfigurationEfModule.SchemaVersion)]

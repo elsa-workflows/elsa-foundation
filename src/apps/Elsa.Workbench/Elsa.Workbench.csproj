@@ -74,6 +74,7 @@
 		<ProjectReference Include="..\..\essentials\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
 		<ProjectReference Include="..\..\essentials\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
 		<ProjectReference Include="..\..\essentials\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
+		<ProjectReference Include="..\..\essentials\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
 		<ProjectReference Include="..\..\essentials\Expressions\JavaScript\Elsa.Expressions.JavaScript.csproj" />
 		<ProjectReference Include="..\..\essentials\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
 		<ProjectReference Include="..\..\essentials\Expressions\JavaScript\Rendering\Elsa.Expressions.JavaScript.Rendering.csproj" />
