@@ -45,6 +45,19 @@ module author declares one on their own assembly with no Elsa PR required.
 that provider is unsupported for the module rather than a missing case. See the package README's table for
 both types.
 
+## Schema family declaration
+
+An assembly-level `[EfSchemaFamily(name, module, currentVersion)]` (`AllowMultiple`) is a schema family's one
+declaration ([spec 180](../../../../specs/180-schema-upcaster-chain/spec.md), FR-001): the family its skew check names,
+the `[EfModule]` of the same assembly that owns it, and the version this build stamps and reads. A module that stamps
+rows declares one per family, passing the family's `SchemaFamily` and version constants.
+`EfSchemaFamilyCatalog.Discover(assemblies)` is the one place that reads it, as metadata matched by type name, so a
+package loaded with its own copy of this assembly is still read. A host's readability report
+([spec 183](../../../../specs/183-cluster-membership/spec.md), FR-020) is derived from these declarations alone, and
+`EfSchemaFamilyDeclarationGuardTests` fails the build when a family the stores check is undeclared or declared at
+another version. The upcaster chain of spec 180 (B4) joins this declaration; until then a build reads its current
+version only.
+
 ## Apply policy
 
 `EfMigratePolicy.AutoMigrate` runs `Database.MigrateAsync` (EF 9+ lock).

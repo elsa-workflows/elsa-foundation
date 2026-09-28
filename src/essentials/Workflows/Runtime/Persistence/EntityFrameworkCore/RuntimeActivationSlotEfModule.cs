@@ -5,6 +5,7 @@ public static class RuntimeActivationSlotEfModule
 {
     public const string TableName = "elsa_runtime_workflow_activation_slot";
     public const string SchemaVersion = "1.0.0";
+    public const string SchemaFamily = "RuntimeActivationSlot";
     // WorkflowActivationSlotIdentity formats two legal 128-code-unit identities into a
     // composite identity of 280 code units. Keep one defensive spare code unit for the
     // formatter contract, then size both lossless projections from that bound.

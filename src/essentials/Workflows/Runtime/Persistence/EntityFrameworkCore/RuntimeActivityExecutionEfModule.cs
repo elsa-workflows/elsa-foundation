@@ -7,6 +7,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 public static class RuntimeActivityExecutionEfModule
 {
     public const string SchemaVersion = "1.0.0";
+    public const string SchemaFamily = "RuntimeActivityExecution";
     public const string ActivityExecutionStateTableName = "elsa_runtime_activity_execution_state";
     public const string ActivityExecutionInspectionTableName = "elsa_runtime_activity_execution_inspection";
     public const string ActivityExecutionHierarchyTableName = "elsa_runtime_activity_execution_hierarchy";

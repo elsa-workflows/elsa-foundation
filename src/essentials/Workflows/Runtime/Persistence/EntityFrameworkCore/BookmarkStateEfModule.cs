@@ -5,6 +5,7 @@ public static class BookmarkStateEfModule
 {
     public const string TableName = "elsa_runtime_bookmark_state";
     public const string SchemaVersion = "1.0.0";
+    public const string SchemaFamily = "BookmarkState";
     public const int WorkflowIdentityMaximumLength = 128;
     public const int BookmarkIdentityMaximumLength = 128;
     public const int StimulusTypeMaximumLength = 256;

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The readability report source (spec 183, FR-019 to FR-022; B3, #2099). It bridges persistence and cluster
+    membership so that neither depends on the other: it reads spec 180's schema-family declarations through
+    Elsa.Persistence.EntityFramework (EF Core and Relational only, no provider engine) and reports them through the
+    Elsa.Cluster.Core contract, whose closure ArchitectureGuardTests.ClusterMembership keeps free of EF. A host composes
+    it once, on its host container, with AddEfSchemaReadability, which also brings the in-process membership default.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Core\Elsa.Cluster.Core.csproj" />
+    <ProjectReference Include="..\InProcess\Elsa.Cluster.InProcess.csproj" />
+    <ProjectReference Include="..\..\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
+  </ItemGroup>
+
+</Project>

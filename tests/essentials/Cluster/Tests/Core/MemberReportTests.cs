@@ -25,7 +25,8 @@ public sealed class MemberReportTests
         new("orders", "OrdersModule", ["2", "1"], "db-a"),
         new("orders", "OrdersModule", ["1"], "db-a"),
         new("orders", "OrdersModule", ["1", "2"], "db-b"),
-        new("orders", "OrdersModule", ["1", "2"])
+        new("orders", "OrdersModule", ["1", "2"]),
+        new("orders", "OrdersModule", ["1", "2"], "db-a", observedFinalizedVersion: "1")
     ];
 
     [Theory]
@@ -48,6 +49,7 @@ public sealed class MemberReportTests
         Assert.ThrowsAny<ArgumentException>(() => new ReadabilityEntry("orders", "", ["1"]));
         Assert.ThrowsAny<ArgumentException>(() => new ReadabilityEntry("orders", "OrdersModule", ["1", " "]));
         Assert.ThrowsAny<ArgumentException>(() => new ReadabilityEntry("orders", "OrdersModule", ["1"], " "));
+        Assert.ThrowsAny<ArgumentException>(() => new ReadabilityEntry("orders", "OrdersModule", ["1"], observedFinalizedVersion: " "));
     }
 
     [Fact]

@@ -317,6 +317,25 @@ public sealed class EfCoreDependencyGuardTests
         Assert.True(offenders.Length == 0, Report("drift from the reviewed activation-guard EF closure", offenders));
     }
 
+    [Fact]
+    public void Every_admitted_readability_project_resolves_only_its_reviewed_EF_closure()
+    {
+        var offenders = Spec183ReadabilityEf.ExpectedEfPackagesByProject
+            .SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
+            {
+                var resolved = ReadProjectEfPackages(project.Key, configuration);
+                var unexpected = FindUnexpectedEfPackages(resolved, project.Value)
+                    .Select(package => $"{project.Key} ({configuration}) unexpectedly resolves {package}");
+                var missing = FindUnexpectedEfPackages(project.Value, resolved)
+                    .Select(package => $"{project.Key} ({configuration}) no longer resolves reviewed package {package}");
+                return unexpected.Concat(missing);
+            }))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        Assert.True(offenders.Length == 0, Report("drift from the reviewed readability-source EF closure", offenders));
+    }
+
     /// <summary>
     /// The adapter's reviewed closure is exact, so a provider engine appearing in it is flagged rather than
     /// absorbed — proved here against the record itself, because a passing guard cannot show what it would
@@ -624,7 +643,8 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0073WorkflowsDesignEf.IsProjectPath(relativePath) ||
                     Adr0073ActivitiesDesignEf.IsProjectPath(relativePath) ||
                     Adr0073Elsa3ImportEf.IsProjectPath(relativePath) ||
-                    Adr0076ActivationGuardEf.IsProjectPath(relativePath)));
+                    Adr0076ActivationGuardEf.IsProjectPath(relativePath) ||
+                    Spec183ReadabilityEf.IsProjectPath(relativePath)));
         }
         return projects;
     }
@@ -770,6 +790,7 @@ public sealed class EfCoreDependencyGuardTests
                Adr0073ActivitiesDesignEf.IsSurfacePath(relativePath) ||
                Adr0073Elsa3ImportEf.IsSurfacePath(relativePath) ||
                Adr0076ActivationGuardEf.IsSurfacePath(relativePath) ||
+               Spec183ReadabilityEf.IsSurfacePath(relativePath) ||
                OpenIddictPersistenceArchitectureTests.IsWorkbenchVendorEfSource(relativePath);
     }
 
@@ -1330,6 +1351,42 @@ public sealed class EfCoreDependencyGuardTests
 
         public static bool IsProjectPath(string relativePath) =>
             ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
+
+        private static string[] CorePackages() =>
+        [
+            "Microsoft.EntityFrameworkCore",
+            "Microsoft.EntityFrameworkCore.Abstractions",
+            "Microsoft.EntityFrameworkCore.Analyzers",
+            "Microsoft.EntityFrameworkCore.Relational"
+        ];
+    }
+
+    /// <summary>
+    /// Spec 183's readability source (B3, #2099): it reads schema-family declarations through the persistence policy
+    /// package and reports them through the membership contract, so it resolves EF Core and Relational and never a
+    /// provider engine. Its tests read the declarations of two first-party module assemblies, which carry the same
+    /// closure.
+    /// </summary>
+    internal static class Spec183ReadabilityEf
+    {
+        public static readonly string[] SurfacePathPrefixes =
+        [
+            "src/essentials/Cluster/Readability/",
+            "tests/essentials/Cluster/Readability/"
+        ];
+
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj"] = CorePackages(),
+                ["tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj"] = CorePackages()
+            };
+
+        public static bool IsSurfacePath(string relativePath) =>
+            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
+
+        public static bool IsProjectPath(string relativePath) =>
+            ExpectedEfPackagesByProject.ContainsKey(relativePath);
 
         private static string[] CorePackages() =>
         [
