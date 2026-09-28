@@ -277,12 +277,12 @@ public sealed class EfWorkflowPortfolioDataSource(
     {
         try
         {
+            EfSchemaVersion.EnsureReadable(RuntimeArtifactEfModule.Chain, row.SchemaVersion);
             var sourceReferenceId = Decode(row.SourceReferenceId);
             var artifactId = Decode(row.ArtifactId);
             var definitionVersionId = Decode(row.DefinitionVersionId);
             var definitionId = Decode(row.DefinitionId);
-            if (EfSchemaVersion.NotReadable("RuntimeArtifact", row.SchemaVersion, RuntimeArtifactEfModule.SchemaVersion) ||
-                row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId) ||
+            if (row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId) ||
                 !StringComparer.Ordinal.Equals(row.Id, EfRelationalIdentity.HashLengthFramed(scope, sourceReferenceId)) ||
                 !StringComparer.Ordinal.Equals(row.ScopeKey, Encode(scope)) ||
                 !StringComparer.Ordinal.Equals(row.ScopeKeyHash, EfRelationalIdentity.Hash(scope)) ||
@@ -294,7 +294,8 @@ public sealed class EfWorkflowPortfolioDataSource(
                 !StringComparer.Ordinal.Equals(row.DefinitionIdHash, EfRelationalIdentity.Hash(definitionId)))
                 throw new InvalidDataException("The workflow executable source-reference projection identity envelope is corrupt.");
 
-            using var document = JsonDocument.Parse(row.ContentJson);
+            using var document = JsonDocument.Parse(RuntimeArtifactEfModule.Chain.Upcast(
+                row.SchemaVersion, RuntimeArtifactEfModule.SourceReferenceTableName, nameof(row.ContentJson), row.ContentJson));
             if (!document.RootElement.TryGetProperty("collection", out var collection) ||
                 !StringComparer.Ordinal.Equals(collection.GetString(), "workflowExecutableSourceReference") ||
                 !document.RootElement.TryGetProperty("artifactId", out var envelopeArtifactId) ||

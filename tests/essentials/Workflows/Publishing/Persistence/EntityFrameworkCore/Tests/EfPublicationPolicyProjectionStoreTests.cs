@@ -349,7 +349,7 @@ public sealed class EfPublicationPolicyProjectionStoreTests
         // A version this build does not run wrote the row. Nothing is damaged, so reporting it as
         // corruption would send an operator looking for data damage that does not exist (ADR 0077).
         var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(read);
-        Assert.Equal("PublishingPolicyProjection", skew.Module);
+        Assert.Equal("PublishingPolicyProjection", skew.Family);
         Assert.Equal(found, skew.Found);
         Assert.Equal(PublishingPolicyProjectionEfModule.SchemaVersion, skew.Expected);
     }

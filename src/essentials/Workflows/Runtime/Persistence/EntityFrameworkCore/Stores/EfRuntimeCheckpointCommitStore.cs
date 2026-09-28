@@ -311,7 +311,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
         string scope,
         string expectedCommitId)
     {
-        if (EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) ||
+        if (EfSchemaVersion.NotReadable(RuntimeOperationalStateEfModule.Chain, row.SchemaVersion) ||
             row.Revision != 1 ||
             row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) ||
             row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope) ||
@@ -335,7 +335,8 @@ public sealed class EfRuntimeCheckpointCommitStore(
         MarkerDocument content;
         try
         {
-            content = JsonSerializer.Deserialize<MarkerDocument>(row.ContentJson, JsonOptions)
+            var stored = RuntimeOperationalStateEfModule.Chain.Upcast(row.SchemaVersion, RuntimeOperationalStateEfModule.CheckpointCommitTableName, nameof(row.ContentJson), row.ContentJson);
+            content = JsonSerializer.Deserialize<MarkerDocument>(stored, JsonOptions)
                       ?? throw new InvalidDataException();
         }
         catch (Exception exception) when (exception is JsonException or InvalidDataException or NotSupportedException)

@@ -323,7 +323,11 @@ public sealed class EfProviderConfigurationStore(
                 entity.SupportsRefresh,
                 entity.SupportsRevocation,
                 (PermissionPropagationMode)entity.PermissionPropagation),
-            IdentityProviderConfigurationSettingsCodec.Deserialize(entity.SettingsJson));
+            IdentityProviderConfigurationSettingsCodec.Deserialize(IdentityProviderConfigurationEfModule.Chain.Upcast(
+                entity.SchemaVersion,
+                entity is TenantProviderConfigurationEntity ? IdentityProviderConfigurationEfModule.TenantTableName : IdentityProviderConfigurationEfModule.GlobalTableName,
+                nameof(entity.SettingsJson),
+                entity.SettingsJson)));
     }
 
     private static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception) => EfIdentityStoreSupport.Failure(message, exception);
@@ -338,7 +342,7 @@ public sealed class EfProviderConfigurationStore(
     }
 
     private static bool Matches(ProviderConfigurationEntity entity, string? tenantId, string provider) =>
-        EfSchemaVersion.Readable("IdentityProviderConfiguration", entity.SchemaVersion, IdentityProviderConfigurationEfModule.SchemaVersion) &&
+        EfSchemaVersion.Readable(IdentityProviderConfigurationEfModule.Chain, entity.SchemaVersion) &&
         string.Equals(
             entity.Id,
             tenantId is null

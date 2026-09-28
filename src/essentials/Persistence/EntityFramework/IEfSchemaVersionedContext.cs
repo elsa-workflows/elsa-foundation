@@ -5,11 +5,14 @@ namespace Elsa.Persistence.EntityFramework;
 /// <see cref="EfSchemaVersionMaterializationInterceptor"/>, apart from the finalization tables every module context maps
 /// (<see cref="EfSchemaFinalization"/>), which belong to their own.
 /// </summary>
+/// <remarks>
+/// EF materializes such a context's domain types directly, running its JSON value converters before any code could
+/// upcast the content, so the interceptor reads only the family's current version. The family therefore declares no
+/// upcasters, which <c>EfSchemaFamilyDeclarationGuardTests</c> enforces: to give it a chain, its content must first move
+/// to store code that can upcast before it deserializes.
+/// </remarks>
 public interface IEfSchemaVersionedContext
 {
-    /// <summary>The schema family every row of this context belongs to, as <see cref="EfSchemaVersionSkewException"/> names it.</summary>
-    string SchemaFamily { get; }
-
-    /// <summary>The version this build stamps on every row it writes and reads without skew.</summary>
-    string SchemaVersion { get; }
+    /// <summary>The chain of the schema family every row of this context belongs to: its module class's <c>Chain</c>.</summary>
+    EfSchemaChain SchemaChain { get; }
 }

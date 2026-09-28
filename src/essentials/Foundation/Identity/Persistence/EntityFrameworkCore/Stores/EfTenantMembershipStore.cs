@@ -60,8 +60,8 @@ public sealed class EfTenantMembershipStore(
 
     private static TenantMembershipRecord Map(TenantMembershipEntity row)
     {
-        EfSchemaVersion.EnsureReadable(IdentityIamEfModule.SchemaFamily, row.SchemaVersion, IdentityIamEfModule.SchemaVersion);
-        return new(row.TenantId, row.UserId, (TenantMembershipStatus)row.Status, EfIdentityStoreSupport.DeserializeSet(row.RoleIdsJson), EfIdentityStoreSupport.DeserializeSet(row.DirectPermissionsJson));
+        EfSchemaVersion.EnsureReadable(IdentityIamEfModule.Chain, row.SchemaVersion);
+        return new(row.TenantId, row.UserId, (TenantMembershipStatus)row.Status, EfIdentityStoreSupport.ReadSet(row.SchemaVersion, IdentityIamEfModule.TenantMembershipTableName, nameof(row.RoleIdsJson), row.RoleIdsJson), EfIdentityStoreSupport.ReadSet(row.SchemaVersion, IdentityIamEfModule.TenantMembershipTableName, nameof(row.DirectPermissionsJson), row.DirectPermissionsJson));
     }
 
     private void Prepare(string tenantId, CancellationToken cancellationToken) { Validate(tenantId, nameof(tenantId)); EfIdentityStoreSupport.EnsureTenant(accessContextAccessor, tenantId); context.EnsureProviderBinding(); cancellationToken.ThrowIfCancellationRequested(); }

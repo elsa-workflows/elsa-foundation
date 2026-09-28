@@ -99,7 +99,7 @@ public sealed class EfDurableTimerStoreTests
 
         var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(
             () => fixture.Store.FindAsync("wf-skew", "timer-1").AsTask());
-        Assert.Equal("RuntimeOperationalState", skew.Module);
+        Assert.Equal("RuntimeOperationalState", skew.Family);
         Assert.Equal("2", skew.Found);
         Assert.Equal(RuntimeOperationalStateEfModule.SchemaVersion, skew.Expected);
     }

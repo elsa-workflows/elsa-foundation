@@ -27,6 +27,11 @@ namespace Elsa.Persistence.EntityFramework;
 /// The finalization tables every module maps (<see cref="EfSchemaFinalization"/>) belong to a family of their own even
 /// in a context that declares one, so the interceptor neither checks nor stamps them; their store does both.
 /// </para>
+/// <para>
+/// It accepts the family's current version alone (<see cref="EfSchemaVersion.EnsureCurrent"/>): a value converter has
+/// deserialized the content before any upcaster could run, so a predecessor's row would be read as if this build had
+/// written it. Such a family declares no upcasters (see <see cref="IEfSchemaVersionedContext"/>).
+/// </para>
 /// </remarks>
 public sealed class EfSchemaVersionMaterializationInterceptor : IMaterializationInterceptor
 {
@@ -47,20 +52,20 @@ public sealed class EfSchemaVersionMaterializationInterceptor : IMaterialization
     public InterceptionResult<object> CreatingInstance(MaterializationInterceptionData data, InterceptionResult<object> result)
     {
         if (data.Context is IEfSchemaVersionedContext context && !EfSchemaFinalization.Maps(data.EntityType.ClrType))
-            EfSchemaVersion.EnsureReadable(context.SchemaFamily, data.GetPropertyValue<string?>(PropertyName), context.SchemaVersion);
+            EfSchemaVersion.EnsureCurrent(context.SchemaChain, data.GetPropertyValue<string?>(PropertyName));
         return result;
     }
 
     /// <summary>
-    /// Stamps every row <paramref name="context"/> is about to insert or update with its schema version, apart from the
-    /// finalization rows, which carry their own. A context calls this from its <c>SaveChanges</c> overrides, so no store
-    /// can write a row without the stamp.
+    /// Stamps every row <paramref name="context"/> is about to insert or update with its family's current version, apart
+    /// from the finalization rows, which carry their own. A context calls this from its <c>SaveChanges</c> overrides, so
+    /// no store can write a row without the stamp.
     /// </summary>
     public static void StampWrites(DbContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
         var version = context is IEfSchemaVersionedContext versioned
-            ? versioned.SchemaVersion
+            ? versioned.SchemaChain.CurrentVersion
             : throw new InvalidOperationException(
                 $"{context.GetType().Name} stamps its writes but does not declare its schema family through {nameof(IEfSchemaVersionedContext)}.");
         foreach (var entry in context.ChangeTracker.Entries()

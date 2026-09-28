@@ -88,8 +88,8 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
     {
         Assert.Equal(["1"], Assert.Single(EfSchemaReadabilitySource.Read([Declaration("Orders", "1"), Declaration("Orders", "1")]).Entries).ReadableVersions);
 
-        // Until the chain lets one generation read the other's version, two generations at different versions leave a
-        // family the host is counted for and can read at no version: never credited with a version it cannot read.
+        // Two generations at different versions whose chains do not reach each other leave a family the host is counted
+        // for and can read at no version: never credited with a version it cannot read.
         var generations = Assert.Single(EfSchemaReadabilitySource.Read([Declaration("Orders", "1"), Declaration("Orders", "2")]).Entries);
         Assert.Empty(generations.ReadableVersions);
     }

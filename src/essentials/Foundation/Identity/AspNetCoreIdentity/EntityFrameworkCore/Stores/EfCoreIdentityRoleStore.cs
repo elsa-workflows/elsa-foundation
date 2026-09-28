@@ -211,7 +211,7 @@ public sealed class EfCoreIdentityRoleStore(
     private static RoleRecord ToRoleRecord(RoleEntity entity)
     {
         IdentityEntityFrameworkAdapterSupport.EnsureReadable(entity.SchemaVersion);
-        return new(entity.RoleId, entity.TenantId, entity.Name, entity.Description, IdentityEntityFrameworkAdapterSupport.DeserializeSet(entity.PermissionsJson), entity.System);
+        return new(entity.RoleId, entity.TenantId, entity.Name, entity.Description, IdentityEntityFrameworkAdapterSupport.ReadSet(entity.SchemaVersion, IdentityIamEfModule.RoleTableName, nameof(entity.PermissionsJson), entity.PermissionsJson), entity.System);
     }
     private static void EnsureRelationshipMaterializationLimit(int count, string subject)
     {

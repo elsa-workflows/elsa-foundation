@@ -1,3 +1,5 @@
+using Elsa.Persistence.EntityFramework;
+
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
 /// <summary>Schema and projection limits for the R11/R12 workflow alteration ledger.</summary>
@@ -7,6 +9,9 @@ public static class RuntimeWorkflowAlterationEfModule
     public const string JobTableName = "elsa_runtime_workflow_alteration_job";
     public const string SchemaVersion = "1.0.0";
     public const string SchemaFamily = "RuntimeWorkflowAlteration";
+    /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
+    /// upcasts through (spec 180, FR-010).</summary>
+    public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(RuntimeWorkflowAlterationEfModule).Assembly, SchemaFamily);
     public const int IdentityMaximumLength = 128;
     public const int TenantMaximumLength = 256;
     public const int IdentityProjectionMaximumLength = 450;

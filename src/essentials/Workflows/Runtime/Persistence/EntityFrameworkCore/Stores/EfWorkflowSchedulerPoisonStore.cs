@@ -166,13 +166,13 @@ public sealed class EfWorkflowSchedulerPoisonStore(
     {
         try
         {
-            if (EfSchemaVersion.NotReadable("RuntimeSchedulerPoison", row.SchemaVersion, RuntimeSchedulerPoisonEfModule.SchemaVersion) ||
+            if (EfSchemaVersion.NotReadable(RuntimeSchedulerPoisonEfModule.Chain, row.SchemaVersion) ||
                 row.Revision <= 0 ||
                 row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) ||
                 row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))
                 throw new InvalidDataException("The scheduler-poison row scope, schema, or revision projection is corrupt.");
 
-            var record = RuntimeArtifactJson.Deserialize<RuntimeSchedulerPoisonRecord>(row.ContentJson);
+            var record = RuntimeArtifactJson.Deserialize<RuntimeSchedulerPoisonRecord>(RuntimeSchedulerPoisonEfModule.Chain.Upcast(row.SchemaVersion, RuntimeSchedulerPoisonEfModule.TableName, nameof(row.ContentJson), row.ContentJson));
             ValidateRecord(record);
             if ((expectedWorkflowExecutionId is not null && record.WorkflowExecutionId != expectedWorkflowExecutionId) ||
                 (expectedWorkItemId is not null && record.WorkItemId != expectedWorkItemId) ||

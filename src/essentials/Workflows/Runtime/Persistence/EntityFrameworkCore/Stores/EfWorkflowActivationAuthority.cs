@@ -258,12 +258,12 @@ public sealed class EfWorkflowActivationAuthority(
 
     private static WorkflowActivationSlot Read(WorkflowActivationSlotEntity row, string scope, string? expectedDefinitionId = null, string? expectedSlotName = null)
     {
-        if (EfSchemaVersion.NotReadable("RuntimeActivationSlot", row.SchemaVersion, RuntimeActivationSlotEfModule.SchemaVersion))
+        if (EfSchemaVersion.NotReadable(RuntimeActivationSlotEfModule.Chain, row.SchemaVersion))
             throw new InvalidDataException(IdentityMismatchMessage);
         WorkflowActivationSlot slot;
         try
         {
-            slot = RuntimeArtifactJson.Deserialize<WorkflowActivationSlot>(row.ContentJson);
+            slot = RuntimeArtifactJson.Deserialize<WorkflowActivationSlot>(RuntimeActivationSlotEfModule.Chain.Upcast(row.SchemaVersion, RuntimeActivationSlotEfModule.TableName, nameof(row.ContentJson), row.ContentJson));
         }
         catch (JsonException exception)
         {

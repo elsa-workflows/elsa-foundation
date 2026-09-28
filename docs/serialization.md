@@ -75,6 +75,20 @@ bindings) must be able to evolve without silently breaking already-suspended wor
   for the shared policy.
 - **Loud enforcement on read.** A pending model change, a missing migration, or a provider mismatch fails
   shell activation rather than serving a partially readable store.
+- **Every row carries its schema family's stamp, and reads go through the family's upcaster chain**
+  ([spec 180](../specs/180-schema-upcaster-chain/spec.md)). A family declares, in its module's assembly, its current
+  version and an ordered chain of upcasters (`[EfSchemaFamily(..., Upcasters = ...)]`, each upcaster an
+  `IEfSchemaUpcaster` carrying `[EfSchemaUpcaster(from, to)]`). Its readable set is the current version plus every
+  predecessor the chain reaches without a gap; a host's readability report credits exactly that set, and a store's
+  check accepts exactly that set, because both are computed from the one declaration. A store checks the stamp first
+  (`EfSchemaVersion.NotReadable(<Module>.Chain, row.SchemaVersion)`), evaluates its integrity clauses for the stamped
+  version, then upcasts the decoded content one step at a time (`<Module>.Chain.Upcast(...)`) before deserializing it.
+  A stamp outside the readable set, below a gap included, is `EfSchemaVersionSkewException`; an upcaster that fails on
+  a readable row is corruption. A write stamps the current version on content it writes in the current format, so a
+  row moves forward the next time it is written; a read never rewrites anything. A chain with a gap, a duplicate, a
+  branch or a cycle, or one that does not end at the current version, fails the build
+  (`EfSchemaFamilyDeclarationGuardTests`) and the module's registration at startup. The two design contexts whose
+  content EF deserializes in value converters read their current version alone and declare no chain.
 - **A golden-fixture gate freezes the wire format for the Distributed leaf only.** The
   `Elsa.Workflows.Runtime.Distributed.Tests` suite re-serializes a canonical instance of the placement and
   transport payloads and compares each semantically against a committed `Fixtures/v1/*.json` expectation,
@@ -87,10 +101,33 @@ bindings) must be able to evolve without silently breaking already-suspended wor
 
 ### How to change a persisted runtime state record
 
-For a clean-break pre-GA change, in the same change: alter the entity and its model configuration, add the
-migration for every provider the module ships, update the payload expectation, and treat installations
-carrying the older generation as reset-and-republish upgrades. An intentionally incompatible change
-documents the required persistence reset.
+Until 4.0 ships as a stable release, migrations are regenerated and every family stays at its baseline version
+([ADR 0078](adr/0078-workflow-executions-are-virtual-actors-and-cluster-membership-is-a-foundation-contract.md),
+Consequences): alter the entity and its model configuration, regenerate the module's migration for every provider
+it ships, update the payload expectation, and treat installations carrying the older generation as
+reset-and-republish upgrades.
+
+From 4.0 on, a change to what a family stores is a new version of that family ([spec 180](../specs/180-schema-upcaster-chain/spec.md)):
+
+1. Bump the family's `SchemaVersion` constant, and add one upcaster from the previous version to the end of its
+   declared chain, beside the family's store code. It is a pure function of its input (FR-019) and preserves every
+   identity the row carries (FR-020).
+2. Keep the change expand-only, for content as for migrations: a renamed, retyped or restructured member is split
+   across two versions (FR-027), and an executable's identity-hashed format never changes in place (FR-028).
+3. Gate every integrity clause for a projection the version introduces on the row's stamp
+   (`<Module>.Chain.IsAtOrAfter(row.SchemaVersion, "<version>")`), since an older writer left it unset (FR-008).
+4. Commit the upcaster's fixture pair under `Fixtures/SchemaUpcasters/<family>/<from>-to-<to>/` in the module's
+   test project, record it in `tests/essentials/Architecture/Baselines/schema-upcaster-fixtures.sha256`, and prove the
+   upcast, the old-format round trip and the store's read of the source fixture (FR-022) with a test class deriving
+   directly from `EfSchemaUpcasterProof<TUpcaster, TValue>(family, store)`, compiled in from
+   `EfSchemaUpcasterFixtureSupport.cs`. The base class holds all three proofs; the module supplies only the store's
+   half, as `SyntheticOrders.cs` does for the synthetic family. The build fails for an upcaster without a pair or
+   without such a class, for a committed pair no such class proves, and for a recorded fixture that is edited or
+   deleted.
+5. When the upcaster reaches a column the stores edit in place, as Identity's coordinators edit a user's registries,
+   the write upgrades the whole row first, upcasting every content column and restamping it, so a stamped row is never
+   partly in an older format (FR-014); `EfSchemaFamilyDeclarationGuardTests` fails an in-place content write that does
+   not restamp its row, directly or through a helper that does.
 
 ## Cross-execution stimulus routing (W7, E3-1 / E3-5)
 

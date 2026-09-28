@@ -20,6 +20,9 @@ public static class EfOpenTelemetryModule
 
     /// <summary>The schema family this module's rows belong to, checked against when a row is read.</summary>
     public const string SchemaFamily = "OpenTelemetry";
+    /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
+    /// upcasts through (spec 180, FR-010).</summary>
+    public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(EfOpenTelemetryModule).Assembly, SchemaFamily);
     public const string DefaultConnectionName = "ElsaOpenTelemetry";
     public const string DefaultSqliteConnectionString = "Data Source=elsa-opentelemetry.db";
 

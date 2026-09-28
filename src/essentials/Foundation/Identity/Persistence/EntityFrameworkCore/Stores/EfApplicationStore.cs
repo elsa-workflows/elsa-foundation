@@ -149,11 +149,11 @@ public sealed class EfApplicationStore(
             entity.DisplayName,
             (ApplicationType)entity.Type,
             (ResourceOwnership)entity.Ownership,
-            IdentityApplicationSetCodec.Deserialize(entity.AllowedGrantTypesJson),
-            IdentityApplicationSetCodec.Deserialize(entity.ScopesJson));
+            IdentityApplicationSetCodec.Deserialize(IdentityIamEfModule.Chain.Upcast(entity.SchemaVersion, IdentityIamEfModule.ApplicationTableName, nameof(entity.AllowedGrantTypesJson), entity.AllowedGrantTypesJson)),
+            IdentityApplicationSetCodec.Deserialize(IdentityIamEfModule.Chain.Upcast(entity.SchemaVersion, IdentityIamEfModule.ApplicationTableName, nameof(entity.ScopesJson), entity.ScopesJson)));
 
     private static bool Matches(ApplicationEntity entity, string tenantId, string applicationId) =>
-        EfSchemaVersion.Readable(IdentityIamEfModule.SchemaFamily, entity.SchemaVersion, IdentityIamEfModule.SchemaVersion) &&
+        EfSchemaVersion.Readable(IdentityIamEfModule.Chain, entity.SchemaVersion) &&
         string.Equals(entity.Id, IdentityEntityFrameworkKey.TenantRecordId(tenantId, applicationId), StringComparison.Ordinal) &&
         string.Equals(IdentityEntityFrameworkKey.Normalize(entity.TenantId), IdentityEntityFrameworkKey.Normalize(tenantId), StringComparison.Ordinal) &&
         string.Equals(IdentityEntityFrameworkKey.Normalize(entity.ApplicationId), IdentityEntityFrameworkKey.Normalize(applicationId), StringComparison.Ordinal);

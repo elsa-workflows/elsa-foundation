@@ -91,7 +91,7 @@ public sealed class EfPublicationRecordStore(
                 .OrderBy(row => row.PublicationIdHash)
                 .Take(PublishingLedgerEfModule.SlotListPageSize)
                 .ToArrayAsync(cancellationToken);
-            if (rows.Any(row => EfSchemaVersion.NotReadable("PublishingLedger", row.SchemaVersion, PublishingLedgerEfModule.ContentSchemaVersion) ||
+            if (rows.Any(row => EfSchemaVersion.NotReadable(PublishingLedgerEfModule.Chain, row.SchemaVersion) ||
                                 !StringComparer.Ordinal.Equals(row.TenantId, encodedTenantId) ||
                                 !StringComparer.Ordinal.Equals(row.SlotId, encodedSlotId)))
                 throw new InvalidOperationException("A publication-record hash candidate did not match its encoded identity residual.");
@@ -157,7 +157,7 @@ public sealed class EfPublicationRecordStore(
         if (candidates.Length == 0)
             return null;
 
-        if (EfSchemaVersion.NotReadable("PublishingLedger", candidates[0].SchemaVersion, PublishingLedgerEfModule.ContentSchemaVersion) ||
+        if (EfSchemaVersion.NotReadable(PublishingLedgerEfModule.Chain, candidates[0].SchemaVersion) ||
             candidates.Length != 1 ||
             !StringComparer.Ordinal.Equals(candidates[0].TenantId, EfPublishingStoreSupport.EncodeNullable(tenantId)) ||
             !StringComparer.Ordinal.Equals(candidates[0].PublicationId, EfPublishingStoreSupport.Encode(publicationId)))
@@ -221,7 +221,7 @@ public sealed class EfPublicationRecordStore(
 
     private static PublicationRecord ToModel(PublicationRecordEntity row)
     {
-        EfSchemaVersion.EnsureReadable("PublishingLedger", row.SchemaVersion, PublishingLedgerEfModule.ContentSchemaVersion);
+        EfSchemaVersion.EnsureReadable(PublishingLedgerEfModule.Chain, row.SchemaVersion);
         var publicationId = EfPublishingStoreSupport.DecodeIdentity(row.PublicationId, nameof(row.PublicationId));
         var tenantId = EfPublishingStoreSupport.DecodeNullableIdentity(row.TenantId, nameof(row.TenantId));
         if (!StringComparer.Ordinal.Equals(row.TenantIdHash, EfPublishingStoreSupport.TenantHash(tenantId)) ||

@@ -135,7 +135,8 @@ public sealed class EfStudioPreferenceStore(StudioPreferencesDbContext context) 
 
     private static StudioPreferenceDocument Map(StudioPreferenceRecord record)
     {
-        using var document = JsonDocument.Parse(record.ValueJson);
+        using var document = JsonDocument.Parse(StudioPreferencesEfModule.Chain.Upcast(
+            record.SchemaVersion, StudioPreferencesEfModule.TableName, nameof(record.ValueJson), record.ValueJson));
         return new StudioPreferenceDocument(
             record.Namespace,
             record.PreferenceSchemaVersion,
@@ -149,7 +150,7 @@ public sealed class EfStudioPreferenceStore(StudioPreferencesDbContext context) 
     /// settled before its identity projection is trusted and before its value is parsed.
     /// </summary>
     private static bool MatchesKey(StudioPreferenceRecord record, string id, StudioPreferenceKey key) =>
-        EfSchemaVersion.Readable("StudioPreferences", record.SchemaVersion, StudioPreferencesEfModule.SchemaVersion) &&
+        EfSchemaVersion.Readable(StudioPreferencesEfModule.Chain, record.SchemaVersion) &&
         string.Equals(record.Id, id, StringComparison.Ordinal) &&
         string.Equals(record.SubjectId, key.SubjectId, StringComparison.Ordinal) &&
         string.Equals(record.TenantId, key.TenantId, StringComparison.Ordinal) &&

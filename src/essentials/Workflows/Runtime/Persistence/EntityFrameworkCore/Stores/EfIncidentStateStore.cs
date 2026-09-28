@@ -136,7 +136,7 @@ public sealed class EfIncidentStateStore(
     {
         try
         {
-            if (EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) ||
+            if (EfSchemaVersion.NotReadable(RuntimeOperationalStateEfModule.Chain, row.SchemaVersion) ||
                 row.Revision <= 0 ||
                 row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) ||
                 row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))
@@ -144,7 +144,8 @@ public sealed class EfIncidentStateStore(
                 throw new InvalidDataException("The incident-state row scope, schema, or revision projection is corrupt.");
             }
 
-            var state = RuntimeArtifactJson.Deserialize<IncidentState>(row.ContentJson);
+            var state = RuntimeArtifactJson.Deserialize<IncidentState>(RuntimeOperationalStateEfModule.Chain.Upcast(
+                row.SchemaVersion, RuntimeOperationalStateEfModule.IncidentTableName, nameof(row.ContentJson), row.ContentJson));
             Validate(state);
             if ((expectedWorkflowExecutionId is not null && state.WorkflowExecutionId != expectedWorkflowExecutionId) ||
                 (expectedIncidentId is not null && state.IncidentId != expectedIncidentId) ||

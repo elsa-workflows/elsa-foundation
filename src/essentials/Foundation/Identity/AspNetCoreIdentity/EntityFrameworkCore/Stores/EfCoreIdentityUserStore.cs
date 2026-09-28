@@ -774,7 +774,8 @@ public sealed class EfCoreIdentityUserStore(
         IdentityEntityFrameworkAdapterSupport.EnsureReadable(entity.SchemaVersion);
         return new(
             entity.UserId, entity.TenantId, entity.UserName, entity.Email, entity.DisplayName, (UserStatus)entity.Status, (ResourceOwnership)entity.Ownership,
-            IdentityEntityFrameworkAdapterSupport.DeserializeSet(entity.RoleIdsJson), IdentityEntityFrameworkAdapterSupport.DeserializeSet(entity.DirectPermissionsJson));
+            IdentityEntityFrameworkAdapterSupport.ReadSet(entity.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(entity.RoleIdsJson), entity.RoleIdsJson),
+            IdentityEntityFrameworkAdapterSupport.ReadSet(entity.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(entity.DirectPermissionsJson), entity.DirectPermissionsJson));
     }
 
     private static AspNetCoreIdentityUser CloneUser(AspNetCoreIdentityUser source) => new()

@@ -1,0 +1,4 @@
+54b51fe1c20232c87a76d3eac2363460fe86865191540e858ab1a8a4c36fe81f  tests/essentials/Persistence/EntityFramework/Tests/Fixtures/SchemaUpcasters/SyntheticOrders/1-to-2/orders.ContentJson.expected.json
+1ba538c581a2e74514a14998a401a12706771dcd3ed5dfe8a2fe2fa2ef9d697e  tests/essentials/Persistence/EntityFramework/Tests/Fixtures/SchemaUpcasters/SyntheticOrders/1-to-2/orders.ContentJson.source.json
+63e3ba17f18784b0614eb1aa10c631827200811cbe523edcba7f9d75dcf0869c  tests/essentials/Persistence/EntityFramework/Tests/Fixtures/SchemaUpcasters/SyntheticOrders/2-to-3/orders.ContentJson.expected.json
+54b51fe1c20232c87a76d3eac2363460fe86865191540e858ab1a8a4c36fe81f  tests/essentials/Persistence/EntityFramework/Tests/Fixtures/SchemaUpcasters/SyntheticOrders/2-to-3/orders.ContentJson.source.json

@@ -530,6 +530,7 @@ public sealed class EfWorkflowExecutableStore(
     private async Task UpdateCoordination(WorkflowExecutableCoordinationEntity row, CoordinationState state, CancellationToken ct)
     {
         row.ContentJson = RuntimeArtifactJson.Serialize(state);
+        row.SchemaVersion = RuntimeArtifactEfModule.SchemaVersion;
         row.Revision++;
         try
         {
@@ -598,7 +599,7 @@ public sealed class EfWorkflowExecutableStore(
         string expected,
         string id)
     {
-        if (EfSchemaVersion.NotReadable("RuntimeArtifact", row.SchemaVersion, RuntimeArtifactEfModule.SchemaVersion) ||
+        if (EfSchemaVersion.NotReadable(RuntimeArtifactEfModule.Chain, row.SchemaVersion) ||
             row.Id != id || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
             row.ArtifactId != Encode(expected) || row.ArtifactIdHash != Hash(expected) ||
             string.IsNullOrWhiteSpace(row.ArtifactHash) ||
@@ -608,7 +609,7 @@ public sealed class EfWorkflowExecutableStore(
             throw new InvalidDataException("The persisted workflow executable row is corrupt.");
         try
         {
-            var x = RuntimeArtifactJson.Deserialize<WorkflowExecutable>(row.ContentJson);
+            var x = RuntimeArtifactJson.Deserialize<WorkflowExecutable>(RuntimeArtifactEfModule.Chain.Upcast(row.SchemaVersion, RuntimeArtifactEfModule.WorkflowExecutableTableName, nameof(row.ContentJson), row.ContentJson));
             Validate(x);
             if (x.Identity.ArtifactId != expected || x.Identity.ArtifactHash != row.ArtifactHash)
                 throw new InvalidDataException("The persisted workflow executable identity is corrupt.");
@@ -623,7 +624,7 @@ public sealed class EfWorkflowExecutableStore(
 
     private static CoordinationState ReadCoordination(WorkflowExecutableCoordinationEntity row, string scope, string expected, string id)
     {
-        if (EfSchemaVersion.NotReadable("RuntimeArtifact", row.SchemaVersion, RuntimeArtifactEfModule.SchemaVersion) ||
+        if (EfSchemaVersion.NotReadable(RuntimeArtifactEfModule.Chain, row.SchemaVersion) ||
             row.Id != id || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
             row.ArtifactId != Encode(expected) || row.ArtifactIdHash != Hash(expected) ||
             row.Revision <= 0 ||
@@ -632,9 +633,10 @@ public sealed class EfWorkflowExecutableStore(
 
         try
         {
-            using var document = JsonDocument.Parse(row.ContentJson);
+            var content = RuntimeArtifactEfModule.Chain.Upcast(row.SchemaVersion, RuntimeArtifactEfModule.WorkflowExecutableCoordinationTableName, nameof(row.ContentJson), row.ContentJson);
+            using var document = JsonDocument.Parse(content);
             EnsureUniqueProperties(document.RootElement);
-            var state = RuntimeArtifactJson.Deserialize<CoordinationState>(row.ContentJson);
+            var state = RuntimeArtifactJson.Deserialize<CoordinationState>(content);
             ValidateCoordination(state);
             return state;
         }

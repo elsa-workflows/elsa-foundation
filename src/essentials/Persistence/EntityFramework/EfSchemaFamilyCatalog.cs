@@ -17,6 +17,8 @@ public static class EfSchemaFamilyCatalog
 {
     private static readonly string FamilyAttributeName = typeof(EfSchemaFamilyAttribute).FullName!;
     private static readonly string ModuleAttributeName = typeof(EfModuleAttribute).FullName!;
+    private static readonly string UpcasterAttributeName = typeof(EfSchemaUpcasterAttribute).FullName!;
+    private static readonly string UpcasterInterfaceName = typeof(IEfSchemaUpcaster).FullName!;
 
     /// <summary>
     /// Enumerates every <see cref="EfSchemaFamilyAttribute"/> declared on <paramref name="assemblies"/>, one
@@ -28,6 +30,13 @@ public static class EfSchemaFamilyCatalog
     /// declared by two assemblies, such as two generations of one package, is two descriptors: combining them is the
     /// caller's decision.
     /// </summary>
+    /// <remarks>
+    /// A fault in a family's upcaster chain (spec 180, FR-005) does not refuse discovery: it is reported on the
+    /// descriptor's <see cref="EfSchemaFamilyDescriptor.Defects"/>, and its
+    /// <see cref="EfSchemaFamilyDescriptor.ReadableVersions"/> never credits a version the fault leaves unreachable. The
+    /// build and the family's registration at startup refuse it instead, so one family's broken chain cannot take every
+    /// other family out of a host's readability report.
+    /// </remarks>
     public static IReadOnlyList<EfSchemaFamilyDescriptor> Discover(IEnumerable<Assembly> assemblies)
     {
         ArgumentNullException.ThrowIfNull(assemblies);
@@ -80,7 +89,7 @@ public static class EfSchemaFamilyCatalog
                     $"{string.Join(", ", modules.Select(declared => $"'{declared}'"))}. An assembly that owns an [EfModule] names it as the family's " +
                     "owner instead of declaring the family shared.");
 
-            return new EfSchemaFamilyDescriptor(name, null, currentVersion, assembly);
+            return new EfSchemaFamilyDescriptor(name, null, currentVersion, assembly) { Upcasters = Upcasters(declaration) };
         }
 
         var owner = modules.FirstOrDefault(declared => StringComparer.OrdinalIgnoreCase.Equals(declared, module));
@@ -89,7 +98,47 @@ public static class EfSchemaFamilyCatalog
                 $"{assembly.GetName().Name} declares [EfSchemaFamily(\"{name}\")] owned by EF module '{module}', which that assembly does not declare. " +
                 $"A family belongs to an [EfModule] of its own assembly; this one declares {(modules.Length == 0 ? "none" : string.Join(", ", modules.Select(declared => $"'{declared}'")))}.");
 
-        return new EfSchemaFamilyDescriptor(name, owner, currentVersion, assembly);
+        return new EfSchemaFamilyDescriptor(name, owner, currentVersion, assembly) { Upcasters = Upcasters(declaration) };
+    }
+
+    /// <summary>The declaration's <see cref="EfSchemaFamilyAttribute.Upcasters"/>, each read as metadata.</summary>
+    private static EfSchemaUpcasterDescriptor[] Upcasters(CustomAttributeData declaration) =>
+        declaration.NamedArguments
+            .Where(argument => argument.MemberName == nameof(EfSchemaFamilyAttribute.Upcasters))
+            .Select(argument => argument.TypedValue.Value)
+            .OfType<IEnumerable<CustomAttributeTypedArgument>>()
+            .SelectMany(types => types)
+            .Select(type => type.Value as Type)
+            .Select(DescribeUpcaster)
+            .ToArray();
+
+    /// <summary>One chain entry, read from <paramref name="type"/>'s metadata exactly as a declaration's entries are.</summary>
+    internal static EfSchemaUpcasterDescriptor DescribeUpcaster(Type? type)
+    {
+        if (type is null)
+            return new EfSchemaUpcasterDescriptor(typeof(void), null, null, "the chain lists no type.");
+
+        var versions = type.GetCustomAttributesData().Where(attribute => Is(attribute, UpcasterAttributeName)).ToArray();
+        var from = versions.Length == 1 ? Argument(versions[0], 0) : null;
+        var to = versions.Length == 1 ? Argument(versions[0], 1) : null;
+        return new EfSchemaUpcasterDescriptor(type, from, to, Refusal(type));
+    }
+
+    /// <summary>
+    /// Why <paramref name="type"/> cannot be constructed and called as an upcaster (spec 180, FR-003), read without
+    /// constructing it; interfaces are matched by full name for the same reason attributes are.
+    /// </summary>
+    private static string? Refusal(Type type)
+    {
+        if (!type.IsClass || type.IsAbstract)
+            return "an upcaster is a concrete class.";
+        if (type.ContainsGenericParameters)
+            return "an upcaster is not an open generic type.";
+        if (!type.GetInterfaces().Any(contract => string.Equals(contract.FullName, UpcasterInterfaceName, StringComparison.Ordinal)))
+            return $"an upcaster implements {UpcasterInterfaceName}.";
+        if (type.GetConstructor(Type.EmptyTypes) is not { IsPublic: true })
+            return "an upcaster has a public parameterless constructor, since the persistence worker has no container to inject from.";
+        return null;
     }
 
     private static bool Is(CustomAttributeData attribute, string fullName) =>

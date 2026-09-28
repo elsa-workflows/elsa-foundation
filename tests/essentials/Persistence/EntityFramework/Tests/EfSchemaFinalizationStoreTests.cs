@@ -578,9 +578,10 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     {
         public const string Version = "9.9.9";
 
-        string IEfSchemaVersionedContext.SchemaFamily => "Versioned";
+        private static readonly EfSchemaChain SchemaChain =
+            EfSchemaChain.For(new EfSchemaFamilyDescriptor("Versioned", null, Version, typeof(VersionedContext).Assembly));
 
-        string IEfSchemaVersionedContext.SchemaVersion => Version;
+        EfSchemaChain IEfSchemaVersionedContext.SchemaChain => SchemaChain;
 
         public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
         {

@@ -514,9 +514,10 @@ public sealed class EfExecutionCommandTransport(
         ExecutionCommandTransportItemEntity row,
         string scope)
     {
-        EfSchemaVersion.EnsureReadable(ExecutionCommandTransportEfModule.SchemaFamily, row.SchemaVersion, ExecutionCommandTransportEfModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(ExecutionCommandTransportEfModule.Chain, row.SchemaVersion);
         EnsureItemIdentity(row, scope);
-        var item = Deserialize<ExecutionCommandTransportItem>(row.PayloadJson);
+        var item = Deserialize<ExecutionCommandTransportItem>(ExecutionCommandTransportEfModule.Chain.Upcast(
+            row.SchemaVersion, ExecutionCommandTransportEfModule.TransportItemTableName, nameof(row.PayloadJson), row.PayloadJson));
         var rowEnqueuedAt = ReadTimestamp(row.EnqueuedAtUtcTicks, row.EnqueuedAtOffsetMinutes);
         var rowLeaseExpiresAt = row.LeaseOwnerId is null
             ? (DateTimeOffset?)null
@@ -552,7 +553,7 @@ public sealed class EfExecutionCommandTransport(
 
     private static void EnsureHead(ExecutionCommandStreamHeadEntity row, string scope, string expectedWorkflowExecutionId)
     {
-        if (EfSchemaVersion.NotReadable(ExecutionCommandTransportEfModule.SchemaFamily, row.SchemaVersion, ExecutionCommandTransportEfModule.SchemaVersion) ||
+        if (EfSchemaVersion.NotReadable(ExecutionCommandTransportEfModule.Chain, row.SchemaVersion) ||
             !StringComparer.Ordinal.Equals(row.ScopeKey, EfDistributedIdentity.EncodeScope(scope)) ||
             !StringComparer.Ordinal.Equals(row.ScopeKeyHash, EfDistributedIdentity.Hash(scope)) ||
             !StringComparer.Ordinal.Equals(row.WorkflowExecutionId, expectedWorkflowExecutionId) ||

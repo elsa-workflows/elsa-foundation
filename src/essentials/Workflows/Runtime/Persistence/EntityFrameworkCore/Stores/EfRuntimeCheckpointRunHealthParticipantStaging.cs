@@ -109,7 +109,7 @@ internal static class EfRuntimeCheckpointRunHealthParticipantStaging
     {
         try
         {
-            if (EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) ||
+            if (EfSchemaVersion.NotReadable(RuntimeOperationalStateEfModule.Chain, row.SchemaVersion) ||
                 row.Revision <= 0 ||
                 row.Id != EfRuntimeOperationalStoreSupport.CompositeId(scope, expectedWorkflowExecutionId) ||
                 row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) ||
@@ -118,7 +118,8 @@ internal static class EfRuntimeCheckpointRunHealthParticipantStaging
                 throw new InvalidDataException("The workflow run-health row envelope is corrupt.");
             }
 
-            var projection = RuntimeArtifactJson.Deserialize<WorkflowRunHealthProjection>(row.ContentJson);
+            var projection = RuntimeArtifactJson.Deserialize<WorkflowRunHealthProjection>(
+                RuntimeOperationalStateEfModule.Chain.Upcast(row.SchemaVersion, RuntimeOperationalStateEfModule.WorkflowRunHealthTableName, nameof(row.ContentJson), row.ContentJson));
             ValidateProjection(projection);
             var startedAt = ReadStartedAt(row);
             if (projection.WorkflowExecutionId != expectedWorkflowExecutionId ||

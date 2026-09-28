@@ -169,6 +169,7 @@ public sealed class EfActivityExecutionInspectionStore(
 
     private static ActivityExecutionInspectionProjection ReadCheckedCore(ActivityExecutionInspectionEntity row, string scope, string? expectedWorkflow, string? expectedActivity)
     {
+        EfSchemaVersion.EnsureReadable(RuntimeActivityExecutionEfModule.Chain, row.SchemaVersion);
         var workflow = ActivityExecutionEfSupport.Decode(row.WorkflowExecutionId);
         var activity = ActivityExecutionEfSupport.Decode(row.ActivityExecutionId);
         ActivityExecutionEfSupport.EnsureRowEnvelope(row.SchemaVersion, row.ScopeKey, scope, row.ScopeKeyHash,
@@ -181,7 +182,7 @@ public sealed class EfActivityExecutionInspectionStore(
         ActivityExecutionEfSupport.EnsureIdentityProjection(row.ActivityExecutionId, row.ActivityExecutionIdHash, row.ActivityExecutionIdOrderKey, activity);
         if (row.ExecutionScopeId is null != row.ExecutionScopeIdHash is null)
             throw new InvalidDataException("The persisted activity execution inspection execution-scope projection is incomplete.");
-        var projection = RuntimeArtifactJson.Deserialize<ActivityExecutionInspectionProjection>(row.ContentJson);
+        var projection = RuntimeArtifactJson.Deserialize<ActivityExecutionInspectionProjection>(RuntimeActivityExecutionEfModule.Chain.Upcast(row.SchemaVersion, RuntimeActivityExecutionEfModule.ActivityExecutionInspectionTableName, nameof(row.ContentJson), row.ContentJson));
         ActivityExecutionEfSupport.Validate(projection);
         var executionScope = row.ExecutionScopeId is null ? null : ActivityExecutionEfSupport.Decode(row.ExecutionScopeId);
         if (executionScope is not null && row.ExecutionScopeIdHash != ActivityExecutionEfSupport.Hash(executionScope))

@@ -45,7 +45,7 @@ public sealed class EfSchemaVersionMaterializationInterceptorTests : IDisposable
         var query = tracked ? context.Rows : context.Rows.AsNoTracking();
         var skew = Assert.Throws<EfSchemaVersionSkewException>(() => query.Single());
 
-        Assert.Equal(StampedContext.Family, skew.Module);
+        Assert.Equal(StampedContext.Family, skew.Family);
         Assert.Equal("2.0.0", skew.Found);
         Assert.Equal(StampedContext.Version, skew.Expected);
     }
@@ -75,6 +75,29 @@ public sealed class EfSchemaVersionMaterializationInterceptorTests : IDisposable
         using var context = Context();
         var skew = Assert.Throws<EfSchemaVersionSkewException>(() => context.Rows.AsNoTracking().Single());
         Assert.Equal("", skew.Found);
+    }
+
+    /// <summary>
+    /// A value converter deserializes the content while EF materializes the row, before any upcaster could run, so the
+    /// interceptor accepts the current version alone even when the family's chain reaches further back (spec 180,
+    /// FR-006): a predecessor's row is refused as skew rather than read as if this build had written it. Its writes still
+    /// stamp the current version.
+    /// </summary>
+    [Fact]
+    public void A_context_whose_family_has_a_chain_refuses_a_predecessor_row_rather_than_reading_it_unupcast()
+    {
+        Insert("older", "1", """{"note":"ok"}""");
+        using var context = new ChainedContext(new DbContextOptionsBuilder<ChainedContext>().UseSqlite(connection).Options);
+
+        var skew = Assert.Throws<EfSchemaVersionSkewException>(() => context.Rows.AsNoTracking().Single());
+
+        Assert.Equal("1", skew.Found);
+        Assert.Equal(["2"], skew.ReadableVersions);
+        context.Rows.Add(new Row { Id = "saved", Content = new("ok") });
+        context.SaveChanges();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT SchemaVersion FROM rows WHERE Id = 'saved'";
+        Assert.Equal("2", command.ExecuteScalar());
     }
 
     [Fact]
@@ -157,9 +180,10 @@ public sealed class EfSchemaVersionMaterializationInterceptorTests : IDisposable
 
         public DbSet<Row> Rows => Set<Row>();
 
-        string IEfSchemaVersionedContext.SchemaFamily => Family;
+        private static readonly EfSchemaChain SchemaChain =
+            EfSchemaChain.For(new EfSchemaFamilyDescriptor(Family, null, Version, typeof(StampedContext).Assembly));
 
-        string IEfSchemaVersionedContext.SchemaVersion => Version;
+        EfSchemaChain IEfSchemaVersionedContext.SchemaChain => SchemaChain;
 
         public override int SaveChanges(bool acceptAllChangesOnSuccess)
         {
@@ -181,6 +205,32 @@ public sealed class EfSchemaVersionMaterializationInterceptorTests : IDisposable
                 value => JsonSerializer.Serialize(value, JsonSerializerOptions.Web),
                 value => JsonSerializer.Deserialize<Payload>(value, JsonSerializerOptions.Web)!);
         }
+    }
+
+    /// <summary>The same table, for a family whose chain upcasts version 1 to its current version 2.</summary>
+    private sealed class ChainedContext(DbContextOptions<ChainedContext> options) : DbContext(options), IEfSchemaVersionedContext
+    {
+        private static readonly EfSchemaChain SchemaChain = SchemaChains.Declare(StampedContext.Family, "2", SchemaChains.Step<ProbeOneToTwo>());
+
+        public DbSet<Row> Rows => Set<Row>();
+
+        EfSchemaChain IEfSchemaVersionedContext.SchemaChain => SchemaChain;
+
+        public override int SaveChanges(bool acceptAllChangesOnSuccess)
+        {
+            EfSchemaVersionMaterializationInterceptor.StampWrites(this);
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) => EfSchemaVersionMaterializationInterceptor.EnsureAdded(optionsBuilder);
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder) => StampedContext.Configure(modelBuilder);
+    }
+
+    [EfSchemaUpcaster("1", "2")]
+    private sealed class ProbeOneToTwo : IEfSchemaUpcaster
+    {
+        public string Upcast(EfSchemaContent content) => content.Value;
     }
 
     private sealed class UnversionedContext(DbContextOptions<UnversionedContext> options) : DbContext(options)

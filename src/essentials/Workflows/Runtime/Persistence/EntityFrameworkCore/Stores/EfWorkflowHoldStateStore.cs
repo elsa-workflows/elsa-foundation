@@ -157,11 +157,12 @@ public sealed class EfWorkflowHoldStateStore(
 
     private static WorkflowHoldState Read(WorkflowHoldStateEntity row, string scope, string? expectedControlPlaneStateId = null)
     {
-        if (EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) ||
+        if (EfSchemaVersion.NotReadable(RuntimeOperationalStateEfModule.Chain, row.SchemaVersion) ||
             row.Revision <= 0 || row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) || row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))
             throw new InvalidDataException("The workflow-hold row scope, schema, or revision projection is corrupt.");
         WorkflowHoldState state;
-        try { state = RuntimeArtifactJson.Deserialize<WorkflowHoldState>(row.ContentJson); }
+        var content = RuntimeOperationalStateEfModule.Chain.Upcast(row.SchemaVersion, RuntimeOperationalStateEfModule.WorkflowHoldTableName, nameof(row.ContentJson), row.ContentJson);
+        try { state = RuntimeArtifactJson.Deserialize<WorkflowHoldState>(content); }
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
         { throw new InvalidDataException("The persisted workflow-hold state is not valid current data.", exception); }
         var workflow = state.WorkflowExecutionId;

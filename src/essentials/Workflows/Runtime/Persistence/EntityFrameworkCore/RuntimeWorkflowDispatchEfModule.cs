@@ -1,3 +1,5 @@
+using Elsa.Persistence.EntityFramework;
+
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
 /// <summary>Names and bounded projection sizes for the EF workflow-dispatch lifecycle.</summary>
@@ -6,6 +8,9 @@ public static class RuntimeWorkflowDispatchEfModule
     public const string TableName = "elsa_runtime_workflow_dispatch";
     public const string SchemaVersion = "1.0.0";
     public const string SchemaFamily = "RuntimeWorkflowDispatch";
+    /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
+    /// upcasts through (spec 180, FR-010).</summary>
+    public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(RuntimeWorkflowDispatchEfModule).Assembly, SchemaFamily);
     public const int IdentityMaximumLength = 450;
     public const int IdentityProjectionMaximumLength = ((IdentityMaximumLength * sizeof(char) + 2) / 3) * 4;
     public const int ScopeProjectionMaximumLength = RuntimeOperationalStateEfModule.ScopeProjectionMaximumLength;

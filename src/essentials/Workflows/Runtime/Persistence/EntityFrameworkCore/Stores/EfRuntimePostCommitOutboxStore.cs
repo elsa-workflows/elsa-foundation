@@ -540,7 +540,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
         string scope,
         string? expectedOutboxItemId = null)
     {
-        if (EfSchemaVersion.NotReadable("RuntimePostCommitOutbox", row.SchemaVersion, RuntimePostCommitOutboxEfModule.SchemaVersion) ||
+        if (EfSchemaVersion.NotReadable(RuntimePostCommitOutboxEfModule.Chain, row.SchemaVersion) ||
             row.Revision <= 0 ||
             row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) ||
             row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))
@@ -575,7 +575,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
         RuntimePostCommitOutboxItem item;
         try
         {
-            item = RuntimeArtifactJson.Deserialize<RuntimePostCommitOutboxItem>(row.ContentJson);
+            item = RuntimeArtifactJson.Deserialize<RuntimePostCommitOutboxItem>(RuntimePostCommitOutboxEfModule.Chain.Upcast(row.SchemaVersion, RuntimePostCommitOutboxEfModule.TableName, nameof(row.ContentJson), row.ContentJson));
         }
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
         {
