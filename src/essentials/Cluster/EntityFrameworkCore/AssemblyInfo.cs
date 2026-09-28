@@ -6,7 +6,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 // persistence tool finds the membership table in any host closure that carries this assembly, and EfModuleBinding.For
 // derives the registration's binding from it.
 [assembly: EfModule(
-    ClusterMembershipEfModule.Name,
+    "Cluster.Membership",
     typeof(ClusterMembershipDbContext),
     HistoryModule = ClusterMembershipEfModule.HistoryModuleName,
     Sqlite = typeof(ClusterMembershipSqliteDbContext),
